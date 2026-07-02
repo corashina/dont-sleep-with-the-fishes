@@ -18,7 +18,6 @@ export class DayScene implements Scene {
   ) {}
 
   enter(): void {
-    this.state.actionsLeftToday = this.state.day === 1 ? 3 : this.state.actionsLeftToday;
     this.env.setTimeOfDay('day');
     this.hud.setDayLabel(`Day ${this.state.day} — ${this.state.actionsLeftToday} actions`);
     this.dialogs.setText('Day breaks. What will you do?');
@@ -28,9 +27,10 @@ export class DayScene implements Scene {
   private renderActions(): void {
     this.bar.clear();
     const actions: DayAction[] = ['fish', 'eat', 'repair', 'chat'];
+    const labels: Record<DayAction, string> = { fish: 'Fish', eat: 'Eat', repair: 'Repair', chat: 'Chat' };
     actions.forEach((a) => {
       const check = this.state.canPerformDayAction(a);
-      this.bar.button(a, () => this.do(a), { disabled: !check.ok });
+      this.bar.button(labels[a], () => this.do(a), { disabled: !check.ok });
     });
     this.diorama.showInventory(this.state.inventory, this.state.food);
     this.hud.render();

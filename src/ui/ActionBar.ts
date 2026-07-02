@@ -10,7 +10,7 @@ export class ActionBar {
     const b = document.createElement('button');
     b.textContent = label;
     b.disabled = !!opts.disabled;
-    b.style.cssText = 'padding:10px 14px;border:none;border-radius:6px;background:#2b4a6f;color:#fff;font:14px system-ui;cursor:pointer';
+    b.style.cssText = 'padding:10px 14px;border:none;border-radius:6px;background:#2b4a6f;color:#fff;font:14px system-ui;cursor:pointer;white-space:pre-line';
     if (b.disabled) { b.style.background = '#444'; b.style.cursor = 'not-allowed'; }
     b.onclick = cb;
     this.root.appendChild(b);

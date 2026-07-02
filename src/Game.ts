@@ -40,6 +40,7 @@ export class Game {
 
     this.bindInput(root);
     this.showTitle();
+    this.hud.render();
   }
 
   private bindInput(root: HTMLElement): void {
@@ -67,6 +68,8 @@ export class Game {
 
   private startNewRun(): void {
     this.state.reset();
+    this.diorama.reset();
+    this.hud.render();
     this.state.setPhase(Phase.Scavenge);
     this.gotoPhase();
   }
