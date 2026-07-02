@@ -104,6 +104,15 @@ export class Diorama {
     this.hotspotClickCb = null;
   }
 
+  reset(): void {
+    this.clearHotspots();
+    this.inventoryGroup.clear();
+    if (this.crewmate) {
+      this.boat.remove(this.crewmate);
+      this.crewmate = null;
+    }
+  }
+
   getCamera(): THREE.PerspectiveCamera { return this.camera; }
 
   enableOrbit(v: boolean): void { this.orbitEnabled = v; }
