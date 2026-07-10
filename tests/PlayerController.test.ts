@@ -1,0 +1,153 @@
+import { describe, expect, it, vi } from 'vitest';
+import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import type { InputController } from '../src/input/InputController';
+import type { MovementAxes } from '../src/player/collisions';
+import { PlayerController } from '../src/player/PlayerController';
+import { createShip } from '../src/world/Ship';
+
+class TestInput {
+  movement: MovementAxes = { x: 0, z: 0 };
+  sprinting = false;
+  private look = { x: 0, y: 0 };
+
+  queueLook(x: number, y: number): void {
+    this.look = { x, y };
+  }
+
+  consumeLook(): { x: number; y: number } {
+    const look = this.look;
+    this.look = { x: 0, y: 0 };
+    return look;
+  }
+
+  asControllerInput(): InputController {
+    return this as unknown as InputController;
+  }
+}
+
+function expectVector(actual: Vector3, expected: Vector3): void {
+  expect(actual.distanceTo(expected)).toBeLessThan(1e-8);
+}
+
+function expectRotation(actual: Quaternion, expected: Quaternion): void {
+  expect(Math.abs(actual.dot(expected))).toBeCloseTo(1, 8);
+}
+
+describe('PlayerController', () => {
+  it('places the camera from ship-local position and view rotation', () => {
+    const ship = new Object3D();
+    ship.position.set(8, -2, 5);
+    ship.rotation.set(0.2, 0.35, -0.1);
+    const camera = new PerspectiveCamera();
+    const start = new Vector3(1.25, 3.7, -2.5);
+    const controller = new PlayerController(camera, ship, start, [], vi.fn());
+
+    controller.update(0, new TestInput().asControllerInput());
+
+    const expectedPosition = start.clone();
+    ship.localToWorld(expectedPosition);
+    const expectedRotation = ship.quaternion.clone().multiply(
+      new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
+    );
+    expectVector(camera.position, expectedPosition);
+    expectRotation(camera.quaternion, expectedRotation);
+  });
+
+  it.each([
+    ['downward', 10_000, -1.35],
+    ['upward', -10_000, 1.35],
+  ])('clamps %s mouse pitch', (_direction, movementY, expectedPitch) => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const input = new TestInput();
+    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    input.queueLook(0, movementY);
+
+    controller.update(0, input.asControllerInput());
+
+    const expectedRotation = new Quaternion().setFromEuler(
+      new Euler(expectedPitch, Math.PI, 0, 'YXZ'),
+    );
+    expectRotation(camera.quaternion, expectedRotation);
+  });
+
+  it('uses walk and sprint speeds in the current local heading', () => {
+    const input = new TestInput();
+    input.movement = { x: 0, z: -1 };
+    const walking = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], vi.fn(),
+    );
+    const sprinting = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], vi.fn(),
+    );
+
+    walking.update(1, input.asControllerInput());
+    input.sprinting = true;
+    sprinting.update(1, input.asControllerInput());
+
+    expect(walking.localPosition.z).toBeCloseTo(3.8);
+    expect(sprinting.localPosition.z).toBeCloseTo(6.2);
+  });
+
+  it('resolves the approved near-console start deterministically without trapping movement', () => {
+    const shipBuild = createShip();
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      shipBuild.root,
+      shipBuild.playerStart,
+      shipBuild.colliders,
+      vi.fn(),
+    );
+
+    controller.update(0, input.asControllerInput());
+    expect(controller.localPosition.z).toBeCloseTo(7.9);
+    const resolvedStart = controller.localPosition.clone();
+
+    input.movement = { x: 0, z: 1 };
+    controller.update(0.1, input.asControllerInput());
+    expectVector(controller.localPosition, resolvedStart);
+
+    input.movement = { x: 0, z: -1 };
+    controller.update(0.1, input.asControllerInput());
+    expect(controller.localPosition.z).toBeGreaterThan(resolvedStart.z);
+  });
+
+  it('restores the latest safe inboard position and reports a fall', () => {
+    const onFall = vi.fn();
+    const input = new TestInput();
+    input.movement = { x: 1, z: 0 };
+    const controller = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], onFall,
+    );
+
+    controller.update(0.5, input.asControllerInput());
+    const safePosition = controller.localPosition.clone();
+    controller.update(2, input.asControllerInput());
+
+    expectVector(controller.localPosition, safePosition);
+    expect(onFall).toHaveBeenCalledOnce();
+  });
+
+  it('reset restores the supplied local start and default view', () => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const input = new TestInput();
+    input.movement = { x: 1, z: 0 };
+    input.queueLook(250, -400);
+    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    controller.update(0.25, input.asControllerInput());
+    const resetStart = new Vector3(2, 3.8, -1);
+
+    controller.reset(resetStart);
+    input.movement = { x: 0, z: 0 };
+    controller.update(0, input.asControllerInput());
+
+    expectVector(controller.localPosition, resetStart);
+    expectVector(camera.position, resetStart);
+    expectRotation(
+      camera.quaternion,
+      new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
+    );
+  });
+});
