@@ -1,4 +1,13 @@
-import { Box3, Group, Object3D, Scene, Vector3 } from 'three';
+import {
+  Box3,
+  BufferGeometry,
+  Group,
+  Material,
+  Mesh,
+  Object3D,
+  Scene,
+  Vector3,
+} from 'three';
 import { ITEM_IDS, type ItemId } from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
 import { BoatBuoyancy, smoothBoatPose, type BoatPose } from '../ocean/BoatBuoyancy';
@@ -9,6 +18,20 @@ import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import { createShip } from './Ship';
+
+function collectOwnedResources(
+  root: Object3D,
+  geometries: Set<BufferGeometry>,
+  materials?: Set<Material>,
+): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    geometries.add(object.geometry);
+    if (!materials) return;
+    const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
+    meshMaterials.forEach((material) => materials.add(material));
+  });
+}
 
 export class World {
   readonly ship: Group;
@@ -22,6 +45,8 @@ export class World {
   private readonly environment: Environment;
   private readonly boatSlots: Group[];
   private readonly buoyancy: BoatBuoyancy;
+  private readonly ownedGeometries = new Set<BufferGeometry>();
+  private readonly ownedMaterials = new Set<Material>();
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private readonly boatAnchor = new Vector3(6.2, 0.35, -5.8);
   private disposed = false;
@@ -33,9 +58,11 @@ export class World {
     this.playerStart = shipBuild.playerStart.clone();
     this.evacuationPoint = shipBuild.evacuationPoint.clone();
     scene.add(this.ship);
+    collectOwnedResources(this.ship, this.ownedGeometries);
 
     ITEM_IDS.forEach((id, index) => {
       const prop = createProp(id);
+      collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
       prop.position.copy(shipBuild.itemSpawnPoints[index]!);
       prop.rotation.y = index * 0.73;
       this.ship.add(prop);
@@ -48,6 +75,7 @@ export class World {
     this.boatSlots = boatBuild.slots;
     this.lifeboatAcceptance = boatBuild.acceptanceBox;
     scene.add(this.lifeboat);
+    collectOwnedResources(this.lifeboat, this.ownedGeometries, this.ownedMaterials);
 
     this.ocean = new OceanRenderer();
     scene.add(this.ocean.mesh);
@@ -100,18 +128,15 @@ export class World {
     this.itemObjects.get(id)?.removeFromParent();
   }
 
-  getInteractiveObjects(): Object3D[] {
-    return [...this.itemObjects.values()].filter((object) => object.parent !== null);
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.ocean.dispose();
     this.environment.dispose();
     this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh);
-
-    // Task 6 builders retain ownership of their shared render resources and expose no
-    // disposal contract. World detaches those roots without disposing shared assets.
+    this.ownedGeometries.forEach((geometry) => geometry.dispose());
+    this.ownedMaterials.forEach((material) => material.dispose());
+    this.ownedGeometries.clear();
+    this.ownedMaterials.clear();
   }
 }
