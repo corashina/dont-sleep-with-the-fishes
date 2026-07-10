@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { Mesh, Vector3 } from 'three';
+import {
+  Color,
+  DirectionalLight,
+  FogExp2,
+  Material,
+  Mesh,
+  Points,
+  Scene,
+  ShaderMaterial,
+  Vector3,
+} from 'three';
 import { ITEM_IDS } from '../src/game/ItemState';
+import type { SinkingState } from '../src/game/sinking';
+import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import type { CollisionBox } from '../src/player/collisions';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { createShip } from '../src/world/Ship';
+import { World } from '../src/world/World';
 
 const pointInside = (point: Vector3, box: CollisionBox): boolean =>
   point.x >= box.minX && point.x <= box.maxX &&
@@ -39,6 +53,116 @@ const geometrySignature = (id: (typeof ITEM_IDS)[number]): string => {
 };
 
 describe('procedural world builders', () => {
+  it('assembles one object for every supply and exposes gameplay markers', () => {
+    const scene = new Scene();
+    const world = new World(scene);
+    expect(world.itemObjects.size).toBe(8);
+    expect(world.colliders.length).toBeGreaterThanOrEqual(10);
+    expect(scene.getObjectByName('sinking-ship')).toBeDefined();
+    expect(scene.getObjectByName('lifeboat')).toBeDefined();
+    world.dispose();
+  });
+
+  it('uses the same wave time and amplitude for the ocean and four-point lifeboat pose', () => {
+    const scene = new Scene();
+    const world = new World(scene);
+    const sinking: SinkingState = {
+      progress: 0.4,
+      rollRadians: -0.12,
+      pitchRadians: 0.04,
+      sinkOffset: -1.25,
+      alarmRate: 1,
+      waveAmplitudeScale: 1.18,
+      cameraShake: 0.006,
+    };
+    const time = 3.75;
+    const delta = 0.2;
+    const cameraPosition = new Vector3(14, 7, -11);
+    const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
+      sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
+    const target = buoyancy.sampleTarget(time, 6.2, -5.8, sinking.waveAmplitudeScale);
+    const expectedPose = smoothBoatPose(
+      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
+      target,
+      delta,
+      7,
+    );
+
+    world.update(time, delta, sinking, cameraPosition, false);
+
+    const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
+    const oceanMaterial = ocean.material as ShaderMaterial;
+    expect(oceanMaterial.uniforms.uTime!.value).toBe(time);
+    expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
+    expect(world.lifeboat.position.x).toBeCloseTo(6.2 + expectedPose.driftX);
+    expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
+    expect(world.lifeboat.position.z).toBeCloseTo(-5.8 + expectedPose.driftZ);
+    expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
+    expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
+    expect(world.ship.position.y).toBe(sinking.sinkOffset);
+    expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
+    expect(world.ship.rotation.z).toBe(sinking.rollRadians);
+
+    const rain = scene.getObjectByName('rain') as Points;
+    expect(rain.position.x).toBe(cameraPosition.x);
+    expect(rain.position.z).toBe(cameraPosition.z);
+    expect((scene.fog as FogExp2).density).toBeCloseTo(0.018 + sinking.progress * 0.009);
+    const keyLight = scene.children.find((object) => object instanceof DirectionalLight) as DirectionalLight;
+    expect(keyLight.intensity).toBeCloseTo(2.1 - sinking.progress * 0.45);
+    world.dispose();
+  });
+
+  it('moves saved items into lifeboat slots and removes lost items from interaction', () => {
+    const world = new World(new Scene());
+    const saved = world.itemObjects.get('flareGun')!;
+    const lost = world.itemObjects.get('ductTape')!;
+
+    world.saveItem('flareGun', 0);
+    world.loseItem('ductTape');
+
+    expect(saved.parent?.name).toBe('supply-slot-1');
+    expect(saved.position.toArray()).toEqual([0, 0, 0]);
+    expect(saved.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
+    expect(lost.parent).toBeNull();
+    expect(world.getInteractiveObjects()).not.toContain(lost);
+    world.dispose();
+  });
+
+  it('restores the scene and disposes only owned resources exactly once', () => {
+    const scene = new Scene();
+    const originalBackground = new Color(0x112233);
+    const originalFog = new FogExp2(0x112233, 0.004);
+    scene.background = originalBackground;
+    scene.fog = originalFog;
+    const world = new World(scene);
+    const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
+    const rain = scene.getObjectByName('rain') as Points;
+    let oceanGeometryDisposals = 0;
+    let rainGeometryDisposals = 0;
+    let sharedShipMaterialDisposals = 0;
+    ocean.geometry.addEventListener('dispose', () => oceanGeometryDisposals += 1);
+    rain.geometry.addEventListener('dispose', () => rainGeometryDisposals += 1);
+    let sharedShipMaterial: Material | undefined;
+    world.ship.traverse((object) => {
+      if (!sharedShipMaterial && object instanceof Mesh) sharedShipMaterial = object.material as Material;
+    });
+    sharedShipMaterial!.addEventListener('dispose', () => sharedShipMaterialDisposals += 1);
+
+    world.dispose();
+    world.dispose();
+
+    expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    expect(scene.getObjectByName('lifeboat')).toBeUndefined();
+    expect(scene.getObjectByName('procedural-ocean')).toBeUndefined();
+    expect(scene.getObjectByName('rain')).toBeUndefined();
+    expect(scene.children.some((object) => object instanceof DirectionalLight)).toBe(false);
+    expect(scene.background).toBe(originalBackground);
+    expect(scene.fog).toBe(originalFog);
+    expect(oceanGeometryDisposals).toBe(1);
+    expect(rainGeometryDisposals).toBe(1);
+    expect(sharedShipMaterialDisposals).toBe(0);
+  });
+
   it('creates a four-wave subdivided ocean mesh', () => {
     const ocean = new OceanRenderer();
     expect(ocean.mesh.name).toBe('procedural-ocean');
