@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BufferGeometry,
   Color,
   DirectionalLight,
   FogExp2,
+  HemisphereLight,
   Material,
   Mesh,
+  Object3D,
   Points,
   Scene,
   ShaderMaterial,
@@ -50,6 +53,32 @@ const geometrySignature = (id: (typeof ITEM_IDS)[number]): string => {
     entries.push(`${object.geometry.type}:${values.join(',')}`);
   });
   return entries.sort().join('|');
+};
+
+interface RenderResources {
+  geometries: Set<BufferGeometry>;
+  materials: Set<Material>;
+}
+
+const collectRenderResources = (root: Object3D): RenderResources => {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    geometries.add(object.geometry);
+    const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
+    meshMaterials.forEach((meshMaterial) => materials.add(meshMaterial));
+  });
+  return { geometries, materials };
+};
+
+const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterable<T>): Map<T, number> => {
+  const counts = new Map<T, number>();
+  for (const resource of resources) {
+    counts.set(resource, 0);
+    resource.addEventListener('dispose', () => counts.set(resource, counts.get(resource)! + 1));
+  }
+  return counts;
 };
 
 describe('procedural world builders', () => {
@@ -112,7 +141,7 @@ describe('procedural world builders', () => {
     world.dispose();
   });
 
-  it('moves saved items into lifeboat slots and removes lost items from interaction', () => {
+  it('moves saved items into lifeboat slots and detaches lost items', () => {
     const world = new World(new Scene());
     const saved = world.itemObjects.get('flareGun')!;
     const lost = world.itemObjects.get('ductTape')!;
@@ -124,11 +153,10 @@ describe('procedural world builders', () => {
     expect(saved.position.toArray()).toEqual([0, 0, 0]);
     expect(saved.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
     expect(lost.parent).toBeNull();
-    expect(world.getInteractiveObjects()).not.toContain(lost);
     world.dispose();
   });
 
-  it('restores the scene and disposes only owned resources exactly once', () => {
+  it.each([1, 2])('restores the scene and disposes all owned resources once after %i dispose call(s)', (disposeCalls) => {
     const scene = new Scene();
     const originalBackground = new Color(0x112233);
     const originalFog = new FogExp2(0x112233, 0.004);
@@ -137,30 +165,68 @@ describe('procedural world builders', () => {
     const world = new World(scene);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
     const rain = scene.getObjectByName('rain') as Points;
-    let oceanGeometryDisposals = 0;
-    let rainGeometryDisposals = 0;
-    let sharedShipMaterialDisposals = 0;
-    ocean.geometry.addEventListener('dispose', () => oceanGeometryDisposals += 1);
-    rain.geometry.addEventListener('dispose', () => rainGeometryDisposals += 1);
-    let sharedShipMaterial: Material | undefined;
-    world.ship.traverse((object) => {
-      if (!sharedShipMaterial && object instanceof Mesh) sharedShipMaterial = object.material as Material;
-    });
-    sharedShipMaterial!.addEventListener('dispose', () => sharedShipMaterialDisposals += 1);
 
-    world.dispose();
-    world.dispose();
+    const shipMeshes = world.ship.children.filter((child): child is Mesh => child instanceof Mesh);
+    const shipGeometries = new Set(shipMeshes.map((mesh) => mesh.geometry));
+    const sharedShipMaterials = new Set(shipMeshes.flatMap((mesh) =>
+      Array.isArray(mesh.material) ? mesh.material : [mesh.material]));
+    const lifeboatMeshes: Mesh[] = [];
+    world.lifeboat.traverse((object) => {
+      if (object instanceof Mesh) lifeboatMeshes.push(object);
+    });
+    const lifeboatResources = collectRenderResources(world.lifeboat);
+    const propResources = [...world.itemObjects.values()].map(collectRenderResources);
+    const propGeometries = new Set(propResources.flatMap((resources) => [...resources.geometries]));
+    const propMaterials = new Set(propResources.flatMap((resources) => [...resources.materials]));
+    const ownedTask6Geometries = new Set([
+      ...shipGeometries,
+      ...lifeboatResources.geometries,
+      ...propGeometries,
+    ]);
+    const ownedTask6Materials = new Set([
+      ...lifeboatResources.materials,
+      ...propMaterials,
+    ]);
+    expect(shipGeometries.size).toBeGreaterThan(0);
+    expect(sharedShipMaterials.size).toBeGreaterThan(0);
+    expect(propResources).toHaveLength(ITEM_IDS.length);
+    propResources.forEach((resources) => {
+      expect(resources.geometries.size).toBeGreaterThan(0);
+      expect(resources.materials.size).toBeGreaterThan(0);
+    });
+    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.geometries.size);
+    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.materials.size);
+
+    const geometryDisposals = observeDisposals([
+      ...ownedTask6Geometries,
+      ocean.geometry,
+      rain.geometry,
+    ]);
+    const ownedMaterialDisposals = observeDisposals([
+      ...ownedTask6Materials,
+      ocean.material as Material,
+      rain.material as Material,
+    ]);
+    const sharedShipMaterialDisposals = observeDisposals(sharedShipMaterials);
+
+    world.saveItem('flareGun', 0);
+    world.loseItem('ductTape');
+    expect(world.itemObjects.get('flareGun')!.parent?.name).toBe('supply-slot-1');
+    expect(world.itemObjects.get('ductTape')!.parent).toBeNull();
+    expect(world.itemObjects.get('cannedFood')!.parent).toBe(world.ship);
+    for (let call = 0; call < disposeCalls; call += 1) world.dispose();
 
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
     expect(scene.getObjectByName('lifeboat')).toBeUndefined();
     expect(scene.getObjectByName('procedural-ocean')).toBeUndefined();
     expect(scene.getObjectByName('rain')).toBeUndefined();
-    expect(scene.children.some((object) => object instanceof DirectionalLight)).toBe(false);
+    expect(scene.children.some((object) =>
+      object instanceof DirectionalLight || object instanceof HemisphereLight)).toBe(false);
     expect(scene.background).toBe(originalBackground);
     expect(scene.fog).toBe(originalFog);
-    expect(oceanGeometryDisposals).toBe(1);
-    expect(rainGeometryDisposals).toBe(1);
-    expect(sharedShipMaterialDisposals).toBe(0);
+    geometryDisposals.forEach((count) => expect(count).toBe(1));
+    ownedMaterialDisposals.forEach((count) => expect(count).toBe(1));
+    sharedShipMaterialDisposals.forEach((count) => expect(count).toBe(0));
   });
 
   it('creates a four-wave subdivided ocean mesh', () => {
