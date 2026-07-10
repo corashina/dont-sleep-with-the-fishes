@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Mesh, Vector3 } from 'three';
 import { ITEM_IDS } from '../src/game/ItemState';
+import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import type { CollisionBox } from '../src/player/collisions';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
@@ -38,6 +39,14 @@ const geometrySignature = (id: (typeof ITEM_IDS)[number]): string => {
 };
 
 describe('procedural world builders', () => {
+  it('creates a four-wave subdivided ocean mesh', () => {
+    const ocean = new OceanRenderer();
+    expect(ocean.mesh.name).toBe('procedural-ocean');
+    expect(ocean.mesh.geometry.getAttribute('position').count).toBeGreaterThan(16_000);
+    expect(ocean.material.uniforms.uDirections!.value).toHaveLength(4);
+    ocean.dispose();
+  });
+
   it.each(ITEM_IDS)('builds a visible mesh for %s', (id) => {
     const prop = createProp(id);
     let meshCount = 0;
