@@ -71,11 +71,13 @@ export function chooseContextAction(input: ContextInput): ContextAction {
 
 function findTaggedAncestor(object: Object3D | null): Object3D | null {
   let current = object;
+  let item: Object3D | null = null;
   while (current) {
-    if (current.userData.itemId || current.name === 'lifeboat') return current;
+    if (current.name === 'lifeboat') return current;
+    if (!item && current.userData.itemId) item = current;
     current = current.parent;
   }
-  return null;
+  return item;
 }
 
 export class InteractionSystem {

@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
+  Quaternion,
   Scene,
   Vector3,
 } from 'three';
@@ -52,6 +53,36 @@ describe('chooseContextAction', () => {
       nearEvacuation: true,
     }).type).toBe('evacuate');
   });
+
+  it('offers an exactly labelled drop while carrying away from the lifeboat', () => {
+    expect(chooseContextAction({
+      target: 'none',
+      itemId: null,
+      carriedItem: 'flashlight',
+      savedCount: 1,
+      nearEvacuation: false,
+    })).toEqual({ type: 'drop', itemId: 'flashlight', prompt: 'E — DROP FLASHLIGHT' });
+  });
+
+  it('returns the exact no-action result when no context applies', () => {
+    expect(chooseContextAction({
+      target: 'none',
+      itemId: null,
+      carriedItem: null,
+      savedCount: 0,
+      nearEvacuation: false,
+    })).toEqual({ type: 'none', prompt: '' });
+  });
+
+  it('prioritizes a full targeted lifeboat over mixed evacuation and drop inputs', () => {
+    expect(chooseContextAction({
+      target: 'lifeboat',
+      itemId: 'flareGun',
+      carriedItem: 'waterJug',
+      savedCount: 5,
+      nearEvacuation: true,
+    })).toEqual({ type: 'boatFull', prompt: 'LIFEBOAT FULL — DROP SOMETHING ELSE' });
+  });
 });
 
 describe('InteractionSystem', () => {
@@ -71,6 +102,72 @@ describe('InteractionSystem', () => {
     const result = new InteractionSystem(camera).update([item], lifeboat);
 
     expect(result).toEqual({ target: 'item', itemId: 'flareGun' });
+  });
+
+  it('treats a tagged saved item nested under the lifeboat as the lifeboat', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.z = -2;
+    const savedItem = new Group();
+    savedItem.userData.itemId = 'medicalKit';
+    savedItem.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.5), new MeshStandardMaterial()));
+    lifeboat.add(savedItem);
+
+    const result = new InteractionSystem(camera).update([savedItem], lifeboat);
+
+    expect(result).toEqual({ target: 'lifeboat', itemId: null });
+  });
+
+  it('resolves a direct lifeboat mesh', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.z = -2;
+    lifeboat.add(new Mesh(new BoxGeometry(2, 1, 1), new MeshStandardMaterial()));
+
+    const result = new InteractionSystem(camera).update([], lifeboat);
+
+    expect(result).toEqual({ target: 'lifeboat', itemId: null });
+  });
+
+  it('switches highlighted targets and clears one beyond ray range', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const first = new Group();
+    first.userData.itemId = 'flareGun';
+    const firstMaterial = new MeshStandardMaterial();
+    const firstMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), firstMaterial);
+    first.add(firstMesh);
+    first.position.z = -2;
+    const second = new Group();
+    second.userData.itemId = 'ductTape';
+    const secondMaterial = new MeshStandardMaterial();
+    const secondMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), secondMaterial);
+    second.add(secondMesh);
+    second.position.set(2, 0, -2);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.set(10, 0, -2);
+    const interaction = new InteractionSystem(camera);
+
+    expect(interaction.update([first, second], lifeboat)).toEqual({
+      target: 'item', itemId: 'flareGun',
+    });
+    expect(firstMesh.material).not.toBe(firstMaterial);
+
+    first.position.x = 2;
+    second.position.x = 0;
+    expect(interaction.update([first, second], lifeboat)).toEqual({
+      target: 'item', itemId: 'ductTape',
+    });
+    expect(firstMesh.material).toBe(firstMaterial);
+    expect(secondMesh.material).not.toBe(secondMaterial);
+
+    second.position.z = -4;
+    expect(interaction.update([first, second], lifeboat)).toEqual({
+      target: 'none', itemId: null,
+    });
+    expect(secondMesh.material).toBe(secondMaterial);
   });
 
   it('isolates highlighting from shared materials and restores resources on dispose', () => {
@@ -134,6 +231,31 @@ describe('CarryController', () => {
     expect(carry.throw()).toBe('flareGun');
     expect(carry.pickUp('ductTape', second)).toBe(false);
     expect(first.parent).toBe(scene);
+  });
+
+  it('preserves the held world transform at release from a transformed camera parent', () => {
+    const scene = new Scene();
+    const cameraRig = new Group();
+    cameraRig.position.set(3, 4, -2);
+    cameraRig.rotation.set(0.1, 0.7, -0.05);
+    cameraRig.scale.setScalar(1.2);
+    scene.add(cameraRig);
+    const camera = new PerspectiveCamera();
+    camera.position.set(0.2, -0.1, 0.3);
+    cameraRig.add(camera);
+    const item = new Group();
+    scene.add(item);
+    const carry = new CarryController(scene, camera);
+    carry.pickUp('baitTin', item);
+    const beforePosition = item.getWorldPosition(new Vector3());
+    const beforeQuaternion = item.getWorldQuaternion(new Quaternion());
+    const beforeScale = item.getWorldScale(new Vector3());
+
+    carry.throw();
+
+    expect(item.getWorldPosition(new Vector3()).distanceTo(beforePosition)).toBeLessThan(1e-10);
+    expect(item.getWorldQuaternion(new Quaternion()).angleTo(beforeQuaternion)).toBeLessThan(1e-10);
+    expect(item.getWorldScale(new Vector3()).distanceTo(beforeScale)).toBeLessThan(1e-10);
   });
 
   it('detects a lifeboat hit across a large delta and reports it once', () => {
