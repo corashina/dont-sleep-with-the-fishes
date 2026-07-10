@@ -128,6 +128,7 @@ export class GameUI {
   }
 
   setPrompt(text: string): void {
+    if (this.prompt.textContent === text) return;
     this.prompt.textContent = text;
     this.prompt.classList.toggle('is-visible', text.length > 0);
   }
