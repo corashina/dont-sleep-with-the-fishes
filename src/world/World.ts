@@ -47,6 +47,7 @@ export class World {
   private readonly buoyancy: BoatBuoyancy;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly settlingItems = new Map<ItemId, number>();
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private readonly boatAnchor = new Vector3(6.2, 0.35, -5.8);
   private disposed = false;
@@ -111,6 +112,7 @@ export class World {
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
+    this.updateSettlingItems(reducedMotion ? 0.3 : delta);
   }
 
   saveItem(id: ItemId, slotIndex: number): void {
@@ -118,19 +120,22 @@ export class World {
     const slot = this.boatSlots[slotIndex];
     if (!item || !slot) return;
     item.removeFromParent();
-    item.position.set(0, 0, 0);
+    item.position.set(0, 0.14, 0);
     item.rotation.set(0, slotIndex * 0.5, 0);
-    item.scale.setScalar(0.82);
+    item.scale.setScalar(0.68);
     slot.add(item);
+    this.settlingItems.set(id, 0);
   }
 
   loseItem(id: ItemId): void {
+    this.settlingItems.delete(id);
     this.itemObjects.get(id)?.removeFromParent();
   }
 
   landItem(id: ItemId): void {
     const item = this.itemObjects.get(id);
     if (!item) return;
+    this.settlingItems.delete(id);
     this.ship.attach(item);
     item.scale.setScalar(1);
   }
@@ -145,5 +150,28 @@ export class World {
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedGeometries.clear();
     this.ownedMaterials.clear();
+    this.settlingItems.clear();
+  }
+
+  private updateSettlingItems(delta: number): void {
+    this.settlingItems.forEach((elapsed, id) => {
+      const item = this.itemObjects.get(id);
+      if (!item) {
+        this.settlingItems.delete(id);
+        return;
+      }
+      const nextElapsed = elapsed + Math.max(0, delta);
+      const progress = Math.min(1, nextElapsed / 0.25);
+      const eased = 1 - (1 - progress) ** 3;
+      item.position.y = 0.14 * (1 - eased);
+      item.scale.setScalar(0.68 + 0.14 * eased);
+      if (progress === 1) {
+        item.position.y = 0;
+        item.scale.setScalar(0.82);
+        this.settlingItems.delete(id);
+      } else {
+        this.settlingItems.set(id, nextElapsed);
+      }
+    });
   }
 }

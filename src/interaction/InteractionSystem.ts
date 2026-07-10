@@ -7,7 +7,7 @@ import {
   Raycaster,
   Vector2,
 } from 'three';
-import type { ItemId } from '../game/ItemState';
+import { ITEM_LABELS, type ItemId } from '../game/ItemState';
 
 export type RayTarget = 'none' | 'item' | 'lifeboat';
 
@@ -26,17 +26,6 @@ export interface ContextInput {
   savedCount: number;
   nearEvacuation: boolean;
 }
-
-const ITEM_LABELS: Record<ItemId, string> = {
-  flareGun: 'FLARE GUN',
-  ductTape: 'DUCT TAPE',
-  fishingRod: 'FISHING ROD',
-  baitTin: 'BAIT TIN',
-  medicalKit: 'MEDICAL KIT',
-  waterJug: 'WATER JUG',
-  cannedFood: 'CANNED FOOD',
-  flashlight: 'FLASHLIGHT',
-};
 
 export function chooseContextAction(input: ContextInput): ContextAction {
   if (input.target === 'lifeboat' && input.carriedItem && input.savedCount >= 5) {

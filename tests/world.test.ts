@@ -14,7 +14,7 @@ import {
   Vector3,
 } from 'three';
 import { ITEM_IDS } from '../src/game/ItemState';
-import type { SinkingState } from '../src/game/sinking';
+import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
@@ -141,7 +141,7 @@ describe('procedural world builders', () => {
     world.dispose();
   });
 
-  it('moves saved items into lifeboat slots and detaches lost items', () => {
+  it('settles saved items into lifeboat slots and detaches lost items', () => {
     const world = new World(new Scene());
     const saved = world.itemObjects.get('flareGun')!;
     const lost = world.itemObjects.get('ductTape')!;
@@ -150,6 +150,9 @@ describe('procedural world builders', () => {
     world.loseItem('ductTape');
 
     expect(saved.parent?.name).toBe('supply-slot-1');
+    expect(saved.position.y).toBeGreaterThan(0);
+    expect(saved.scale.x).toBeLessThan(0.82);
+    world.update(0.3, 0.3, getSinkingState(0, 120), new Vector3(), false);
     expect(saved.position.toArray()).toEqual([0, 0, 0]);
     expect(saved.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
     expect(lost.parent).toBeNull();
