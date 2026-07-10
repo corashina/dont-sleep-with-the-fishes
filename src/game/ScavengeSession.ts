@@ -46,7 +46,7 @@ export class ScavengeSession {
   }
 
   dropCarried(): ItemId | null {
-    if (!this.carriedItem) return null;
+    if (this.status !== 'running' || !this.carriedItem) return null;
     const id = this.carriedItem;
     this.items[id] = 'available';
     this.carriedItem = null;
@@ -54,7 +54,7 @@ export class ScavengeSession {
   }
 
   saveCarried(): boolean {
-    if (!this.carriedItem || this.savedCount >= BOAT_CAPACITY) return false;
+    if (this.status !== 'running' || !this.carriedItem || this.savedCount >= BOAT_CAPACITY) return false;
     const id = this.carriedItem;
     this.items[id] = 'saved';
     this.carriedItem = null;
@@ -63,7 +63,7 @@ export class ScavengeSession {
   }
 
   loseCarried(): boolean {
-    if (!this.carriedItem) return false;
+    if (this.status !== 'running' || !this.carriedItem) return false;
     const id = this.carriedItem;
     this.items[id] = 'lost';
     this.carriedItem = null;
@@ -71,7 +71,7 @@ export class ScavengeSession {
   }
 
   lose(id: ItemId): boolean {
-    if (this.items[id] === 'saved' || this.items[id] === 'lost') return false;
+    if (this.status !== 'running' || this.items[id] === 'saved' || this.items[id] === 'lost') return false;
     if (this.carriedItem === id) this.carriedItem = null;
     this.items[id] = 'lost';
     return true;
