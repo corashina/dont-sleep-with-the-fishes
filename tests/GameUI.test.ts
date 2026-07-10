@@ -71,6 +71,21 @@ describe('GameUI', () => {
     expect(mount.querySelector('.slot')).toBe(firstSlot);
   });
 
+  it('does not rewrite an unchanged live-region prompt', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new GameUI(mount);
+    const prompt = mount.querySelector('[data-prompt]')!;
+    ui.setPrompt('E â€” PICK UP FLARE GUN');
+    const observer = new MutationObserver(vi.fn());
+    observer.observe(prompt, { childList: true });
+
+    ui.setPrompt('E â€” PICK UP FLARE GUN');
+
+    expect(observer.takeRecords()).toHaveLength(0);
+    observer.disconnect();
+  });
+
   it('surfaces pointer-lock rejection on start and pause layers', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

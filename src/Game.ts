@@ -44,6 +44,7 @@ export class Game {
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private readonly lifecycle = new GameLifecycle();
   private animationFrame = 0;
+  private started = false;
   private elapsed = 0;
   private terminalPresentation: TerminalPresentation = {
     phase: 'playing',
@@ -90,7 +91,8 @@ export class Game {
   }
 
   start(): void {
-    if (this.lifecycle.isDisposed) return;
+    if (this.lifecycle.isDisposed || this.started) return;
+    this.started = true;
     this.clock.start();
     this.animationFrame = requestAnimationFrame(this.animate);
   }

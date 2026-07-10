@@ -22,6 +22,20 @@ function block(size: [number, number, number], position: [number, number, number
   return mesh;
 }
 
+export function selectSpawnPoints(
+  points: readonly Vector3[],
+  random: () => number = Math.random,
+): Vector3[] {
+  const selected = points.map((point) => point.clone());
+  for (let index = selected.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(
+      Math.max(0, Math.min(0.999999, random())) * (index + 1),
+    );
+    [selected[index], selected[swapIndex]] = [selected[swapIndex]!, selected[index]!];
+  }
+  return selected;
+}
+
 export function createShip(): ShipBuild {
   const root = new Group();
   root.name = 'sinking-ship';
@@ -36,7 +50,9 @@ export function createShip(): ShipBuild {
   root.add(block([2.5, 0.9, 0.9], [0, 2.55, 7.1], darkSteel));
   root.add(block([0.18, 1.1, 13], [-3.85, 2.65, -4.2], steel));
   root.add(block([0.18, 1.1, 13], [3.85, 2.65, -4.2], steel));
-  root.add(block([0.7, 0.7, 0.7], [-2.8, 2.55, -6.5], alarmMaterial));
+  const alarmBeacon = block([0.7, 0.7, 0.7], [-2.8, 2.55, -6.5], alarmMaterial);
+  alarmBeacon.name = 'alarm-beacon';
+  root.add(alarmBeacon);
   root.add(block([1.4, 1.2, 1.5], [1.6, 2.75, -5.5], darkSteel));
   root.add(block([1.8, 1.4, 1.8], [-1.8, 2.85, -7.5], darkSteel));
 

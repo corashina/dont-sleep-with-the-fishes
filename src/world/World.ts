@@ -4,6 +4,7 @@ import {
   Group,
   Material,
   Mesh,
+  MeshStandardMaterial,
   Object3D,
   Scene,
   Vector3,
@@ -17,7 +18,7 @@ import type { CollisionBox } from '../player/collisions';
 import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
-import { createShip } from './Ship';
+import { createShip, selectSpawnPoints } from './Ship';
 
 function collectOwnedResources(
   root: Object3D,
@@ -61,10 +62,11 @@ export class World {
     scene.add(this.ship);
     collectOwnedResources(this.ship, this.ownedGeometries);
 
+    const selectedSpawnPoints = selectSpawnPoints(shipBuild.itemSpawnPoints);
     ITEM_IDS.forEach((id, index) => {
       const prop = createProp(id);
       collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
-      prop.position.copy(shipBuild.itemSpawnPoints[index]!);
+      prop.position.copy(selectedSpawnPoints[index]!);
       prop.rotation.y = index * 0.73;
       this.ship.add(prop);
       this.itemObjects.set(id, prop);
@@ -113,6 +115,12 @@ export class World {
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
     this.updateSettlingItems(reducedMotion ? 0.3 : delta);
+
+    const beacon = this.ship.getObjectByName('alarm-beacon');
+    if (beacon instanceof Mesh && beacon.material instanceof MeshStandardMaterial) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
+      beacon.material.emissiveIntensity = 0.25 + pulse * 1.35;
+    }
   }
 
   saveItem(id: ItemId, slotIndex: number): void {

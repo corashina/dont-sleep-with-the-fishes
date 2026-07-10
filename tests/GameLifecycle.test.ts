@@ -7,6 +7,25 @@ import { GameLifecycle } from '../src/game/GameLoop';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 
 describe('Game disposal integration', () => {
+  it('starts the clock and schedules animation only once', () => {
+    const startClock = vi.fn();
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
+    const game = Object.create(Game.prototype) as Game;
+    Object.assign(game, {
+      lifecycle: new GameLifecycle(),
+      clock: { start: startClock },
+      animate: vi.fn(),
+      animationFrame: 0,
+    });
+
+    game.start();
+    game.start();
+
+    expect(startClock).toHaveBeenCalledOnce();
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+    requestAnimationFrame.mockRestore();
+  });
+
   it('exits an owned lock, resets carry, tears down every subsystem, and removes the canvas once', () => {
     const canvas = document.createElement('canvas');
     document.body.append(canvas);

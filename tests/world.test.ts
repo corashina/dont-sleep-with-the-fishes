@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BufferAttribute,
   BufferGeometry,
   Color,
   DirectionalLight,
   FogExp2,
+  Group,
   HemisphereLight,
   Material,
   Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
   Object3D,
   Points,
   Scene,
@@ -21,7 +25,7 @@ import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import type { CollisionBox } from '../src/player/collisions';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
-import { createShip } from '../src/world/Ship';
+import { createShip, selectSpawnPoints } from '../src/world/Ship';
 import { World } from '../src/world/World';
 
 const pointInside = (point: Vector3, box: CollisionBox): boolean =>
@@ -138,7 +142,43 @@ describe('procedural world builders', () => {
     expect((scene.fog as FogExp2).density).toBeCloseTo(0.018 + sinking.progress * 0.009);
     const keyLight = scene.children.find((object) => object instanceof DirectionalLight) as DirectionalLight;
     expect(keyLight.intensity).toBeCloseTo(2.1 - sinking.progress * 0.45);
+    const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
+    expect(beacon).toBeInstanceOf(Mesh);
+    const expectedPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
+    expect((beacon.material as MeshStandardMaterial).emissiveIntensity)
+      .toBeCloseTo(0.25 + expectedPulse * 1.35);
+    expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
+    expect(scene.getObjectByName('storm-clouds')).toBeDefined();
     world.dispose();
+  });
+
+  it('slows spray and cloud movement when reduced motion is requested', () => {
+    const sinking = getSinkingState(60, 120);
+    const regularScene = new Scene();
+    const reducedScene = new Scene();
+    const regular = new World(regularScene);
+    const reduced = new World(reducedScene);
+    const regularSpray = regularScene.getObjectByName('sea-spray') as Points;
+    const reducedSpray = reducedScene.getObjectByName('sea-spray') as Points;
+    const regularClouds = regularScene.getObjectByName('storm-clouds') as Group;
+    const reducedClouds = reducedScene.getObjectByName('storm-clouds') as Group;
+    const regularY = (regularSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number;
+    const reducedY = (reducedSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number;
+
+    regular.update(1, 1, sinking, new Vector3(), false);
+    reduced.update(1, 1, sinking, new Vector3(), true);
+
+    const regularDistance = (
+      ((regularSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number) - regularY + 2.2
+    ) % 2.2;
+    const reducedDistance = (
+      ((reducedSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number) - reducedY + 2.2
+    ) % 2.2;
+    expect(regularDistance).toBeGreaterThan(reducedDistance);
+    expect(regularClouds.position.x).toBeCloseTo(0.9);
+    expect(reducedClouds.position.x).toBeCloseTo(0.3);
+    regular.dispose();
+    reduced.dispose();
   });
 
   it('settles saved items into lifeboat slots and detaches lost items', () => {
@@ -181,6 +221,10 @@ describe('procedural world builders', () => {
     const world = new World(scene);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
     const rain = scene.getObjectByName('rain') as Points;
+    const spray = scene.getObjectByName('sea-spray') as Points;
+    const clouds = scene.getObjectByName('storm-clouds') as Group;
+    const cloudResources = collectRenderResources(clouds);
+    expect([...cloudResources.materials].every((material) => material instanceof MeshBasicMaterial)).toBe(true);
 
     const shipMeshes = world.ship.children.filter((child): child is Mesh => child instanceof Mesh);
     const shipGeometries = new Set(shipMeshes.map((mesh) => mesh.geometry));
@@ -217,11 +261,15 @@ describe('procedural world builders', () => {
       ...ownedTask6Geometries,
       ocean.geometry,
       rain.geometry,
+      spray.geometry,
+      ...cloudResources.geometries,
     ]);
     const ownedMaterialDisposals = observeDisposals([
       ...ownedTask6Materials,
       ocean.material as Material,
       rain.material as Material,
+      spray.material as Material,
+      ...cloudResources.materials,
     ]);
     const sharedShipMaterialDisposals = observeDisposals(sharedShipMaterials);
 
@@ -236,6 +284,8 @@ describe('procedural world builders', () => {
     expect(scene.getObjectByName('lifeboat')).toBeUndefined();
     expect(scene.getObjectByName('procedural-ocean')).toBeUndefined();
     expect(scene.getObjectByName('rain')).toBeUndefined();
+    expect(scene.getObjectByName('sea-spray')).toBeUndefined();
+    expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
     expect(scene.children.some((object) =>
       object instanceof DirectionalLight || object instanceof HemisphereLight)).toBe(false);
     expect(scene.background).toBe(originalBackground);
@@ -290,6 +340,16 @@ describe('procedural world builders', () => {
     expect(ship.colliders.length).toBeGreaterThanOrEqual(10);
     expect(ship.playerStart.y).toBeGreaterThan(2);
     expect(ship.evacuationPoint.x).toBeGreaterThan(3);
+  });
+
+  it('selects every authored spawn point exactly once', () => {
+    const points = createShip().itemSpawnPoints;
+    const values = [0.12, 0.81, 0.34, 0.67, 0.05, 0.92, 0.48];
+    let index = 0;
+    const selected = selectSpawnPoints(points, () => values[index++] ?? 0.5);
+    expect(selected).toHaveLength(8);
+    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(8);
+    expect(selected.every((point) => !points.includes(point))).toBe(true);
   });
 
   it.each([
