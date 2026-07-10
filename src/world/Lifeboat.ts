@@ -20,6 +20,8 @@ export function createLifeboat(): LifeboatBuild {
   right.rotation.z = 0.16;
   const floor = new Mesh(new BoxGeometry(2.2, 0.25, 4.9), inner);
   floor.position.y = -0.4;
+  const slotGeometry = new BoxGeometry(0.5, 0.04, 0.5);
+  const slotMaterial = new MeshStandardMaterial({ color: 0xd4c894, roughness: 0.76, flatShading: true });
   const bow = new Mesh(new BoxGeometry(2.2, 0.7, 0.35), orange);
   bow.position.z = -2.55;
   const stern = bow.clone();
@@ -32,6 +34,10 @@ export function createLifeboat(): LifeboatBuild {
     const slot = new Group();
     slot.name = `supply-slot-${index + 1}`;
     slot.position.set(x!, y!, z!);
+    const marker = new Mesh(slotGeometry, slotMaterial);
+    marker.name = `supply-slot-marker-${index + 1}`;
+    marker.position.y = -0.22;
+    slot.add(marker);
     root.add(slot);
     return slot;
   });
@@ -46,6 +52,6 @@ export function createLifeboat(): LifeboatBuild {
   return {
     root,
     slots,
-    acceptanceBox: new Box3(new Vector3(-1.55, -0.8, -2.9), new Vector3(1.55, 1.2, 2.9)),
+    acceptanceBox: new Box3(new Vector3(-1, -0.2, -2.3), new Vector3(1, 1, 2.3)),
   };
 }

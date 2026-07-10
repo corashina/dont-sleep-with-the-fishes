@@ -47,11 +47,11 @@ export function createShip(): ShipBuild {
     { minX: -3.8, maxX: 3.8, minY: 2, maxY: 5.4, minZ: 8.9, maxZ: 9.3 },
     { minX: -3.8, maxX: -1.05, minY: 2, maxY: 5.4, minZ: 1.05, maxZ: 1.4 },
     { minX: 1.05, maxX: 3.8, minY: 2, maxY: 5.4, minZ: 1.05, maxZ: 1.4 },
-    { minX: -1.3, maxX: 1.3, minY: 2, maxY: 3.1, minZ: 6.6, maxZ: 7.6 },
-    { minX: 0.85, maxX: 2.35, minY: 2, maxY: 3.5, minZ: -6.3, maxZ: -4.7 },
-    { minX: -2.8, maxX: -0.8, minY: 2, maxY: 3.6, minZ: -8.5, maxZ: -6.5 },
-    { minX: -4.2, maxX: -3.55, minY: 2, maxY: 3.3, minZ: -10.5, maxZ: -0.2 },
-    { minX: 3.55, maxX: 4.2, minY: 2, maxY: 3.3, minZ: -10.5, maxZ: -0.2 },
+    { minX: -1.25, maxX: 1.25, minY: 2, maxY: 4.2, minZ: 6.65, maxZ: 7.55 },
+    { minX: 0.9, maxX: 2.3, minY: 2, maxY: 4.2, minZ: -6.25, maxZ: -4.75 },
+    { minX: -2.7, maxX: -0.9, minY: 2, maxY: 4.2, minZ: -8.4, maxZ: -6.6 },
+    { minX: -3.94, maxX: -3.76, minY: 2, maxY: 4.2, minZ: -10.7, maxZ: 2.3 },
+    { minX: 3.76, maxX: 3.94, minY: 2, maxY: 4.2, minZ: -10.7, maxZ: 2.3 },
   ];
 
   return {
@@ -64,6 +64,6 @@ export function createShip(): ShipBuild {
       new Vector3(-0.2, 2.35, -6.4), new Vector3(2.4, 2.35, -8.6),
     ],
     playerStart: new Vector3(0, 3.72, 7.8),
-    evacuationPoint: new Vector3(4.35, 2.4, -5.8),
+    evacuationPoint: new Vector3(3.2, 3.72, -5.8),
   };
 }
