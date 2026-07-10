@@ -30,6 +30,12 @@ export class ScavengeSession {
     if (this.remainingSeconds === 0) this.finish('failure');
   }
 
+  penalize(seconds: number): void {
+    if (this.status !== 'running') return;
+    this.remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, seconds));
+    if (this.remainingSeconds === 0) this.finish('failure');
+  }
+
   pause(): void {
     if (this.status === 'running') this.status = 'paused';
   }
