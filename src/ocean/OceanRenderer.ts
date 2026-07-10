@@ -19,7 +19,6 @@ const vertexShader = `
   varying float vHeight;
   varying float vViewDepth;
   varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
 
   void main() {
     vec3 displaced = position;
@@ -45,7 +44,6 @@ const vertexShader = `
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
     vHeight = height;
     vViewDepth = length(cameraPosition - worldPosition.xyz);
-    vWorldPosition = worldPosition.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
@@ -61,11 +59,17 @@ const fragmentShader = `
   varying float vHeight;
   varying float vViewDepth;
   varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
+
+  float bayer2(vec2 cell) {
+    return 2.0 * cell.x + 3.0 * cell.y - 4.0 * cell.x * cell.y;
+  }
 
   float orderedDither(vec2 position) {
     vec2 cell = mod(floor(position), 4.0);
-    return mod(cell.x + cell.y * 2.0, 4.0) / 255.0;
+    vec2 lowBits = mod(cell, 2.0);
+    vec2 highBits = floor(cell / 2.0);
+    float threshold = 4.0 * bayer2(lowBits) + bayer2(highBits);
+    return (threshold - 7.5) / (16.0 * 255.0);
   }
 
   void main() {
@@ -76,8 +80,9 @@ const fragmentShader = `
     color = mix(color, uFoamColor, crest * 0.42);
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
-    color += orderedDither(gl_FragCoord.xy);
     gl_FragColor = vec4(color, 0.98);
+    #include <colorspace_fragment>
+    gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);
   }
 `;
 

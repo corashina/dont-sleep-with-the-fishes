@@ -47,6 +47,22 @@ describe('procedural world builders', () => {
     ocean.dispose();
   });
 
+  it('converts linear ocean color before centered display-space dithering', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+    const linearOutput = shader.indexOf('gl_FragColor = vec4(color, 0.98);');
+    const colorSpaceConversion = shader.indexOf('#include <colorspace_fragment>');
+    const displayDither = shader.indexOf(
+      'gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);',
+    );
+
+    expect(linearOutput).toBeGreaterThan(-1);
+    expect(colorSpaceConversion).toBeGreaterThan(linearOutput);
+    expect(displayDither).toBeGreaterThan(colorSpaceConversion);
+    expect(shader).toContain('(threshold - 7.5) / (16.0 * 255.0)');
+    ocean.dispose();
+  });
+
   it.each(ITEM_IDS)('builds a visible mesh for %s', (id) => {
     const prop = createProp(id);
     let meshCount = 0;
