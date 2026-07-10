@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 
+const BLOCKED_STATE_SETUPS = [
+  { name: 'paused', enter: (session: ScavengeSession) => session.pause() },
+  { name: 'after success', enter: (session: ScavengeSession) => session.evacuate() },
+  { name: 'after failure', enter: (session: ScavengeSession) => session.tick(120) },
+] as const;
+
+const ITEM_MUTATIONS = [
+  { name: 'dropCarried', run: (session: ScavengeSession) => session.dropCarried(), rejected: null },
+  { name: 'saveCarried', run: (session: ScavengeSession) => session.saveCarried(), rejected: false },
+  { name: 'loseCarried', run: (session: ScavengeSession) => session.loseCarried(), rejected: false },
+  { name: 'lose', run: (session: ScavengeSession) => session.lose('ductTape'), rejected: false },
+] as const;
+
 describe('ScavengeSession', () => {
   it('starts at 120 seconds and fails exactly once at expiry', () => {
     const session = new ScavengeSession();
@@ -44,12 +57,34 @@ describe('ScavengeSession', () => {
   });
 
   it('keeps saved and lost transitions idempotent', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.pickUp('flashlight');
-    expect(session.loseCarried()).toBe(true);
-    expect(session.lose('flashlight')).toBe(false);
-    expect(session.snapshot().items.flashlight).toBe('lost');
+    const savedSession = new ScavengeSession();
+    savedSession.start();
+    savedSession.pickUp('flareGun');
+    expect(savedSession.saveCarried()).toBe(true);
+    expect(savedSession.lose('flareGun')).toBe(false);
+    expect(savedSession.pickUp('flareGun')).toBe(false);
+    expect(savedSession.snapshot().items.flareGun).toBe('saved');
+
+    const lostSession = new ScavengeSession();
+    lostSession.start();
+    lostSession.pickUp('flashlight');
+    expect(lostSession.loseCarried()).toBe(true);
+    expect(lostSession.lose('flashlight')).toBe(false);
+    expect(lostSession.pickUp('flashlight')).toBe(false);
+    expect(lostSession.snapshot().items.flashlight).toBe('lost');
+  });
+
+  it.each(BLOCKED_STATE_SETUPS)('rejects item mutations while $name', ({ enter }) => {
+    for (const mutation of ITEM_MUTATIONS) {
+      const session = new ScavengeSession();
+      session.start();
+      session.pickUp('flareGun');
+      enter(session);
+      const before = session.snapshot();
+
+      expect.soft(mutation.run(session), mutation.name).toBe(mutation.rejected);
+      expect.soft(session.snapshot(), mutation.name).toEqual(before);
+    }
   });
 
   it('commits success only once', () => {
