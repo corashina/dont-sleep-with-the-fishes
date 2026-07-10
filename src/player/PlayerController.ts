@@ -33,9 +33,9 @@ export class PlayerController {
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     this.movement.set(
-      (axes.x * cos - axes.z * sin) * speed * delta,
+      (axes.x * cos + axes.z * sin) * speed * delta,
       0,
-      (axes.x * sin + axes.z * cos) * speed * delta,
+      (-axes.x * sin + axes.z * cos) * speed * delta,
     );
 
     const current: LocalPlayerPosition = {
