@@ -7,6 +7,13 @@ import {
   WebGLRenderer,
 } from 'three';
 import { ScavengeSession } from './game/ScavengeSession';
+import {
+  GameLifecycle,
+  advanceTerminalPresentation,
+  pointerLockTransition,
+  runGameplayFrame,
+  type TerminalPresentation,
+} from './game/GameLoop';
 import { getSinkingState } from './game/sinking';
 import { InputController } from './input/InputController';
 import { CarryController } from './interaction/CarryController';
@@ -35,9 +42,13 @@ export class Game {
   private readonly carry: CarryController;
   private readonly ui: GameUI;
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  private readonly lifecycle = new GameLifecycle();
   private animationFrame = 0;
   private elapsed = 0;
-  private ended = false;
+  private terminalPresentation: TerminalPresentation = {
+    phase: 'playing',
+    remainingSeconds: 0,
+  };
   private contextAction: ContextAction = { type: 'none', prompt: '' };
 
   constructor(private readonly mount: HTMLElement) {
@@ -66,10 +77,10 @@ export class Game {
     this.carry = new CarryController(this.scene, this.camera);
 
     this.ui.onStart = () => {
-      void this.input.requestPointerLock();
+      void this.requestPointerLock();
     };
     this.ui.onResume = () => {
-      void this.input.requestPointerLock();
+      void this.requestPointerLock();
     };
     this.ui.onReplay = () => window.location.reload();
     window.addEventListener('resize', this.onResize);
@@ -79,60 +90,99 @@ export class Game {
   }
 
   start(): void {
+    if (this.lifecycle.isDisposed) return;
     this.clock.start();
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
   dispose(): void {
-    cancelAnimationFrame(this.animationFrame);
-    window.removeEventListener('resize', this.onResize);
-    document.removeEventListener('pointerlockchange', this.onPointerLockChange);
-    document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    this.input.dispose();
-    this.interaction.dispose();
-    this.world.dispose();
-    this.renderer.dispose();
+    this.lifecycle.dispose(this.input.pointerLocked, {
+      cancelAnimation: () => cancelAnimationFrame(this.animationFrame),
+      removeGlobalListeners: () => {
+        window.removeEventListener('resize', this.onResize);
+        document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      },
+      exitPointerLock: () => document.exitPointerLock(),
+      resetCarry: () => this.carry.reset(),
+      disposeInput: () => this.input.dispose(),
+      disposeInteraction: () => this.interaction.dispose(),
+      disposeWorld: () => this.world.dispose(),
+      disposeUI: () => this.ui.dispose(),
+      disposeRenderer: () => this.renderer.dispose(),
+      removeCanvas: () => this.renderer.domElement.remove(),
+    });
   }
 
   private readonly animate = (): void => {
-    this.animationFrame = requestAnimationFrame(this.animate);
+    if (this.lifecycle.isDisposed) return;
     const delta = Math.min(this.clock.getDelta(), 0.05);
     const before = this.session.snapshot();
     const active = before.status === 'running' && this.input.pointerLocked && !document.hidden;
-    if (active) {
-      this.session.tick(delta);
-      this.elapsed = RUN_SECONDS - this.session.snapshot().remainingSeconds;
-    }
+    let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
+    const updateWorld = (worldDelta: number): void => {
+      this.world.update(
+        this.elapsed,
+        worldDelta,
+        sinking,
+        this.camera.position,
+        this.reducedMotion.matches,
+      );
+    };
+    const synchronizeElapsed = (): boolean => {
+      const nextElapsed = RUN_SECONDS - this.session.snapshot().remainingSeconds;
+      if (nextElapsed === this.elapsed) return false;
+      this.elapsed = nextElapsed;
+      sinking = getSinkingState(this.elapsed, RUN_SECONDS);
+      return true;
+    };
 
-    const snapshot = this.session.snapshot();
-    const sinking = getSinkingState(this.elapsed, RUN_SECONDS);
-    this.world.update(
-      this.elapsed,
-      delta,
-      sinking,
-      this.camera.position,
-      this.reducedMotion.matches,
-    );
     if (active) {
-      const shake = this.reducedMotion.matches
-        ? 0
-        : Math.sin(this.elapsed * 37) * sinking.cameraShake;
-      this.player.update(delta, this.input, shake);
-      this.updateInteraction(snapshot.savedCount);
-      this.updateFlight(delta, sinking.waveAmplitudeScale);
+      runGameplayFrame(true, {
+        tick: () => this.session.tick(delta),
+        afterTick: () => {
+          synchronizeElapsed();
+          updateWorld(delta);
+        },
+        move: () => {
+          const shake = this.reducedMotion.matches
+            ? 0
+            : Math.sin(this.elapsed * 37) * sinking.cameraShake;
+          this.player.update(delta, this.input, shake);
+        },
+        afterMove: () => {
+          if (synchronizeElapsed()) updateWorld(0);
+        },
+        interact: () => this.updateInteraction(this.session.snapshot().savedCount),
+        flight: () => this.updateFlight(delta, sinking.waveAmplitudeScale),
+        isRunning: () => this.session.snapshot().status === 'running',
+      });
     } else {
+      updateWorld(delta);
       this.input.consumeLook();
     }
 
     const next = this.session.snapshot();
     this.ui.render(next, sinking);
-    this.ui.setPrompt(active ? this.contextAction.prompt : '');
-    if ((next.status === 'success' || next.status === 'failure') && !this.ended) {
-      this.ended = true;
-      if (document.pointerLockElement) document.exitPointerLock();
-      this.ui.showResult(next);
+    const stillActive = next.status === 'running' && this.input.pointerLocked && !document.hidden;
+    this.ui.setPrompt(stillActive ? this.contextAction.prompt : '');
+
+    const previousTerminalPhase = this.terminalPresentation.phase;
+    this.terminalPresentation = advanceTerminalPresentation(
+      this.terminalPresentation,
+      next.status,
+      delta,
+    );
+    if (this.terminalPresentation.phase !== previousTerminalPhase) {
+      if (this.input.pointerLocked) document.exitPointerLock();
+      if (this.terminalPresentation.phase === 'failureSequence') {
+        this.ui.showFailureSequence();
+      } else if (this.terminalPresentation.phase === 'result') {
+        this.ui.showResult(next);
+      }
     }
     this.renderer.render(this.scene, this.camera);
+    this.animationFrame = requestAnimationFrame(this.animate);
   };
 
   private updateInteraction(savedCount: number): void {
@@ -181,11 +231,11 @@ export class Game {
           this.world.saveItem(id, this.session.snapshot().savedCount - 1);
         },
         onLost: (id) => {
-          this.session.loseCarried();
+          if (!this.session.loseCarried()) return;
           this.world.loseItem(id);
         },
         onLanded: (id) => {
-          this.session.dropCarried();
+          if (!this.session.dropCarried()) return;
           this.world.landItem(id);
         },
       },
@@ -195,13 +245,16 @@ export class Game {
   private readonly onPointerLockChange = (): void => {
     const locked = this.input.pointerLocked;
     const status = this.session.snapshot().status;
-    if (locked && status === 'idle') {
+    const transition = pointerLockTransition(status, locked);
+    if (transition === 'start') {
       this.session.start();
+      this.ui.clearPointerLockError();
       this.ui.hideStart();
-    } else if (locked && status === 'paused') {
+    } else if (transition === 'resume') {
       this.session.resume();
+      this.ui.clearPointerLockError();
       this.ui.setPaused(false);
-    } else if (!locked && status === 'running') {
+    } else if (transition === 'pause') {
       this.session.pause();
       this.ui.setPaused(true);
     }
@@ -223,4 +276,9 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
   };
+
+  private async requestPointerLock(): Promise<void> {
+    const acquired = await this.input.requestPointerLock();
+    if (!acquired && !this.lifecycle.isDisposed) this.ui.showPointerLockError();
+  }
 }
