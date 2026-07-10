@@ -128,6 +128,13 @@ export class World {
     this.itemObjects.get(id)?.removeFromParent();
   }
 
+  landItem(id: ItemId): void {
+    const item = this.itemObjects.get(id);
+    if (!item) return;
+    this.ship.attach(item);
+    item.scale.setScalar(1);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

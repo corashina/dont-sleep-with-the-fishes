@@ -156,6 +156,19 @@ describe('procedural world builders', () => {
     world.dispose();
   });
 
+  it('reattaches landed items to the sinking ship and restores their scale', () => {
+    const world = new World(new Scene());
+    const landed = world.itemObjects.get('waterJug')!;
+    landed.removeFromParent();
+    landed.scale.setScalar(0.85);
+
+    world.landItem('waterJug');
+
+    expect(landed.parent).toBe(world.ship);
+    expect(landed.scale.toArray()).toEqual([1, 1, 1]);
+    world.dispose();
+  });
+
   it.each([1, 2])('restores the scene and disposes all owned resources once after %i dispose call(s)', (disposeCalls) => {
     const scene = new Scene();
     const originalBackground = new Color(0x112233);

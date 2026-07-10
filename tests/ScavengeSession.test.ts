@@ -94,4 +94,14 @@ describe('ScavengeSession', () => {
     expect(session.evacuate()).toBe(false);
     expect(session.snapshot().status).toBe('success');
   });
+
+  it('deducts a five-second fall penalty without double-finishing', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.penalize(5);
+    expect(session.snapshot().remainingSeconds).toBe(115);
+    session.penalize(500);
+    expect(session.snapshot().remainingSeconds).toBe(0);
+    expect(session.snapshot().status).toBe('failure');
+  });
 });
