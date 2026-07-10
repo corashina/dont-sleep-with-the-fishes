@@ -89,6 +89,32 @@ describe('PlayerController', () => {
     expect(sprinting.localPosition.z).toBeCloseTo(6.2);
   });
 
+  it.each([
+    ['KeyW', { x: 0, z: -1 }, new Vector3(0, 0, -1)],
+    ['KeyD', { x: 1, z: 0 }, new Vector3(1, 0, 0)],
+  ])('moves %s along its visible camera-space direction at yaw pi/2', (
+    _key,
+    movement,
+    cameraDirection,
+  ) => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const input = new TestInput();
+    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    input.queueLook(Math.PI / (2 * 0.0018), 0);
+    controller.update(0, input.asControllerInput());
+    const visibleDirection = cameraDirection.clone().applyQuaternion(camera.quaternion);
+    visibleDirection.y = 0;
+    visibleDirection.normalize();
+    const before = controller.localPosition.clone();
+    input.movement = movement;
+
+    controller.update(0.5, input.asControllerInput());
+
+    const displacement = controller.localPosition.clone().sub(before).normalize();
+    expect(displacement.dot(visibleDirection)).toBeCloseTo(1, 8);
+  });
+
   it('resolves the approved near-console start deterministically without trapping movement', () => {
     const shipBuild = createShip();
     const input = new TestInput();

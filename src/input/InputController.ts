@@ -26,8 +26,13 @@ export class InputController {
     return document.pointerLockElement === this.canvas;
   }
 
-  requestPointerLock(): void {
-    void this.canvas.requestPointerLock();
+  async requestPointerLock(): Promise<boolean> {
+    try {
+      await this.canvas.requestPointerLock();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   consumeLook(): { x: number; y: number } {
@@ -46,6 +51,7 @@ export class InputController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clear();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('mousemove', this.onMouseMove);
@@ -71,5 +77,6 @@ export class InputController {
     this.pressed.clear();
     this.lookX = 0;
     this.lookY = 0;
+    this.interactQueued = false;
   };
 }

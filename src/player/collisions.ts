@@ -33,20 +33,29 @@ export function resolveLocalMovement(
 ): LocalPlayerPosition {
   const result = { ...desired };
   const resolveAxis = (axis: 'x' | 'z'): void => {
+    const perpendicularAxis = axis === 'x' ? 'z' : 'x';
     for (const box of boxes) {
       if (result.y < box.minY || result.y > box.maxY) continue;
-      const closestX = Math.max(box.minX, Math.min(result.x, box.maxX));
-      const closestZ = Math.max(box.minZ, Math.min(result.z, box.maxZ));
-      const dx = result.x - closestX;
-      const dz = result.z - closestZ;
-      if (dx * dx + dz * dz >= radius * radius) continue;
+      const perpendicular = result[perpendicularAxis];
+      const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
+      const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
+      const perpendicularDistance = perpendicular < perpendicularMin
+        ? perpendicularMin - perpendicular
+        : Math.max(0, perpendicular - perpendicularMax);
+      if (perpendicularDistance >= radius) continue;
 
-      if (axis === 'x') {
-        if (current.x <= box.minX) result.x = box.minX - radius;
-        else if (current.x >= box.maxX) result.x = box.maxX + radius;
-      } else {
-        if (current.z <= box.minZ) result.z = box.minZ - radius;
-        else if (current.z >= box.maxZ) result.z = box.maxZ + radius;
+      const axisMin = axis === 'x' ? box.minX : box.minZ;
+      const axisMax = axis === 'x' ? box.maxX : box.maxZ;
+      const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
+      const lowerBoundary = axisMin - radiusAtAxis;
+      const upperBoundary = axisMax + radiusAtAxis;
+      const start = current[axis];
+      const target = result[axis];
+
+      if (start <= axisMin && target >= start && target > lowerBoundary) {
+        result[axis] = lowerBoundary;
+      } else if (start >= axisMax && target <= start && target < upperBoundary) {
+        result[axis] = upperBoundary;
       }
     }
   };

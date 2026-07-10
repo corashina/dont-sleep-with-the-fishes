@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { movementAxes, resolveLocalMovement } from '../src/player/collisions';
+import { createShip } from '../src/world/Ship';
 
 describe('player movement helpers', () => {
   it('normalizes diagonal keyboard movement', () => {
@@ -43,5 +44,33 @@ describe('player movement helpers', () => {
     );
 
     expect(result.x).toBeCloseTo(1.2);
+  });
+
+  it('cannot cross the bridge console in one large movement', () => {
+    const console = createShip().colliders.find((box) =>
+      box.minX === -1.25 && box.maxX === 1.25 && box.minZ === 6.65 && box.maxZ === 7.55)!;
+
+    const result = resolveLocalMovement(
+      { x: 0, y: 3.72, z: 8.4 },
+      { x: 0, y: 3.72, z: 5 },
+      0.35,
+      [console],
+    );
+
+    expect(result.z).toBeCloseTo(7.9);
+  });
+
+  it('cannot cross a thin rail in one very large movement', () => {
+    const rail = createShip().colliders.find((box) =>
+      box.minX === 3.76 && box.maxX === 3.94 && box.minZ === -10.7 && box.maxZ === 2.3)!;
+
+    const result = resolveLocalMovement(
+      { x: 0, y: 3.72, z: 0 },
+      { x: 50, y: 3.72, z: 0 },
+      0.35,
+      [rail],
+    );
+
+    expect(result.x).toBeCloseTo(3.41);
   });
 });
