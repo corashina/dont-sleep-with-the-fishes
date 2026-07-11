@@ -20,6 +20,8 @@ interface ActionDefinition {
   risk: 'safe' | 'uncertain' | 'dangerous';
 }
 
+interface ActionPreview { cost: string; effect: string; risk: ActionDefinition['risk'] }
+
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
 
 interface MeterDefinition {
@@ -40,6 +42,26 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'rest', label: 'REST', shortcut: '6', cost: '1 WATER', effect: 'ENERGY +2', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
 ];
+
+function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
+  const missingHull = Math.max(0, 100 - snapshot.hull);
+  switch (definition.id) {
+    case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
+    case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
+    case 'rest': return { ...definition, effect: `ENERGY +${Math.min(2, Math.max(0, 4 - snapshot.energy))}` };
+    case 'repair': {
+      const useTape = snapshot.repairMaterial < 1
+        && snapshot.inventory.ductTape.owned
+        && (snapshot.inventory.ductTape.charges ?? 0) > 0;
+      return {
+        ...definition,
+        cost: useTape ? '2 ENERGY + TAPE' : '2 ENERGY + MATERIAL',
+        effect: `HULL +${Math.min(useTape ? 15 : 25, missingHull)}`,
+      };
+    }
+    default: return definition;
+  }
+}
 
 const METERS: readonly MeterDefinition[] = [
   { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
@@ -321,7 +343,11 @@ export class SurvivalUI {
       this.actionReasons.set(id, reason);
       const button = this.actionButtons.get(id)!;
       const definition = ACTIONS.find((action) => action.id === id)!;
-      const preview = `${definition.cost}. ${definition.effect}. ${definition.risk}.`;
+      const current = actionPreview(definition, snapshot);
+      this.updateText(`action:${id}:cost`, requireElement(button, '[data-action-cost]'), current.cost);
+      this.updateText(`action:${id}:effect`, requireElement(button, '[data-action-effect]'), current.effect);
+      this.updateText(`action:${id}:risk`, requireElement(button, '[data-action-risk]'), current.risk.toUpperCase());
+      const preview = `${current.cost}. ${current.effect}. ${current.risk}.`;
       button.setAttribute('aria-description', reason === null ? preview : `${preview} Unavailable: ${reason}`);
       const reasonElement = requireElement<HTMLElement>(button, '[data-action-reason]');
       if (reasonElement.textContent !== (reason ?? '')) reasonElement.textContent = reason ?? '';
@@ -364,16 +390,19 @@ export class SurvivalUI {
       const item = snapshot.inventory[id];
       if (!item.owned) return;
       const usable = item.durable || (item.charges !== null && item.charges > 0);
+      const transferred = (id === 'cannedFood' || id === 'baitTin') && (item.charges ?? 0) === 0;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'event-item';
       button.dataset.item = id;
       button.dataset.usable = usable ? 'true' : 'false';
-      button.textContent = item.durable
+      button.textContent = transferred
+        ? `${ITEM_LABELS[id]} — TRANSFERRED TO STORES`
+        : item.durable
         ? `${ITEM_LABELS[id]} — DURABLE`
         : `${ITEM_LABELS[id]} — ${item.charges ?? 0} CHARGES`;
       button.disabled = this.busy || !usable;
-      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${usable ? '' : ' No charges remain.'}`);
+      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${transferred ? ' Use through day actions.' : usable ? '' : ' No charges remain.'}`);
       this.eventItems.append(button);
     });
     if (this.eventItems.childElementCount === 0) {

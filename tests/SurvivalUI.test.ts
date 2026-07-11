@@ -40,6 +40,38 @@ describe('SurvivalUI', () => {
     expect(fish.textContent).toContain('Chance to gain food');
     expect(fish.textContent).toContain('UNCERTAIN');
     expect(fish.getAttribute('aria-description')).toContain('2 ENERGY');
+    expect(fish.querySelector('.survival-action__preview')).not.toBeNull();
+    expect(mount.querySelector('.inventory-row__description')).not.toBeNull();
+  });
+
+  it('updates guaranteed previews to clamped snapshot effects and selected repair source', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const state = snapshot({ hunger: 20, health: 90, hull: 90, energy: 3, repairMaterial: 1 });
+    ui.render(state, () => null);
+    expect(mount.querySelector('[data-action="eat"] [data-action-effect]')?.textContent).toBe('HUNGER -20');
+    expect(mount.querySelector('[data-action="treat"] [data-action-effect]')?.textContent).toBe('HEALTH +10');
+    expect(mount.querySelector('[data-action="repair"] [data-action-cost]')?.textContent).toBe('2 ENERGY + MATERIAL');
+    expect(mount.querySelector('[data-action="repair"] [data-action-effect]')?.textContent).toBe('HULL +10');
+    expect(mount.querySelector('[data-action="rest"] [data-action-effect]')?.textContent).toBe('ENERGY +1');
+
+    const tape = new SurvivalSession(['ductTape'], { seed: 1, initial: { hull: 92 } }).snapshot();
+    ui.render(tape, () => null);
+    expect(mount.querySelector('[data-action="repair"] [data-action-cost]')?.textContent).toBe('2 ENERGY + TAPE');
+    expect(mount.querySelector('[data-action="repair"] [data-action-effect]')?.textContent).toBe('HULL +8');
+  });
+
+  it('marks transferred store items clearly and unavailable in event choices', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const state = new SurvivalSession(['cannedFood', 'baitTin'], { seed: 1 }).snapshot();
+    ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
+    for (const id of ['cannedFood', 'baitTin']) {
+      const choice = mount.querySelector<HTMLButtonElement>(`[data-event-items] [data-item="${id}"]`)!;
+      expect(choice.textContent).toContain('TRANSFERRED TO STORES');
+      expect(choice.getAttribute('aria-description')).toContain('Use through day actions');
+      expect(choice.disabled).toBe(true);
+    }
   });
 
   it('shows transferred stores and shared logical item descriptions', () => {

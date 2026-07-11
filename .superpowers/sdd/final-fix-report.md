@@ -40,3 +40,10 @@ The session owns rule state and reports actual before/after deltas. Phase owns p
 ## Remaining concern
 
 The requested optional procedural rain/spray enhancement was not added in this time-boxed correctness wave. Existing squall presentation remains reduced-motion safe (camera lurch is disabled under reduced motion), but it does not add a new particle field.
+
+## Focused UI follow-up
+
+- RED: dynamic previews still showed authored maxima, transferred event items showed `0 CHARGES`, and rodless fish presentation had no line/catch mesh. GREEN: `SurvivalUI` 31/31 and `BoatWorld` 5/5 focused tests.
+- Action buttons now use explicit label/shortcut and full-width metadata rows. Inventory descriptions use an explicit full-width second row with restrained wrapping. The 700px breakpoint uses a four-column/two-row action dock and a viewport-bounded tray.
+- Browser QA used the retained `.superpowers/sdd/qa-final/index.html` harness. Final screenshots and `browser-results-final.json` cover 1280x720, 1440x900, 1920x1080, and 700x720. Every viewport reported no document/dock/tray overflow, no clipped previews/descriptions, four meters, and zero console warnings/errors.
+- Dynamic guaranteed effects now reflect current clamping and selected repair material/tape. Transferred bait/food event choices direct use through day actions. Rodless fishing animates a line and catch without adding a rod to scavenging.
