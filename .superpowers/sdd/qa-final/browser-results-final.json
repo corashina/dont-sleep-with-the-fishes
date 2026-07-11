@@ -1,0 +1,61 @@
+{
+  "results": [
+    {
+      "clippedDescriptions": 0,
+      "clippedPreviews": 0,
+      "dockOverflow": false,
+      "documentOverflow": false,
+      "meterCount": 4,
+      "trayBottom": 598,
+      "trayHorizontalOverflow": false,
+      "trayTop": 38,
+      "viewport": [
+        1280,
+        720
+      ]
+    },
+    {
+      "clippedDescriptions": 0,
+      "clippedPreviews": 0,
+      "dockOverflow": false,
+      "documentOverflow": false,
+      "meterCount": 4,
+      "trayBottom": 818,
+      "trayHorizontalOverflow": false,
+      "trayTop": 298,
+      "viewport": [
+        1440,
+        900
+      ]
+    },
+    {
+      "clippedDescriptions": 0,
+      "clippedPreviews": 0,
+      "dockOverflow": false,
+      "documentOverflow": false,
+      "meterCount": 4,
+      "trayBottom": 998,
+      "trayHorizontalOverflow": false,
+      "trayTop": 478,
+      "viewport": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "clippedDescriptions": 0,
+      "clippedPreviews": 0,
+      "dockOverflow": false,
+      "documentOverflow": false,
+      "meterCount": 4,
+      "trayBottom": 498,
+      "trayHorizontalOverflow": false,
+      "trayTop": 16,
+      "viewport": [
+        700,
+        720
+      ]
+    }
+  ],
+  "logs": []
+}

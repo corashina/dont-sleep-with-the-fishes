@@ -83,14 +83,14 @@ export function createLifeboat(options: { fishingRod?: boolean } = {}): Lifeboat
   line.name = 'fishing-line';
   line.position.set(1.58, 0.18, -0.2);
   line.visible = false;
-  if (options.fishingRod) root.add(line);
+  root.add(line);
 
   const catchMesh = new Mesh(new SphereGeometry(0.12, 7, 5), metal);
   catchMesh.name = 'fishing-catch';
   catchMesh.position.set(1.58, -0.58, -0.2);
   catchMesh.scale.set(1.8, 0.65, 0.45);
   catchMesh.visible = false;
-  if (options.fishingRod) root.add(catchMesh);
+  root.add(catchMesh);
 
   const slots = [
     [-0.68, 0, -1.45], [0.68, 0, -1.45], [-0.68, 0, 0], [0.68, 0, 0], [0, 0, 1.45],

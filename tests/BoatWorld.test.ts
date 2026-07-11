@@ -37,4 +37,16 @@ describe('BoatWorld helpers', () => {
     expect(world.presentationCueForTest()).toBeNull();
     world.dispose();
   });
+
+  it('animates line and catch for both rod and hand-line fishing', () => {
+    for (const hasRod of [true, false]) {
+      const world = new BoatWorld(new PerspectiveCamera(), { matches: false } as MediaQueryList, hasRod);
+      expect(Boolean(world.scene.getObjectByName('fishing-rod'))).toBe(hasRod);
+      world.play('fish');
+      world.update(0.7, 0.7);
+      expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
+      expect(world.scene.getObjectByName('fishing-catch')?.visible).toBe(true);
+      world.dispose();
+    }
+  });
 });
