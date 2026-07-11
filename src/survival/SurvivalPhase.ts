@@ -176,7 +176,11 @@ export class SurvivalPhase implements GamePhase {
       const eventDay = this.pendingDayEventDay;
       this.pendingDayEventDay = null;
       this.requestedDayEventDays.add(eventDay);
-      this.session.requestDayEvent?.();
+      const eventOutcome = this.session.requestDayEvent?.();
+      if (eventOutcome?.accepted) {
+        this.present(eventOutcome);
+        return;
+      }
       snapshot = this.renderSnapshot(false);
     }
     this.openPendingEvent(snapshot);
@@ -296,7 +300,12 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private presentTerminalOnce(snapshot: SurvivalSnapshot): void {
-    if (!isTerminal(snapshot.state) || this.presentedTerminalState !== null) return;
+    if (
+      this.busy
+      || this.awaitingContinue
+      || !isTerminal(snapshot.state)
+      || this.presentedTerminalState !== null
+    ) return;
     this.presentedTerminalState = snapshot.state;
     this.ui.showEnding?.(
       snapshot.state,
