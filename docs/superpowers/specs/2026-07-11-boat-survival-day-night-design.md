@@ -1,6 +1,6 @@
 # Last Boat Out — Boat Survival Day/Night Design
 
-- **Status:** Approved design; awaiting written-spec review
+- **Status:** Approved
 - **Date:** 2026-07-11
 - **Target:** Desktop web browser
 - **Stack:** Vite, TypeScript, Three.js, Vitest
