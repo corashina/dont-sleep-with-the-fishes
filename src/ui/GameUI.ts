@@ -1,6 +1,5 @@
 import { ITEM_IDS, ITEM_LABELS } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
-import { gradeForSavedCount } from '../game/scoring';
 import type { SinkingState } from '../game/sinking';
 
 export function formatCountdown(seconds: number): string {
@@ -147,13 +146,9 @@ export class GameUI {
     this.renderSlots(snapshot.savedCount);
   }
 
-  showResult(snapshot: ScavengeSnapshot): void {
-    const grade = gradeForSavedCount(snapshot.savedCount);
-    const success = snapshot.status === 'success';
-    this.resultTitle.textContent = success ? grade.label : 'Taken by the Sea';
-    this.resultBody.textContent = success
-      ? grade.description
-      : 'The deck disappeared before you reached the lifeboat.';
+  showFailureResult(snapshot: ScavengeSnapshot): void {
+    this.resultTitle.textContent = 'Taken by the Sea';
+    this.resultBody.textContent = 'The deck disappeared before you reached the lifeboat.';
     const savedItems = ITEM_IDS
       .filter((id) => snapshot.items[id] === 'saved')
       .map((id) => ITEM_LABELS[id]);
