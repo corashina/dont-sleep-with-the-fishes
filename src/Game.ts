@@ -31,7 +31,7 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createSurvival: (context, result, seed, onRestart) => (
     new SurvivalPhase(
       context,
-      result.savedItems,
+      result.savedItems.map(({ type }) => type),
       seed,
       result.elapsedSeconds,
       onRestart,

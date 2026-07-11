@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createInitialItemState } from '../src/game/ItemState';
-import type { ScavengeSnapshot } from '../src/game/ScavengeSession';
+import { ScavengeSession, type ScavengeSnapshot } from '../src/game/ScavengeSession';
 import { getSinkingState } from '../src/game/sinking';
 import { GameUI } from '../src/ui/GameUI';
 
 function snapshot(overrides: Partial<ScavengeSnapshot> = {}): ScavengeSnapshot {
   return {
+    ...new ScavengeSession().snapshot(),
     status: 'running',
-    remainingSeconds: 120,
-    savedCount: 0,
-    carriedItem: null,
-    items: createInitialItemState(),
     ...overrides,
   };
 }

@@ -56,7 +56,7 @@ describe('Game director', () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
     const scavenge = phase({ dispose: vi.fn(() => calls.push('dispose-scavenge')) });
     const survival = phase({ start: vi.fn(() => calls.push('start-survival')) });
-    const sourceItems = ['flareGun'] as const;
+    const sourceItems = [{ instanceId: 'flareGun-1', type: 'flareGun' }] as const;
     const sourceResult: ScavengeResult = { savedItems: sourceItems, elapsedSeconds: 8 };
     let receivedResult: Readonly<ScavengeResult> | undefined;
     const game = Game.forTest({
@@ -74,7 +74,10 @@ describe('Game director', () => {
     complete(sourceResult);
 
     expect(calls).toEqual(['dispose-scavenge', 'start-survival']);
-    expect(receivedResult).toEqual({ savedItems: ['flareGun'], elapsedSeconds: 8 });
+    expect(receivedResult).toEqual({
+      savedItems: [{ instanceId: 'flareGun-1', type: 'flareGun' }],
+      elapsedSeconds: 8,
+    });
     expect(receivedResult).not.toBe(sourceResult);
     expect(receivedResult?.savedItems).not.toBe(sourceItems);
     expect(Object.isFrozen(receivedResult)).toBe(true);
