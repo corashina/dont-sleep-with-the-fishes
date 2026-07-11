@@ -7,9 +7,18 @@ import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
+const activeUIs: SurvivalUI[] = [];
+
 afterEach(() => {
+  activeUIs.splice(0).forEach((ui) => ui.dispose());
   document.body.innerHTML = '';
 });
+
+function createUI(mount: HTMLElement): SurvivalUI {
+  const ui = new SurvivalUI(mount);
+  activeUIs.push(ui);
+  return ui;
+}
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
@@ -24,7 +33,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 describe('SurvivalUI', () => {
   it('renders labeled meters, actions, weather, hotspots, and all item charges', () => {
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
 
     ui.render(snapshot(), () => null);
 
@@ -43,7 +52,7 @@ describe('SurvivalUI', () => {
 
   it('emits one action and blocks controls while busy', () => {
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const action = vi.fn();
     ui.onAction = action;
     ui.render(snapshot(), () => null);
@@ -58,15 +67,40 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.hidden).toBe(false);
   });
 
+  it('keeps unavailable actions and hotspots focusable while suppressing commands', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot(), (id) => id === 'fish' ? 'The line is tangled.' : null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const hotspot = mount.querySelector<HTMLButtonElement>('[data-hotspot="fish"]')!;
+
+    for (const control of [fish, hotspot]) {
+      expect(control.disabled).toBe(false);
+      expect(control.getAttribute('aria-disabled')).toBe('true');
+      expect(control.getAttribute('aria-description')).toContain('line is tangled');
+      control.focus();
+      expect(document.activeElement).toBe(control);
+      control.click();
+    }
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    expect(action).not.toHaveBeenCalled();
+
+    ui.setBusy(true);
+    expect(fish.disabled).toBe(true);
+    expect(hotspot.disabled).toBe(true);
+  });
+
   it('shows unavailable reasons and event item selection accessibly', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     ui.render(snapshot(), (action) => action === 'repair' ? 'No repair material or duct tape.' : null);
 
     const repair = mount.querySelector<HTMLButtonElement>('[data-action="repair"]')!;
     expect(repair.getAttribute('aria-description')).toContain('No repair material');
-    expect(repair.disabled).toBe(true);
     expect(mount.querySelector('[data-event]')?.hasAttribute('inert')).toBe(true);
 
     ui.showEvent({
@@ -85,7 +119,7 @@ describe('SurvivalUI', () => {
   it('routes event choices, endurance, outcomes, and continue without duplicate commands', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const eventItem = vi.fn();
     const endure = vi.fn();
     const continued = vi.fn();
@@ -124,9 +158,38 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(fish);
   });
 
+  it('restores direct-click and numeric-shortcut command origins after outcomes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
+    const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
+    ui.onAction = () => ui.showOutcome({
+      accepted: true,
+      code: 'complete',
+      message: 'The work is done.',
+      deltas: {},
+      cue: 'none',
+    });
+
+    dive.click();
+    ui.hideOutcome();
+    expect(document.activeElement).toBe(dive);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '7' }));
+    ui.hideOutcome();
+    expect(document.activeElement).toBe(endDay);
+
+    endDay.click();
+    ui.render(snapshot(), (id) => id === 'endDay' ? 'Night has already fallen.' : null);
+    ui.hideOutcome();
+    expect(document.activeElement).toBe(mount.querySelector('[data-action="fish"]'));
+  });
+
   it('keeps meter and action nodes stable across differential renders', () => {
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
     const fish = mount.querySelector('[data-action="fish"]');
@@ -142,7 +205,7 @@ describe('SurvivalUI', () => {
   it('uses number shortcuts only when no overlay is open', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const action = vi.fn();
     const pause = vi.fn();
     ui.onAction = action;
@@ -164,7 +227,7 @@ describe('SurvivalUI', () => {
   it('closes inventory before requesting pause and resumes accessibly', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const pause = vi.fn();
     ui.onPauseChange = pause;
     ui.render(snapshot(), () => null);
@@ -184,9 +247,64 @@ describe('SurvivalUI', () => {
     expect(pause).toHaveBeenLastCalledWith(false);
   });
 
+  it('restores the command origin when a command-driven pause closes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
+    ui.onAction = () => ui.setPaused(true);
+
+    dive.click();
+    expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
+    ui.setPaused(false);
+    expect(document.activeElement).toBe(dive);
+  });
+
+  it('isolates background commands throughout every modal state', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot(), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const actionDock = mount.querySelector<HTMLElement>('.survival-actions')!;
+    const hotspots = mount.querySelector<HTMLElement>('.survival-hotspots')!;
+    const inventoryToggle = mount.querySelector<HTMLButtonElement>('[data-inventory-toggle]')!;
+
+    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    expect(actionDock.hasAttribute('inert')).toBe(true);
+    expect(hotspots.hasAttribute('inert')).toBe(true);
+    expect(inventoryToggle.hasAttribute('inert')).toBe(true);
+    fish.click();
+    inventoryToggle.click();
+    expect(action).not.toHaveBeenCalled();
+    expect(mount.querySelector('[data-inventory]')?.classList).not.toContain('is-visible');
+
+    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
+    fish.click();
+    expect(action).not.toHaveBeenCalled();
+    ui.hideOutcome();
+    expect(actionDock.hasAttribute('inert')).toBe(false);
+    fish.click();
+    expect(action).toHaveBeenCalledOnce();
+
+    ui.setPaused(true);
+    fish.click();
+    expect(action).toHaveBeenCalledOnce();
+    ui.setPaused(false);
+    fish.click();
+    expect(action).toHaveBeenCalledTimes(2);
+
+    ui.showEnding('sunk', 2, 7, 40);
+    fish.click();
+    expect(action).toHaveBeenCalledTimes(2);
+  });
+
   it('routes diegetic hotspots and pointer coordinates', () => {
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const action = vi.fn();
     const pointer = vi.fn();
     ui.onAction = action;
@@ -201,7 +319,7 @@ describe('SurvivalUI', () => {
 
   it('shows distinct terminal copy and emits full restart once', () => {
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const restart = vi.fn();
     ui.onRestart = restart;
 
@@ -218,7 +336,7 @@ describe('SurvivalUI', () => {
   it('removes document, pointer, and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount);
+    const ui = createUI(mount);
     const action = vi.fn();
     const pointer = vi.fn();
     const pause = vi.fn();
