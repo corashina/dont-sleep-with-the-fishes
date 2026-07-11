@@ -1,4 +1,4 @@
-import { createInitialItemState, type ItemId, type ItemStatus } from './ItemState';
+import { createInitialItemState, ITEM_IDS, type ItemId, type ItemStatus } from './ItemState';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'success' | 'failure';
 
@@ -8,6 +8,11 @@ export interface ScavengeSnapshot {
   savedCount: number;
   carriedItem: ItemId | null;
   items: Readonly<Record<ItemId, ItemStatus>>;
+}
+
+export interface ScavengeResult {
+  savedItems: readonly ItemId[];
+  elapsedSeconds: number;
 }
 
 const RUN_SECONDS = 120;
@@ -95,6 +100,14 @@ export class ScavengeSession {
       carriedItem: this.carriedItem,
       items: { ...this.items },
     };
+  }
+
+  result(): Readonly<ScavengeResult> | null {
+    if (this.status !== 'success') return null;
+    return Object.freeze({
+      savedItems: Object.freeze(ITEM_IDS.filter((id) => this.items[id] === 'saved')),
+      elapsedSeconds: RUN_SECONDS - this.remainingSeconds,
+    });
   }
 
   private finish(status: 'success' | 'failure'): boolean {

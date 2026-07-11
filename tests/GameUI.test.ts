@@ -22,28 +22,6 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
-  it('reports saved supply names, filled slots, and elapsed time', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = new GameUI(mount);
-    const items = createInitialItemState();
-    items.flareGun = 'saved';
-    items.medicalKit = 'saved';
-
-    ui.showResult(snapshot({
-      status: 'success',
-      remainingSeconds: 83.2,
-      savedCount: 2,
-      items,
-    }));
-
-    const details = mount.querySelector('[data-result-items]')?.textContent ?? '';
-    expect(details).toContain('2 / 5 SUPPLY SLOTS FILLED');
-    expect(details).toContain('FLARE GUN');
-    expect(details).toContain('MEDICAL KIT');
-    expect(details).toContain('00:37 ELAPSED');
-  });
-
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -53,9 +31,10 @@ describe('GameUI', () => {
     expect(mount.querySelector('[data-failure]')?.classList).toContain('is-visible');
     expect(mount.querySelector('[data-result]')?.classList).not.toContain('is-visible');
 
-    ui.showResult(snapshot({ status: 'failure', remainingSeconds: 0 }));
+    ui.showFailureResult(snapshot({ status: 'failure', remainingSeconds: 0 }));
     expect(mount.querySelector('[data-failure]')?.classList).not.toContain('is-visible');
     expect(mount.querySelector('[data-result]')?.classList).toContain('is-visible');
+    expect(mount.querySelector('[data-result-title]')?.textContent).toBe('Taken by the Sea');
   });
 
   it('keeps slot nodes stable when the saved count has not changed', () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ItemId } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 
 const BLOCKED_STATE_SETUPS = [
@@ -93,6 +94,21 @@ describe('ScavengeSession', () => {
     expect(session.evacuate()).toBe(true);
     expect(session.evacuate()).toBe(false);
     expect(session.snapshot().status).toBe('success');
+  });
+
+  it('returns an immutable result containing only saved item IDs', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('flareGun');
+    session.saveCarried();
+    session.pickUp('waterJug');
+    session.dropCarried();
+    session.tick(12);
+    session.evacuate();
+
+    expect(session.result()).toEqual({ savedItems: ['flareGun'], elapsedSeconds: 12 });
+    const result = session.result()!;
+    expect(() => (result.savedItems as ItemId[]).push('waterJug')).toThrow();
   });
 
   it('deducts a five-second fall penalty without double-finishing', () => {
