@@ -1,4 +1,4 @@
-import { ITEM_IDS, ITEM_LABELS } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
 
@@ -28,7 +28,9 @@ export class GameUI {
   private readonly sinking: HTMLElement;
   private readonly capacity: HTMLElement;
   private readonly prompt: HTMLElement;
-  private readonly carried: HTMLElement;
+  private readonly carryWeight: HTMLElement;
+  private readonly carriedItems: HTMLElement;
+  private readonly feedback: HTMLElement;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
   private readonly resultItems: HTMLElement;
@@ -46,10 +48,15 @@ export class GameUI {
       <div class="hud">
         <div class="objective"><span class="eyebrow">OBJECTIVE</span><strong>LOAD THE LIFEBOAT</strong></div>
         <div class="timer-block"><span class="eyebrow" data-sinking>SHIP LISTING</span><strong data-timer>02:00</strong></div>
-        <div class="capacity"><span class="eyebrow">LIFEBOAT</span><div class="slots" data-capacity aria-label="0 of 5 slots filled"></div></div>
+        <div class="capacity"><span class="eyebrow">LIFEBOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
         <div class="crosshair" aria-hidden="true"></div>
         <div class="prompt" data-prompt aria-live="polite"></div>
-        <div class="carried" data-carried></div>
+        <div class="carried" data-carried>
+          <span class="eyebrow">CARRY WEIGHT</span>
+          <strong data-carry-weight>0 / 3</strong>
+          <div data-carried-items></div>
+          <div class="feedback" data-feedback aria-live="polite"></div>
+        </div>
       </div>
       <section class="screen is-visible start-screen" data-start>
         <div class="screen-rule"></div>
@@ -90,7 +97,9 @@ export class GameUI {
     this.sinking = requireElement(this.root, '[data-sinking]');
     this.capacity = requireElement(this.root, '[data-capacity]');
     this.prompt = requireElement(this.root, '[data-prompt]');
-    this.carried = requireElement(this.root, '[data-carried]');
+    this.carryWeight = requireElement(this.root, '[data-carry-weight]');
+    this.carriedItems = requireElement(this.root, '[data-carried-items]');
+    this.feedback = requireElement(this.root, '[data-feedback]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
     this.resultItems = requireElement(this.root, '[data-result-items]');
@@ -101,7 +110,7 @@ export class GameUI {
     this.startButton.addEventListener('click', this.handleStart);
     this.resumeButton.addEventListener('click', this.handleResume);
     this.replayButton.addEventListener('click', this.handleReplay);
-    this.renderSlots(0);
+    this.renderSavedCount(0);
   }
 
   hideStart(): void {
@@ -132,6 +141,14 @@ export class GameUI {
     this.prompt.classList.toggle('is-visible', text.length > 0);
   }
 
+  showFeedback(text: string): void {
+    if (this.feedback.textContent === text) {
+      this.feedback.dataset.version = String(Number(this.feedback.dataset.version ?? 0) + 1);
+    }
+    this.feedback.textContent = text;
+    this.feedback.classList.toggle('is-visible', text.length > 0);
+  }
+
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
     this.timer.textContent = formatCountdown(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
@@ -140,10 +157,8 @@ export class GameUI {
       : sinking.progress >= 0.4
         ? 'DECK TAKING WATER'
         : 'SHIP LISTING';
-    this.carried.textContent = snapshot.carriedItem
-      ? `CARRYING — ${snapshot.carriedItem.replace(/([A-Z])/g, ' $1').toUpperCase()}`
-      : '';
-    this.renderSlots(snapshot.savedCount);
+    this.renderCarry(snapshot);
+    this.renderSavedCount(snapshot.savedCount);
   }
 
   showFailureResult(snapshot: ScavengeSnapshot): void {
@@ -154,7 +169,7 @@ export class GameUI {
       .map((id) => ITEM_LABELS[id]);
     const elapsedSeconds = 120 - snapshot.remainingSeconds;
     this.resultItems.textContent = [
-      `${snapshot.savedCount} / 5 SUPPLY SLOTS FILLED`,
+      `${snapshot.savedCount} SUPPLIES SAVED`,
       `SAVED — ${savedItems.length > 0 ? savedItems.join(' · ') : 'NONE'}`,
       `${formatCountdown(elapsedSeconds)} ELAPSED`,
     ].join('\n');
@@ -186,14 +201,21 @@ export class GameUI {
     this.root.remove();
   }
 
-  private renderSlots(savedCount: number): void {
+  private renderCarry(snapshot: ScavengeSnapshot): void {
+    this.carryWeight.textContent = `${snapshot.carriedWeight} / 3`;
+    this.carriedItems.replaceChildren(...snapshot.carriedItems.map((item) => {
+      const row = document.createElement('span');
+      const definition = ITEM_DEFINITIONS[item.type];
+      row.textContent = `${definition.label} · ${definition.weight}`;
+      return row;
+    }));
+  }
+
+  private renderSavedCount(savedCount: number): void {
     if (savedCount === this.lastSavedCount) return;
     this.lastSavedCount = savedCount;
-    this.capacity.innerHTML = Array.from(
-      { length: 5 },
-      (_, index) => `<span class="slot${index < savedCount ? ' is-filled' : ''}"></span>`,
-    ).join('');
-    this.capacity.setAttribute('aria-label', `${savedCount} of 5 slots filled`);
+    this.capacity.textContent = `${savedCount} SAVED`;
+    this.capacity.setAttribute('aria-label', `${savedCount} supplies saved`);
   }
 
   private readonly handleStart = (): void => this.onStart();

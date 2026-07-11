@@ -17,12 +17,13 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { ITEM_IDS } from '../src/game/ItemState';
+import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import type { CollisionBox } from '../src/player/collisions';
+import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { createShip, selectSpawnPoints } from '../src/world/Ship';
@@ -40,9 +41,9 @@ const playerOverlaps = (point: Vector3, radius: number, box: CollisionBox): bool
   return (point.x - closestX) ** 2 + (point.z - closestZ) ** 2 < radius ** 2;
 };
 
-const geometrySignature = (id: (typeof ITEM_IDS)[number]): string => {
+const geometrySignature = (type: (typeof ITEM_IDS)[number]): string => {
   const entries: string[] = [];
-  createProp(id).traverse((object) => {
+  createProp({ instanceId: `${type}-1`, type }).traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.geometry.computeBoundingBox();
     const bounds = object.geometry.boundingBox;
@@ -86,13 +87,27 @@ const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterab
 };
 
 describe('procedural world builders', () => {
-  it('assembles one object for every supply and exposes gameplay markers', () => {
+  it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
-    const world = new World(scene);
-    expect(world.itemObjects.size).toBe(8);
+    const world = new World(scene, createItemInstances());
+    expect(world.itemObjects.size).toBe(14);
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
+    world.dispose();
+  });
+
+  it('packs every approved instance and extends into deterministic layers', () => {
+    expect(boatStorageTransform(0)).toEqual(boatStorageTransform(0));
+    expect(boatStorageTransform(14).position.y)
+      .toBeCloseTo(boatStorageTransform(0).position.y + 0.28);
+  });
+
+  it('builds fourteen instance meshes including a distinct scuba set', () => {
+    const world = new World(new Scene(), createItemInstances());
+    expect(world.itemObjects.size).toBe(14);
+    expect(world.itemObjects.get('scubaSet-1')?.userData.itemType).toBe('scubaSet');
+    expect(world.itemObjects.get('scubaSet-1')?.userData.instanceId).toBe('scubaSet-1');
     world.dispose();
   });
 
@@ -113,7 +128,7 @@ describe('procedural world builders', () => {
     const cameraPosition = new Vector3(14, 7, -11);
     const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
       sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-    const target = buoyancy.sampleTarget(time, 6.2, -5.8, sinking.waveAmplitudeScale);
+    const target = buoyancy.sampleTarget(time, 5.5, -5.8, sinking.waveAmplitudeScale);
     const expectedPose = smoothBoatPose(
       { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
       target,
@@ -127,11 +142,12 @@ describe('procedural world builders', () => {
     const oceanMaterial = ocean.material as ShaderMaterial;
     expect(oceanMaterial.uniforms.uTime!.value).toBe(time);
     expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
-    expect(world.lifeboat.position.x).toBeCloseTo(6.2 + expectedPose.driftX);
+    expect(world.lifeboat.position.x).toBeCloseTo(5.5 + expectedPose.driftX);
     expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
     expect(world.lifeboat.position.z).toBeCloseTo(-5.8 + expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
+    expect(world.lifeboat.scale.toArray()).toEqual([1.15, 1.15, 1.15]);
     expect(world.ship.position.y).toBe(sinking.sinkOffset);
     expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
     expect(world.ship.rotation.z).toBe(sinking.rollRadians);
@@ -181,31 +197,30 @@ describe('procedural world builders', () => {
     reduced.dispose();
   });
 
-  it('settles saved items into lifeboat slots and detaches lost items', () => {
-    const world = new World(new Scene());
-    const saved = world.itemObjects.get('flareGun')!;
-    const lost = world.itemObjects.get('ductTape')!;
+  it('packs saved instances into lifeboat storage and detaches lost instances', () => {
+    const world = new World(new Scene(), createItemInstances());
+    const saved = world.itemObjects.get('flareGun-1')!;
+    const lost = world.itemObjects.get('ductTape-1')!;
+    const transform = boatStorageTransform(0);
 
-    world.saveItem('flareGun', 0);
-    world.loseItem('ductTape');
+    world.saveItem('flareGun-1', 0);
+    world.loseItem('ductTape-1');
 
-    expect(saved.parent?.name).toBe('supply-slot-1');
-    expect(saved.position.y).toBeGreaterThan(0);
-    expect(saved.scale.x).toBeLessThan(0.82);
-    world.update(0.3, 0.3, getSinkingState(0, 120), new Vector3(), false);
-    expect(saved.position.toArray()).toEqual([0, 0, 0]);
-    expect(saved.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
+    expect(saved.parent?.name).toBe('lifeboat-storage');
+    expect(saved.position.toArray()).toEqual(transform.position.toArray());
+    expect(saved.rotation.toArray()).toEqual(transform.rotation.toArray());
+    expect(saved.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
     expect(lost.parent).toBeNull();
     world.dispose();
   });
 
   it('reattaches landed items to the sinking ship and restores their scale', () => {
-    const world = new World(new Scene());
-    const landed = world.itemObjects.get('waterJug')!;
+    const world = new World(new Scene(), createItemInstances());
+    const landed = world.itemObjects.get('waterJug-1')!;
     landed.removeFromParent();
     landed.scale.setScalar(0.85);
 
-    world.landItem('waterJug');
+    world.landItem('waterJug-1');
 
     expect(landed.parent).toBe(world.ship);
     expect(landed.scale.toArray()).toEqual([1, 1, 1]);
@@ -249,7 +264,7 @@ describe('procedural world builders', () => {
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
     expect(sharedShipMaterials.size).toBeGreaterThan(0);
-    expect(propResources).toHaveLength(8);
+    expect(propResources).toHaveLength(14);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
@@ -273,11 +288,11 @@ describe('procedural world builders', () => {
     ]);
     const sharedShipMaterialDisposals = observeDisposals(sharedShipMaterials);
 
-    world.saveItem('flareGun', 0);
-    world.loseItem('ductTape');
-    expect(world.itemObjects.get('flareGun')!.parent?.name).toBe('supply-slot-1');
-    expect(world.itemObjects.get('ductTape')!.parent).toBeNull();
-    expect(world.itemObjects.get('cannedFood')!.parent).toBe(world.ship);
+    world.saveItem('flareGun-1', 0);
+    world.loseItem('ductTape-1');
+    expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
+    expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
+    expect(world.itemObjects.get('cannedFood-1')!.parent).toBe(world.ship);
     for (let call = 0; call < disposeCalls; call += 1) world.dispose();
 
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
@@ -319,24 +334,26 @@ describe('procedural world builders', () => {
     ocean.dispose();
   });
 
-  it.each(ITEM_IDS)('builds a visible mesh for %s', (id) => {
-    const prop = createProp(id);
+  it.each(ITEM_IDS)('builds a visible mesh for %s', (type) => {
+    const instance = { instanceId: `${type}-1`, type } as ItemInstance;
+    const prop = createProp(instance);
     let meshCount = 0;
     prop.traverse((object) => {
       if (object instanceof Mesh) meshCount += 1;
     });
-    expect(prop.userData.itemId).toBe(id);
+    expect(prop.userData.instanceId).toBe(instance.instanceId);
+    expect(prop.userData.itemType).toBe(type);
     expect(meshCount).toBeGreaterThan(0);
   });
 
-  it('gives all eight props distinct procedural geometry signatures', () => {
+  it('gives every prop type distinct procedural geometry signatures', () => {
     const signatures = ITEM_IDS.map(geometrySignature);
     expect(new Set(signatures)).toHaveLength(ITEM_IDS.length);
   });
 
-  it('builds the two-zone ship contract', () => {
+  it('builds the two-zone ship contract with fourteen supply spawns', () => {
     const ship = createShip();
-    expect(ship.itemSpawnPoints).toHaveLength(8);
+    expect(ship.itemSpawnPoints).toHaveLength(14);
     expect(ship.colliders.length).toBeGreaterThanOrEqual(10);
     expect(ship.playerStart.y).toBeGreaterThan(2);
     expect(ship.evacuationPoint.x).toBeGreaterThan(3);
@@ -347,8 +364,8 @@ describe('procedural world builders', () => {
     const values = [0.12, 0.81, 0.34, 0.67, 0.05, 0.92, 0.48];
     let index = 0;
     const selected = selectSpawnPoints(points, () => values[index++] ?? 0.5);
-    expect(selected).toHaveLength(8);
-    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(8);
+    expect(selected).toHaveLength(14);
+    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(14);
     expect(selected.every((point) => !points.includes(point))).toBe(true);
   });
 
@@ -377,16 +394,11 @@ describe('procedural world builders', () => {
     expect(ship.evacuationPoint.x).toBeLessThan(3.5);
   });
 
-  it('builds exactly five lifeboat supply slots', () => {
+  it('builds an unmarked storage root inside the lifeboat', () => {
     const lifeboat = createLifeboat();
-    expect(lifeboat.slots).toHaveLength(5);
-    lifeboat.slots.forEach((slot) => {
-      let meshCount = 0;
-      slot.traverse((object) => {
-        if (object instanceof Mesh) meshCount += 1;
-      });
-      expect(meshCount).toBeGreaterThan(0);
-    });
+    expect(lifeboat.storageRoot.name).toBe('lifeboat-storage');
+    expect(lifeboat.storageRoot.children).toHaveLength(0);
+    expect(lifeboat.root.getObjectByName('supply-slot-1')).toBeUndefined();
   });
 
   it('limits acceptance to the lifeboat interior above its floor', () => {
