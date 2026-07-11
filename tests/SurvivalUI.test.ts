@@ -31,6 +31,36 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('labels every survival action and meter without relying on color', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.render(snapshot(), () => null);
+
+    [...mount.querySelectorAll('[role="meter"]')].forEach((meter) => {
+      expect(meter.getAttribute('aria-label')).toBeTruthy();
+      expect(meter.querySelector('[data-meter-value]')?.textContent).toMatch(/^\d+$/);
+    });
+    [...mount.querySelectorAll<HTMLButtonElement>('[data-action]')].forEach((button) => {
+      expect(button.textContent?.trim()).not.toBe('');
+      expect(button.getAttribute('aria-keyshortcuts')).toMatch(/^[1-7]$/);
+    });
+  });
+
+  it('announces outcomes politely and exposes one terminal alert heading', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    const liveRegion = mount.querySelector('[data-outcome-message]');
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
+
+    ui.showEnding('dead', 3, 77, 12);
+    const alerts = mount.querySelectorAll('[role="alert"]');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toBe(mount.querySelector('[data-ending-title]'));
+  });
+
   it('renders labeled meters, actions, weather, hotspots, and all item charges', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -306,6 +336,18 @@ describe('SurvivalUI', () => {
     expect(health.style.getPropertyValue('--meter-value')).toBe('63%');
   });
 
+  it('marks critical meter values with a non-color danger state', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.render(snapshot({ health: 12, hull: 21 }), () => null);
+
+    const health = mount.querySelector('[data-meter="health"]');
+    expect(health?.classList).toContain('is-danger');
+    expect(health?.getAttribute('aria-valuetext')).toBe('12, critical');
+    expect(mount.querySelector('[data-meter="hull"]')?.classList).not.toContain('is-danger');
+  });
+
   it('uses number shortcuts only when no overlay is open', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -462,6 +504,33 @@ describe('SurvivalUI', () => {
     ui.setPaused(false);
     expect(endingLayer.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(endingTitle);
+  });
+
+  it('traps keyboard focus inside event and outcome dialogs', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+
+    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    const firstEventItem = mount.querySelector<HTMLButtonElement>('[data-event-items] button')!;
+    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+    expect(document.activeElement).toBe(endure);
+    endure.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(document.activeElement).toBe(firstEventItem);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+    expect(document.activeElement).toBe(endure);
+
+    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
+    const skip = mount.querySelector<HTMLButtonElement>('[data-skip]')!;
+    const continueButton = mount.querySelector<HTMLButtonElement>('[data-continue]')!;
+    continueButton.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(document.activeElement).toBe(skip);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+    expect(document.activeElement).toBe(continueButton);
   });
 
   it('routes diegetic hotspots and pointer coordinates', () => {

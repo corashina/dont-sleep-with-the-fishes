@@ -210,7 +210,7 @@ export class SurvivalUI {
       <section class="survival-overlay outcome-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
         <p class="eyebrow">AFTERMATH</p>
         <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
-        <p data-outcome-message></p>
+        <p data-outcome-message aria-live="polite" aria-atomic="true"></p>
         <ul class="outcome-deltas" data-outcome-deltas></ul>
         <div class="outcome-actions">
           <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
@@ -225,7 +225,7 @@ export class SurvivalUI {
       </section>
       <section class="survival-overlay ending-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
         <p class="eyebrow">JOURNEY ENDED</p>
-        <h2 data-ending-title tabindex="-1"></h2>
+        <h2 data-ending-title tabindex="-1" role="alert"></h2>
         <p data-ending-body></p>
         <p class="ending-stats" data-ending-stats></p>
         <button type="button" class="primary-action" data-restart>START FROM THE SHIP</button>
@@ -481,6 +481,9 @@ export class SurvivalUI {
     const meter = this.meterElements.get(id)!;
     const safe = Math.min(100, Math.max(0, value));
     meter.setAttribute('aria-valuenow', String(value));
+    meter.classList.toggle('is-danger', safe <= 20);
+    if (safe <= 20) meter.setAttribute('aria-valuetext', `${value}, critical`);
+    else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${safe}%`);
     requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(value);
   }
@@ -560,15 +563,7 @@ export class SurvivalUI {
   }
 
   private overlayOpen(): boolean {
-    return this.inventoryOpen
-      || this.paused
-      || this.eventLayer.classList.contains('is-visible')
-      || this.outcomeLayer.classList.contains('is-visible')
-      || this.endingLayer.classList.contains('is-visible');
-  }
-
-  private modalOpen(): boolean {
-    return this.topmostModal() !== null;
+    return this.inventoryOpen || this.topmostModal() !== null;
   }
 
   private topmostModal(): HTMLElement | null {
@@ -608,7 +603,7 @@ export class SurvivalUI {
   private chooseFishingOption(option: DayActionOption | undefined): void {
     this.hideLayer(this.actionOptionsLayer);
     this.onAction('fish', option);
-    if (!this.modalOpen()) this.restoreCommandFocus(this.latestCommandOrigin);
+    if (this.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private closeActionOptions(): void {
@@ -652,6 +647,33 @@ export class SurvivalUI {
     const target = this.focusReturnTarget;
     this.focusReturnTarget = null;
     this.restoreCommandFocus(target);
+  }
+
+  private trapModalFocus(event: KeyboardEvent, modal: HTMLElement): boolean {
+    if (event.key !== 'Tab') return false;
+    const controls = [...modal.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => !element.hasAttribute('inert') && element.getAttribute('aria-hidden') !== 'true');
+    if (controls.length === 0) {
+      event.preventDefault();
+      this.focusModal(modal);
+      return true;
+    }
+    const first = controls[0]!;
+    const last = controls[controls.length - 1]!;
+    const active = document.activeElement;
+    const activeIsControl = active instanceof HTMLElement && controls.includes(active);
+    if (event.shiftKey && (active === first || !activeIsControl)) {
+      event.preventDefault();
+      last.focus();
+      return true;
+    }
+    if (!event.shiftKey && (active === last || !activeIsControl)) {
+      event.preventDefault();
+      first.focus();
+      return true;
+    }
+    return false;
   }
 
   private readonly handleClick = (event: MouseEvent): void => {
@@ -709,6 +731,8 @@ export class SurvivalUI {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
+    const topmostModal = this.topmostModal();
+    if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
     if (event.key === 'Escape') {
       if (this.inventoryOpen) {
         event.preventDefault();

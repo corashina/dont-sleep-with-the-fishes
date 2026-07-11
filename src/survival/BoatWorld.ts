@@ -26,6 +26,8 @@ export interface SurvivalLighting {
   fogDensity: number;
 }
 
+export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
+
 export function clampParallax(
   x: number,
   y: number,
