@@ -7,42 +7,51 @@ import {
   Raycaster,
   Vector2,
 } from 'three';
-import { ITEM_LABELS, type ItemId } from '../game/ItemState';
+import {
+  ITEM_DEFINITIONS,
+  ITEM_LABELS,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../game/ItemState';
 
 export type RayTarget = 'none' | 'item' | 'lifeboat';
 
-export type ContextAction =
-  | { type: 'none'; prompt: '' }
-  | { type: 'pickUp'; itemId: ItemId; prompt: string }
-  | { type: 'drop'; itemId: ItemId; prompt: string }
-  | { type: 'throwToBoat'; itemId: ItemId; prompt: string }
-  | { type: 'boatFull'; prompt: string }
-  | { type: 'evacuate'; prompt: string };
-
 export interface ContextInput {
   target: RayTarget;
-  itemId: ItemId | null;
-  carriedItem: ItemId | null;
-  savedCount: number;
+  targetItem: ItemInstance | null;
+  carriedItem: ItemInstance | null;
+  remainingCapacity: number;
   nearEvacuation: boolean;
 }
 
+export type ContextAction =
+  | { type: 'none'; prompt: '' }
+  | { type: 'pickUp'; item: ItemInstance; prompt: string }
+  | { type: 'drop'; item: ItemInstance; prompt: string }
+  | { type: 'throwToBoat'; item: ItemInstance; prompt: string }
+  | { type: 'capacityFull'; prompt: string }
+  | { type: 'evacuate'; prompt: string };
+
 export function chooseContextAction(input: ContextInput): ContextAction {
-  if (input.target === 'lifeboat' && input.carriedItem && input.savedCount >= 5) {
-    return { type: 'boatFull', prompt: 'LIFEBOAT FULL — DROP SOMETHING ELSE' };
-  }
   if (input.target === 'lifeboat' && input.carriedItem) {
     return {
       type: 'throwToBoat',
-      itemId: input.carriedItem,
-      prompt: `E — THROW ${ITEM_LABELS[input.carriedItem]} TO LIFEBOAT`,
+      item: input.carriedItem,
+      prompt: `E — THROW ${ITEM_LABELS[input.carriedItem.type]} TO LIFEBOAT`,
     };
   }
-  if (input.target === 'item' && input.itemId && !input.carriedItem) {
+  if (input.target === 'item' && input.targetItem) {
+    const definition = ITEM_DEFINITIONS[input.targetItem.type];
+    if (definition.weight > input.remainingCapacity) {
+      return {
+        type: 'capacityFull',
+        prompt: `${definition.label} WEIGHS ${definition.weight} — ${input.remainingCapacity} CAPACITY FREE`,
+      };
+    }
     return {
       type: 'pickUp',
-      itemId: input.itemId,
-      prompt: `E — PICK UP ${ITEM_LABELS[input.itemId]}`,
+      item: input.targetItem,
+      prompt: `E — PICK UP ${definition.label}`,
     };
   }
   if (input.nearEvacuation && !input.carriedItem) {
@@ -51,8 +60,8 @@ export function chooseContextAction(input: ContextInput): ContextAction {
   if (input.carriedItem) {
     return {
       type: 'drop',
-      itemId: input.carriedItem,
-      prompt: `E — DROP ${ITEM_LABELS[input.carriedItem]}`,
+      item: input.carriedItem,
+      prompt: `E — DROP ${ITEM_LABELS[input.carriedItem.type]}`,
     };
   }
   return { type: 'none', prompt: '' };
@@ -63,10 +72,15 @@ function findTaggedAncestor(object: Object3D | null): Object3D | null {
   let item: Object3D | null = null;
   while (current) {
     if (current.name === 'lifeboat') return current;
-    if (!item && current.userData.itemId) item = current;
+    if (!item && current.userData.instanceId) item = current;
     current = current.parent;
   }
   return item;
+}
+
+export interface InteractionTarget {
+  target: RayTarget;
+  targetItem: ItemInstance | null;
 }
 
 export class InteractionSystem {
@@ -83,17 +97,22 @@ export class InteractionSystem {
   update(
     items: readonly Object3D[],
     lifeboat: Object3D,
-  ): { target: RayTarget; itemId: ItemId | null } {
+    instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
+  ): InteractionTarget {
     this.camera.updateWorldMatrix(true, false);
     items.forEach((item) => item.updateWorldMatrix(true, true));
     lifeboat.updateWorldMatrix(true, true);
     this.raycaster.setFromCamera(this.center, this.camera);
     const hit = this.raycaster.intersectObjects([...items, lifeboat], true)[0];
     const tagged = findTaggedAncestor(hit?.object ?? null);
-    this.setHighlight(tagged?.userData.itemId ? tagged : null);
-    if (!tagged) return { target: 'none', itemId: null };
-    if (tagged.name === 'lifeboat') return { target: 'lifeboat', itemId: null };
-    return { target: 'item', itemId: tagged.userData.itemId as ItemId };
+    this.setHighlight(tagged);
+
+    if (!tagged) return { target: 'none', targetItem: null };
+    if (tagged.name === 'lifeboat') return { target: 'lifeboat', targetItem: null };
+    const targetItem = instances.get(tagged.userData.instanceId as ItemInstanceId) ?? null;
+    return targetItem
+      ? { target: 'item', targetItem }
+      : { target: 'none', targetItem: null };
   }
 
   dispose(): void {

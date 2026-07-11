@@ -1,5 +1,5 @@
 import { Box3, Object3D, PerspectiveCamera, Quaternion, Scene, Vector3 } from 'three';
-import type { ItemId } from '../game/ItemState';
+import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 
 interface OriginalPlacement {
   parent: Object3D | null;
@@ -8,21 +8,39 @@ interface OriginalPlacement {
   scale: Vector3;
 }
 
-interface Flight {
-  id: ItemId;
+interface CarriedItem {
+  instance: ItemInstance;
   object: Object3D;
-  velocity: Vector3;
   original: OriginalPlacement;
 }
 
+interface Flight extends CarriedItem {
+  velocity: Vector3;
+}
+
 export interface FlightResultHandlers {
-  onSaved: (id: ItemId) => void;
-  onLost: (id: ItemId) => void;
-  onLanded: (id: ItemId) => void;
+  onSaved: (instance: ItemInstance) => void;
+  onLost: (instance: ItemInstance) => void;
+  onLanded: (instance: ItemInstance) => void;
+}
+
+const CARRY_OFFSETS = [
+  new Vector3(0.56, -0.48, -1.12),
+  new Vector3(0.18, -0.54, -1.02),
+  new Vector3(-0.24, -0.50, -1.08),
+] as const;
+
+function capturePlacement(object: Object3D): OriginalPlacement {
+  return {
+    parent: object.parent,
+    position: object.position.clone(),
+    quaternion: object.quaternion.clone(),
+    scale: object.scale.clone(),
+  };
 }
 
 export class CarryController {
-  private carried: { id: ItemId; object: Object3D; original: OriginalPlacement } | null = null;
+  private readonly carried: CarriedItem[] = [];
   private flight: Flight | null = null;
   private readonly direction = new Vector3();
   private readonly worldPosition = new Vector3();
@@ -34,44 +52,41 @@ export class CarryController {
   ) {}
 
   get busy(): boolean {
-    return this.carried !== null || this.flight !== null;
+    return this.carried.length > 0 || this.flight !== null;
   }
 
-  pickUp(id: ItemId, object: Object3D): boolean {
-    if (this.busy) return false;
-    this.carried = {
-      id,
-      object,
-      original: {
-        parent: object.parent,
-        position: object.position.clone(),
-        quaternion: object.quaternion.clone(),
-        scale: object.scale.clone(),
-      },
-    };
+  get activeInstance(): ItemInstance | null {
+    return this.carried.at(-1)?.instance ?? null;
+  }
+
+  get flightActive(): boolean {
+    return this.flight !== null;
+  }
+
+  pickUp(instance: ItemInstance, object: Object3D): boolean {
+    if (this.flight !== null) return false;
+    this.carried.push({ instance, object, original: capturePlacement(object) });
     this.camera.add(object);
-    object.position.set(0.62, -0.48, -1.15);
-    object.rotation.set(-0.15, 0.45, 0.08);
-    object.scale.setScalar(0.85);
+    this.reflowCarried();
     return true;
   }
 
-  throw(speed = 7.5): ItemId | null {
-    if (!this.carried) return null;
-    const { id, object, original } = this.carried;
+  throw(speed = 7.5): ItemInstanceId | null {
+    if (this.flight !== null) return null;
+    const released = this.carried.pop();
+    if (!released) return null;
+    const { instance, object } = released;
     this.scene.attach(object);
     this.camera.getWorldDirection(this.direction);
     this.flight = {
-      id,
-      object,
+      ...released,
       velocity: this.direction.multiplyScalar(speed).add(new Vector3(0, 1.5, 0)),
-      original,
     };
-    this.carried = null;
-    return id;
+    this.reflowCarried();
+    return instance.instanceId;
   }
 
-  drop(): ItemId | null {
+  drop(): ItemInstanceId | null {
     return this.throw(1.2);
   }
 
@@ -91,7 +106,7 @@ export class CarryController {
       flight.object.getWorldPosition(this.worldPosition);
       if (lifeboatBoxWorld.containsPoint(this.worldPosition)) {
         this.flight = null;
-        handlers.onSaved(flight.id);
+        handlers.onSaved(flight.instance);
         return;
       }
       if (
@@ -99,7 +114,7 @@ export class CarryController {
         waterHeight(this.worldPosition.x, this.worldPosition.z) - 0.25
       ) {
         this.flight = null;
-        handlers.onLost(flight.id);
+        handlers.onLost(flight.instance);
         return;
       }
       const deck = flight.original.parent;
@@ -114,7 +129,7 @@ export class CarryController {
           flight.object.position.y = 2.35;
           flight.object.scale.setScalar(1);
           this.flight = null;
-          handlers.onLanded(flight.id);
+          handlers.onLanded(flight.instance);
           return;
         }
       }
@@ -123,16 +138,23 @@ export class CarryController {
   }
 
   reset(): void {
-    const active = this.carried ?? this.flight;
-    if (active) {
-      const { object, original } = active;
+    const active = this.flight ? [...this.carried, this.flight] : this.carried;
+    active.forEach(({ object, original }) => {
       if (original.parent) original.parent.add(object);
       else object.removeFromParent();
       object.position.copy(original.position);
       object.quaternion.copy(original.quaternion);
       object.scale.copy(original.scale);
-    }
-    this.carried = null;
+    });
+    this.carried.length = 0;
     this.flight = null;
+  }
+
+  private reflowCarried(): void {
+    this.carried.forEach(({ object }, index) => {
+      object.position.copy(CARRY_OFFSETS[index] ?? CARRY_OFFSETS[2]);
+      object.rotation.set(-0.15, 0.45 - index * 0.2, 0.08);
+      object.scale.setScalar(0.72);
+    });
   }
 }

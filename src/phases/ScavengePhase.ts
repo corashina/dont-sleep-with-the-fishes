@@ -6,7 +6,12 @@ import {
   runGameplayFrame,
   type TerminalPresentation,
 } from '../game/GameLoop';
-import { ScavengeSession, type ScavengeResult } from '../game/ScavengeSession';
+import {
+  ScavengeSession,
+  type ScavengeItemState,
+  type ScavengeResult,
+} from '../game/ScavengeSession';
+import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -114,7 +119,7 @@ export class ScavengePhase implements GamePhase {
         afterMove: () => {
           if (synchronizeElapsed()) updateWorld(0);
         },
-        interact: () => this.updateInteraction(this.session.snapshot().savedCount),
+        interact: () => this.updateInteraction(),
         flight: () => this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale),
         isRunning: () => this.session.snapshot().status === 'running',
       });
@@ -173,27 +178,41 @@ export class ScavengePhase implements GamePhase {
     this.ui.dispose();
   }
 
-  private updateInteraction(savedCount: number): void {
+  private updateInteraction(): void {
     const snapshot = this.session.snapshot();
-    const availableItems = [...this.world.itemObjects.entries()]
-      .filter(([id]) => snapshot.items[id] === 'available')
-      .map(([, object]) => object);
-    const target = this.interaction.update(availableItems, this.world.lifeboat);
+    const availableItems = [];
+    const instances = new Map<ItemInstanceId, ItemInstance>();
+    for (const [type, object] of this.world.itemObjects) {
+      if (snapshot.items[type] !== 'available') continue;
+      const item = Object.values(snapshot.items).find((candidate): candidate is ScavengeItemState => (
+        typeof candidate !== 'string' &&
+        candidate.type === type &&
+        candidate.status === 'available'
+      ));
+      if (!item) continue;
+      const instance = { instanceId: item.instanceId, type: item.type };
+      object.userData.instanceId = instance.instanceId;
+      availableItems.push(object);
+      instances.set(instance.instanceId, instance);
+    }
+    const target = this.interaction.update(availableItems, this.world.lifeboat, instances);
     const distanceToEvacuation = this.player.localPosition.distanceTo(this.world.evacuationPoint);
-    this.contextAction = chooseContextAction({
-      ...target,
-      carriedItem: snapshot.carriedItem,
-      savedCount,
-      nearEvacuation: distanceToEvacuation <= 1.7,
-    });
+    this.contextAction = this.carry.flightActive
+      ? { type: 'none', prompt: '' }
+      : chooseContextAction({
+        ...target,
+        carriedItem: this.carry.activeInstance,
+        remainingCapacity: 3 - snapshot.carriedWeight,
+        nearEvacuation: distanceToEvacuation <= 1.7,
+      });
     if (this.input.consumeInteract()) this.performAction(this.contextAction);
   }
 
   private performAction(action: ContextAction): void {
     if (action.type === 'pickUp') {
-      const object = this.world.itemObjects.get(action.itemId);
-      if (object && this.session.pickUp(action.itemId)) {
-        this.carry.pickUp(action.itemId, object);
+      const object = this.world.itemObjects.get(action.item.type);
+      if (object && this.session.pickUp(action.item.instanceId)) {
+        this.carry.pickUp(action.item, object);
       }
     } else if (action.type === 'throwToBoat') {
       this.carry.throw();
@@ -216,15 +235,15 @@ export class ScavengePhase implements GamePhase {
       {
         onSaved: (id) => {
           if (!this.session.saveCarried()) return;
-          this.world.saveItem(id, this.session.snapshot().savedCount - 1);
+          this.world.saveItem(id.type, this.session.snapshot().savedCount - 1);
         },
         onLost: (id) => {
           if (!this.session.loseCarried()) return;
-          this.world.loseItem(id);
+          this.world.loseItem(id.type);
         },
         onLanded: (id) => {
           if (!this.session.dropCarried()) return;
-          this.world.landItem(id);
+          this.world.landItem(id.type);
         },
       },
     );
