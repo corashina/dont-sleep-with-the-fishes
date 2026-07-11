@@ -16,7 +16,7 @@ export interface LifeboatBuild {
   acceptanceBox: Box3;
 }
 
-export function createLifeboat(): LifeboatBuild {
+export function createLifeboat(options: { fishingRod?: boolean } = {}): LifeboatBuild {
   const root = new Group();
   root.name = 'lifeboat';
   const orange = new MeshStandardMaterial({ color: 0x9b6848, roughness: 0.78, flatShading: true });
@@ -77,20 +77,20 @@ export function createLifeboat(): LifeboatBuild {
   rod.name = 'fishing-rod';
   rod.position.set(0.94, 0.72, -0.2);
   rod.rotation.set(0.18, 0, -0.62);
-  root.add(rod);
+  if (options.fishingRod) root.add(rod);
 
   const line = new Mesh(new CylinderGeometry(0.004, 0.004, 1.55, 4), rope);
   line.name = 'fishing-line';
   line.position.set(1.58, 0.18, -0.2);
   line.visible = false;
-  root.add(line);
+  if (options.fishingRod) root.add(line);
 
   const catchMesh = new Mesh(new SphereGeometry(0.12, 7, 5), metal);
   catchMesh.name = 'fishing-catch';
   catchMesh.position.set(1.58, -0.58, -0.2);
   catchMesh.scale.set(1.8, 0.65, 0.45);
   catchMesh.visible = false;
-  root.add(catchMesh);
+  if (options.fishingRod) root.add(catchMesh);
 
   const slots = [
     [-0.68, 0, -1.45], [0.68, 0, -1.45], [-0.68, 0, 0], [0.68, 0, 0], [0, 0, 1.45],

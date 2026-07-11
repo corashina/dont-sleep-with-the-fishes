@@ -43,12 +43,12 @@ The ship sinks in two minutes. Search the cabin and upper deck, carry supplies o
 
 In the lifeboat, each day gives four energy for daytime actions:
 
-- **Fish** attempts to add food. A fishing rod is required; bait improves the odds.
+- **Fish** attempts to add food. Hand-line fishing is always possible; a rescued fishing rod and bait improve the odds.
 - **Dive** searches for food, bait, or repair material, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
 - **Repair** restores hull using recovered material or a duct-tape charge.
 - **Treat** spends a medical-kit charge to restore health.
-- **Rest** trades time for energy.
+- **Rest** consumes one water charge, restores two energy, and is available once per day.
 - **End day** advances into the day and night event sequence.
 
 Health reaches zero when injury or deprivation becomes fatal. Hunger rises overnight and influences recovery. Energy limits daytime work. Hull at zero sinks the boat. Food, bait, repair material, and rescue progress are separate stores shown beside the condition meters.

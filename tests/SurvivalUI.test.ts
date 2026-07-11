@@ -31,6 +31,39 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('renders stable action cost, effect, and risk previews in accessible descriptions', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    const fish = mount.querySelector<HTMLElement>('[data-action="fish"]')!;
+    expect(fish.textContent).toContain('2 ENERGY');
+    expect(fish.textContent).toContain('Chance to gain food');
+    expect(fish.textContent).toContain('UNCERTAIN');
+    expect(fish.getAttribute('aria-description')).toContain('2 ENERGY');
+  });
+
+  it('shows transferred stores and shared logical item descriptions', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const state = snapshot({
+      ...new SurvivalSession(['cannedFood', 'baitTin', 'fishingRod'], { seed: 1 }).snapshot(),
+      food: 2,
+      bait: 3,
+    });
+    ui.render(state, () => null);
+    expect(mount.querySelector('[data-item="cannedFood"] [data-item-state]')?.textContent).toBe('TRANSFERRED TO STORES');
+    expect(mount.querySelector('[data-item="baitTin"] [data-item-state]')?.textContent).toBe('TRANSFERRED TO STORES');
+    expect(mount.querySelector('[data-item="fishingRod"]')?.textContent).toMatch(/food|fish/i);
+    ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
+    expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')?.getAttribute('aria-description')).toMatch(/food|fish/i);
+  });
+
+  it('labels hand-line fishing when no rod was rescued', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ inventory: new SurvivalSession([], { seed: 1 }).snapshot().inventory }), () => null);
+    expect(mount.querySelector('[data-hotspot="fish"]')?.getAttribute('aria-label')).toMatch(/hand-line/i);
+  });
   it('labels every survival action and meter without relying on color', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);

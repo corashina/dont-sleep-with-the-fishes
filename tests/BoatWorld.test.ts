@@ -26,4 +26,15 @@ describe('BoatWorld helpers', () => {
 
     expect(after).toBe(before);
   });
+
+  it('only builds survival fishing gear when rescued and resets transient cues', async () => {
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, false);
+    expect(world.scene.getObjectByName('fishing-rod')).toBeUndefined();
+    const sequence = world.play('rest');
+    world.update(0.8, 0.8);
+    await sequence;
+    expect(world.presentationCueForTest()).toBeNull();
+    world.dispose();
+  });
 });

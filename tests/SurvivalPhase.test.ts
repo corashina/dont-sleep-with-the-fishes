@@ -158,7 +158,9 @@ describe('SurvivalPhase orchestration', () => {
     });
 
     phase.handleAction('fish', 'useBait');
+    phase.handleContinue();
     phase.handleAction('repair');
+    phase.handleContinue();
     current = snapshot({
       inventory: inventory({ ductTape: { owned: true, charges: 1, durable: false } }),
     });
