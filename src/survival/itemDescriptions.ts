@@ -9,4 +9,5 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   waterJug: 'Helps in heat and supplies water for rest.',
   cannedFood: 'Relieves hunger when eaten.',
   flashlight: 'Illuminates dark inspections and safer diving.',
+  scubaSet: 'Enables safe dives beneath the lifeboat.',
 };
