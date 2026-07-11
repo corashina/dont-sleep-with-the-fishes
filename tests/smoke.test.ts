@@ -6,9 +6,9 @@ import { createSurvivalInventory } from '../src/survival/inventory';
 import { formatCountdown } from '../src/ui/GameUI';
 
 describe('demo contracts', () => {
-  it('ships exactly eight supply definitions', () => {
-    expect(ITEM_IDS).toHaveLength(8);
-    expect(new Set(ITEM_IDS).size).toBe(8);
+  it('ships exactly nine supply definitions', () => {
+    expect(ITEM_IDS).toHaveLength(9);
+    expect(new Set(ITEM_IDS).size).toBe(9);
   });
 
   it('ships exactly sixteen authored survival events', () => {
@@ -21,7 +21,7 @@ describe('demo contracts', () => {
     expect(new Set(WEATHER_IDS).size).toBe(3);
   });
 
-  it('maps all eight scavenged items into survival definitions', () => {
+  it('maps all nine scavenged items into survival definitions', () => {
     const inventory = createSurvivalInventory(ITEM_IDS);
 
     expect(Object.keys(inventory).sort()).toEqual([...ITEM_IDS].sort());
