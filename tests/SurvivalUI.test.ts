@@ -67,6 +67,88 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.hidden).toBe(false);
   });
 
+  it('emits unbaited fishing directly when no bait remains', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot({ bait: 0 }), () => null);
+    const options = mount.querySelector<HTMLElement>('[data-action-options]');
+
+    expect(options).not.toBeNull();
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
+
+    expect(action).toHaveBeenCalledWith('fish', undefined);
+    expect(options?.classList).not.toContain('is-visible');
+  });
+
+  it('emits both fishing choices with their matching option values', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot({ bait: 2 }), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+
+    fish.click();
+    expect(action).not.toHaveBeenCalled();
+    mount.querySelector<HTMLButtonElement>('[data-action-option="fish"]')!.click();
+    expect(action).toHaveBeenLastCalledWith('fish', undefined);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
+    expect(action).toHaveBeenLastCalledWith('fish', 'useBait');
+    expect(action).toHaveBeenCalledTimes(2);
+  });
+
+  it('isolates fishing choices and restores their command origin on Escape', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const pause = vi.fn();
+    ui.onAction = action;
+    ui.onPauseChange = pause;
+    ui.render(snapshot({ bait: 1 }), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-hotspot="fish"]')!;
+    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
+    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+
+    fish.click();
+    expect(options.classList).toContain('is-visible');
+    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
+    expect(mount.querySelector('.survival-actions')?.hasAttribute('inert')).toBe(true);
+    dive.click();
+    expect(action).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(options.classList).not.toContain('is-visible');
+    expect(document.activeElement).toBe(fish);
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it('keeps Pause above fishing choices and resumes into the choice layer', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot({ bait: 1 }), () => null);
+    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
+    ui.setPaused(true);
+    expect(options.hasAttribute('inert')).toBe(true);
+    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
+    expect(action).not.toHaveBeenCalled();
+
+    ui.setPaused(false);
+    expect(options.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
+    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
+    expect(action).toHaveBeenCalledWith('fish', 'useBait');
+  });
+
   it('keeps unavailable actions and hotspots focusable while suppressing commands', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

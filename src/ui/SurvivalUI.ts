@@ -130,6 +130,9 @@ export class SurvivalUI {
   private readonly outcomeTitle: HTMLElement;
   private readonly outcomeMessage: HTMLElement;
   private readonly outcomeDeltas: HTMLElement;
+  private readonly actionOptionsLayer: HTMLElement;
+  private readonly actionOptionsTitle: HTMLElement;
+  private readonly fishingOptionButtons: HTMLButtonElement[];
   private readonly pauseLayer: HTMLElement;
   private readonly resumeButton: HTMLButtonElement;
   private readonly endingLayer: HTMLElement;
@@ -151,6 +154,7 @@ export class SurvivalUI {
   private inventoryOpen = false;
   private disposed = false;
   private restartIssued = false;
+  private availableBait = 0;
   private focusReturnTarget: HTMLElement | null = null;
   private pauseReturnTarget: HTMLElement | null = null;
   private inventoryReturnTarget: HTMLElement | null = null;
@@ -187,6 +191,15 @@ export class SurvivalUI {
         <div class="inventory-tray__heading"><span class="eyebrow">RECOVERED SUPPLIES</span><strong>INVENTORY</strong></div>
         <ul class="inventory-list" data-inventory-items>${ITEM_IDS.map(inventoryMarkup).join('')}</ul>
       </aside>
+      <section class="survival-overlay action-options-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
+        <p class="eyebrow">FISHING METHOD</p>
+        <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
+        <p>Cast now, or spend one bait for a better chance.</p>
+        <div class="action-options">
+          <button type="button" class="secondary-action" data-action-option="fish">FISH WITHOUT BAIT</button>
+          <button type="button" class="primary-action" data-action-option="useBait">USE 1 BAIT</button>
+        </div>
+      </section>
       <section class="survival-overlay event-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
         <p class="event-danger" data-event-danger></p>
         <h2 data-event-title tabindex="-1"></h2>
@@ -235,6 +248,9 @@ export class SurvivalUI {
     this.outcomeTitle = requireElement(this.root, '[data-outcome-title]');
     this.outcomeMessage = requireElement(this.root, '[data-outcome-message]');
     this.outcomeDeltas = requireElement(this.root, '[data-outcome-deltas]');
+    this.actionOptionsLayer = requireElement(this.root, '[data-action-options]');
+    this.actionOptionsTitle = requireElement(this.root, '[data-action-options-title]');
+    this.fishingOptionButtons = [...this.actionOptionsLayer.querySelectorAll<HTMLButtonElement>('[data-action-option]')];
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.resumeButton = requireElement(this.root, '[data-resume]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
@@ -245,7 +261,13 @@ export class SurvivalUI {
     this.actionDock = requireElement(this.root, '.survival-actions');
     this.hotspotRegion = requireElement(this.root, '.survival-hotspots');
     this.backgroundRegions = [this.actionDock, this.hotspotRegion, this.inventoryToggle];
-    this.modalLayers = [this.pauseLayer, this.endingLayer, this.outcomeLayer, this.eventLayer];
+    this.modalLayers = [
+      this.pauseLayer,
+      this.actionOptionsLayer,
+      this.endingLayer,
+      this.outcomeLayer,
+      this.eventLayer,
+    ];
 
     ACTIONS.forEach(({ id }) => {
       this.actionButtons.set(id, requireElement(this.root, `[data-action="${id}"]`));
@@ -270,6 +292,7 @@ export class SurvivalUI {
     this.updateStore('bait', snapshot.bait);
     this.updateStore('repairMaterial', snapshot.repairMaterial);
     this.updateStore('rescueProgress', snapshot.rescueProgress);
+    this.availableBait = snapshot.bait;
 
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
@@ -495,6 +518,7 @@ export class SurvivalUI {
     this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item]').forEach((button) => {
       button.disabled = this.busy || button.dataset.usable !== 'true';
     });
+    this.fishingOptionButtons.forEach((button) => { button.disabled = this.busy; });
     this.endureButton.disabled = this.busy;
   }
 
@@ -567,7 +591,29 @@ export class SurvivalUI {
     if (layer === this.eventLayer) this.eventTitle.focus();
     else if (layer === this.outcomeLayer) this.outcomeTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
+    else if (layer === this.actionOptionsLayer) this.actionOptionsTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
+  }
+
+  private activateDayAction(action: DayActionId, origin: HTMLButtonElement): void {
+    this.latestCommandOrigin = origin;
+    if (action === 'fish' && this.availableBait > 0) {
+      this.showLayer(this.actionOptionsLayer);
+      this.actionOptionsTitle.focus();
+      return;
+    }
+    this.onAction(action, undefined);
+  }
+
+  private chooseFishingOption(option: DayActionOption | undefined): void {
+    this.hideLayer(this.actionOptionsLayer);
+    this.onAction('fish', option);
+    if (!this.modalOpen()) this.restoreCommandFocus(this.latestCommandOrigin);
+  }
+
+  private closeActionOptions(): void {
+    this.hideLayer(this.actionOptionsLayer);
+    this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private isUsableCommand(element: HTMLElement | null): element is HTMLElement {
@@ -619,8 +665,7 @@ export class SurvivalUI {
     const actionId = button.dataset.action as DayActionId | undefined;
     if (actionId !== undefined) {
       if (this.overlayOpen()) return;
-      this.latestCommandOrigin = button;
-      this.onAction(actionId, undefined);
+      this.activateDayAction(actionId, button);
       return;
     }
     const hotspot = button.dataset.hotspot;
@@ -630,12 +675,16 @@ export class SurvivalUI {
     }
     if (hotspot === 'fish' || hotspot === 'dive' || hotspot === 'repair') {
       if (this.overlayOpen()) return;
-      this.latestCommandOrigin = button;
-      this.onAction(hotspot, undefined);
+      this.activateDayAction(hotspot, button);
       return;
     }
     if (button.hasAttribute('data-inventory-toggle')) {
       this.toggleInventory(button);
+      return;
+    }
+    const actionOption = button.dataset.actionOption;
+    if (actionOption === 'fish' || actionOption === 'useBait') {
+      this.chooseFishingOption(actionOption === 'useBait' ? 'useBait' : undefined);
       return;
     }
     const itemId = button.dataset.item as ItemId | undefined;
@@ -664,6 +713,9 @@ export class SurvivalUI {
       if (this.inventoryOpen) {
         event.preventDefault();
         this.closeInventory(true);
+      } else if (this.topmostModal() === this.actionOptionsLayer) {
+        event.preventDefault();
+        this.closeActionOptions();
       } else {
         event.preventDefault();
         this.onPauseChange(!this.paused);
