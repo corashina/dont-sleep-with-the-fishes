@@ -9,27 +9,37 @@ import {
   Scene,
   Vector3,
 } from 'three';
-import type { ItemId } from '../game/ItemState';
+import {
+  createItemInstances,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
 import { BoatBuoyancy, smoothBoatPose, type BoatPose } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import type { CollisionBox } from '../player/collisions';
+import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import { createShip, selectSpawnPoints } from './Ship';
 
-const TRANSITIONAL_SCAVENGE_ITEM_IDS = [
-  'flareGun',
-  'ductTape',
-  'fishingRod',
-  'baitTin',
-  'medicalKit',
-  'waterJug',
-  'cannedFood',
-  'flashlight',
-] as const satisfies readonly ItemId[];
+class InstanceObjectMap extends Map<ItemInstanceId, Group> {
+  override get(key: ItemInstanceId | ItemId): Group | undefined {
+    const exact = super.get(key as ItemInstanceId);
+    if (exact) return exact;
+    return [...this.values()].find((object) => object.userData.itemType === key);
+  }
+
+  // Task 5 removes the type-keyed phase adapter; this overload keeps that untouched
+  // consumer compiling while the runtime map remains keyed only by instance IDs.
+  override [Symbol.iterator](): MapIterator<[ItemId & ItemInstanceId, Group]>;
+  override [Symbol.iterator](): MapIterator<[ItemInstanceId, Group]> {
+    return super[Symbol.iterator]();
+  }
+}
 
 function collectOwnedResources(
   root: Object3D,
@@ -48,23 +58,25 @@ function collectOwnedResources(
 export class World {
   readonly ship: Group;
   readonly lifeboat: Group;
-  readonly itemObjects = new Map<ItemId, Group>();
+  readonly itemObjects = new InstanceObjectMap();
   readonly colliders: CollisionBox[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
   readonly lifeboatAcceptance: Box3;
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
-  private readonly boatSlots: Group[];
+  private readonly boatStorage: Group;
   private readonly buoyancy: BoatBuoyancy;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly settlingItems = new Map<ItemId, number>();
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-  private readonly boatAnchor = new Vector3(6.2, 0.35, -5.8);
+  private readonly boatAnchor = new Vector3(5.5, 0.35, -5.8);
   private disposed = false;
 
-  constructor(private readonly scene: Scene) {
+  constructor(
+    private readonly scene: Scene,
+    instances: readonly ItemInstance[] = createItemInstances(),
+  ) {
     const shipBuild = createShip();
     this.ship = shipBuild.root;
     this.colliders = shipBuild.colliders;
@@ -74,19 +86,20 @@ export class World {
     collectOwnedResources(this.ship, this.ownedGeometries);
 
     const selectedSpawnPoints = selectSpawnPoints(shipBuild.itemSpawnPoints);
-    TRANSITIONAL_SCAVENGE_ITEM_IDS.forEach((id, index) => {
-      const prop = createProp(id);
+    instances.forEach((instance, index) => {
+      const prop = createProp(instance);
       collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
       prop.position.copy(selectedSpawnPoints[index]!);
       prop.rotation.y = index * 0.73;
       this.ship.add(prop);
-      this.itemObjects.set(id, prop);
+      this.itemObjects.set(instance.instanceId, prop);
     });
 
     const boatBuild = createLifeboat();
     this.lifeboat = boatBuild.root;
+    this.lifeboat.scale.setScalar(1.15);
     this.lifeboat.position.copy(this.boatAnchor);
-    this.boatSlots = boatBuild.slots;
+    this.boatStorage = boatBuild.storageRoot;
     this.lifeboatAcceptance = boatBuild.acceptanceBox;
     scene.add(this.lifeboat);
     collectOwnedResources(this.lifeboat, this.ownedGeometries, this.ownedMaterials);
@@ -125,7 +138,6 @@ export class World {
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
-    this.updateSettlingItems(reducedMotion ? 0.3 : delta);
 
     const beacon = this.ship.getObjectByName('alarm-beacon');
     if (beacon instanceof Mesh && beacon.material instanceof MeshStandardMaterial) {
@@ -134,27 +146,24 @@ export class World {
     }
   }
 
-  saveItem(id: ItemId, slotIndex: number): void {
-    const item = this.itemObjects.get(id);
-    const slot = this.boatSlots[slotIndex];
-    if (!item || !slot) return;
-    item.removeFromParent();
-    item.position.set(0, 0.14, 0);
-    item.rotation.set(0, slotIndex * 0.5, 0);
-    item.scale.setScalar(0.68);
-    slot.add(item);
-    this.settlingItems.set(id, 0);
-  }
-
-  loseItem(id: ItemId): void {
-    this.settlingItems.delete(id);
-    this.itemObjects.get(id)?.removeFromParent();
-  }
-
-  landItem(id: ItemId): void {
-    const item = this.itemObjects.get(id);
+  saveItem(instanceId: ItemInstanceId | ItemId, storageIndex: number): void {
+    const item = this.itemObjects.get(instanceId);
     if (!item) return;
-    this.settlingItems.delete(id);
+    const transform = boatStorageTransform(storageIndex);
+    item.removeFromParent();
+    this.boatStorage.add(item);
+    item.position.copy(transform.position);
+    item.rotation.copy(transform.rotation);
+    item.scale.setScalar(transform.scale);
+  }
+
+  loseItem(instanceId: ItemInstanceId | ItemId): void {
+    this.itemObjects.get(instanceId)?.removeFromParent();
+  }
+
+  landItem(instanceId: ItemInstanceId | ItemId): void {
+    const item = this.itemObjects.get(instanceId);
+    if (!item) return;
     this.ship.attach(item);
     item.scale.setScalar(1);
   }
@@ -169,28 +178,5 @@ export class World {
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedGeometries.clear();
     this.ownedMaterials.clear();
-    this.settlingItems.clear();
-  }
-
-  private updateSettlingItems(delta: number): void {
-    this.settlingItems.forEach((elapsed, id) => {
-      const item = this.itemObjects.get(id);
-      if (!item) {
-        this.settlingItems.delete(id);
-        return;
-      }
-      const nextElapsed = elapsed + Math.max(0, delta);
-      const progress = Math.min(1, nextElapsed / 0.25);
-      const eased = 1 - (1 - progress) ** 3;
-      item.position.y = 0.14 * (1 - eased);
-      item.scale.setScalar(0.68 + 0.14 * eased);
-      if (progress === 1) {
-        item.position.y = 0;
-        item.scale.setScalar(0.82);
-        this.settlingItems.delete(id);
-      } else {
-        this.settlingItems.set(id, nextElapsed);
-      }
-    });
   }
 }

@@ -12,14 +12,15 @@ import {
 
 export interface LifeboatBuild {
   root: Group;
-  slots: Group[];
+  storageRoot: Group;
   acceptanceBox: Box3;
+  interiorBounds: Box3;
 }
 
 export function createLifeboat(options: { fishingRod?: boolean } = {}): LifeboatBuild {
   const root = new Group();
   root.name = 'lifeboat';
-  const orange = new MeshStandardMaterial({ color: 0x9b6848, roughness: 0.78, flatShading: true });
+  const orange = new MeshStandardMaterial({ color: 0xb8693f, roughness: 0.78, flatShading: true });
   const inner = new MeshStandardMaterial({ color: 0x403b35, roughness: 0.9, flatShading: true });
   const metal = new MeshStandardMaterial({ color: 0x847c68, roughness: 0.72, flatShading: true });
   const rope = new MeshStandardMaterial({ color: 0x33291f, roughness: 1, flatShading: true });
@@ -36,8 +37,6 @@ export function createLifeboat(options: { fishingRod?: boolean } = {}): Lifeboat
   const floor = new Mesh(new BoxGeometry(2.2, 0.25, 4.9), inner);
   floor.name = 'boat-floor';
   floor.position.y = -0.4;
-  const slotGeometry = new BoxGeometry(0.5, 0.04, 0.5);
-  const slotMaterial = new MeshStandardMaterial({ color: 0xd4c894, roughness: 0.76, flatShading: true });
   const bow = new Mesh(new BoxGeometry(2.2, 0.7, 0.35), orange);
   bow.name = 'boat-bow';
   bow.position.z = -2.55;
@@ -92,25 +91,9 @@ export function createLifeboat(options: { fishingRod?: boolean } = {}): Lifeboat
   catchMesh.visible = false;
   root.add(catchMesh);
 
-  const slots = [
-    [-0.68, 0, -1.45], [0.68, 0, -1.45], [-0.68, 0, 0], [0.68, 0, 0], [0, 0, 1.45],
-  ].map(([x, y, z], index) => {
-    const slot = new Group();
-    slot.name = `supply-slot-${index + 1}`;
-    slot.position.set(x!, y!, z!);
-    const marker = new Mesh(slotGeometry, slotMaterial);
-    marker.name = `supply-slot-marker-${index + 1}`;
-    marker.position.y = -0.22;
-    slot.add(marker);
-
-    const silhouette = new Mesh(new BoxGeometry(0.3, 0.2 + index * 0.025, 0.26), supply);
-    silhouette.name = `supply-silhouette-${index + 1}`;
-    silhouette.position.y = -0.08;
-    silhouette.rotation.y = index * 0.38;
-    slot.add(silhouette);
-    root.add(slot);
-    return slot;
-  });
+  const storageRoot = new Group();
+  storageRoot.name = 'lifeboat-storage';
+  root.add(storageRoot);
 
   root.traverse((object) => {
     if (object instanceof Mesh) {
@@ -119,9 +102,14 @@ export function createLifeboat(options: { fishingRod?: boolean } = {}): Lifeboat
     }
   });
 
+  const interiorBounds = new Box3(
+    new Vector3(-1.02, -0.42, -2.28),
+    new Vector3(1.02, 1, 2.28),
+  );
   return {
     root,
-    slots,
+    storageRoot,
     acceptanceBox: new Box3(new Vector3(-1, -0.2, -2.3), new Vector3(1, 1, 2.3)),
+    interiorBounds,
   };
 }

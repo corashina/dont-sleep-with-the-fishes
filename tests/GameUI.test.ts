@@ -33,17 +33,43 @@ describe('GameUI', () => {
     expect(mount.querySelector('[data-result-title]')?.textContent).toBe('Taken by the Sea');
   });
 
-  it('keeps slot nodes stable when the saved count has not changed', () => {
+  it('renders carry weight, items, and save feedback without slot markers', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new GameUI(mount);
-    const sinking = getSinkingState(0, 120);
-    const firstSlot = mount.querySelector('.slot');
+    ui.render(snapshot({
+      carriedWeight: 2,
+      carriedItems: [
+        { instanceId: 'cannedFood-1', type: 'cannedFood' },
+        { instanceId: 'ductTape-1', type: 'ductTape' },
+      ],
+    }), getSinkingState(0, 120));
+    ui.showFeedback('SAVED — CANNED FOOD');
 
-    ui.render(snapshot(), sinking);
-    ui.render(snapshot({ remainingSeconds: 119 }), getSinkingState(1, 120));
+    expect(mount.querySelector('[data-carry-weight]')?.textContent).toBe('2 / 3');
+    expect(mount.querySelector('[data-carried-items]')?.textContent).toContain('CANNED FOOD · 1');
+    expect(mount.querySelector('[data-feedback]')?.textContent).toBe('SAVED — CANNED FOOD');
+    expect(mount.querySelector('.slot')).toBeNull();
+  });
 
-    expect(mount.querySelector('.slot')).toBe(firstSlot);
+  it('versions repeated feedback so identical saves remain observable', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    ui.showFeedback('SAVED — CANNED FOOD');
+    ui.showFeedback('SAVED — CANNED FOOD');
+
+    expect(mount.querySelector<HTMLElement>('[data-feedback]')?.dataset.version).toBe('1');
+  });
+
+  it('reports saved supplies without a five-slot limit', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    ui.showFailureResult(snapshot({ status: 'failure', savedCount: 6 }));
+
+    expect(mount.querySelector('[data-result-items]')?.textContent).toContain('6 SUPPLIES SAVED');
+    expect(mount.querySelector('[data-result-items]')?.textContent).not.toContain('/ 5');
   });
 
   it('does not rewrite an unchanged live-region prompt', () => {
