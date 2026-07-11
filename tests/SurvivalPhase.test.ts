@@ -87,22 +87,25 @@ describe('SurvivalPhase orchestration', () => {
     expect(render).toHaveBeenCalledWith(expect.objectContaining({ state: 'day', day: 1 }), expect.any(Function));
   });
 
-  it('requests and opens the day event only after Continue from the first energy-spending action', async () => {
+  it('presents the requested day-event cue and waits for a second Continue before opening the event', async () => {
     const event = SURVIVAL_EVENTS.find((candidate) => candidate.phase === 'day')!;
     let current = snapshot();
+    const eventOutcome = accepted({ code: 'event-opened', message: event.prompt, cue: event.cue, deltas: {} });
     const requestDayEvent = vi.fn(() => {
       current = snapshot({ state: 'dayEvent', actedToday: true, pendingEventId: event.id });
-      return accepted({ code: 'event-opened', message: event.prompt, cue: event.cue, deltas: {} });
+      return eventOutcome;
     });
+    const play = vi.fn(() => Promise.resolve());
     const showEvent = vi.fn();
+    const showOutcome = vi.fn();
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: vi.fn(() => current),
         perform: vi.fn(() => accepted()),
         requestDayEvent,
       },
-      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
-      ui: { render: vi.fn(), showOutcome: vi.fn(), hideOutcome: vi.fn(), setBusy: vi.fn(), showEvent, dispose: vi.fn() },
+      world: { play, dispose: vi.fn() },
+      ui: { render: vi.fn(), showOutcome, hideOutcome: vi.fn(), setBusy: vi.fn(), showEvent, dispose: vi.fn() },
     });
 
     phase.handleAction('fish');
@@ -112,6 +115,13 @@ describe('SurvivalPhase orchestration', () => {
     phase.handleContinue();
 
     expect(requestDayEvent).toHaveBeenCalledOnce();
+    expect(showOutcome).toHaveBeenLastCalledWith(eventOutcome);
+    expect(play).toHaveBeenNthCalledWith(2, event.cue);
+    expect(showEvent).not.toHaveBeenCalled();
+
+    await flushPromises();
+    expect(showEvent).not.toHaveBeenCalled();
+    phase.handleContinue();
     expect(showEvent).toHaveBeenCalledWith(event, current);
   });
 
@@ -220,6 +230,39 @@ describe('SurvivalPhase orchestration', () => {
     phase.requestRestart();
     phase.requestRestart();
     expect(restart).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a terminal action outcome visible until its cue and explicit Continue complete', async () => {
+    let current = snapshot();
+    let finishSequence!: () => void;
+    const play = vi.fn(() => new Promise<void>((resolve) => { finishSequence = resolve; }));
+    const showEnding = vi.fn();
+    const hideOutcome = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        perform: vi.fn(() => {
+          current = snapshot({ state: 'sunk', day: 4 });
+          return accepted({ code: 'boat-sunk', cue: 'sinking', deltas: { hull: -100 } });
+        }),
+      },
+      world: { play, update: vi.fn(), dispose: vi.fn() },
+      ui: { showOutcome: vi.fn(), hideOutcome, setBusy: vi.fn(), showEnding, render: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleAction('dive');
+    phase.update(1, 0.016);
+    expect(showEnding).not.toHaveBeenCalled();
+
+    finishSequence();
+    await flushPromises();
+    phase.update(2, 0.016);
+    expect(showEnding).not.toHaveBeenCalled();
+
+    phase.handleContinue();
+    phase.update(3, 0.016);
+    expect(hideOutcome).toHaveBeenCalledOnce();
+    expect(showEnding).toHaveBeenCalledOnce();
   });
 
   it('pauses while hidden and requires the UI resume action before updates continue', () => {
