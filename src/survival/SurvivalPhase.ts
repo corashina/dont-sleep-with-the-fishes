@@ -72,7 +72,7 @@ export class SurvivalPhase implements GamePhase {
       this.initialize(
         context,
         new SurvivalSession(savedItems, { seed }),
-        new BoatWorld(context.camera, context.reducedMotion),
+        new BoatWorld(context.camera, context.reducedMotion, savedItems.includes('fishingRod')),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
@@ -168,6 +168,20 @@ export class SurvivalPhase implements GamePhase {
     this.ui.hideOutcome?.();
 
     let snapshot = this.renderSnapshot(false);
+    if (snapshot.state === 'nightEvent' && snapshot.pendingEventId === null) {
+      const dawn = this.session.beginDawn?.();
+      if (dawn?.accepted) {
+        this.busy = true;
+        this.ui.setBusy?.(true);
+        void (this.world.play?.(dawn.cue) ?? Promise.resolve()).finally(() => {
+          if (this.disposed) return;
+          this.busy = false;
+          this.ui.setBusy?.(false);
+          this.renderSnapshot(false);
+        });
+        return;
+      }
+    }
     if (
       this.pendingDayEventDay !== null
       && snapshot.day === this.pendingDayEventDay
@@ -265,7 +279,10 @@ export class SurvivalPhase implements GamePhase {
 
   private present(outcome: ActionOutcome): void {
     this.ui.showOutcome?.(outcome);
-    if (!outcome.accepted) return;
+    if (!outcome.accepted) {
+      this.awaitingContinue = true;
+      return;
+    }
     this.busy = true;
     this.ui.setBusy?.(true);
     const sequence = this.world.play?.(outcome.cue) ?? Promise.resolve();

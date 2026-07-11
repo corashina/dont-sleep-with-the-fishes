@@ -64,6 +64,8 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   impact: 0.8,
   darkness: 1,
   sighting: 1.2,
+  nightfall: 1.1,
+  dawn: 1.1,
   rescue: 1.5,
   death: 1.5,
   sinking: 1.5,
@@ -133,7 +135,7 @@ export class BoatWorld {
   private settledCue: PresentationCue | null = null;
   private disposed = false;
 
-  constructor(camera: PerspectiveCamera, reducedMotion: MediaQueryList) {
+  constructor(camera: PerspectiveCamera, reducedMotion: MediaQueryList, hasFishingRod = true) {
     this.scene = new Scene();
     this.camera = camera;
     this.reducedMotion = reducedMotion;
@@ -141,7 +143,7 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
 
-    const build = createLifeboat();
+    const build = createLifeboat({ fishingRod: hasFishingRod });
     this.boat = build.root;
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
@@ -207,11 +209,13 @@ export class BoatWorld {
     });
   }
 
+  presentationCueForTest(): PresentationCue | null { return this.settledCue; }
+
   skipSequence(): void {
     if (!this.activeSequence) return;
     const sequence = this.activeSequence;
     this.activeSequence = null;
-    this.settledCue = sequence.cue;
+    this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
     this.applyBasePresentation();
     this.applyCue(sequence.cue, 1, sequence.duration);
     sequence.resolve();
@@ -248,7 +252,7 @@ export class BoatWorld {
       this.applyCue(sequence.cue, progress, sequence.elapsed);
       if (progress >= 1) {
         this.activeSequence = null;
-        this.settledCue = sequence.cue;
+        this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
         sequence.resolve();
       }
     }
@@ -378,6 +382,14 @@ export class BoatWorld {
         this.distantVessel.visible = progress > 0.08;
         this.vesselMaterial.opacity = 0.16 + eased * 0.38;
         break;
+      case 'nightfall':
+        this.ambient.intensity *= 1 - eased * 0.72;
+        this.key.intensity *= 1 - eased * 0.78;
+        break;
+      case 'dawn':
+        this.ambient.intensity *= 0.35 + eased * 0.65;
+        this.key.intensity *= 0.3 + eased * 0.7;
+        break;
       case 'rescue':
         this.distantVessel.visible = true;
         this.vesselMaterial.opacity = 0.25 + eased * 0.75;
@@ -400,5 +412,9 @@ export class BoatWorld {
     const sequence = this.activeSequence;
     this.activeSequence = null;
     sequence?.resolve();
+  }
+
+  private isTerminalCue(cue: PresentationCue): boolean {
+    return cue === 'rescue' || cue === 'death' || cue === 'sinking';
   }
 }

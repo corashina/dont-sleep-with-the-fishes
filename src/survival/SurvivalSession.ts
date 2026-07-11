@@ -150,7 +150,7 @@ export class SurvivalSession {
 
     const event = this.drawEvent('night');
     this.openEvent(event);
-    return this.commit('event-opened', event.prompt, {}, event.cue);
+    return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
 
   resolveEvent(itemId: ItemId | null): ActionOutcome {
@@ -160,6 +160,9 @@ export class SurvivalSession {
     }
 
     const event = this.pendingEvent;
+    if (itemId !== null && !this.canUseEventItem(itemId)) {
+      return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
+    }
     const phase = event.phase;
     const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
     const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
@@ -176,13 +179,14 @@ export class SurvivalSession {
 
     if (!this.isTerminal()) {
       if (phase === 'day') this.state = 'day';
-      else this.beginDawn();
+      else this.state = 'nightEvent';
     }
     return outcome;
   }
 
   beginDawn(): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
+    if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
 
     this.day += 1;
     this.restedToday = false;
@@ -212,7 +216,7 @@ export class SurvivalSession {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
 
-    const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'none');
+    const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'dawn');
     if (this.isTerminal() || this.day < SURVIVAL_BALANCE.rescue.firstDay) return dawn;
 
     const baseChance = Math.min(
@@ -423,11 +427,26 @@ export class SurvivalSession {
   }
 
   private commit(code: string, message: string, deltas: ResourceDelta, cue: PresentationCue): ActionOutcome {
+    const before = this.resourceValues();
     this.applyDeltas(deltas);
     this.resolveTerminal();
-    const outcome: ActionOutcome = { accepted: true, code, message, deltas: { ...deltas }, cue };
+    const after = this.resourceValues();
+    const applied = Object.fromEntries(Object.keys(deltas).map((key) => {
+      const resource = key as keyof ResourceDelta;
+      return [resource, after[resource] - before[resource]];
+    })) as ResourceDelta;
+    const terminalCue = this.state === 'dead' ? 'death' : this.state === 'sunk' ? 'sinking' : this.state === 'rescued' ? 'rescue' : cue;
+    const outcome: ActionOutcome = { accepted: true, code, message, deltas: applied, cue: terminalCue };
     this.lastOutcome = outcome;
     return { ...outcome, deltas: { ...outcome.deltas } };
+  }
+
+  private resourceValues(): Required<ResourceDelta> {
+    return {
+      health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
+      food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
+      rescueProgress: this.rescueProgress,
+    };
   }
 
   private applyDeltas(deltas: ResourceDelta): void {

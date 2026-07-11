@@ -6,7 +6,8 @@ export type DayActionId = 'fish' | 'dive' | 'eat' | 'repair' | 'treat' | 'rest' 
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
 export type PresentationCue =
   | 'none' | 'fish' | 'dive' | 'repair' | 'treat' | 'rest'
-  | 'storm' | 'impact' | 'darkness' | 'sighting' | 'rescue' | 'death' | 'sinking';
+  | 'storm' | 'impact' | 'darkness' | 'sighting' | 'nightfall' | 'dawn'
+  | 'rescue' | 'death' | 'sinking';
 
 export interface ItemInventoryState {
   owned: boolean;

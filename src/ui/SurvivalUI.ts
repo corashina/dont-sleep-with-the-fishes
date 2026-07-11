@@ -1,5 +1,6 @@
 import { ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { DayActionOption } from '../survival/SurvivalSession';
+import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import type {
   ActionOutcome,
   DayActionId,
@@ -14,6 +15,9 @@ interface ActionDefinition {
   id: DayActionId;
   label: string;
   shortcut: string;
+  cost: string;
+  effect: string;
+  risk: 'safe' | 'uncertain' | 'dangerous';
 }
 
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
@@ -28,13 +32,13 @@ interface MeterDefinition {
 }
 
 const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', shortcut: '1' },
-  { id: 'dive', label: 'DIVE', shortcut: '2' },
-  { id: 'eat', label: 'EAT', shortcut: '3' },
-  { id: 'repair', label: 'REPAIR', shortcut: '4' },
-  { id: 'treat', label: 'TREAT', shortcut: '5' },
-  { id: 'rest', label: 'REST', shortcut: '6' },
-  { id: 'endDay', label: 'END DAY', shortcut: '7' },
+  { id: 'fish', label: 'FISH', shortcut: '1', cost: '2 ENERGY', effect: 'Chance to gain food', risk: 'uncertain' },
+  { id: 'dive', label: 'DIVE', shortcut: '2', cost: '3 ENERGY', effect: 'May recover supplies; injury risk', risk: 'dangerous' },
+  { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', effect: 'HUNGER -35', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', effect: 'HULL +25 (tape +15)', risk: 'safe' },
+  { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', effect: 'HEALTH +30', risk: 'safe' },
+  { id: 'rest', label: 'REST', shortcut: '6', cost: '1 WATER', effect: 'ENERGY +2', risk: 'safe' },
+  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
 ];
 
 const METERS: readonly MeterDefinition[] = [
@@ -77,10 +81,12 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 }
 
 function actionMarkup(action: ActionDefinition): string {
+  const description = `${action.cost}. ${action.effect}. ${action.risk}.`;
   return `
-    <button type="button" class="survival-action" data-action="${action.id}" aria-keyshortcuts="${action.shortcut}">
+    <button type="button" class="survival-action" data-action="${action.id}" aria-keyshortcuts="${action.shortcut}" aria-description="${description}">
       <span class="survival-action__key" aria-hidden="true">${action.shortcut}</span>
       <span class="survival-action__label">${action.label}</span>
+      <span class="survival-action__preview"><span data-action-cost>${action.cost}</span><span data-action-effect>${action.effect}</span><span data-action-risk>${action.risk.toUpperCase()}</span></span>
       <span class="survival-action__reason" data-action-reason hidden></span>
     </button>`;
 }
@@ -99,6 +105,7 @@ function inventoryMarkup(id: ItemId): string {
   return `
     <li class="inventory-row" data-item="${id}">
       <span class="inventory-row__name">${ITEM_LABELS[id]}</span>
+      <span class="inventory-row__description">${SURVIVAL_ITEM_DESCRIPTIONS[id]}</span>
       <span class="inventory-row__state" data-item-state>NOT RECOVERED</span>
     </li>`;
 }
@@ -303,15 +310,19 @@ export class SurvivalUI {
     this.updateStore('repairMaterial', snapshot.repairMaterial);
     this.updateStore('rescueProgress', snapshot.rescueProgress);
     this.availableBait = snapshot.bait;
+    const fishHotspot = this.root.querySelector<HTMLElement>('[data-hotspot="fish"]');
+    fishHotspot?.setAttribute(
+      'aria-label',
+      snapshot.inventory.fishingRod.owned ? 'Use the fishing rod' : 'Attempt hand-line fishing',
+    );
 
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
       this.actionReasons.set(id, reason);
       const button = this.actionButtons.get(id)!;
-      if (button.getAttribute('aria-description') !== reason) {
-        if (reason === null) button.removeAttribute('aria-description');
-        else button.setAttribute('aria-description', reason);
-      }
+      const definition = ACTIONS.find((action) => action.id === id)!;
+      const preview = `${definition.cost}. ${definition.effect}. ${definition.risk}.`;
+      button.setAttribute('aria-description', reason === null ? preview : `${preview} Unavailable: ${reason}`);
       const reasonElement = requireElement<HTMLElement>(button, '[data-action-reason]');
       if (reasonElement.textContent !== (reason ?? '')) reasonElement.textContent = reason ?? '';
       reasonElement.hidden = reason === null;
@@ -322,6 +333,8 @@ export class SurvivalUI {
       const item = snapshot.inventory[id];
       const state = !item.owned
         ? 'NOT RECOVERED'
+        : (id === 'cannedFood' || id === 'baitTin') && (item.charges ?? 0) === 0
+          ? 'TRANSFERRED TO STORES'
         : item.durable
           ? 'DURABLE'
           : `${item.charges ?? 0} CHARGES`;
@@ -360,7 +373,7 @@ export class SurvivalUI {
         ? `${ITEM_LABELS[id]} — DURABLE`
         : `${ITEM_LABELS[id]} — ${item.charges ?? 0} CHARGES`;
       button.disabled = this.busy || !usable;
-      if (!usable) button.setAttribute('aria-description', 'No charges remain.');
+      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${usable ? '' : ' No charges remain.'}`);
       this.eventItems.append(button);
     });
     if (this.eventItems.childElementCount === 0) {

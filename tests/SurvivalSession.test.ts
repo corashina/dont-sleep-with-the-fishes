@@ -14,6 +14,40 @@ function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number)
 }
 
 describe('SurvivalSession daytime actions', () => {
+  it('reports applied rather than requested clamped deltas', () => {
+    const eating = new SurvivalSession(['cannedFood'], { seed: 1, initial: { hunger: 20 } });
+    expect(eating.perform('eat').deltas).toEqual({ hunger: -20, food: -1 });
+    const treating = new SurvivalSession(['medicalKit'], { seed: 1, initial: { health: 90 } });
+    expect(treating.perform('treat').deltas).toEqual({ health: 10 });
+    const repairing = new SurvivalSession([], { seed: 1, initial: { hull: 90, energy: 4 } });
+    (repairing as unknown as { repairMaterial: number }).repairMaterial = 1;
+    expect(repairing.perform('repair', 'repairMaterial').deltas).toEqual({ energy: -2, hull: 10, repairMaterial: -1 });
+  });
+
+  it('rejects unowned or exhausted event items without changing the event', () => {
+    const unowned = new SurvivalSession([], { seed: 1, initialEventId: 'day-sudden-squall' });
+    const before = unowned.snapshot();
+    expect(unowned.resolveEvent('waterJug')).toMatchObject({ accepted: false, code: 'item-unavailable' });
+    expect(unowned.snapshot()).toEqual(before);
+  });
+
+  it('guards dawn while an event is pending and exposes nightfall then dawn cues', () => {
+    const session = new SurvivalSession([], { seed: 1, random: sequenceRandom([0, 0.99]) });
+    expect(session.perform('endDay').cue).toBe('nightfall');
+    const pending = session.snapshot();
+    expect(session.beginDawn()).toMatchObject({ accepted: false, code: 'event-pending' });
+    expect(session.snapshot()).toEqual(pending);
+    session.resolveEvent(null);
+    expect(session.snapshot().state).toBe('nightEvent');
+    expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'dawn' });
+  });
+
+  it('selects terminal cues from the resulting real state', () => {
+    const dead = new SurvivalSession([], { seed: 1, initial: { health: 5 }, initialEventId: 'night-oppressive-darkness' });
+    expect(dead.resolveEvent(null).cue).toBe('death');
+    const sunk = new SurvivalSession([], { seed: 1, initial: { hull: 10 }, initialEventId: 'night-violent-weather' });
+    expect(sunk.resolveEvent(null).cue).toBe('sinking');
+  });
   it('starts day one with copied supplies and canned food', () => {
     const saved: ItemId[] = ['cannedFood', 'waterJug'];
     const session = new SurvivalSession(saved, { seed: 9, random: sequenceRandom([0]) });
@@ -103,6 +137,7 @@ describe('SurvivalSession daytime actions', () => {
     session.perform('endDay');
     expect(session.snapshot().state).toBe('nightEvent');
     session.resolveEvent(null);
+    session.beginDawn();
     expect(session.snapshot().state).toBe('day');
     expect(session.snapshot().day).toBe(2);
   });
@@ -135,6 +170,7 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'night-calm-water',
     });
     rescued.resolveEvent(null);
+    rescued.beginDawn();
     expect(rescued.snapshot().state).toBe('rescued');
 
     const missed = new SurvivalSession([], {
@@ -144,6 +180,7 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'night-calm-water',
     });
     missed.resolveEvent(null);
+    missed.beginDawn();
     expect(missed.snapshot().state).toBe('day');
   });
 
