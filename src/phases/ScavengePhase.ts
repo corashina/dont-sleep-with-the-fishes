@@ -8,10 +8,14 @@ import {
 } from '../game/GameLoop';
 import {
   ScavengeSession,
-  type ScavengeItemState,
   type ScavengeResult,
 } from '../game/ScavengeSession';
-import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
+import {
+  createItemInstances,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../game/ItemState';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -36,6 +40,7 @@ export class ScavengePhase implements GamePhase {
   private readonly interaction: InteractionSystem;
   private readonly carry: CarryController;
   private readonly ui: GameUI;
+  private readonly worldInstances: ReadonlyMap<ItemId, ItemInstance>;
   private started = false;
   private disposed = false;
   private completionReported = false;
@@ -54,6 +59,16 @@ export class ScavengePhase implements GamePhase {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
     this.world = new World(this.scene);
+    const catalog = createItemInstances();
+    const worldInstances = new Map<ItemId, ItemInstance>();
+    for (const [type, object] of this.world.itemObjects) {
+      const item = catalog.find((candidate) => candidate.type === type);
+      if (!item) continue;
+      const instance = Object.freeze({ instanceId: item.instanceId, type: item.type });
+      worldInstances.set(type, instance);
+      object.userData.instanceId = instance.instanceId;
+    }
+    this.worldInstances = worldInstances;
     this.input = new InputController(context.renderer.domElement);
     this.player = new PlayerController(
       context.camera,
@@ -183,15 +198,10 @@ export class ScavengePhase implements GamePhase {
     const availableItems = [];
     const instances = new Map<ItemInstanceId, ItemInstance>();
     for (const [type, object] of this.world.itemObjects) {
-      if (snapshot.items[type] !== 'available') continue;
-      const item = Object.values(snapshot.items).find((candidate): candidate is ScavengeItemState => (
-        typeof candidate !== 'string' &&
-        candidate.type === type &&
-        candidate.status === 'available'
-      ));
-      if (!item) continue;
-      const instance = { instanceId: item.instanceId, type: item.type };
-      object.userData.instanceId = instance.instanceId;
+      const instance = this.worldInstances.get(type);
+      if (!instance) continue;
+      const state = snapshot.items[instance.instanceId];
+      if (!state || state.status !== 'available') continue;
       availableItems.push(object);
       instances.set(instance.instanceId, instance);
     }

@@ -7,11 +7,11 @@ import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 
 describe('ScavengePhase lifecycle integration', () => {
-  it('adapts a type-keyed world prop to its first available stable instance', () => {
-    const session = new ScavengeSession();
-    session.start();
+  it('uses the bound instance status when the deprecated type view contradicts it', () => {
+    const boundInstance = { instanceId: 'cannedFood-1', type: 'cannedFood' } as const;
     const cannedFood = new Group();
     cannedFood.userData.itemId = 'cannedFood';
+    cannedFood.userData.instanceId = boundInstance.instanceId;
     const lifeboat = new Group();
     const updateInteraction = vi.fn((_items, _lifeboat, instances: ReadonlyMap<string, unknown>) => ({
       target: 'item' as const,
@@ -19,12 +19,21 @@ describe('ScavengePhase lifecycle integration', () => {
     }));
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
-      session,
+      session: {
+        snapshot: () => ({
+          items: {
+            [boundInstance.instanceId]: { ...boundInstance, status: 'available' },
+            cannedFood: 'lost',
+          },
+          carriedWeight: 0,
+        }),
+      },
       world: {
         itemObjects: new Map([['cannedFood', cannedFood]]),
         lifeboat,
         evacuationPoint: new Vector3(50, 0, 0),
       },
+      worldInstances: new Map([[boundInstance.type, boundInstance]]),
       interaction: { update: updateInteraction },
       carry: { activeInstance: null, flightActive: false },
       player: { localPosition: new Vector3() },
@@ -35,7 +44,7 @@ describe('ScavengePhase lifecycle integration', () => {
     (phase as unknown as { updateInteraction: () => void }).updateInteraction();
 
     const instances = updateInteraction.mock.calls[0]![2] as ReadonlyMap<string, unknown>;
-    expect(cannedFood.userData.instanceId).toBe('cannedFood-1');
+    expect(cannedFood.userData.instanceId).toBe(boundInstance.instanceId);
     expect(instances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1', type: 'cannedFood',
     });
