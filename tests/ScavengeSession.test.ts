@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ItemId } from '../src/game/ItemState';
+import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 
 const BLOCKED_STATE_SETUPS = [
@@ -10,9 +10,9 @@ const BLOCKED_STATE_SETUPS = [
 
 const ITEM_MUTATIONS = [
   { name: 'dropCarried', run: (session: ScavengeSession) => session.dropCarried(), rejected: null },
-  { name: 'saveCarried', run: (session: ScavengeSession) => session.saveCarried(), rejected: false },
-  { name: 'loseCarried', run: (session: ScavengeSession) => session.loseCarried(), rejected: false },
-  { name: 'lose', run: (session: ScavengeSession) => session.lose('ductTape'), rejected: false },
+  { name: 'saveCarried', run: (session: ScavengeSession) => session.saveCarried(), rejected: null },
+  { name: 'loseCarried', run: (session: ScavengeSession) => session.loseCarried(), rejected: null },
+  { name: 'lose', run: (session: ScavengeSession) => session.lose('ductTape-1'), rejected: false },
 ] as const;
 
 describe('ScavengeSession', () => {
@@ -39,47 +39,92 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().remainingSeconds).toBe(109);
   });
 
-  it('allows one carried item and five saved items', () => {
+  it('carries repeatable instances up to total weight three', () => {
     const session = new ScavengeSession();
     session.start();
-    expect(session.pickUp('flareGun')).toBe(true);
-    expect(session.pickUp('ductTape')).toBe(false);
-    expect(session.saveCarried()).toBe(true);
-
-    for (const id of ['ductTape', 'fishingRod', 'baitTin', 'medicalKit'] as const) {
-      expect(session.pickUp(id)).toBe(true);
-      expect(session.saveCarried()).toBe(true);
-    }
-
-    expect(session.snapshot().savedCount).toBe(5);
-    expect(session.pickUp('waterJug')).toBe(true);
-    expect(session.saveCarried()).toBe(false);
-    expect(session.snapshot().carriedItem).toBe('waterJug');
+    expect(session.pickUp('cannedFood-1')).toBe(true);
+    expect(session.pickUp('ductTape-1')).toBe(true);
+    expect(session.pickUp('flashlight-1')).toBe(true);
+    expect(session.snapshot()).toMatchObject({ carriedWeight: 3 });
+    expect(session.pickUp('cannedFood-2')).toBe(false);
+    expect(session.snapshot().carriedItems.map(({ instanceId }) => instanceId))
+      .toEqual(['cannedFood-1', 'ductTape-1', 'flashlight-1']);
   });
 
-  it('keeps saved and lost transitions idempotent', () => {
+  it('rejects a heavy item unless the full capacity is free', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('cannedFood-1');
+    expect(session.pickUp('scubaSet-1')).toBe(false);
+    expect(session.dropCarried()?.instanceId).toBe('cannedFood-1');
+    expect(session.pickUp('scubaSet-1')).toBe(true);
+  });
+
+  it('saves duplicate instances without a boat limit', () => {
+    const session = new ScavengeSession();
+    session.start();
+    for (const id of ['cannedFood-1', 'cannedFood-2', 'cannedFood-3'] as const) {
+      session.pickUp(id);
+      expect(session.saveCarried()?.instanceId).toBe(id);
+    }
+    expect(session.snapshot().savedCount).toBe(3);
+  });
+
+  it('keeps a legacy type status pinned to its first world instance', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('ductTape');
+    session.saveCarried();
+
+    expect(session.snapshot().items.ductTape).toBe('saved');
+    expect(session.snapshot().items['ductTape-2']!.status).toBe('available');
+  });
+
+  it('releases carried instances in LIFO order for every transition', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('cannedFood-1');
+    session.pickUp('ductTape-1');
+    session.pickUp('flashlight-1');
+
+    expect(session.dropCarried()).toEqual({ instanceId: 'flashlight-1', type: 'flashlight' });
+    expect(session.saveCarried()).toEqual({ instanceId: 'ductTape-1', type: 'ductTape' });
+    expect(session.loseCarried()).toEqual({ instanceId: 'cannedFood-1', type: 'cannedFood' });
+    expect(session.snapshot()).toMatchObject({
+      carriedItems: [],
+      carriedWeight: 0,
+      savedCount: 1,
+      items: {
+        'flashlight-1': { status: 'available' },
+        'ductTape-1': { status: 'saved' },
+        'cannedFood-1': { status: 'lost' },
+      },
+    });
+  });
+
+  it('keeps saved and lost instance transitions idempotent', () => {
     const savedSession = new ScavengeSession();
     savedSession.start();
-    savedSession.pickUp('flareGun');
-    expect(savedSession.saveCarried()).toBe(true);
-    expect(savedSession.lose('flareGun')).toBe(false);
-    expect(savedSession.pickUp('flareGun')).toBe(false);
-    expect(savedSession.snapshot().items.flareGun).toBe('saved');
+    savedSession.pickUp('flareGun-1');
+    expect(savedSession.saveCarried()?.instanceId).toBe('flareGun-1');
+    expect(savedSession.lose('flareGun-1')).toBe(false);
+    expect(savedSession.pickUp('flareGun-1')).toBe(false);
+    expect(savedSession.snapshot().items['flareGun-1']!.status).toBe('saved');
 
     const lostSession = new ScavengeSession();
     lostSession.start();
-    lostSession.pickUp('flashlight');
-    expect(lostSession.loseCarried()).toBe(true);
-    expect(lostSession.lose('flashlight')).toBe(false);
-    expect(lostSession.pickUp('flashlight')).toBe(false);
-    expect(lostSession.snapshot().items.flashlight).toBe('lost');
+    lostSession.pickUp('flashlight-1');
+    expect(lostSession.loseCarried()?.instanceId).toBe('flashlight-1');
+    expect(lostSession.lose('flashlight-1')).toBe(false);
+    expect(lostSession.pickUp('flashlight-1')).toBe(false);
+    expect(lostSession.snapshot().items['flashlight-1']!.status).toBe('lost');
   });
 
   it.each(BLOCKED_STATE_SETUPS)('rejects item mutations while $name', ({ enter }) => {
     for (const mutation of ITEM_MUTATIONS) {
       const session = new ScavengeSession();
       session.start();
-      session.pickUp('flareGun');
+      session.pickUp('flareGun-1');
       enter(session);
       const before = session.snapshot();
 
@@ -96,19 +141,49 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().status).toBe('success');
   });
 
-  it('returns an immutable result containing only saved item IDs', () => {
+  it('returns frozen snapshot clones instead of exposing session state', () => {
+    const instances: readonly ItemInstance[] = [
+      { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      { instanceId: 'cannedFood-2', type: 'cannedFood' },
+    ];
+    const session = new ScavengeSession(instances);
+    session.start();
+    session.pickUp('cannedFood-1');
+
+    const snapshot = session.snapshot();
+    expect(Object.isFrozen(snapshot.carriedItems)).toBe(true);
+    expect(Object.isFrozen(snapshot.carriedItems[0])).toBe(true);
+    expect(Object.isFrozen(snapshot.items)).toBe(true);
+    expect(Object.isFrozen(snapshot.items['cannedFood-1'])).toBe(true);
+    expect(snapshot.carriedItems[0]).not.toBe(instances[0]);
+    expect(() => {
+      (snapshot.items['cannedFood-1'] as { status: string }).status = 'lost';
+    }).toThrow();
+    expect(session.snapshot().items['cannedFood-1']!.status).toBe('carried');
+  });
+
+  it('returns an immutable result containing frozen saved instances', () => {
     const session = new ScavengeSession();
     session.start();
-    session.pickUp('flareGun');
+    session.pickUp('flareGun-1');
     session.saveCarried();
-    session.pickUp('waterJug');
+    session.pickUp('waterJug-1');
     session.dropCarried();
     session.tick(12);
     session.evacuate();
 
-    expect(session.result()).toEqual({ savedItems: ['flareGun'], elapsedSeconds: 12 });
+    expect(session.result()).toEqual({
+      savedItems: [{ instanceId: 'flareGun-1', type: 'flareGun' }],
+      elapsedSeconds: 12,
+    });
     const result = session.result()!;
-    expect(() => (result.savedItems as ItemId[]).push('waterJug')).toThrow();
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.savedItems)).toBe(true);
+    expect(Object.isFrozen(result.savedItems[0])).toBe(true);
+    expect(() => (result.savedItems as ItemInstance[]).push({
+      instanceId: 'waterJug-1',
+      type: 'waterJug',
+    })).toThrow();
   });
 
   it('does not return a result before successful evacuation', () => {
