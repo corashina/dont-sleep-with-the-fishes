@@ -3,6 +3,16 @@ import type { ItemId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
 
+function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number) {
+  const session = new SurvivalSession([], {
+    seed: 1,
+    random: sequenceRandom([0, rescueRoll]),
+    initial: { day, rescueProgress },
+  });
+  session.beginDawn();
+  return session.snapshot().state;
+}
+
 describe('SurvivalSession daytime actions', () => {
   it('starts day one with copied supplies and canned food', () => {
     const saved: ItemId[] = ['cannedFood', 'waterJug'];
@@ -135,5 +145,25 @@ describe('SurvivalSession daytime actions', () => {
     });
     missed.resolveEvent(null);
     expect(missed.snapshot().state).toBe('day');
+  });
+
+  it('starts rescue rolls at 5% on day 5', () => {
+    expect(stateAfterDawn(4, 0, 0.049999)).toBe('rescued');
+    expect(stateAfterDawn(4, 0, 0.050001)).toBe('day');
+  });
+
+  it('increases rescue chance by 8 percentage points on day 6', () => {
+    expect(stateAfterDawn(5, 0, 0.129999)).toBe('rescued');
+    expect(stateAfterDawn(5, 0, 0.130001)).toBe('day');
+  });
+
+  it('caps the base rescue chance at 60%', () => {
+    expect(stateAfterDawn(19, 0, 0.599999)).toBe('rescued');
+    expect(stateAfterDawn(19, 0, 0.600001)).toBe('day');
+  });
+
+  it('caps rescue-progress bonus at 25 percentage points', () => {
+    expect(stateAfterDawn(4, 100, 0.299999)).toBe('rescued');
+    expect(stateAfterDawn(4, 100, 0.300001)).toBe('day');
   });
 });
