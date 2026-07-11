@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clampParallax, survivalLighting } from '../src/survival/BoatWorld';
+import { PerspectiveCamera, Vector3 } from 'three';
+import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
 
 describe('BoatWorld helpers', () => {
   it('clamps mouse parallax and disables it for reduced motion', () => {
@@ -11,5 +12,18 @@ describe('BoatWorld helpers', () => {
     expect(survivalLighting('calm', 'day')).toMatchObject({ ambient: 1.1, fogDensity: 0.012 });
     expect(survivalLighting('overcast', 'night').ambient).toBeLessThan(0.5);
     expect(survivalLighting('squall', 'day').fogDensity).toBeGreaterThan(0.02);
+  });
+
+  it('keeps the shared camera at a fixed height for reduced motion', () => {
+    const camera = new PerspectiveCamera();
+    const reducedMotion = { matches: true } as unknown as MediaQueryList;
+    const world = new BoatWorld(camera, reducedMotion);
+    const before = camera.getWorldPosition(new Vector3()).y;
+
+    world.update(1, 0.1);
+    const after = camera.getWorldPosition(new Vector3()).y;
+    world.dispose();
+
+    expect(after).toBe(before);
   });
 });

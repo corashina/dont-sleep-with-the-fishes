@@ -222,13 +222,19 @@ export class BoatWorld {
     const amplitudeScale = this.weather === 'squall' ? 1.35 : this.weather === 'overcast' ? 1 : 0.78;
     const sample = sampleWaveField(DEFAULT_WAVES, time, 0, 0, amplitudeScale);
     const reduced = this.reducedMotion.matches;
-    const targetY = sample.height * (reduced ? 0.12 : 0.62);
-    const targetPitch = reduced ? 0 : clamp(Math.atan2(sample.normal.z, sample.normal.y), -0.11, 0.11);
-    const targetRoll = reduced ? 0 : clamp(-Math.atan2(sample.normal.x, sample.normal.y), -0.13, 0.13);
+    const targetY = sample.height * 0.62;
+    const targetPitch = clamp(Math.atan2(sample.normal.z, sample.normal.y), -0.11, 0.11);
+    const targetRoll = clamp(-Math.atan2(sample.normal.x, sample.normal.y), -0.13, 0.13);
     const response = 1 - Math.exp(-Math.min(delta, 0.1) * 4.5);
-    this.smoothedY += (targetY - this.smoothedY) * response;
-    this.smoothedPitch += (targetPitch - this.smoothedPitch) * response;
-    this.smoothedRoll += (targetRoll - this.smoothedRoll) * response;
+    if (reduced) {
+      this.smoothedY = 0;
+      this.smoothedPitch = 0;
+      this.smoothedRoll = 0;
+    } else {
+      this.smoothedY += (targetY - this.smoothedY) * response;
+      this.smoothedPitch += (targetPitch - this.smoothedPitch) * response;
+      this.smoothedRoll += (targetRoll - this.smoothedRoll) * response;
+    }
 
     this.applyBasePresentation();
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
