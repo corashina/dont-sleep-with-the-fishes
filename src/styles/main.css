@@ -65,6 +65,18 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font-variant-numeric: tabular-nums;
 }
 
+.survival-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .survival-status {
   position: absolute;
   inset: 20px auto auto 24px;
@@ -146,7 +158,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-meter--energy { --meter-accent: #a8a797; }
 .survival-meter--hull { --meter-accent: #78929a; }
 .survival-meter.is-danger .survival-meter__value { color: #d78a75; }
-.survival-meter.is-danger .survival-meter__label::after { content: " LOW"; color: #d78a75; }
+.survival-meter__danger { margin-left: 0.35rem; color: #d78a75; }
 
 .survival-stores {
   position: absolute;

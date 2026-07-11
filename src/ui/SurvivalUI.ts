@@ -16,9 +16,15 @@ interface ActionDefinition {
   shortcut: string;
 }
 
+type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
+
 interface MeterDefinition {
-  id: 'health' | 'hunger' | 'energy' | 'hull';
+  id: MeterId;
   label: string;
+  min: number;
+  max: number;
+  dangerLabel: 'LOW' | 'HIGH';
+  isDanger: (value: number) => boolean;
 }
 
 const ACTIONS: readonly ActionDefinition[] = [
@@ -32,10 +38,10 @@ const ACTIONS: readonly ActionDefinition[] = [
 ];
 
 const METERS: readonly MeterDefinition[] = [
-  { id: 'health', label: 'HEALTH' },
-  { id: 'hunger', label: 'HUNGER' },
-  { id: 'energy', label: 'ENERGY' },
-  { id: 'hull', label: 'HULL' },
+  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
+  { id: 'hunger', label: 'HUNGER', min: 0, max: 100, dangerLabel: 'HIGH', isDanger: (value) => value >= 70 },
+  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', isDanger: (value) => value <= 1 },
+  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
 ];
 
 const PHASE_LABELS: Readonly<Record<SurvivalState, string>> = {
@@ -82,9 +88,9 @@ function actionMarkup(action: ActionDefinition): string {
 function meterMarkup(meter: MeterDefinition): string {
   return `
     <div class="survival-meter survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
-      aria-label="${meter.label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <span class="survival-meter__label">${meter.label}</span>
-      <span class="survival-meter__track" aria-hidden="true"><span class="survival-meter__fill"></span></span>
+      aria-label="${meter.label}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}">
+      <span class="survival-meter__label">${meter.label}<span class="survival-meter__danger" data-meter-danger aria-hidden="true" hidden>${meter.dangerLabel}</span></span>
+      <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
       <span class="survival-meter__value" data-meter-value>0</span>
     </div>`;
 }
@@ -118,6 +124,7 @@ export class SurvivalUI {
   private readonly day: HTMLElement;
   private readonly weather: HTMLElement;
   private readonly phase: HTMLElement;
+  private readonly announcer: HTMLElement;
   private readonly inventory: HTMLElement;
   private readonly inventoryToggle: HTMLButtonElement;
   private readonly eventLayer: HTMLElement;
@@ -145,7 +152,7 @@ export class SurvivalUI {
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
   private readonly actionButtons = new Map<DayActionId, HTMLButtonElement>();
-  private readonly meterElements = new Map<MeterDefinition['id'], HTMLElement>();
+  private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly inventoryRows = new Map<ItemId, HTMLElement>();
   private readonly actionReasons = new Map<DayActionId, string | null>();
   private readonly lastValues = new Map<string, string | number | boolean | null>();
@@ -153,6 +160,7 @@ export class SurvivalUI {
   private paused = false;
   private inventoryOpen = false;
   private disposed = false;
+  private announcementVersion = 0;
   private restartIssued = false;
   private availableBait = 0;
   private focusReturnTarget: HTMLElement | null = null;
@@ -164,6 +172,7 @@ export class SurvivalUI {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
+      <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <header class="survival-status" aria-label="Survival status">
         <div class="survival-status__time"><span data-day>DAY 1</span><span data-phase>DAYLIGHT</span></div>
         <div class="survival-status__weather"><span class="eyebrow">WEATHER</span><strong data-weather>CALM</strong></div>
@@ -210,7 +219,7 @@ export class SurvivalUI {
       <section class="survival-overlay outcome-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
         <p class="eyebrow">AFTERMATH</p>
         <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
-        <p data-outcome-message aria-live="polite" aria-atomic="true"></p>
+        <p data-outcome-message></p>
         <ul class="outcome-deltas" data-outcome-deltas></ul>
         <div class="outcome-actions">
           <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
@@ -236,6 +245,7 @@ export class SurvivalUI {
     this.day = requireElement(this.root, '[data-day]');
     this.weather = requireElement(this.root, '[data-weather]');
     this.phase = requireElement(this.root, '[data-phase]');
+    this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.inventory = requireElement(this.root, '[data-inventory]');
     this.inventoryToggle = requireElement(this.root, '[data-inventory-toggle]');
     this.eventLayer = requireElement(this.root, '[data-event]');
@@ -392,6 +402,7 @@ export class SurvivalUI {
     }
     this.showLayer(this.outcomeLayer);
     this.outcomeTitle.focus();
+    this.publishOutcomeAnnouncement(outcome.message);
   }
 
   hideOutcome(): void {
@@ -461,6 +472,7 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.announcementVersion += 1;
     this.root.removeEventListener('click', this.handleClick);
     window.removeEventListener('pointermove', this.handlePointer);
     document.removeEventListener('keydown', this.handleKeyDown);
@@ -475,17 +487,30 @@ export class SurvivalUI {
     this.root.remove();
   }
 
-  private updateMeter(id: MeterDefinition['id'], value: number): void {
+  private updateMeter(id: MeterId, value: number): void {
     if (this.lastValues.get(`meter:${id}`) === value) return;
     this.lastValues.set(`meter:${id}`, value);
+    const definition = METERS.find((meter) => meter.id === id)!;
     const meter = this.meterElements.get(id)!;
-    const safe = Math.min(100, Math.max(0, value));
-    meter.setAttribute('aria-valuenow', String(value));
-    meter.classList.toggle('is-danger', safe <= 20);
-    if (safe <= 20) meter.setAttribute('aria-valuetext', `${value}, critical`);
+    const safe = Math.min(definition.max, Math.max(definition.min, value));
+    const danger = definition.isDanger(safe);
+    const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
+    meter.setAttribute('aria-valuenow', String(safe));
+    meter.classList.toggle('is-danger', danger);
+    requireElement<HTMLElement>(meter, '[data-meter-danger]').hidden = !danger;
+    if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
     else meter.removeAttribute('aria-valuetext');
-    meter.style.setProperty('--meter-value', `${safe}%`);
-    requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(value);
+    meter.style.setProperty('--meter-value', `${percentage}%`);
+    requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(safe);
+  }
+
+  private publishOutcomeAnnouncement(message: string): void {
+    const version = ++this.announcementVersion;
+    this.announcer.textContent = '';
+    queueMicrotask(() => {
+      if (this.disposed || version !== this.announcementVersion) return;
+      this.announcer.textContent = message;
+    });
   }
 
   private updateStore(id: 'food' | 'bait' | 'repairMaterial' | 'rescueProgress', value: number): void {
