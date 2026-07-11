@@ -111,6 +111,21 @@ describe('ScavengeSession', () => {
     expect(() => (result.savedItems as ItemId[]).push('waterJug')).toThrow();
   });
 
+  it('does not return a result before successful evacuation', () => {
+    const idle = new ScavengeSession();
+    expect(idle.result()).toBeNull();
+    idle.start();
+    expect(idle.result()).toBeNull();
+  });
+
+  it('does not return a result after failure', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.tick(120);
+
+    expect(session.result()).toBeNull();
+  });
+
   it('deducts a five-second fall penalty without double-finishing', () => {
     const session = new ScavengeSession();
     session.start();
