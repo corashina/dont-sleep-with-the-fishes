@@ -249,7 +249,7 @@ describe('procedural world builders', () => {
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
     expect(sharedShipMaterials.size).toBeGreaterThan(0);
-    expect(propResources).toHaveLength(ITEM_IDS.length);
+    expect(propResources).toHaveLength(8);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);

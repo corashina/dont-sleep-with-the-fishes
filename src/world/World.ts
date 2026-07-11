@@ -9,7 +9,7 @@ import {
   Scene,
   Vector3,
 } from 'three';
-import { ITEM_IDS, type ItemId } from '../game/ItemState';
+import type { ItemId } from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
 import { BoatBuoyancy, smoothBoatPose, type BoatPose } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
@@ -19,6 +19,17 @@ import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import { createShip, selectSpawnPoints } from './Ship';
+
+const TRANSITIONAL_SCAVENGE_ITEM_IDS = [
+  'flareGun',
+  'ductTape',
+  'fishingRod',
+  'baitTin',
+  'medicalKit',
+  'waterJug',
+  'cannedFood',
+  'flashlight',
+] as const satisfies readonly ItemId[];
 
 function collectOwnedResources(
   root: Object3D,
@@ -63,7 +74,7 @@ export class World {
     collectOwnedResources(this.ship, this.ownedGeometries);
 
     const selectedSpawnPoints = selectSpawnPoints(shipBuild.itemSpawnPoints);
-    ITEM_IDS.forEach((id, index) => {
+    TRANSITIONAL_SCAVENGE_ITEM_IDS.forEach((id, index) => {
       const prop = createProp(id);
       collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
       prop.position.copy(selectedSpawnPoints[index]!);

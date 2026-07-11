@@ -65,6 +65,14 @@ export function createProp(id: ItemId): Group {
     const can = new Mesh(new CylinderGeometry(0.2, 0.2, 0.38, 12), material(0x7c8582, 0.45));
     const band = new Mesh(new CylinderGeometry(0.205, 0.205, 0.18, 12), material(0x9b6848));
     root.add(can, band);
+  } else if (id === 'scubaSet') {
+    const leftTank = new Mesh(new CylinderGeometry(0.14, 0.14, 0.72, 8), material(0x547b82, 0.4));
+    leftTank.position.x = -0.18;
+    const rightTank = leftTank.clone();
+    rightTank.position.x = 0.18;
+    const harness = box([0.5, 0.5, 0.1], 0x353b3c);
+    harness.position.z = -0.14;
+    root.add(leftTank, rightTank, harness);
   } else {
     const body = cylinder(0.11, 0.58, 0x353b3c, 10);
     const head = new Mesh(new CylinderGeometry(0.2, 0.13, 0.2, 10), material(0x9b8b61, 0.35));
