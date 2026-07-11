@@ -187,6 +187,28 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(mount.querySelector('[data-action="fish"]'));
   });
 
+  it('prefers the latest clicked command over a stale focused command', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
+    fish.focus();
+    ui.onAction = () => ui.showOutcome({
+      accepted: true,
+      code: 'complete',
+      message: 'The work is done.',
+      deltas: {},
+      cue: 'none',
+    });
+
+    dive.click();
+    ui.hideOutcome();
+
+    expect(document.activeElement).toBe(dive);
+  });
+
   it('keeps meter and action nodes stable across differential renders', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -300,6 +322,64 @@ describe('SurvivalUI', () => {
     ui.showEnding('sunk', 2, 7, 40);
     fish.click();
     expect(action).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes pause topmost and restores each underlying modal focus', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const eventItem = vi.fn();
+    const endure = vi.fn();
+    const continued = vi.fn();
+    const skipped = vi.fn();
+    const restarted = vi.fn();
+    ui.onEventItem = eventItem;
+    ui.onEndure = endure;
+    ui.onContinue = continued;
+    ui.onSkip = skipped;
+    ui.onRestart = restarted;
+    ui.render(snapshot(), () => null);
+    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+
+    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    const eventLayer = mount.querySelector<HTMLElement>('[data-event]')!;
+    const eventTitle = mount.querySelector<HTMLElement>('[data-event-title]')!;
+    ui.setPaused(true);
+    expect(pause.hasAttribute('inert')).toBe(false);
+    expect(eventLayer.hasAttribute('inert')).toBe(true);
+    expect(eventLayer.getAttribute('aria-hidden')).toBe('true');
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="waterJug"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
+    expect(eventItem).not.toHaveBeenCalled();
+    expect(endure).not.toHaveBeenCalled();
+    ui.setPaused(false);
+    expect(eventLayer.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(eventTitle);
+
+    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
+    const outcomeLayer = mount.querySelector<HTMLElement>('[data-outcome]')!;
+    const outcomeTitle = mount.querySelector<HTMLElement>('[data-outcome-title]')!;
+    ui.setPaused(true);
+    expect(outcomeLayer.hasAttribute('inert')).toBe(true);
+    mount.querySelector<HTMLButtonElement>('[data-continue]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-skip]')!.click();
+    expect(continued).not.toHaveBeenCalled();
+    expect(skipped).not.toHaveBeenCalled();
+    ui.setPaused(false);
+    expect(outcomeLayer.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(outcomeTitle);
+    ui.hideOutcome();
+
+    ui.showEnding('sunk', 2, 7, 40);
+    const endingLayer = mount.querySelector<HTMLElement>('[data-ending]')!;
+    const endingTitle = mount.querySelector<HTMLElement>('[data-ending-title]')!;
+    ui.setPaused(true);
+    expect(endingLayer.hasAttribute('inert')).toBe(true);
+    mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();
+    expect(restarted).not.toHaveBeenCalled();
+    ui.setPaused(false);
+    expect(endingLayer.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(endingTitle);
   });
 
   it('routes diegetic hotspots and pointer coordinates', () => {

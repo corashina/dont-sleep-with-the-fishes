@@ -154,7 +154,7 @@ export class SurvivalUI {
   private focusReturnTarget: HTMLElement | null = null;
   private pauseReturnTarget: HTMLElement | null = null;
   private inventoryReturnTarget: HTMLElement | null = null;
-  private commandOrigin: HTMLButtonElement | null = null;
+  private latestCommandOrigin: HTMLButtonElement | null = null;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -245,7 +245,7 @@ export class SurvivalUI {
     this.actionDock = requireElement(this.root, '.survival-actions');
     this.hotspotRegion = requireElement(this.root, '.survival-hotspots');
     this.backgroundRegions = [this.actionDock, this.hotspotRegion, this.inventoryToggle];
-    this.modalLayers = [this.eventLayer, this.outcomeLayer, this.pauseLayer, this.endingLayer];
+    this.modalLayers = [this.pauseLayer, this.endingLayer, this.outcomeLayer, this.eventLayer];
 
     ACTIONS.forEach(({ id }) => {
       this.actionButtons.set(id, requireElement(this.root, `[data-action="${id}"]`));
@@ -386,7 +386,7 @@ export class SurvivalUI {
   }
 
   setPaused(paused: boolean): void {
-    if (this.disposed) return;
+    if (this.disposed || paused === this.paused) return;
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
       this.closeInventory(false);
@@ -399,7 +399,9 @@ export class SurvivalUI {
       this.hideLayer(this.pauseLayer);
       const target = this.pauseReturnTarget;
       this.pauseReturnTarget = null;
-      this.restoreCommandFocus(target);
+      const underlyingModal = this.topmostModal();
+      if (underlyingModal !== null) this.focusModal(underlyingModal);
+      else this.restoreCommandFocus(target);
     }
   }
 
@@ -498,15 +500,11 @@ export class SurvivalUI {
 
   private showLayer(layer: HTMLElement): void {
     layer.classList.add('is-visible');
-    layer.setAttribute('aria-hidden', 'false');
-    layer.removeAttribute('inert');
     this.syncBackgroundInteraction();
   }
 
   private hideLayer(layer: HTMLElement): void {
     layer.classList.remove('is-visible');
-    layer.setAttribute('aria-hidden', 'true');
-    layer.setAttribute('inert', '');
     this.syncBackgroundInteraction();
   }
 
@@ -546,13 +544,30 @@ export class SurvivalUI {
   }
 
   private modalOpen(): boolean {
-    return this.modalLayers.some((layer) => layer.classList.contains('is-visible'));
+    return this.topmostModal() !== null;
+  }
+
+  private topmostModal(): HTMLElement | null {
+    return this.modalLayers.find((layer) => layer.classList.contains('is-visible')) ?? null;
   }
 
   private syncBackgroundInteraction(): void {
-    const modalOpen = this.modalOpen();
+    const topmostModal = this.topmostModal();
+    this.modalLayers.forEach((layer) => {
+      const isTopmost = layer === topmostModal;
+      layer.toggleAttribute('inert', !isTopmost);
+      layer.setAttribute('aria-hidden', isTopmost ? 'false' : 'true');
+    });
+    const modalOpen = topmostModal !== null;
     this.backgroundRegions.forEach((region) => region.toggleAttribute('inert', modalOpen));
     this.inventory.toggleAttribute('inert', modalOpen || !this.inventoryOpen);
+  }
+
+  private focusModal(layer: HTMLElement): void {
+    if (layer === this.eventLayer) this.eventTitle.focus();
+    else if (layer === this.outcomeLayer) this.outcomeTitle.focus();
+    else if (layer === this.endingLayer) this.endingTitle.focus();
+    else if (layer === this.pauseLayer) this.resumeButton.focus();
   }
 
   private isUsableCommand(element: HTMLElement | null): element is HTMLElement {
@@ -576,14 +591,14 @@ export class SurvivalUI {
 
   private resolveCommandOrigin(): HTMLElement | null {
     const active = document.activeElement;
+    if (this.isUsableCommand(this.latestCommandOrigin)) return this.latestCommandOrigin;
     if (this.isCommandControl(active) && this.isUsableCommand(active)) return active;
-    if (this.isUsableCommand(this.commandOrigin)) return this.commandOrigin;
     return this.firstUsableAction();
   }
 
   private restoreCommandFocus(target: HTMLElement | null): void {
     const destination = this.isUsableCommand(target) ? target : this.firstUsableAction();
-    this.commandOrigin = null;
+    this.latestCommandOrigin = null;
     destination?.focus();
   }
 
@@ -598,12 +613,13 @@ export class SurvivalUI {
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
-    if (this.modalOpen() && button.closest('.survival-overlay.is-visible') === null) return;
+    const topmostModal = this.topmostModal();
+    if (topmostModal !== null && !topmostModal.contains(button)) return;
 
     const actionId = button.dataset.action as DayActionId | undefined;
     if (actionId !== undefined) {
       if (this.overlayOpen()) return;
-      this.commandOrigin = button;
+      this.latestCommandOrigin = button;
       this.onAction(actionId, undefined);
       return;
     }
@@ -614,7 +630,7 @@ export class SurvivalUI {
     }
     if (hotspot === 'fish' || hotspot === 'dive' || hotspot === 'repair') {
       if (this.overlayOpen()) return;
-      this.commandOrigin = button;
+      this.latestCommandOrigin = button;
       this.onAction(hotspot, undefined);
       return;
     }
