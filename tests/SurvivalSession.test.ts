@@ -63,4 +63,77 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('fish').accepted).toBe(false);
     expect(session.snapshot()).toEqual(terminal);
   });
+
+  it('opens one day event only after an action and resolves a valid item once', () => {
+    const session = new SurvivalSession(['waterJug'], { seed: 2, random: sequenceRandom([0]) });
+    expect(session.requestDayEvent().code).toBe('act-first');
+    session.perform('fish');
+    expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
+    expect(session.snapshot().state).toBe('dayEvent');
+    const first = session.resolveEvent('waterJug');
+    expect(first.accepted).toBe(true);
+    const charges = session.snapshot().inventory.waterJug.charges;
+    expect(session.resolveEvent('waterJug').accepted).toBe(false);
+    expect(session.snapshot().inventory.waterJug.charges).toBe(charges);
+  });
+
+  it('does not consume an unsuitable item and applies the authored fallback consequence', () => {
+    const session = new SurvivalSession(['waterJug'], {
+      seed: 2,
+      random: sequenceRandom([0]),
+      initialEventId: 'day-sudden-squall',
+    });
+    const before = session.snapshot().inventory.waterJug.charges;
+    expect(session.resolveEvent('waterJug')).toMatchObject({ accepted: true, deltas: { hull: -15 } });
+    expect(session.snapshot().inventory.waterJug.charges).toBe(before);
+  });
+
+  it('draws a night event, advances dawn, and applies increasing rescue chance', () => {
+    const session = new SurvivalSession([], { seed: 2, random: sequenceRandom([0, 0.99, 0.99, 0.99, 0]) });
+    session.perform('endDay');
+    expect(session.snapshot().state).toBe('nightEvent');
+    session.resolveEvent(null);
+    expect(session.snapshot().state).toBe('day');
+    expect(session.snapshot().day).toBe(2);
+  });
+
+  it('guarantees rescue when the flare counters a sighting and stays terminal', () => {
+    const session = new SurvivalSession(['flareGun'], {
+      seed: 3,
+      random: sequenceRandom([0]),
+      initial: { day: 5 },
+      initialEventId: 'day-distant-aircraft',
+    });
+    expect(session.resolveEvent('flareGun')).toMatchObject({ accepted: true, cue: 'rescue' });
+    expect(session.snapshot().state).toBe('rescued');
+    const rescued = session.snapshot();
+    expect(session.beginDawn().accepted).toBe(false);
+    expect(session.snapshot()).toEqual(rescued);
+  });
+
+  it('validates the initial event seam and adopts its phase', () => {
+    expect(() => new SurvivalSession([], { seed: 1, initialEventId: 'missing-event' })).toThrow(/unknown/i);
+    const session = new SurvivalSession([], { seed: 1, initialEventId: 'night-calm-water' });
+    expect(session.snapshot()).toMatchObject({ state: 'nightEvent', pendingEventId: 'night-calm-water' });
+  });
+
+  it('caps rescue probability at 0.85 after progress', () => {
+    const rescued = new SurvivalSession([], {
+      seed: 1,
+      random: sequenceRandom([0, 0.849]),
+      initial: { day: 20, rescueProgress: 100 },
+      initialEventId: 'night-calm-water',
+    });
+    rescued.resolveEvent(null);
+    expect(rescued.snapshot().state).toBe('rescued');
+
+    const missed = new SurvivalSession([], {
+      seed: 1,
+      random: sequenceRandom([0, 0.851]),
+      initial: { day: 20, rescueProgress: 100 },
+      initialEventId: 'night-calm-water',
+    });
+    missed.resolveEvent(null);
+    expect(missed.snapshot().state).toBe('day');
+  });
 });

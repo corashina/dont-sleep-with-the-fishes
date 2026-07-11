@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
 import { createSurvivalInventory } from './inventory';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
@@ -8,6 +9,7 @@ import type {
   PresentationCue,
   RandomSource,
   ResourceDelta,
+  SurvivalEventDefinition,
   SurvivalInventory,
   SurvivalSnapshot,
   SurvivalState,
@@ -43,8 +45,12 @@ export class SurvivalSession {
   private weather: WeatherId;
   private restedToday = false;
   private actedToday = false;
+  private dayEventOccurred = false;
   private readonly inventory: SurvivalInventory;
   private pendingEventId: string | null;
+  private pendingEvent: SurvivalEventDefinition | null = null;
+  private lastEventId: string | null = null;
+  private readonly lastSeenDay = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
   private readonly seed: number;
   private readonly random: RandomSource;
@@ -59,8 +65,15 @@ export class SurvivalSession {
     this.energy = options.initial?.energy ?? SURVIVAL_BALANCE.start.energy;
     this.hull = options.initial?.hull ?? SURVIVAL_BALANCE.start.hull;
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
-    this.pendingEventId = options.initialEventId ?? null;
+    this.pendingEventId = null;
     this.inventory = createSurvivalInventory([...savedItems]);
+
+    if (options.initialEventId !== undefined) {
+      const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
+      if (initialEvent === undefined) throw new Error(`Unknown survival event: ${options.initialEventId}`);
+      this.openEvent(initialEvent);
+      this.dayEventOccurred = initialEvent.phase === 'day';
+    }
 
     this.bait = this.inventory.baitTin.charges ?? 0;
     this.food = this.inventory.cannedFood.charges ?? 0;
@@ -115,8 +128,57 @@ export class SurvivalSession {
       case 'repair': return this.repair(option);
       case 'treat': return this.treat();
       case 'rest': return this.rest();
-      case 'endDay': return this.reject('events-not-ready', 'Night events are added in the next task.');
+      case 'endDay': return this.endDay();
     }
+  }
+
+  requestDayEvent(): ActionOutcome {
+    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
+    if (this.state !== 'day') return this.reject('not-daytime', 'A day event cannot begin right now.');
+    if (!this.actedToday) return this.reject('act-first', 'Take a survival action before looking beyond the boat.');
+    if (this.dayEventOccurred) return this.reject('day-event-used', 'Today\'s event has already passed.');
+
+    const event = this.drawEvent('day');
+    this.dayEventOccurred = true;
+    this.openEvent(event);
+    return this.commit('event-opened', event.prompt, {}, event.cue);
+  }
+
+  endDay(): ActionOutcome {
+    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
+    if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
+
+    const event = this.drawEvent('night');
+    this.openEvent(event);
+    return this.commit('event-opened', event.prompt, {}, event.cue);
+  }
+
+  resolveEvent(itemId: ItemId | null): ActionOutcome {
+    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
+    if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
+      return this.reject('no-event', 'There is no unresolved event.');
+    }
+
+    const event = this.pendingEvent;
+    const phase = event.phase;
+    const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
+    const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
+    const response = itemId === null ? event.endure : usable ? matching! : event.unsuitable;
+
+    if (usable && matching!.consume) this.consumeCharge(matching!.itemId);
+    this.lastEventId = event.id;
+    this.lastSeenDay.set(event.id, this.day);
+    this.pendingEvent = null;
+    this.pendingEventId = null;
+
+    if (usable && matching!.rescue === true) this.state = 'rescued';
+    const outcome = this.commit('event-resolved', response.message, { ...response.deltas }, response.cue);
+
+    if (!this.isTerminal()) {
+      if (phase === 'day') this.state = 'day';
+      else this.beginDawn();
+    }
+    return outcome;
   }
 
   beginDawn(): ActionOutcome {
@@ -125,6 +187,13 @@ export class SurvivalSession {
     this.day += 1;
     this.restedToday = false;
     this.actedToday = false;
+    this.dayEventOccurred = false;
+    this.pendingEvent = null;
+    this.pendingEventId = null;
+    this.state = 'day';
+
+    const weatherRoll = this.random.next();
+    this.weather = weatherRoll < 0.60 ? 'calm' : weatherRoll < 0.85 ? 'overcast' : 'squall';
 
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
@@ -143,7 +212,19 @@ export class SurvivalSession {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
 
-    return this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'none');
+    const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'none');
+    if (this.isTerminal() || this.day < SURVIVAL_BALANCE.rescue.firstDay) return dawn;
+
+    const baseChance = Math.min(
+      SURVIVAL_BALANCE.rescue.chanceCap,
+      SURVIVAL_BALANCE.rescue.initialChance
+        + (this.day - SURVIVAL_BALANCE.rescue.firstDay) * SURVIVAL_BALANCE.rescue.dailyIncrease,
+    );
+    const progressChance = Math.min(SURVIVAL_BALANCE.rescue.progressCap, this.rescueProgress) / 100;
+    if (this.random.next() >= Math.min(0.85, baseChance + progressChance)) return dawn;
+
+    this.state = 'rescued';
+    return this.commit('rescued', 'A rescue vessel finds the lifeboat at dawn.', {}, 'rescue');
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
@@ -313,6 +394,28 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.dawn.normalEnergy - this.energy,
     );
     return this.commit('rested', 'Water and a brief rest restore your strength.', { energy: restoredEnergy }, 'rest');
+  }
+
+  private drawEvent(phase: 'day' | 'night'): SurvivalEventDefinition {
+    const pool = eligibleEvents(SURVIVAL_EVENTS, {
+      phase,
+      day: this.day,
+      weather: this.weather,
+      lastEventId: this.lastEventId,
+      lastSeenDay: this.lastSeenDay,
+    });
+    return drawWeightedEvent(pool, this.random, phase);
+  }
+
+  private openEvent(event: SurvivalEventDefinition): void {
+    this.pendingEvent = event;
+    this.pendingEventId = event.id;
+    this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
+  }
+
+  private canUseEventItem(id: ItemId): boolean {
+    const entry = this.inventory[id];
+    return entry.owned && (entry.durable || (entry.charges !== null && entry.charges > 0));
   }
 
   private reject(code: string, message: string): ActionOutcome {

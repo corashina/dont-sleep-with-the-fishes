@@ -35,6 +35,32 @@ export interface ActionOutcome {
   cue: PresentationCue;
 }
 
+export interface EventResponse {
+  itemId: ItemId;
+  message: string;
+  deltas: Readonly<ResourceDelta>;
+  cue: PresentationCue;
+  consume: boolean;
+  rescue?: boolean;
+}
+
+export interface SurvivalEventDefinition {
+  id: string;
+  phase: 'day' | 'night';
+  title: string;
+  prompt: string;
+  danger: RiskLabel;
+  earliestDay: number;
+  latestDay?: number;
+  weight: number;
+  cooldownDays: number;
+  weather?: readonly WeatherId[];
+  responses: readonly EventResponse[];
+  unsuitable: Omit<EventResponse, 'itemId' | 'consume'>;
+  endure: Omit<EventResponse, 'itemId' | 'consume'>;
+  cue: PresentationCue;
+}
+
 export interface SurvivalSnapshot {
   state: SurvivalState;
   day: number;
