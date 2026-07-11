@@ -47,18 +47,69 @@ describe('SurvivalUI', () => {
     });
   });
 
-  it('announces outcomes politely and exposes one terminal alert heading', () => {
+  it('keeps one exposed polite announcer and one terminal alert heading', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    const liveRegion = mount.querySelector('[data-outcome-message]');
+    const liveRegion = mount.querySelector('[data-survival-announcer]');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
+    expect(mount.querySelector('[data-outcome-message]')?.hasAttribute('aria-live')).toBe(false);
+    expect(liveRegion?.closest('[aria-hidden="true"], [inert]')).toBeNull();
 
     ui.showEnding('dead', 3, 77, 12);
     const alerts = mount.querySelectorAll('[role="alert"]');
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toBe(mount.querySelector('[data-ending-title]'));
+  });
+
+  it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]');
+    expect(announcer).not.toBeNull();
+    if (!announcer) return;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => {
+      if (announcer.textContent) publications.push(announcer.textContent);
+    });
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+    const outcome = {
+      accepted: true,
+      code: 'repeat',
+      message: 'The patch holds.',
+      deltas: {},
+      cue: 'none',
+    } as const;
+
+    ui.showOutcome(outcome);
+    await Promise.resolve();
+    await Promise.resolve();
+    ui.showOutcome(outcome);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(publications.filter((message) => message === outcome.message)).toHaveLength(2);
+  });
+
+  it('cancels a deferred live announcement when disposed', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]');
+    expect(announcer).not.toBeNull();
+    if (!announcer) return;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => publications.push(announcer.textContent ?? ''));
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+
+    ui.showOutcome({ accepted: true, code: 'late', message: 'Too late.', deltas: {}, cue: 'none' });
+    ui.dispose();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(publications).not.toContain('Too late.');
   });
 
   it('renders labeled meters, actions, weather, hotspots, and all item charges', () => {
@@ -336,16 +387,45 @@ describe('SurvivalUI', () => {
     expect(health.style.getPropertyValue('--meter-value')).toBe('63%');
   });
 
-  it('marks critical meter values with a non-color danger state', () => {
+  it('uses each meter scale and direction for visual and accessible danger states', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    ui.render(snapshot({ health: 12, hull: 21 }), () => null);
+    ui.render(snapshot({ health: 21, hunger: 20, energy: 4, hull: 21 }), () => null);
 
-    const health = mount.querySelector('[data-meter="health"]');
-    expect(health?.classList).toContain('is-danger');
-    expect(health?.getAttribute('aria-valuetext')).toBe('12, critical');
-    expect(mount.querySelector('[data-meter="hull"]')?.classList).not.toContain('is-danger');
+    const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
+    const hunger = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
+    const energy = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
+    const hull = mount.querySelector<HTMLElement>('[data-meter="hull"]')!;
+
+    expect(hunger.classList).not.toContain('is-danger');
+    expect(hunger.getAttribute('aria-valuetext')).toBeNull();
+    expect(hunger.getAttribute('aria-valuemax')).toBe('100');
+    expect(energy.getAttribute('aria-valuemax')).toBe('4');
+    expect(energy.style.getPropertyValue('--meter-value')).toBe('100%');
+    expect(energy.querySelector('.survival-meter__fill')?.tagName).toBe('DIV');
+    expect(energy.classList).not.toContain('is-danger');
+
+    ui.render(snapshot({ health: 20, hunger: 70, energy: 1, hull: 20 }), () => null);
+
+    expect(health.classList).toContain('is-danger');
+    expect(health.getAttribute('aria-valuetext')).toBe('20, low');
+    expect(health.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
+    expect(hunger.classList).toContain('is-danger');
+    expect(hunger.getAttribute('aria-valuetext')).toBe('70, high');
+    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
+    expect(energy.classList).toContain('is-danger');
+    expect(energy.getAttribute('aria-valuetext')).toBe('1, low');
+    expect(energy.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
+    expect(hull.classList).toContain('is-danger');
+    expect(hull.getAttribute('aria-valuetext')).toBe('20, low');
+    expect(hull.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
+
+    ui.render(snapshot({ hunger: 90 }), () => null);
+
+    expect(hunger.classList).toContain('is-danger');
+    expect(hunger.getAttribute('aria-valuetext')).toBe('90, high');
+    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
   });
 
   it('uses number shortcuts only when no overlay is open', () => {
