@@ -12,76 +12,98 @@ import {
 } from 'three';
 import { CarryController } from '../src/interaction/CarryController';
 import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
+import type { ItemInstance } from '../src/game/ItemState';
+
+const item = (instanceId: ItemInstance['instanceId'], type: ItemInstance['type']): ItemInstance => ({
+  instanceId,
+  type,
+});
 
 describe('chooseContextAction', () => {
   it('offers pickup for an item when hands are empty', () => {
+    const flareGun = item('flareGun-1', 'flareGun');
     expect(chooseContextAction({
       target: 'item',
-      itemId: 'flareGun',
+      targetItem: flareGun,
       carriedItem: null,
-      savedCount: 0,
+      remainingCapacity: 3,
       nearEvacuation: false,
-    })).toEqual({ type: 'pickUp', itemId: 'flareGun', prompt: 'E — PICK UP FLARE GUN' });
+    })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'E — PICK UP FLARE GUN' });
   });
 
   it('offers a lifeboat throw while carrying', () => {
     expect(chooseContextAction({
       target: 'lifeboat',
-      itemId: null,
-      carriedItem: 'ductTape',
-      savedCount: 2,
+      targetItem: null,
+      carriedItem: item('ductTape-1', 'ductTape'),
+      remainingCapacity: 2,
       nearEvacuation: false,
     }).type).toBe('throwToBoat');
   });
 
-  it('explains when the lifeboat is full', () => {
+  it('explains when a targeted pickup exceeds remaining capacity', () => {
     expect(chooseContextAction({
-      target: 'lifeboat',
-      itemId: null,
-      carriedItem: 'ductTape',
-      savedCount: 5,
+      target: 'item',
+      targetItem: item('scubaSet-1', 'scubaSet'),
+      carriedItem: item('cannedFood-1', 'cannedFood'),
+      remainingCapacity: 2,
       nearEvacuation: false,
-    }).type).toBe('boatFull');
+    })).toEqual({ type: 'capacityFull', prompt: 'SCUBA SET WEIGHS 3 — 2 CAPACITY FREE' });
+  });
+
+  it('offers another pickup when the target fits the remaining capacity', () => {
+    const ductTape = item('ductTape-1', 'ductTape');
+    expect(chooseContextAction({
+      target: 'item',
+      targetItem: ductTape,
+      carriedItem: item('cannedFood-1', 'cannedFood'),
+      remainingCapacity: 2,
+      nearEvacuation: false,
+    })).toEqual({ type: 'pickUp', item: ductTape, prompt: 'E — PICK UP DUCT TAPE' });
   });
 
   it('offers evacuation near the marker with empty hands', () => {
     expect(chooseContextAction({
       target: 'none',
-      itemId: null,
+      targetItem: null,
       carriedItem: null,
-      savedCount: 4,
+      remainingCapacity: 3,
       nearEvacuation: true,
     }).type).toBe('evacuate');
   });
 
   it('offers an exactly labelled drop while carrying away from the lifeboat', () => {
+    const flashlight = item('flashlight-1', 'flashlight');
     expect(chooseContextAction({
       target: 'none',
-      itemId: null,
-      carriedItem: 'flashlight',
-      savedCount: 1,
+      targetItem: null,
+      carriedItem: flashlight,
+      remainingCapacity: 2,
       nearEvacuation: false,
-    })).toEqual({ type: 'drop', itemId: 'flashlight', prompt: 'E — DROP FLASHLIGHT' });
+    })).toEqual({ type: 'drop', item: flashlight, prompt: 'E — DROP FLASHLIGHT' });
   });
 
   it('returns the exact no-action result when no context applies', () => {
     expect(chooseContextAction({
       target: 'none',
-      itemId: null,
+      targetItem: null,
       carriedItem: null,
-      savedCount: 0,
+      remainingCapacity: 3,
       nearEvacuation: false,
     })).toEqual({ type: 'none', prompt: '' });
   });
 
-  it('prioritizes a full targeted lifeboat over mixed evacuation and drop inputs', () => {
+  it('prioritizes a targeted lifeboat over mixed evacuation and drop inputs', () => {
+    const waterJug = item('waterJug-1', 'waterJug');
     expect(chooseContextAction({
       target: 'lifeboat',
-      itemId: 'flareGun',
-      carriedItem: 'waterJug',
-      savedCount: 5,
+      targetItem: item('flareGun-1', 'flareGun'),
+      carriedItem: waterJug,
+      remainingCapacity: 1,
       nearEvacuation: true,
-    })).toEqual({ type: 'boatFull', prompt: 'LIFEBOAT FULL — DROP SOMETHING ELSE' });
+    })).toEqual({
+      type: 'throwToBoat', item: waterJug, prompt: 'E — THROW WATER JUG TO LIFEBOAT',
+    });
   });
 });
 
@@ -91,7 +113,7 @@ describe('InteractionSystem', () => {
     const ship = new Group();
     ship.position.z = -2;
     const item = new Group();
-    item.userData.itemId = 'flareGun';
+    item.userData.instanceId = 'flareGun-1';
     item.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.5), new MeshStandardMaterial()));
     ship.add(item);
     const lifeboat = new Group();
@@ -99,9 +121,12 @@ describe('InteractionSystem', () => {
     lifeboat.position.z = -6;
     lifeboat.add(new Mesh(new BoxGeometry(2, 1, 4), new MeshStandardMaterial()));
 
-    const result = new InteractionSystem(camera).update([item], lifeboat);
+    const flareGun = { instanceId: 'flareGun-1', type: 'flareGun' } as const;
+    const result = new InteractionSystem(camera).update(
+      [item], lifeboat, new Map([[flareGun.instanceId, flareGun]]),
+    );
 
-    expect(result).toEqual({ target: 'item', itemId: 'flareGun' });
+    expect(result).toEqual({ target: 'item', targetItem: flareGun });
   });
 
   it('treats a tagged saved item nested under the lifeboat as the lifeboat', () => {
@@ -110,13 +135,16 @@ describe('InteractionSystem', () => {
     lifeboat.name = 'lifeboat';
     lifeboat.position.z = -2;
     const savedItem = new Group();
-    savedItem.userData.itemId = 'medicalKit';
+    savedItem.userData.instanceId = 'medicalKit-1';
     savedItem.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.5), new MeshStandardMaterial()));
     lifeboat.add(savedItem);
 
-    const result = new InteractionSystem(camera).update([savedItem], lifeboat);
+    const medicalKit = item('medicalKit-1', 'medicalKit');
+    const result = new InteractionSystem(camera).update(
+      [savedItem], lifeboat, new Map([[medicalKit.instanceId, medicalKit]]),
+    );
 
-    expect(result).toEqual({ target: 'lifeboat', itemId: null });
+    expect(result).toEqual({ target: 'lifeboat', targetItem: null });
   });
 
   it('resolves a direct lifeboat mesh', () => {
@@ -124,23 +152,29 @@ describe('InteractionSystem', () => {
     const lifeboat = new Group();
     lifeboat.name = 'lifeboat';
     lifeboat.position.z = -2;
-    lifeboat.add(new Mesh(new BoxGeometry(2, 1, 1), new MeshStandardMaterial()));
+    const material = new MeshStandardMaterial();
+    const mesh = new Mesh(new BoxGeometry(2, 1, 1), material);
+    lifeboat.add(mesh);
+    const interaction = new InteractionSystem(camera);
 
-    const result = new InteractionSystem(camera).update([], lifeboat);
+    const result = interaction.update([], lifeboat, new Map());
 
-    expect(result).toEqual({ target: 'lifeboat', itemId: null });
+    expect(result).toEqual({ target: 'lifeboat', targetItem: null });
+    expect(mesh.material).not.toBe(material);
+    interaction.dispose();
+    expect(mesh.material).toBe(material);
   });
 
   it('switches highlighted targets and clears one beyond ray range', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const first = new Group();
-    first.userData.itemId = 'flareGun';
+    first.userData.instanceId = 'flareGun-1';
     const firstMaterial = new MeshStandardMaterial();
     const firstMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), firstMaterial);
     first.add(firstMesh);
     first.position.z = -2;
     const second = new Group();
-    second.userData.itemId = 'ductTape';
+    second.userData.instanceId = 'ductTape-1';
     const secondMaterial = new MeshStandardMaterial();
     const secondMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), secondMaterial);
     second.add(secondMesh);
@@ -149,23 +183,27 @@ describe('InteractionSystem', () => {
     lifeboat.name = 'lifeboat';
     lifeboat.position.set(10, 0, -2);
     const interaction = new InteractionSystem(camera);
+    const instances = new Map([
+      ['flareGun-1', item('flareGun-1', 'flareGun')],
+      ['ductTape-1', item('ductTape-1', 'ductTape')],
+    ] as const);
 
-    expect(interaction.update([first, second], lifeboat)).toEqual({
-      target: 'item', itemId: 'flareGun',
+    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+      target: 'item', targetItem: item('flareGun-1', 'flareGun'),
     });
     expect(firstMesh.material).not.toBe(firstMaterial);
 
     first.position.x = 2;
     second.position.x = 0;
-    expect(interaction.update([first, second], lifeboat)).toEqual({
-      target: 'item', itemId: 'ductTape',
+    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+      target: 'item', targetItem: item('ductTape-1', 'ductTape'),
     });
     expect(firstMesh.material).toBe(firstMaterial);
     expect(secondMesh.material).not.toBe(secondMaterial);
 
     second.position.z = -4;
-    expect(interaction.update([first, second], lifeboat)).toEqual({
-      target: 'none', itemId: null,
+    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+      target: 'none', targetItem: null,
     });
     expect(secondMesh.material).toBe(secondMaterial);
   });
@@ -177,12 +215,12 @@ describe('InteractionSystem', () => {
       emissiveIntensity: 0.2,
     });
     const aimedItem = new Group();
-    aimedItem.userData.itemId = 'ductTape';
+    aimedItem.userData.instanceId = 'ductTape-1';
     const aimedMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), sharedMaterial);
     aimedItem.add(aimedMesh);
     aimedItem.position.z = -2;
     const otherItem = new Group();
-    otherItem.userData.itemId = 'baitTin';
+    otherItem.userData.instanceId = 'baitTin-1';
     const otherMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), sharedMaterial);
     otherItem.add(otherMesh);
     otherItem.position.set(2, 0, -2);
@@ -191,7 +229,10 @@ describe('InteractionSystem', () => {
     lifeboat.position.set(10, 0, -2);
     const interaction = new InteractionSystem(camera);
 
-    interaction.update([aimedItem, otherItem], lifeboat);
+    interaction.update([aimedItem, otherItem], lifeboat, new Map([
+      ['ductTape-1', item('ductTape-1', 'ductTape')],
+      ['baitTin-1', item('baitTin-1', 'baitTin')],
+    ] as const));
 
     const highlightMaterial = aimedMesh.material as MeshStandardMaterial;
     let highlightDisposals = 0;
@@ -211,26 +252,51 @@ describe('InteractionSystem', () => {
 });
 
 describe('CarryController', () => {
-  it('keeps carried and flight states exclusive', () => {
+  it('attaches three light instances as a visible bundle and releases LIFO', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     scene.add(camera);
-    const ship = new Group();
-    scene.add(ship);
-    const first = new Group();
-    const second = new Group();
-    ship.add(first, second);
+    const objects = [new Group(), new Group(), new Group()];
+    objects.forEach((object) => scene.add(object));
     const carry = new CarryController(scene, camera);
+    const instances = [
+      item('cannedFood-1', 'cannedFood'),
+      item('ductTape-1', 'ductTape'),
+      item('flashlight-1', 'flashlight'),
+    ];
 
-    expect(carry.pickUp('flareGun', first)).toBe(true);
-    expect(carry.pickUp('ductTape', second)).toBe(false);
+    instances.forEach((instance, index) => {
+      expect(carry.pickUp(instance, objects[index]!)).toBe(true);
+    });
     expect(carry.busy).toBe(true);
-    expect(first.parent).toBe(camera);
-    expect(first.position.toArray()).toEqual([0.62, -0.48, -1.15]);
-
-    expect(carry.throw()).toBe('flareGun');
-    expect(carry.pickUp('ductTape', second)).toBe(false);
-    expect(first.parent).toBe(scene);
+    expect(objects.every(({ parent }) => parent === camera)).toBe(true);
+    expect(objects.map(({ position }) => position.toArray())).toEqual([
+      [0.56, -0.48, -1.12],
+      [0.18, -0.54, -1.02],
+      [-0.24, -0.5, -1.08],
+    ]);
+    expect(carry.drop()).toBe('flashlight-1');
+    expect(carry.activeInstance?.instanceId).toBe('ductTape-1');
+    expect(carry.flightActive).toBe(true);
+    expect(carry.pickUp(item('baitTin-1', 'baitTin'), new Group())).toBe(false);
+    expect(objects[2]!.parent).toBe(scene);
+    const outcomes: string[] = [];
+    carry.update(
+      0.1,
+      new Box3(new Vector3(20, 20, 20), new Vector3(21, 21, 21)),
+      () => 100,
+      {
+        onSaved: (instance) => outcomes.push(`saved:${instance.instanceId}`),
+        onLost: (instance) => outcomes.push(`lost:${instance.instanceId}`),
+        onLanded: (instance) => outcomes.push(`landed:${instance.instanceId}`),
+      },
+    );
+    expect(outcomes).toEqual(['lost:flashlight-1']);
+    expect(carry.flightActive).toBe(false);
+    expect(carry.activeInstance?.instanceId).toBe('ductTape-1');
+    expect(objects.slice(0, 2).every(({ parent }) => parent === camera)).toBe(true);
+    carry.reset();
+    expect(objects.slice(0, 2).every(({ parent }) => parent === scene)).toBe(true);
   });
 
   it('preserves the held world transform at release from a transformed camera parent', () => {
@@ -246,7 +312,7 @@ describe('CarryController', () => {
     const item = new Group();
     scene.add(item);
     const carry = new CarryController(scene, camera);
-    carry.pickUp('baitTin', item);
+    carry.pickUp({ instanceId: 'baitTin-1', type: 'baitTin' }, item);
     const beforePosition = item.getWorldPosition(new Vector3());
     const beforeQuaternion = item.getWorldQuaternion(new Quaternion());
     const beforeScale = item.getWorldScale(new Vector3());
@@ -270,21 +336,21 @@ describe('CarryController', () => {
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
     const handlers = {
-      onSaved: (id: string) => outcomes.push(`saved:${id}`),
-      onLost: (id: string) => outcomes.push(`lost:${id}`),
-      onLanded: (id: string) => outcomes.push(`landed:${id}`),
+      onSaved: (instance: ItemInstance) => outcomes.push(`saved:${instance.instanceId}`),
+      onLost: (instance: ItemInstance) => outcomes.push(`lost:${instance.instanceId}`),
+      onLanded: (instance: ItemInstance) => outcomes.push(`landed:${instance.instanceId}`),
     };
     const lifeboatBox = new Box3(
       new Vector3(6.4, 1.8, -3.2),
       new Vector3(6.8, 2.4, -2.75),
     );
 
-    carry.pickUp('medicalKit', item);
+    carry.pickUp({ instanceId: 'medicalKit-1', type: 'medicalKit' }, item);
     carry.throw();
     carry.update(1, lifeboatBox, () => -100, handlers);
     carry.update(1, lifeboatBox, () => -100, handlers);
 
-    expect(outcomes).toEqual(['saved:medicalKit']);
+    expect(outcomes).toEqual(['saved:medicalKit-1']);
     expect(carry.busy).toBe(false);
   });
 
@@ -298,20 +364,20 @@ describe('CarryController', () => {
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
 
-    carry.pickUp('waterJug', item);
-    expect(carry.drop()).toBe('waterJug');
+    carry.pickUp({ instanceId: 'waterJug-1', type: 'waterJug' }, item);
+    expect(carry.drop()).toBe('waterJug-1');
     carry.update(
       1,
       new Box3(new Vector3(20, 20, 20), new Vector3(21, 21, 21)),
       () => 0,
       {
-        onSaved: (id) => outcomes.push(`saved:${id}`),
-        onLost: (id) => outcomes.push(`lost:${id}`),
-        onLanded: (id) => outcomes.push(`landed:${id}`),
+        onSaved: (instance) => outcomes.push(`saved:${instance.instanceId}`),
+        onLost: (instance) => outcomes.push(`lost:${instance.instanceId}`),
+        onLanded: (instance) => outcomes.push(`landed:${instance.instanceId}`),
       },
     );
 
-    expect(outcomes).toEqual(['lost:waterJug']);
+    expect(outcomes).toEqual(['lost:waterJug-1']);
     expect(carry.busy).toBe(false);
   });
 
@@ -325,7 +391,7 @@ describe('CarryController', () => {
     ship.updateWorldMatrix(true, false);
     const carriedStart = ship.localToWorld(new Vector3(0, 4, 0));
     const camera = new PerspectiveCamera();
-    camera.position.copy(carriedStart).sub(new Vector3(0.62, -0.48, -1.15));
+    camera.position.copy(carriedStart).sub(new Vector3(0.56, -0.48, -1.12));
     scene.add(camera);
     const item = new Group();
     item.position.set(2, 2.35, 3);
@@ -333,20 +399,20 @@ describe('CarryController', () => {
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
 
-    carry.pickUp('cannedFood', item);
+    carry.pickUp({ instanceId: 'cannedFood-1', type: 'cannedFood' }, item);
     carry.drop();
     carry.update(
       1,
       new Box3(new Vector3(20, 20, 20), new Vector3(21, 21, 21)),
       () => -100,
       {
-        onSaved: (id) => outcomes.push(`saved:${id}`),
-        onLost: (id) => outcomes.push(`lost:${id}`),
-        onLanded: (id) => outcomes.push(`landed:${id}`),
+        onSaved: (instance) => outcomes.push(`saved:${instance.instanceId}`),
+        onLost: (instance) => outcomes.push(`lost:${instance.instanceId}`),
+        onLanded: (instance) => outcomes.push(`landed:${instance.instanceId}`),
       },
     );
 
-    expect(outcomes).toEqual(['landed:cannedFood']);
+    expect(outcomes).toEqual(['landed:cannedFood-1']);
     expect(item.parent).toBe(ship);
     expect(item.position.y).toBeCloseTo(2.35);
     expect(item.scale.toArray()).toEqual([1, 1, 1]);
@@ -369,7 +435,7 @@ describe('CarryController', () => {
     ship.add(item);
     const carry = new CarryController(scene, camera);
 
-    carry.pickUp('flashlight', item);
+    carry.pickUp({ instanceId: 'flashlight-1', type: 'flashlight' }, item);
     carry.reset();
     expect(carry.busy).toBe(false);
     expect(item.parent).toBe(ship);
@@ -377,7 +443,7 @@ describe('CarryController', () => {
     expect(item.quaternion.equals(originalQuaternion)).toBe(true);
     expect(item.scale.equals(originalScale)).toBe(true);
 
-    carry.pickUp('flashlight', item);
+    carry.pickUp({ instanceId: 'flashlight-1', type: 'flashlight' }, item);
     carry.throw();
     carry.reset();
     expect(carry.busy).toBe(false);
