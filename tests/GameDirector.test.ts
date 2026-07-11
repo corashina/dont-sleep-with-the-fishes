@@ -18,15 +18,19 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
 
 describe('Game director', () => {
   it('starts the shared clock and schedules animation only once', () => {
+    const startClock = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const game = Game.forTest({
       createScavenge: () => phase(),
       createSurvival: () => phase(),
+    }, {
+      clock: { start: startClock, getDelta: () => 0.016 },
     });
 
     game.start();
     game.start();
 
+    expect(startClock).toHaveBeenCalledOnce();
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
   });
@@ -77,26 +81,137 @@ describe('Game director', () => {
     expect(Object.isFrozen(receivedResult?.savedItems)).toBe(true);
   });
 
-  it('full restart disposes survival and creates fresh scavenging', () => {
+  it('ignores a stale scavenging restart callback after survival takes ownership', () => {
+    let complete!: (result: Readonly<ScavengeResult>) => void;
+    let restartScavenge!: () => void;
     const scavenge = phase();
     const survival = phase();
-    let complete!: (result: Readonly<ScavengeResult>) => void;
-    const createScavenge = vi.fn((_context, onComplete: (result: Readonly<ScavengeResult>) => void) => {
+    const createScavenge = vi.fn((_context, onComplete, onRestart) => {
       complete = onComplete;
+      restartScavenge = onRestart;
       return scavenge;
     });
     const game = Game.forTest({
       createScavenge,
-      createSurvival: vi.fn(() => survival),
+      createSurvival: () => survival,
     });
     game.start();
-    complete({ savedItems: [], elapsedSeconds: 3 });
+    complete({ savedItems: [], elapsedSeconds: 4 });
+
+    restartScavenge();
+
+    expect(createScavenge).toHaveBeenCalledOnce();
+    expect(survival.dispose).not.toHaveBeenCalled();
+    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(survival);
+  });
+
+  it('keeps a nested restart when survival requests it synchronously during construction', () => {
+    let complete!: (result: Readonly<ScavengeResult>) => void;
+    const initialScavenge = phase();
+    const restartedScavenge = phase();
+    const staleSurvival = phase();
+    const scavenges = [initialScavenge, restartedScavenge];
+    const createScavenge = vi.fn((_context, onComplete) => {
+      complete = onComplete;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
+    });
+    const game = Game.forTest({
+      createScavenge,
+      createSurvival: (_context, _result, _seed, onRestart) => {
+        onRestart();
+        return staleSurvival;
+      },
+    });
+    game.start();
+
+    complete({ savedItems: [], elapsedSeconds: 5 });
+
+    expect(initialScavenge.dispose).toHaveBeenCalledOnce();
+    expect(restartedScavenge.start).toHaveBeenCalledOnce();
+    expect(staleSurvival.dispose).toHaveBeenCalledOnce();
+    expect(staleSurvival.start).not.toHaveBeenCalled();
+    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(restartedScavenge);
+  });
+
+  it('ignores a phase restart callback fired reentrantly during its disposal', () => {
+    let complete!: (result: Readonly<ScavengeResult>) => void;
+    let restartSurvival!: () => void;
+    const initialScavenge = phase();
+    const restartedScavenge = phase();
+    const unexpectedScavenge = phase();
+    const scavenges = [initialScavenge, restartedScavenge, unexpectedScavenge];
+    const createScavenge = vi.fn((_context, onComplete) => {
+      complete = onComplete;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
+    });
+    let firedDuringDispose = false;
+    const survival = phase({
+      dispose: vi.fn(() => {
+        if (firedDuringDispose) return;
+        firedDuringDispose = true;
+        restartSurvival();
+      }),
+    });
+    const game = Game.forTest({
+      createScavenge,
+      createSurvival: (_context, _result, _seed, onRestart) => {
+        restartSurvival = onRestart;
+        return survival;
+      },
+    });
+    game.start();
+    complete({ savedItems: [], elapsedSeconds: 6 });
 
     game.restart();
 
     expect(survival.dispose).toHaveBeenCalledOnce();
     expect(createScavenge).toHaveBeenCalledTimes(2);
-    expect(scavenge.start).toHaveBeenCalledTimes(2);
+    expect(restartedScavenge.start).toHaveBeenCalledOnce();
+    expect(unexpectedScavenge.start).not.toHaveBeenCalled();
+    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(restartedScavenge);
+  });
+
+  it('full restart disposes survival before fresh scavenging and refreshes the survival seed', () => {
+    const calls: string[] = [];
+    const completions: Array<(result: Readonly<ScavengeResult>) => void> = [];
+    const firstScavenge = phase();
+    const secondScavenge = phase({ start: vi.fn(() => calls.push('start-scavenge-2')) });
+    const scavenges = [firstScavenge, secondScavenge];
+    const firstSurvival = phase({ dispose: vi.fn(() => calls.push('dispose-survival-1')) });
+    const secondSurvival = phase();
+    const survivals = [firstSurvival, secondSurvival];
+    const receivedSeeds: number[] = [];
+    const createScavenge = vi.fn((_context, onComplete: (result: Readonly<ScavengeResult>) => void) => {
+      completions.push(onComplete);
+      const index = createScavenge.mock.calls.length - 1;
+      calls.push(`create-scavenge-${index + 1}`);
+      return scavenges[index]!;
+    });
+    const createSurvival = vi.fn((_context, _result, seed: number) => {
+      receivedSeeds.push(seed);
+      return survivals[createSurvival.mock.calls.length - 1]!;
+    });
+    const createSeed = vi.fn()
+      .mockReturnValueOnce(11)
+      .mockReturnValueOnce(22);
+    const game = Game.forTest({
+      createScavenge,
+      createSurvival,
+    }, {
+      createSeed,
+    });
+    game.start();
+    completions[0]!({ savedItems: [], elapsedSeconds: 3 });
+    calls.length = 0;
+
+    game.restart();
+
+    expect(calls).toEqual(['dispose-survival-1', 'create-scavenge-2', 'start-scavenge-2']);
+    expect(firstSurvival.dispose).toHaveBeenCalledOnce();
+    expect(createScavenge).toHaveBeenCalledTimes(2);
+    expect(firstScavenge).not.toBe(secondScavenge);
+    completions[1]!({ savedItems: [], elapsedSeconds: 2 });
+    expect(receivedSeeds).toEqual([11, 22]);
   });
 
   it('disposes shared animation, renderer, and canvas resources exactly once', () => {
@@ -111,6 +226,7 @@ describe('Game director', () => {
       renderer: { dispose: () => void; domElement: HTMLCanvasElement };
     }).renderer;
     const disposeRenderer = vi.spyOn(renderer, 'dispose');
+    const removeEventListener = vi.spyOn(window, 'removeEventListener');
     expect(renderer.domElement.parentElement).not.toBeNull();
     game.start();
 
@@ -121,7 +237,10 @@ describe('Game director', () => {
     expect(active.dispose).toHaveBeenCalledOnce();
     expect(disposeRenderer).toHaveBeenCalledOnce();
     expect(renderer.domElement.parentElement).toBeNull();
+    expect(removeEventListener).toHaveBeenCalledTimes(1);
+    expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
     requestAnimationFrame.mockRestore();
     cancelAnimationFrame.mockRestore();
+    removeEventListener.mockRestore();
   });
 });

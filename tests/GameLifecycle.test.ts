@@ -7,6 +7,7 @@ import { ScavengePhase } from '../src/phases/ScavengePhase';
 
 describe('ScavengePhase lifecycle integration', () => {
   it('exits an owned lock and tears down only phase-owned resources once', () => {
+    const removeEventListener = vi.spyOn(document, 'removeEventListener');
     const exitPointerLock = vi.fn();
     Object.defineProperty(document, 'exitPointerLock', {
       configurable: true,
@@ -38,6 +39,10 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(disposeInteraction).toHaveBeenCalledOnce();
     expect(disposeWorld).toHaveBeenCalledOnce();
     expect(disposeUI).toHaveBeenCalledOnce();
+    expect(removeEventListener).toHaveBeenCalledTimes(2);
+    expect(removeEventListener).toHaveBeenCalledWith('pointerlockchange', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    removeEventListener.mockRestore();
   });
 
   it('does not mutate world item state when a stale flight callback is rejected by the session', () => {

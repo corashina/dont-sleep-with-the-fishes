@@ -41,6 +41,21 @@ const PRODUCTION_FACTORIES: GameFactories = {
 
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
+export interface GameTestOptions {
+  clock?: GameClock;
+  createSeed?: () => number;
+}
+
+function createRandomSeed(): number {
+  try {
+    const values = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(values);
+    return values[0]!;
+  } catch {
+    return Date.now() >>> 0;
+  }
+}
+
 export class Game {
   private mount!: HTMLElement;
   private renderer!: WebGLRenderer;
@@ -55,6 +70,8 @@ export class Game {
   private disposed = false;
   private elapsed = 0;
   private seed = 0;
+  private phaseGeneration = 0;
+  private createSeed!: () => number;
   private onResize!: () => void;
   private animate!: () => void;
 
@@ -75,10 +92,11 @@ export class Game {
       new Clock(),
       window.matchMedia('(prefers-reduced-motion: reduce)'),
       PRODUCTION_FACTORIES,
+      createRandomSeed,
     );
   }
 
-  static forTest(factories: GameFactories): Game {
+  static forTest(factories: GameFactories, options: GameTestOptions = {}): Game {
     const mount = document.createElement('main');
     const canvas = document.createElement('canvas');
     mount.prepend(canvas);
@@ -89,7 +107,7 @@ export class Game {
       render: () => undefined,
       dispose: () => undefined,
     } as unknown as WebGLRenderer;
-    const clock: GameClock = {
+    const clock: GameClock = options.clock ?? {
       start: () => undefined,
       getDelta: () => 0.016,
     };
@@ -102,6 +120,7 @@ export class Game {
       clock,
       reducedMotion,
       factories,
+      options.createSeed ?? createRandomSeed,
     );
     return game;
   }
@@ -116,12 +135,7 @@ export class Game {
 
   restart(): void {
     if (this.disposed) return;
-    this.exitPointerLock();
-    this.activePhase?.dispose();
-    this.resetCamera();
-    this.elapsed = 0;
-    this.seed = this.createSeed();
-    this.activateScavenge(true);
+    this.restartCurrentPhase();
   }
 
   dispose(): void {
@@ -129,9 +143,9 @@ export class Game {
     this.disposed = true;
     if (this.animationFrame !== 0) cancelAnimationFrame(this.animationFrame);
     window.removeEventListener('resize', this.onResize);
+    const outgoing = this.detachActivePhase();
     this.exitPointerLock();
-    this.activePhase?.dispose();
-    this.activePhase = null;
+    outgoing?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -143,6 +157,7 @@ export class Game {
     clock: GameClock,
     reducedMotion: MediaQueryList,
     factories: GameFactories,
+    createSeed: () => number,
   ): void {
     this.mount = mount;
     this.renderer = renderer;
@@ -150,12 +165,14 @@ export class Game {
     this.clock = clock;
     this.reducedMotion = reducedMotion;
     this.factories = factories;
+    this.createSeed = createSeed;
     this.context = { mount, renderer, camera, reducedMotion };
     this.activePhase = null;
     this.animationFrame = 0;
     this.started = false;
     this.disposed = false;
     this.elapsed = 0;
+    this.phaseGeneration = 0;
     this.seed = this.createSeed();
     this.onResize = () => this.handleResize();
     this.animate = () => this.handleAnimationFrame();
@@ -165,12 +182,16 @@ export class Game {
   }
 
   private activateScavenge(start: boolean): void {
-    let phase!: GamePhase;
-    phase = this.factories.createScavenge(
+    const generation = ++this.phaseGeneration;
+    const phase = this.factories.createScavenge(
       this.context,
-      (result) => this.completeScavenge(phase, result),
-      () => this.restart(),
+      (result) => this.completeScavenge(generation, result),
+      () => this.restartFrom(generation),
     );
+    if (!this.ownsGeneration(generation)) {
+      phase.dispose();
+      return;
+    }
     this.activePhase = phase;
     if (start) {
       phase.resize(window.innerWidth, window.innerHeight);
@@ -179,26 +200,62 @@ export class Game {
   }
 
   private completeScavenge(
-    scavenge: GamePhase,
+    generation: number,
     result: Readonly<ScavengeResult>,
   ): void {
-    if (this.disposed || this.activePhase !== scavenge) return;
+    if (!this.ownsGeneration(generation)) return;
+    const scavenge = this.detachActivePhase();
     this.exitPointerLock();
-    scavenge.dispose();
+    scavenge?.dispose();
     this.resetCamera();
     const copiedResult: Readonly<ScavengeResult> = Object.freeze({
       savedItems: Object.freeze([...result.savedItems]),
       elapsedSeconds: result.elapsedSeconds,
     });
+    this.activateSurvival(copiedResult);
+  }
+
+  private activateSurvival(result: Readonly<ScavengeResult>): void {
+    const generation = ++this.phaseGeneration;
     const survival = this.factories.createSurvival(
       this.context,
-      copiedResult,
+      result,
       this.seed,
-      () => this.restart(),
+      () => this.restartFrom(generation),
     );
+    if (!this.ownsGeneration(generation)) {
+      survival.dispose();
+      return;
+    }
     this.activePhase = survival;
     survival.resize(window.innerWidth, window.innerHeight);
     survival.start();
+  }
+
+  private restartFrom(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    this.restartCurrentPhase();
+  }
+
+  private restartCurrentPhase(): void {
+    const outgoing = this.detachActivePhase();
+    this.exitPointerLock();
+    outgoing?.dispose();
+    this.resetCamera();
+    this.elapsed = 0;
+    this.seed = this.createSeed();
+    this.activateScavenge(true);
+  }
+
+  private detachActivePhase(): GamePhase | null {
+    const outgoing = this.activePhase;
+    this.activePhase = null;
+    this.phaseGeneration += 1;
+    return outgoing;
+  }
+
+  private ownsGeneration(generation: number): boolean {
+    return !this.disposed && this.phaseGeneration === generation;
   }
 
   private resetCamera(): void {
@@ -206,16 +263,6 @@ export class Game {
     this.camera.quaternion.identity();
     this.camera.scale.set(1, 1, 1);
     this.camera.updateMatrixWorld(true);
-  }
-
-  private createSeed(): number {
-    try {
-      const values = new Uint32Array(1);
-      globalThis.crypto.getRandomValues(values);
-      return values[0]!;
-    } catch {
-      return Date.now() >>> 0;
-    }
   }
 
   private exitPointerLock(): void {
