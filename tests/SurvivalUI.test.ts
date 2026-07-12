@@ -63,6 +63,11 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/@media\s*\(max-height:\s*760px\)\s*and\s*\(min-width:\s*761px\)\s*\{\s*\.cinematic-overlay\s*\{[^}]*padding-top:\s*44px;[^}]*\}\s*\.cinematic-overlay::before\s*\{[^}]*top:\s*44px;/s);
   });
 
+  it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
+    expect(mainStyles).toMatch(/\.boat-anchor:not\(:disabled\):not\(\[aria-disabled="true"\]\):active::before\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\) scale\(0\.78\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
+  });
+
   it('renders projected item tooltips without action dock or inventory tray', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
