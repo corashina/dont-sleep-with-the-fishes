@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error The app tsconfig omits Node types; Vitest still runs with this built-in.
+import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
@@ -8,6 +10,7 @@ import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
 const activeUIs: SurvivalUI[] = [];
+const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
   instanceId: `${type}-${index + 1}` as ItemInstanceId,
@@ -140,6 +143,45 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-anchor-id="left"]')?.getAttribute('data-tooltip-x')).toBe('left');
     expect(mount.querySelector('[data-anchor-id="right"]')?.getAttribute('data-tooltip-x')).toBe('right');
     expect(mount.querySelector('[data-anchor-id="top"]')?.getAttribute('data-tooltip-y')).toBe('below');
+  });
+
+  it('keeps edge-aligned tooltips inside the clipped survival viewport', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([
+      { id: 'left', itemType: 'flareGun', action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
+      { id: 'right', itemType: 'flashlight', action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
+    ]);
+    const style = document.createElement('style');
+    style.textContent = mainStyles;
+    mount.append(style);
+
+    const px = (value: string): number => Number.parseFloat(value);
+    const ruleFor = (selector: string): CSSStyleDeclaration => {
+      const availableRules = [...style.sheet!.cssRules]
+        .map((candidate) => candidate.cssText.slice(0, 80))
+        .join(' | ');
+      const rule = [...style.sheet!.cssRules].find((candidate) => (
+        candidate instanceof CSSStyleRule && candidate.selectorText === selector
+      )) as CSSStyleRule | undefined;
+      expect(rule, `Missing stylesheet rule: ${selector}; available: ${availableRules}`).toBeDefined();
+      return rule!.style;
+    };
+    const anchorStyle = ruleFor('.boat-anchor');
+    const leftTooltipStyle = ruleFor('.boat-anchor[data-tooltip-x="left"] .boat-tooltip');
+    const rightTooltipStyle = ruleFor('.boat-anchor[data-tooltip-x="right"] .boat-tooltip');
+    const anchorWidth = px(anchorStyle.width);
+    const anchorHalfWidth = anchorWidth / 2;
+    const leftTooltipEdge = 8 - anchorHalfWidth + px(leftTooltipStyle.left);
+    const rightTooltipEdge = window.innerWidth - 8
+      - anchorHalfWidth
+      + anchorWidth
+      - px(rightTooltipStyle.right);
+
+    expect(leftTooltipEdge).toBe(8);
+    expect(rightTooltipEdge).toBe(window.innerWidth - 8);
   });
 
   it('renders stable action cost, effect, and risk previews in accessible descriptions', () => {

@@ -285,12 +285,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 
 .boat-anchor[data-tooltip-x="left"] .boat-tooltip {
-  left: 16px;
+  left: 27px;
   transform: translateY(6px);
 }
 
 .boat-anchor[data-tooltip-x="right"] .boat-tooltip {
-  right: 16px;
+  right: 27px;
   left: auto;
   transform: translateY(6px);
 }
