@@ -1,6 +1,6 @@
 # Last Boat Out
 
-A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
+A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, ordinary survival events, and an uncertain wait for rescue.
 
 The 3D world uses original procedural geometry and shaders. No external art assets or game framework are required.
 
@@ -45,19 +45,31 @@ The ship sinks in two minutes. Search the cabin and upper deck, carry any combin
 
 In the lifeboat, each day gives four energy for daytime actions:
 
-- **Fish** requires a rescued fishing rod and attempts to add food. When bait remains, each cast offers a choice to spend one bait for better odds or fish without it.
+- **Fish** requires a rescued fishing rod and attempts to add food. When bait remains, each cast offers baited or unbaited fishing. Bait improves the documented roll but is spent only when the result is a fish or Fishlet; junk, worms, and recovered tools do not consume it.
 - **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
-- **Repair** restores hull using recovered material or a duct-tape charge.
+- **Repair** restores hull with the lifeboat's built-in repair kit or recovered repair material. A recovered duct-tape charge instead repairs one selected broken item instance.
 - **Treat** spends a medical-kit charge to restore health.
 - **Rest** consumes one water charge, restores two energy, and is available once per day.
 - **End day** advances into the day and night event sequence.
 
 Health reaches zero when injury or deprivation becomes fatal. Hunger rises overnight and influences recovery. Energy limits daytime work. Hull at zero sinks the boat. Food, bait, repair material, and rescue progress are separate stores shown beside the condition meters.
 
-Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable item resolves to the event's fallback result, and **Endure** uses no item. Consumable charges are finite and exhausted supplies remain visible.
+Ordinary events present their documented choices and relative outcome weights without converting those weights into percentage claims. Choices may require a usable recovered item or resource; unavailable, broken, consumed, and lost choices explain why they cannot be selected. Consumable charges are finite.
 
-Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
+Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the preserved natural chance. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh expanded scavenging catalog and no inventory carried over.
+
+## Canonical gameplay snapshot
+
+The checked-in canonical layer is an audit snapshot of the unofficial wiki reviewed on **2026-07-12**. Gameplay reads only local TypeScript records: it does not request wiki pages at runtime, copy wiki art or audio, or require a network connection after the application files have been served. There is no service worker or offline-install guarantee, and progress is not persisted between runs.
+
+Each canonical field records provenance. Values marked `wiki` reproduce documented labels, weights, charges, catch weights, minimum days, choices, inclusive ranges, and relative outcome weights. Values marked `preserved` retain the pre-parity game where the source is silent, incomplete, or contradictory. New ship items without documented physical data use the approved `default` of weight `1` and one spawn. Preserved values are deliberate compatibility decisions, not claims about the wiki.
+
+The runtime includes the practical non-story supplies, condition-aware duplicate instances, the built-in Repair Kit, deterministic fishing catches, ordinary selectable events, exact event-caused danger changes, item gains, consumption, breaking, repair, and loss. A saved instance moves independently through `usable`, `broken`, `consumed`, or `lost`: broken items remain visible but unavailable until repaired, depleted consumables remain represented with zero uses, and lost items no longer act as available props.
+
+The parity boundary excludes crewmates, passengers, character needs, dialogue, journals, lore progression, Heart of the Sea progression, endings, rescue-story chains, and story-related events. Bottled Paper, Heart Pieces 1–3, Heart of the Sea, and Yellow Flower therefore never enter runtime item catalogs. White Flower is also absent because the reviewed source documents acquisition but no gameplay use. The preserved Water Jug remains for the existing hunger/rest loop.
+
+Some reviewed records remain intentionally dormant rather than guessed. Opening a recovered **Chest** is unavailable because its utility pool is undocumented; the separate **Mystery Chest** ordinary event remains selectable. **Seagull** and **Chest Attack** are checked in for audit completeness but cannot be selected because their trigger or outcome data is incomplete. **Broken Boat** is different: it is an active automatic event with its documented hull-threshold roll. Danger does not grow passively at dawn because the source provides no rate; it changes only when an included event outcome explicitly says it does.
 
 ## Commands
 

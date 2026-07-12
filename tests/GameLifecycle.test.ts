@@ -37,6 +37,10 @@ describe('ScavengePhase lifecycle integration', () => {
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
     const generatedItemCount = createItemInstances().length;
     expect(internals.world.itemObjects.size).toBe(generatedItemCount);
+    expect(internals.world.itemObjects.has('flareGun-1')).toBe(true);
+    expect(internals.world.itemObjects.has('map-1')).toBe(true);
+    expect(internals.world.itemObjects.has('chest-1')).toBe(true);
+    expect(internals.world.itemObjects.has('repairKit-1')).toBe(false);
     expect(firstItems).toHaveLength(generatedItemCount);
     expect(firstItems).toContain(cannedFood);
     expect(firstInstances.size).toBe(generatedItemCount);

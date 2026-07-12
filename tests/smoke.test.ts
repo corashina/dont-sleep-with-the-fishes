@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CANONICAL_EVENTS } from '../src/canonical/events';
 import { ITEM_DEFINITIONS, ITEM_IDS, createItemInstances } from '../src/game/ItemState';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { ACTION_FOR_ITEM } from '../src/survival/BoatInteraction';
@@ -21,9 +22,16 @@ describe('demo contracts', () => {
     expect(ACTION_FOR_ITEM.fishingRod).toBe('fish');
   });
 
-  it('ships exactly sixteen authored survival events', () => {
+  it('ships the canonical event catalog with undocumented triggers dormant', () => {
     expect(SURVIVAL_EVENTS).toHaveLength(16);
-    expect(new Set(SURVIVAL_EVENTS.map((event) => event.id)).size).toBe(SURVIVAL_EVENTS.length);
+    expect(CANONICAL_EVENTS).toHaveLength(26);
+    expect(new Set(CANONICAL_EVENTS.map((event) => event.id)).size).toBe(CANONICAL_EVENTS.length);
+    expect(CANONICAL_EVENTS.find(({ id }) => id === 'seagull')?.selectable).toBe(false);
+    expect(CANONICAL_EVENTS.find(({ id }) => id === 'chest-attack')?.selectable).toBe(false);
+    expect(CANONICAL_EVENTS.find(({ id }) => id === 'broken-boat')).toMatchObject({
+      automatic: true,
+      selectable: false,
+    });
   });
 
   it('ships exactly three weather definitions', () => {
