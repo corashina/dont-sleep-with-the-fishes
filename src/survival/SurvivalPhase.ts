@@ -75,7 +75,7 @@ export class SurvivalPhase implements GamePhase {
         new BoatWorld(
           context.camera,
           context.reducedMotion,
-          savedItems.some(({ type }) => type === 'fishingRod'),
+          savedItems,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
