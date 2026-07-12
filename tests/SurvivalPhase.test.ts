@@ -59,6 +59,31 @@ afterEach(() => {
 });
 
 describe('SurvivalPhase orchestration', () => {
+  it('synchronizes inventory and projected anchors after renders, updates, and resize', () => {
+    const current = snapshot();
+    const syncInventory = vi.fn();
+    const anchors = [{
+      id: 'horizon', itemType: null, action: 'endDay' as const,
+      x: 400, y: 80, visible: true, depleted: false,
+    }];
+    const projectInteractionAnchors = vi.fn(() => anchors);
+    const setAnchors = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { syncInventory, projectInteractionAnchors, update: vi.fn(), dispose: vi.fn() },
+      ui: { render: vi.fn(), setAnchors, dispose: vi.fn() },
+    });
+
+    phase.start();
+    phase.resize(800, 600);
+    phase.update(1, 0.016);
+
+    expect(syncInventory).toHaveBeenCalledWith(current);
+    expect(projectInteractionAnchors).toHaveBeenLastCalledWith(800, 600);
+    expect(setAnchors).toHaveBeenLastCalledWith(anchors);
+    expect(projectInteractionAnchors.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('resolves one command, blocks another through presentation, and renders the new snapshot after Continue', async () => {
     let finishSequence!: () => void;
     const play = vi.fn(() => new Promise<void>((resolve) => { finishSequence = resolve; }));
