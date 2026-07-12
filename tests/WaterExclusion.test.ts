@@ -24,6 +24,31 @@ describe('water exclusions', () => {
     )).toBe(false);
   });
 
+  it('keeps containment aligned through a non-uniformly scaled parent', () => {
+    const rig = new Group();
+    rig.position.set(-3, 1.5, 6);
+    rig.rotation.set(-0.12, 0.7, 0.18);
+    rig.scale.set(1.8, 0.65, 1.25);
+    const vessel = new Group();
+    vessel.position.set(2, -0.4, -3);
+    vessel.rotation.set(0.08, -0.3, 0.05);
+    rig.add(vessel);
+    const region = createWaterExclusion(vessel, 1, 2.2);
+
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(0.95, 3, -2.1)),
+      region,
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(1.05, 0, 0)),
+      region,
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(0, 0, 2.3)),
+      region,
+    )).toBe(false);
+  });
+
   it('starts with explicit inactive fixed-size uniform defaults', () => {
     const ocean = new OceanRenderer();
 

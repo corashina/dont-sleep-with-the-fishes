@@ -22,29 +22,31 @@ Open the local URL printed by Vite and select **Begin Evacuation**. The scavengi
 | `WASD` | Move through the ship |
 | Mouse | Look |
 | `Shift` | Sprint |
-| `E` | Pick up, drop, throw, or evacuate |
+| `E` | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
 | `Escape` | Pause and release the mouse |
+
+Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The rescue-orange lifeboat has unlimited storage, so every supply thrown aboard remains visible and no full-boat state exists.
 
 ### Lifeboat survival
 
 | Input | Action |
 |---|---|
-| Mouse | Select actions, hotspots, supplies, and event responses |
+| Mouse | Hover physical recovered props for details; click a prop to perform its action |
 | `Tab` / `Shift+Tab` | Move forward or backward through controls |
 | `Enter` | Activate the focused control |
-| `Escape` | Close the supply tray first; otherwise pause or resume |
+| `Escape` | Close the fishing-choice dialog first; otherwise pause or resume |
 | `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
 
-Unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
+Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, remaining uses, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Depleted multi-use props stay in place with subdued markers, while consumed cans disappear as their individual instances are spent. **Fish** exists only when a fishing rod was rescued, and **Dive** only when scuba gear was rescued; without those tools, shortcuts `1` and `2` do nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
 
 ## Game loop
 
-The ship sinks in two minutes. Search the cabin and upper deck, carry supplies one at a time, throw up to five into the lifeboat, and evacuate before the timer expires. Only items physically saved in the boat enter the survival inventory.
+The ship sinks in two minutes. Search the cabin and upper deck, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
 
 In the lifeboat, each day gives four energy for daytime actions:
 
-- **Fish** attempts to add food. Hand-line fishing is always possible; a rescued fishing rod and bait improve the odds.
-- **Dive** searches for food, bait, or repair material, with weather-dependent risk.
+- **Fish** requires a rescued fishing rod and attempts to add food. When bait remains, each cast offers a choice to spend one bait for better odds or fish without it.
+- **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
 - **Repair** restores hull using recovered material or a duct-tape charge.
 - **Treat** spends a medical-kit charge to restore health.
@@ -79,7 +81,9 @@ bun run preview
 - `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
 - `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
 
-The scavenging ocean mesh and lifeboat sample the same four-wave field. In survival, the ocean and boat remain synchronized while the camera stays fixed to the boat rig; reduced-motion preference removes parallax, lurch, and nonessential UI motion.
+The scavenging ocean mesh and lifeboat sample the same four-wave field. In survival, the ocean and boat remain synchronized while the camera stays fixed to the boat rig; reduced-motion preference removes parallax, lurch, tooltip movement, and nonessential UI transitions.
+
+Water exclusion is rendered in the ocean shader rather than by layering flat patches over the water. Each frame, the ship and lifeboat contribute inverse world-transform matrices and local hull bounds to two fixed shader regions. Ocean fragments transform their world positions into each vessel's local coordinates and are discarded inside those bounds before ocean color output. Because the mask follows complete world transforms, it stays aligned through vessel translation, rotation, listing, parent rigs, and non-uniform scale while high waves remain visible outside the hulls.
 
 ## Milestone boundaries
 

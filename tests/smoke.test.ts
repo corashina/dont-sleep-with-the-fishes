@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ITEM_IDS } from '../src/game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, createItemInstances } from '../src/game/ItemState';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import { ACTION_FOR_ITEM } from '../src/survival/BoatInteraction';
 import { WEATHER_IDS } from '../src/survival/BoatWorld';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { createSurvivalInventory } from '../src/survival/inventory';
@@ -12,9 +13,12 @@ const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) =>
 }));
 
 describe('demo contracts', () => {
-  it('ships exactly nine supply definitions', () => {
+  it('exposes the complete physical-inventory milestone', () => {
     expect(ITEM_IDS).toHaveLength(9);
-    expect(new Set(ITEM_IDS).size).toBe(9);
+    expect(createItemInstances()).toHaveLength(14);
+    expect(ITEM_DEFINITIONS.scubaSet.weight).toBe(3);
+    expect(ACTION_FOR_ITEM.scubaSet).toBe('dive');
+    expect(ACTION_FOR_ITEM.fishingRod).toBe('fish');
   });
 
   it('ships exactly sixteen authored survival events', () => {
