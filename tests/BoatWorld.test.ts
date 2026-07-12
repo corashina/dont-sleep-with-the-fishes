@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PerspectiveCamera, Vector3 } from 'three';
+import {
+  Matrix4,
+  Mesh,
+  PerspectiveCamera,
+  ShaderMaterial,
+  Vector3,
+  Vector4,
+} from 'three';
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
 
 describe('BoatWorld helpers', () => {
@@ -25,6 +32,27 @@ describe('BoatWorld helpers', () => {
     world.dispose();
 
     expect(after).toBe(before);
+  });
+
+  it('uploads one exclusion from the motion-rig lifeboat world transform', () => {
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+    );
+
+    world.update(1.5, 0.1);
+
+    const boat = world.scene.getObjectByName('lifeboat')!;
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
+    const uniforms = (ocean.material as ShaderMaterial).uniforms;
+    const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
+    const bounds = uniforms.uExclusionBounds!.value as Vector4[];
+    expect(uniforms.uExclusionCount!.value).toBe(1);
+    expect(bounds[0]!.toArray()).toEqual([-1.02, 1.02, -2.28, 2.28]);
+    expect(matrices[0]!.elements).toEqual(boat.matrixWorld.clone().invert().elements);
+    expect(matrices[1]).toEqual(new Matrix4());
+    expect(bounds[1]).toEqual(new Vector4());
+    world.dispose();
   });
 
   it('only builds survival fishing gear when rescued and resets transient cues', async () => {

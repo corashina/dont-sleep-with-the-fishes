@@ -16,6 +16,7 @@ import {
   Vector3,
 } from 'three';
 import { OceanRenderer } from '../ocean/OceanRenderer';
+import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { createLifeboat } from '../world/Lifeboat';
 import type { PresentationCue, WeatherId } from './survivalTypes';
@@ -260,6 +261,7 @@ export class BoatWorld {
     const fog = this.scene.fog as FogExp2;
     this.ocean.update(time, amplitudeScale, fog.density);
     this.scene.updateMatrixWorld(true);
+    this.ocean.setExclusions([createWaterExclusion(this.boat, 1.02, 2.28)]);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }

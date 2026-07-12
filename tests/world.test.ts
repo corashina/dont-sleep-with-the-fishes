@@ -8,6 +8,7 @@ import {
   Group,
   HemisphereLight,
   Material,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -16,11 +17,13 @@ import {
   Scene,
   ShaderMaterial,
   Vector3,
+  Vector4,
 } from 'three';
 import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import type { CollisionBox } from '../src/player/collisions';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -165,6 +168,31 @@ describe('procedural world builders', () => {
       .toBeCloseTo(0.25 + expectedPulse * 1.35);
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
     expect(scene.getObjectByName('storm-clouds')).toBeDefined();
+    world.dispose();
+  });
+
+  it('uploads ship and lifeboat exclusions from their current world transforms', () => {
+    const scene = new Scene();
+    const world = new World(scene);
+    const sinking = getSinkingState(45, 120);
+
+    world.update(2.5, 0.1, sinking, new Vector3(12, 5, -9), false);
+
+    const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
+    const uniforms = (ocean.material as ShaderMaterial).uniforms;
+    const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
+    const bounds = uniforms.uExclusionBounds!.value as Vector4[];
+    expect(uniforms.uExclusionCount!.value).toBe(2);
+    expect(bounds.map((value) => value.toArray())).toEqual([
+      [-3.72, 3.72, -10.25, 10.25],
+      [-1.02, 1.02, -2.28, 2.28],
+    ]);
+    expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
+    expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
+    expect(pointInWaterExclusion(
+      world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
+      { worldToLocal: matrices[1]!, bounds: bounds[1]! },
+    )).toBe(true);
     world.dispose();
   });
 
