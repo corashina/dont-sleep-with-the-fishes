@@ -15,11 +15,28 @@ import {
   Scene,
   Vector3,
 } from 'three';
+import {
+  ITEM_DEFINITIONS,
+  type ItemId,
+  type ItemInstance,
+} from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
+import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat } from '../world/Lifeboat';
-import type { PresentationCue, WeatherId } from './survivalTypes';
+import { createProp } from '../world/PropFactory';
+import {
+  ACTION_FOR_ITEM,
+  projectBoatAnchor,
+  type BoatInteractionAnchor,
+} from './BoatInteraction';
+import type {
+  DayActionId,
+  PresentationCue,
+  SurvivalSnapshot,
+  WeatherId,
+} from './survivalTypes';
 
 export interface SurvivalLighting {
   ambient: number;
@@ -79,6 +96,17 @@ interface ActiveSequence {
   resolve: () => void;
 }
 
+interface SavedProp {
+  instance: ItemInstance;
+  prop: Object3D;
+}
+
+interface FixedAnchor {
+  id: string;
+  action: DayActionId;
+  target: Object3D;
+}
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -95,6 +123,19 @@ function collectResources(
     const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
     meshMaterials.forEach((material) => materials.add(material));
   });
+}
+
+function setPropDepleted(root: Object3D, depleted: boolean): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
+    const material = object.material;
+    const original = material.userData.originalColor as number | undefined
+      ?? material.color.getHex();
+    material.userData.originalColor = original;
+    material.color.setHex(original);
+    if (depleted) material.color.lerp(new Color(0x4f5756), 0.65);
+  });
+  root.userData.depleted = depleted;
 }
 
 export class BoatWorld {
@@ -120,6 +161,9 @@ export class BoatWorld {
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
   private readonly baseCameraQuaternion: Quaternion;
+  private readonly savedProps: SavedProp[] = [];
+  private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
+  private readonly fixedAnchors: FixedAnchor[] = [];
   private readonly rod: Object3D | undefined;
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
@@ -136,7 +180,11 @@ export class BoatWorld {
   private settledCue: PresentationCue | null = null;
   private disposed = false;
 
-  constructor(camera: PerspectiveCamera, reducedMotion: MediaQueryList, hasFishingRod = true) {
+  constructor(
+    camera: PerspectiveCamera,
+    reducedMotion: MediaQueryList,
+    savedItems: readonly ItemInstance[] = [],
+  ) {
     this.scene = new Scene();
     this.camera = camera;
     this.reducedMotion = reducedMotion;
@@ -144,8 +192,29 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
 
-    const build = createLifeboat({ fishingRod: hasFishingRod });
+    const build = createLifeboat();
     this.boat = build.root;
+    savedItems.forEach((instance, index) => {
+      const prop = createProp(instance);
+      const transform = boatStorageTransform(index);
+      prop.position.copy(transform.position);
+      prop.rotation.copy(transform.rotation);
+      prop.scale.setScalar(transform.scale);
+      build.storageRoot.add(prop);
+      this.savedProps.push({ instance, prop });
+      this.savedPropByInstanceId.set(instance.instanceId, prop);
+    });
+
+    const repairPatch = this.boat.getObjectByName('damaged-plank-patch');
+    if (repairPatch !== undefined) {
+      this.fixedAnchors.push({ id: 'repair-patch', action: 'repair', target: repairPatch });
+    }
+    const horizon = new Object3D();
+    horizon.name = 'horizon-anchor';
+    horizon.position.set(0, 1.15, -12);
+    this.boat.add(horizon);
+    this.fixedAnchors.push({ id: 'horizon', action: 'endDay', target: horizon });
+
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
     this.motionRig.add(this.boat, this.cameraRig);
@@ -154,7 +223,10 @@ export class BoatWorld {
     camera.lookAt(0, 0.08, -2.7);
     this.baseCameraQuaternion = camera.quaternion.clone();
 
-    this.rod = this.boat.getObjectByName('fishing-rod');
+    const rodInstance = savedItems.find(({ type }) => type === 'fishingRod');
+    this.rod = rodInstance === undefined
+      ? undefined
+      : this.savedPropByInstanceId.get(rodInstance.instanceId);
     this.line = this.boat.getObjectByName('fishing-line');
     this.catchMesh = this.boat.getObjectByName('fishing-catch');
     this.baseRodRotationZ = this.rod?.rotation.z ?? 0;
@@ -194,6 +266,51 @@ export class BoatWorld {
     if (this.disposed) return;
     this.weather = weather;
     this.applyBaseLighting();
+  }
+
+  syncInventory(snapshot: SurvivalSnapshot): void {
+    if (this.disposed) return;
+    const syncedTypes = new Set<ItemId>();
+    this.savedProps.forEach(({ instance }) => {
+      if (syncedTypes.has(instance.type)) return;
+      syncedTypes.add(instance.type);
+      this.syncType(instance.type, snapshot);
+    });
+  }
+
+  projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
+    if (this.disposed || width <= 0 || height <= 0) return [];
+    this.scene.updateMatrixWorld(true);
+
+    const itemAnchors = this.savedProps.map(({ instance, prop }) => {
+      const projected = projectBoatAnchor(
+        prop.getWorldPosition(new Vector3()),
+        this.camera,
+        width,
+        height,
+      );
+      return {
+        id: instance.instanceId,
+        itemType: instance.type,
+        action: ACTION_FOR_ITEM[instance.type] ?? null,
+        ...projected,
+        visible: prop.visible && projected.visible,
+        depleted: prop.userData.depleted === true,
+      } satisfies BoatInteractionAnchor;
+    });
+    const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
+      id,
+      itemType: null,
+      action,
+      ...projectBoatAnchor(
+        target.getWorldPosition(new Vector3()),
+        this.camera,
+        width,
+        height,
+      ),
+      depleted: false,
+    } satisfies BoatInteractionAnchor));
+    return [...itemAnchors, ...fixedAnchors];
   }
 
   play(cue: PresentationCue): Promise<void> {
@@ -301,6 +418,24 @@ export class BoatWorld {
     this.distantVessel.visible = false;
   }
 
+  private remainingUses(type: ItemId, snapshot: SurvivalSnapshot): number | null {
+    if (type === 'cannedFood') return snapshot.food;
+    if (type === 'baitTin') return snapshot.bait;
+    return snapshot.inventory[type].charges;
+  }
+
+  private syncType(type: ItemId, snapshot: SurvivalSnapshot): void {
+    const instances = this.savedProps.filter((entry) => entry.instance.type === type);
+    const remaining = this.remainingUses(type, snapshot);
+    if (remaining === null) return;
+    const perInstance = ITEM_DEFINITIONS[type].charges ?? 1;
+    const activeCount = Math.ceil(remaining / perInstance);
+    instances.forEach(({ prop }, index) => {
+      prop.visible = type !== 'cannedFood' || index < activeCount;
+      setPropDepleted(prop, index >= activeCount);
+    });
+  }
+
   private applyBasePresentation(): void {
     this.applyBaseLighting();
     this.motionRig.position.set(0, 0.22 + this.smoothedY, 0);
@@ -342,9 +477,11 @@ export class BoatWorld {
       case 'none':
         break;
       case 'fish':
-        if (this.rod) this.rod.rotation.z = this.baseRodRotationZ - eased * 0.82;
-        if (this.line) this.line.visible = progress > 0.12;
-        if (this.catchMesh) this.catchMesh.visible = progress > 0.42;
+        if (this.rod) {
+          this.rod.rotation.z = this.baseRodRotationZ - eased * 0.82;
+          if (this.line) this.line.visible = progress > 0.12;
+          if (this.catchMesh) this.catchMesh.visible = progress > 0.42;
+        }
         break;
       case 'dive':
         if (!reduced) this.cameraRig.position.y -= pulse * 0.72;
