@@ -1,5 +1,6 @@
 import {
   Color,
+  Matrix4,
   Mesh,
   PlaneGeometry,
   ShaderMaterial,
@@ -8,6 +9,9 @@ import {
   Vector4,
 } from 'three';
 import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
+import type { WaterExclusionRegion } from './WaterExclusion';
+
+const MAX_EXCLUSIONS = 2;
 
 const vertexShader = `
   uniform float uTime;
@@ -19,6 +23,7 @@ const vertexShader = `
   varying float vHeight;
   varying float vViewDepth;
   varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
 
   void main() {
     vec3 displaced = position;
@@ -45,6 +50,7 @@ const vertexShader = `
     vHeight = height;
     vViewDepth = length(cameraPosition - worldPosition.xyz);
     vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
+    vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
 `;
@@ -56,9 +62,13 @@ const fragmentShader = `
   uniform vec3 uFogColor;
   uniform float uFogDensity;
   uniform vec3 uLightDirection;
+  uniform int uExclusionCount;
+  uniform mat4 uExclusionWorldToLocal[2];
+  uniform vec4 uExclusionBounds[2];
   varying float vHeight;
   varying float vViewDepth;
   varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
 
   float bayer2(vec2 cell) {
     return 2.0 * cell.x + 3.0 * cell.y - 4.0 * cell.x * cell.y;
@@ -73,6 +83,20 @@ const fragmentShader = `
   }
 
   void main() {
+    for (int i = 0; i < 2; i++) {
+      if (i < uExclusionCount) {
+        vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
+        vec4 exclusionBounds = uExclusionBounds[i];
+        if (
+          exclusionLocal.x >= exclusionBounds.x &&
+          exclusionLocal.x <= exclusionBounds.y &&
+          exclusionLocal.z >= exclusionBounds.z &&
+          exclusionLocal.z <= exclusionBounds.w
+        ) {
+          discard;
+        }
+      }
+    }
     float facing = clamp(dot(normalize(vWorldNormal), normalize(uLightDirection)), 0.0, 1.0);
     float crest = smoothstep(0.48, 0.82, vHeight);
     float depthMix = clamp(0.42 + vHeight * 0.25 + facing * 0.25, 0.0, 1.0);
@@ -109,6 +133,9 @@ export class OceanRenderer {
         uFogColor: { value: new Color(0x27343b) },
         uFogDensity: { value: 0.018 },
         uLightDirection: { value: new Vector3(-0.4, 0.85, 0.25) },
+        uExclusionCount: { value: 0 },
+        uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
+        uExclusionBounds: { value: [new Vector4(), new Vector4()] },
       },
     });
     const geometry = new PlaneGeometry(180, 180, 128, 128);
@@ -123,6 +150,22 @@ export class OceanRenderer {
     this.material.uniforms.uTime!.value = timeSeconds;
     this.material.uniforms.uAmplitudeScale!.value = amplitudeScale;
     this.material.uniforms.uFogDensity!.value = fogDensity;
+  }
+
+  setExclusions(regions: readonly WaterExclusionRegion[]): void {
+    const worldToLocal = this.material.uniforms.uExclusionWorldToLocal!.value as Matrix4[];
+    const bounds = this.material.uniforms.uExclusionBounds!.value as Vector4[];
+    const activeCount = Math.min(regions.length, MAX_EXCLUSIONS);
+
+    for (let index = 0; index < MAX_EXCLUSIONS; index += 1) {
+      worldToLocal[index]!.identity();
+      bounds[index]!.set(0, 0, 0, 1);
+    }
+    for (let index = 0; index < activeCount; index += 1) {
+      worldToLocal[index]!.copy(regions[index]!.worldToLocal);
+      bounds[index]!.copy(regions[index]!.bounds);
+    }
+    this.material.uniforms.uExclusionCount!.value = activeCount;
   }
 
   follow(worldX: number, worldZ: number): void {

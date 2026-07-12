@@ -17,6 +17,7 @@ import {
 import type { SinkingState } from '../game/sinking';
 import { BoatBuoyancy, smoothBoatPose, type BoatPose } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
+import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import type { CollisionBox } from '../player/collisions';
 import { boatStorageTransform } from './BoatStorage';
@@ -121,6 +122,10 @@ export class World {
       this.boatAnchor.z + this.boatPose.driftZ,
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
+    this.ocean.setExclusions([
+      createWaterExclusion(this.ship, 3.72, 10.25),
+      createWaterExclusion(this.lifeboat, 1.02, 2.28),
+    ]);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
 
     const beacon = this.ship.getObjectByName('alarm-beacon');
