@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { applyInventoryMutation, createSurvivalInventory } from '../src/survival/inventory';
 import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
@@ -225,6 +226,54 @@ describe('SurvivalUI', () => {
       expect(choice.getAttribute('aria-description')).toContain('Use through day actions');
       expect(choice.disabled).toBe(true);
     }
+  });
+
+  it('keeps a depleted recovered non-store consumable visible and unavailable in event choices', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const inventory = createSurvivalInventory(saved('waterJug'));
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'waterJug', quantity: 3 });
+
+    ui.showEvent(
+      { id: 'x', title: 'X', prompt: 'X', danger: 'safe' },
+      snapshot({ inventory }),
+    );
+
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="waterJug"]')!;
+    expect(choice.textContent).toContain('0 CHARGES');
+    expect(choice.getAttribute('aria-description')).toContain('No charges remain');
+    expect(choice.disabled).toBe(true);
+  });
+
+  it('hides inventory whose instances are all lost from event choices', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const inventory = createSurvivalInventory(saved('flareGun'));
+    applyInventoryMutation(inventory, { kind: 'lose', itemId: 'flareGun', quantity: 1 });
+
+    ui.showEvent(
+      { id: 'x', title: 'X', prompt: 'X', danger: 'safe' },
+      snapshot({ inventory }),
+    );
+
+    expect(mount.querySelector('[data-event-items] [data-item="flareGun"]')).toBeNull();
+  });
+
+  it('keeps mixed usable and consumed store instances enabled without transferred labeling', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const inventory = createSurvivalInventory(saved('baitTin', 'baitTin'));
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'baitTin', quantity: 3 });
+
+    ui.showEvent(
+      { id: 'x', title: 'X', prompt: 'X', danger: 'safe' },
+      snapshot({ inventory }),
+    );
+
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="baitTin"]')!;
+    expect(choice.textContent).toContain('3 CHARGES');
+    expect(choice.textContent).not.toContain('TRANSFERRED TO STORES');
+    expect(choice.disabled).toBe(false);
   });
 
   it('shows transferred stores and shared logical item descriptions', () => {

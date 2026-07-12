@@ -336,9 +336,13 @@ export class SurvivalUI {
 
     ITEM_IDS.forEach((id) => {
       const item = snapshot.inventory[id];
+      const hasUsableInstance = item.instances.some(({ condition }) => condition === 'usable');
+      const recovered = item.owned
+        || item.instances.some(({ condition }) => condition !== 'lost');
       const transferred = (id === 'cannedFood' || id === 'baitTin')
+        && !hasUsableInstance
         && item.instances.some(({ condition }) => condition === 'consumed');
-      if (!item.owned && !transferred) return;
+      if (!recovered) return;
       const usable = item.owned && (item.durable || (item.charges !== null && item.charges > 0));
       const button = document.createElement('button');
       button.type = 'button';
