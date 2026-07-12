@@ -185,12 +185,16 @@ describe('procedural world builders', () => {
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
       [-3.72, 3.72, -10.25, 10.25],
-      [-1.02, 1.02, -2.28, 2.28],
+      [-1.18, 1.18, -2.48, 2.48],
     ]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
+      { worldToLocal: matrices[1]!, bounds: bounds[1]! },
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      world.lifeboat.localToWorld(new Vector3(1.12, 0, 2.4)),
       { worldToLocal: matrices[1]!, bounds: bounds[1]! },
     )).toBe(true);
     world.dispose();

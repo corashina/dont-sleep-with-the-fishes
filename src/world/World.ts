@@ -22,7 +22,7 @@ import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import type { CollisionBox } from '../player/collisions';
 import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
-import { createLifeboat } from './Lifeboat';
+import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from './Lifeboat';
 import { createProp } from './PropFactory';
 import { createShip, selectSpawnPoints } from './Ship';
 
@@ -124,7 +124,11 @@ export class World {
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.ocean.setExclusions([
       createWaterExclusion(this.ship, 3.72, 10.25),
-      createWaterExclusion(this.lifeboat, 1.02, 2.28),
+      createWaterExclusion(
+        this.lifeboat,
+        LIFEBOAT_WATER_EXCLUSION.halfWidth,
+        LIFEBOAT_WATER_EXCLUSION.halfLength,
+      ),
     ]);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
 

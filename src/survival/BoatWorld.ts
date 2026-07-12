@@ -24,7 +24,7 @@ import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { boatStorageTransform } from '../world/BoatStorage';
-import { createLifeboat } from '../world/Lifeboat';
+import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import {
   ACTION_FOR_ITEM,
@@ -381,7 +381,13 @@ export class BoatWorld {
     const fog = this.scene.fog as FogExp2;
     this.ocean.update(time, amplitudeScale, fog.density);
     this.scene.updateMatrixWorld(true);
-    this.ocean.setExclusions([createWaterExclusion(this.boat, 1.02, 2.28)]);
+    this.ocean.setExclusions([
+      createWaterExclusion(
+        this.boat,
+        LIFEBOAT_WATER_EXCLUSION.halfWidth,
+        LIFEBOAT_WATER_EXCLUSION.halfLength,
+      ),
+    ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
