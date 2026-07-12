@@ -11,7 +11,6 @@ import {
 } from 'three';
 import {
   createItemInstances,
-  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -25,21 +24,6 @@ import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import { createShip, selectSpawnPoints } from './Ship';
-
-class InstanceObjectMap extends Map<ItemInstanceId, Group> {
-  override get(key: ItemInstanceId | ItemId): Group | undefined {
-    const exact = super.get(key as ItemInstanceId);
-    if (exact) return exact;
-    return [...this.values()].find((object) => object.userData.itemType === key);
-  }
-
-  // Task 5 removes the type-keyed phase adapter; this overload keeps that untouched
-  // consumer compiling while the runtime map remains keyed only by instance IDs.
-  override [Symbol.iterator](): MapIterator<[ItemId & ItemInstanceId, Group]>;
-  override [Symbol.iterator](): MapIterator<[ItemInstanceId, Group]> {
-    return super[Symbol.iterator]();
-  }
-}
 
 function collectOwnedResources(
   root: Object3D,
@@ -58,7 +42,7 @@ function collectOwnedResources(
 export class World {
   readonly ship: Group;
   readonly lifeboat: Group;
-  readonly itemObjects = new InstanceObjectMap();
+  readonly itemObjects = new Map<ItemInstanceId, Group>();
   readonly colliders: CollisionBox[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
@@ -146,7 +130,7 @@ export class World {
     }
   }
 
-  saveItem(instanceId: ItemInstanceId | ItemId, storageIndex: number): void {
+  saveItem(instanceId: ItemInstanceId, storageIndex: number): void {
     const item = this.itemObjects.get(instanceId);
     if (!item) return;
     const transform = boatStorageTransform(storageIndex);
@@ -157,11 +141,11 @@ export class World {
     item.scale.setScalar(transform.scale);
   }
 
-  loseItem(instanceId: ItemInstanceId | ItemId): void {
+  loseItem(instanceId: ItemInstanceId): void {
     this.itemObjects.get(instanceId)?.removeFromParent();
   }
 
-  landItem(instanceId: ItemInstanceId | ItemId): void {
+  landItem(instanceId: ItemInstanceId): void {
     const item = this.itemObjects.get(instanceId);
     if (!item) return;
     this.ship.attach(item);

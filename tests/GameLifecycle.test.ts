@@ -1,58 +1,58 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
-import { Box3, Group, Vector3 } from 'three';
+import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
+import type { PhaseContext } from '../src/app/GamePhase';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 import type { ItemInstance } from '../src/game/ItemState';
+import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
+import { World } from '../src/world/World';
 
 describe('ScavengePhase lifecycle integration', () => {
-  it('uses the bound instance status when the deprecated type view contradicts it', () => {
-    const boundInstance = { instanceId: 'cannedFood-1', type: 'cannedFood' } as const;
-    const cannedFood = new Group();
-    cannedFood.userData.itemId = 'cannedFood';
-    cannedFood.userData.instanceId = boundInstance.instanceId;
-    const lifeboat = new Group();
-    const updateInteraction = vi.fn((_items, _lifeboat, instances: ReadonlyMap<string, unknown>) => ({
-      target: 'item' as const,
-      targetItem: instances.get('cannedFood-1'),
-    }));
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      session: {
-        snapshot: () => ({
-          items: {
-            [boundInstance.instanceId]: { ...boundInstance, status: 'available' },
-            cannedFood: 'lost',
-          },
-          carriedWeight: 0,
-        }),
-      },
-      world: {
-        itemObjects: new Map([['cannedFood', cannedFood]]),
-        lifeboat,
-        evacuationPoint: new Vector3(50, 0, 0),
-      },
-      worldInstances: new Map([[boundInstance.type, boundInstance]]),
-      interaction: { update: updateInteraction },
-      carry: { activeInstance: null, flightActive: false },
-      player: { localPosition: new Vector3() },
-      input: { consumeInteract: () => false },
-      contextAction: { type: 'none', prompt: '' },
+  it('binds all real world instances to interaction and excludes an unavailable prop', () => {
+    const context = {
+      mount: document.createElement('main'),
+      camera: new PerspectiveCamera(70, 1, 0.1, 100),
+      renderer: { domElement: document.createElement('canvas') },
+      reducedMotion: { matches: false },
+    } as unknown as PhaseContext;
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const internals = phase as unknown as {
+      interaction: InteractionSystem;
+      session: ScavengeSession;
+      updateInteraction: () => void;
+      world: World;
+    };
+    const updateInteraction = vi.spyOn(internals.interaction, 'update').mockReturnValue({
+      target: 'none',
+      targetItem: null,
+    });
+    internals.session.start();
+
+    internals.updateInteraction();
+
+    const firstItems = updateInteraction.mock.calls[0]![0];
+    const firstInstances = updateInteraction.mock.calls[0]![2];
+    const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
+    expect(internals.world.itemObjects.size).toBe(14);
+    expect(firstItems).toHaveLength(14);
+    expect(firstItems).toContain(cannedFood);
+    expect(firstInstances.size).toBe(14);
+    expect(firstInstances.get('cannedFood-1')).toEqual({
+      instanceId: 'cannedFood-1',
+      type: 'cannedFood',
     });
 
-    (phase as unknown as { updateInteraction: () => void }).updateInteraction();
+    expect(internals.session.pickUp('cannedFood-1')).toBe(true);
+    internals.updateInteraction();
 
-    const instances = updateInteraction.mock.calls[0]![2] as ReadonlyMap<string, unknown>;
-    expect(cannedFood.userData.instanceId).toBe(boundInstance.instanceId);
-    expect(instances.get('cannedFood-1')).toEqual({
-      instanceId: 'cannedFood-1', type: 'cannedFood',
-    });
-    expect((phase as unknown as { contextAction: unknown }).contextAction).toEqual({
-      type: 'pickUp',
-      item: { instanceId: 'cannedFood-1', type: 'cannedFood' },
-      prompt: 'E — PICK UP CANNED FOOD',
-    });
+    const nextItems = updateInteraction.mock.calls[1]![0];
+    const nextInstances = updateInteraction.mock.calls[1]![2];
+    expect(nextItems).toHaveLength(13);
+    expect(nextItems).not.toContain(cannedFood);
+    expect(nextInstances.has('cannedFood-1')).toBe(false);
+    phase.dispose();
   });
 
   it('exits an owned lock and tears down only phase-owned resources once', () => {
