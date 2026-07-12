@@ -10,7 +10,7 @@ import {
 } from 'three';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
-import { createSurvivalInventory } from '../src/survival/inventory';
+import { applyInventoryMutation, createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 
@@ -229,6 +229,77 @@ describe('BoatWorld helpers', () => {
     world.dispose();
   });
 
+  it('synchronizes visible broken and detached lost conditions by instance ID', () => {
+    const savedItems = [
+      savedItem('fishingNet'),
+      savedItem('fishingNet', 2),
+      savedItem('map'),
+    ];
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const inventory = createSurvivalInventory(savedItems);
+    applyInventoryMutation(inventory, {
+      kind: 'break', itemId: 'fishingNet', quantity: 1, instanceId: 'fishingNet-2',
+    });
+    applyInventoryMutation(inventory, {
+      kind: 'lose', itemId: 'map', quantity: 1, instanceId: 'map-1',
+    });
+    const broken = world.scene.getObjectByName('prop:fishingNet-2')!;
+    const lost = world.scene.getObjectByName('prop:map-1')!;
+
+    world.syncInventory(snapshot(savedItems, { inventory }));
+
+    const brokenMesh = broken.getObjectByProperty('isMesh', true) as Mesh;
+    const brokenMaterial = brokenMesh.material as MeshStandardMaterial;
+    let anchors = world.projectInteractionAnchors(800, 600);
+    expect(broken.visible).toBe(true);
+    expect(brokenMaterial.transparent).toBe(true);
+    expect(brokenMaterial.opacity).toBeLessThan(1);
+    expect(anchors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fishingNet-1', depleted: false }),
+      expect.objectContaining({ id: 'fishingNet-2', depleted: true }),
+    ]));
+    expect(lost.parent).toBeNull();
+    expect(anchors.some(({ id }) => id === 'map-1')).toBe(false);
+
+    applyInventoryMutation(inventory, {
+      kind: 'repair', itemId: 'fishingNet', quantity: 1, instanceId: 'fishingNet-2',
+    });
+    world.syncInventory(snapshot(savedItems, { inventory }));
+    anchors = world.projectInteractionAnchors(800, 600);
+    expect(brokenMaterial.opacity).toBe(1);
+    expect(brokenMaterial.transparent).toBe(false);
+    expect(anchors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fishingNet-2', depleted: false }),
+    ]));
+    world.dispose();
+  });
+
+  it('keeps consumed supplies as depleted markers except empty canned food', () => {
+    const savedItems = [savedItem('energyBar'), savedItem('cannedFood')];
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const inventory = createSurvivalInventory(savedItems);
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'energyBar', quantity: 1 });
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'cannedFood', quantity: 1 });
+
+    world.syncInventory(snapshot(savedItems, { inventory, recoveredFood: 0 }));
+
+    const bar = world.scene.getObjectByName('prop:energyBar-1')!;
+    const can = world.scene.getObjectByName('prop:cannedFood-1')!;
+    const anchors = world.projectInteractionAnchors(800, 600);
+    expect(bar.visible).toBe(true);
+    expect(bar.userData.depleted).toBe(true);
+    expect(anchors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'energyBar-1', depleted: true }),
+    ]));
+    expect(can.visible).toBe(false);
+    expect(anchors.some(({ id }) => id === 'cannedFood-1')).toBe(false);
+    world.dispose();
+  });
+
   it('animates fishing cues from the recovered rod and has no hand-line fallback', () => {
     const rodWorld = new BoatWorld(
       new PerspectiveCamera(),
@@ -273,7 +344,7 @@ describe('BoatWorld helpers', () => {
       [savedItem('medicalKit')],
     );
     const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
-    const mesh = prop.children[0] as Mesh;
+    const mesh = prop.getObjectByProperty('isMesh', true) as Mesh;
     const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
     const disposeMaterial = vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose');
 

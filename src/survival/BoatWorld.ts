@@ -125,17 +125,26 @@ function collectResources(
   });
 }
 
-function setPropDepleted(root: Object3D, depleted: boolean): void {
+function setPropPresentation(root: Object3D, depleted: boolean, subdued = false): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
     const material = object.material;
     const original = material.userData.originalColor as number | undefined
       ?? material.color.getHex();
+    const originalOpacity = material.userData.originalOpacity as number | undefined
+      ?? material.opacity;
+    const originalTransparent = material.userData.originalTransparent as boolean | undefined
+      ?? material.transparent;
     material.userData.originalColor = original;
+    material.userData.originalOpacity = originalOpacity;
+    material.userData.originalTransparent = originalTransparent;
     material.color.setHex(original);
     if (depleted) material.color.lerp(new Color(0x4f5756), 0.65);
+    material.opacity = subdued ? Math.min(originalOpacity, 0.48) : originalOpacity;
+    material.transparent = subdued || originalTransparent;
   });
   root.userData.depleted = depleted;
+  root.userData.subdued = subdued;
 }
 
 export class BoatWorld {
@@ -204,6 +213,8 @@ export class BoatWorld {
       this.savedProps.push({ instance, prop });
       this.savedPropByInstanceId.set(instance.instanceId, prop);
       prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
+      prop.userData.condition = 'usable';
+      prop.userData.hasInteractionAnchor = true;
     });
 
     const repairPatch = this.boat.getObjectByName('damaged-plank-patch');
@@ -283,23 +294,25 @@ export class BoatWorld {
     if (this.disposed || width <= 0 || height <= 0) return [];
     this.scene.updateMatrixWorld(true);
 
-    const itemAnchors = this.savedProps.map(({ instance, prop }) => {
-      const projected = projectBoatAnchor(
-        prop.getWorldPosition(new Vector3()),
-        this.camera,
-        width,
-        height,
-      );
-      return {
-        id: instance.instanceId,
-        itemType: instance.type,
-        action: ACTION_FOR_ITEM[instance.type] ?? null,
-        ...projected,
-        visible: prop.visible && projected.visible,
-        depleted: prop.userData.depleted === true,
-        remainingUses: prop.userData.remainingUses as number | null,
-      } satisfies BoatInteractionAnchor;
-    });
+    const itemAnchors = this.savedProps
+      .filter(({ prop }) => prop.userData.hasInteractionAnchor === true)
+      .map(({ instance, prop }) => {
+        const projected = projectBoatAnchor(
+          prop.getWorldPosition(new Vector3()),
+          this.camera,
+          width,
+          height,
+        );
+        return {
+          id: instance.instanceId,
+          itemType: instance.type,
+          action: ACTION_FOR_ITEM[instance.type] ?? null,
+          ...projected,
+          visible: prop.visible && projected.visible,
+          depleted: prop.userData.depleted === true,
+          remainingUses: prop.userData.remainingUses as number | null,
+        } satisfies BoatInteractionAnchor;
+      });
     const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
       id,
       itemType: null,
@@ -436,19 +449,69 @@ export class BoatWorld {
   private syncType(type: ItemId, snapshot: SurvivalSnapshot): void {
     const instances = this.savedProps.filter((entry) => entry.instance.type === type);
     const remaining = this.remainingUses(type, snapshot);
-    if (remaining === null) {
-      instances.forEach(({ prop }) => {
-        prop.userData.remainingUses = null;
-        setPropDepleted(prop, false);
-      });
-      return;
-    }
+    const stateByInstanceId = new Map(snapshot.inventory[type].instances.map((instance) => (
+      [instance.instanceId, instance] as const
+    )));
+    const contextualStore = type === 'cannedFood' || type === 'baitTin';
     const perInstance = ITEM_DEFINITIONS[type].charges ?? 1;
-    instances.forEach(({ prop }, index) => {
-      const instanceUses = clamp(remaining - index * perInstance, 0, perInstance);
+    let unallocated = remaining;
+    const usesByInstanceId = new Map<ItemInstance['instanceId'], number | null>();
+
+    instances.forEach(({ instance }) => {
+      if (unallocated === null) {
+        usesByInstanceId.set(instance.instanceId, null);
+        return;
+      }
+      const condition = stateByInstanceId.get(instance.instanceId)?.condition ?? 'lost';
+      const receivesStore = contextualStore
+        ? condition !== 'lost' && condition !== 'broken'
+        : condition === 'usable';
+      const instanceUses = receivesStore ? clamp(unallocated, 0, perInstance) : 0;
+      usesByInstanceId.set(instance.instanceId, instanceUses);
+      unallocated -= instanceUses;
+    });
+
+    instances.forEach(({ instance, prop }) => {
+      const condition = stateByInstanceId.get(instance.instanceId)?.condition ?? 'lost';
+      const instanceUses = usesByInstanceId.get(instance.instanceId) ?? null;
+      prop.userData.condition = condition;
       prop.userData.remainingUses = instanceUses;
-      prop.visible = type !== 'cannedFood' || instanceUses > 0;
-      setPropDepleted(prop, instanceUses <= 0);
+
+      if (condition === 'lost') {
+        prop.visible = false;
+        prop.userData.hasInteractionAnchor = false;
+        prop.removeFromParent();
+        setPropPresentation(prop, true, true);
+        return;
+      }
+
+      if (condition === 'broken') {
+        prop.visible = true;
+        prop.userData.hasInteractionAnchor = true;
+        setPropPresentation(prop, true, true);
+        return;
+      }
+
+      if (contextualStore) {
+        const depleted = instanceUses !== null && instanceUses <= 0;
+        prop.visible = type !== 'cannedFood' || !depleted;
+        prop.userData.hasInteractionAnchor = type !== 'cannedFood' || !depleted;
+        setPropPresentation(prop, depleted);
+        return;
+      }
+
+      if (condition === 'consumed') {
+        prop.visible = true;
+        prop.userData.hasInteractionAnchor = true;
+        prop.userData.remainingUses = 0;
+        setPropPresentation(prop, true, true);
+        return;
+      }
+
+      const depleted = instanceUses !== null && instanceUses <= 0;
+      prop.visible = true;
+      prop.userData.hasInteractionAnchor = true;
+      setPropPresentation(prop, depleted);
     });
   }
 
