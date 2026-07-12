@@ -33,6 +33,11 @@ export type InventoryMutation = {
   instanceId?: ItemInstanceId;
 };
 
+export type EventInventoryMutation = InventoryMutation
+  | { kind: 'loseRandom'; quantity: number }
+  | { kind: 'breakRandom'; quantity: number }
+  | { kind: 'loseEventTarget'; quantity: number };
+
 export type EventRoute = 'left' | 'right';
 export type EventResource = 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'danger';
 
@@ -47,8 +52,9 @@ export interface WeightedEventOutcome {
   message: string;
   effects: {
     resources?: readonly ResourceEffect[];
-    items?: readonly InventoryMutation[];
+    items?: readonly EventInventoryMutation[];
     route?: EventRoute;
+    terminal?: 'sunk';
   };
 }
 
@@ -57,6 +63,7 @@ export interface EventChoiceDefinition {
   label: string;
   itemId?: ItemId | 'any';
   outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
+  trade?: { receive: ItemId; fallbackFood: 1 };
 }
 
 interface CanonicalEventBase {
@@ -71,8 +78,10 @@ interface CanonicalEventBase {
   cooldownDays: number;
   maxAppearances: number;
   dangerMin: number;
+  selectable?: boolean;
   requiredItems?: readonly ItemId[];
   requiredAnyItems?: readonly ItemId[];
+  forbiddenItems?: readonly ItemId[];
   routeWeightBonuses?: Partial<Record<EventRoute, number>>;
 }
 
@@ -102,8 +111,9 @@ export interface ResolvedEventOutcome {
   message: string;
   resourceDeltas: ResolvedEventResources;
   resourceSets: ResolvedEventResources;
-  itemMutations: readonly InventoryMutation[];
+  itemMutations: readonly EventInventoryMutation[];
   route?: EventRoute;
+  terminal?: 'sunk';
 }
 
 export interface ResourceDelta {

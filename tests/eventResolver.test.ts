@@ -171,6 +171,22 @@ describe('event outcome resolver', () => {
     });
   });
 
+  it('passes deferred random and event-target inventory mutations through unchanged', () => {
+    const outcome: WeightedEventOutcome = {
+      weight: 1,
+      message: 'Deferred.',
+      effects: {
+        items: [
+          { kind: 'loseRandom', quantity: 2 },
+          { kind: 'breakRandom', quantity: 2 },
+          { kind: 'loseEventTarget', quantity: 1 },
+        ],
+      },
+    };
+
+    expect(resolveEventOutcome(outcome, sequenceRandom([0])).itemMutations).toEqual(outcome.effects.items);
+  });
+
   it('normalizes invalid outcome weights and preserves weighted boundaries', () => {
     const choice: EventChoiceDefinition = {
       id: 'weighted',
@@ -270,8 +286,19 @@ describe('event eligibility', () => {
     }))).toEqual([]);
   });
 
+  it('excludes events when a forbidden inventory item is present', () => {
+    const gated = { ...weightedDefinition, forbiddenItems: ['chest'] as const };
+    expect(eligibleEvents([gated], criteria({ inventory: inventory() }))).toEqual([gated]);
+    expect(eligibleEvents([gated], criteria({ inventory: inventory('chest') }))).toEqual([]);
+  });
+
   it('filters by phase', () => {
     expect(eligibleEvents([weightedDefinition], criteria({ phase: 'day' }))).toEqual([]);
+  });
+
+  it('excludes explicitly non-selectable catalog records', () => {
+    const dormant = { ...weightedDefinition, weight: 0, selectable: false };
+    expect(eligibleEvents([dormant], criteria())).toEqual([]);
   });
 });
 

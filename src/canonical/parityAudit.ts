@@ -18,6 +18,18 @@ const storyExcluded = (wikiName: string): ParityAuditEntry => ({
   kind: 'item', wikiName, classification: 'story-excluded',
   reason: 'Excluded because its only documented purpose belongs to the out-of-scope story path.',
 });
+const eventEntry = (
+  wikiName: string,
+  classification: Extract<ParityClassification, 'included' | 'story-excluded' | 'unsupported-undocumented'>,
+  runtimeId?: string,
+): ParityAuditEntry => ({
+  kind: 'event', wikiName, classification, ...(runtimeId ? { runtimeId } : {}),
+  reason: classification === 'included'
+    ? 'Included as an in-scope ordinary survival event from the canonical Events page.'
+    : classification === 'story-excluded'
+      ? 'Excluded because it requires story state, an ending, or an out-of-scope crewmate.'
+      : 'Not implemented because the canonical page does not document enough behavior to reproduce it.',
+});
 
 export const PARITY_AUDIT: readonly ParityAuditEntry[] = [
   included('Food', 'cannedFood', 'Included as the practical ship food supply.'),
@@ -54,4 +66,26 @@ export const PARITY_AUDIT: readonly ParityAuditEntry[] = [
     kind: 'item', wikiName: 'Water Jug', runtimeId: 'waterJug', classification: 'preserved',
     reason: 'Preserved for the current hunger and rest loop because the wiki has no equivalent numeric water rule.',
   },
+  ...[
+    ['Peaceful Night', 'peaceful-night'], ['Shower Night', 'shower-night'],
+    ['Windy Night', 'windy-night'], ['Bad Sleep', 'bad-sleep'],
+    ['Thunderstorm', 'thunderstorm'], ['Check the Back', 'check-the-back'],
+    ['Dangerous Waters', 'dangerous-waters'], ['Needs Direction', 'needs-direction'],
+    ['Restless Waves', 'restless-waves'], ['Leak', 'leak'],
+    ['Man in the Fog', 'man-in-the-fog'], ['Mystery Chest', 'mystery-chest'],
+    ['Seagull', 'seagull'], ['Midnight Tour', 'midnight-tour'], ['Ghosts', 'ghosts'],
+    ['School of Fish', 'school-of-fish'], ['Snatcher', 'snatcher'],
+    ['Chest left unopened', 'chest-attack'], ['Death Stare', 'death-stare'],
+    ['Swarm of Anglerfish', 'swarm-of-anglerfish'], ['Whirlpool', 'whirlpool'],
+    ['Eerie Melody', 'eerie-melody'], ['Shark Men', 'shark-men'],
+    ['Face on the Moon', 'face-on-the-moon'], ['Broken Boat', 'broken-boat'],
+    ['The Handyman', 'the-handyman'],
+  ].map(([wikiName, runtimeId]) => eventEntry(wikiName!, 'included', runtimeId)),
+  ...[
+    'Sinking Ship', 'Drifting Bottle', 'Flowers', 'Distant Ship/Airplane/Hope',
+    'Helicopter', 'Red', 'Ghost Ship', 'Mirror', 'Kraken/The One', 'Found Land',
+    'Sick Companion', 'Guarded Sleep', 'Shadow Figure', 'Sea Watcher',
+  ].map((wikiName) => eventEntry(wikiName, 'story-excluded')),
+  ...['Drifting Loot', 'Night Trader', 'Sleep Killer']
+    .map((wikiName) => eventEntry(wikiName, 'unsupported-undocumented')),
 ];

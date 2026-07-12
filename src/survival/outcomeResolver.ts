@@ -46,8 +46,10 @@ export function eligibleEvents(
   criteria: CanonicalEventEligibility,
 ): CanonicalEventDefinition[] {
   return catalog.filter((event) => {
+    if (event.selectable === false) return false;
     if (event.phase !== criteria.phase || criteria.danger < event.dangerMin) return false;
     if (event.requiredItems?.some((itemId) => !hasUsableItem(criteria.inventory, itemId))) return false;
+    if (event.forbiddenItems?.some((itemId) => hasUsableItem(criteria.inventory, itemId))) return false;
     if (
       event.requiredAnyItems !== undefined
       && !event.requiredAnyItems.some((itemId) => hasUsableItem(criteria.inventory, itemId))
@@ -119,6 +121,7 @@ function resolveSelectedOutcome(
     itemMutations: (selected.effects.items ?? []).map((mutation) => ({ ...mutation })),
   };
   if (selected.effects.route !== undefined) resolved.route = selected.effects.route;
+  if (selected.effects.terminal !== undefined) resolved.terminal = selected.effects.terminal;
   return resolved;
 }
 
