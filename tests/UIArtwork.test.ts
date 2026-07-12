@@ -21,4 +21,13 @@ describe('uiArtwork', () => {
   it('applies a caller-supplied fixed presentation class', () => {
     expect(uiArtwork('watch', 'hud-watch')).toContain('class="ui-artwork ui-artwork--watch hud-watch"');
   });
+
+  it('omits invalid class tokens while retaining fixed and valid CSS identifiers', () => {
+    const markup = uiArtwork('warning', 'safe-token 123bad bad" onload="alert(1) <script>');
+
+    expect(markup).toContain('class="ui-artwork ui-artwork--warning safe-token"');
+    expect(markup).not.toContain('123bad');
+    expect(markup).not.toContain('onload');
+    expect(markup).not.toContain('<script>');
+  });
 });
