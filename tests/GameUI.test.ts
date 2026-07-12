@@ -125,6 +125,14 @@ describe('GameUI', () => {
     const root = mount.querySelector<HTMLElement>('.game-ui')!;
     const sinkingLabel = mount.querySelector<HTMLElement>('[data-sinking]')!;
 
+    ui.render(snapshot(), getSinkingState(0, 120));
+    expect(root.dataset.sinkingSeverity).toBe('stable');
+    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
+
+    ui.render(snapshot(), getSinkingState(47.99, 120));
+    expect(root.dataset.sinkingSeverity).toBe('stable');
+    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
+
     ui.render(snapshot(), getSinkingState(48, 120));
     expect(root.dataset.sinkingSeverity).toBe('danger');
     expect(sinkingLabel.textContent).toBe('DECK TAKING WATER');
@@ -210,6 +218,13 @@ describe('GameUI', () => {
     errors.forEach((error) => {
       expect(error.textContent).toContain('Mouse look was blocked');
       expect(error.classList).toContain('is-visible');
+    });
+
+    ui.clearPointerLockError();
+    errors.forEach((error) => {
+      expect(error.querySelector('[data-pointer-lock-error-copy]')?.textContent).toBe('');
+      expect(error.classList).not.toContain('is-visible');
+      expect(error.querySelector('[data-ui-artwork="warning"]')?.getAttribute('aria-hidden')).toBe('true');
     });
     expect(mainStyles).toMatch(/\.illustrated-warning\.is-visible\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
