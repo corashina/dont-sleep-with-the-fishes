@@ -2,12 +2,18 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ITEM_IDS } from '../src/game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
 const activeUIs: SurvivalUI[] = [];
+
+const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
+  instanceId: `${type}-${index + 1}` as ItemInstanceId,
+  type,
+}));
 
 afterEach(() => {
   activeUIs.splice(0).forEach((ui) => ui.dispose());
@@ -22,7 +28,7 @@ function createUI(mount: HTMLElement): SurvivalUI {
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    ...new SurvivalSession(['fishingRod', 'waterJug'], {
+    ...new SurvivalSession(saved('fishingRod', 'waterJug'), {
       seed: 7,
       random: sequenceRandom([0.5]),
     }).snapshot(),
@@ -55,7 +61,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="repair"] [data-action-effect]')?.textContent).toBe('HULL +10');
     expect(mount.querySelector('[data-action="rest"] [data-action-effect]')?.textContent).toBe('ENERGY +1');
 
-    const tape = new SurvivalSession(['ductTape'], { seed: 1, initial: { hull: 92 } }).snapshot();
+    const tape = new SurvivalSession(saved('ductTape'), { seed: 1, initial: { hull: 92 } }).snapshot();
     ui.render(tape, () => null);
     expect(mount.querySelector('[data-action="repair"] [data-action-cost]')?.textContent).toBe('2 ENERGY + TAPE');
     expect(mount.querySelector('[data-action="repair"] [data-action-effect]')?.textContent).toBe('HULL +8');
@@ -64,7 +70,7 @@ describe('SurvivalUI', () => {
   it('marks transferred store items clearly and unavailable in event choices', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    const state = new SurvivalSession(['cannedFood', 'baitTin'], { seed: 1 }).snapshot();
+    const state = new SurvivalSession(saved('cannedFood', 'baitTin'), { seed: 1 }).snapshot();
     ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
     for (const id of ['cannedFood', 'baitTin']) {
       const choice = mount.querySelector<HTMLButtonElement>(`[data-event-items] [data-item="${id}"]`)!;
@@ -78,7 +84,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const state = snapshot({
-      ...new SurvivalSession(['cannedFood', 'baitTin', 'fishingRod'], { seed: 1 }).snapshot(),
+      ...new SurvivalSession(saved('cannedFood', 'baitTin', 'fishingRod'), { seed: 1 }).snapshot(),
       food: 2,
       bait: 3,
     });
@@ -93,7 +99,7 @@ describe('SurvivalUI', () => {
   it('labels hand-line fishing when no rod was rescued', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    ui.render(snapshot({ inventory: new SurvivalSession([], { seed: 1 }).snapshot().inventory }), () => null);
+    ui.render(snapshot({ inventory: new SurvivalSession(saved(), { seed: 1 }).snapshot().inventory }), () => null);
     expect(mount.querySelector('[data-hotspot="fish"]')?.getAttribute('aria-label')).toMatch(/hand-line/i);
   });
   it('labels every survival action and meter without relying on color', () => {

@@ -71,7 +71,7 @@ export class SurvivalPhase implements GamePhase {
     if (testDependencies === undefined) {
       this.initialize(
         context,
-        new SurvivalSession(savedItems.map(({ type }) => type), { seed }),
+        new SurvivalSession(savedItems, { seed }),
         new BoatWorld(
           context.camera,
           context.reducedMotion,

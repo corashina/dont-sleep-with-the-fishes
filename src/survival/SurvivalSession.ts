@@ -1,4 +1,4 @@
-import type { ItemId } from '../game/ItemState';
+import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
 import { createSurvivalInventory } from './inventory';
 import { mulberry32 } from './random';
@@ -47,6 +47,7 @@ export class SurvivalSession {
   private actedToday = false;
   private dayEventOccurred = false;
   private readonly inventory: SurvivalInventory;
+  private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private lastEventId: string | null = null;
@@ -55,7 +56,7 @@ export class SurvivalSession {
   private readonly seed: number;
   private readonly random: RandomSource;
 
-  constructor(savedItems: readonly ItemId[], options: SurvivalSessionOptions) {
+  constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions) {
     this.seed = options.seed;
     this.random = options.random ?? mulberry32(options.seed);
     this.weather = options.weather ?? 'calm';
@@ -66,7 +67,8 @@ export class SurvivalSession {
     this.hull = options.initial?.hull ?? SURVIVAL_BALANCE.start.hull;
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
     this.pendingEventId = null;
-    this.inventory = createSurvivalInventory([...savedItems]);
+    this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
+    this.inventory = createSurvivalInventory(this.savedItems);
 
     if (options.initialEventId !== undefined) {
       const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
@@ -107,6 +109,7 @@ export class SurvivalSession {
       restedToday: this.restedToday,
       actedToday: this.actedToday,
       inventory,
+      savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
       lastOutcome,
       seed: this.seed,
@@ -237,6 +240,9 @@ export class SurvivalSession {
 
     switch (action) {
       case 'fish':
+        if (!this.inventory.fishingRod.owned) {
+          return { code: 'no-fishing-rod', message: 'Fishing requires a recovered fishing rod.' };
+        }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
         }
@@ -245,6 +251,9 @@ export class SurvivalSession {
         }
         return null;
       case 'dive':
+        if (!this.inventory.scubaSet.owned) {
+          return { code: 'no-scuba-set', message: 'Diving requires a recovered scuba set.' };
+        }
         if (this.weather === 'squall') {
           return { code: 'weather-blocked', message: 'Diving is too dangerous during a squall.' };
         }
@@ -292,14 +301,13 @@ export class SurvivalSession {
   }
 
   private fish(useBait: boolean): ActionOutcome {
-    const hasRod = this.inventory.fishingRod.owned;
-    const successChance = hasRod
-      ? useBait ? SURVIVAL_BALANCE.fishing.rodBaitSuccess : SURVIVAL_BALANCE.fishing.rodSuccess
-      : useBait ? SURVIVAL_BALANCE.fishing.handBaitSuccess : SURVIVAL_BALANCE.fishing.handSuccess;
+    const successChance = useBait
+      ? SURVIVAL_BALANCE.fishing.rodBaitSuccess
+      : SURVIVAL_BALANCE.fishing.rodSuccess;
     const caught = this.random.next() < successChance;
     let food = caught ? 1 : 0;
 
-    if (caught && hasRod) {
+    if (caught) {
       const doubleChance = useBait
         ? SURVIVAL_BALANCE.fishing.rodBaitDouble
         : SURVIVAL_BALANCE.fishing.rodDouble;

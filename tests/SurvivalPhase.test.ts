@@ -30,6 +30,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     restedToday: false,
     actedToday: false,
     inventory: inventory(),
+    savedItems: [],
     pendingEventId: null,
     lastOutcome: null,
     seed: 8,
