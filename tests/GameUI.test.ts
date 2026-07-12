@@ -160,4 +160,23 @@ describe('GameUI', () => {
     expect(replay).toHaveBeenCalledOnce();
     expect(mount.children).toHaveLength(0);
   });
+
+  it('renders the illustrated scavenging hierarchy without losing state hooks', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('.hud')?.classList).toContain('illustrated-hud');
+    expect(mount.querySelector('[data-ui-artwork="watch"]')).not.toBeNull();
+    expect(mount.querySelector('.timer-block')?.classList).toContain('pocket-watch');
+    expect(mount.querySelector('[data-timer]')?.textContent).toBe('02:00');
+    expect(mount.querySelector('[data-capacity]')).not.toBeNull();
+    expect(mount.querySelector('[data-carry-weight]')).not.toBeNull();
+    expect(mount.querySelector('[data-prompt]')).not.toBeNull();
+    expect(mount.querySelector('[data-feedback]')).not.toBeNull();
+    expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
+    expect(mount.querySelector('[data-start-button]')?.classList).toContain('timber-action');
+    expect(mount.querySelector('[data-ui-artwork="warning"]')).not.toBeNull();
+
+    ui.dispose();
+  });
 });
