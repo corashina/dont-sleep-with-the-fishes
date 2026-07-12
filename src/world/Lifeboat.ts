@@ -17,6 +17,13 @@ export interface LifeboatBuild {
   interiorBounds: Box3;
 }
 
+// Extends beneath the hull sides and endcaps so wave crests cannot peek
+// through the narrow seam between the interior floor and the hull meshes.
+export const LIFEBOAT_WATER_EXCLUSION = {
+  halfWidth: 1.18,
+  halfLength: 2.48,
+} as const;
+
 export function createLifeboat(options: { fishingRod?: boolean } = {}): LifeboatBuild {
   const root = new Group();
   root.name = 'lifeboat';
