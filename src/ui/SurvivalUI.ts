@@ -1,6 +1,7 @@
 import { ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { DayActionOption } from '../survival/SurvivalSession';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
+import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
@@ -102,17 +103,6 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
   return element;
 }
 
-function actionMarkup(action: ActionDefinition): string {
-  const description = `${action.cost}. ${action.effect}. ${action.risk}.`;
-  return `
-    <button type="button" class="survival-action" data-action="${action.id}" aria-keyshortcuts="${action.shortcut}" aria-description="${description}">
-      <span class="survival-action__key" aria-hidden="true">${action.shortcut}</span>
-      <span class="survival-action__label">${action.label}</span>
-      <span class="survival-action__preview"><span data-action-cost>${action.cost}</span><span data-action-effect>${action.effect}</span><span data-action-risk>${action.risk.toUpperCase()}</span></span>
-      <span class="survival-action__reason" data-action-reason hidden></span>
-    </button>`;
-}
-
 function meterMarkup(meter: MeterDefinition): string {
   return `
     <div class="survival-meter survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
@@ -121,15 +111,6 @@ function meterMarkup(meter: MeterDefinition): string {
       <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
       <span class="survival-meter__value" data-meter-value>0</span>
     </div>`;
-}
-
-function inventoryMarkup(id: ItemId): string {
-  return `
-    <li class="inventory-row" data-item="${id}">
-      <span class="inventory-row__name">${ITEM_LABELS[id]}</span>
-      <span class="inventory-row__description">${SURVIVAL_ITEM_DESCRIPTIONS[id]}</span>
-      <span class="inventory-row__state" data-item-state>NOT RECOVERED</span>
-    </li>`;
 }
 
 function formatElapsed(seconds: number): string {
@@ -154,8 +135,7 @@ export class SurvivalUI {
   private readonly weather: HTMLElement;
   private readonly phase: HTMLElement;
   private readonly announcer: HTMLElement;
-  private readonly inventory: HTMLElement;
-  private readonly inventoryToggle: HTMLButtonElement;
+  private readonly anchorLayer: HTMLElement;
   private readonly eventLayer: HTMLElement;
   private readonly eventTitle: HTMLElement;
   private readonly eventPrompt: HTMLElement;
@@ -176,26 +156,23 @@ export class SurvivalUI {
   private readonly endingBody: HTMLElement;
   private readonly endingStats: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
-  private readonly actionDock: HTMLElement;
-  private readonly hotspotRegion: HTMLElement;
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
-  private readonly actionButtons = new Map<DayActionId, HTMLButtonElement>();
+  private readonly anchorButtons = new Map<string, HTMLButtonElement>();
+  private readonly anchors = new Map<string, BoatInteractionAnchor>();
   private readonly meterElements = new Map<MeterId, HTMLElement>();
-  private readonly inventoryRows = new Map<ItemId, HTMLElement>();
   private readonly actionReasons = new Map<DayActionId, string | null>();
   private readonly lastValues = new Map<string, string | number | boolean | null>();
   private busy = false;
   private paused = false;
-  private inventoryOpen = false;
   private disposed = false;
   private announcementVersion = 0;
   private restartIssued = false;
   private availableBait = 0;
   private focusReturnTarget: HTMLElement | null = null;
   private pauseReturnTarget: HTMLElement | null = null;
-  private inventoryReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
+  private currentSnapshot: SurvivalSnapshot | null = null;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -215,20 +192,7 @@ export class SurvivalUI {
         <span>REPAIR MATERIAL <strong data-store="repairMaterial">0</strong></span>
         <span>RESCUE <strong data-store="rescueProgress">0</strong></span>
       </section>
-      <nav class="survival-actions" aria-label="Day actions">
-        ${ACTIONS.map(actionMarkup).join('')}
-      </nav>
-      <div class="survival-hotspots" aria-label="Boat action points">
-        <button type="button" class="survival-hotspot survival-hotspot--fish" data-hotspot="fish" aria-label="Use the fishing rod"></button>
-        <button type="button" class="survival-hotspot survival-hotspot--dive" data-hotspot="dive" aria-label="Dive beside the lifeboat"></button>
-        <button type="button" class="survival-hotspot survival-hotspot--repair" data-hotspot="repair" aria-label="Inspect the hull patch"></button>
-        <button type="button" class="survival-hotspot survival-hotspot--inventory" data-hotspot="inventory" aria-label="Open the supply crate"></button>
-      </div>
-      <button type="button" class="inventory-toggle" data-inventory-toggle aria-expanded="false">SUPPLY CRATE</button>
-      <aside class="inventory-tray" data-inventory aria-label="Supply crate" aria-hidden="true" inert>
-        <div class="inventory-tray__heading"><span class="eyebrow">RECOVERED SUPPLIES</span><strong>INVENTORY</strong></div>
-        <ul class="inventory-list" data-inventory-items>${ITEM_IDS.map(inventoryMarkup).join('')}</ul>
-      </aside>
+      <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="survival-overlay action-options-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
         <p class="eyebrow">FISHING METHOD</p>
         <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
@@ -275,8 +239,7 @@ export class SurvivalUI {
     this.weather = requireElement(this.root, '[data-weather]');
     this.phase = requireElement(this.root, '[data-phase]');
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
-    this.inventory = requireElement(this.root, '[data-inventory]');
-    this.inventoryToggle = requireElement(this.root, '[data-inventory-toggle]');
+    this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventLayer = requireElement(this.root, '[data-event]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.eventPrompt = requireElement(this.root, '[data-event-prompt]');
@@ -297,9 +260,7 @@ export class SurvivalUI {
     this.endingBody = requireElement(this.root, '[data-ending-body]');
     this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.actionDock = requireElement(this.root, '.survival-actions');
-    this.hotspotRegion = requireElement(this.root, '.survival-hotspots');
-    this.backgroundRegions = [this.actionDock, this.hotspotRegion, this.inventoryToggle];
+    this.backgroundRegions = [this.anchorLayer];
     this.modalLayers = [
       this.pauseLayer,
       this.actionOptionsLayer,
@@ -308,12 +269,8 @@ export class SurvivalUI {
       this.eventLayer,
     ];
 
-    ACTIONS.forEach(({ id }) => {
-      this.actionButtons.set(id, requireElement(this.root, `[data-action="${id}"]`));
-      this.actionReasons.set(id, null);
-    });
+    ACTIONS.forEach(({ id }) => this.actionReasons.set(id, null));
     METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
-    ITEM_IDS.forEach((id) => this.inventoryRows.set(id, requireElement(this.inventory, `[data-item="${id}"]`)));
 
     this.root.addEventListener('click', this.handleClick);
     window.addEventListener('pointermove', this.handlePointer);
@@ -322,6 +279,7 @@ export class SurvivalUI {
 
   render(snapshot: SurvivalSnapshot, unavailable: (action: DayActionId) => string | null): void {
     if (this.disposed) return;
+    this.currentSnapshot = snapshot;
     this.updateText('day', this.day, `DAY ${snapshot.day}`);
     this.updateText('weather', this.weather, WEATHER_LABELS[snapshot.weather]);
     this.updateText('phase', this.phase, PHASE_LABELS[snapshot.state]);
@@ -332,43 +290,33 @@ export class SurvivalUI {
     this.updateStore('repairMaterial', snapshot.repairMaterial);
     this.updateStore('rescueProgress', snapshot.rescueProgress);
     this.availableBait = snapshot.bait;
-    const fishHotspot = this.root.querySelector<HTMLElement>('[data-hotspot="fish"]');
-    fishHotspot?.setAttribute(
-      'aria-label',
-      snapshot.inventory.fishingRod.owned ? 'Use the fishing rod' : 'Attempt hand-line fishing',
-    );
-
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
       this.actionReasons.set(id, reason);
-      const button = this.actionButtons.get(id)!;
-      const definition = ACTIONS.find((action) => action.id === id)!;
-      const current = actionPreview(definition, snapshot);
-      this.updateText(`action:${id}:cost`, requireElement(button, '[data-action-cost]'), current.cost);
-      this.updateText(`action:${id}:effect`, requireElement(button, '[data-action-effect]'), current.effect);
-      this.updateText(`action:${id}:risk`, requireElement(button, '[data-action-risk]'), current.risk.toUpperCase());
-      const preview = `${current.cost}. ${current.effect}. ${current.risk}.`;
-      button.setAttribute('aria-description', reason === null ? preview : `${preview} Unavailable: ${reason}`);
-      const reasonElement = requireElement<HTMLElement>(button, '[data-action-reason]');
-      if (reasonElement.textContent !== (reason ?? '')) reasonElement.textContent = reason ?? '';
-      reasonElement.hidden = reason === null;
+    });
+    this.anchors.forEach((anchor, id) => this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor));
+    this.syncCommandState();
+  }
+
+  setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
+    if (this.disposed) return;
+    const seen = new Set<string>();
+    for (const anchor of anchors) {
+      seen.add(anchor.id);
+      this.anchors.set(anchor.id, anchor);
+      const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
+      button.hidden = !anchor.visible;
+      button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
+      button.classList.toggle('is-depleted', anchor.depleted);
+      this.refreshAnchorTooltip(button, anchor);
+    }
+    this.anchorButtons.forEach((button, id) => {
+      if (seen.has(id)) return;
+      button.remove();
+      this.anchorButtons.delete(id);
+      this.anchors.delete(id);
     });
     this.syncCommandState();
-
-    ITEM_IDS.forEach((id) => {
-      const item = snapshot.inventory[id];
-      const state = !item.owned
-        ? 'NOT RECOVERED'
-        : (id === 'cannedFood' || id === 'baitTin') && (item.charges ?? 0) === 0
-          ? 'TRANSFERRED TO STORES'
-        : item.durable
-          ? 'DURABLE'
-          : `${item.charges ?? 0} CHARGES`;
-      const row = this.inventoryRows.get(id)!;
-      this.updateText(`item:${id}`, requireElement(row, '[data-item-state]'), state);
-      row.classList.toggle('is-owned', item.owned);
-      row.classList.toggle('is-depleted', item.owned && !item.durable && (item.charges ?? 0) <= 0);
-    });
   }
 
   showEvent(
@@ -377,7 +325,6 @@ export class SurvivalUI {
   ): void {
     if (this.disposed) return;
     this.focusReturnTarget = this.resolveCommandOrigin();
-    this.closeInventory(false);
     this.hideLayer(this.outcomeLayer);
     this.updateText('event:title', this.eventTitle, event.title);
     this.updateText('event:prompt', this.eventPrompt, event.prompt);
@@ -420,7 +367,6 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.focusReturnTarget ??= this.resolveCommandOrigin();
     this.hideLayer(this.eventLayer);
-    this.closeInventory(false);
     this.outcomeLayer.dataset.accepted = String(outcome.accepted);
     this.outcomeLayer.dataset.cue = outcome.cue;
     this.updateText('outcome:title', this.outcomeTitle, outcome.accepted ? 'YOU ENDURED' : 'ACTION BLOCKED');
@@ -465,7 +411,6 @@ export class SurvivalUI {
     if (this.disposed || paused === this.paused) return;
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
-      this.closeInventory(false);
     }
     this.paused = paused;
     if (paused) {
@@ -493,7 +438,6 @@ export class SurvivalUI {
       : state === 'dead'
         ? { title: 'The sea outlasted you.', body: 'Your empty lifeboat drifts on beneath the weather.' }
         : { title: 'Boat is gone.', body: 'The damaged hull slips under and leaves no refuge behind.' };
-    this.closeInventory(false);
     this.hideLayer(this.eventLayer);
     this.hideLayer(this.outcomeLayer);
     this.setPaused(false);
@@ -527,6 +471,46 @@ export class SurvivalUI {
     this.onSkip = () => undefined;
     this.onPauseChange = () => undefined;
     this.root.remove();
+  }
+
+  private createAnchorButton(anchor: BoatInteractionAnchor): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'boat-anchor';
+    button.dataset.anchorId = anchor.id;
+    const tooltip = document.createElement('span');
+    tooltip.className = 'boat-tooltip';
+    tooltip.role = 'tooltip';
+    button.append(tooltip);
+    this.anchorLayer.append(button);
+    this.anchorButtons.set(anchor.id, button);
+    return button;
+  }
+
+  private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+    const itemLabel = anchor.itemType === null
+      ? anchor.id === 'horizon' ? 'HORIZON' : 'HULL PATCH'
+      : ITEM_LABELS[anchor.itemType];
+    const itemDescription = anchor.itemType === null
+      ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.' : 'Inspect the lifeboat repair patch.'
+      : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
+    const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
+    const reason = action === null ? null : this.actionReasons.get(action.id) ?? null;
+    const preview = action !== null && this.currentSnapshot !== null
+      ? actionPreview(action, this.currentSnapshot)
+      : action;
+    const text = action === null || preview === null
+      ? `${itemLabel} — ${itemDescription}${anchor.depleted ? ' — DEPLETED' : ''}`
+      : `${itemLabel} — ${action.label} [${action.shortcut}] — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
+    requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = text;
+    button.dataset.action = anchor.action ?? '';
+    if (anchor.itemType === null) delete button.dataset.item;
+    else button.dataset.item = anchor.itemType;
+    button.setAttribute('aria-label', text);
+    button.setAttribute('aria-description', action === null ? itemDescription : text);
+    button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
+    if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
+    else button.removeAttribute('aria-keyshortcuts');
   }
 
   private updateMeter(id: MeterId, value: number): void {
@@ -566,24 +550,13 @@ export class SurvivalUI {
   }
 
   private syncCommandState(): void {
-    ACTIONS.forEach(({ id }) => {
-      const reason = this.actionReasons.get(id);
-      const unavailable = reason !== null && reason !== undefined;
-      const actionButton = this.actionButtons.get(id)!;
-      actionButton.disabled = this.busy;
-      if (unavailable) actionButton.setAttribute('aria-disabled', 'true');
-      else actionButton.removeAttribute('aria-disabled');
-      const hotspot = this.root.querySelector<HTMLButtonElement>(`[data-hotspot="${id}"]`);
-      if (hotspot) {
-        hotspot.disabled = this.busy;
-        if (unavailable) {
-          hotspot.setAttribute('aria-disabled', 'true');
-          hotspot.setAttribute('aria-description', reason);
-        } else {
-          hotspot.removeAttribute('aria-disabled');
-          hotspot.removeAttribute('aria-description');
-        }
-      }
+    this.anchorButtons.forEach((button, id) => {
+      const anchor = this.anchors.get(id);
+      const reason = anchor?.action === null || anchor === undefined
+        ? null
+        : this.actionReasons.get(anchor.action) ?? null;
+      button.disabled = this.busy;
+      button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     });
     this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item]').forEach((button) => {
       button.disabled = this.busy || button.dataset.usable !== 'true';
@@ -602,35 +575,8 @@ export class SurvivalUI {
     this.syncBackgroundInteraction();
   }
 
-  private toggleInventory(opener: HTMLElement): void {
-    if (this.inventoryOpen) this.closeInventory(true);
-    else {
-      this.inventoryReturnTarget = opener;
-      this.inventoryOpen = true;
-      this.inventory.classList.add('is-visible');
-      this.inventory.setAttribute('aria-hidden', 'false');
-      this.inventory.removeAttribute('inert');
-      this.inventoryToggle.setAttribute('aria-expanded', 'true');
-      this.syncBackgroundInteraction();
-    }
-  }
-
-  private closeInventory(restoreFocus: boolean): void {
-    if (!this.inventoryOpen) return;
-    this.inventoryOpen = false;
-    this.inventory.classList.remove('is-visible');
-    this.inventory.setAttribute('aria-hidden', 'true');
-    this.inventory.setAttribute('inert', '');
-    this.inventoryToggle.setAttribute('aria-expanded', 'false');
-    this.syncBackgroundInteraction();
-    const target = this.inventoryReturnTarget;
-    this.inventoryReturnTarget = null;
-    if (restoreFocus && target?.isConnected && !target.hasAttribute('disabled')) target.focus();
-    else if (restoreFocus) this.inventoryToggle.focus();
-  }
-
   private overlayOpen(): boolean {
-    return this.inventoryOpen || this.topmostModal() !== null;
+    return this.topmostModal() !== null;
   }
 
   private topmostModal(): HTMLElement | null {
@@ -646,7 +592,6 @@ export class SurvivalUI {
     });
     const modalOpen = topmostModal !== null;
     this.backgroundRegions.forEach((region) => region.toggleAttribute('inert', modalOpen));
-    this.inventory.toggleAttribute('inert', modalOpen || !this.inventoryOpen);
   }
 
   private focusModal(layer: HTMLElement): void {
@@ -657,7 +602,7 @@ export class SurvivalUI {
     else if (layer === this.pauseLayer) this.resumeButton.focus();
   }
 
-  private activateDayAction(action: DayActionId, origin: HTMLButtonElement): void {
+  private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
     this.latestCommandOrigin = origin;
     if (action === 'fish' && this.availableBait > 0) {
       this.showLayer(this.actionOptionsLayer);
@@ -681,20 +626,21 @@ export class SurvivalUI {
   private isUsableCommand(element: HTMLElement | null): element is HTMLElement {
     return element !== null
       && element.isConnected
+      && !element.hidden
       && (!(element instanceof HTMLButtonElement) || !element.disabled)
       && element.getAttribute('aria-disabled') !== 'true';
   }
 
   private isCommandControl(element: Element | null): element is HTMLButtonElement {
     return element instanceof HTMLButtonElement
-      && (element.hasAttribute('data-action')
-        || ['fish', 'dive', 'repair'].includes(element.dataset.hotspot ?? ''));
+      && element.hasAttribute('data-anchor-id')
+      && element.hasAttribute('data-action');
   }
 
   private firstUsableAction(): HTMLButtonElement | null {
-    return ACTIONS
-      .map(({ id }) => this.actionButtons.get(id)!)
-      .find((button) => this.isUsableCommand(button)) ?? null;
+    return [...this.anchorButtons.values()].find((button) => (
+      button.dataset.action !== '' && this.isUsableCommand(button)
+    )) ?? null;
   }
 
   private resolveCommandOrigin(): HTMLElement | null {
@@ -751,24 +697,10 @@ export class SurvivalUI {
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && !topmostModal.contains(button)) return;
 
-    const actionId = button.dataset.action as DayActionId | undefined;
-    if (actionId !== undefined) {
+    const action = ACTIONS.find(({ id }) => id === button.dataset.action);
+    if (action !== undefined) {
       if (this.overlayOpen()) return;
-      this.activateDayAction(actionId, button);
-      return;
-    }
-    const hotspot = button.dataset.hotspot;
-    if (hotspot === 'inventory') {
-      this.toggleInventory(button);
-      return;
-    }
-    if (hotspot === 'fish' || hotspot === 'dive' || hotspot === 'repair') {
-      if (this.overlayOpen()) return;
-      this.activateDayAction(hotspot, button);
-      return;
-    }
-    if (button.hasAttribute('data-inventory-toggle')) {
-      this.toggleInventory(button);
+      this.activateDayAction(action.id, button);
       return;
     }
     const actionOption = button.dataset.actionOption;
@@ -801,10 +733,7 @@ export class SurvivalUI {
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
     if (event.key === 'Escape') {
-      if (this.inventoryOpen) {
-        event.preventDefault();
-        this.closeInventory(true);
-      } else if (this.topmostModal() === this.actionOptionsLayer) {
+      if (this.topmostModal() === this.actionOptionsLayer) {
         event.preventDefault();
         this.closeActionOptions();
       } else {
@@ -815,10 +744,12 @@ export class SurvivalUI {
     }
     if (this.overlayOpen() || this.busy) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);
-    const button = action === undefined ? undefined : this.actionButtons.get(action.id);
-    if (button === undefined || !this.isUsableCommand(button)) return;
+    if (action === undefined || this.actionReasons.get(action.id) !== null) return;
     event.preventDefault();
-    button.focus();
-    button.click();
+    const button = [...this.anchorButtons.values()].find((candidate) => (
+      candidate.dataset.action === action.id && this.isUsableCommand(candidate)
+    )) ?? null;
+    button?.focus();
+    this.activateDayAction(action.id, button);
   };
 }

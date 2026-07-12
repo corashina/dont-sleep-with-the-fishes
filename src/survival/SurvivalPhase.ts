@@ -52,6 +52,8 @@ export class SurvivalPhase implements GamePhase {
   private pendingDayEventDay: number | null = null;
   private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
+  private viewportWidth = 1;
+  private viewportHeight = 1;
 
   constructor(
     context: PhaseContext,
@@ -127,13 +129,18 @@ export class SurvivalPhase implements GamePhase {
   update(time: number, deltaSeconds: number): void {
     if (this.disposed || this.paused || this.documentIsHidden()) return;
     this.world.update?.(time, deltaSeconds);
-    this.presentTerminalOnce(this.session.snapshot());
+    const snapshot = this.session.snapshot();
+    this.syncPresentation(snapshot);
+    this.presentTerminalOnce(snapshot);
   }
 
   resize(width: number, height: number): void {
     if (this.disposed || width <= 0 || height <= 0) return;
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.context.camera.aspect = width / height;
     this.context.camera.updateProjectionMatrix();
+    this.syncPresentation(this.session.snapshot());
   }
 
   render(): void {
@@ -309,9 +316,17 @@ export class SurvivalPhase implements GamePhase {
         action === 'repair' ? this.repairOption() : undefined,
       ) ?? null,
     );
+    this.syncPresentation(snapshot);
     this.presentTerminalOnce(snapshot);
     if (openPendingEvent && !isTerminal(snapshot.state)) this.openPendingEvent(snapshot);
     return snapshot;
+  }
+
+  private syncPresentation(snapshot: SurvivalSnapshot): void {
+    this.world.syncInventory?.(snapshot);
+    this.ui.setAnchors?.(
+      this.world.projectInteractionAnchors?.(this.viewportWidth, this.viewportHeight) ?? [],
+    );
   }
 
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
