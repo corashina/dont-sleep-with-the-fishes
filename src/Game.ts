@@ -31,7 +31,7 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createSurvival: (context, result, seed, onRestart) => (
     new SurvivalPhase(
       context,
-      result.savedItems.map(({ type }) => type),
+      result.savedItems,
       seed,
       result.elapsedSeconds,
       onRestart,
@@ -209,7 +209,9 @@ export class Game {
     scavenge?.dispose();
     this.resetCamera();
     const copiedResult: Readonly<ScavengeResult> = Object.freeze({
-      savedItems: Object.freeze([...result.savedItems]),
+      savedItems: Object.freeze(
+        result.savedItems.map((item) => Object.freeze({ ...item })),
+      ),
       elapsedSeconds: result.elapsedSeconds,
     });
     this.activateSurvival(copiedResult);

@@ -51,12 +51,15 @@ describe('Game director', () => {
     requestAnimationFrame.mockRestore();
   });
 
-  it('disposes scavenging before starting survival with a copied immutable result', () => {
+  it('deep-copies and freezes duplicate saved instances at the phase boundary', () => {
     const calls: string[] = [];
     let complete!: (result: Readonly<ScavengeResult>) => void;
     const scavenge = phase({ dispose: vi.fn(() => calls.push('dispose-scavenge')) });
     const survival = phase({ start: vi.fn(() => calls.push('start-survival')) });
-    const sourceItems = [{ instanceId: 'flareGun-1', type: 'flareGun' }] as const;
+    const sourceItems = [
+      { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      { instanceId: 'cannedFood-2', type: 'cannedFood' },
+    ] as const;
     const sourceResult: ScavengeResult = { savedItems: sourceItems, elapsedSeconds: 8 };
     let receivedResult: Readonly<ScavengeResult> | undefined;
     const game = Game.forTest({
@@ -75,13 +78,17 @@ describe('Game director', () => {
 
     expect(calls).toEqual(['dispose-scavenge', 'start-survival']);
     expect(receivedResult).toEqual({
-      savedItems: [{ instanceId: 'flareGun-1', type: 'flareGun' }],
+      savedItems: sourceItems,
       elapsedSeconds: 8,
     });
     expect(receivedResult).not.toBe(sourceResult);
     expect(receivedResult?.savedItems).not.toBe(sourceItems);
     expect(Object.isFrozen(receivedResult)).toBe(true);
     expect(Object.isFrozen(receivedResult?.savedItems)).toBe(true);
+    expect(receivedResult?.savedItems[0]).not.toBe(sourceItems[0]);
+    expect(receivedResult?.savedItems[1]).not.toBe(sourceItems[1]);
+    expect(Object.isFrozen(receivedResult?.savedItems[0])).toBe(true);
+    expect(Object.isFrozen(receivedResult?.savedItems[1])).toBe(true);
   });
 
   it('ignores a stale scavenging restart callback after survival takes ownership', () => {

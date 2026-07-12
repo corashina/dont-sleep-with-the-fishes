@@ -12,6 +12,7 @@ import {
 } from '../game/ScavengeSession';
 import {
   createItemInstances,
+  ITEM_LABELS,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -32,7 +33,7 @@ const RUN_SECONDS = 120;
 
 export class ScavengePhase implements GamePhase {
   private readonly scene = new Scene();
-  private readonly session = new ScavengeSession();
+  private readonly session: ScavengeSession;
   private readonly world: World;
   private readonly input: InputController;
   private readonly player: PlayerController;
@@ -57,11 +58,12 @@ export class ScavengePhase implements GamePhase {
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
-    const catalog = createItemInstances();
-    this.world = new World(this.scene, catalog);
-    this.instancesById = new Map(catalog.map((instance) => [
+    const instances = createItemInstances();
+    this.session = new ScavengeSession(instances);
+    this.world = new World(this.scene, instances);
+    this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
-      Object.freeze({ instanceId: instance.instanceId, type: instance.type }),
+      instance,
     ]));
     this.input = new InputController(context.renderer.domElement);
     this.player = new PlayerController(
@@ -228,6 +230,8 @@ export class ScavengePhase implements GamePhase {
       this.carry.drop();
     } else if (action.type === 'evacuate') {
       this.session.evacuate();
+    } else if (action.type === 'capacityFull') {
+      this.ui.showFeedback(action.prompt);
     }
   }
 
@@ -241,17 +245,20 @@ export class ScavengePhase implements GamePhase {
       boatBox,
       (x, z) => sampleWaveField(DEFAULT_WAVES, this.elapsed, x, z, amplitudeScale).height,
       {
-        onSaved: (id) => {
+        onSaved: (instance) => {
           if (!this.session.saveCarried()) return;
-          this.world.saveItem(id.instanceId, this.session.snapshot().savedCount - 1);
+          this.world.saveItem(instance.instanceId, this.session.snapshot().savedCount - 1);
+          this.ui.showFeedback(`SAVED — ${ITEM_LABELS[instance.type]}`);
         },
-        onLost: (id) => {
+        onLost: (instance) => {
           if (!this.session.loseCarried()) return;
-          this.world.loseItem(id.instanceId);
+          this.world.loseItem(instance.instanceId);
+          this.ui.showFeedback(`LOST — ${ITEM_LABELS[instance.type]}`);
         },
-        onLanded: (id) => {
+        onLanded: (instance) => {
           if (!this.session.dropCarried()) return;
-          this.world.landItem(id.instanceId);
+          this.world.landItem(instance.instanceId);
+          this.ui.showFeedback(`DROPPED — ${ITEM_LABELS[instance.type]}`);
         },
       },
     );
