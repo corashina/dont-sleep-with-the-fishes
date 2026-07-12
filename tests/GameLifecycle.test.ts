@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
 import type { PhaseContext } from '../src/app/GamePhase';
 import { ScavengeSession } from '../src/game/ScavengeSession';
-import type { ItemInstance } from '../src/game/ItemState';
+import { ITEM_DEFINITIONS, type ItemInstance } from '../src/game/ItemState';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import { World } from '../src/world/World';
@@ -97,7 +97,7 @@ describe('ScavengePhase lifecycle integration', () => {
   it('does not mutate world item state when a stale flight callback is rejected by the session', () => {
     const session = new ScavengeSession();
     session.start();
-    session.pickUp('flareGun');
+    session.pickUp('flareGun-1');
     session.pause();
     const loseItem = vi.fn();
     const carryUpdate = vi.fn((
@@ -121,8 +121,75 @@ describe('ScavengePhase lifecycle integration', () => {
     (phase as unknown as { updateFlight: (delta: number, scale: number) => void })
       .updateFlight(0.016, 1);
 
-    expect(session.snapshot().carriedItem).toBe('flareGun');
+    expect(session.snapshot().carriedItems).toEqual([
+      { instanceId: 'flareGun-1', type: 'flareGun' },
+    ]);
     expect(loseItem).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['onSaved', 'saveCarried', 'saveItem', 'SAVED'],
+    ['onLanded', 'dropCarried', 'landItem', 'DROPPED'],
+    ['onLost', 'loseCarried', 'loseItem', 'LOST'],
+  ] as const)(
+    'routes %s flight results to the matching instance, world, and visible feedback',
+    (handlerName, sessionMethod, worldMethod, feedbackPrefix) => {
+      const instance = { instanceId: 'cannedFood-2', type: 'cannedFood' } as const;
+      const sessionResult = vi.fn().mockReturnValue(instance);
+      const worldResult = vi.fn();
+      const showFeedback = vi.fn();
+      const carryUpdate = vi.fn((
+        _delta: number,
+        _acceptance: Box3,
+        _waterHeight: (x: number, z: number) => number,
+        handlers: Record<typeof handlerName, (item: ItemInstance) => void>,
+      ) => handlers[handlerName](instance));
+      const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+      Object.assign(phase, {
+        elapsed: 0,
+        session: {
+          [sessionMethod]: sessionResult,
+          snapshot: () => ({ savedCount: 2 }),
+        },
+        carry: { update: carryUpdate },
+        world: {
+          lifeboat: new Group(),
+          lifeboatAcceptance: new Box3(),
+          [worldMethod]: worldResult,
+        },
+        ui: { showFeedback },
+      });
+
+      (phase as unknown as { updateFlight: (delta: number, scale: number) => void })
+        .updateFlight(0.016, 1);
+
+      expect(sessionResult).toHaveBeenCalledOnce();
+      expect(worldResult).toHaveBeenCalledWith(
+        instance.instanceId,
+        ...(worldMethod === 'saveItem' ? [1] : []),
+      );
+      expect(showFeedback).toHaveBeenCalledWith(
+        `${feedbackPrefix} — ${ITEM_DEFINITIONS[instance.type].label}`,
+      );
+    },
+  );
+
+  it('routes capacity rejection to visible item-labelled feedback', () => {
+    const showFeedback = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, { ui: { showFeedback } });
+
+    (phase as unknown as {
+      performAction: (action: {
+        type: 'capacityFull';
+        prompt: string;
+      }) => void;
+    }).performAction({
+      type: 'capacityFull',
+      prompt: 'SCUBA SET WEIGHS 3 — 2 CAPACITY FREE',
+    });
+
+    expect(showFeedback).toHaveBeenCalledWith('SCUBA SET WEIGHS 3 — 2 CAPACITY FREE');
   });
 
   it('reports pointer-lock rejection through the UI', async () => {

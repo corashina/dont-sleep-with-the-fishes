@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
-import type { ItemId } from '../game/ItemState';
+import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
@@ -55,14 +55,14 @@ export class SurvivalPhase implements GamePhase {
 
   constructor(
     context: PhaseContext,
-    savedItems: readonly ItemId[],
+    savedItems: readonly ItemInstance[],
     seed: number,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
   );
   constructor(
     context: PhaseContext,
-    savedItems: readonly ItemId[],
+    savedItems: readonly ItemInstance[],
     seed: number,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
@@ -71,8 +71,12 @@ export class SurvivalPhase implements GamePhase {
     if (testDependencies === undefined) {
       this.initialize(
         context,
-        new SurvivalSession(savedItems, { seed }),
-        new BoatWorld(context.camera, context.reducedMotion, savedItems.includes('fishingRod')),
+        new SurvivalSession(savedItems.map(({ type }) => type), { seed }),
+        new BoatWorld(
+          context.camera,
+          context.reducedMotion,
+          savedItems.some(({ type }) => type === 'fishingRod'),
+        ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
@@ -92,7 +96,7 @@ export class SurvivalPhase implements GamePhase {
   static forTest(dependencies: SurvivalPhaseTestDependencies): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
       context: PhaseContext,
-      savedItems: readonly ItemId[],
+      savedItems: readonly ItemInstance[],
       seed: number,
       scavengeElapsedSeconds: number,
       onRestart: () => void,
