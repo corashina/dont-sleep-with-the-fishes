@@ -70,7 +70,10 @@ export class GameUI {
         <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
         <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>E</dd></div></dl>
         <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>
-        <p class="input-error" data-pointer-lock-error aria-live="polite"></p>
+        <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+          ${uiArtwork('warning', 'illustrated-warning__art')}
+          <span data-pointer-lock-error-copy></span>
+        </p>
         <p class="fine-print">Desktop keyboard and mouse required. Click to enable mouse look.</p>
       </section>
       <section class="screen pause-screen poster-screen" data-pause>
@@ -78,7 +81,10 @@ export class GameUI {
         <h2>Back to the deck?</h2>
         <p class="lead">The countdown is stopped while the mouse is released.</p>
         <button type="button" class="primary-action timber-action" data-resume-button>RESUME</button>
-        <p class="input-error" data-pointer-lock-error aria-live="polite"></p>
+        <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+          ${uiArtwork('warning', 'illustrated-warning__art')}
+          <span data-pointer-lock-error-copy></span>
+        </p>
       </section>
       <section class="screen failure-screen poster-screen" data-failure aria-live="assertive">
         ${uiArtwork('warning', 'failure-mark')}
@@ -129,14 +135,14 @@ export class GameUI {
 
   clearPointerLockError(): void {
     this.pointerLockErrors.forEach((element) => {
-      element.textContent = '';
+      requireElement<HTMLElement>(element, '[data-pointer-lock-error-copy]').textContent = '';
       element.classList.remove('is-visible');
     });
   }
 
   showPointerLockError(): void {
     this.pointerLockErrors.forEach((element) => {
-      element.textContent = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
+      requireElement<HTMLElement>(element, '[data-pointer-lock-error-copy]').textContent = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
       element.classList.add('is-visible');
     });
   }
@@ -158,11 +164,17 @@ export class GameUI {
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
     this.timer.textContent = formatCountdown(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
-    this.sinking.textContent = sinking.progress >= 0.75
-      ? 'FINAL SUBMERSION'
+    const severity = sinking.progress >= 0.75
+      ? 'critical'
       : sinking.progress >= 0.4
-        ? 'DECK TAKING WATER'
-        : 'SHIP LISTING';
+        ? 'danger'
+        : 'stable';
+    this.root.dataset.sinkingSeverity = severity;
+    this.sinking.textContent = {
+      stable: 'SHIP LISTING',
+      danger: 'DECK TAKING WATER',
+      critical: 'FINAL SUBMERSION',
+    }[severity];
     this.renderCarry(snapshot);
     this.renderSavedCount(snapshot.savedCount);
   }
@@ -190,7 +202,7 @@ export class GameUI {
   }
 
   showCompatibilityError(message: string): void {
-    this.startLayer.classList.add('is-visible');
+    this.startLayer.classList.add('is-visible', 'has-compatibility-error');
     requireElement<HTMLElement>(this.startLayer, '.lead').textContent = message;
     requireElement<HTMLButtonElement>(this.startLayer, '[data-start-button]').hidden = true;
   }

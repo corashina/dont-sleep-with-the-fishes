@@ -56,8 +56,29 @@ describe('GameUI', () => {
     expect(ratio).toBeGreaterThanOrEqual(3);
   });
 
-  it('does not brighten or move disabled timber actions on hover', () => {
-    expect(mainStyles).toMatch(/\.timber-action:not\(:disabled\):not\(\[aria-disabled="true"\]\):hover\s*\{[^}]*filter:\s*brightness\(1\.14\);[^}]*transform:\s*translateY\(-2px\) rotate\(-\.25deg\);/s);
+  it('guards every illustrated action hover and active selector from disabled states', () => {
+    const interactiveSelectors = [...mainStyles.matchAll(/([^{}]+)\{/g)]
+      .flatMap((match) => match[1]!.split(',').map((selector) => selector.trim()))
+      .filter((selector) => /:(?:hover|active)$/.test(selector))
+      .filter((selector) => [
+        '.timber-action',
+        '.primary-action',
+        '.event-item',
+        '.secondary-action',
+      ].some((className) => selector.includes(className)));
+
+    expect(interactiveSelectors).toEqual([
+      '.timber-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.timber-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.primary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.primary-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.event-item:not(:disabled):not([aria-disabled="true"]):hover',
+      '.secondary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.event-item:not(:disabled):not([aria-disabled="true"]):active',
+      '.secondary-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):active',
+    ]);
   });
 
   it('shows a distinct failure layer before revealing the result', () => {
@@ -96,6 +117,27 @@ describe('GameUI', () => {
     expect(mount.querySelectorAll('.carried-row')).toHaveLength(2);
     expect(mainStyles).toMatch(/\.carried-list\s*\{[^}]*display:\s*grid[^}]*gap:/s);
     expect(mainStyles).toMatch(/\.carried-row\s*\{[^}]*display:\s*block/s);
+  });
+
+  it('exposes sinking danger and critical severity at the presentation thresholds', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const root = mount.querySelector<HTMLElement>('.game-ui')!;
+    const sinkingLabel = mount.querySelector<HTMLElement>('[data-sinking]')!;
+
+    ui.render(snapshot(), getSinkingState(48, 120));
+    expect(root.dataset.sinkingSeverity).toBe('danger');
+    expect(sinkingLabel.textContent).toBe('DECK TAKING WATER');
+
+    ui.render(snapshot(), getSinkingState(90, 120));
+    expect(root.dataset.sinkingSeverity).toBe('critical');
+    expect(sinkingLabel.textContent).toBe('FINAL SUBMERSION');
+  });
+
+  it('defines red-ink danger and transform-opacity-only critical sinking treatments', () => {
+    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="danger"\] \[data-sinking\]\s*\{[^}]*color:\s*var\(--ink-red-bright\);[^}]*text-shadow:/s);
+    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="critical"\] \.ui-treatment::before\s*\{[^}]*background:\s*radial-gradient\([^}]*animation:\s*critical-vignette/s);
+    expect(mainStyles).toMatch(/@keyframes critical-vignette\s*\{\s*50%\s*\{\s*opacity:\s*[^;]+;\s*transform:\s*[^;]+;\s*\}\s*\}/s);
   });
 
   it('reports a saved duplicate even when the first instance of its type was not saved', () => {
@@ -155,14 +197,36 @@ describe('GameUI', () => {
     document.body.append(mount);
     const ui = new GameUI(mount);
 
+    const errors = [...mount.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
+    expect(errors).toHaveLength(2);
+    errors.forEach((error) => {
+      expect(error.classList).toContain('illustrated-warning');
+      expect(error.querySelector('[data-ui-artwork="warning"]')?.getAttribute('aria-hidden')).toBe('true');
+      expect(error.querySelector('[data-pointer-lock-error-copy]')).not.toBeNull();
+    });
+
     ui.showPointerLockError();
 
-    const errors = [...mount.querySelectorAll('[data-pointer-lock-error]')];
-    expect(errors).toHaveLength(2);
     errors.forEach((error) => {
       expect(error.textContent).toContain('Mouse look was blocked');
       expect(error.classList).toContain('is-visible');
     });
+    expect(mainStyles).toMatch(/\.illustrated-warning\.is-visible\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
+  });
+
+  it('presents compatibility failures with warning artwork and preserved error copy', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const message = 'WebGL 2 is required for this voyage.';
+
+    ui.showCompatibilityError(message);
+
+    const startLayer = mount.querySelector<HTMLElement>('[data-start]')!;
+    expect(startLayer.classList).toContain('has-compatibility-error');
+    expect(startLayer.querySelector('.lead')?.textContent).toBe(message);
+    expect(startLayer.querySelector<HTMLButtonElement>('[data-start-button]')?.hidden).toBe(true);
+    expect(startLayer.querySelector('[data-pointer-lock-error] [data-ui-artwork="warning"]')).not.toBeNull();
+    expect(mainStyles).toMatch(/\.poster-screen\.has-compatibility-error \.illustrated-warning\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
   it('removes button listeners and its DOM root exactly once on dispose', () => {

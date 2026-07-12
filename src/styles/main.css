@@ -34,7 +34,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .timber-action { position: relative; isolation: isolate; border: 3px solid #26150f; background: linear-gradient(174deg, #795338, #4d2d1e 54%, #6c472f); color: var(--ink-bone); box-shadow: inset 0 2px #b4865d55, 3px 5px 0 #050606aa; clip-path: polygon(2% 8%, 96% 0, 100% 89%, 4% 100%, 0 52%); }
 .timber-action::before { content: ''; position: absolute; inset: 3px; z-index: -1; opacity: .32; background: repeating-linear-gradient(4deg, transparent 0 7px, #1f110c 8px 9px); }
 .timber-action:not(:disabled):not([aria-disabled="true"]):hover { filter: brightness(1.14); transform: translateY(-2px) rotate(-.25deg); }
-.timber-action:active { transform: translateY(2px) scale(.98); }
+.timber-action:not(:disabled):not([aria-disabled="true"]):active { transform: translateY(2px) scale(.98); }
 .timber-action:focus-visible, .survival-ui button:focus-visible { outline: 3px solid var(--ink-bone); outline-offset: 4px; }
 .game-ui { position: fixed; inset: 0; pointer-events: none; }
 .hud { position: absolute; inset: 0; padding: 24px 28px; font-family: ui-monospace, "Cascadia Mono", monospace; text-shadow: 0 2px 8px #10191dbf; }
@@ -68,8 +68,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .controls dt { color: #8f9189; font: 0.64rem ui-monospace, monospace; letter-spacing: 0.16em; }
 .controls dd { margin: 7px 0 0; color: #ded8c8; font: 0.86rem ui-monospace, monospace; }
 .primary-action { min-width: 230px; padding: 14px 18px; border: 1px solid #b88772; background: #914f42; color: #f3ecdc; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; transition: transform 160ms ease, background 160ms ease; }
-.primary-action:hover { background: #a45d4d; transform: translateY(-2px); }
-.primary-action:active { transform: translateY(1px) scale(0.99); }
+.primary-action:not(:disabled):not([aria-disabled="true"]):hover { background: #a45d4d; transform: translateY(-2px); }
+.primary-action:not(:disabled):not([aria-disabled="true"]):active { transform: translateY(1px) scale(0.99); }
 .primary-action:focus-visible { outline: 3px solid #d7c8a7; outline-offset: 4px; }
 .fine-print, .result-items { color: #8f9189; font: 0.72rem ui-monospace, monospace; letter-spacing: 0.08em; }
 .result-items { white-space: pre-line; line-height: 1.8; }
@@ -221,13 +221,13 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   transition: transform 160ms ease, opacity 160ms ease;
 }
 
-.event-item:hover,
+.event-item:not(:disabled):not([aria-disabled="true"]):hover,
 .event-item:focus-visible,
-.secondary-action:hover,
+.secondary-action:not(:disabled):not([aria-disabled="true"]):hover,
 .secondary-action:focus-visible { transform: translateY(-2px); }
 
-.event-item:active,
-.secondary-action:active { transform: translateY(1px) scale(0.99); }
+.event-item:not(:disabled):not([aria-disabled="true"]):active,
+.secondary-action:not(:disabled):not([aria-disabled="true"]):active { transform: translateY(1px) scale(0.99); }
 
 .event-item:disabled,
 .secondary-action:disabled,
@@ -401,8 +401,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .action-options,
 .outcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .survival-ui .primary-action { min-width: 180px; transition: transform 160ms ease, opacity 160ms ease; }
-.survival-ui .primary-action:hover { transform: translateY(-2px); }
-.survival-ui .primary-action:active { transform: translateY(1px) scale(0.99); }
+.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):hover { transform: translateY(-2px); }
+.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):active { transform: translateY(1px) scale(0.99); }
 .text-action { border-color: transparent; background: transparent; color: #a8a797; }
 .outcome-deltas { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
 .outcome-deltas li { padding: 7px 9px; border: 1px solid #b9b5a74d; color: #b9b5a7; font-size: 0.62rem; letter-spacing: 0.07em; }
@@ -452,6 +452,9 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .pocket-watch .eyebrow { position: absolute; top: 91px; width: 100%; text-align: center; color: var(--ink-faded); }
 .pocket-watch [data-timer] { position: absolute; top: 39px; width: 100%; z-index: 1; color: var(--ink-black); font: 800 1.28rem/1 ui-monospace, monospace; text-align: center; text-shadow: none; }
 .pocket-watch [data-timer].is-critical { color: var(--ink-red); animation: watch-jolt .65s steps(2, end) infinite; }
+.game-ui[data-sinking-severity="danger"] [data-sinking] { color: var(--ink-red-bright); text-shadow: 2px 2px 0 var(--ink-outline), 0 0 12px #661411; }
+.game-ui[data-sinking-severity="critical"] [data-sinking] { color: #ff8a80; text-shadow: 2px 2px 0 var(--ink-outline), 0 0 14px #661411; }
+.game-ui[data-sinking-severity="critical"] .ui-treatment::before { background: radial-gradient(circle at 50% 44%, transparent 30%, #30050580 64%, #020303f5 100%); animation: critical-vignette .8s steps(2, end) infinite; }
 .carried { left: 28px; bottom: 30px; transform: rotate(-.6deg); }
 .carried-list { padding-top: 5px; border-top: 2px solid #f2ead755; }
 .crosshair { width: 12px; height: 12px; border-color: #f2ead799; box-shadow: 0 0 12px var(--ink-outline); }
@@ -463,7 +466,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .poster-screen .controls div { border: 0; background: linear-gradient(95deg, #111d, #1118); clip-path: polygon(0 8%, 96% 0, 100% 90%, 4% 100%); }
 .failure-mark { width: 88px; color: var(--ink-red-bright); }
 .input-error.is-visible { padding: 8px 12px; background: #2b0808dd; color: #ffb4a7; }
+.illustrated-warning { display: flex; align-items: center; gap: 10px; visibility: hidden; }
+.illustrated-warning__art { width: 34px; flex: 0 0 auto; color: var(--ink-red-bright); }
+.illustrated-warning.is-visible { opacity: 1; visibility: visible; }
+.poster-screen.has-compatibility-error .illustrated-warning { opacity: 1; visibility: visible; }
 @keyframes watch-jolt { 50% { transform: rotate(-2deg) scale(1.06); } }
+@keyframes critical-vignette { 50% { opacity: .82; transform: scale(1.025); } }
 
 /* Illustrated survival status, projected actions, and tallies */
 .survival-ui { color: var(--ink-bone); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; }

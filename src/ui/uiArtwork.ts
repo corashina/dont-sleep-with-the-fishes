@@ -14,7 +14,10 @@ const ARTWORK: Record<UiArtworkId, string> = {
   warning: '<path d="M40 7 73 65H7z"/><path d="M40 25v21M40 55v2"/><path class="ui-artwork__shine" d="m20 56 20-35"/>',
 };
 
+const CSS_IDENTIFIER = /^-?[_a-zA-Z][_a-zA-Z0-9-]*$/;
+
 export function uiArtwork(id: UiArtworkId, className = ''): string {
-  const classes = ['ui-artwork', `ui-artwork--${id}`, className].filter(Boolean).join(' ');
+  const optionalClasses = className.split(/\s+/).filter((token) => CSS_IDENTIFIER.test(token));
+  const classes = ['ui-artwork', `ui-artwork--${id}`, ...optionalClasses].join(' ');
   return `<svg class="${classes}" data-ui-artwork="${id}" viewBox="0 0 80 72" aria-hidden="true" focusable="false">${ARTWORK[id]}</svg>`;
 }
