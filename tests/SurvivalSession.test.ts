@@ -64,6 +64,10 @@ describe('SurvivalSession daytime actions', () => {
     expect(state.savedItems).not.toBe(savedItems);
     expect(Object.isFrozen(state.savedItems)).toBe(true);
     expect(state.savedItems.every(Object.isFrozen)).toBe(true);
+    expect(Object.isFrozen(state.inventory)).toBe(true);
+    expect(Object.isFrozen(state.inventory.waterJug)).toBe(true);
+    expect(Object.isFrozen(state.inventory.waterJug.instances)).toBe(true);
+    expect(state.inventory.waterJug.instances.every(Object.isFrozen)).toBe(true);
   });
 
   it('fishes deterministically with rod and bait', () => {

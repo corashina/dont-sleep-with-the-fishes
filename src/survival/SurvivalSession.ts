@@ -1,6 +1,6 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
-import { createSurvivalInventory } from './inventory';
+import { applyInventoryMutation, createSurvivalInventory } from './inventory';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
@@ -83,17 +83,24 @@ export class SurvivalSession {
     this.recoveredFood = this.inventory.cannedFood.charges ?? 0;
     this.bait = this.recoveredBait;
     this.food = this.recoveredFood;
-    this.inventory.baitTin.charges = 0;
-    this.inventory.cannedFood.charges = 0;
+    applyInventoryMutation(this.inventory, {
+      kind: 'consume', itemId: 'baitTin', quantity: this.recoveredBait,
+    });
+    applyInventoryMutation(this.inventory, {
+      kind: 'consume', itemId: 'cannedFood', quantity: this.recoveredFood,
+    });
 
     this.clampMeters();
     this.resolveTerminal();
   }
 
   snapshot(): SurvivalSnapshot {
-    const inventory = Object.fromEntries(
-      Object.entries(this.inventory).map(([id, entry]) => [id, { ...entry }]),
-    ) as SurvivalInventory;
+    const inventory = Object.freeze(Object.fromEntries(
+      Object.entries(this.inventory).map(([id, entry]) => [id, Object.freeze({
+        ...entry,
+        instances: Object.freeze(entry.instances.map((instance) => Object.freeze({ ...instance }))),
+      })]),
+    )) as SurvivalInventory;
     const lastOutcome = this.lastOutcome === null
       ? null
       : { ...this.lastOutcome, deltas: { ...this.lastOutcome.deltas } };
@@ -494,7 +501,7 @@ export class SurvivalSession {
   private consumeCharge(id: ItemId): boolean {
     const entry = this.inventory[id];
     if (!entry.owned || entry.charges === null || entry.charges <= 0) return false;
-    entry.charges -= 1;
+    applyInventoryMutation(this.inventory, { kind: 'consume', itemId: id, quantity: 1 });
     return true;
   }
 

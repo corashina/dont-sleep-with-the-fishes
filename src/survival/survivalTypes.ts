@@ -1,4 +1,4 @@
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 export type WeatherId = 'calm' | 'overcast' | 'squall';
@@ -9,13 +9,28 @@ export type PresentationCue =
   | 'storm' | 'impact' | 'darkness' | 'sighting' | 'nightfall' | 'dawn'
   | 'rescue' | 'death' | 'sinking';
 
+export type ItemCondition = 'usable' | 'broken' | 'consumed' | 'lost';
+
+export interface SurvivalItemInstance extends ItemInstance {
+  condition: ItemCondition;
+  charges: number | null;
+}
+
 export interface ItemInventoryState {
   owned: boolean;
   charges: number | null;
   durable: boolean;
+  instances: SurvivalItemInstance[];
 }
 
 export type SurvivalInventory = Record<ItemId, ItemInventoryState>;
+
+export type InventoryMutation = {
+  kind: 'consume' | 'break' | 'repair' | 'lose' | 'gain';
+  itemId: ItemId;
+  quantity: number;
+  instanceId?: ItemInstanceId;
+};
 
 export interface ResourceDelta {
   health?: number;
