@@ -24,8 +24,34 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
 describe('wiki gameplay parity integration', () => {
   it('carries expanded scavenging supplies through survival mechanics and a full restart', () => {
     const expandedCatalog = createItemInstances();
-    const scavenge = new ScavengeSession(expandedCatalog);
-    scavenge.start();
+    const scavengeSessions: ScavengeSession[] = [];
+    const scavengePhases: GamePhase[] = [];
+    const survivalSessions: SurvivalSession[] = [];
+    const completions: Array<(completed: Readonly<ScavengeResult>) => void> = [];
+    const game = Game.forTest({
+      createScavenge: (_context, onComplete) => {
+        const session = new ScavengeSession();
+        const createdPhase = phase({ start: vi.fn(() => session.start()) });
+        scavengeSessions.push(session);
+        scavengePhases.push(createdPhase);
+        completions.push(onComplete);
+        return createdPhase;
+      },
+      createSurvival: (_context, result, seed) => {
+        const session = new SurvivalSession(result.savedItems, {
+          seed,
+          initial: { day: 2 },
+          initialEventId: 'shower-night',
+          random: sequenceRandom([0, 0, 0, 0.99, 0]),
+        });
+        survivalSessions.push(session);
+        return phase();
+      },
+    }, { createSeed: vi.fn().mockReturnValueOnce(11).mockReturnValueOnce(12) });
+
+    game.start();
+    const scavenge = scavengeSessions[0]!;
+    expect(Object.keys(scavenge.snapshot().items)).toHaveLength(expandedCatalog.length);
 
     for (const instanceId of ['fishingRod-1', 'baitTin-1', 'ductTape-1', 'map-1'] as const) {
       expect(scavenge.pickUp(instanceId)).toBe(true);
@@ -37,13 +63,10 @@ describe('wiki gameplay parity integration', () => {
     expect(result.savedItems.map(({ instanceId }) => instanceId)).toEqual([
       'ductTape-1', 'fishingRod-1', 'baitTin-1', 'map-1',
     ]);
+    completions[0]!(result);
 
-    const survival = new SurvivalSession(result.savedItems, {
-      seed: 11,
-      initial: { day: 2 },
-      initialEventId: 'shower-night',
-      random: sequenceRandom([0, 0, 0, 0.99, 0]),
-    });
+    const survival = survivalSessions[0]!;
+    expect(scavengePhases[0]!.dispose).toHaveBeenCalledOnce();
     expect(survival.snapshot().inventory).toMatchObject({
       fishingRod: { instances: [{ instanceId: 'fishingRod-1', condition: 'usable' }] },
       baitTin: { instances: [{ instanceId: 'baitTin-1', condition: 'consumed', charges: 0 }] },
@@ -72,24 +95,17 @@ describe('wiki gameplay parity integration', () => {
     });
     expect(survival.snapshot()).toMatchObject({ day: 3, food: 1, bait: 2, danger: 0 });
 
-    const sessions: ScavengeSession[] = [];
-    const completions: Array<(completed: Readonly<ScavengeResult>) => void> = [];
-    const game = Game.forTest({
-      createScavenge: (_context, onComplete) => {
-        const session = new ScavengeSession();
-        sessions.push(session);
-        completions.push(onComplete);
-        return phase({ start: vi.fn(() => session.start()) });
-      },
-      createSurvival: () => phase(),
-    }, { createSeed: vi.fn().mockReturnValueOnce(11).mockReturnValueOnce(12) });
-
-    game.start();
-    completions[0]!(result);
     game.restart();
 
-    expect(sessions).toHaveLength(2);
-    const restarted = sessions[1]!.snapshot();
+    expect(scavengeSessions).toHaveLength(2);
+    expect(scavengeSessions[1]).not.toBe(scavenge);
+    expect(scavenge.snapshot()).toMatchObject({
+      status: 'success', savedCount: 4, carriedWeight: 0, carriedItems: [],
+    });
+    const restarted = scavengeSessions[1]!.snapshot();
+    expect(restarted).toMatchObject({
+      status: 'running', savedCount: 0, carriedWeight: 0, carriedItems: [],
+    });
     expect(Object.keys(restarted.items)).toHaveLength(expandedCatalog.length);
     expect(expandedCatalog.every(({ instanceId }) => (
       restarted.items[instanceId]!.status === 'available'
