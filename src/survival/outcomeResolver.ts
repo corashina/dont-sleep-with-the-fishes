@@ -3,6 +3,7 @@ import type {
   CanonicalEventDefinition,
   EventChoiceDefinition,
   EventHistory,
+  EventAssetRequirement,
   EventResource,
   EventRoute,
   RandomSource,
@@ -19,10 +20,20 @@ export interface CanonicalEventEligibility {
   inventory: Readonly<SurvivalInventory>;
   route: EventRoute | null;
   history: ReadonlyMap<string, EventHistory>;
+  resources: Readonly<Partial<Record<EventResource, number>>>;
 }
 
 function hasUsableItem(inventory: Readonly<SurvivalInventory>, itemId: keyof SurvivalInventory): boolean {
   return inventory[itemId].owned;
+}
+
+function hasAsset(
+  requirement: EventAssetRequirement,
+  criteria: CanonicalEventEligibility,
+): boolean {
+  return requirement.kind === 'item'
+    ? hasUsableItem(criteria.inventory, requirement.itemId)
+    : (criteria.resources[requirement.resource] ?? 0) >= requirement.min;
 }
 
 function normalizedWeight(weight: number): number {
@@ -54,14 +65,18 @@ export function eligibleEvents(
       event.requiredAnyItems !== undefined
       && !event.requiredAnyItems.some((itemId) => hasUsableItem(criteria.inventory, itemId))
     ) return false;
+    if (
+      event.requiredAnyAssets !== undefined
+      && !event.requiredAnyAssets.some((requirement) => hasAsset(requirement, criteria))
+    ) return false;
 
     const history = criteria.history.get(event.id);
     if (history === undefined) {
       return criteria.day >= event.minDay
         && (event.maxDay === undefined || criteria.day <= event.maxDay);
     }
-    if (event.maxAppearances > 0 && history.appearances >= event.maxAppearances) return false;
-    return event.cooldownDays === 0 || criteria.day - history.lastDay >= event.cooldownDays;
+    if (event.cooldownDays > 0) return criteria.day - history.lastDay >= event.cooldownDays;
+    return event.maxAppearances === 0 || history.appearances < event.maxAppearances;
   });
 }
 
@@ -70,8 +85,9 @@ export function drawWeightedEvent(
   random: RandomSource,
   route: EventRoute | null,
 ): CanonicalEventDefinition | undefined {
-  if (pool.length === 0) return undefined;
-  const weighted = pool.map((event) => ({
+  const selectable = pool.filter((event) => event.selectable !== false && !event.automatic);
+  if (selectable.length === 0) return undefined;
+  const weighted = selectable.map((event) => ({
     weight: event.weight + (route === null ? 0 : (event.routeWeightBonuses?.[route] ?? 0)),
     value: event,
   }));

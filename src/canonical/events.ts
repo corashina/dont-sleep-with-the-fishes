@@ -29,6 +29,7 @@ export type CanonicalCatalogEvent = (ChoiceEventDefinition | AutomaticEventDefin
   sourceId: 'events';
   selectable: boolean;
   sourceNote?: string;
+  normalizationNote?: string;
   trigger?: BrokenBoatTrigger | ChestAttackTrigger;
 };
 
@@ -113,6 +114,7 @@ export const CANONICAL_EVENTS: readonly CanonicalCatalogEvent[] = [
   {
     ...common('peaceful-night', 'Peaceful Night', 'none', 75, 0, 0),
     maxAppearances: 0,
+    normalizationNote: 'Synthetic sleep choice normalizes the source no-choice passive event to the ordinary choice schema.',
     choices: [choice('sleep', 'Sleep', undefined, outcome(1, 'The night passes peacefully.'))],
   },
   {
@@ -286,7 +288,13 @@ export const CANONICAL_EVENTS: readonly CanonicalCatalogEvent[] = [
   },
   {
     ...common('snatcher', 'Snatcher', 'impact', 28, 8, 45, 1), routeWeightBonuses: { left: 5 },
-    requiredAnyItems: ['anchor', 'bucket', 'medicalKit', 'flareGun', 'flashlight', 'map', 'scubaSet', 'umbrella'],
+    requiredAnyAssets: [
+      { kind: 'item', itemId: 'anchor' }, { kind: 'item', itemId: 'bucket' },
+      { kind: 'item', itemId: 'medicalKit' }, { kind: 'item', itemId: 'flareGun' },
+      { kind: 'item', itemId: 'flashlight' }, { kind: 'item', itemId: 'map' },
+      { kind: 'item', itemId: 'scubaSet' }, { kind: 'item', itemId: 'umbrella' },
+      { kind: 'resource', resource: 'food', min: 1 },
+    ],
     choices: [
       choice('telescope', 'Use Telescope', 'telescope', outcome(1, 'The telescope breaks.', effects(undefined, [breakItem('telescope')]))),
       choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
@@ -421,6 +429,10 @@ function isRuntimeItemId(value: string): value is RuntimeItemId {
   return (RUNTIME_ITEM_IDS as readonly string[]).includes(value);
 }
 
+const EVENT_RESOURCES: readonly EventResource[] = [
+  'health', 'hull', 'energy', 'food', 'bait', 'danger',
+];
+
 function validateOutcome(outcomeEntry: WeightedEventOutcome, path: string): void {
   for (const [index, effect] of (outcomeEntry.effects.resources ?? []).entries()) {
     if (typeof effect.value === 'object') validateRange(effect.value, `${path}.resources[${index}]`);
@@ -445,16 +457,45 @@ export function validateCanonicalEvents(
     if (!Number.isFinite(eventEntry.weight) || eventEntry.weight < 0) {
       throw new Error(`canonical event ${eventEntry.id} has an invalid weight`);
     }
-    if (eventEntry.selectable === false) {
-      if (eventEntry.weight !== 0) throw new Error(`non-selectable event ${eventEntry.id} must have zero weight`);
-    } else if (eventEntry.weight <= 0) {
-      throw new Error(`selectable event ${eventEntry.id} must have positive weight`);
+    for (const itemId of [
+      ...(eventEntry.requiredItems ?? []),
+      ...(eventEntry.requiredAnyItems ?? []),
+      ...(eventEntry.forbiddenItems ?? []),
+      ...(eventEntry.requiredAnyAssets ?? [])
+        .filter((requirement) => requirement.kind === 'item')
+        .map((requirement) => requirement.itemId),
+    ]) {
+      if (!isRuntimeItemId(itemId)) throw new Error(`${eventEntry.id} contains unknown item ID ${itemId}`);
+    }
+    for (const requirement of eventEntry.requiredAnyAssets ?? []) {
+      if (requirement.kind === 'resource') {
+        if (!EVENT_RESOURCES.includes(requirement.resource)) {
+          throw new Error(`${eventEntry.id} contains unknown resource ${requirement.resource}`);
+        }
+        if (!Number.isInteger(requirement.min) || requirement.min < 1) {
+          throw new Error(`${eventEntry.id} contains an invalid resource asset minimum`);
+        }
+      }
     }
 
     if (eventEntry.automatic) {
       const automaticAtRuntime = eventEntry as AutomaticEventDefinition & { choices?: unknown };
+      const triggerAtRuntime = eventEntry as AutomaticEventDefinition & { trigger?: unknown };
+      if (eventEntry.selectable !== false) {
+        throw new Error(`automatic event ${eventEntry.id} must be non-selectable`);
+      }
+      if (eventEntry.weight !== 0) {
+        throw new Error(`automatic event ${eventEntry.id} must have zero weight`);
+      }
       if (automaticAtRuntime.choices !== undefined) {
         throw new Error(`automatic event ${eventEntry.id} must have no choices`);
+      }
+      if (triggerAtRuntime.trigger === undefined) {
+        throw new Error(`automatic event ${eventEntry.id} requires an explicit trigger`);
+      }
+      const trigger = triggerAtRuntime.trigger as Partial<BrokenBoatTrigger>;
+      if (trigger.resource !== 'hull' || trigger.max !== 10 || trigger.chancePercentBase !== 100) {
+        throw new Error(`automatic event ${eventEntry.id} requires the documented broken boat trigger`);
       }
       if (!eventEntry.automaticOutcome?.effects.terminal) {
         throw new Error(`automatic event ${eventEntry.id} requires an explicit terminal outcome`);
@@ -462,14 +503,12 @@ export function validateCanonicalEvents(
       validateOutcome(eventEntry.automaticOutcome, `${eventEntry.id}.automaticOutcome`);
       continue;
     }
-    if (!eventEntry.choices?.length) throw new Error(`canonical event ${eventEntry.id} choices are empty`);
-    for (const itemId of [
-      ...(eventEntry.requiredItems ?? []),
-      ...(eventEntry.requiredAnyItems ?? []),
-      ...(eventEntry.forbiddenItems ?? []),
-    ]) {
-      if (!isRuntimeItemId(itemId)) throw new Error(`${eventEntry.id} contains unknown item ID ${itemId}`);
+    if (eventEntry.selectable === false) {
+      if (eventEntry.weight !== 0) throw new Error(`non-selectable event ${eventEntry.id} must have zero weight`);
+    } else if (eventEntry.weight <= 0) {
+      throw new Error(`selectable event ${eventEntry.id} must have positive weight`);
     }
+    if (!eventEntry.choices?.length) throw new Error(`canonical event ${eventEntry.id} choices are empty`);
     for (const eventChoice of eventEntry.choices) {
       if (eventChoice.itemId && eventChoice.itemId !== 'any' && !isRuntimeItemId(eventChoice.itemId)) {
         throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item ID ${eventChoice.itemId}`);

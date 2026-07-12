@@ -40,6 +40,9 @@ export type EventInventoryMutation = InventoryMutation
 
 export type EventRoute = 'left' | 'right';
 export type EventResource = 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'danger';
+export type EventAssetRequirement =
+  | { kind: 'item'; itemId: ItemId }
+  | { kind: 'resource'; resource: EventResource; min: number };
 
 export interface ResourceEffect {
   resource: EventResource;
@@ -81,6 +84,7 @@ interface CanonicalEventBase {
   selectable?: boolean;
   requiredItems?: readonly ItemId[];
   requiredAnyItems?: readonly ItemId[];
+  requiredAnyAssets?: readonly EventAssetRequirement[];
   forbiddenItems?: readonly ItemId[];
   routeWeightBonuses?: Partial<Record<EventRoute, number>>;
 }

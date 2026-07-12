@@ -7,6 +7,7 @@ import {
 } from '../src/survival/outcomeResolver';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import { sequenceRandom } from '../src/survival/random';
+import { CANONICAL_EVENTS } from '../src/canonical/events';
 import type {
   CanonicalEventDefinition,
   EventChoiceDefinition,
@@ -57,6 +58,7 @@ function criteria(overrides: Partial<Parameters<typeof eligibleEvents>[1]> = {})
     day: 2,
     danger: 1,
     inventory: inventory(),
+    resources: {},
     route: null,
     history: new Map<string, EventHistory>(),
     ...overrides,
@@ -243,21 +245,40 @@ describe('event eligibility', () => {
     expect(eligibleEvents([repeatable], criteria({ day: 22, history: appeared }))).toEqual([repeatable]);
   });
 
-  it('enforces cooldowns and positive appearance caps while zero means unlimited', () => {
+  it('lets cooldown-bearing events recur regardless of their initial-window appearance cap', () => {
     const history = new Map<string, EventHistory>([
       ['test', { appearances: 1, firstDay: 2, lastDay: 2 }],
     ]);
-    const repeatable = { ...weightedDefinition, maxAppearances: 2 };
+    const repeatable = { ...weightedDefinition, maxAppearances: 1 };
 
     expect(eligibleEvents([repeatable], criteria({ day: 21, history }))).toEqual([]);
     expect(eligibleEvents([repeatable], criteria({ day: 22, history }))).toEqual([repeatable]);
     expect(eligibleEvents([repeatable], criteria({
       day: 42,
-      history: new Map([['test', { appearances: 2, firstDay: 2, lastDay: 22 }]]),
-    }))).toEqual([]);
+      history: new Map([['test', { appearances: 20, firstDay: 2, lastDay: 22 }]]),
+    }))).toEqual([repeatable]);
+  });
+
+  it('uses a positive appearance cap permanently only when cooldown is zero', () => {
+    const history = new Map<string, EventHistory>([
+      ['test', { appearances: 1, firstDay: 2, lastDay: 2 }],
+    ]);
+    const capped = { ...weightedDefinition, cooldownDays: 0, maxAppearances: 1 };
+    expect(eligibleEvents([capped], criteria({ day: 30, history }))).toEqual([]);
 
     const unlimited = { ...weightedDefinition, cooldownDays: 0, maxAppearances: 0 };
     expect(eligibleEvents([unlimited], criteria({ day: 30, history }))).toEqual([unlimited]);
+  });
+
+  it('recurs Shower Night after its documented 35-day cooldown boundary', () => {
+    const shower = CANONICAL_EVENTS.find(({ id }) => id === 'shower-night')!;
+    const history = new Map<string, EventHistory>([
+      ['shower-night', { appearances: 1, firstDay: 2, lastDay: 2 }],
+    ]);
+
+    expect(eligibleEvents([shower], criteria({ day: 36, danger: 0, history }))).toEqual([]);
+    expect(eligibleEvents([shower], criteria({ day: 37, danger: 0, history }))).toEqual([shower]);
+    expect(eligibleEvents([shower], criteria({ day: 40, danger: 0, history }))).toEqual([shower]);
   });
 
   it('checks all-of and at-least-one inventory prerequisites and danger minimums', () => {
@@ -286,6 +307,14 @@ describe('event eligibility', () => {
     }))).toEqual([]);
   });
 
+  it('supports a combined any-asset prerequisite across items and aggregate resources', () => {
+    const snatcher = CANONICAL_EVENTS.find(({ id }) => id === 'snatcher')!;
+
+    expect(eligibleEvents([snatcher], criteria({ day: 8, resources: { food: 1 } }))).toEqual([snatcher]);
+    expect(eligibleEvents([snatcher], criteria({ day: 8, inventory: inventory('anchor') }))).toEqual([snatcher]);
+    expect(eligibleEvents([snatcher], criteria({ day: 8, resources: { food: 0 } }))).toEqual([]);
+  });
+
   it('excludes events when a forbidden inventory item is present', () => {
     const gated = { ...weightedDefinition, forbiddenItems: ['chest'] as const };
     expect(eligibleEvents([gated], criteria({ inventory: inventory() }))).toEqual([gated]);
@@ -303,6 +332,14 @@ describe('event eligibility', () => {
 });
 
 describe('weighted event selection', () => {
+  it('does not directly draw dormant or automatic trigger-only records', () => {
+    const brokenBoat = CANONICAL_EVENTS.find(({ id }) => id === 'broken-boat')!;
+    const dormant = CANONICAL_EVENTS.filter(({ id }) => id === 'seagull' || id === 'chest-attack');
+
+    expect(drawWeightedEvent([brokenBoat], sequenceRandom([0]), null)).toBeUndefined();
+    expect(drawWeightedEvent(dormant, sequenceRandom([0]), null)).toBeUndefined();
+  });
+
   it('applies route-specific bonuses before drawing with canonical weighted boundaries', () => {
     const first: CanonicalEventDefinition = {
       ...weightedDefinition,
