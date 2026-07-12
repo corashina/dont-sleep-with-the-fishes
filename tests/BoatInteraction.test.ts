@@ -11,7 +11,10 @@ describe('BoatInteraction', () => {
       ductTape: 'repair',
       medicalKit: 'treat',
       waterJug: 'rest',
+      repairKit: 'repair',
     });
+    expect(ACTION_FOR_ITEM.energyBar).toBeUndefined();
+    expect(ACTION_FOR_ITEM.chest).toBeUndefined();
     expect(ACTION_FOR_ITEM.flareGun).toBeUndefined();
   });
 

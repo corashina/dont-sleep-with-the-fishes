@@ -1,15 +1,14 @@
 import type { PerspectiveCamera, Vector3 } from 'three';
+import { RUNTIME_ITEM_IDS, runtimeItemDefinition } from '../canonical/items';
 import type { ItemId } from '../game/ItemState';
 import type { DayActionId } from './survivalTypes';
 
-export const ACTION_FOR_ITEM: Readonly<Partial<Record<ItemId, DayActionId>>> = {
-  fishingRod: 'fish',
-  scubaSet: 'dive',
-  cannedFood: 'eat',
-  ductTape: 'repair',
-  medicalKit: 'treat',
-  waterJug: 'rest',
-};
+export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
+  RUNTIME_ITEM_IDS.flatMap((itemId) => {
+    const action = runtimeItemDefinition(itemId).dayAction;
+    return action === null ? [] : [[itemId, action]];
+  }),
+)) as Readonly<Partial<Record<ItemId, DayActionId>>>;
 
 export interface BoatInteractionAnchor {
   id: string;

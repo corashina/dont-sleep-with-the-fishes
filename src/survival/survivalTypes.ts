@@ -26,6 +26,11 @@ export interface ItemInventoryState {
 
 export type SurvivalInventory = Record<ItemId, ItemInventoryState>;
 
+/** Documented energy costs for direct item use, also consumed by interaction previews. */
+export const ITEM_USE_ENERGY_COST = Object.freeze({
+  chest: 3,
+}) satisfies Readonly<Partial<Record<ItemId, number>>>;
+
 export type InventoryMutation = {
   kind: 'consume' | 'break' | 'repair' | 'lose' | 'gain';
   itemId: ItemId;

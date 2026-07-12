@@ -1,4 +1,4 @@
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import { CANONICAL_EVENTS, eventDamageMultiplier } from '../canonical/events';
 import { runtimeItemDefinition } from '../canonical/items';
 import { resolveFishing } from './fishing';
@@ -6,6 +6,7 @@ import { applyInventoryMutation, createSurvivalInventory, usableInstances } from
 import { drawWeightedEvent, eligibleEvents, resolveEventOutcome } from './outcomeResolver';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
+import { ITEM_USE_ENERGY_COST } from './survivalTypes';
 import type {
   ActionOutcome,
   CanonicalEventDefinition,
@@ -169,16 +170,58 @@ export class SurvivalSession {
     return this.unavailable(action, option)?.message ?? null;
   }
 
+  availableItemReason(itemId: ItemId, targetInstanceId?: ItemInstanceId): string | null {
+    return this.unavailableItem(itemId, targetInstanceId)?.message ?? null;
+  }
+
+  useItem(itemId: ItemId, targetInstanceId?: ItemInstanceId): ActionOutcome {
+    const unavailable = this.unavailableItem(itemId, targetInstanceId);
+    if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
+
+    switch (itemId) {
+      case 'energyBar':
+        this.consumeCharge(itemId);
+        return this.commit(
+          'energy-bar-used',
+          'The ration restores your energy.',
+          { energy: SURVIVAL_BALANCE.dawn.normalEnergy - this.energy },
+          'rest',
+        );
+      case 'ductTape': {
+        const target = this.findInventoryInstance(targetInstanceId!);
+        this.consumeCharge(itemId);
+        applyInventoryMutation(this.inventory, {
+          kind: 'repair',
+          itemId: target!.itemId,
+          instanceId: targetInstanceId,
+          quantity: 1,
+        });
+        return this.commit(
+          'item-repaired',
+          `The duct tape repairs the ${runtimeItemDefinition(target!.itemId).label.toLowerCase()}.`,
+          {},
+          'repair',
+        );
+      }
+      case 'medicalKit': return this.treat();
+      case 'repairKit': return this.repairWithKit();
+      case 'fishingRod': return this.fish(false);
+      case 'scubaSet': return this.dive();
+      default:
+        return this.reject('item-not-usable', 'That item has no direct use.');
+    }
+  }
+
   perform(action: DayActionId, option?: DayActionOption): ActionOutcome {
     const unavailable = this.unavailable(action, option);
     if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
 
     switch (action) {
-      case 'fish': return this.fish(option === 'useBait');
-      case 'dive': return this.dive();
+      case 'fish': return option === 'useBait' ? this.fish(true) : this.useItem('fishingRod');
+      case 'dive': return this.useItem('scubaSet');
       case 'eat': return this.eat();
-      case 'repair': return this.repair(option);
-      case 'treat': return this.treat();
+      case 'repair': return option === undefined ? this.useItem('repairKit') : this.repair(option);
+      case 'treat': return this.useItem('medicalKit');
       case 'rest': return this.rest();
       case 'endDay': return this.endDay();
     }
@@ -418,6 +461,7 @@ export class SurvivalSession {
         if (this.energy < SURVIVAL_BALANCE.actions.repairEnergy) {
           return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
         }
+        if (option === undefined) return null;
         if (option === 'ductTape') {
           if (!this.hasCharge('ductTape')) return { code: 'no-duct-tape', message: 'No duct tape remains.' };
           return null;
@@ -475,6 +519,62 @@ export class SurvivalSession {
       deltas,
       'fish',
     );
+  }
+
+  private unavailableItem(itemId: ItemId, targetInstanceId?: ItemInstanceId): Rejection | null {
+    if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
+    if (this.state !== 'day') return { code: 'not-daytime', message: 'That item can only be used during the day.' };
+
+    const directlyUsable = itemId === 'energyBar'
+      || itemId === 'ductTape'
+      || itemId === 'medicalKit'
+      || itemId === 'repairKit'
+      || itemId === 'chest'
+      || itemId === 'fishingRod'
+      || itemId === 'scubaSet';
+    if (!directlyUsable) return { code: 'item-not-usable', message: 'That item has no direct use.' };
+    switch (itemId) {
+      case 'fishingRod': return this.unavailable('fish');
+      case 'scubaSet': return this.unavailable('dive');
+      case 'medicalKit': return this.unavailable('treat');
+      case 'repairKit':
+        if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
+          return { code: 'hull-full', message: 'The hull needs no repair.' };
+        }
+        if (this.energy < SURVIVAL_BALANCE.actions.repairEnergy) {
+          return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
+        }
+        return null;
+      case 'ductTape': {
+        if (!this.canUseEventItem(itemId)) {
+          return { code: 'item-unavailable', message: 'That item was not recovered or has no uses remaining.' };
+        }
+        if (targetInstanceId === undefined) {
+          return { code: 'repair-target-required', message: 'Choose a broken item to repair.' };
+        }
+        const target = this.findInventoryInstance(targetInstanceId);
+        if (target === null || target.instance.condition !== 'broken') {
+          return { code: 'repair-target-unavailable', message: 'That broken item is not available to repair.' };
+        }
+        return null;
+      }
+      case 'energyBar':
+        return this.canUseEventItem(itemId)
+          ? null
+          : { code: 'item-unavailable', message: 'That item was not recovered or has no uses remaining.' };
+      case 'chest':
+        if (!this.canUseEventItem(itemId)) {
+          return { code: 'item-unavailable', message: 'That item was not recovered or has no uses remaining.' };
+        }
+        if (this.energy < ITEM_USE_ENERGY_COST.chest) {
+          return { code: 'not-enough-energy', message: 'Opening a chest requires three energy.' };
+        }
+        return {
+          code: 'chest-pool-undocumented',
+          message: 'Chest opening is unavailable because the wiki does not document its utility pool.',
+        };
+      default: return { code: 'item-not-usable', message: 'That item has no direct use.' };
+    }
   }
 
   static brokenBoatChance(hull: number): number {
@@ -593,6 +693,16 @@ export class SurvivalSession {
       },
     });
     return drawWeightedEvent(pool, this.random, this.route);
+  }
+
+  private repairWithKit(): ActionOutcome {
+    this.actedToday = true;
+    return this.commit(
+      'repaired',
+      'You reinforce the damaged hull.',
+      { energy: -SURVIVAL_BALANCE.actions.repairEnergy, hull: SURVIVAL_BALANCE.actions.repairHull },
+      'repair',
+    );
   }
 
   private openEvent(event: CanonicalEventDefinition): void {
@@ -750,6 +860,17 @@ export class SurvivalSession {
       rescueProgress: this.rescueProgress,
       danger: this.danger,
     };
+  }
+
+  private findInventoryInstance(instanceId: ItemInstanceId): {
+    itemId: ItemId;
+    instance: SurvivalInventory[ItemId]['instances'][number];
+  } | null {
+    for (const [itemId, entry] of Object.entries(this.inventory) as [ItemId, SurvivalInventory[ItemId]][]) {
+      const instance = entry.instances.find((candidate) => candidate.instanceId === instanceId);
+      if (instance !== undefined) return { itemId, instance };
+    }
+    return null;
   }
 
   private setEventResource(resource: keyof ResolvedEventOutcome['resourceSets'], value: number): void {
