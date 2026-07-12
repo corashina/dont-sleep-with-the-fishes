@@ -11,6 +11,7 @@ import type {
   CanonicalEventDefinition,
   EventChoiceDefinition,
   EventHistory,
+  WeightedEventOutcome,
 } from '../src/survival/survivalTypes';
 
 const weightedDefinition: CanonicalEventDefinition = {
@@ -63,6 +64,43 @@ function criteria(overrides: Partial<Parameters<typeof eligibleEvents>[1]> = {})
 }
 
 describe('event outcome resolver', () => {
+  it('resolves an automatic event outcome without fabricating a choice', () => {
+    const automatic: CanonicalEventDefinition = {
+      id: 'automatic',
+      phase: 'night',
+      title: 'Automatic',
+      prompt: 'Too late.',
+      cue: 'sinking',
+      weight: 1,
+      minDay: 1,
+      cooldownDays: 0,
+      maxAppearances: 1,
+      dangerMin: 0,
+      automatic: true,
+      automaticOutcome: {
+        weight: 1,
+        message: 'The boat breaks apart.',
+        effects: {
+          resources: [{ resource: 'hull', operation: 'subtract', value: 10 }],
+          items: [
+            { kind: 'lose', itemId: 'map', quantity: 1 },
+            { kind: 'gain', itemId: 'swimRing', quantity: 1 },
+          ],
+        },
+      },
+    };
+
+    expect(resolveEventOutcome(automatic.automaticOutcome, sequenceRandom([0]))).toEqual({
+      message: 'The boat breaks apart.',
+      resourceDeltas: { hull: -10 },
+      resourceSets: {},
+      itemMutations: [
+        { kind: 'lose', itemId: 'map', quantity: 1 },
+        { kind: 'gain', itemId: 'swimRing', quantity: 1 },
+      ],
+    });
+  });
+
   it('uses relative outcome weights and resolves inclusive positive damage ranges', () => {
     const choice = weightedDefinition.choices[0]!;
 
@@ -131,6 +169,48 @@ describe('event outcome resolver', () => {
       ],
       route: 'left',
     });
+  });
+
+  it('normalizes invalid outcome weights and preserves weighted boundaries', () => {
+    const choice: EventChoiceDefinition = {
+      id: 'weighted',
+      label: 'Weighted',
+      outcomes: [
+        { weight: -10, message: 'Invalid.', effects: {} },
+        { weight: 20, message: 'Second.', effects: {} },
+        { weight: 30, message: 'Third.', effects: {} },
+      ],
+    };
+    expect(resolveEventOutcome(choice, sequenceRandom([19.999 / 50])).message).toBe('Second.');
+    expect(resolveEventOutcome(choice, sequenceRandom([20 / 50])).message).toBe('Third.');
+
+    const allInvalid: EventChoiceDefinition = {
+      id: 'invalid',
+      label: 'Invalid',
+      outcomes: [
+        { weight: Number.NaN, message: 'First.', effects: {} },
+        { weight: Number.POSITIVE_INFINITY, message: 'Second.', effects: {} },
+        { weight: -1, message: 'Third.', effects: {} },
+      ],
+    };
+    expect(resolveEventOutcome(allInvalid, sequenceRandom([0.99])).message).toBe('First.');
+  });
+
+  it('rejects mixed set and delta operations for the same resource', () => {
+    const outcome: WeightedEventOutcome = {
+      weight: 1,
+      message: 'Ambiguous.',
+      effects: {
+        resources: [
+          { resource: 'energy', operation: 'set', value: 1 },
+          { resource: 'energy', operation: 'add', value: 2 },
+        ],
+      },
+    };
+
+    expect(() => resolveEventOutcome(outcome, sequenceRandom([0]))).toThrow(
+      'Event outcome cannot mix set and add/subtract effects for resource "energy".',
+    );
   });
 });
 
@@ -215,5 +295,14 @@ describe('weighted event selection', () => {
     expect(drawWeightedEvent([first, second], sequenceRandom([9.999 / 40]), 'right')?.id).toBe('first');
     expect(drawWeightedEvent([first, second], sequenceRandom([10 / 40]), 'right')?.id).toBe('second');
     expect(drawWeightedEvent([], sequenceRandom([0]), null)).toBeUndefined();
+  });
+
+  it('normalizes non-finite event weights and chooses the first when all are zero', () => {
+    const invalid = [
+      { ...weightedDefinition, id: 'first', weight: Number.NaN },
+      { ...weightedDefinition, id: 'second', weight: Number.POSITIVE_INFINITY },
+      { ...weightedDefinition, id: 'third', weight: -1 },
+    ];
+    expect(drawWeightedEvent(invalid, sequenceRandom([0.99]), null)?.id).toBe('first');
   });
 });

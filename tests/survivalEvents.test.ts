@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from '../src/survival/events';
+import {
+  SURVIVAL_EVENTS,
+  drawWeightedEvent,
+  eligibleEvents,
+  type EventEligibility,
+} from '../src/survival/events';
 import { sequenceRandom } from '../src/survival/random';
 
 describe('survival events', () => {
@@ -43,10 +48,11 @@ describe('survival events', () => {
   });
 
   it('filters by phase, day, weather, immediate repeat, and cooldown', () => {
-    const events = eligibleEvents(SURVIVAL_EVENTS, {
+    const criteria: EventEligibility = {
       phase: 'day', day: 2, weather: 'calm', lastEventId: 'day-heat-haze',
       lastSeenDay: new Map([['day-hull-leak', 1]]),
-    });
+    };
+    const events = eligibleEvents(SURVIVAL_EVENTS, criteria);
     expect(events.every((event) => event.phase === 'day' && event.earliestDay <= 2)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('day-heat-haze');
     expect(events.map((event) => event.id)).not.toContain('day-hull-leak');

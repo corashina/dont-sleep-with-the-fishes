@@ -189,6 +189,8 @@ export interface LegacyEventEligibility {
   lastSeenDay: ReadonlyMap<string, number>;
 }
 
+export type EventEligibility = LegacyEventEligibility;
+
 export function eligibleEvents(
   catalog: readonly SurvivalEventDefinition[],
   criteria: LegacyEventEligibility,

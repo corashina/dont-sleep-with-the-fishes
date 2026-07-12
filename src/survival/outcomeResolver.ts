@@ -9,6 +9,7 @@ import type {
   ResolvedEventOutcome,
   ResolvedEventResources,
   SurvivalInventory,
+  WeightedEventOutcome,
 } from './survivalTypes';
 
 export interface CanonicalEventEligibility {
@@ -22,6 +23,22 @@ export interface CanonicalEventEligibility {
 
 function hasUsableItem(inventory: Readonly<SurvivalInventory>, itemId: keyof SurvivalInventory): boolean {
   return inventory[itemId].owned;
+}
+
+function normalizedWeight(weight: number): number {
+  return Number.isFinite(weight) && weight > 0 ? weight : 0;
+}
+
+function drawNormalized<T>(
+  entries: readonly { weight: number; value: T }[],
+  random: RandomSource,
+): T {
+  const normalized = entries.map((entry) => ({
+    weight: normalizedWeight(entry.weight),
+    value: entry.value,
+  }));
+  if (normalized.every(({ weight }) => weight === 0)) return normalized[0]!.value;
+  return drawWeighted(normalized, random);
 }
 
 export function eligibleEvents(
@@ -53,11 +70,10 @@ export function drawWeightedEvent(
 ): CanonicalEventDefinition | undefined {
   if (pool.length === 0) return undefined;
   const weighted = pool.map((event) => ({
-    weight: Math.max(0, event.weight + (route === null ? 0 : (event.routeWeightBonuses?.[route] ?? 0))),
+    weight: event.weight + (route === null ? 0 : (event.routeWeightBonuses?.[route] ?? 0)),
     value: event,
   }));
-  if (weighted.every(({ weight }) => weight === 0)) return pool[0];
-  return drawWeighted(weighted, random);
+  return drawNormalized(weighted, random);
 }
 
 function addDelta(
@@ -68,14 +84,25 @@ function addDelta(
   target[resource] = (target[resource] ?? 0) + delta;
 }
 
-export function resolveEventOutcome(
-  choice: EventChoiceDefinition,
+function assertConsistentResourceOperations(outcome: WeightedEventOutcome): void {
+  const modes = new Map<EventResource, 'set' | 'delta'>();
+  for (const effect of outcome.effects.resources ?? []) {
+    const mode = effect.operation === 'set' ? 'set' : 'delta';
+    const previous = modes.get(effect.resource);
+    if (previous !== undefined && previous !== mode) {
+      throw new Error(
+        `Event outcome cannot mix set and add/subtract effects for resource "${effect.resource}".`,
+      );
+    }
+    modes.set(effect.resource, mode);
+  }
+}
+
+function resolveSelectedOutcome(
+  selected: WeightedEventOutcome,
   random: RandomSource,
 ): ResolvedEventOutcome {
-  const selected = drawWeighted(
-    choice.outcomes.map((outcome) => ({ weight: outcome.weight, value: outcome })),
-    random,
-  );
+  assertConsistentResourceOperations(selected);
   const resourceDeltas: ResolvedEventResources = {};
   const resourceSets: ResolvedEventResources = {};
 
@@ -93,4 +120,25 @@ export function resolveEventOutcome(
   };
   if (selected.effects.route !== undefined) resolved.route = selected.effects.route;
   return resolved;
+}
+
+export function resolveEventOutcome(
+  choice: EventChoiceDefinition,
+  random: RandomSource,
+): ResolvedEventOutcome;
+export function resolveEventOutcome(
+  outcome: WeightedEventOutcome,
+  random: RandomSource,
+): ResolvedEventOutcome;
+export function resolveEventOutcome(
+  choiceOrOutcome: EventChoiceDefinition | WeightedEventOutcome,
+  random: RandomSource,
+): ResolvedEventOutcome {
+  const selected = 'outcomes' in choiceOrOutcome
+    ? drawNormalized(
+      choiceOrOutcome.outcomes.map((outcome) => ({ weight: outcome.weight, value: outcome })),
+      random,
+    )
+    : choiceOrOutcome;
+  return resolveSelectedOutcome(selected, random);
 }
