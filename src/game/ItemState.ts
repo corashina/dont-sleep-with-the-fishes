@@ -1,7 +1,6 @@
-export const ITEM_IDS = [
-  'flareGun', 'ductTape', 'fishingRod', 'baitTin', 'medicalKit',
-  'waterJug', 'cannedFood', 'flashlight', 'scubaSet',
-] as const;
+import { RUNTIME_ITEM_IDS, runtimeItemDefinition } from '../canonical/items';
+
+export const ITEM_IDS = RUNTIME_ITEM_IDS;
 
 export type ItemId = (typeof ITEM_IDS)[number];
 export type ItemInstanceId = `${ItemId}-${number}`;
@@ -21,17 +20,16 @@ export interface ItemInstance {
 
 export type ItemStatus = 'available' | 'carried' | 'saved' | 'lost';
 
-export const ITEM_DEFINITIONS: Readonly<Record<ItemId, ItemDefinition>> = {
-  flareGun: { label: 'FLARE GUN', weight: 1, spawnCount: 1, charges: 1, durable: false },
-  ductTape: { label: 'DUCT TAPE', weight: 1, spawnCount: 2, charges: 2, durable: false },
-  fishingRod: { label: 'FISHING ROD', weight: 2, spawnCount: 1, charges: null, durable: true },
-  baitTin: { label: 'BAIT TIN', weight: 1, spawnCount: 2, charges: 3, durable: false },
-  medicalKit: { label: 'MEDICAL KIT', weight: 2, spawnCount: 1, charges: 2, durable: false },
-  waterJug: { label: 'WATER JUG', weight: 2, spawnCount: 2, charges: 3, durable: false },
-  cannedFood: { label: 'CANNED FOOD', weight: 1, spawnCount: 3, charges: 1, durable: false },
-  flashlight: { label: 'FLASHLIGHT', weight: 1, spawnCount: 1, charges: null, durable: true },
-  scubaSet: { label: 'SCUBA SET', weight: 3, spawnCount: 1, charges: null, durable: true },
-};
+export const ITEM_DEFINITIONS = Object.fromEntries(ITEM_IDS.map((id) => {
+  const definition = runtimeItemDefinition(id);
+  return [id, {
+    label: definition.label,
+    weight: definition.weight,
+    spawnCount: definition.spawnCount,
+    charges: definition.charges,
+    durable: definition.durable,
+  } satisfies ItemDefinition];
+})) as Readonly<Record<ItemId, ItemDefinition>>;
 
 export const ITEM_LABELS = Object.fromEntries(
   ITEM_IDS.map((id) => [id, ITEM_DEFINITIONS[id].label]),

@@ -14,8 +14,8 @@ const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) =>
 
 describe('demo contracts', () => {
   it('exposes the complete physical-inventory milestone', () => {
-    expect(ITEM_IDS).toHaveLength(9);
-    expect(createItemInstances()).toHaveLength(14);
+    expect(ITEM_IDS).toHaveLength(21);
+    expect(createItemInstances()).toHaveLength(25);
     expect(ITEM_DEFINITIONS.scubaSet.weight).toBe(3);
     expect(ACTION_FOR_ITEM.scubaSet).toBe('dive');
     expect(ACTION_FOR_ITEM.fishingRod).toBe('fish');
@@ -31,7 +31,7 @@ describe('demo contracts', () => {
     expect(new Set(WEATHER_IDS).size).toBe(3);
   });
 
-  it('maps all nine scavenged items into survival definitions', () => {
+  it('maps every runtime item into survival definitions', () => {
     const inventory = createSurvivalInventory(saved(...ITEM_IDS));
 
     expect(Object.keys(inventory).sort()).toEqual([...ITEM_IDS].sort());

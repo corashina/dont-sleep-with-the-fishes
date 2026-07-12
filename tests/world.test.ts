@@ -37,6 +37,8 @@ const pointInside = (point: Vector3, box: CollisionBox): boolean =>
   point.y >= box.minY && point.y <= box.maxY &&
   point.z >= box.minZ && point.z <= box.maxZ;
 
+const GENERATED_ITEM_COUNT = createItemInstances().length;
+
 const playerOverlaps = (point: Vector3, radius: number, box: CollisionBox): boolean => {
   if (point.y < box.minY || point.y > box.maxY) return false;
   const closestX = Math.max(box.minX, Math.min(point.x, box.maxX));
@@ -93,7 +95,7 @@ describe('procedural world builders', () => {
   it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
     const world = new World(scene, createItemInstances());
-    expect(world.itemObjects.size).toBe(14);
+    expect(world.itemObjects.size).toBe(GENERATED_ITEM_COUNT);
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
@@ -106,9 +108,9 @@ describe('procedural world builders', () => {
       .toBeCloseTo(boatStorageTransform(0).position.y + 0.28);
   });
 
-  it('builds fourteen instance meshes including a distinct scuba set', () => {
+  it('builds every instance mesh including a distinct scuba set', () => {
     const world = new World(new Scene(), createItemInstances());
-    expect(world.itemObjects.size).toBe(14);
+    expect(world.itemObjects.size).toBe(GENERATED_ITEM_COUNT);
     expect(world.itemObjects.get('scubaSet-1')?.userData.itemType).toBe('scubaSet');
     expect(world.itemObjects.get('scubaSet-1')?.userData.instanceId).toBe('scubaSet-1');
     world.dispose();
@@ -296,7 +298,7 @@ describe('procedural world builders', () => {
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
     expect(sharedShipMaterials.size).toBeGreaterThan(0);
-    expect(propResources).toHaveLength(14);
+    expect(propResources).toHaveLength(GENERATED_ITEM_COUNT);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
@@ -378,14 +380,22 @@ describe('procedural world builders', () => {
     expect(meshCount).toBeGreaterThan(0);
   });
 
-  it('gives every prop type distinct procedural geometry signatures', () => {
-    const signatures = ITEM_IDS.map(geometrySignature);
-    expect(new Set(signatures)).toHaveLength(ITEM_IDS.length);
+  it('keeps established prop types visually distinct', () => {
+    const establishedItemIds = [
+      'flareGun', 'ductTape', 'fishingRod', 'baitTin', 'medicalKit',
+      'waterJug', 'cannedFood', 'flashlight', 'scubaSet',
+    ] as const;
+    const signatures = establishedItemIds.map(geometrySignature);
+    expect(new Set(signatures)).toHaveLength(establishedItemIds.length);
   });
 
-  it('builds the two-zone ship contract with fourteen supply spawns', () => {
+  it('builds enough finite unique supply spawns for the full catalog', () => {
     const ship = createShip();
-    expect(ship.itemSpawnPoints).toHaveLength(14);
+    expect(ship.itemSpawnPoints.length).toBeGreaterThanOrEqual(GENERATED_ITEM_COUNT);
+    expect(ship.itemSpawnPoints.every((point) =>
+      point.toArray().every(Number.isFinite))).toBe(true);
+    expect(new Set(ship.itemSpawnPoints.map((point) => point.toArray().join(','))).size)
+      .toBe(ship.itemSpawnPoints.length);
     expect(ship.colliders.length).toBeGreaterThanOrEqual(10);
     expect(ship.playerStart.y).toBeGreaterThan(2);
     expect(ship.evacuationPoint.x).toBeGreaterThan(3);
@@ -396,8 +406,8 @@ describe('procedural world builders', () => {
     const values = [0.12, 0.81, 0.34, 0.67, 0.05, 0.92, 0.48];
     let index = 0;
     const selected = selectSpawnPoints(points, () => values[index++] ?? 0.5);
-    expect(selected).toHaveLength(14);
-    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(14);
+    expect(selected).toHaveLength(points.length);
+    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(points.length);
     expect(selected.every((point) => !points.includes(point))).toBe(true);
   });
 

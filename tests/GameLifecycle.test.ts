@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
 import type { PhaseContext } from '../src/app/GamePhase';
 import { ScavengeSession } from '../src/game/ScavengeSession';
-import { ITEM_DEFINITIONS, type ItemInstance } from '../src/game/ItemState';
+import { createItemInstances, ITEM_DEFINITIONS, type ItemInstance } from '../src/game/ItemState';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import { World } from '../src/world/World';
@@ -35,10 +35,11 @@ describe('ScavengePhase lifecycle integration', () => {
     const firstItems = updateInteraction.mock.calls[0]![0];
     const firstInstances = updateInteraction.mock.calls[0]![2];
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
-    expect(internals.world.itemObjects.size).toBe(14);
-    expect(firstItems).toHaveLength(14);
+    const generatedItemCount = createItemInstances().length;
+    expect(internals.world.itemObjects.size).toBe(generatedItemCount);
+    expect(firstItems).toHaveLength(generatedItemCount);
     expect(firstItems).toContain(cannedFood);
-    expect(firstInstances.size).toBe(14);
+    expect(firstInstances.size).toBe(generatedItemCount);
     expect(firstInstances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1',
       type: 'cannedFood',
@@ -49,7 +50,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
     const nextItems = updateInteraction.mock.calls[1]![0];
     const nextInstances = updateInteraction.mock.calls[1]![2];
-    expect(nextItems).toHaveLength(13);
+    expect(nextItems).toHaveLength(generatedItemCount - 1);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();
