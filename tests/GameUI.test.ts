@@ -23,6 +23,64 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
+  it('defines the illustrated global and scavenging presentation contracts', () => {
+    expect(mainStyles).toContain('--ink-bone: #f2ead7');
+    expect(mainStyles).toContain('.ui-treatment::after');
+    expect(mainStyles).toContain('.pocket-watch__art');
+    expect(mainStyles).toContain('.timber-action::before');
+    expect(mainStyles).toContain('.poster-screen');
+    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
+  it('keeps the critical watch timer at least 3:1 against its gold face', () => {
+    expect(mainStyles).toMatch(/\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\(--ink-red\);/s);
+    const criticalColor = mainStyles.match(/--ink-red:\s*(#[0-9a-f]{6})/i)?.[1];
+    const watchGold = mainStyles.match(/\.pocket-watch__art\s*\{[^}]*color:\s*(#[0-9a-f]{6})/is)?.[1];
+    expect(criticalColor).toBeDefined();
+    expect(watchGold).toBeDefined();
+    if (!criticalColor || !watchGold) return;
+
+    const luminance = (hex: string): number => {
+      const channels = hex.slice(1).match(/.{2}/g)!
+        .map((channel) => Number.parseInt(channel, 16) / 255)
+        .map((channel) => channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+    };
+    const foreground = luminance(criticalColor);
+    const background = luminance(watchGold);
+    const ratio = (Math.max(foreground, background) + 0.05)
+      / (Math.min(foreground, background) + 0.05);
+
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+
+  it('guards every illustrated action hover and active selector from disabled states', () => {
+    const interactiveSelectors = [...mainStyles.matchAll(/([^{}]+)\{/g)]
+      .flatMap((match) => match[1]!.split(',').map((selector) => selector.trim()))
+      .filter((selector) => /:(?:hover|active)$/.test(selector))
+      .filter((selector) => [
+        '.timber-action',
+        '.primary-action',
+        '.event-item',
+        '.secondary-action',
+      ].some((className) => selector.includes(className)));
+
+    expect(interactiveSelectors).toEqual([
+      '.timber-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.timber-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.primary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.primary-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.event-item:not(:disabled):not([aria-disabled="true"]):hover',
+      '.secondary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.event-item:not(:disabled):not([aria-disabled="true"]):active',
+      '.secondary-action:not(:disabled):not([aria-disabled="true"]):active',
+      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):hover',
+      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):active',
+    ]);
+  });
+
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -59,6 +117,35 @@ describe('GameUI', () => {
     expect(mount.querySelectorAll('.carried-row')).toHaveLength(2);
     expect(mainStyles).toMatch(/\.carried-list\s*\{[^}]*display:\s*grid[^}]*gap:/s);
     expect(mainStyles).toMatch(/\.carried-row\s*\{[^}]*display:\s*block/s);
+  });
+
+  it('exposes sinking danger and critical severity at the presentation thresholds', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const root = mount.querySelector<HTMLElement>('.game-ui')!;
+    const sinkingLabel = mount.querySelector<HTMLElement>('[data-sinking]')!;
+
+    ui.render(snapshot(), getSinkingState(0, 120));
+    expect(root.dataset.sinkingSeverity).toBe('stable');
+    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
+
+    ui.render(snapshot(), getSinkingState(47.99, 120));
+    expect(root.dataset.sinkingSeverity).toBe('stable');
+    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
+
+    ui.render(snapshot(), getSinkingState(48, 120));
+    expect(root.dataset.sinkingSeverity).toBe('danger');
+    expect(sinkingLabel.textContent).toBe('DECK TAKING WATER');
+
+    ui.render(snapshot(), getSinkingState(90, 120));
+    expect(root.dataset.sinkingSeverity).toBe('critical');
+    expect(sinkingLabel.textContent).toBe('FINAL SUBMERSION');
+  });
+
+  it('defines red-ink danger and transform-opacity-only critical sinking treatments', () => {
+    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="danger"\] \[data-sinking\]\s*\{[^}]*color:\s*var\(--ink-red-bright\);[^}]*text-shadow:/s);
+    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="critical"\] \.ui-treatment::before\s*\{[^}]*background:\s*radial-gradient\([^}]*animation:\s*critical-vignette/s);
+    expect(mainStyles).toMatch(/@keyframes critical-vignette\s*\{\s*50%\s*\{\s*opacity:\s*[^;]+;\s*transform:\s*[^;]+;\s*\}\s*\}/s);
   });
 
   it('reports a saved duplicate even when the first instance of its type was not saved', () => {
@@ -118,14 +205,43 @@ describe('GameUI', () => {
     document.body.append(mount);
     const ui = new GameUI(mount);
 
+    const errors = [...mount.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
+    expect(errors).toHaveLength(2);
+    errors.forEach((error) => {
+      expect(error.classList).toContain('illustrated-warning');
+      expect(error.querySelector('[data-ui-artwork="warning"]')?.getAttribute('aria-hidden')).toBe('true');
+      expect(error.querySelector('[data-pointer-lock-error-copy]')).not.toBeNull();
+    });
+
     ui.showPointerLockError();
 
-    const errors = [...mount.querySelectorAll('[data-pointer-lock-error]')];
-    expect(errors).toHaveLength(2);
     errors.forEach((error) => {
       expect(error.textContent).toContain('Mouse look was blocked');
       expect(error.classList).toContain('is-visible');
     });
+
+    ui.clearPointerLockError();
+    errors.forEach((error) => {
+      expect(error.querySelector('[data-pointer-lock-error-copy]')?.textContent).toBe('');
+      expect(error.classList).not.toContain('is-visible');
+      expect(error.querySelector('[data-ui-artwork="warning"]')?.getAttribute('aria-hidden')).toBe('true');
+    });
+    expect(mainStyles).toMatch(/\.illustrated-warning\.is-visible\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
+  });
+
+  it('presents compatibility failures with warning artwork and preserved error copy', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const message = 'WebGL 2 is required for this voyage.';
+
+    ui.showCompatibilityError(message);
+
+    const startLayer = mount.querySelector<HTMLElement>('[data-start]')!;
+    expect(startLayer.classList).toContain('has-compatibility-error');
+    expect(startLayer.querySelector('.lead')?.textContent).toBe(message);
+    expect(startLayer.querySelector<HTMLButtonElement>('[data-start-button]')?.hidden).toBe(true);
+    expect(startLayer.querySelector('[data-pointer-lock-error] [data-ui-artwork="warning"]')).not.toBeNull();
+    expect(mainStyles).toMatch(/\.poster-screen\.has-compatibility-error \.illustrated-warning\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
   it('removes button listeners and its DOM root exactly once on dispose', () => {
@@ -159,5 +275,24 @@ describe('GameUI', () => {
     expect(resume).toHaveBeenCalledOnce();
     expect(replay).toHaveBeenCalledOnce();
     expect(mount.children).toHaveLength(0);
+  });
+
+  it('renders the illustrated scavenging hierarchy without losing state hooks', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('.hud')?.classList).toContain('illustrated-hud');
+    expect(mount.querySelector('[data-ui-artwork="watch"]')).not.toBeNull();
+    expect(mount.querySelector('.timer-block')?.classList).toContain('pocket-watch');
+    expect(mount.querySelector('[data-timer]')?.textContent).toBe('02:00');
+    expect(mount.querySelector('[data-capacity]')).not.toBeNull();
+    expect(mount.querySelector('[data-carry-weight]')).not.toBeNull();
+    expect(mount.querySelector('[data-prompt]')).not.toBeNull();
+    expect(mount.querySelector('[data-feedback]')).not.toBeNull();
+    expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
+    expect(mount.querySelector('[data-start-button]')?.classList).toContain('timber-action');
+    expect(mount.querySelector('[data-ui-artwork="warning"]')).not.toBeNull();
+
+    ui.dispose();
   });
 });

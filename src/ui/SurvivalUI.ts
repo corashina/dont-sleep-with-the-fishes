@@ -11,6 +11,7 @@ import type {
   SurvivalState,
   WeatherId,
 } from '../survival/survivalTypes';
+import { uiArtwork, type UiArtworkId } from './uiArtwork';
 
 interface ActionDefinition {
   id: DayActionId;
@@ -24,6 +25,13 @@ interface ActionDefinition {
 interface ActionPreview { cost: string; effect: string; risk: ActionDefinition['risk'] }
 
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
+
+const METER_ARTWORK: Record<MeterId, UiArtworkId> = {
+  health: 'health',
+  hunger: 'hunger',
+  energy: 'energy',
+  hull: 'hull',
+};
 
 interface MeterDefinition {
   id: MeterId;
@@ -105,8 +113,9 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 
 function meterMarkup(meter: MeterDefinition): string {
   return `
-    <div class="survival-meter survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
+    <div class="survival-meter survival-condition survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
       aria-label="${meter.label}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}">
+      ${uiArtwork(METER_ARTWORK[meter.id], 'survival-condition__art')}
       <span class="survival-meter__label">${meter.label}<span class="survival-meter__danger" data-meter-danger aria-hidden="true" hidden>${meter.dangerLabel}</span></span>
       <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
       <span class="survival-meter__value" data-meter-value>0</span>
@@ -178,59 +187,61 @@ export class SurvivalUI {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
+      <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <header class="survival-status" aria-label="Survival status">
+      <header class="survival-status journal-marker" aria-label="Survival status">
+        ${uiArtwork('journal', 'journal-marker__art')}
         <div class="survival-status__time"><span data-day>DAY 1</span><span data-phase>DAYLIGHT</span></div>
         <div class="survival-status__weather"><span class="eyebrow">WEATHER</span><strong data-weather>CALM</strong></div>
       </header>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
-      <section class="survival-stores" aria-label="Loose supplies">
+      <section class="survival-stores survival-tallies" aria-label="Loose supplies">
         <span>FOOD <strong data-store="food">0</strong></span>
         <span>BAIT <strong data-store="bait">0</strong></span>
-        <span>REPAIR MATERIAL <strong data-store="repairMaterial">0</strong></span>
+        <span>REPAIR <strong data-store="repairMaterial">0</strong></span>
         <span>RESCUE <strong data-store="rescueProgress">0</strong></span>
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="survival-overlay action-options-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
+      <section class="survival-overlay action-options-overlay cinematic-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
         <p class="eyebrow">FISHING METHOD</p>
         <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
         <p>Cast now, or spend one bait for a better chance.</p>
         <div class="action-options">
-          <button type="button" class="secondary-action" data-action-option="fish">FISH WITHOUT BAIT</button>
-          <button type="button" class="primary-action" data-action-option="useBait">USE 1 BAIT</button>
+          <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
+          <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
         </div>
       </section>
-      <section class="survival-overlay event-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
+      <section class="survival-overlay event-overlay cinematic-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
         <p class="event-danger" data-event-danger></p>
         <h2 data-event-title tabindex="-1"></h2>
         <p data-event-prompt></p>
         <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
-        <button type="button" class="secondary-action" data-endure>ENDURE</button>
+        <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
       </section>
-      <section class="survival-overlay outcome-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
+      <section class="survival-overlay outcome-overlay cinematic-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
         <p class="eyebrow">AFTERMATH</p>
         <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
         <p data-outcome-message></p>
         <ul class="outcome-deltas" data-outcome-deltas></ul>
         <div class="outcome-actions">
           <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
-          <button type="button" class="primary-action" data-continue>CONTINUE</button>
+          <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
         </div>
       </section>
-      <section class="survival-overlay pause-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
+      <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <p class="eyebrow">PAUSED</p>
         <h2>Hold Fast</h2>
         <p>The sea will wait until you return.</p>
-        <button type="button" class="primary-action" data-resume>RESUME</button>
+        <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
       </section>
-      <section class="survival-overlay ending-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
+      <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
         <p class="eyebrow">JOURNEY ENDED</p>
         <h2 data-ending-title tabindex="-1" role="alert"></h2>
         <p data-ending-body></p>
         <p class="ending-stats" data-ending-stats></p>
-        <button type="button" class="primary-action" data-restart>START FROM THE SHIP</button>
+        <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
       </section>
     `;
     mount.append(this.root);
