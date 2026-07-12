@@ -5,12 +5,25 @@ import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
+  ItemCondition,
   ResourceDelta,
   SurvivalEventDefinition,
   SurvivalSnapshot,
   SurvivalState,
   WeatherId,
 } from '../survival/survivalTypes';
+
+export interface EventChoiceView {
+  id: string;
+  label: string;
+  itemId?: ItemId;
+  unavailableReason: string | null;
+}
+
+interface RenderedEventChoice extends EventChoiceView {
+  riskDescription?: string;
+  usesItemAdapter?: boolean;
+}
 
 interface ActionDefinition {
   id: DayActionId;
@@ -324,6 +337,7 @@ export class SurvivalUI {
   showEvent(
     event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'prompt' | 'danger'>,
     snapshot: SurvivalSnapshot,
+    choices?: readonly RenderedEventChoice[],
   ): void {
     if (this.disposed) return;
     this.focusReturnTarget = this.resolveCommandOrigin();
@@ -334,6 +348,20 @@ export class SurvivalUI {
     this.eventLayer.dataset.eventId = event.id;
     this.eventLayer.dataset.danger = event.danger;
     this.eventItems.replaceChildren();
+    if (choices !== undefined) {
+      choices.forEach((choice) => this.renderEventChoice(choice, snapshot));
+      this.endureButton.hidden = true;
+      if (choices.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'event-items__empty';
+        empty.textContent = 'NO RESPONSE IS AVAILABLE';
+        this.eventItems.append(empty);
+      }
+      this.showLayer(this.eventLayer);
+      this.eventTitle.focus();
+      return;
+    }
+    this.endureButton.hidden = false;
     const canonicalChoices = snapshot.pendingChoices;
     const usesCanonicalChoices = canonicalChoices.length > 0;
 
@@ -393,6 +421,94 @@ export class SurvivalUI {
     this.endureButton.disabled = this.busy;
     this.showLayer(this.eventLayer);
     this.eventTitle.focus();
+  }
+
+  private renderEventChoice(choice: RenderedEventChoice, snapshot: SurvivalSnapshot): void {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'event-item event-choice';
+    button.dataset.eventChoice = choice.id;
+    button.dataset.usable = choice.unavailableReason === null ? 'true' : 'false';
+    if (choice.itemId !== undefined) button.dataset.item = choice.itemId;
+    if (choice.usesItemAdapter) button.dataset.usesItemAdapter = 'true';
+    button.disabled = this.busy;
+    button.setAttribute('aria-disabled', choice.unavailableReason === null ? 'false' : 'true');
+
+    const label = document.createElement('span');
+    label.className = 'event-choice__label';
+    label.textContent = choice.label;
+    button.append(label);
+
+    if (choice.usesItemAdapter && choice.itemId !== undefined) {
+      const target = document.createElement('span');
+      target.className = 'event-choice__target';
+      target.dataset.eventChoiceTarget = '';
+      target.textContent = ITEM_LABELS[choice.itemId].toUpperCase();
+      button.append(target);
+    }
+
+    if (choice.unavailableReason !== null) {
+      const reason = document.createElement('span');
+      reason.className = 'event-choice__reason';
+      reason.setAttribute('aria-hidden', 'true');
+      reason.textContent = choice.unavailableReason;
+      button.append(reason);
+    }
+
+    const description = this.eventChoiceDescription(choice, snapshot);
+    if (description !== '') {
+      button.setAttribute('aria-description', description);
+      const tooltip = document.createElement('span');
+      tooltip.className = 'event-choice-tooltip';
+      tooltip.role = 'tooltip';
+      tooltip.setAttribute('aria-hidden', 'true');
+      tooltip.textContent = description;
+      button.append(tooltip);
+    }
+    this.eventItems.append(button);
+  }
+
+  private eventChoiceDescription(choice: RenderedEventChoice, snapshot: SurvivalSnapshot): string {
+    const details: string[] = [];
+    if (choice.itemId !== undefined) {
+      const inventory = snapshot.inventory[choice.itemId];
+      const instances = inventory.instances ?? [];
+      const conditions = [...new Set(instances.map(({ condition }) => condition))];
+      if (conditions.length > 0) {
+        details.push(`${conditions.map((condition) => this.conditionLabel(condition, instances)).join(', ')} ${ITEM_LABELS[choice.itemId]}`);
+      } else if (this.aggregateItemUses(choice.itemId, snapshot) > 0 || inventory.owned) {
+        details.push('USABLE');
+      }
+
+      const aggregateUses = this.aggregateItemUses(choice.itemId, snapshot);
+      if (aggregateUses > 0) {
+        const storeLabel = choice.itemId === 'cannedFood' ? 'FOOD' : 'BAIT';
+        details.push(`${aggregateUses} ${storeLabel} IN STORES`);
+      } else if (inventory.durable) {
+        details.push('DURABLE');
+      } else {
+        const charges = inventory.charges ?? 0;
+        details.push(`${charges} ${charges === 1 ? 'CHARGE' : 'CHARGES'} REMAINING`);
+      }
+      details.push(SURVIVAL_ITEM_DESCRIPTIONS[choice.itemId]);
+    }
+    if (choice.riskDescription !== undefined) details.push(choice.riskDescription);
+    if (choice.unavailableReason !== null) details.push(choice.unavailableReason);
+    return details.join('. ');
+  }
+
+  private conditionLabel(
+    condition: ItemCondition,
+    instances: readonly { condition: ItemCondition }[],
+  ): string {
+    const count = instances.filter((instance) => instance.condition === condition).length;
+    return count > 1 ? `${condition.toUpperCase()} x${count}` : condition.toUpperCase();
+  }
+
+  private aggregateItemUses(itemId: ItemId, snapshot: SurvivalSnapshot): number {
+    if (itemId === 'cannedFood') return snapshot.food;
+    if (itemId === 'baitTin') return snapshot.bait;
+    return 0;
   }
 
   showOutcome(outcome: ActionOutcome): void {
@@ -614,8 +730,8 @@ export class SurvivalUI {
       button.disabled = this.busy;
       button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     });
-    this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item], button[data-choice]').forEach((button) => {
-      button.disabled = this.busy || button.dataset.usable !== 'true';
+    this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item], button[data-choice], button[data-event-choice]').forEach((button) => {
+      button.disabled = this.busy || (!button.hasAttribute('data-event-choice') && button.dataset.usable !== 'true');
     });
     this.fishingOptionButtons.forEach((button) => { button.disabled = this.busy; });
     this.endureButton.disabled = this.busy;
@@ -723,7 +839,10 @@ export class SurvivalUI {
     if (event.key !== 'Tab') return false;
     const controls = [...modal.querySelectorAll<HTMLElement>(
       'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => !element.hasAttribute('inert') && element.getAttribute('aria-hidden') !== 'true');
+    )].filter((element) => (
+      !element.hidden
+      && element.closest('[hidden], [inert], [aria-hidden="true"]') === null
+    ));
     if (controls.length === 0) {
       event.preventDefault();
       this.focusModal(modal);
@@ -765,14 +884,24 @@ export class SurvivalUI {
       this.chooseFishingOption(actionOption === 'useBait' ? 'useBait' : undefined);
       return;
     }
+    const choiceId = button.dataset.eventChoice;
+    if (choiceId !== undefined && this.eventItems.contains(button)) {
+      if (button.dataset.usesItemAdapter === 'true') {
+        const targetItemId = button.dataset.item as ItemId | undefined;
+        if (targetItemId !== undefined) this.onEventItem(targetItemId);
+      } else {
+        this.onEventChoice(choiceId);
+      }
+      return;
+    }
     const itemId = button.dataset.item as ItemId | undefined;
     if (itemId !== undefined && this.eventItems.contains(button)) {
       this.onEventItem(itemId);
       return;
     }
-    const choiceId = button.dataset.choice;
-    if (choiceId !== undefined && this.eventItems.contains(button)) {
-      this.onEventChoice(choiceId);
+    const legacyChoiceId = button.dataset.choice;
+    if (legacyChoiceId !== undefined && this.eventItems.contains(button)) {
+      this.onEventChoice(legacyChoiceId);
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();

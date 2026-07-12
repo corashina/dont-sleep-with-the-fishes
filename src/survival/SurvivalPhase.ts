@@ -1,13 +1,21 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import { ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstance } from '../game/ItemState';
+import { runtimeItemDefinition } from '../canonical/items';
 import { CANONICAL_EVENTS } from '../canonical/events';
-import { SurvivalUI } from '../ui/SurvivalUI';
+import { SurvivalUI, type EventChoiceView } from '../ui/SurvivalUI';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
 import { SurvivalSession } from './SurvivalSession';
 import type { DayActionOption } from './SurvivalSession';
-import type { ActionOutcome, DayActionId, SurvivalSnapshot, SurvivalState } from './survivalTypes';
+import type {
+  ActionOutcome,
+  ChoiceEventDefinition,
+  DayActionId,
+  EventChoiceDefinition,
+  SurvivalSnapshot,
+  SurvivalState,
+} from './survivalTypes';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -348,7 +356,7 @@ export class SurvivalPhase implements GamePhase {
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const canonical = CANONICAL_EVENTS.find((candidate) => candidate.id === snapshot.pendingEventId);
-    if (canonical !== undefined) {
+    if (canonical !== undefined && !canonical.automatic) {
       const danger = canonical.dangerMin >= 2
         ? 'dangerous'
         : canonical.dangerMin >= 1
@@ -359,11 +367,88 @@ export class SurvivalPhase implements GamePhase {
         title: canonical.title,
         prompt: canonical.prompt,
         danger,
-      }, snapshot);
+      }, snapshot, this.eventChoiceViews(canonical, snapshot));
       return;
     }
     const event = SURVIVAL_EVENTS.find((candidate) => candidate.id === snapshot.pendingEventId);
     if (event !== undefined) this.ui.showEvent?.(event, snapshot);
+  }
+
+  private eventChoiceViews(
+    event: ChoiceEventDefinition,
+    snapshot: SurvivalSnapshot,
+  ): EventChoiceView[] {
+    const availableChoiceIds = new Set(snapshot.pendingChoices.map(({ id }) => id));
+    const exactItemIds = new Set(event.choices.flatMap(({ itemId }) => (
+      itemId === undefined || itemId === 'any' ? [] : [itemId]
+    )));
+
+    return event.choices.flatMap((choice) => {
+      const riskDescription = this.relativeWeightDescription(choice);
+      if (choice.itemId === 'any') {
+        const targets = ITEM_IDS.filter((itemId) => (
+          !exactItemIds.has(itemId)
+          && !runtimeItemDefinition(itemId).builtIn
+          && (snapshot.inventory[itemId].instances ?? []).some(({ condition }) => condition === 'usable')
+        ));
+        if (targets.length === 0) {
+          return [{
+            id: choice.id,
+            label: choice.label,
+            unavailableReason: 'No eligible recovered item can be offered.',
+            ...(riskDescription === undefined ? {} : { riskDescription }),
+          }];
+        }
+        return targets.map((itemId) => ({
+          id: choice.id,
+          label: choice.label,
+          itemId,
+          unavailableReason: availableChoiceIds.has(choice.id) ? null : 'No eligible recovered item can be offered.',
+          usesItemAdapter: true,
+          ...(riskDescription === undefined ? {} : { riskDescription }),
+        }));
+      }
+
+      const unavailableReason = choice.itemId === undefined
+        ? null
+        : this.eventItemUnavailableReason(choice.itemId, choice.id, snapshot, availableChoiceIds);
+      return [{
+        id: choice.id,
+        label: choice.label,
+        ...(choice.itemId === undefined ? {} : { itemId: choice.itemId }),
+        unavailableReason,
+        ...(riskDescription === undefined ? {} : { riskDescription }),
+      }];
+    });
+  }
+
+  private eventItemUnavailableReason(
+    itemId: ItemId,
+    choiceId: string,
+    snapshot: SurvivalSnapshot,
+    availableChoiceIds: ReadonlySet<string>,
+  ): string | null {
+    if (availableChoiceIds.has(choiceId)) return null;
+    if (itemId === 'cannedFood' && snapshot.food > 0) return null;
+    if (itemId === 'baitTin' && snapshot.bait > 0) return null;
+
+    const entry = snapshot.inventory[itemId];
+    const instances = entry.instances ?? [];
+    const label = ITEM_LABELS[itemId];
+    if (instances.length === 0) return `${label} was not recovered.`;
+    const conditions = new Set(instances.map(({ condition }) => condition));
+    if (conditions.size === 1) {
+      if (conditions.has('broken')) return `${label} is broken.`;
+      if (conditions.has('consumed')) return `${label} was consumed.`;
+      if (conditions.has('lost')) return `${label} was lost.`;
+    }
+    if (!entry.durable && (entry.charges ?? 0) <= 0) return `No charges remain for ${label}.`;
+    return `No usable ${label} remains.`;
+  }
+
+  private relativeWeightDescription(choice: EventChoiceDefinition): string | undefined {
+    if (choice.outcomes.length < 2) return undefined;
+    return `RELATIVE OUTCOME WEIGHTS ${choice.outcomes.map(({ weight }) => weight).join(':')}. EXACT PERCENTAGES ARE NOT DOCUMENTED`;
   }
 
   private presentTerminalOnce(snapshot: SurvivalSnapshot): void {

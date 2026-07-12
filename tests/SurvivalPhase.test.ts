@@ -313,7 +313,85 @@ describe('SurvivalPhase orchestration', () => {
       id: 'dangerous-waters',
       title: 'Dangerous Waters',
       danger: 'safe',
-    }), current);
+    }), current, expect.any(Array));
+  });
+
+  it('resolves every canonical choice into a labeled availability view without percentage claims', () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'dangerous-waters',
+      pendingChoices: [
+        { id: 'map', label: 'Use Map', itemId: 'map' },
+        { id: 'sleep', label: 'Sleep' },
+      ],
+      inventory: inventory({
+        map: {
+          owned: true,
+          charges: null,
+          durable: true,
+          instances: [{ instanceId: 'map-1', type: 'map', condition: 'usable', charges: null }],
+        },
+        compass: {
+          owned: false,
+          charges: null,
+          durable: true,
+          instances: [{ instanceId: 'compass-1', type: 'compass', condition: 'lost', charges: null }],
+        },
+      }),
+    });
+    const showEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { dispose: vi.fn() },
+      ui: { render: vi.fn(), showEvent, dispose: vi.fn() },
+    });
+
+    phase.start();
+
+    const choices = showEvent.mock.calls[0]![2];
+    expect(choices).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'map', label: 'Use Map', itemId: 'map', unavailableReason: null }),
+      expect.objectContaining({ id: 'compass', label: 'Use Compass', itemId: 'compass', unavailableReason: expect.stringMatching(/lost/i) }),
+      expect.objectContaining({ id: 'sleep', label: 'Sleep', unavailableReason: null }),
+    ]));
+    expect(JSON.stringify(choices)).toContain('RELATIVE OUTCOME WEIGHTS 80:20');
+    expect(JSON.stringify(choices)).not.toMatch(/\d+%/);
+  });
+
+  it('expands the Handyman fallback into concrete recovered-item targets', () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'the-handyman',
+      pendingChoices: [
+        { id: 'invalid-trade', label: 'Offer another item', itemId: 'any' },
+        { id: 'touch', label: 'Touch the Hand' },
+        { id: 'sleep', label: 'Sleep' },
+      ],
+      inventory: inventory({
+        waterJug: {
+          owned: true,
+          charges: 3,
+          durable: false,
+          instances: [{ instanceId: 'waterJug-1', type: 'waterJug', condition: 'usable', charges: 3 }],
+        },
+      }),
+    });
+    const showEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { dispose: vi.fn() },
+      ui: { render: vi.fn(), showEvent, dispose: vi.fn() },
+    });
+
+    phase.start();
+
+    expect(showEvent.mock.calls[0]![2]).toContainEqual(expect.objectContaining({
+      id: 'invalid-trade',
+      label: 'Offer another item',
+      itemId: 'waterJug',
+      unavailableReason: null,
+      usesItemAdapter: true,
+    }));
   });
 
   it('wires generic canonical choices to resolveEventChoice', () => {

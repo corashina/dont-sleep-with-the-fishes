@@ -641,6 +641,83 @@ describe('SurvivalUI', () => {
     expect(eventChoice).toHaveBeenCalledWith('yes');
   });
 
+  it('renders resolved canonical choices with announced item condition and unavailable reasons', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const eventChoice = vi.fn();
+    ui.onEventChoice = eventChoice;
+    const inventory = createSurvivalInventory(saved('map', 'bucket', 'waterJug'));
+    applyInventoryMutation(inventory, { kind: 'break', itemId: 'map', quantity: 1 });
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'waterJug', quantity: 3 });
+    applyInventoryMutation(inventory, { kind: 'lose', itemId: 'bucket', quantity: 1 });
+    const current = snapshot({ inventory });
+
+    ui.showEvent(
+      { id: 'dangerous-waters', title: 'Dangerous Waters', prompt: 'Choose.', danger: 'dangerous' },
+      current,
+      [
+        { id: 'map', label: 'Use Map', itemId: 'map', unavailableReason: 'The Map is broken.' },
+        { id: 'bucket', label: 'Use Bucket', itemId: 'bucket', unavailableReason: 'The Bucket was lost.' },
+        { id: 'water', label: 'Use Water', itemId: 'waterJug', unavailableReason: 'The Water Jug was consumed.' },
+        { id: 'yes', label: 'Yes', unavailableReason: null },
+        { id: 'sleep', label: 'Sleep', unavailableReason: null, riskDescription: 'RELATIVE OUTCOME WEIGHTS 60:30.' },
+      ],
+    );
+
+    const buttons = [...mount.querySelectorAll<HTMLButtonElement>('[data-event-choice]')];
+    expect(buttons.map(({ textContent }) => textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining('Use Map'),
+      expect.stringContaining('Use Bucket'),
+      expect.stringContaining('Use Water'),
+      expect.stringContaining('Yes'),
+      expect.stringContaining('Sleep'),
+    ]));
+    expect(mount.querySelector('[data-event-choice="map"]')?.getAttribute('aria-description')).toMatch(/BROKEN.*map.*The Map is broken/is);
+    expect(mount.querySelector('[data-event-choice="bucket"]')?.getAttribute('aria-description')).toMatch(/LOST.*The Bucket was lost/is);
+    expect(mount.querySelector('[data-event-choice="water"]')?.getAttribute('aria-description')).toMatch(/CONSUMED.*0 CHARGES.*The Water Jug was consumed/is);
+    for (const id of ['map', 'bucket', 'water']) {
+      const button = mount.querySelector<HTMLButtonElement>(`[data-event-choice="${id}"]`)!;
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.disabled).toBe(false);
+      button.click();
+    }
+    expect(eventChoice).not.toHaveBeenCalled();
+
+    mount.querySelector<HTMLButtonElement>('[data-event-choice="yes"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-event-choice="sleep"]')!.click();
+    expect(eventChoice.mock.calls).toEqual([['yes'], ['sleep']]);
+    expect(mount.querySelector('[data-endure]')?.hasAttribute('hidden')).toBe(true);
+    expect(mount.querySelector('[data-event-choice="sleep"]')?.getAttribute('aria-description')).toContain('RELATIVE OUTCOME WEIGHTS 60:30');
+    expect(mount.querySelector('[data-event]')?.textContent).not.toMatch(/\d+%/);
+  });
+
+  it('keeps Handyman fallback offers concrete while using canonical choice presentation', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const offeredItem = vi.fn();
+    ui.onEventItem = offeredItem;
+
+    ui.showEvent(
+      { id: 'the-handyman', title: 'The Handyman', prompt: 'Choose.', danger: 'dangerous' },
+      snapshot(),
+      [{
+        id: 'invalid-trade',
+        label: 'Offer another item',
+        itemId: 'waterJug',
+        unavailableReason: null,
+        usesItemAdapter: true,
+      }],
+    );
+
+    const offer = mount.querySelector<HTMLButtonElement>('[data-event-choice="invalid-trade"]')!;
+    expect(offer.textContent).toContain('Offer another item');
+    expect(offer.querySelector('[data-event-choice-target]')?.textContent).toBe('WATER JUG');
+    expect(offer.getAttribute('aria-description')).toMatch(/USABLE.*water/i);
+    offer.click();
+    expect(offeredItem).toHaveBeenCalledWith('waterJug');
+  });
+
   it('enables canonical aggregate Food and Bait choices after item transfer', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -654,10 +731,18 @@ describe('SurvivalUI', () => {
       ],
     };
 
-    ui.showEvent({ id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' }, current);
+    ui.showEvent(
+      { id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' },
+      current,
+      [
+        { id: 'cannedFood', label: 'Use Food', itemId: 'cannedFood', unavailableReason: null },
+        { id: 'baitTin', label: 'Use Bait', itemId: 'baitTin', unavailableReason: null },
+      ],
+    );
 
-    expect(mount.querySelector<HTMLButtonElement>('[data-item="cannedFood"]')?.disabled).toBe(false);
-    expect(mount.querySelector<HTMLButtonElement>('[data-item="baitTin"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="cannedFood"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="baitTin"]')?.disabled).toBe(false);
+    expect(mount.querySelector('[data-event-choice="cannedFood"]')?.getAttribute('aria-description')).toMatch(/CONSUMED.*FOOD IN STORES/is);
   });
 
   it('renders aggregate Food and Bait choices without recovered containers', () => {
@@ -673,10 +758,18 @@ describe('SurvivalUI', () => {
       ],
     });
 
-    ui.showEvent({ id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' }, current);
+    ui.showEvent(
+      { id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' },
+      current,
+      [
+        { id: 'cannedFood', label: 'Use Food', itemId: 'cannedFood', unavailableReason: null },
+        { id: 'baitTin', label: 'Use Bait', itemId: 'baitTin', unavailableReason: null },
+      ],
+    );
 
-    expect(mount.querySelector<HTMLButtonElement>('[data-item="cannedFood"]')?.disabled).toBe(false);
-    expect(mount.querySelector<HTMLButtonElement>('[data-item="baitTin"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="cannedFood"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="baitTin"]')?.disabled).toBe(false);
+    expect(mount.querySelector('[data-event-choice="baitTin"]')?.getAttribute('aria-description')).toMatch(/USABLE.*BAIT IN STORES/is);
   });
 
   it('restores direct-click and numeric-shortcut command origins after outcomes', () => {
@@ -801,7 +894,11 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', repeat: true }));
     expect(action).toHaveBeenCalledOnce();
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(
+      { id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' },
+      snapshot(),
+      [{ id: 'sleep', label: 'Sleep', unavailableReason: null }],
+    );
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
     expect(action).toHaveBeenCalledOnce();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -849,7 +946,11 @@ describe('SurvivalUI', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const anchorLayer = mount.querySelector<HTMLElement>('[data-boat-anchors]')!;
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(
+      { id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' },
+      snapshot(),
+      [{ id: 'sleep', label: 'Sleep', unavailableReason: null }],
+    );
     expect(anchorLayer.hasAttribute('inert')).toBe(true);
     fish.click();
     expect(action).not.toHaveBeenCalled();
@@ -938,16 +1039,24 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
-    const firstEventItem = mount.querySelector<HTMLButtonElement>('[data-event-items] button')!;
-    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
+    ui.showEvent(
+      { id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' },
+      snapshot(),
+      [
+        { id: 'yes', label: 'Yes', unavailableReason: null },
+        { id: 'map', label: 'Use Map', itemId: 'map', unavailableReason: 'Map was not recovered.' },
+        { id: 'sleep', label: 'Sleep', unavailableReason: null },
+      ],
+    );
+    const firstEventItem = mount.querySelector<HTMLButtonElement>('[data-event-choice="yes"]')!;
+    const lastEventItem = mount.querySelector<HTMLButtonElement>('[data-event-choice="sleep"]')!;
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
-    expect(document.activeElement).toBe(endure);
-    endure.focus();
+    expect(document.activeElement).toBe(lastEventItem);
+    lastEventItem.focus();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     expect(document.activeElement).toBe(firstEventItem);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
-    expect(document.activeElement).toBe(endure);
+    expect(document.activeElement).toBe(lastEventItem);
 
     ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
     const skip = mount.querySelector<HTMLButtonElement>('[data-skip]')!;
