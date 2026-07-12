@@ -89,10 +89,16 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
     'FLARE GUN', 1, 1, 1, false, null,
     'Signals distant sightings and may frighten a threat.',
   ),
-  ductTape: preservedItem(
-    'DUCT TAPE', 1, 2, 2, false, 'repair',
-    'Patches leaks and reinforces emergency repairs.',
-  ),
+  ductTape: {
+    label: wiki('DUCT TAPE'),
+    weight: preserved(1),
+    spawnCount: preserved(2),
+    charges: source(1, 'wiki', WIKI_ITEMS, 'The wiki documents Duct Tape as a one-time-use item.'),
+    durable: preserved(false),
+    builtIn: false,
+    dayAction: 'repair',
+    description: 'Patches leaks and reinforces emergency repairs.',
+  },
   fishingRod: preservedItem(
     'FISHING ROD', 2, 1, null, true, 'fish',
     'Improves attempts to catch fish for food.',
@@ -100,10 +106,12 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
   baitTin: preservedItem(
     'BAIT TIN', 1, 2, 3, false, null,
     'Improves the odds of catching fish.',
+    'preserved',
   ),
   medicalKit: preservedItem(
     'MEDICAL KIT', 2, 1, 2, false, 'treat',
     'Treats injuries and restores health.',
+    'preserved',
   ),
   waterJug: preservedItem(
     'WATER JUG', 2, 2, 3, false, 'rest',
@@ -113,6 +121,7 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
   cannedFood: preservedItem(
     'CANNED FOOD', 1, 3, 1, false, 'eat',
     'Relieves hunger when eaten.',
+    'preserved',
   ),
   flashlight: preservedItem(
     'FLASHLIGHT', 1, 1, null, true, null,
@@ -121,6 +130,7 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
   scubaSet: preservedItem(
     'SCUBA SET', 3, 1, null, true, 'dive',
     'Enables safe dives beneath the lifeboat.',
+    'preserved',
   ),
   compass: newShipItem(
     'COMPASS', null, true,
@@ -166,8 +176,8 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
     label: wiki('REPAIR KIT'),
     weight: approvedDefault(1),
     spawnCount: source(0, 'wiki', WIKI_ITEMS, 'Built into the lifeboat.'),
-    charges: preserved(null),
-    durable: preserved(true),
+    charges: source(null, 'wiki', WIKI_ITEMS, 'The built-in Repair Kit is not consumed when used.'),
+    durable: source(true, 'wiki', WIKI_ITEMS, 'The Repair Kit remains installed in the lifeboat.'),
     builtIn: true,
     dayAction: 'repair',
     description: 'Built into the lifeboat for hull repairs.',

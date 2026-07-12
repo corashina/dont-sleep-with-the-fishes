@@ -401,6 +401,14 @@ describe('procedural world builders', () => {
     expect(ship.evacuationPoint.x).toBeGreaterThan(3);
   });
 
+  it('keeps every supply spawn clear of ship colliders', () => {
+    const ship = createShip();
+    for (const point of ship.itemSpawnPoints) {
+      expect(ship.colliders.some((box) => pointInside(point, box)), point.toArray().join(','))
+        .toBe(false);
+    }
+  });
+
   it('selects every authored spawn point exactly once', () => {
     const points = createShip().itemSpawnPoints;
     const values = [0.12, 0.81, 0.34, 0.67, 0.05, 0.92, 0.48];

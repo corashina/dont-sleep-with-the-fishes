@@ -24,6 +24,25 @@ describe('wiki item catalog', () => {
     expect(CANONICAL_ITEMS.repairKit.spawnCount.value).toBe(0);
   });
 
+  it('models each Duct Tape roll as a documented one-time item', () => {
+    expect(CANONICAL_ITEMS.ductTape.spawnCount).toMatchObject({ value: 2, provenance: 'preserved' });
+    expect(CANONICAL_ITEMS.ductTape.charges).toMatchObject({ value: 1, provenance: 'wiki' });
+  });
+
+  it('keeps legacy display labels distinct from wiki item headings', () => {
+    expect(CANONICAL_ITEMS.baitTin.label).toMatchObject({ value: 'BAIT TIN', provenance: 'preserved' });
+    expect(CANONICAL_ITEMS.cannedFood.label).toMatchObject({ value: 'CANNED FOOD', provenance: 'preserved' });
+    expect(CANONICAL_ITEMS.medicalKit.label).toMatchObject({ value: 'MEDICAL KIT', provenance: 'preserved' });
+    expect(CANONICAL_ITEMS.scubaSet.label).toMatchObject({ value: 'SCUBA SET', provenance: 'preserved' });
+  });
+
+  it('sources the new built-in Repair Kit from documented reusable behavior', () => {
+    expect(CANONICAL_ITEMS.repairKit.charges).toMatchObject({ value: null, provenance: 'wiki' });
+    expect(CANONICAL_ITEMS.repairKit.durable).toMatchObject({ value: true, provenance: 'wiki' });
+    expect(CANONICAL_ITEMS.repairKit.charges.note?.length).toBeGreaterThan(0);
+    expect(CANONICAL_ITEMS.repairKit.durable.note?.length).toBeGreaterThan(0);
+  });
+
   it('classifies every reviewed item without silent omissions', () => {
     const itemAudit = PARITY_AUDIT.filter(({ kind }) => kind === 'item');
     expect(itemAudit.map(({ wikiName }) => wikiName)).toEqual(expect.arrayContaining([
