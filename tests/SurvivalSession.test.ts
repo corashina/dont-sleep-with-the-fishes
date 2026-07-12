@@ -73,10 +73,67 @@ describe('SurvivalSession daytime actions', () => {
   it('fishes deterministically with rod and bait', () => {
     const session = new SurvivalSession(saved('fishingRod', 'baitTin'), {
       seed: 1,
-      random: sequenceRandom([0.1, 0.1]),
+      random: sequenceRandom([0.1, 0.1, 0]),
     });
     expect(session.perform('fish', 'useBait')).toMatchObject({ accepted: true, deltas: { energy: -2, food: 2, bait: -1 } });
     expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 2, actedToday: true });
+  });
+
+  it('preserves the double roll as one bonus food on a higher-value catch', () => {
+    const session = new SurvivalSession(saved('fishingRod'), {
+      seed: 1,
+      initial: { day: 3 },
+      random: sequenceRandom([0, 0, 59 / 469]),
+    });
+
+    expect(session.perform('fish')).toMatchObject({
+      accepted: true, deltas: { energy: -2, food: 3 },
+    });
+  });
+
+  it('keeps bait when a successful cast selects junk', () => {
+    const session = new SurvivalSession(saved('fishingRod', 'baitTin'), {
+      seed: 1,
+      random: sequenceRandom([0, 0.99, 191 / 426]),
+    });
+
+    expect(session.perform('fish', 'useBait')).toMatchObject({
+      accepted: true, code: 'fish-caught', deltas: { energy: -2, food: 0 },
+    });
+    expect(session.snapshot()).toMatchObject({ food: 0, bait: 3, recoveredBait: 3 });
+  });
+
+  it('turns caught worms into one bait use without consuming bait', () => {
+    const session = new SurvivalSession(saved('fishingRod', 'baitTin'), {
+      seed: 1,
+      random: sequenceRandom([0, 0.99, 405 / 426]),
+    });
+
+    expect(session.perform('fish', 'useBait')).toMatchObject({
+      accepted: true, deltas: { energy: -2, food: 0, bait: 1 },
+    });
+    expect(session.snapshot()).toMatchObject({ bait: 4, recoveredBait: 3 });
+  });
+
+  it('adds caught tools with their documented usable or broken condition', () => {
+    const catches = [
+      [448 / 469, 'ductTape', 'usable'],
+      [453 / 469, 'compass', 'broken'],
+      [458 / 469, 'fishingNet', 'broken'],
+      [461 / 469, 'energyBar', 'usable'],
+    ] as const;
+
+    for (const [catchRoll, itemId, condition] of catches) {
+      const session = new SurvivalSession(saved('fishingRod'), {
+        seed: 1,
+        initial: { day: 3 },
+        random: sequenceRandom([0, 0.99, catchRoll]),
+      });
+
+      expect(session.perform('fish')).toMatchObject({ accepted: true, code: 'fish-caught' });
+      expect(session.snapshot().inventory[itemId].instances).toHaveLength(1);
+      expect(session.snapshot().inventory[itemId].instances[0]).toMatchObject({ condition });
+    }
   });
 
   it('does not restore a consumed recovered can when diving finds loose food', () => {
@@ -96,7 +153,7 @@ describe('SurvivalSession daytime actions', () => {
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
     const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet'), {
       seed: 1,
-      random: sequenceRandom([0.99, 0, 0.99, 0.3]),
+      random: sequenceRandom([0, 0.99, 0, 0, 0.99, 0.3]),
       initial: { energy: 10 },
     });
 

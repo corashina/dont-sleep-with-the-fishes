@@ -1,5 +1,6 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
+import { resolveFishing } from './fishing';
 import { applyInventoryMutation, createSurvivalInventory } from './inventory';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
@@ -318,24 +319,40 @@ export class SurvivalSession {
       ? SURVIVAL_BALANCE.fishing.rodBaitSuccess
       : SURVIVAL_BALANCE.fishing.rodSuccess;
     const caught = this.random.next() < successChance;
-    let food = caught ? 1 : 0;
+    let bonusFood = 0;
 
     if (caught) {
       const doubleChance = useBait
         ? SURVIVAL_BALANCE.fishing.rodBaitDouble
         : SURVIVAL_BALANCE.fishing.rodDouble;
-      if (this.random.next() < doubleChance) food += 1;
+      if (this.random.next() < doubleChance) bonusFood = 1;
     }
 
+    const result = caught ? resolveFishing(this.day, useBait, this.random) : null;
+    const food = result !== null && result.food > 0 ? result.food + bonusFood : 0;
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.fishEnergy, food };
-    if (useBait) deltas.bait = -1;
+    if (result?.id === 'worms') deltas.bait = 1;
+    else if (result?.consumesBait === true) deltas.bait = -1;
+    if (result?.itemGain !== undefined && result.id !== 'worms') {
+      this.gainFishingItem(result.itemGain, result.itemCondition ?? 'usable');
+    }
     this.actedToday = true;
     return this.commit(
       caught ? 'fish-caught' : 'fish-missed',
-      caught ? `You caught ${food === 2 ? 'two fish' : 'a fish'}.` : 'The line came back empty.',
+      result === null ? 'The line came back empty.' : `You caught ${result.label}.`,
       deltas,
       'fish',
     );
+  }
+
+  private gainFishingItem(itemId: ItemId, condition: 'usable' | 'broken'): void {
+    const previousIds = new Set(this.inventory[itemId].instances.map(({ instanceId }) => instanceId));
+    applyInventoryMutation(this.inventory, { kind: 'gain', itemId, quantity: 1 });
+    if (condition !== 'broken') return;
+    const gained = this.inventory[itemId].instances.find(({ instanceId }) => !previousIds.has(instanceId));
+    applyInventoryMutation(this.inventory, {
+      kind: 'break', itemId, quantity: 1, instanceId: gained?.instanceId,
+    });
   }
 
   private dive(): ActionOutcome {
