@@ -1,5 +1,12 @@
+import { CANONICAL_SURVIVAL_BALANCE } from '../canonical/balance';
+
 export const SURVIVAL_BALANCE = {
-  start: { health: 100, hunger: 20, energy: 4, hull: 75 },
+  start: {
+    health: CANONICAL_SURVIVAL_BALANCE.start.health.value,
+    hunger: CANONICAL_SURVIVAL_BALANCE.start.hunger.value,
+    energy: CANONICAL_SURVIVAL_BALANCE.start.energy.value,
+    hull: CANONICAL_SURVIVAL_BALANCE.start.hull.value,
+  },
   dawn: { hungerIncrease: 18, starvationDamage: 15, normalEnergy: 4, hungryEnergy: 3, starvingEnergy: 2 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {

@@ -1,6 +1,7 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import type { ItemId, ItemInstance } from '../game/ItemState';
+import { CANONICAL_EVENTS } from '../canonical/events';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
@@ -163,13 +164,27 @@ export class SurvivalPhase implements GamePhase {
 
   handleEventItem(itemId: ItemId): void {
     if (!this.canAcceptCommand()) return;
-    const outcome = this.session.resolveEvent?.(itemId);
+    const choice = this.session.snapshot().pendingChoices.find((candidate) => (
+      candidate.itemId === itemId || candidate.itemId === 'any'
+    ));
+    const outcome = choice !== undefined && choice.itemId !== 'any' && this.session.resolveEventChoice !== undefined
+      ? this.session.resolveEventChoice(choice.id)
+      : this.session.resolveEvent?.(itemId);
     if (outcome !== undefined) this.present(outcome);
   }
 
   handleEndure(): void {
     if (!this.canAcceptCommand()) return;
-    const outcome = this.session.resolveEvent?.(null);
+    const sleep = this.session.snapshot().pendingChoices.find(({ id }) => id === 'sleep');
+    const outcome = sleep !== undefined && this.session.resolveEventChoice !== undefined
+      ? this.session.resolveEventChoice(sleep.id)
+      : this.session.resolveEvent?.(null);
+    if (outcome !== undefined) this.present(outcome);
+  }
+
+  handleEventChoice(choiceId: string): void {
+    if (!this.canAcceptCommand()) return;
+    const outcome = this.session.resolveEventChoice?.(choiceId);
     if (outcome !== undefined) this.present(outcome);
   }
 
@@ -255,6 +270,7 @@ export class SurvivalPhase implements GamePhase {
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
     this.ui.onEventItem = (itemId) => this.handleEventItem(itemId);
+    this.ui.onEventChoice = (choiceId) => this.handleEventChoice(choiceId);
     this.ui.onEndure = () => this.handleEndure();
     this.ui.onContinue = () => this.handleContinue();
     this.ui.onRestart = () => this.requestRestart();
@@ -331,6 +347,21 @@ export class SurvivalPhase implements GamePhase {
 
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
+    const canonical = CANONICAL_EVENTS.find((candidate) => candidate.id === snapshot.pendingEventId);
+    if (canonical !== undefined) {
+      const danger = canonical.dangerMin >= 2
+        ? 'dangerous'
+        : canonical.dangerMin >= 1
+          ? 'uncertain'
+          : 'safe';
+      this.ui.showEvent?.({
+        id: canonical.id,
+        title: canonical.title,
+        prompt: canonical.prompt,
+        danger,
+      }, snapshot);
+      return;
+    }
     const event = SURVIVAL_EVENTS.find((candidate) => candidate.id === snapshot.pendingEventId);
     if (event !== undefined) this.ui.showEvent?.(event, snapshot);
   }

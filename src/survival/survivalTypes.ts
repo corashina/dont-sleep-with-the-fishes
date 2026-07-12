@@ -129,7 +129,10 @@ export interface ResourceDelta {
   bait?: number;
   repairMaterial?: number;
   rescueProgress?: number;
+  danger?: number;
 }
+
+export type PendingEventChoice = Readonly<Pick<EventChoiceDefinition, 'id' | 'label' | 'itemId'>>;
 
 export interface ActionOutcome {
   accepted: boolean;
@@ -178,12 +181,16 @@ export interface SurvivalSnapshot {
   recoveredBait: number;
   repairMaterial: number;
   rescueProgress: number;
+  danger: number;
+  route: EventRoute | null;
   weather: WeatherId;
   restedToday: boolean;
   actedToday: boolean;
   inventory: Readonly<SurvivalInventory>;
   savedItems: readonly ItemInstance[];
   pendingEventId: string | null;
+  pendingChoices: readonly PendingEventChoice[];
+  eventHistory: Readonly<Record<string, EventHistory>>;
   lastOutcome: ActionOutcome | null;
   seed: number;
 }

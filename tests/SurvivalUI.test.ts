@@ -399,7 +399,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('20');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('4');
-    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
+    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
     expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(7);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
@@ -620,6 +620,63 @@ describe('SurvivalUI', () => {
     ui.hideOutcome();
     expect(mount.querySelector('[data-outcome]')?.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(fish);
+  });
+
+  it('renders and routes generic canonical choices', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const eventChoice = vi.fn();
+    ui.onEventChoice = eventChoice;
+    const current = snapshot({
+      pendingChoices: [
+        { id: 'yes', label: 'Yes' },
+        { id: 'no', label: 'No' },
+      ],
+    });
+
+    ui.showEvent({ id: 'check-the-back', title: 'Check the Back', prompt: 'Choose.', danger: 'safe' }, current);
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-choice="yes"]')!.click();
+
+    expect(eventChoice).toHaveBeenCalledWith('yes');
+  });
+
+  it('enables canonical aggregate Food and Bait choices after item transfer', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const session = new SurvivalSession(saved('cannedFood', 'baitTin'), { seed: 1 });
+    const current = {
+      ...session.snapshot(),
+      pendingChoices: [
+        { id: 'cannedFood', label: 'Use Food', itemId: 'cannedFood' as const },
+        { id: 'baitTin', label: 'Use Bait', itemId: 'baitTin' as const },
+      ],
+    };
+
+    ui.showEvent({ id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' }, current);
+
+    expect(mount.querySelector<HTMLButtonElement>('[data-item="cannedFood"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-item="baitTin"]')?.disabled).toBe(false);
+  });
+
+  it('renders aggregate Food and Bait choices without recovered containers', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const current = snapshot({
+      food: 1,
+      bait: 1,
+      pendingChoices: [
+        { id: 'cannedFood', label: 'Use Food', itemId: 'cannedFood' },
+        { id: 'baitTin', label: 'Use Bait', itemId: 'baitTin' },
+      ],
+    });
+
+    ui.showEvent({ id: 'test', title: 'Test', prompt: 'Choose.', danger: 'dangerous' }, current);
+
+    expect(mount.querySelector<HTMLButtonElement>('[data-item="cannedFood"]')?.disabled).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-item="baitTin"]')?.disabled).toBe(false);
   });
 
   it('restores direct-click and numeric-shortcut command origins after outcomes', () => {

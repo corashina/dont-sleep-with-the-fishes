@@ -123,6 +123,7 @@ function formatElapsed(seconds: number): string {
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (itemId: ItemId) => void = () => undefined;
+  onEventChoice: (choiceId: string) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onContinue: () => void = () => undefined;
   onRestart: () => void = () => undefined;
@@ -333,6 +334,8 @@ export class SurvivalUI {
     this.eventLayer.dataset.eventId = event.id;
     this.eventLayer.dataset.danger = event.danger;
     this.eventItems.replaceChildren();
+    const canonicalChoices = snapshot.pendingChoices;
+    const usesCanonicalChoices = canonicalChoices.length > 0;
 
     ITEM_IDS.forEach((id) => {
       const item = snapshot.inventory[id];
@@ -342,14 +345,25 @@ export class SurvivalUI {
       const transferred = (id === 'cannedFood' || id === 'baitTin')
         && !hasUsableInstance
         && item.instances.some(({ condition }) => condition === 'consumed');
-      if (!recovered) return;
-      const usable = item.owned && (item.durable || (item.charges !== null && item.charges > 0));
+      const aggregateUsable = (id === 'cannedFood' && snapshot.food > 0)
+        || (id === 'baitTin' && snapshot.bait > 0);
+      if (!recovered && !aggregateUsable) return;
+      const matchingChoice = canonicalChoices.find((choice) => choice.itemId === id)
+        ?? canonicalChoices.find((choice) => choice.itemId === 'any');
+      const inventoryUsable = item.owned && (item.durable || (item.charges !== null && item.charges > 0));
+      const usable = usesCanonicalChoices
+        ? matchingChoice !== undefined && (
+          matchingChoice.itemId === 'any' ? inventoryUsable : inventoryUsable || aggregateUsable
+        )
+        : inventoryUsable;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'event-item';
       button.dataset.item = id;
       button.dataset.usable = usable ? 'true' : 'false';
-      button.textContent = transferred
+      button.textContent = !recovered && aggregateUsable
+        ? `${ITEM_LABELS[id]} — ${id === 'cannedFood' ? snapshot.food : snapshot.bait} IN STORES`
+        : transferred
         ? `${ITEM_LABELS[id]} — TRANSFERRED TO STORES`
         : item.durable
         ? `${ITEM_LABELS[id]} — DURABLE`
@@ -358,6 +372,18 @@ export class SurvivalUI {
       button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${transferred ? ' Use through day actions.' : usable ? '' : ' No charges remain.'}`);
       this.eventItems.append(button);
     });
+    canonicalChoices
+      .filter((choice) => choice.itemId === undefined && choice.id !== 'sleep')
+      .forEach((choice) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'event-item';
+        button.dataset.choice = choice.id;
+        button.dataset.usable = 'true';
+        button.textContent = choice.label;
+        button.disabled = this.busy;
+        this.eventItems.append(button);
+      });
     if (this.eventItems.childElementCount === 0) {
       const empty = document.createElement('p');
       empty.className = 'event-items__empty';
@@ -470,6 +496,7 @@ export class SurvivalUI {
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
+    this.onEventChoice = () => undefined;
     this.onEndure = () => undefined;
     this.onContinue = () => undefined;
     this.onRestart = () => undefined;
@@ -587,7 +614,7 @@ export class SurvivalUI {
       button.disabled = this.busy;
       button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     });
-    this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item]').forEach((button) => {
+    this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item], button[data-choice]').forEach((button) => {
       button.disabled = this.busy || button.dataset.usable !== 'true';
     });
     this.fishingOptionButtons.forEach((button) => { button.disabled = this.busy; });
@@ -741,6 +768,11 @@ export class SurvivalUI {
     const itemId = button.dataset.item as ItemId | undefined;
     if (itemId !== undefined && this.eventItems.contains(button)) {
       this.onEventItem(itemId);
+      return;
+    }
+    const choiceId = button.dataset.choice;
+    if (choiceId !== undefined && this.eventItems.contains(button)) {
+      this.onEventChoice(choiceId);
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();

@@ -1,16 +1,25 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
-import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
+import { CANONICAL_EVENTS, eventDamageMultiplier } from '../canonical/events';
+import { runtimeItemDefinition } from '../canonical/items';
 import { resolveFishing } from './fishing';
-import { applyInventoryMutation, createSurvivalInventory } from './inventory';
+import { applyInventoryMutation, createSurvivalInventory, usableInstances } from './inventory';
+import { drawWeightedEvent, eligibleEvents, resolveEventOutcome } from './outcomeResolver';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
+  CanonicalEventDefinition,
+  ChoiceEventDefinition,
   DayActionId,
+  EventChoiceDefinition,
+  EventHistory,
+  EventInventoryMutation,
+  EventRoute,
+  InventoryMutation,
   PresentationCue,
   RandomSource,
+  ResolvedEventOutcome,
   ResourceDelta,
-  SurvivalEventDefinition,
   SurvivalInventory,
   SurvivalSnapshot,
   SurvivalState,
@@ -21,7 +30,10 @@ export interface SurvivalSessionOptions {
   seed: number;
   random?: RandomSource;
   weather?: WeatherId;
-  initial?: Partial<Pick<SurvivalSnapshot, 'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress'>>;
+  initial?: Partial<Pick<
+    SurvivalSnapshot,
+    'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress' | 'danger' | 'route'
+  >>;
   initialEventId?: string;
 }
 
@@ -30,6 +42,22 @@ export type DayActionOption = 'useBait' | 'repairMaterial' | 'ductTape';
 interface Rejection {
   code: string;
   message: string;
+}
+
+type EventTarget =
+  | { kind: 'item'; itemId: ItemId; instanceId: InventoryMutation['instanceId'] }
+  | { kind: 'food' };
+
+const BREAKABLE_ITEM_IDS = new Set<ItemId>();
+for (const event of CANONICAL_EVENTS) {
+  if (event.automatic) continue;
+  for (const choice of event.choices) {
+    for (const outcome of choice.outcomes) {
+      for (const mutation of outcome.effects.items ?? []) {
+        if (mutation.kind === 'break') BREAKABLE_ITEM_IDS.add(mutation.itemId);
+      }
+    }
+  }
 }
 
 export class SurvivalSession {
@@ -45,6 +73,8 @@ export class SurvivalSession {
   private recoveredBait = 0;
   private repairMaterial = 0;
   private rescueProgress: number;
+  private danger: number;
+  private route: EventRoute | null;
   private weather: WeatherId;
   private restedToday = false;
   private actedToday = false;
@@ -52,9 +82,9 @@ export class SurvivalSession {
   private readonly inventory: SurvivalInventory;
   private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
-  private pendingEvent: SurvivalEventDefinition | null = null;
-  private lastEventId: string | null = null;
-  private readonly lastSeenDay = new Map<string, number>();
+  private pendingEvent: CanonicalEventDefinition | null = null;
+  private pendingEventTarget: EventTarget | null = null;
+  private readonly eventHistory = new Map<string, EventHistory>();
   private lastOutcome: ActionOutcome | null = null;
   private readonly seed: number;
   private readonly random: RandomSource;
@@ -69,16 +99,11 @@ export class SurvivalSession {
     this.energy = options.initial?.energy ?? SURVIVAL_BALANCE.start.energy;
     this.hull = options.initial?.hull ?? SURVIVAL_BALANCE.start.hull;
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
+    this.danger = options.initial?.danger ?? 0;
+    this.route = options.initial?.route ?? null;
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
     this.inventory = createSurvivalInventory(this.savedItems);
-
-    if (options.initialEventId !== undefined) {
-      const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
-      if (initialEvent === undefined) throw new Error(`Unknown survival event: ${options.initialEventId}`);
-      this.openEvent(initialEvent);
-      this.dayEventOccurred = initialEvent.phase === 'day';
-    }
 
     this.recoveredBait = this.inventory.baitTin.charges ?? 0;
     this.recoveredFood = this.inventory.cannedFood.charges ?? 0;
@@ -90,6 +115,15 @@ export class SurvivalSession {
     applyInventoryMutation(this.inventory, {
       kind: 'consume', itemId: 'cannedFood', quantity: this.recoveredFood,
     });
+
+    if (options.initialEventId !== undefined) {
+      const initialEvent = CANONICAL_EVENTS.find((event) => event.id === options.initialEventId);
+      if (initialEvent === undefined || initialEvent.selectable === false || initialEvent.automatic) {
+        throw new Error(`Unknown or non-selectable survival event: ${options.initialEventId}`);
+      }
+      this.openEvent(initialEvent);
+      this.dayEventOccurred = initialEvent.phase === 'day';
+    }
 
     this.clampMeters();
     this.resolveTerminal();
@@ -105,6 +139,14 @@ export class SurvivalSession {
     const lastOutcome = this.lastOutcome === null
       ? null
       : { ...this.lastOutcome, deltas: { ...this.lastOutcome.deltas } };
+    const pendingChoices = Object.freeze(this.availablePendingChoices().map((choice) => Object.freeze({
+      id: choice.id,
+      label: choice.label,
+      ...(choice.itemId === undefined ? {} : { itemId: choice.itemId }),
+    })));
+    const eventHistory = Object.freeze(Object.fromEntries(
+      [...this.eventHistory].map(([id, history]) => [id, Object.freeze({ ...history })]),
+    ));
 
     return {
       state: this.state,
@@ -119,12 +161,16 @@ export class SurvivalSession {
       recoveredBait: this.recoveredBait,
       repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
+      danger: this.danger,
+      route: this.route,
       weather: this.weather,
       restedToday: this.restedToday,
       actedToday: this.actedToday,
       inventory,
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
+      pendingChoices,
+      eventHistory,
       lastOutcome,
       seed: this.seed,
     };
@@ -157,6 +203,9 @@ export class SurvivalSession {
 
     const event = this.drawEvent('day');
     this.dayEventOccurred = true;
+    if (event === undefined) {
+      return this.commit('no-event', 'The day passes without incident.', {}, 'none');
+    }
     this.openEvent(event);
     return this.commit('event-opened', event.prompt, {}, event.cue);
   }
@@ -165,40 +214,123 @@ export class SurvivalSession {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
 
+    const brokenBoat = CANONICAL_EVENTS.find((event) => event.id === 'broken-boat');
+    if (
+      brokenBoat?.automatic === true
+      && this.hull <= 10
+      && this.random.next() < SurvivalSession.brokenBoatChance(this.hull)
+    ) {
+      this.recordEvent(brokenBoat.id);
+      return this.applyResolvedEvent(brokenBoat, resolveEventOutcome(brokenBoat.automaticOutcome, this.random));
+    }
+
     const event = this.drawEvent('night');
+    if (event === undefined) {
+      return this.commit('no-event', 'The night passes without incident.', {}, 'nightfall');
+    }
     this.openEvent(event);
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
 
+  resolveEventChoice(choiceId: string): ActionOutcome {
+    return this.resolveChoice(choiceId, null);
+  }
+
+  /** @deprecated Use resolveEventChoice(choiceId) with the pending canonical choice ID. */
   resolveEvent(itemId: ItemId | null): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
-    if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
-      return this.reject('no-event', 'There is no unresolved event.');
-    }
+    const event = this.pendingChoiceEvent();
+    if (event === null) return this.reject('no-event', 'There is no unresolved event.');
 
-    const event = this.pendingEvent;
     if (itemId !== null && !this.canUseEventItem(itemId)) {
       return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
     }
-    const phase = event.phase;
-    const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
-    const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
-    const response = itemId === null ? event.endure : usable ? matching! : event.unsuitable;
+    const choices = event.choices;
+    const matching = itemId === null
+      ? choices.find(({ id }) => id === 'sleep')
+      : choices.find(({ itemId: choiceItemId }) => choiceItemId === itemId)
+        ?? choices.find(({ itemId: choiceItemId }) => choiceItemId === 'any');
+    if (matching === undefined) {
+      return this.reject('choice-unavailable', 'That item is not a response to this event.');
+    }
+    return this.resolveChoice(matching.id, itemId === null ? null : this.targetForItem(itemId));
+  }
 
-    if (usable && matching!.consume) this.consumeCharge(matching!.itemId);
-    this.lastEventId = event.id;
-    this.lastSeenDay.set(event.id, this.day);
+  private resolveChoice(choiceId: string, offeredTarget: EventTarget | null): ActionOutcome {
+    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
+    const event = this.pendingChoiceEvent();
+    if (event === null) return this.reject('no-event', 'There is no unresolved event.');
+    const choice = event.choices.find(({ id }) => id === choiceId);
+    if (choice === undefined) return this.reject('choice-unavailable', 'That response is not available.');
+    if (choice.itemId === 'any' && offeredTarget === null) {
+      return this.reject('item-target-required', 'Choose the recovered item offered for this response.');
+    }
+    if (!this.canUseEventChoice(choice)) {
+      return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
+    }
+
+    const resolved = resolveEventOutcome(choice, this.random);
+    return this.applyResolvedEvent(event, resolved, offeredTarget);
+  }
+
+  private applyResolvedEvent(
+    event: CanonicalEventDefinition,
+    resolved: ResolvedEventOutcome,
+    offeredTarget: EventTarget | null = null,
+  ): ActionOutcome {
+    const before = this.resourceValues();
+    const affected = new Set<keyof ResourceDelta>();
+
+    for (const mutation of resolved.itemMutations) {
+      this.applyEventInventoryMutation(mutation, offeredTarget, affected);
+    }
+
+    const multiplier = eventDamageMultiplier(event.phase, this.day);
+    const deltas: ResourceDelta = {};
+    for (const [resource, value] of Object.entries(resolved.resourceDeltas)) {
+      const key = resource as keyof typeof resolved.resourceDeltas;
+      const adjusted = (key === 'health' || key === 'hull') && value! < 0
+        ? value! * multiplier
+        : value!;
+      deltas[key] = adjusted;
+      affected.add(key);
+    }
+    this.applyDeltas(deltas);
+
+    for (const [resource, value] of Object.entries(resolved.resourceSets)) {
+      const key = resource as keyof typeof resolved.resourceSets;
+      this.setEventResource(key, value!);
+      affected.add(key);
+    }
+    if (resolved.route !== undefined) this.route = resolved.route;
+
     this.pendingEvent = null;
     this.pendingEventId = null;
+    this.pendingEventTarget = null;
+    if (resolved.terminal === 'sunk') this.state = 'sunk';
+    this.resolveTerminal();
+    if (!this.isTerminal()) this.state = event.phase === 'day' ? 'day' : 'nightEvent';
 
-    if (usable && matching!.rescue === true) this.state = 'rescued';
-    const outcome = this.commit('event-resolved', response.message, { ...response.deltas }, response.cue);
-
-    if (!this.isTerminal()) {
-      if (phase === 'day') this.state = 'day';
-      else this.state = 'nightEvent';
-    }
-    return outcome;
+    const after = this.resourceValues();
+    const applied = Object.fromEntries([...affected].map((resource) => (
+      [resource, after[resource] - before[resource]]
+    ))) as ResourceDelta;
+    const cue = this.state === 'dead'
+      ? 'death'
+      : this.state === 'sunk'
+        ? 'sinking'
+        : this.state === 'rescued'
+          ? 'rescue'
+          : event.cue;
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: resolved.message,
+      deltas: applied,
+      cue,
+    };
+    this.lastOutcome = outcome;
+    return { ...outcome, deltas: { ...outcome.deltas } };
   }
 
   beginDawn(): ActionOutcome {
@@ -345,6 +477,11 @@ export class SurvivalSession {
     );
   }
 
+  static brokenBoatChance(hull: number): number {
+    const clampedHull = Math.min(100, Math.max(0, hull));
+    return (100 - clampedHull) / 100;
+  }
+
   private gainFishingItem(itemId: ItemId, condition: 'usable' | 'broken'): void {
     const previousIds = new Set(this.inventory[itemId].instances.map(({ instanceId }) => instanceId));
     applyInventoryMutation(this.inventory, { kind: 'gain', itemId, quantity: 1 });
@@ -438,24 +575,142 @@ export class SurvivalSession {
     return this.commit('rested', 'Water and a brief rest restore your strength.', { energy: restoredEnergy }, 'rest');
   }
 
-  private drawEvent(phase: 'day' | 'night'): SurvivalEventDefinition {
-    const pool = eligibleEvents(SURVIVAL_EVENTS, {
+  private drawEvent(phase: 'day' | 'night'): CanonicalEventDefinition | undefined {
+    const pool = eligibleEvents(CANONICAL_EVENTS, {
       phase,
       day: this.day,
-      weather: this.weather,
-      lastEventId: this.lastEventId,
-      lastSeenDay: this.lastSeenDay,
+      danger: this.danger,
+      inventory: this.inventory,
+      route: this.route,
+      history: this.eventHistory,
+      resources: {
+        health: this.health,
+        hull: this.hull,
+        energy: this.energy,
+        food: this.food,
+        bait: this.bait,
+        danger: this.danger,
+      },
     });
-    return drawWeightedEvent(pool, this.random, phase);
+    return drawWeightedEvent(pool, this.random, this.route);
   }
 
-  private openEvent(event: SurvivalEventDefinition): void {
+  private openEvent(event: CanonicalEventDefinition): void {
+    if (event.automatic || event.selectable === false) {
+      throw new Error(`Cannot open non-selectable event: ${event.id}`);
+    }
     this.pendingEvent = event;
     this.pendingEventId = event.id;
+    this.pendingEventTarget = event.id === 'snatcher' ? this.drawSnatcherTarget(event) : null;
+    this.recordEvent(event.id);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
   }
 
+  private recordEvent(eventId: string): void {
+    const existing = this.eventHistory.get(eventId);
+    this.eventHistory.set(eventId, existing === undefined
+      ? { appearances: 1, firstDay: this.day, lastDay: this.day }
+      : { ...existing, appearances: existing.appearances + 1, lastDay: this.day });
+  }
+
+  private hasPendingEvent(): boolean {
+    return (this.state === 'dayEvent' || this.state === 'nightEvent') && this.pendingEvent !== null;
+  }
+
+  private pendingChoiceEvent(): ChoiceEventDefinition | null {
+    const event = this.pendingEvent;
+    return this.hasPendingEvent() && event !== null && !event.automatic ? event : null;
+  }
+
+  private availablePendingChoices(): EventChoiceDefinition[] {
+    const event = this.pendingChoiceEvent();
+    return event === null ? [] : event.choices.filter((choice) => this.canUseEventChoice(choice));
+  }
+
+  private canUseEventChoice(choice: EventChoiceDefinition): boolean {
+    if (choice.itemId === undefined) return true;
+    if (choice.itemId === 'any') return this.randomInventoryCandidates('lose').length > 0;
+    return this.canUseEventItem(choice.itemId);
+  }
+
+  private drawSnatcherTarget(event: CanonicalEventDefinition): EventTarget | null {
+    const candidates: EventTarget[] = [];
+    for (const requirement of event.requiredAnyAssets ?? []) {
+      if (requirement.kind === 'resource') {
+        if (requirement.resource === 'food' && this.food >= requirement.min) candidates.push({ kind: 'food' });
+        continue;
+      }
+      for (const instance of usableInstances(this.inventory, requirement.itemId)) {
+        candidates.push({ kind: 'item', itemId: requirement.itemId, instanceId: instance.instanceId });
+      }
+    }
+    return this.drawCandidate(candidates);
+  }
+
+  private targetForItem(itemId: ItemId): EventTarget | null {
+    if (itemId === 'cannedFood' && this.food > 0) return { kind: 'food' };
+    const instance = usableInstances(this.inventory, itemId)[0];
+    return instance === undefined ? null : { kind: 'item', itemId, instanceId: instance.instanceId };
+  }
+
+  private applyEventInventoryMutation(
+    mutation: EventInventoryMutation,
+    offeredTarget: EventTarget | null,
+    affected: Set<keyof ResourceDelta>,
+  ): void {
+    if (mutation.kind === 'loseRandom' || mutation.kind === 'breakRandom') {
+      const kind = mutation.kind === 'loseRandom' ? 'lose' : 'break';
+      for (let index = 0; index < mutation.quantity; index += 1) {
+        const target = this.drawCandidate(this.randomInventoryCandidates(kind));
+        if (target === null || target.kind !== 'item') break;
+        applyInventoryMutation(this.inventory, {
+          kind,
+          itemId: target.itemId,
+          instanceId: target.instanceId,
+          quantity: 1,
+        });
+      }
+      return;
+    }
+
+    if (mutation.kind === 'loseEventTarget') {
+      const target = this.pendingEventTarget ?? offeredTarget;
+      if (target?.kind === 'food') {
+        this.applyDeltas({ food: -mutation.quantity });
+        affected.add('food');
+      } else if (target?.kind === 'item') {
+        applyInventoryMutation(this.inventory, {
+          kind: 'lose', itemId: target.itemId, instanceId: target.instanceId, quantity: mutation.quantity,
+        });
+      }
+      return;
+    }
+
+    applyInventoryMutation(this.inventory, mutation);
+  }
+
+  private randomInventoryCandidates(kind: 'lose' | 'break'): EventTarget[] {
+    const candidates: EventTarget[] = [];
+    for (const [itemId, entry] of Object.entries(this.inventory) as [ItemId, SurvivalInventory[ItemId]][]) {
+      if (runtimeItemDefinition(itemId).builtIn) continue;
+      if (kind === 'break' && !BREAKABLE_ITEM_IDS.has(itemId)) continue;
+      for (const instance of entry.instances) {
+        if (instance.condition === 'usable') {
+          candidates.push({ kind: 'item', itemId, instanceId: instance.instanceId });
+        }
+      }
+    }
+    return candidates;
+  }
+
+  private drawCandidate<T>(candidates: readonly T[]): T | null {
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(this.random.next() * candidates.length)] ?? candidates[candidates.length - 1]!;
+  }
+
   private canUseEventItem(id: ItemId): boolean {
+    if (id === 'cannedFood') return this.food > 0;
+    if (id === 'baitTin') return this.bait > 0;
     const entry = this.inventory[id];
     return entry.owned && (entry.durable || (entry.charges !== null && entry.charges > 0));
   }
@@ -484,7 +739,20 @@ export class SurvivalSession {
       health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
       food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
+      danger: this.danger,
     };
+  }
+
+  private setEventResource(resource: keyof ResolvedEventOutcome['resourceSets'], value: number): void {
+    switch (resource) {
+      case 'health': this.health = value; break;
+      case 'hull': this.hull = value; break;
+      case 'energy': this.energy = value; break;
+      case 'food': this.food = value; break;
+      case 'bait': this.bait = value; break;
+      case 'danger': this.danger = value; break;
+    }
+    this.clampMeters();
   }
 
   private applyDeltas(deltas: ResourceDelta): void {
@@ -506,6 +774,7 @@ export class SurvivalSession {
     this.bait += deltas.bait ?? 0;
     this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueProgress += deltas.rescueProgress ?? 0;
+    this.danger += deltas.danger ?? 0;
     this.clampMeters();
   }
 
@@ -546,5 +815,6 @@ export class SurvivalSession {
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
     this.rescueProgress = Math.max(0, this.rescueProgress);
+    this.danger = Math.max(0, this.danger);
   }
 }

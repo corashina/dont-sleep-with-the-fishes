@@ -79,7 +79,7 @@ describe('survival foundations', () => {
   });
 
   it('exposes the approved starting balance', () => {
-    expect(SURVIVAL_BALANCE.start).toEqual({ health: 100, hunger: 20, energy: 4, hull: 75 });
+    expect(SURVIVAL_BALANCE.start).toEqual({ health: 100, hunger: 20, energy: 4, hull: 100 });
     expect(SURVIVAL_BALANCE.dawn.hungerIncrease).toBe(18);
     expect(SURVIVAL_BALANCE.rescue.firstDay).toBe(5);
   });

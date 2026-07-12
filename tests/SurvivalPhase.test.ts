@@ -4,6 +4,7 @@ import { ITEM_IDS } from '../src/game/ItemState';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import type { SurvivalInventory, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
 function inventory(overrides: Partial<Record<ItemId, Partial<SurvivalInventory[ItemId]>>> = {}): SurvivalInventory {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, {
@@ -28,12 +29,16 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     recoveredBait: 0,
     repairMaterial: 0,
     rescueProgress: 0,
+    danger: 0,
+    route: null,
     weather: 'calm',
     restedToday: false,
     actedToday: false,
     inventory: inventory(),
     savedItems: [],
     pendingEventId: null,
+    pendingChoices: [],
+    eventHistory: {},
     lastOutcome: null,
     seed: 8,
     ...overrides,
@@ -241,6 +246,88 @@ describe('SurvivalPhase orchestration', () => {
     phase.handleContinue();
     phase.handleEndure();
     expect(resolveEvent).toHaveBeenLastCalledWith(null);
+  });
+
+  it('routes canonical item and sleep choices by choice ID', async () => {
+    let finishSequence!: () => void;
+    const play = vi.fn(() => new Promise<void>((resolve) => { finishSequence = resolve; }));
+    const resolveEventChoice = vi.fn(() => accepted({ code: 'event-resolved', cue: 'impact' }));
+    const current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'dangerous-waters',
+      pendingChoices: [
+        { id: 'map', label: 'Use Map', itemId: 'map' },
+        { id: 'sleep', label: 'Sleep' },
+      ],
+    });
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current), resolveEventChoice },
+      world: { play, dispose: vi.fn() },
+      ui: { showOutcome: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleEventItem('map');
+    expect(resolveEventChoice).toHaveBeenCalledWith('map');
+
+    finishSequence();
+    await flushPromises();
+    phase.handleContinue();
+    phase.handleEndure();
+    expect(resolveEventChoice).toHaveBeenLastCalledWith('sleep');
+  });
+
+  it('keeps the item adapter for a canonical any-item choice', () => {
+    const resolveEventChoice = vi.fn(() => accepted());
+    const resolveEvent = vi.fn(() => accepted());
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingChoices: [{ id: 'invalid-trade', label: 'Offer another item', itemId: 'any' }],
+        })),
+        resolveEventChoice,
+        resolveEvent,
+      },
+      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      ui: { showOutcome: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleEventItem('waterJug');
+
+    expect(resolveEvent).toHaveBeenCalledWith('waterJug');
+    expect(resolveEventChoice).not.toHaveBeenCalled();
+  });
+
+  it('presents canonical pending-event metadata', () => {
+    const current = snapshot({ state: 'nightEvent', pendingEventId: 'dangerous-waters' });
+    const showEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { dispose: vi.fn() },
+      ui: { render: vi.fn(), showEvent, dispose: vi.fn() },
+    });
+
+    phase.start();
+
+    expect(showEvent).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'dangerous-waters',
+      title: 'Dangerous Waters',
+      danger: 'safe',
+    }), current);
+  });
+
+  it('wires generic canonical choices to resolveEventChoice', () => {
+    const resolveEventChoice = vi.fn(() => accepted());
+    const ui = { showOutcome: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() } as Partial<SurvivalUI>;
+    SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ state: 'nightEvent' })), resolveEventChoice },
+      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      ui,
+    });
+
+    expect(ui.onEventChoice).toBeTypeOf('function');
+    ui.onEventChoice?.('yes');
+    expect(resolveEventChoice).toHaveBeenCalledWith('yes');
   });
 
   it('shows an ending once and restarts only through its callback', () => {
