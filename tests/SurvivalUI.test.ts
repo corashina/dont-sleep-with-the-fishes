@@ -48,6 +48,26 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
+    expect(mainStyles).toContain('.survival-condition__art');
+    expect(mainStyles).toContain('.journal-marker__art');
+    expect(mainStyles).toContain('.survival-tallies');
+    expect(mainStyles).toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
+    expect(mainStyles).toContain('.cinematic-overlay::before');
+    expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
+  });
+
+  it('aligns cinematic backing panels with their clamp-based content padding', () => {
+    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*clamp\(68px,\s*12vh,\s*150px\);[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay\.is-visible::before\s*\{[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(mainStyles).toMatch(/@media\s*\(max-height:\s*760px\)\s*and\s*\(min-width:\s*761px\)\s*\{\s*\.cinematic-overlay\s*\{[^}]*padding-top:\s*44px;[^}]*\}\s*\.cinematic-overlay::before\s*\{[^}]*top:\s*44px;/s);
+  });
+
+  it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
+    expect(mainStyles).toMatch(/\.boat-anchor:not\(:disabled\):not\(\[aria-disabled="true"\]\):active::before\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\) scale\(0\.78\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
+  });
+
   it('renders projected item tooltips without action dock or inventory tray', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -882,6 +902,25 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-ending-stats]')?.textContent).toContain('1234');
     mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();
     expect(restart).toHaveBeenCalledOnce();
+  });
+
+  it('renders illustrated conditions, journal status, tallies, and cinematic overlays', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    expect(mount.querySelector('[data-meter="health"] [data-ui-artwork="health"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="hunger"] [data-ui-artwork="hunger"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')).not.toBeNull();
+    expect(mount.querySelector('.journal-marker [data-ui-artwork="journal"]')).not.toBeNull();
+    expect(mount.querySelector('.survival-stores')?.classList).toContain('survival-tallies');
+    expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-outcome]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
+
+    ui.dispose();
   });
 
   it('removes document, pointer, and button listeners exactly once on dispose', () => {
