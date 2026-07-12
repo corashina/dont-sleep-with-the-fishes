@@ -1,4 +1,5 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import type { IntegerValue } from '../canonical/types';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 export type WeatherId = 'calm' | 'overcast' | 'squall';
@@ -31,6 +32,79 @@ export type InventoryMutation = {
   quantity: number;
   instanceId?: ItemInstanceId;
 };
+
+export type EventRoute = 'left' | 'right';
+export type EventResource = 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'danger';
+
+export interface ResourceEffect {
+  resource: EventResource;
+  operation: 'add' | 'subtract' | 'set';
+  value: IntegerValue;
+}
+
+export interface WeightedEventOutcome {
+  weight: number;
+  message: string;
+  effects: {
+    resources?: readonly ResourceEffect[];
+    items?: readonly InventoryMutation[];
+    route?: EventRoute;
+  };
+}
+
+export interface EventChoiceDefinition {
+  id: string;
+  label: string;
+  itemId?: ItemId | 'any';
+  outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
+}
+
+interface CanonicalEventBase {
+  id: string;
+  phase: 'day' | 'night';
+  title: string;
+  prompt: string;
+  cue: PresentationCue;
+  weight: number;
+  minDay: number;
+  maxDay?: number;
+  cooldownDays: number;
+  maxAppearances: number;
+  dangerMin: number;
+  requiredItems?: readonly ItemId[];
+  requiredAnyItems?: readonly ItemId[];
+  routeWeightBonuses?: Partial<Record<EventRoute, number>>;
+}
+
+export interface ChoiceEventDefinition extends CanonicalEventBase {
+  automatic?: false;
+  choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
+  automaticOutcome?: never;
+}
+
+export interface AutomaticEventDefinition extends CanonicalEventBase {
+  automatic: true;
+  choices?: never;
+  automaticOutcome: WeightedEventOutcome;
+}
+
+export type CanonicalEventDefinition = ChoiceEventDefinition | AutomaticEventDefinition;
+
+export interface EventHistory {
+  appearances: number;
+  firstDay: number;
+  lastDay: number;
+}
+
+export type ResolvedEventResources = Partial<Record<EventResource, number>>;
+
+export interface ResolvedEventOutcome {
+  message: string;
+  resourceDeltas: ResolvedEventResources;
+  resourceSets: ResolvedEventResources;
+  itemMutations: readonly InventoryMutation[];
+  route?: EventRoute;
+}
 
 export interface ResourceDelta {
   health?: number;

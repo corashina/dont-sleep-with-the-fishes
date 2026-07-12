@@ -7,6 +7,8 @@ describe('survival events', () => {
     expect(SURVIVAL_EVENTS.filter((event) => event.phase === 'day').length).toBeGreaterThanOrEqual(8);
     expect(SURVIVAL_EVENTS.filter((event) => event.phase === 'night').length).toBeGreaterThanOrEqual(8);
     expect(new Set(SURVIVAL_EVENTS.map((event) => event.id)).size).toBe(SURVIVAL_EVENTS.length);
+    expect(SURVIVAL_EVENTS.map((event) => event.id)).not.toContain('day-calm-fallback');
+    expect(SURVIVAL_EVENTS.map((event) => event.id)).not.toContain('night-calm-fallback');
   });
 
   it('encodes the complete initial counter and endure effects', () => {

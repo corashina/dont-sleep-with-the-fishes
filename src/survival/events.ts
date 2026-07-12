@@ -8,6 +8,14 @@ import type {
   WeatherId,
 } from './survivalTypes';
 
+// The original runtime catalog stays active until the canonical wiki catalog is
+// supplied. New code can use the generic engine through these explicit aliases.
+export {
+  drawWeightedEvent as drawWeightedCanonicalEvent,
+  eligibleEvents as eligibleCanonicalEvents,
+  resolveEventOutcome,
+} from './outcomeResolver';
+
 interface EventSeed {
   id: string;
   phase: 'day' | 'night';
@@ -173,7 +181,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = [
   }),
 ];
 
-export interface EventEligibility {
+export interface LegacyEventEligibility {
   phase: 'day' | 'night';
   day: number;
   weather: WeatherId;
@@ -183,7 +191,7 @@ export interface EventEligibility {
 
 export function eligibleEvents(
   catalog: readonly SurvivalEventDefinition[],
-  criteria: EventEligibility,
+  criteria: LegacyEventEligibility,
 ): SurvivalEventDefinition[] {
   return catalog.filter((event) => {
     if (event.phase !== criteria.phase || event.id === criteria.lastEventId) return false;
@@ -194,7 +202,7 @@ export function eligibleEvents(
   });
 }
 
-const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> = {
+const LEGACY_FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> = {
   day: {
     id: 'day-calm-fallback', phase: 'day', title: 'Quiet Waters', prompt: 'The day passes without incident.',
     danger: 'safe', earliestDay: 1, weight: 1, cooldownDays: 0, responses: [],
@@ -214,7 +222,7 @@ export function drawWeightedEvent(
   random: RandomSource,
   fallbackPhase: 'day' | 'night' = 'day',
 ): SurvivalEventDefinition {
-  if (pool.length === 0) return FALLBACKS[fallbackPhase];
+  if (pool.length === 0) return LEGACY_FALLBACKS[fallbackPhase];
   const totalWeight = pool.reduce((sum, event) => sum + Math.max(0, event.weight), 0);
   if (totalWeight <= 0) return pool[0]!;
   const roll = random.next() * totalWeight;
