@@ -419,8 +419,8 @@ Add these shared rules after `canvas`:
 .game-ui, .survival-ui { isolation: isolate; }
 .ui-treatment { position: absolute; inset: 0; z-index: 20; overflow: hidden; pointer-events: none; }
 .ui-treatment::before { content: ''; position: absolute; inset: -8%; background: radial-gradient(circle at 50% 44%, transparent 42%, #0506074d 72%, #020303e8 108%); }
-.ui-treatment::after { content: ''; position: absolute; inset: 0; opacity: .16; background-image: repeating-radial-gradient(circle at 20% 30%, #f2ead71f 0 1px, transparent 1px 4px), repeating-linear-gradient(8deg, #0000 0 3px, #0003 4px); mix-blend-mode: soft-light; }
-.ui-artwork { overflow: visible; fill: currentColor; stroke: var(--ink-outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke fill; filter: drop-shadow(2px 3px 0 #0009); }
+.ui-treatment::after { content: ''; position: absolute; inset: 0; opacity: .16; background-image: repeating-radial-gradient(circle at 20% 30%, #f2ead71f 0 1px, transparent 1px 4px), repeating-linear-gradient(8deg, transparent 0 3px, #05060633 4px); mix-blend-mode: soft-light; }
+.ui-artwork { overflow: visible; fill: currentColor; stroke: var(--ink-outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke fill; filter: drop-shadow(2px 3px 0 #05060699); }
 .ui-artwork__shine { fill: none; stroke: #fff8; stroke-width: 3; paint-order: normal; }
 .ink-label, .brush-label { color: var(--ink-bone); text-shadow: 2px 2px 0 var(--ink-outline), -1px 1px 0 var(--ink-outline); }
 .brush-label { padding: 10px 18px; border: 0; background: linear-gradient(95deg, transparent, #080a0be8 8% 91%, transparent); }
@@ -447,11 +447,11 @@ Override the existing scavenging selectors with:
 .pocket-watch [data-timer].is-critical { color: var(--ink-red); animation: watch-jolt .65s steps(2, end) infinite; }
 .carried { left: 28px; bottom: 30px; transform: rotate(-.6deg); }
 .carried-list { padding-top: 5px; border-top: 2px solid #f2ead755; }
-.crosshair { width: 12px; height: 12px; border-color: #f2ead799; box-shadow: 0 0 12px #000; }
+.crosshair { width: 12px; height: 12px; border-color: #f2ead799; box-shadow: 0 0 12px var(--ink-outline); }
 .prompt { bottom: 82px; max-width: min(520px, calc(100vw - 48px)); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; text-align: center; }
 .feedback { position: absolute; bottom: 100%; left: 0; width: max-content; max-width: 360px; margin-bottom: 8px; color: var(--ink-yellow); }
 .poster-screen { justify-items: start; background: linear-gradient(90deg, #07090aef 0 34%, #07090ac4 52%, transparent 78%); }
-.poster-screen h1, .poster-screen h2 { color: var(--ink-bone); font-family: Impact, 'Arial Black', sans-serif; letter-spacing: -.045em; text-transform: uppercase; text-shadow: 3px 4px 0 #000, -2px 1px 0 #000; transform: rotate(-1deg); }
+.poster-screen h1, .poster-screen h2 { color: var(--ink-bone); font-family: Impact, 'Arial Black', sans-serif; letter-spacing: -.045em; text-transform: uppercase; text-shadow: 3px 4px 0 var(--ink-outline), -2px 1px 0 var(--ink-outline); transform: rotate(-1deg); }
 .poster-screen .kicker { color: var(--ink-yellow); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; }
 .poster-screen .controls div { border: 0; background: linear-gradient(95deg, #111d, #1118); clip-path: polygon(0 8%, 96% 0, 100% 90%, 4% 100%); }
 .failure-mark { width: 88px; color: var(--ink-red-bright); }
@@ -477,13 +477,13 @@ Add or override:
 .survival-meter--energy { --meter-accent: var(--ink-yellow); }
 .survival-meter--hull { --meter-accent: var(--ink-blue); }
 .survival-meter__label { grid-area: label; color: var(--ink-bone); font-size: .62rem; text-align: center; }
-.survival-meter__value { grid-area: value; align-self: center; color: var(--ink-bone); font: 800 1rem/1 ui-monospace, monospace; text-shadow: 2px 2px 0 #000; }
+.survival-meter__value { grid-area: value; align-self: center; color: var(--ink-bone); font: 800 1rem/1 ui-monospace, monospace; text-shadow: 2px 2px 0 var(--ink-outline); }
 .survival-meter__track { position: absolute; left: 6px; right: 4px; bottom: -7px; height: 4px; border: 0; background: #070808cc; transform: skewX(-12deg); }
 .survival-meter__fill { background: currentColor; }
 .survival-meter.is-danger { animation: condition-jolt .75s steps(2, end) infinite; }
 .journal-marker { inset: 18px 22px auto auto; min-width: 180px; padding: 8px 12px 8px 58px; border: 0; transform: rotate(1.2deg); }
 .journal-marker__art { position: absolute; left: 0; top: -5px; width: 64px; color: #8d5d37; }
-.survival-status__time [data-day] { color: var(--ink-bone); font-size: 1.15rem; text-shadow: 2px 2px 0 #000; }
+.survival-status__time [data-day] { color: var(--ink-bone); font-size: 1.15rem; text-shadow: 2px 2px 0 var(--ink-outline); }
 .survival-tallies { top: 112px; right: auto; left: 24px; display: flex; width: auto; max-width: 390px; gap: 6px; border: 0; }
 .survival-tallies span { gap: 6px; padding: 5px 8px; background: #090b0cb8; color: var(--ink-faded); clip-path: polygon(2% 0, 100% 8%, 97% 100%, 0 92%); }
 .boat-anchor::before { width: 12px; height: 12px; border: 3px solid #090b0c; background: var(--anchor-accent); box-shadow: 0 0 0 2px #f2ead799; }
@@ -500,7 +500,7 @@ Add or override:
 .cinematic-overlay { place-content: start center; padding-top: clamp(68px, 12vh, 150px); background: radial-gradient(circle at 50% 38%, #090b0cbb, #030404f2 72%); text-align: center; }
 .cinematic-overlay::before { width: min(720px, calc(100vw - 48px)); min-height: 300px; border: 0; background: linear-gradient(95deg, transparent, #090b0cf2 10% 90%, transparent); clip-path: polygon(4% 0, 98% 5%, 100% 92%, 3% 100%, 0 48%); }
 .cinematic-overlay > * { width: min(620px, calc(100vw - 96px)); text-align: center; }
-.cinematic-overlay h2 { font-family: Impact, 'Arial Black', sans-serif; letter-spacing: .015em; text-transform: uppercase; text-shadow: 3px 4px 0 #000; transform: rotate(-.5deg); }
+.cinematic-overlay h2 { font-family: Impact, 'Arial Black', sans-serif; letter-spacing: .015em; text-transform: uppercase; text-shadow: 3px 4px 0 var(--ink-outline); transform: rotate(-.5deg); }
 .event-danger { color: var(--ink-yellow); }
 .event-overlay[data-danger="dangerous"] .event-danger, .event-overlay[data-danger="dangerous"] h2 { color: var(--ink-red-bright); }
 .event-overlay[data-danger="safe"] .event-danger { color: var(--ink-green); }
