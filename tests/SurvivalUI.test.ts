@@ -57,6 +57,12 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
   });
 
+  it('aligns cinematic backing panels with their clamp-based content padding', () => {
+    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*clamp\(68px,\s*12vh,\s*150px\);[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay\.is-visible::before\s*\{[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(mainStyles).toMatch(/@media\s*\(max-height:\s*760px\)\s*and\s*\(min-width:\s*761px\)\s*\{\s*\.cinematic-overlay\s*\{[^}]*padding-top:\s*44px;[^}]*\}\s*\.cinematic-overlay::before\s*\{[^}]*top:\s*44px;/s);
+  });
+
   it('renders projected item tooltips without action dock or inventory tray', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);

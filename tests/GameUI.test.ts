@@ -32,6 +32,34 @@ describe('GameUI', () => {
     expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
+  it('keeps the critical watch timer at least 3:1 against its gold face', () => {
+    expect(mainStyles).toMatch(/\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\(--ink-red\);/s);
+    const criticalColor = mainStyles.match(/--ink-red:\s*(#[0-9a-f]{6})/i)?.[1];
+    const watchGold = mainStyles.match(/\.pocket-watch__art\s*\{[^}]*color:\s*(#[0-9a-f]{6})/is)?.[1];
+    expect(criticalColor).toBeDefined();
+    expect(watchGold).toBeDefined();
+    if (!criticalColor || !watchGold) return;
+
+    const luminance = (hex: string): number => {
+      const channels = hex.slice(1).match(/.{2}/g)!
+        .map((channel) => Number.parseInt(channel, 16) / 255)
+        .map((channel) => channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+    };
+    const foreground = luminance(criticalColor);
+    const background = luminance(watchGold);
+    const ratio = (Math.max(foreground, background) + 0.05)
+      / (Math.min(foreground, background) + 0.05);
+
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+
+  it('does not brighten or move disabled timber actions on hover', () => {
+    expect(mainStyles).toMatch(/\.timber-action:not\(:disabled\):not\(\[aria-disabled="true"\]\):hover\s*\{[^}]*filter:\s*brightness\(1\.14\);[^}]*transform:\s*translateY\(-2px\) rotate\(-\.25deg\);/s);
+  });
+
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
