@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CANONICAL_ITEMS,
   RUNTIME_ITEM_IDS,
+  runtimeItemDefinition,
   validateCanonicalItems,
 } from '../src/canonical/items';
 import { PARITY_AUDIT } from '../src/canonical/parityAudit';
@@ -43,6 +44,20 @@ describe('wiki item catalog', () => {
     expect(CANONICAL_ITEMS.repairKit.durable.note?.length).toBeGreaterThan(0);
   });
 
+  it('records authoritative breakable metadata from canonical event and fishing behavior', () => {
+    const breakable = [
+      'compass', 'map', 'telescope', 'fishingNet', 'bucket', 'scubaSet',
+      'anchor', 'umbrella', 'swimRing',
+    ] as const;
+    for (const id of breakable) {
+      expect(CANONICAL_ITEMS[id].breakable).toMatchObject({ value: true, provenance: 'wiki' });
+      expect(CANONICAL_ITEMS[id].breakable.note?.length).toBeGreaterThan(0);
+      expect(runtimeItemDefinition(id).breakable).toBe(true);
+    }
+    expect(CANONICAL_ITEMS.fishingRod.breakable.value).toBe(false);
+    expect(CANONICAL_ITEMS.repairKit.breakable.value).toBe(false);
+  });
+
   it('classifies every reviewed item without silent omissions', () => {
     const itemAudit = PARITY_AUDIT.filter(({ kind }) => kind === 'item');
     expect(itemAudit.map(({ wikiName }) => wikiName)).toEqual(expect.arrayContaining([
@@ -59,9 +74,10 @@ describe('wiki item catalog', () => {
     for (const id of RUNTIME_ITEM_IDS) {
       const item = CANONICAL_ITEMS[id];
       expect(item.label.value.length).toBeGreaterThan(0);
-      for (const field of [item.label, item.weight, item.spawnCount, item.charges, item.durable]) {
-        expect(['wiki', 'preserved', 'default']).toContain(field.provenance);
-        expect(field.source.length).toBeGreaterThan(0);
+      for (const field of [item.label, item.weight, item.spawnCount, item.charges, item.durable, item.breakable]) {
+        expect(field, `${id} field`).toBeDefined();
+        expect(['wiki', 'preserved', 'default']).toContain(field?.provenance);
+        expect(field?.source.length).toBeGreaterThan(0);
       }
     }
   });

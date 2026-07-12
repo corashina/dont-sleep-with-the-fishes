@@ -18,6 +18,7 @@ export interface CanonicalItemDefinition {
   spawnCount: Sourced<number>;
   charges: Sourced<number | null>;
   durable: Sourced<boolean>;
+  breakable: Sourced<boolean>;
   builtIn: boolean;
   dayAction: CanonicalDayAction;
   description: string;
@@ -29,6 +30,7 @@ export interface RuntimeItemDefinition {
   spawnCount: number;
   charges: number | null;
   durable: boolean;
+  breakable: boolean;
   builtIn: boolean;
   dayAction: CanonicalDayAction;
   description: string;
@@ -43,6 +45,18 @@ const preserved = <T>(value: T): Sourced<T> =>
 const wiki = <T>(value: T): Sourced<T> => source(value, 'wiki', WIKI_ITEMS);
 const approvedDefault = <T>(value: T): Sourced<T> =>
   source(value, 'default', APPROVED_DEFAULTS);
+const notBreakable = (): Sourced<boolean> => source(
+  false,
+  'preserved',
+  PRESERVED_ITEMS,
+  'No broken state or break behavior is documented in the canonical item, event, or fishing data.',
+);
+const eventBreakable = (note: string): Sourced<boolean> =>
+  source(true, 'wiki', WIKI_SOURCES.events.url, note);
+const fishingBreakable = (note: string): Sourced<boolean> =>
+  source(true, 'wiki', WIKI_SOURCES.fishing.url, note);
+const eventAndFishingBreakable = (note: string): Sourced<boolean> =>
+  source(true, 'wiki', `${WIKI_SOURCES.events.url}; ${WIKI_SOURCES.fishing.url}`, note);
 
 function preservedItem(
   label: string,
@@ -53,6 +67,7 @@ function preservedItem(
   dayAction: CanonicalDayAction,
   description: string,
   labelProvenance: Provenance = 'wiki',
+  breakable: Sourced<boolean> = notBreakable(),
 ): CanonicalItemDefinition {
   return {
     label: source(label, labelProvenance, labelProvenance === 'wiki' ? WIKI_ITEMS : PRESERVED_ITEMS),
@@ -60,6 +75,7 @@ function preservedItem(
     spawnCount: preserved(spawnCount),
     charges: preserved(charges),
     durable: preserved(durable),
+    breakable,
     builtIn: false,
     dayAction,
     description,
@@ -71,6 +87,7 @@ function newShipItem(
   charges: number | null,
   durable: boolean,
   description: string,
+  breakable: Sourced<boolean> = notBreakable(),
 ): CanonicalItemDefinition {
   return {
     label: wiki(label),
@@ -78,6 +95,7 @@ function newShipItem(
     spawnCount: approvedDefault(1),
     charges: wiki(charges),
     durable: wiki(durable),
+    breakable,
     builtIn: false,
     dayAction: null,
     description,
@@ -95,6 +113,7 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
     spawnCount: preserved(2),
     charges: source(1, 'wiki', WIKI_ITEMS, 'The wiki documents Duct Tape as a one-time-use item.'),
     durable: preserved(false),
+    breakable: notBreakable(),
     builtIn: false,
     dayAction: 'repair',
     description: 'Patches leaks and reinforces emergency repairs.',
@@ -131,38 +150,47 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
     'SCUBA SET', 3, 1, null, true, 'dive',
     'Enables safe dives beneath the lifeboat.',
     'preserved',
+    eventBreakable('Shark Men outcomes explicitly break Scuba Gear.'),
   ),
   compass: newShipItem(
     'COMPASS', null, true,
     'Provides a reliable heading when landmarks disappear.',
+    fishingBreakable('Fishing explicitly recovers a Broken Compass.'),
   ),
   map: newShipItem(
     'MAP', null, true,
     'Charts nearby waters and routes through drifting hazards.',
+    eventBreakable('Shower Night and Leak outcomes explicitly break the Map.'),
   ),
   telescope: newShipItem(
     'SPYGLASS', null, true,
     'Extends sight across the horizon for distant landmarks.',
+    eventBreakable('Snatcher and Face on the Moon outcomes explicitly break the Spyglass.'),
   ),
   fishingNet: newShipItem(
     'FISHING NET', null, true,
     'Collects fish and floating supplies near the lifeboat.',
+    eventAndFishingBreakable('Events break Fishing Nets and Fishing recovers a Torn Fishing Net.'),
   ),
   bucket: newShipItem(
     'BUCKET', null, true,
     'Bails water and carries loose supplies.',
+    eventBreakable('Multiple documented event outcomes explicitly break the Bucket.'),
   ),
   anchor: newShipItem(
     'ANCHOR', null, true,
     'Keeps the lifeboat from drifting in rough water.',
+    eventBreakable('The Whirlpool outcome explicitly breaks the Anchor.'),
   ),
   umbrella: newShipItem(
     'UMBRELLA', null, true,
     'Offers cover from sun and rain.',
+    eventBreakable('Multiple documented event outcomes explicitly break the Umbrella.'),
   ),
   swimRing: newShipItem(
     'SWIM RING', null, true,
     'Provides flotation during dangerous water crossings.',
+    eventBreakable('Multiple documented event outcomes explicitly break the Swim Ring.'),
   ),
   harpoonGun: newShipItem(
     'HARPOON GUN', 1, false,
@@ -178,6 +206,7 @@ export const CANONICAL_ITEMS: Readonly<Record<RuntimeItemId, CanonicalItemDefini
     spawnCount: source(0, 'wiki', WIKI_ITEMS, 'Built into the lifeboat.'),
     charges: source(null, 'wiki', WIKI_ITEMS, 'The built-in Repair Kit is not consumed when used.'),
     durable: source(true, 'wiki', WIKI_ITEMS, 'The Repair Kit remains installed in the lifeboat.'),
+    breakable: notBreakable(),
     builtIn: true,
     dayAction: 'repair',
     description: 'Built into the lifeboat for hull repairs.',
@@ -211,6 +240,7 @@ export function validateCanonicalItems(
       spawnCount: item.spawnCount,
       charges: item.charges,
       durable: item.durable,
+      breakable: item.breakable,
     } as const;
     for (const [fieldName, field] of Object.entries(fields)) {
       if (!PROVENANCE_VALUES.includes(field.provenance)) {
@@ -234,6 +264,9 @@ export function validateCanonicalItems(
     if (typeof item.durable.value !== 'boolean') {
       throw new Error(`canonical item ${id}.durable is invalid`);
     }
+    if (typeof item.breakable.value !== 'boolean') {
+      throw new Error(`canonical item ${id}.breakable is invalid`);
+    }
     if (item.builtIn && item.spawnCount.value !== 0) {
       throw new Error(`canonical item ${id} is built in but has ship spawns`);
     }
@@ -248,6 +281,7 @@ export function runtimeItemDefinition(id: RuntimeItemId): RuntimeItemDefinition 
     spawnCount: item.spawnCount.value,
     charges: item.charges.value,
     durable: item.durable.value,
+    breakable: item.breakable.value,
     builtIn: item.builtIn,
     dayAction: item.dayAction,
     description: item.description,

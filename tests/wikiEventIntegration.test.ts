@@ -229,17 +229,69 @@ describe('canonical survival-event integration', () => {
     expect(session.snapshot()).toEqual(before);
   });
 
-  it('applies next-day energy set effects exactly', () => {
-    const session = new SurvivalSession(saved(), {
+  it('rejects a built-in Handyman offer even when another loseable item exists', () => {
+    const session = new SurvivalSession(saved('repairKit', 'map'), {
       seed: 1,
-      random: sequenceRandom([0.99]),
-      initial: { energy: 0 },
-      initialEventId: 'shower-night',
+      initial: { day: 20, danger: 2 },
+      initialEventId: 'the-handyman',
+    });
+    const before = session.snapshot();
+
+    expect(session.resolveEvent('repairKit')).toMatchObject({
+      accepted: false,
+      code: 'item-unavailable',
+    });
+    expect(session.snapshot()).toEqual(before);
+  });
+
+  it.each([
+    ['face-on-the-moon', 'sleep', [] as ItemId[], 0, 0],
+    ['eerie-melody', 'bucket', ['bucket'] as ItemId[], 0, 1],
+    ['shower-night', 'sleep', [] as ItemId[], 0.99, 2],
+  ])('applies %s energy set as a one-shot next-day override', (
+    eventId, choiceId, items, outcomeRoll, expectedEnergy,
+  ) => {
+    const session = new SurvivalSession(saved(...items), {
+      seed: 1,
+      random: sequenceRandom([outcomeRoll, 0, 0]),
+      initial: { day: 1, energy: 4, hunger: 20 },
+      initialEventId: eventId,
+    });
+
+    session.resolveEventChoice(choiceId);
+    expect(session.snapshot().energy).toBe(4);
+    session.beginDawn();
+    expect(session.snapshot().energy).toBe(expectedEnergy);
+    session.beginDawn();
+    expect(session.snapshot().energy).toBe(4);
+  });
+
+  it('uses Compass breakability for random breaks', () => {
+    const session = new SurvivalSession(saved('compass'), {
+      seed: 1,
+      random: sequenceRandom([0, 0, 0]),
+      initialEventId: 'windy-night',
     });
 
     session.resolveEventChoice('sleep');
 
-    expect(session.snapshot().energy).toBe(2);
+    expect(session.snapshot().inventory.compass.instances[0]?.condition).toBe('broken');
+  });
+
+  it('stops random breaking when usable breakable instances are exhausted', () => {
+    const rolls = [0, 0, 0];
+    let calls = 0;
+    const session = new SurvivalSession(saved('compass', 'fishingRod'), {
+      seed: 1,
+      random: { next: () => rolls[calls++] ?? 0 },
+      initialEventId: 'windy-night',
+    });
+
+    session.resolveEventChoice('sleep');
+
+    expect(session.snapshot().inventory.compass.instances[0]?.condition).toBe('broken');
+    expect(session.snapshot().inventory.fishingRod.instances[0]?.condition).toBe('usable');
+    expect(calls).toBe(3);
   });
 
   it('doubles only negative night health and hull damage from day 50', () => {

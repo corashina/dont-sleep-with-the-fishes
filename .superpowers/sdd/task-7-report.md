@@ -74,7 +74,7 @@ Additional focused verification:
 - Confirmed the session imports canonical events and `outcomeResolver` directly; the legacy catalog is no longer used for live selection or resolution.
 - Confirmed inventory mutations execute before resource deltas/sets and terminal checks.
 - Confirmed `loseRandom` selects only usable recovered instances and excludes built-in/no-instance items.
-- Confirmed `breakRandom` derives eligible item types from explicit canonical `break` outcomes and selects only usable recovered instances.
+- Confirmed `breakRandom` uses authoritative canonical item metadata and selects only usable recovered instances.
 - Confirmed Snatcher chooses one private target when the event opens, using its exact item/Food asset list and the injected `RandomSource`.
 - Confirmed event history records appearances at selection time and preserves first/last day plus recurrence counts.
 - Confirmed dormant and automatic records cannot enter ordinary weighted selection.
@@ -87,3 +87,45 @@ Additional focused verification:
 
 - Seagull and Chest left unopened remain dormant because their selection data is undocumented in the canonical source, as established in Task 6.
 - No blocking Task 7 concerns remain.
+
+## Post-implementation review fixes
+
+### RED evidence
+
+Command:
+
+```powershell
+bun run test -- tests/wikiEventIntegration.test.ts tests/SurvivalSession.test.ts tests/canonicalItems.test.ts tests/SurvivalPhase.test.ts
+```
+
+Result: exit 1; 8 failures. The regressions proved that night energy sets were still immediate, Compass was absent from random break candidates, authoritative `breakable` metadata did not exist, and the Handyman adapter accepted a built-in Repair Kit when another loseable instance existed.
+
+After replacing the runtime candidate source, `tests/canonicalItems.test.ts` was rerun independently while RED and failed with explicit missing-metadata assertions rather than a test error.
+
+### GREEN evidence
+
+- Deferred energy regression group: 3 passed, covering exact next-day values 0, 1, and 2 plus one-shot clearing.
+- Breakability regression group: 4 passed, covering sourced metadata, runtime adaptation, Compass, and candidate exhaustion without an extra random draw.
+- Handyman regression group: 3 passed, covering valid fallback, missing target, and built-in target rejection.
+- Requested focused gate: 4 files passed, 77 tests passed.
+
+### Final verification
+
+- `bun run test` — exit 0; 31 test files passed, 361 tests passed.
+- `bun run typecheck` — exit 0 (`tsc --noEmit`).
+- `git diff --check` — exit 0; only line-ending notices, no whitespace errors.
+- Independent read-only review found no remaining Critical or Important issues.
+
+### Review-fix self-review
+
+- Confirmed night-event energy `set` values remain private until `beginDawn()`, override the already-calculated hunger tier, and clear before any later dawn.
+- Confirmed day-event energy sets retain immediate semantics.
+- Replaced the earlier inferred breakability implementation: `breakRandom` now reads the authoritative runtime item field only.
+- Confirmed Compass is breakable from the Fishing record; Map, Spyglass, Bucket, Scuba Gear, Anchor, Umbrella, and Swim Ring are breakable from event records; Fishing Net is sourced from both event and fishing behavior.
+- Confirmed every canonical item has sourced/provenanced `breakable` metadata and runtime validation rejects malformed values.
+- Confirmed random breaking selects only usable instances, excludes built-in items, and stops without drawing randomness when candidates are exhausted.
+- Confirmed Handyman `any` choices validate the exact offered item and instance against the loseable candidate set before resolving effects.
+
+### Review-fix concerns
+
+- No new concerns.

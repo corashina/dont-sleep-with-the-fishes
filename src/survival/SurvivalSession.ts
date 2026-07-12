@@ -48,18 +48,6 @@ type EventTarget =
   | { kind: 'item'; itemId: ItemId; instanceId: InventoryMutation['instanceId'] }
   | { kind: 'food' };
 
-const BREAKABLE_ITEM_IDS = new Set<ItemId>();
-for (const event of CANONICAL_EVENTS) {
-  if (event.automatic) continue;
-  for (const choice of event.choices) {
-    for (const outcome of choice.outcomes) {
-      for (const mutation of outcome.effects.items ?? []) {
-        if (mutation.kind === 'break') BREAKABLE_ITEM_IDS.add(mutation.itemId);
-      }
-    }
-  }
-}
-
 export class SurvivalSession {
   private state: SurvivalState = 'day';
   private day: number;
@@ -84,6 +72,7 @@ export class SurvivalSession {
   private pendingEventId: string | null;
   private pendingEvent: CanonicalEventDefinition | null = null;
   private pendingEventTarget: EventTarget | null = null;
+  private pendingMorningEnergy: number | null = null;
   private readonly eventHistory = new Map<string, EventHistory>();
   private lastOutcome: ActionOutcome | null = null;
   private readonly seed: number;
@@ -265,6 +254,9 @@ export class SurvivalSession {
     if (choice.itemId === 'any' && offeredTarget === null) {
       return this.reject('item-target-required', 'Choose the recovered item offered for this response.');
     }
+    if (choice.itemId === 'any' && !this.isEligibleLoseTarget(offeredTarget!)) {
+      return this.reject('item-unavailable', 'That recovered item cannot be offered for this response.');
+    }
     if (!this.canUseEventChoice(choice)) {
       return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
     }
@@ -299,6 +291,10 @@ export class SurvivalSession {
 
     for (const [resource, value] of Object.entries(resolved.resourceSets)) {
       const key = resource as keyof typeof resolved.resourceSets;
+      if (key === 'energy' && event.phase === 'night') {
+        this.pendingMorningEnergy = value!;
+        continue;
+      }
       this.setEventResource(key, value!);
       affected.add(key);
     }
@@ -352,11 +348,15 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
     );
-    const morningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
+    let morningEnergy: number = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
       ? SURVIVAL_BALANCE.dawn.starvingEnergy
       : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
         ? SURVIVAL_BALANCE.dawn.hungryEnergy
         : SURVIVAL_BALANCE.dawn.normalEnergy;
+    if (this.pendingMorningEnergy !== null) {
+      morningEnergy = this.pendingMorningEnergy;
+      this.pendingMorningEnergy = null;
+    }
     const deltas: ResourceDelta = {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
@@ -692,8 +692,9 @@ export class SurvivalSession {
   private randomInventoryCandidates(kind: 'lose' | 'break'): EventTarget[] {
     const candidates: EventTarget[] = [];
     for (const [itemId, entry] of Object.entries(this.inventory) as [ItemId, SurvivalInventory[ItemId]][]) {
-      if (runtimeItemDefinition(itemId).builtIn) continue;
-      if (kind === 'break' && !BREAKABLE_ITEM_IDS.has(itemId)) continue;
+      const definition = runtimeItemDefinition(itemId);
+      if (definition.builtIn) continue;
+      if (kind === 'break' && !definition.breakable) continue;
       for (const instance of entry.instances) {
         if (instance.condition === 'usable') {
           candidates.push({ kind: 'item', itemId, instanceId: instance.instanceId });
@@ -701,6 +702,14 @@ export class SurvivalSession {
       }
     }
     return candidates;
+  }
+
+  private isEligibleLoseTarget(target: EventTarget): boolean {
+    return target.kind === 'item' && this.randomInventoryCandidates('lose').some((candidate) => (
+      candidate.kind === 'item'
+      && candidate.itemId === target.itemId
+      && candidate.instanceId === target.instanceId
+    ));
   }
 
   private drawCandidate<T>(candidates: readonly T[]): T | null {
