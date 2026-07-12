@@ -48,6 +48,15 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
+    expect(mainStyles).toContain('.survival-condition__art');
+    expect(mainStyles).toContain('.journal-marker__art');
+    expect(mainStyles).toContain('.survival-tallies');
+    expect(mainStyles).toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
+    expect(mainStyles).toContain('.cinematic-overlay::before');
+    expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
+  });
+
   it('renders projected item tooltips without action dock or inventory tray', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);

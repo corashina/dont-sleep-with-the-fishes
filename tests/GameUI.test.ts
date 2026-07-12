@@ -23,6 +23,15 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
+  it('defines the illustrated global and scavenging presentation contracts', () => {
+    expect(mainStyles).toContain('--ink-bone: #f2ead7');
+    expect(mainStyles).toContain('.ui-treatment::after');
+    expect(mainStyles).toContain('.pocket-watch__art');
+    expect(mainStyles).toContain('.timber-action::before');
+    expect(mainStyles).toContain('.poster-screen');
+    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
