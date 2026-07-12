@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import { mulberry32, sequenceRandom } from '../src/survival/random';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 
+const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
+  instanceId: `${type}-${index + 1}` as ItemInstanceId,
+  type,
+}));
+
 describe('survival foundations', () => {
   it('maps only saved items to their documented charges', () => {
-    const inventory = createSurvivalInventory(['flareGun', 'baitTin', 'medicalKit', 'flashlight']);
+    const inventory = createSurvivalInventory(saved('flareGun', 'baitTin', 'medicalKit', 'flashlight'));
     expect(inventory.flareGun).toEqual({ owned: true, charges: 1, durable: false });
     expect(inventory.baitTin).toEqual({ owned: true, charges: 3, durable: false });
     expect(inventory.medicalKit).toEqual({ owned: true, charges: 2, durable: false });
@@ -14,9 +20,10 @@ describe('survival foundations', () => {
     expect(inventory.cannedFood.charges).toBe(0);
   });
 
-  it('deduplicates copied saved item IDs', () => {
-    const inventory = createSurvivalInventory(['waterJug', 'waterJug']);
-    expect(inventory.waterJug.charges).toBe(3);
+  it('adds charges for duplicate instances and one food per can', () => {
+    const inventory = createSurvivalInventory(saved('waterJug', 'waterJug', 'cannedFood', 'cannedFood'));
+    expect(inventory.waterJug.charges).toBe(6);
+    expect(inventory.cannedFood.charges).toBe(2);
   });
 
   it('produces repeatable seeded values and clamped test sequences', () => {

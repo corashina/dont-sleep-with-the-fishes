@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS } from '../src/game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { WEATHER_IDS } from '../src/survival/BoatWorld';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import { formatCountdown } from '../src/ui/GameUI';
+
+const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
+  instanceId: `${type}-${index + 1}` as ItemInstanceId,
+  type,
+}));
 
 describe('demo contracts', () => {
   it('ships exactly nine supply definitions', () => {
@@ -22,7 +28,7 @@ describe('demo contracts', () => {
   });
 
   it('maps all nine scavenged items into survival definitions', () => {
-    const inventory = createSurvivalInventory(ITEM_IDS);
+    const inventory = createSurvivalInventory(saved(...ITEM_IDS));
 
     expect(Object.keys(inventory).sort()).toEqual([...ITEM_IDS].sort());
     ITEM_IDS.forEach((id) => {
