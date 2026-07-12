@@ -1,49 +1,155 @@
-# Final whole-branch review fix wave
+# Final Physical Inventory Review Fix Report
 
-## Scope and method
+Date: 2026-07-12
 
-Head reviewed: `84be912`. Work was performed in-place on `master` by user choice. The pass followed RED/GREEN TDD: focused regression tests were added first, run to observe the intended failures, then minimal production changes were made and the focused suites rerun.
+## Scope
 
-## RED / GREEN evidence
+Implemented only the five findings from the final whole-branch review:
 
-- Applied deltas, unavailable event items, pending-event dawn guard, nightfall/dawn, and terminal cues: RED showed requested `-35` instead of applied `-20`, unsuitable resolution for an unowned item, event cue instead of nightfall, and missing terminal cue behavior. GREEN: `tests/SurvivalSession.test.ts` 20/20.
-- Boat lifecycle and rod representation: RED showed the rod existed when opt-out was requested and transient rest remained settled. GREEN: `tests/BoatWorld.test.ts` 4/4; shared scavenging default remains rod-free and the full world suite passes.
-- Action previews, transferred stores, item clues, and hand-line labeling: RED showed absent preview metadata, `0 CHARGES`/`NOT RECOVERED`, missing descriptions, and rod-only hotspot copy. GREEN: `tests/SurvivalUI.test.ts` 29/29.
-- Phase lifecycle: rejected outcomes now wait for Continue without a world cue; night resolution waits at the existing Continue gate, then automatically plays dawn or the real terminal rescue cue. Legacy orchestration expectations were updated to exercise the Continue contract. GREEN: `tests/SurvivalPhase.test.ts` 11/11.
+1. Recovered canned-food and bait-tin depletion is now tracked separately from loose aggregate gains.
+2. Unavailable numeric day-action shortcuts announce their stored reason through the polite live region.
+3. Continue renders and synchronizes updated props/anchors before closing the outcome and restoring focus.
+4. Scavenging failure summaries enumerate saved instance states rather than deprecated type aliases.
+5. Carried items use explicit list/row classes with visible block/grid spacing.
 
-## Files
+## Root Causes
 
-- `src/survival/SurvivalSession.ts`
-- `src/survival/SurvivalPhase.ts`
-- `src/survival/BoatWorld.ts`
+- `BoatWorld` derived physical canned-food and bait-tin uses from aggregate stores. Fishing/diving gains therefore refilled recovered props after consumption.
+- `SurvivalUI.handleKeyDown` returned immediately for unavailable actions without publishing the reason.
+- `SurvivalPhase.handleContinue` called `hideOutcome` before `renderSnapshot`; focus restoration evaluated stale anchors, after which synchronization removed the focused control.
+- `GameUI.showFailureResult` inspected one deprecated type-level status per item type, so it missed a saved non-first duplicate.
+- Carried rows were unclassified inline spans with no explicit list layout.
+
+## RED Evidence
+
+### Recovered food/bait and BoatWorld sync
+
+Command:
+
+```text
+bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts -t "recovered|refill"
+```
+
+Observed before production changes: exit 1; 3 failed, 1 passed, 29 skipped. Both session snapshots lacked `recoveredFood`/`recoveredBait`, and the second canned-food prop remained visible after aggregate food increased (`expected true to be false`).
+
+### Unavailable numeric shortcuts
+
+Command:
+
+```text
+bun run test tests/SurvivalUI.test.ts -t "announces unavailable numeric shortcuts"
+```
+
+Observed before production changes: exit 1; the publication list was empty (`expected [] to have a length of 2`).
+
+### Continue synchronization and focus
+
+Command:
+
+```text
+bun run test tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts -t "Continue|moves focus"
+```
+
+Observed before production changes: exit 1; 2 failed. The UI render invocation occurred after `hideOutcome` (`expected 12 to be less than 8`), and after consuming the last can focus fell to `<body>` instead of the horizon anchor.
+
+### Saved duplicate failure summary
+
+Command:
+
+```text
+bun run test tests/GameUI.test.ts -t "saved duplicate"
+```
+
+Observed before production changes: exit 1; summary contained `SAVED — NONE` rather than `SAVED — CANNED FOOD` when only `cannedFood-2` was saved.
+
+### Carried list DOM/CSS
+
+Command:
+
+```text
+bun run test tests/GameUI.test.ts -t "renders carry weight"
+```
+
+Observed before production changes: exit 1; the carried container had no `carried-list` class.
+
+## GREEN Evidence
+
+Focused commands after implementation:
+
+```text
+bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts -t "recovered|refill"
+# 2 files passed; 4 tests passed
+
+bun run test tests/SurvivalUI.test.ts -t "announces unavailable numeric shortcuts"
+# 1 file passed; 1 test passed
+
+bun run test tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts -t "Continue|moves focus"
+# 2 files passed; 5 tests passed
+
+bun run test tests/GameUI.test.ts -t "saved duplicate|renders carry weight"
+# 1 file passed; 2 tests passed
+```
+
+Affected suites:
+
+```text
+bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts tests/SurvivalUI.test.ts tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts tests/GameUI.test.ts
+# 6 files passed; 92 tests passed
+```
+
+Final verification:
+
+```text
+bun run typecheck
+# exit 0
+
+bun run test
+# 25 files passed; 260 tests passed
+
+bun run build
+# exit 0; TypeScript and Vite production build succeeded
+
+git diff --check
+# exit 0
+```
+
+## Files Changed
+
+Production:
+
 - `src/survival/survivalTypes.ts`
-- `src/survival/itemDescriptions.ts`
-- `src/world/Lifeboat.ts`
+- `src/survival/SurvivalSession.ts`
+- `src/survival/BoatWorld.ts`
+- `src/survival/SurvivalPhase.ts`
 - `src/ui/SurvivalUI.ts`
+- `src/ui/GameUI.ts`
+- `src/styles/main.css`
+
+Tests:
+
 - `tests/SurvivalSession.test.ts`
-- `tests/SurvivalPhase.test.ts`
 - `tests/BoatWorld.test.ts`
 - `tests/SurvivalUI.test.ts`
-- `README.md`
+- `tests/SurvivalPhase.test.ts`
+- `tests/SurvivalPhaseFocus.test.ts`
+- `tests/GameUI.test.ts`
 
-## Verification
+## Self-Review
 
-- Focused: `bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts tests/SurvivalUI.test.ts tests/SurvivalPhase.test.ts` — 64/64 after reconciliation.
-- Full: `bun run test` — 21 files, 211 tests passed.
-- Typecheck: `bun run typecheck` — passed.
-- Build: `bun run build` — passed; Vite emitted only its existing chunk-size advisory.
+- Recovered counters initialize directly from saved-instance inventory contributions, decrement only for actually consumable negative aggregate deltas, never increase on positive gains, and are exposed as required snapshot fields.
+- Aggregate food/bait behavior and seeded random action behavior are unchanged.
+- `BoatWorld` uses only recovered counters for physical can/tin presentation; all other item charge paths are unchanged.
+- Shortcut handling prevents the unavailable numeric key default and reuses the existing versioned polite-announcement path, so identical repeated reasons remain observable.
+- Continue synchronizes snapshot/UI/world anchors first, then closes the outcome. Terminal presentation remains after outcome closure so ending focus is not overwritten.
+- Focus validation rejects disconnected controls, direct or ancestor-hidden controls, inert controls, aria-hidden controls, disabled controls, and aria-disabled controls before falling back to the first usable anchor.
+- Failure summary iteration sees enumerable instance records (legacy aliases are non-enumerable) and retains duplicates.
+- No unrelated functionality or dependencies were added.
 
-## Self-review
+## Independent Review
 
-The session owns rule state and reports actual before/after deltas. Phase owns presentation ordering and preserves the existing explicit outcome Continue gates. Boat construction makes survival equipment opt-in while leaving scavenging's default supply-slot silhouette intact. UI preview and item-description data are centralized and stable in the DOM.
+A read-only reviewer inspected the complete working-tree diff against the five findings and the approved design. Verdict: **Ready to merge**, with no Critical, Important, or Minor findings. The reviewer independently passed `bun run typecheck`, `bun run test` (25 files, 260 tests), and `git diff --check` and did not modify the checkout.
 
-## Remaining concern
+## Concerns
 
-The requested optional procedural rain/spray enhancement was not added in this time-boxed correctness wave. Existing squall presentation remains reduced-motion safe (camera lurch is disabled under reduced motion), but it does not add a new particle field.
-
-## Focused UI follow-up
-
-- RED: dynamic previews still showed authored maxima, transferred event items showed `0 CHARGES`, and rodless fish presentation had no line/catch mesh. GREEN: `SurvivalUI` 31/31 and `BoatWorld` 5/5 focused tests.
-- Action buttons now use explicit label/shortcut and full-width metadata rows. Inventory descriptions use an explicit full-width second row with restrained wrapping. The 700px breakpoint uses a four-column/two-row action dock and a viewport-bounded tray.
-- Browser QA used the retained `.superpowers/sdd/qa-final/index.html` harness. Final screenshots and `browser-results-final.json` cover 1280x720, 1440x900, 1920x1080, and 700x720. Every viewport reported no document/dock/tray overflow, no clipped previews/descriptions, four meters, and zero console warnings/errors.
-- Dynamic guaranteed effects now reflect current clamping and selected repair material/tape. Transferred bait/food event choices direct use through day actions. Rodless fishing animates a line and catch without adding a rod to scavenging.
+- Vite continues to emit the existing advisory that the main minified JavaScript chunk exceeds 500 kB. The build succeeds; bundle splitting is outside this review scope.
+- No browser visual run was added for these review-only fixes; DOM/CSS, focus, state, full-suite, typecheck, and production-build verification are green.

@@ -422,8 +422,8 @@ export class BoatWorld {
   }
 
   private remainingUses(type: ItemId, snapshot: SurvivalSnapshot): number | null {
-    if (type === 'cannedFood') return snapshot.food;
-    if (type === 'baitTin') return snapshot.bait;
+    if (type === 'cannedFood') return snapshot.recoveredFood;
+    if (type === 'baitTin') return snapshot.recoveredBait;
     return snapshot.inventory[type].charges;
   }
 

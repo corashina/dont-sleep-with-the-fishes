@@ -75,6 +75,34 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 2, actedToday: true });
   });
 
+  it('does not restore a consumed recovered can when diving finds loose food', () => {
+    const session = new SurvivalSession(saved('cannedFood', 'scubaSet'), {
+      seed: 1,
+      random: sequenceRandom([0, 0.99, 0]),
+      initial: { hunger: 80, energy: 5 },
+    });
+
+    session.perform('eat');
+    expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
+    session.perform('dive');
+
+    expect(session.snapshot()).toMatchObject({ food: 1, recoveredFood: 0 });
+  });
+
+  it('does not refill a used recovered bait tin when diving finds loose bait', () => {
+    const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet'), {
+      seed: 1,
+      random: sequenceRandom([0.99, 0, 0.99, 0.3]),
+      initial: { energy: 10 },
+    });
+
+    session.perform('fish', 'useBait');
+    expect(session.snapshot()).toMatchObject({ bait: 2, recoveredBait: 2 });
+    session.perform('dive');
+
+    expect(session.snapshot()).toMatchObject({ bait: 3, recoveredBait: 2 });
+  });
+
   it('requires a rod for fishing and scuba for diving', () => {
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('fish')).toMatchObject({ code: 'no-fishing-rod' });
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('dive')).toMatchObject({ code: 'no-scuba-set' });

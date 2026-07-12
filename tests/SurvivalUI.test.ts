@@ -500,6 +500,37 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(mount.querySelector('[data-event-title]'));
   });
 
+  it('announces unavailable numeric shortcuts, including repeated reasons', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const session = new SurvivalSession(saved(), { seed: 7 });
+    const action = vi.fn();
+    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => {
+      if (announcer.textContent) publications.push(announcer.textContent);
+    });
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+    ui.onAction = action;
+    ui.render(session.snapshot(), (id) => session.availableReason(id));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(publications.filter((message) => message === 'Fishing requires a recovered fishing rod.')).toHaveLength(2);
+    expect(publications).toContain('Diving requires a recovered scuba set.');
+    expect(action).not.toHaveBeenCalled();
+  });
+
   it('routes event choices, endurance, outcomes, and continue without duplicate commands', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

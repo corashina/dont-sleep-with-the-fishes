@@ -24,6 +24,8 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     hull: 100,
     food: 0,
     bait: 0,
+    recoveredFood: 0,
+    recoveredBait: 0,
     repairMaterial: 0,
     rescueProgress: 0,
     weather: 'calm',
@@ -111,6 +113,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(hideOutcome).toHaveBeenCalledOnce();
     expect(render).toHaveBeenCalledWith(expect.objectContaining({ state: 'day', day: 1 }), expect.any(Function));
+    expect(Math.min(...render.mock.invocationCallOrder)).toBeLessThan(hideOutcome.mock.invocationCallOrder[0]!);
   });
 
   it('presents the requested day-event cue and waits for a second Continue before opening the event', async () => {

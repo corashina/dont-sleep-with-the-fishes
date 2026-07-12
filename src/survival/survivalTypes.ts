@@ -71,6 +71,8 @@ export interface SurvivalSnapshot {
   hull: number;
   food: number;
   bait: number;
+  recoveredFood: number;
+  recoveredBait: number;
   repairMaterial: number;
   rescueProgress: number;
   weather: WeatherId;

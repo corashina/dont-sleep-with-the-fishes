@@ -40,6 +40,8 @@ export class SurvivalSession {
   private hull: number;
   private food = 0;
   private bait = 0;
+  private recoveredFood = 0;
+  private recoveredBait = 0;
   private repairMaterial = 0;
   private rescueProgress: number;
   private weather: WeatherId;
@@ -77,8 +79,10 @@ export class SurvivalSession {
       this.dayEventOccurred = initialEvent.phase === 'day';
     }
 
-    this.bait = this.inventory.baitTin.charges ?? 0;
-    this.food = this.inventory.cannedFood.charges ?? 0;
+    this.recoveredBait = this.inventory.baitTin.charges ?? 0;
+    this.recoveredFood = this.inventory.cannedFood.charges ?? 0;
+    this.bait = this.recoveredBait;
+    this.food = this.recoveredFood;
     this.inventory.baitTin.charges = 0;
     this.inventory.cannedFood.charges = 0;
 
@@ -103,6 +107,8 @@ export class SurvivalSession {
       hull: this.hull,
       food: this.food,
       bait: this.bait,
+      recoveredFood: this.recoveredFood,
+      recoveredBait: this.recoveredBait,
       repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
       weather: this.weather,
@@ -458,6 +464,16 @@ export class SurvivalSession {
   }
 
   private applyDeltas(deltas: ResourceDelta): void {
+    this.recoveredFood = this.remainingRecoveredUses(
+      this.recoveredFood,
+      this.food,
+      deltas.food,
+    );
+    this.recoveredBait = this.remainingRecoveredUses(
+      this.recoveredBait,
+      this.bait,
+      deltas.bait,
+    );
     this.health += deltas.health ?? 0;
     this.hunger += deltas.hunger ?? 0;
     this.energy += deltas.energy ?? 0;
@@ -467,6 +483,12 @@ export class SurvivalSession {
     this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueProgress += deltas.rescueProgress ?? 0;
     this.clampMeters();
+  }
+
+  private remainingRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
+    if (delta === undefined || delta >= 0) return recovered;
+    const consumed = Math.min(aggregate, -delta);
+    return Math.max(0, recovered - consumed);
   }
 
   private consumeCharge(id: ItemId): boolean {

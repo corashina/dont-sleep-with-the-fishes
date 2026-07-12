@@ -176,9 +176,9 @@ export class SurvivalPhase implements GamePhase {
   handleContinue(): void {
     if (this.disposed || !this.awaitingContinue) return;
     this.awaitingContinue = false;
+    let snapshot = this.renderSnapshot(false, false);
     this.ui.hideOutcome?.();
-
-    let snapshot = this.renderSnapshot(false);
+    this.presentTerminalOnce(snapshot);
     if (snapshot.state === 'nightEvent' && snapshot.pendingEventId === null) {
       const dawn = this.session.beginDawn?.();
       if (dawn?.accepted) {
@@ -305,7 +305,7 @@ export class SurvivalPhase implements GamePhase {
     });
   }
 
-  private renderSnapshot(openPendingEvent: boolean): SurvivalSnapshot {
+  private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
     const snapshot = this.session.snapshot();
     this.world.setWeather?.(snapshot.weather);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
@@ -317,7 +317,7 @@ export class SurvivalPhase implements GamePhase {
       ) ?? null,
     );
     this.syncPresentation(snapshot);
-    this.presentTerminalOnce(snapshot);
+    if (presentTerminal) this.presentTerminalOnce(snapshot);
     if (openPendingEvent && !isTerminal(snapshot.state)) this.openPendingEvent(snapshot);
     return snapshot;
   }
