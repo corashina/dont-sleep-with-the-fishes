@@ -203,6 +203,7 @@ export class BoatWorld {
       build.storageRoot.add(prop);
       this.savedProps.push({ instance, prop });
       this.savedPropByInstanceId.set(instance.instanceId, prop);
+      prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
     });
 
     const repairPatch = this.boat.getObjectByName('damaged-plank-patch');
@@ -296,6 +297,7 @@ export class BoatWorld {
         ...projected,
         visible: prop.visible && projected.visible,
         depleted: prop.userData.depleted === true,
+        remainingUses: prop.userData.remainingUses as number | null,
       } satisfies BoatInteractionAnchor;
     });
     const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
@@ -309,6 +311,7 @@ export class BoatWorld {
         height,
       ),
       depleted: false,
+      remainingUses: null,
     } satisfies BoatInteractionAnchor));
     return [...itemAnchors, ...fixedAnchors];
   }
@@ -427,12 +430,19 @@ export class BoatWorld {
   private syncType(type: ItemId, snapshot: SurvivalSnapshot): void {
     const instances = this.savedProps.filter((entry) => entry.instance.type === type);
     const remaining = this.remainingUses(type, snapshot);
-    if (remaining === null) return;
+    if (remaining === null) {
+      instances.forEach(({ prop }) => {
+        prop.userData.remainingUses = null;
+        setPropDepleted(prop, false);
+      });
+      return;
+    }
     const perInstance = ITEM_DEFINITIONS[type].charges ?? 1;
-    const activeCount = Math.ceil(remaining / perInstance);
     instances.forEach(({ prop }, index) => {
-      prop.visible = type !== 'cannedFood' || index < activeCount;
-      setPropDepleted(prop, index >= activeCount);
+      const instanceUses = clamp(remaining - index * perInstance, 0, perInstance);
+      prop.userData.remainingUses = instanceUses;
+      prop.visible = type !== 'cannedFood' || instanceUses > 0;
+      setPropDepleted(prop, instanceUses <= 0);
     });
   }
 

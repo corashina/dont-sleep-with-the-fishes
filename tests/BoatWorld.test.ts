@@ -184,6 +184,33 @@ describe('BoatWorld helpers', () => {
     world.dispose();
   });
 
+  it('projects per-instance remaining uses for duplicate and contextual supplies', () => {
+    const savedItems = [
+      savedItem('ductTape'), savedItem('ductTape', 2),
+      savedItem('baitTin'), savedItem('baitTin', 2),
+      savedItem('flareGun'), savedItem('flashlight'),
+    ];
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const inventory = createSurvivalInventory(savedItems);
+    inventory.ductTape.charges = 1;
+    inventory.flareGun.charges = 1;
+
+    world.syncInventory(snapshot(savedItems, { bait: 3, inventory }));
+    const anchors = world.projectInteractionAnchors(800, 600);
+
+    expect(anchors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'ductTape-1', remainingUses: 1, depleted: false }),
+      expect.objectContaining({ id: 'ductTape-2', remainingUses: 0, depleted: true }),
+      expect.objectContaining({ id: 'baitTin-1', remainingUses: 3, depleted: false }),
+      expect.objectContaining({ id: 'baitTin-2', remainingUses: 0, depleted: true }),
+      expect.objectContaining({ id: 'flareGun-1', remainingUses: 1, depleted: false }),
+      expect.objectContaining({ id: 'flashlight-1', remainingUses: null, depleted: false }),
+    ]));
+    world.dispose();
+  });
+
   it('animates fishing cues from the recovered rod and has no hand-line fallback', () => {
     const rodWorld = new BoatWorld(
       new PerspectiveCamera(),

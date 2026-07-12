@@ -22,13 +22,13 @@ afterEach(() => {
 function createUI(mount: HTMLElement): SurvivalUI {
   const ui = new SurvivalUI(mount);
   ui.setAnchors([
-    { id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', x: 140, y: 180, visible: true, depleted: false },
-    { id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', x: 240, y: 250, visible: true, depleted: false },
-    { id: 'cannedFood-test', itemType: 'cannedFood', action: 'eat', x: 340, y: 300, visible: true, depleted: false },
-    { id: 'repair-patch', itemType: null, action: 'repair', x: 440, y: 280, visible: true, depleted: false },
-    { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', x: 540, y: 250, visible: true, depleted: false },
-    { id: 'waterJug-test', itemType: 'waterJug', action: 'rest', x: 640, y: 220, visible: true, depleted: false },
-    { id: 'horizon', itemType: null, action: 'endDay', x: 400, y: 80, visible: true, depleted: false },
+    { id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
+    { id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null, x: 240, y: 250, visible: true, depleted: false },
+    { id: 'cannedFood-test', itemType: 'cannedFood', action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
+    { id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 440, y: 280, visible: true, depleted: false },
+    { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
+    { id: 'waterJug-test', itemType: 'waterJug', action: 'rest', remainingUses: 3, x: 640, y: 220, visible: true, depleted: false },
+    { id: 'horizon', itemType: null, action: 'endDay', remainingUses: null, x: 400, y: 80, visible: true, depleted: false },
   ]);
   activeUIs.push(ui);
   return ui;
@@ -50,7 +50,7 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     ui.setAnchors([{
-      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish',
+      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
@@ -69,7 +69,7 @@ describe('SurvivalUI', () => {
     ui.onAction = onAction;
     ui.render(snapshot(), (action) => action === 'fish' ? 'Fishing requires a recovered fishing rod.' : null);
     ui.setAnchors([{
-      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish',
+      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
@@ -77,6 +77,69 @@ describe('SurvivalUI', () => {
     expect(button.getAttribute('aria-disabled')).toBe('true');
     button.click();
     expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps a depleted duplicate action anchor focusable but blocks its delegated action', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onAction = vi.fn();
+    ui.onAction = onAction;
+    ui.render(snapshot({ repairMaterial: 1 }), () => null);
+    ui.setAnchors([
+      {
+        id: 'ductTape-1', itemType: 'ductTape', action: 'repair', remainingUses: 1,
+        x: 320, y: 240, visible: true, depleted: false,
+      },
+      {
+        id: 'ductTape-2', itemType: 'ductTape', action: 'repair', remainingUses: 0,
+        x: 360, y: 240, visible: true, depleted: true,
+      },
+    ]);
+
+    const available = mount.querySelector<HTMLButtonElement>('[data-anchor-id="ductTape-1"]')!;
+    const depleted = mount.querySelector<HTMLButtonElement>('[data-anchor-id="ductTape-2"]')!;
+    expect(depleted.disabled).toBe(false);
+    expect(depleted.getAttribute('aria-disabled')).toBe('true');
+    expect(depleted.textContent).toMatch(/DEPLETED.*0 USES REMAINING/i);
+    depleted.focus();
+    expect(document.activeElement).toBe(depleted);
+    depleted.click();
+    expect(onAction).not.toHaveBeenCalled();
+    available.click();
+    expect(onAction).toHaveBeenCalledWith('repair', undefined);
+  });
+
+  it('shows remaining uses and durable state on contextual item tooltips', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([
+      { id: 'flareGun-1', itemType: 'flareGun', action: null, remainingUses: 1, x: 1, y: 1, visible: true, depleted: false },
+      { id: 'flashlight-1', itemType: 'flashlight', action: null, remainingUses: null, x: 2, y: 2, visible: true, depleted: false },
+      { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 3, x: 3, y: 3, visible: true, depleted: false },
+      { id: 'baitTin-2', itemType: 'baitTin', action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: true },
+    ]);
+
+    expect(mount.querySelector('[data-anchor-id="flareGun-1"]')?.textContent).toMatch(/1 USE REMAINING/i);
+    expect(mount.querySelector('[data-anchor-id="flashlight-1"]')?.textContent).toMatch(/DURABLE/i);
+    expect(mount.querySelector('[data-anchor-id="baitTin-1"]')?.textContent).toMatch(/3 USES REMAINING/i);
+    expect(mount.querySelector('[data-anchor-id="baitTin-2"]')?.textContent).toMatch(/DEPLETED.*0 USES REMAINING/i);
+  });
+
+  it('marks left, right, and top-edge anchors for on-screen tooltip placement', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([
+      { id: 'left', itemType: 'flareGun', action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
+      { id: 'right', itemType: 'flashlight', action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
+      { id: 'top', itemType: null, action: 'endDay', remainingUses: null, x: window.innerWidth / 2, y: 8, visible: true, depleted: false },
+    ]);
+
+    expect(mount.querySelector('[data-anchor-id="left"]')?.getAttribute('data-tooltip-x')).toBe('left');
+    expect(mount.querySelector('[data-anchor-id="right"]')?.getAttribute('data-tooltip-x')).toBe('right');
+    expect(mount.querySelector('[data-anchor-id="top"]')?.getAttribute('data-tooltip-y')).toBe('below');
   });
 
   it('renders stable action cost, effect, and risk previews in accessible descriptions', () => {
@@ -132,9 +195,9 @@ describe('SurvivalUI', () => {
     });
     ui.render(state, () => null);
     ui.setAnchors([
-      { id: 'cannedFood-1', itemType: 'cannedFood', action: 'eat', x: 1, y: 1, visible: true, depleted: true },
-      { id: 'baitTin-1', itemType: 'baitTin', action: null, x: 2, y: 2, visible: true, depleted: true },
-      { id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', x: 3, y: 3, visible: true, depleted: false },
+      { id: 'cannedFood-1', itemType: 'cannedFood', action: 'eat', remainingUses: 0, x: 1, y: 1, visible: true, depleted: true },
+      { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
+      { id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
     expect(mount.querySelector('[data-store="food"]')?.textContent).toBe('2');
     expect(mount.querySelector('[data-store="bait"]')?.textContent).toBe('3');
@@ -148,7 +211,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot({ inventory: new SurvivalSession(saved(), { seed: 1 }).snapshot().inventory }), () => null);
-    ui.setAnchors([{ id: 'horizon', itemType: null, action: 'endDay', x: 1, y: 1, visible: true, depleted: false }]);
+    ui.setAnchors([{ id: 'horizon', itemType: null, action: 'endDay', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
     expect(mount.textContent).not.toMatch(/hand-line/i);
     expect(mount.querySelector('[data-action="fish"]')).toBeNull();
   });

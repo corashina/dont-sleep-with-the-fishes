@@ -1,4 +1,4 @@
-import { ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { DayActionOption } from '../survival/SurvivalSession';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
@@ -307,6 +307,7 @@ export class SurvivalUI {
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
       button.hidden = !anchor.visible;
       button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
+      this.placeAnchorTooltip(button, anchor);
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);
     }
@@ -495,22 +496,47 @@ export class SurvivalUI {
       ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.' : 'Inspect the lifeboat repair patch.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = action === null ? null : this.actionReasons.get(action.id) ?? null;
+    const reason = this.anchorUnavailableReason(anchor);
+    const state = this.anchorItemState(anchor);
     const preview = action !== null && this.currentSnapshot !== null
       ? actionPreview(action, this.currentSnapshot)
       : action;
+    const stateText = state === null ? '' : ` — ${state}`;
     const text = action === null || preview === null
-      ? `${itemLabel} — ${itemDescription}${anchor.depleted ? ' — DEPLETED' : ''}`
-      : `${itemLabel} — ${action.label} [${action.shortcut}] — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
+      ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
+      : `${itemLabel}${stateText} — ${action.label} [${action.shortcut}] — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = text;
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
     button.setAttribute('aria-label', text);
-    button.setAttribute('aria-description', action === null ? itemDescription : text);
+    button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
     else button.removeAttribute('aria-keyshortcuts');
+  }
+
+  private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
+    if (anchor.depleted) return 'This recovered item is depleted.';
+    return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
+  }
+
+  private anchorItemState(anchor: BoatInteractionAnchor): string | null {
+    if (anchor.itemType === null) return null;
+    if (ITEM_DEFINITIONS[anchor.itemType].durable) return 'DURABLE';
+    const remaining = anchor.remainingUses ?? 0;
+    if (anchor.depleted || remaining <= 0) return 'DEPLETED — 0 USES REMAINING';
+    return `${remaining} ${remaining === 1 ? 'USE' : 'USES'} REMAINING`;
+  }
+
+  private placeAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+    const bounds = this.root.getBoundingClientRect();
+    const viewportWidth = bounds.width || this.root.clientWidth || window.innerWidth;
+    const edgeGutter = 160;
+    button.dataset.tooltipX = anchor.x < edgeGutter
+      ? 'left'
+      : anchor.x > viewportWidth - edgeGutter ? 'right' : 'center';
+    button.dataset.tooltipY = anchor.y < 96 ? 'below' : 'above';
   }
 
   private updateMeter(id: MeterId, value: number): void {
@@ -552,9 +578,7 @@ export class SurvivalUI {
   private syncCommandState(): void {
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
-      const reason = anchor?.action === null || anchor === undefined
-        ? null
-        : this.actionReasons.get(anchor.action) ?? null;
+      const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
       button.disabled = this.busy;
       button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     });
