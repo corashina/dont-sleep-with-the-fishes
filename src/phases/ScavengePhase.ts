@@ -12,7 +12,6 @@ import {
 } from '../game/ScavengeSession';
 import {
   createItemInstances,
-  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -40,7 +39,7 @@ export class ScavengePhase implements GamePhase {
   private readonly interaction: InteractionSystem;
   private readonly carry: CarryController;
   private readonly ui: GameUI;
-  private readonly worldInstances: ReadonlyMap<ItemId, ItemInstance>;
+  private readonly instancesById: ReadonlyMap<ItemInstanceId, ItemInstance>;
   private started = false;
   private disposed = false;
   private completionReported = false;
@@ -58,17 +57,12 @@ export class ScavengePhase implements GamePhase {
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
-    this.world = new World(this.scene);
     const catalog = createItemInstances();
-    const worldInstances = new Map<ItemId, ItemInstance>();
-    for (const [type, object] of this.world.itemObjects) {
-      const item = catalog.find((candidate) => candidate.type === type);
-      if (!item) continue;
-      const instance = Object.freeze({ instanceId: item.instanceId, type: item.type });
-      worldInstances.set(type, instance);
-      object.userData.instanceId = instance.instanceId;
-    }
-    this.worldInstances = worldInstances;
+    this.world = new World(this.scene, catalog);
+    this.instancesById = new Map(catalog.map((instance) => [
+      instance.instanceId,
+      Object.freeze({ instanceId: instance.instanceId, type: instance.type }),
+    ]));
     this.input = new InputController(context.renderer.domElement);
     this.player = new PlayerController(
       context.camera,
@@ -197,10 +191,14 @@ export class ScavengePhase implements GamePhase {
     const snapshot = this.session.snapshot();
     const availableItems = [];
     const instances = new Map<ItemInstanceId, ItemInstance>();
-    for (const [type, object] of this.world.itemObjects) {
-      const instance = this.worldInstances.get(type);
-      if (!instance) continue;
-      const state = snapshot.items[instance.instanceId];
+    for (const [instanceId, object] of this.world.itemObjects) {
+      const instance = this.instancesById.get(instanceId);
+      if (
+        !instance
+        || object.userData.instanceId !== instanceId
+        || object.userData.itemType !== instance.type
+      ) continue;
+      const state = snapshot.items[instanceId];
       if (!state || state.status !== 'available') continue;
       availableItems.push(object);
       instances.set(instance.instanceId, instance);
@@ -220,7 +218,7 @@ export class ScavengePhase implements GamePhase {
 
   private performAction(action: ContextAction): void {
     if (action.type === 'pickUp') {
-      const object = this.world.itemObjects.get(action.item.type);
+      const object = this.world.itemObjects.get(action.item.instanceId);
       if (object && this.session.pickUp(action.item.instanceId)) {
         this.carry.pickUp(action.item, object);
       }
@@ -245,15 +243,15 @@ export class ScavengePhase implements GamePhase {
       {
         onSaved: (id) => {
           if (!this.session.saveCarried()) return;
-          this.world.saveItem(id.type, this.session.snapshot().savedCount - 1);
+          this.world.saveItem(id.instanceId, this.session.snapshot().savedCount - 1);
         },
         onLost: (id) => {
           if (!this.session.loseCarried()) return;
-          this.world.loseItem(id.type);
+          this.world.loseItem(id.instanceId);
         },
         onLanded: (id) => {
           if (!this.session.dropCarried()) return;
-          this.world.landItem(id.type);
+          this.world.landItem(id.instanceId);
         },
       },
     );
