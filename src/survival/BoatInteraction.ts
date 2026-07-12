@@ -19,6 +19,7 @@ export interface BoatInteractionAnchor {
   y: number;
   visible: boolean;
   depleted: boolean;
+  remainingUses: number | null;
 }
 
 export function projectBoatAnchor(

@@ -63,7 +63,7 @@ describe('SurvivalPhase orchestration', () => {
     const current = snapshot();
     const syncInventory = vi.fn();
     const anchors = [{
-      id: 'horizon', itemType: null, action: 'endDay' as const,
+      id: 'horizon', itemType: null, action: 'endDay' as const, remainingUses: null,
       x: 400, y: 80, visible: true, depleted: false,
     }];
     const projectInteractionAnchors = vi.fn(() => anchors);
