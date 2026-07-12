@@ -195,8 +195,10 @@ git commit -m "feat: add canonical data primitives"
 - Create: `src/canonical/parityAudit.ts`
 - Modify: `src/game/ItemState.ts`
 - Modify: `src/survival/itemDescriptions.ts`
+- Modify: `src/world/Ship.ts`
 - Test: `tests/canonicalItems.test.ts`
 - Modify: `tests/ItemState.test.ts`
+- Modify: `tests/world.test.ts`
 
 **Interfaces:**
 - Consumes: `Sourced<T>` and `source()` from Task 1.
@@ -284,6 +286,8 @@ Refactor `src/game/ItemState.ts` to derive `ITEM_IDS`, `ITEM_DEFINITIONS`, `ITEM
 
 Add `validateCanonicalItems()` and run it at module initialization in development/test builds. It rejects duplicate IDs, blank labels, missing source/provenance, invalid weights/counts/charges, built-in items with ship spawns, and runtime IDs without catalog records.
 
+Expand `createShip().itemSpawnPoints` to at least the exact number returned by `createItemInstances()`. Place new points on existing walkable cabin and upper-deck surfaces with enough separation for raycasting. Extend `tests/world.test.ts` to assert the point count covers the full catalog, every selected point is finite and unique, and the default `World` constructs one prop for every generated instance.
+
 - [ ] **Step 4: Run item tests and verify GREEN**
 
 Run: `bun run test -- tests/canonicalItems.test.ts tests/ItemState.test.ts tests/ScavengeSession.test.ts`
@@ -293,7 +297,7 @@ Expected: all focused tests pass; update old exact-length assertions to use the 
 - [ ] **Step 5: Commit the item catalog**
 
 ```powershell
-git add src/canonical/items.ts src/canonical/parityAudit.ts src/game/ItemState.ts src/survival/itemDescriptions.ts tests/canonicalItems.test.ts tests/ItemState.test.ts
+git add src/canonical/items.ts src/canonical/parityAudit.ts src/game/ItemState.ts src/survival/itemDescriptions.ts src/world/Ship.ts tests/canonicalItems.test.ts tests/ItemState.test.ts tests/world.test.ts
 git commit -m "feat: add wiki item catalog"
 ```
 
