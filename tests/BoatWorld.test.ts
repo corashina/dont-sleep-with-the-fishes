@@ -12,6 +12,7 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
 import { applyInventoryMutation, createSurvivalInventory } from '../src/survival/inventory';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 
@@ -228,6 +229,73 @@ describe('BoatWorld helpers', () => {
       expect.objectContaining({ id: 'flashlight-1', remainingUses: null, depleted: false }),
     ]));
     world.dispose();
+  });
+
+  it('creates a deterministic prop and accessible anchor for a runtime-fished usable item', () => {
+    const rod = savedItem('fishingRod');
+    const session = new SurvivalSession([rod], {
+      seed: 1,
+      initial: { day: 3 },
+      random: sequenceRandom([0, 462 / 469]),
+    });
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, [rod]);
+
+    expect(session.useItem('fishingRod')).toMatchObject({
+      accepted: true,
+      message: 'You caught Energy Bar.',
+    });
+    world.syncInventory(session.snapshot());
+
+    const prop = world.scene.getObjectByName('prop:energyBar-1')!;
+    const transform = boatStorageTransform(1);
+    expect(prop).toBeDefined();
+    expect(prop.position.toArray()).toEqual(transform.position.toArray());
+    expect(prop.rotation.toArray().slice(0, 3)).toEqual(transform.rotation.toArray().slice(0, 3));
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'energyBar-1', itemType: 'energyBar', condition: 'usable', depleted: false,
+      }),
+    ]));
+    world.syncInventory(session.snapshot());
+    expect(world.scene.getObjectByName('lifeboat-storage')?.children.filter(({ name }) => (
+      name === 'prop:energyBar-1'
+    ))).toHaveLength(1);
+    world.dispose();
+  });
+
+  it('creates and owns a subdued anchored prop for a runtime-fished broken item', () => {
+    const rod = savedItem('fishingRod');
+    const session = new SurvivalSession([rod], {
+      seed: 1,
+      initial: { day: 3 },
+      random: sequenceRandom([0, 454 / 469]),
+    });
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, [rod]);
+
+    expect(session.useItem('fishingRod')).toMatchObject({ message: 'You caught Broken Compass.' });
+    world.syncInventory(session.snapshot());
+
+    const prop = world.scene.getObjectByName('prop:compass-1')!;
+    const mesh = prop.getObjectByProperty('isMesh', true) as Mesh;
+    const propMaterial = mesh.material as MeshStandardMaterial;
+    const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
+    const disposeMaterial = vi.spyOn(propMaterial, 'dispose');
+    expect(prop.visible).toBe(true);
+    expect(propMaterial.opacity).toBeLessThan(1);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'compass-1', itemType: 'compass', condition: 'broken', depleted: true,
+      }),
+    ]));
+
+    world.dispose();
+    world.dispose();
+    expect(disposeGeometry).toHaveBeenCalledOnce();
+    expect(disposeMaterial).toHaveBeenCalledOnce();
   });
 
   it('synchronizes visible broken and detached lost conditions by instance ID', () => {

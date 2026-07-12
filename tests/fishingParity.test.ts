@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FISHING_CATCHES, eligibleCatches } from '../src/canonical/fishing';
 import { resolveFishing } from '../src/survival/fishing';
 import { sequenceRandom } from '../src/survival/random';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
 
 describe('canonical fishing parity', () => {
   it('encodes every documented catch with its exact weight, first day, and food value', () => {
@@ -60,5 +61,44 @@ describe('canonical fishing parity', () => {
     expect(resolveFishing(3, true, sequenceRandom([461 / 469]))).toMatchObject({
       id: 'energyBar', itemGain: 'energyBar', itemCondition: 'usable', consumesBait: false,
     });
+  });
+
+  it('applies every catalog food value exactly after the preserved success gate with no bonus RNG roll', () => {
+    const totalWeight = FISHING_CATCHES.reduce((sum, entry) => sum + entry.weight, 0);
+    let cumulative = 0;
+    for (const catchEntry of FISHING_CATCHES) {
+      const draw = (cumulative + catchEntry.weight / 2) / totalWeight;
+      cumulative += catchEntry.weight;
+      if (catchEntry.food <= 0) continue;
+      let calls = 0;
+      const sequence = [0, draw];
+      const session = new SurvivalSession(
+        [{ instanceId: 'fishingRod-1', type: 'fishingRod' }],
+        {
+          seed: 1,
+          initial: { day: 3 },
+          random: { next: () => { const value = sequence[calls] ?? 0; calls += 1; return value; } },
+        },
+      );
+
+      const outcome = session.useItem('fishingRod');
+
+      expect(outcome.message, catchEntry.id).toBe(`You caught ${catchEntry.label}.`);
+      expect(outcome.deltas.food, catchEntry.id).toBe(catchEntry.food);
+      expect(session.snapshot().food, catchEntry.id).toBe(catchEntry.food);
+      expect(calls, catchEntry.id).toBe(2);
+    }
+  });
+
+  it('keeps Tuna at two Food and Swordfish at three Food', () => {
+    const tuna = new SurvivalSession([{ instanceId: 'fishingRod-1', type: 'fishingRod' }], {
+      seed: 1, initial: { day: 3 }, random: sequenceRandom([0, 60 / 469]),
+    });
+    const swordfish = new SurvivalSession([{ instanceId: 'fishingRod-1', type: 'fishingRod' }], {
+      seed: 1, initial: { day: 3 }, random: sequenceRandom([0, 216.5 / 469]),
+    });
+
+    expect(tuna.useItem('fishingRod').deltas.food).toBe(2);
+    expect(swordfish.useItem('fishingRod').deltas.food).toBe(3);
   });
 });

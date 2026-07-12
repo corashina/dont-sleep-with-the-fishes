@@ -17,6 +17,7 @@ import {
 } from 'three';
 import {
   ITEM_DEFINITIONS,
+  ITEM_IDS,
   type ItemId,
   type ItemInstance,
 } from '../game/ItemState';
@@ -33,6 +34,7 @@ import {
 } from './BoatInteraction';
 import type {
   DayActionId,
+  ItemCondition,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -155,6 +157,7 @@ export class BoatWorld {
   private readonly motionRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
+  private readonly storageRoot: Group;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
   private readonly distantVessel = new Group();
@@ -172,6 +175,7 @@ export class BoatWorld {
   private readonly baseCameraQuaternion: Quaternion;
   private readonly savedProps: SavedProp[] = [];
   private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
+  private readonly savedPropsByType = new Map<ItemId, SavedProp[]>();
   private readonly fixedAnchors: FixedAnchor[] = [];
   private readonly rod: Object3D | undefined;
   private readonly line: Object3D | undefined;
@@ -203,6 +207,7 @@ export class BoatWorld {
 
     const build = createLifeboat();
     this.boat = build.root;
+    this.storageRoot = build.storageRoot;
     savedItems.forEach((instance, index) => {
       const prop = createProp(instance);
       const transform = boatStorageTransform(index);
@@ -211,6 +216,10 @@ export class BoatWorld {
       prop.scale.setScalar(transform.scale);
       build.storageRoot.add(prop);
       this.savedProps.push({ instance, prop });
+      this.savedPropsByType.set(instance.type, [
+        ...(this.savedPropsByType.get(instance.type) ?? []),
+        { instance, prop },
+      ]);
       this.savedPropByInstanceId.set(instance.instanceId, prop);
       prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
       prop.userData.condition = 'usable';
@@ -282,11 +291,33 @@ export class BoatWorld {
 
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
-    const syncedTypes = new Set<ItemId>();
-    this.savedProps.forEach(({ instance }) => {
-      if (syncedTypes.has(instance.type)) return;
-      syncedTypes.add(instance.type);
-      this.syncType(instance.type, snapshot);
+    ITEM_IDS.forEach((itemId) => {
+      snapshot.inventory[itemId].instances.forEach((instance) => {
+        if (this.savedPropByInstanceId.has(instance.instanceId)) return;
+        const prop = createProp(instance);
+        const transform = boatStorageTransform(this.savedProps.length);
+        prop.position.copy(transform.position);
+        prop.rotation.copy(transform.rotation);
+        prop.scale.setScalar(transform.scale);
+        prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
+        prop.userData.condition = instance.condition;
+        prop.userData.hasInteractionAnchor = true;
+        this.storageRoot.add(prop);
+        const propEntry = {
+          instance: { instanceId: instance.instanceId, type: instance.type },
+          prop,
+        };
+        this.savedProps.push(propEntry);
+        this.savedPropsByType.set(instance.type, [
+          ...(this.savedPropsByType.get(instance.type) ?? []),
+          propEntry,
+        ]);
+        this.savedPropByInstanceId.set(instance.instanceId, prop);
+        collectResources(prop, this.ownedGeometries, this.ownedMaterials);
+      });
+    });
+    ITEM_IDS.forEach((itemId) => {
+      if (snapshot.inventory[itemId].instances.length > 0) this.syncType(itemId, snapshot);
     });
   }
 
@@ -311,6 +342,7 @@ export class BoatWorld {
           visible: prop.visible && projected.visible,
           depleted: prop.userData.depleted === true,
           remainingUses: prop.userData.remainingUses as number | null,
+          condition: prop.userData.condition as ItemCondition,
         } satisfies BoatInteractionAnchor;
       });
     const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
@@ -447,7 +479,7 @@ export class BoatWorld {
   }
 
   private syncType(type: ItemId, snapshot: SurvivalSnapshot): void {
-    const instances = this.savedProps.filter((entry) => entry.instance.type === type);
+    const instances = this.savedPropsByType.get(type) ?? [];
     const remaining = this.remainingUses(type, snapshot);
     const stateByInstanceId = new Map(snapshot.inventory[type].instances.map((instance) => (
       [instance.instanceId, instance] as const

@@ -3537,6 +3537,72 @@ describe('canonical event validation and audit', () => {
     } as unknown as CanonicalEventDefinition])).toThrow(/automatic.*broken boat trigger/i);
   });
 
+  it.each([
+    ['minDay', -1],
+    ['cooldownDays', -1],
+    ['maxAppearances', -1],
+    ['dangerMin', -1],
+  ] as const)('rejects invalid %s values', (field, value) => {
+    const base = event('shower-night');
+    expect(() => validateCanonicalEvents([{
+      ...base, [field]: value,
+    } as unknown as CanonicalEventDefinition])).toThrow(new RegExp(field, 'i'));
+  });
+
+  it('rejects inverted day bounds and blank source/title/prompt text', () => {
+    const base = event('shower-night');
+    expect(() => validateCanonicalEvents([{
+      ...base, minDay: 5, maxDay: 4,
+    } as unknown as CanonicalEventDefinition])).toThrow(/day bounds/i);
+    for (const field of ['sourceId', 'title', 'prompt'] as const) {
+      expect(() => validateCanonicalEvents([{
+        ...base, [field]: '   ',
+      } as unknown as CanonicalEventDefinition])).toThrow(new RegExp(field, 'i'));
+    }
+  });
+
+  it('rejects duplicate and blank choice IDs', () => {
+    const base = event('shower-night');
+    if (base.automatic) throw new Error('test fixture must use choices');
+    expect(() => validateCanonicalEvents([{
+      ...base,
+      choices: [base.choices[0], { ...base.choices[1], id: base.choices[0].id }],
+    } as unknown as CanonicalEventDefinition])).toThrow(/choice ID.*duplicated/i);
+    expect(() => validateCanonicalEvents([{
+      ...base, choices: [{ ...base.choices[0], id: '   ' }],
+    } as unknown as CanonicalEventDefinition])).toThrow(/choice ID.*blank/i);
+  });
+
+  it('rejects invalid scalar resource values and inconsistent operations', () => {
+    const base = event('shower-night');
+    if (base.automatic) throw new Error('test fixture must use choices');
+    const withResource = (resourceEffect: Record<string, unknown>) => ({
+      ...base,
+      choices: [{
+        ...base.choices[0],
+        outcomes: [{
+          ...base.choices[0].outcomes[0],
+          effects: { resources: [resourceEffect] },
+        }],
+      }],
+    }) as unknown as CanonicalEventDefinition;
+
+    for (const value of [Number.NaN, 1.5, -1]) {
+      expect(() => validateCanonicalEvents([
+        withResource({ resource: 'food', operation: 'add', value }),
+      ])).toThrow(/resource value/i);
+    }
+    expect(() => validateCanonicalEvents([
+      withResource({ resource: 'food', operation: 'multiply', value: 1 }),
+    ])).toThrow(/resource operation/i);
+    expect(() => validateCanonicalEvents([
+      withResource({ resource: 'unknown', operation: 'add', value: 1 }),
+    ])).toThrow(/unknown resource/i);
+    expect(() => validateCanonicalEvents([
+      withResource({ resource: 'food', operation: 'subtract', value: 0 }),
+    ])).toThrow(/subtract.*positive/i);
+  });
+
   it('classifies all included, story-excluded, and unsupported-undocumented events', () => {
     const eventAudit = PARITY_AUDIT.filter(({ kind }) => kind === 'event');
     expect(eventAudit.filter(({ classification }) => classification === 'included').map(({ runtimeId }) => runtimeId)).toEqual(includedIds);

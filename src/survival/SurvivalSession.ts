@@ -6,7 +6,6 @@ import { applyInventoryMutation, createSurvivalInventory, usableInstances } from
 import { drawWeightedEvent, eligibleEvents, resolveEventOutcome } from './outcomeResolver';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
-import { ITEM_USE_ENERGY_COST } from './survivalTypes';
 import type {
   ActionOutcome,
   CanonicalEventDefinition,
@@ -38,7 +37,7 @@ export interface SurvivalSessionOptions {
   initialEventId?: string;
 }
 
-export type DayActionOption = 'useBait' | 'repairMaterial' | 'ductTape';
+export type DayActionOption = 'useBait' | 'repairMaterial';
 
 interface Rejection {
   code: string;
@@ -462,10 +461,6 @@ export class SurvivalSession {
           return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
         }
         if (option === undefined) return null;
-        if (option === 'ductTape') {
-          if (!this.hasCharge('ductTape')) return { code: 'no-duct-tape', message: 'No duct tape remains.' };
-          return null;
-        }
         if (this.repairMaterial < 1) {
           return { code: 'no-repair-material', message: 'No repair material remains.' };
         }
@@ -495,17 +490,8 @@ export class SurvivalSession {
       ? SURVIVAL_BALANCE.fishing.rodBaitSuccess
       : SURVIVAL_BALANCE.fishing.rodSuccess;
     const caught = this.random.next() < successChance;
-    let bonusFood = 0;
-
-    if (caught) {
-      const doubleChance = useBait
-        ? SURVIVAL_BALANCE.fishing.rodBaitDouble
-        : SURVIVAL_BALANCE.fishing.rodDouble;
-      if (this.random.next() < doubleChance) bonusFood = 1;
-    }
-
     const result = caught ? resolveFishing(this.day, useBait, this.random) : null;
-    const food = result !== null && result.food > 0 ? result.food + bonusFood : 0;
+    const food = result?.food ?? 0;
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.fishEnergy, food };
     if (result?.id === 'worms') deltas.bait = 1;
     else if (result?.consumesBait === true) deltas.bait = -1;
@@ -565,9 +551,6 @@ export class SurvivalSession {
       case 'chest':
         if (!this.canUseEventItem(itemId)) {
           return { code: 'item-unavailable', message: 'That item was not recovered or has no uses remaining.' };
-        }
-        if (this.energy < ITEM_USE_ENERGY_COST.chest) {
-          return { code: 'not-enough-energy', message: 'Opening a chest requires three energy.' };
         }
         return {
           code: 'chest-pool-undocumented',
@@ -633,16 +616,6 @@ export class SurvivalSession {
 
   private repair(option?: DayActionOption): ActionOutcome {
     this.actedToday = true;
-    if (option === 'ductTape') {
-      this.consumeCharge('ductTape');
-      return this.commit(
-        'repaired-with-duct-tape',
-        'The emergency patch holds for now.',
-        { energy: -SURVIVAL_BALANCE.actions.repairEnergy, hull: SURVIVAL_BALANCE.actions.tapeHull },
-        'repair',
-      );
-    }
-
     return this.commit(
       'repaired',
       'You reinforce the damaged hull.',

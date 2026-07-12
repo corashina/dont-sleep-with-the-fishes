@@ -1,10 +1,11 @@
 import type { PerspectiveCamera, Vector3 } from 'three';
 import { RUNTIME_ITEM_IDS, runtimeItemDefinition } from '../canonical/items';
 import type { ItemId } from '../game/ItemState';
-import type { DayActionId } from './survivalTypes';
+import type { DayActionId, ItemCondition } from './survivalTypes';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
   RUNTIME_ITEM_IDS.flatMap((itemId) => {
+    if (itemId === 'ductTape') return [];
     const action = runtimeItemDefinition(itemId).dayAction;
     return action === null ? [] : [[itemId, action]];
   }),
@@ -19,6 +20,7 @@ export interface BoatInteractionAnchor {
   visible: boolean;
   depleted: boolean;
   remainingUses: number | null;
+  condition?: ItemCondition;
 }
 
 export function projectBoatAnchor(

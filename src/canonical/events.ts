@@ -435,7 +435,27 @@ const EVENT_RESOURCES: readonly EventResource[] = [
 
 function validateOutcome(outcomeEntry: WeightedEventOutcome, path: string): void {
   for (const [index, effect] of (outcomeEntry.effects.resources ?? []).entries()) {
-    if (typeof effect.value === 'object') validateRange(effect.value, `${path}.resources[${index}]`);
+    const effectPath = `${path}.resources[${index}]`;
+    if (!EVENT_RESOURCES.includes(effect.resource)) {
+      throw new Error(`${effectPath} contains unknown resource ${effect.resource}`);
+    }
+    if (!['add', 'subtract', 'set'].includes(effect.operation)) {
+      throw new Error(`${effectPath} has an invalid resource operation`);
+    }
+    if (typeof effect.value === 'object') {
+      validateRange(effect.value, effectPath);
+      if (effect.value.min < 0) throw new Error(`${effectPath} has an invalid resource value`);
+      if (effect.operation !== 'set' && effect.value.min <= 0) {
+        throw new Error(`${effectPath} ${effect.operation} requires a positive resource value`);
+      }
+    } else {
+      if (!Number.isInteger(effect.value) || effect.value < 0) {
+        throw new Error(`${effectPath} has an invalid resource value`);
+      }
+      if (effect.operation !== 'set' && effect.value <= 0) {
+        throw new Error(`${effectPath} ${effect.operation} requires a positive resource value`);
+      }
+    }
   }
   for (const itemEffect of outcomeEntry.effects.items ?? []) {
     if ('itemId' in itemEffect && !isRuntimeItemId(itemEffect.itemId)) {
@@ -452,10 +472,26 @@ export function validateCanonicalEvents(
 ): void {
   const ids = new Set<string>();
   for (const eventEntry of catalog) {
+    const sourcedEvent = eventEntry as CanonicalEventDefinition & { sourceId?: string };
     if (ids.has(eventEntry.id)) throw new Error(`canonical event ${eventEntry.id} is duplicated`);
     ids.add(eventEntry.id);
+    if (sourcedEvent.sourceId === undefined || sourcedEvent.sourceId.trim().length === 0) {
+      throw new Error(`canonical event ${eventEntry.id}.sourceId is blank`);
+    }
+    if (eventEntry.title.trim().length === 0) throw new Error(`canonical event ${eventEntry.id}.title is blank`);
+    if (eventEntry.prompt.trim().length === 0) throw new Error(`canonical event ${eventEntry.id}.prompt is blank`);
     if (!Number.isFinite(eventEntry.weight) || eventEntry.weight < 0) {
       throw new Error(`canonical event ${eventEntry.id} has an invalid weight`);
+    }
+    for (const field of ['minDay', 'cooldownDays', 'maxAppearances', 'dangerMin'] as const) {
+      if (!Number.isInteger(eventEntry[field]) || eventEntry[field] < 0) {
+        throw new Error(`canonical event ${eventEntry.id}.${field} is invalid`);
+      }
+    }
+    if (eventEntry.maxDay !== undefined && (
+      !Number.isInteger(eventEntry.maxDay) || eventEntry.maxDay < eventEntry.minDay
+    )) {
+      throw new Error(`canonical event ${eventEntry.id} has invalid day bounds`);
     }
     for (const itemId of [
       ...(eventEntry.requiredItems ?? []),
@@ -509,7 +545,15 @@ export function validateCanonicalEvents(
       throw new Error(`selectable event ${eventEntry.id} must have positive weight`);
     }
     if (!eventEntry.choices?.length) throw new Error(`canonical event ${eventEntry.id} choices are empty`);
+    const choiceIds = new Set<string>();
     for (const eventChoice of eventEntry.choices) {
+      if (eventChoice.id.trim().length === 0) {
+        throw new Error(`${eventEntry.id} choice ID is blank`);
+      }
+      if (choiceIds.has(eventChoice.id)) {
+        throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
+      }
+      choiceIds.add(eventChoice.id);
       if (eventChoice.itemId && eventChoice.itemId !== 'any' && !isRuntimeItemId(eventChoice.itemId)) {
         throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item ID ${eventChoice.itemId}`);
       }

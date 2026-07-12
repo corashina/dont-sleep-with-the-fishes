@@ -150,8 +150,8 @@ describe('wiki item actions', () => {
 
     const tired = new SurvivalSession(saved('chest'), { seed: 1, random, initial: { energy: 2 } });
     const tiredBefore = tired.snapshot();
-    expect(tired.availableItemReason('chest')).toMatch(/requires three energy/i);
-    expect(tired.useItem('chest')).toMatchObject({ accepted: false, code: 'not-enough-energy' });
+    expect(tired.availableItemReason('chest')).toMatch(/wiki.*utility pool/i);
+    expect(tired.useItem('chest')).toMatchObject({ accepted: false, code: 'chest-pool-undocumented' });
     expect(tired.snapshot()).toEqual(tiredBefore);
 
     const ready = new SurvivalSession(saved('chest'), { seed: 1, random, initial: { energy: 3 } });
@@ -159,6 +159,55 @@ describe('wiki item actions', () => {
     expect(ready.availableItemReason('chest')).toMatch(/wiki.*utility pool/i);
     expect(ready.useItem('chest')).toMatchObject({ accepted: false, code: 'chest-pool-undocumented' });
     expect(ready.snapshot()).toEqual(readyBefore);
+    expect(randomCalls).toBe(0);
+  });
+
+  it.each([
+    ['fishingRod', saved('fishingRod'), { energy: 1 }, 'not-enough-energy'],
+    ['scubaSet', saved('scubaSet'), { energy: 2 }, 'not-enough-energy'],
+    ['medicalKit', saved('medicalKit'), { health: 100 }, 'health-full'],
+    ['repairKit', saved(), { hull: 100 }, 'hull-full'],
+  ] as const)('keeps rejected direct %s use snapshot- and RNG-atomic', (itemId, items, initial, code) => {
+    let randomCalls = 0;
+    const session = new SurvivalSession(items, {
+      seed: 1,
+      random: { next: () => { randomCalls += 1; return 0; } },
+      initial,
+    });
+    const before = session.snapshot();
+
+    expect(session.useItem(itemId)).toMatchObject({ accepted: false, code });
+    expect(session.snapshot()).toEqual(before);
+    expect(randomCalls).toBe(0);
+  });
+
+  it('keeps squall-blocked Scuba use snapshot- and RNG-atomic', () => {
+    let randomCalls = 0;
+    const session = new SurvivalSession(saved('scubaSet'), {
+      seed: 1,
+      weather: 'squall',
+      random: { next: () => { randomCalls += 1; return 0; } },
+    });
+    const before = session.snapshot();
+
+    expect(session.useItem('scubaSet')).toMatchObject({ accepted: false, code: 'weather-blocked' });
+    expect(session.snapshot()).toEqual(before);
+    expect(randomCalls).toBe(0);
+  });
+
+  it('keeps a depleted Medkit direct use snapshot- and RNG-atomic', () => {
+    let randomCalls = 0;
+    const session = new SurvivalSession(saved('medicalKit'), {
+      seed: 1,
+      initial: { health: 50 },
+      random: { next: () => { randomCalls += 1; return 0; } },
+    });
+    const inventory = mutableInventory(session);
+    applyInventoryMutation(inventory, { kind: 'consume', itemId: 'medicalKit', quantity: 2 });
+    const before = session.snapshot();
+
+    expect(session.useItem('medicalKit')).toMatchObject({ accepted: false, code: 'no-medical-kit' });
+    expect(session.snapshot()).toEqual(before);
     expect(randomCalls).toBe(0);
   });
 });

@@ -8,11 +8,11 @@ describe('BoatInteraction', () => {
       fishingRod: 'fish',
       scubaSet: 'dive',
       cannedFood: 'eat',
-      ductTape: 'repair',
       medicalKit: 'treat',
       waterJug: 'rest',
       repairKit: 'repair',
     });
+    expect(ACTION_FOR_ITEM.ductTape).toBeUndefined();
     expect(ACTION_FOR_ITEM.energyBar).toBeUndefined();
     expect(ACTION_FOR_ITEM.chest).toBeUndefined();
     expect(ACTION_FOR_ITEM.flareGun).toBeUndefined();

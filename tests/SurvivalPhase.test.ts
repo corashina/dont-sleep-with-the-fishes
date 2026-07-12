@@ -66,6 +66,26 @@ afterEach(() => {
 });
 
 describe('SurvivalPhase orchestration', () => {
+  it('does not route hull repair through Duct Tape when preserved material is absent', () => {
+    const perform = vi.fn(() => accepted({ code: 'repaired', cue: 'repair' }));
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          hull: 50,
+          repairMaterial: 0,
+          inventory: inventory({ ductTape: { owned: true, charges: 1, durable: false, instances: [] } }),
+        })),
+        perform,
+      },
+      world: { dispose: vi.fn() },
+      ui: { showOutcome: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleAction('repair');
+
+    expect(perform).toHaveBeenCalledWith('repair', undefined);
+  });
+
   it('synchronizes inventory and projected anchors after renders, updates, and resize', () => {
     const current = snapshot();
     const syncInventory = vi.fn();
@@ -182,7 +202,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(showEvent).toHaveBeenCalledWith(event, current);
   });
 
-  it('passes the bait option through and selects the best available repair resource', () => {
+  it('passes the bait option through and uses preserved material before the built-in kit', () => {
     let current = snapshot({ bait: 1, repairMaterial: 1 });
     const perform = vi.fn(() => ({ ...accepted(), accepted: false }));
     const phase = SurvivalPhase.forTest({
@@ -202,11 +222,11 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(perform).toHaveBeenNthCalledWith(1, 'fish', 'useBait');
     expect(perform).toHaveBeenNthCalledWith(2, 'repair', 'repairMaterial');
-    expect(perform).toHaveBeenNthCalledWith(3, 'repair', 'ductTape');
+    expect(perform).toHaveBeenNthCalledWith(3, 'repair', undefined);
   });
 
   it('renders repair availability using the same selected resource as the command', () => {
-    const availableReason = vi.fn((_action: string, option?: string) => option === 'ductTape' ? null : 'No repair material remains.');
+    const availableReason = vi.fn((_action: string, option?: string) => option === undefined ? null : 'No repair material remains.');
     const render = vi.fn();
     const phase = SurvivalPhase.forTest({
       session: {
@@ -223,7 +243,7 @@ describe('SurvivalPhase orchestration', () => {
     const unavailable = render.mock.calls[0]![1];
 
     expect(unavailable('repair')).toBeNull();
-    expect(availableReason).toHaveBeenLastCalledWith('repair', 'ductTape');
+    expect(availableReason).toHaveBeenLastCalledWith('repair', undefined);
   });
 
   it('routes item and endure event commands through the same presentation lock', async () => {

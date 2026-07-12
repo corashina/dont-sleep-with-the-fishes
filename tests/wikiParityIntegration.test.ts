@@ -42,7 +42,7 @@ describe('wiki gameplay parity integration', () => {
           seed,
           initial: { day: 2 },
           initialEventId: 'shower-night',
-          random: sequenceRandom([0, 0, 0, 0.99, 0]),
+          random: sequenceRandom([0, 0, 0, 0]),
         });
         survivalSessions.push(session);
         return phase();

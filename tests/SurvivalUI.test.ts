@@ -49,6 +49,79 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('carries direct-use item and instance IDs from a real anchor click', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const onItemUse = vi.fn();
+    ui.onItemUse = onItemUse;
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'energyBar-1', itemType: 'energyBar', action: null, remainingUses: 1,
+      condition: 'usable', x: 320, y: 240, visible: true, depleted: false,
+    }]);
+
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="energyBar-1"]')!.click();
+
+    expect(onItemUse).toHaveBeenCalledWith('energyBar', 'energyBar-1');
+  });
+
+  it('offers accessible per-instance Duct Tape repair targets and returns focus on cancel', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onItemTarget = vi.fn();
+    ui.onItemTarget = onItemTarget;
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'ductTape-1', itemType: 'ductTape', action: null, remainingUses: 1,
+      condition: 'usable', x: 320, y: 240, visible: true, depleted: false,
+    }]);
+    const tape = mount.querySelector<HTMLButtonElement>('[data-anchor-id="ductTape-1"]')!;
+    tape.focus();
+    tape.click();
+    ui.showItemTargets('ductTape', [{
+      instanceId: 'map-1', type: 'map', condition: 'broken', charges: null,
+    }]);
+
+    const dialog = mount.querySelector<HTMLElement>('[data-item-targets]')!;
+    const target = dialog.querySelector<HTMLButtonElement>('[data-item-target-id="map-1"]')!;
+    expect(dialog.getAttribute('aria-label')).toBe('Choose an item to repair');
+    expect(target.textContent).toMatch(/map.*broken/i);
+    target.click();
+    expect(onItemTarget).toHaveBeenCalledWith('ductTape', 'map-1');
+
+    ui.showItemTargets('ductTape', [{
+      instanceId: 'map-1', type: 'map', condition: 'broken', charges: null,
+    }]);
+    dialog.querySelector<HTMLButtonElement>('[data-item-target-cancel]')!.click();
+    expect(document.activeElement).toBe(tape);
+  });
+
+  it('labels canonical response choices generically', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showEvent(
+      { id: 'x', title: 'X', prompt: 'X', danger: 'safe' },
+      snapshot(),
+      [{ id: 'yes', label: 'Yes', unavailableReason: null }],
+    );
+
+    expect(mount.querySelector('[data-event-items]')?.getAttribute('aria-label')).toBe('Choose a response');
+  });
+
+  it('announces broken anchor condition instead of calling a durable tool usable', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'fishingNet-1', itemType: 'fishingNet', action: null, remainingUses: 0,
+      condition: 'broken', x: 320, y: 240, visible: true, depleted: true,
+    }]);
+
+    expect(mount.querySelector('[data-anchor-id="fishingNet-1"]')?.textContent).toMatch(/BROKEN/i);
+    expect(mount.querySelector('[data-anchor-id="fishingNet-1"]')?.textContent).not.toMatch(/DURABLE/i);
+  });
+
   it('renders projected item tooltips without action dock or inventory tray', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -87,8 +160,8 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const onAction = vi.fn();
-    ui.onAction = onAction;
+    const onItemUse = vi.fn();
+    ui.onItemUse = onItemUse;
     ui.render(snapshot({ repairMaterial: 1 }), () => null);
     ui.setAnchors([
       {
@@ -109,9 +182,9 @@ describe('SurvivalUI', () => {
     depleted.focus();
     expect(document.activeElement).toBe(depleted);
     depleted.click();
-    expect(onAction).not.toHaveBeenCalled();
+    expect(onItemUse).not.toHaveBeenCalled();
     available.click();
-    expect(onAction).toHaveBeenCalledWith('repair', undefined);
+    expect(onItemUse).toHaveBeenCalledWith('ductTape', 'ductTape-1');
   });
 
   it('shows remaining uses and durable state on contextual item tooltips', () => {
@@ -211,7 +284,7 @@ describe('SurvivalUI', () => {
 
     const tape = new SurvivalSession(saved('ductTape'), { seed: 1, initial: { hull: 92 } }).snapshot();
     ui.render(tape, () => null);
-    expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('2 ENERGY + TAPE');
+    expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('2 ENERGY + KIT');
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('HULL +8');
   });
 

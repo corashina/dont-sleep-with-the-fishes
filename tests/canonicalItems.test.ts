@@ -69,6 +69,33 @@ describe('wiki item catalog', () => {
     expect(itemAudit.every(({ reason }) => reason.length > 0)).toBe(true);
   });
 
+  it('locks the exact normalized wiki-name, classification, and runtime-ID audit mapping', () => {
+    const itemAudit = PARITY_AUDIT.filter(({ kind }) => kind === 'item');
+    const normalized = itemAudit.map(({ wikiName, classification, runtimeId }) => [
+      wikiName.trim().toLocaleLowerCase('en-US'), classification, runtimeId ?? null,
+    ]);
+    expect(normalized).toEqual([
+      ['food', 'included', 'cannedFood'], ['bait', 'included', 'baitTin'],
+      ['duct tape', 'included', 'ductTape'], ['compass', 'included', 'compass'],
+      ['map', 'included', 'map'], ['medkit', 'included', 'medicalKit'],
+      ['spyglass', 'included', 'telescope'], ['fishing net', 'included', 'fishingNet'],
+      ['bucket', 'included', 'bucket'], ['flare gun', 'included', 'flareGun'],
+      ['scuba gear', 'included', 'scubaSet'], ['anchor', 'included', 'anchor'],
+      ['bottled paper', 'story-excluded', null], ['umbrella', 'included', 'umbrella'],
+      ['swim ring', 'included', 'swimRing'], ['flashlight', 'included', 'flashlight'],
+      ['harpoon gun', 'included', 'harpoonGun'], ['energy bar', 'included', 'energyBar'],
+      ['repair kit', 'included', 'repairKit'], ['fishing rod', 'included', 'fishingRod'],
+      ['heart piece 1', 'story-excluded', null], ['heart piece 2', 'story-excluded', null],
+      ['heart piece 3', 'story-excluded', null], ['heart of the sea', 'story-excluded', null],
+      ['chest', 'included', 'chest'], ['yellow flower', 'story-excluded', null],
+      ['white flower', 'unsupported-undocumented', null],
+      ['water jug', 'preserved', 'waterJug'],
+    ]);
+    expect(new Set(normalized.map(([wikiName]) => wikiName)).size).toBe(normalized.length);
+    const runtimeIds = normalized.flatMap(([, , runtimeId]) => runtimeId === null ? [] : [runtimeId]);
+    expect(new Set(runtimeIds).size).toBe(runtimeIds.length);
+  });
+
   it('has unique IDs, labels, sources, and provenance for every resolved field', () => {
     expect(new Set(RUNTIME_ITEM_IDS).size).toBe(RUNTIME_ITEM_IDS.length);
     for (const id of RUNTIME_ITEM_IDS) {
@@ -84,5 +111,44 @@ describe('wiki item catalog', () => {
 
   it('validates the checked-in item catalog', () => {
     expect(() => validateCanonicalItems()).not.toThrow();
+  });
+
+  it('rejects duplicate IDs and missing item records', () => {
+    expect(() => validateCanonicalItems(['flareGun', 'flareGun'])).toThrow(/duplicates/i);
+    expect(() => validateCanonicalItems(['missing'], CANONICAL_ITEMS)).toThrow(/no catalog record/i);
+  });
+
+  it('rejects blank labels and blank sources', () => {
+    const base = CANONICAL_ITEMS.flareGun;
+    expect(() => validateCanonicalItems(['flareGun'], {
+      flareGun: { ...base, label: { ...base.label, value: '   ' } },
+    })).toThrow(/label is blank/i);
+    expect(() => validateCanonicalItems(['flareGun'], {
+      flareGun: { ...base, weight: { ...base.weight, source: '   ' } },
+    })).toThrow(/weight has no source/i);
+  });
+
+  it('rejects invalid provenance and numeric fields', () => {
+    const base = CANONICAL_ITEMS.flareGun;
+    expect(() => validateCanonicalItems(['flareGun'], {
+      flareGun: {
+        ...base,
+        weight: { ...base.weight, provenance: 'invented' as never },
+      },
+    })).toThrow(/invalid provenance/i);
+    for (const [field, value] of [
+      ['weight', 0], ['spawnCount', -1], ['charges', 0],
+    ] as const) {
+      expect(() => validateCanonicalItems(['flareGun'], {
+        flareGun: { ...base, [field]: { ...base[field], value } },
+      })).toThrow(new RegExp(`${field} is invalid`, 'i'));
+    }
+  });
+
+  it('rejects ship spawns for built-in items', () => {
+    const base = CANONICAL_ITEMS.repairKit;
+    expect(() => validateCanonicalItems(['repairKit'], {
+      repairKit: { ...base, spawnCount: { ...base.spawnCount, value: 1 } },
+    })).toThrow(/built in.*ship spawns/i);
   });
 });

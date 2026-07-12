@@ -277,6 +277,8 @@ export class SurvivalPhase implements GamePhase {
 
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
+    this.ui.onItemUse = (itemId, instanceId) => this.handleItemUse(itemId, instanceId);
+    this.ui.onItemTarget = (itemId, targetInstanceId) => this.handleItemTarget(itemId, targetInstanceId);
     this.ui.onEventItem = (itemId) => this.handleEventItem(itemId);
     this.ui.onEventChoice = (choiceId) => this.handleEventChoice(choiceId);
     this.ui.onEndure = () => this.handleEndure();
@@ -302,9 +304,33 @@ export class SurvivalPhase implements GamePhase {
   private repairOption(): DayActionOption | undefined {
     const snapshot = this.session.snapshot();
     if (snapshot.repairMaterial > 0) return 'repairMaterial';
-    const ductTape = snapshot.inventory.ductTape;
-    if (ductTape.owned && (ductTape.charges ?? 0) > 0) return 'ductTape';
     return undefined;
+  }
+
+  private handleItemUse(itemId: ItemId, instanceId: ItemInstance['instanceId']): void {
+    if (!this.canAcceptCommand()) return;
+    if (itemId === 'ductTape') {
+      const targets = ITEM_IDS.flatMap((candidate) => (
+        this.session.snapshot().inventory[candidate].instances.filter(({ condition }) => (
+          condition === 'broken'
+        ))
+      ));
+      if (targets.length > 0) {
+        this.ui.showItemTargets?.(itemId, targets);
+        return;
+      }
+      const outcome = this.session.useItem?.(itemId);
+      if (outcome !== undefined) this.present(outcome);
+      return;
+    }
+    const outcome = this.session.useItem?.(itemId, instanceId);
+    if (outcome !== undefined) this.present(outcome);
+  }
+
+  private handleItemTarget(itemId: ItemId, targetInstanceId: ItemInstance['instanceId']): void {
+    if (!this.canAcceptCommand()) return;
+    const outcome = this.session.useItem?.(itemId, targetInstanceId);
+    if (outcome !== undefined) this.present(outcome);
   }
 
   private canAcceptCommand(): boolean {
