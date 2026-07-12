@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error The app tsconfig omits Node types; Vitest still runs with this built-in.
+import { readFileSync } from 'node:fs';
+import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession, type ScavengeSnapshot } from '../src/game/ScavengeSession';
 import { getSinkingState } from '../src/game/sinking';
 import { GameUI } from '../src/ui/GameUI';
+
+const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
 
 function snapshot(overrides: Partial<ScavengeSnapshot> = {}): ScavengeSnapshot {
   return {
@@ -50,6 +55,27 @@ describe('GameUI', () => {
     expect(mount.querySelector('[data-carried-items]')?.textContent).toContain('CANNED FOOD · 1');
     expect(mount.querySelector('[data-feedback]')?.textContent).toBe('SAVED — CANNED FOOD');
     expect(mount.querySelector('.slot')).toBeNull();
+    expect(mount.querySelector('[data-carried-items]')?.classList).toContain('carried-list');
+    expect(mount.querySelectorAll('.carried-row')).toHaveLength(2);
+    expect(mainStyles).toMatch(/\.carried-list\s*\{[^}]*display:\s*grid[^}]*gap:/s);
+    expect(mainStyles).toMatch(/\.carried-row\s*\{[^}]*display:\s*block/s);
+  });
+
+  it('reports a saved duplicate even when the first instance of its type was not saved', () => {
+    const mount = document.createElement('main');
+    const instances: ItemInstance[] = [
+      { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      { instanceId: 'cannedFood-2', type: 'cannedFood' },
+    ];
+    const session = new ScavengeSession(instances);
+    session.start();
+    session.pickUp('cannedFood-2');
+    session.saveCarried();
+    const ui = new GameUI(mount);
+
+    ui.showFailureResult(session.snapshot());
+
+    expect(mount.querySelector('[data-result-items]')?.textContent).toContain('SAVED — CANNED FOOD');
   });
 
   it('versions repeated feedback so identical saves remain observable', () => {

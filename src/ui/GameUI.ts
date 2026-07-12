@@ -1,4 +1,4 @@
-import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_LABELS } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
 
@@ -54,7 +54,7 @@ export class GameUI {
         <div class="carried" data-carried>
           <span class="eyebrow">CARRY WEIGHT</span>
           <strong data-carry-weight>0 / 3</strong>
-          <div data-carried-items></div>
+          <div class="carried-list" data-carried-items></div>
           <div class="feedback" data-feedback aria-live="polite"></div>
         </div>
       </div>
@@ -164,9 +164,9 @@ export class GameUI {
   showFailureResult(snapshot: ScavengeSnapshot): void {
     this.resultTitle.textContent = 'Taken by the Sea';
     this.resultBody.textContent = 'The deck disappeared before you reached the lifeboat.';
-    const savedItems = ITEM_IDS
-      .filter((id) => snapshot.items[id] === 'saved')
-      .map((id) => ITEM_LABELS[id]);
+    const savedItems = Object.values(snapshot.items).flatMap((item) => (
+      typeof item !== 'string' && item.status === 'saved' ? [ITEM_LABELS[item.type]] : []
+    ));
     const elapsedSeconds = 120 - snapshot.remainingSeconds;
     this.resultItems.textContent = [
       `${snapshot.savedCount} SUPPLIES SAVED`,
@@ -205,6 +205,7 @@ export class GameUI {
     this.carryWeight.textContent = `${snapshot.carriedWeight} / 3`;
     this.carriedItems.replaceChildren(...snapshot.carriedItems.map((item) => {
       const row = document.createElement('span');
+      row.className = 'carried-row';
       const definition = ITEM_DEFINITIONS[item.type];
       row.textContent = `${definition.label} · ${definition.weight}`;
       return row;

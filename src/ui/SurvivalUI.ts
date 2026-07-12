@@ -651,6 +651,7 @@ export class SurvivalUI {
     return element !== null
       && element.isConnected
       && !element.hidden
+      && element.closest('[hidden], [inert], [aria-hidden="true"]') === null
       && (!(element instanceof HTMLButtonElement) || !element.disabled)
       && element.getAttribute('aria-disabled') !== 'true';
   }
@@ -768,7 +769,13 @@ export class SurvivalUI {
     }
     if (this.overlayOpen() || this.busy) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);
-    if (action === undefined || this.actionReasons.get(action.id) !== null) return;
+    if (action === undefined) return;
+    const unavailableReason = this.actionReasons.get(action.id);
+    if (unavailableReason !== null && unavailableReason !== undefined) {
+      event.preventDefault();
+      this.publishOutcomeAnnouncement(unavailableReason);
+      return;
+    }
     event.preventDefault();
     const button = [...this.anchorButtons.values()].find((candidate) => (
       candidate.dataset.action === action.id && this.isUsableCommand(candidate)

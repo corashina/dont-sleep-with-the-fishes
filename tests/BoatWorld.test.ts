@@ -32,6 +32,8 @@ function snapshot(
     hull: 80,
     food: 0,
     bait: 0,
+    recoveredFood: 0,
+    recoveredBait: 0,
     repairMaterial: 0,
     rescueProgress: 0,
     weather: 'calm',
@@ -125,7 +127,7 @@ describe('BoatWorld helpers', () => {
     world.dispose();
   });
 
-  it('synchronizes aggregate food, bait, and inventory charges without losing duplicates', () => {
+  it('synchronizes recovered food, bait, and inventory charges without loose gains refilling props', () => {
     const savedItems = [
       savedItem('cannedFood'),
       savedItem('cannedFood', 2),
@@ -142,7 +144,13 @@ describe('BoatWorld helpers', () => {
     const inventory = createSurvivalInventory(savedItems);
     inventory.ductTape.charges = 1;
 
-    world.syncInventory(snapshot(savedItems, { food: 1, bait: 1, inventory }));
+    world.syncInventory(snapshot(savedItems, {
+      food: 1,
+      bait: 1,
+      recoveredFood: 1,
+      recoveredBait: 1,
+      inventory,
+    }));
 
     const foodOne = world.scene.getObjectByName('prop:cannedFood-1')!;
     const foodTwo = world.scene.getObjectByName('prop:cannedFood-2')!;
@@ -157,10 +165,16 @@ describe('BoatWorld helpers', () => {
     expect([tapeOne.userData.depleted, tapeTwo.userData.depleted]).toEqual([false, true]);
 
     inventory.ductTape.charges = 4;
-    world.syncInventory(snapshot(savedItems, { food: 2, bait: 6, inventory }));
-    expect(foodTwo.visible).toBe(true);
-    expect(foodTwo.userData.depleted).toBe(false);
-    expect(baitTwo.userData.depleted).toBe(false);
+    world.syncInventory(snapshot(savedItems, {
+      food: 2,
+      bait: 6,
+      recoveredFood: 1,
+      recoveredBait: 1,
+      inventory,
+    }));
+    expect(foodTwo.visible).toBe(false);
+    expect(foodTwo.userData.depleted).toBe(true);
+    expect(baitTwo.userData.depleted).toBe(true);
     expect(tapeTwo.userData.depleted).toBe(false);
     world.dispose();
   });
@@ -197,7 +211,7 @@ describe('BoatWorld helpers', () => {
     inventory.ductTape.charges = 1;
     inventory.flareGun.charges = 1;
 
-    world.syncInventory(snapshot(savedItems, { bait: 3, inventory }));
+    world.syncInventory(snapshot(savedItems, { bait: 3, recoveredBait: 3, inventory }));
     const anchors = world.projectInteractionAnchors(800, 600);
 
     expect(anchors).toEqual(expect.arrayContaining([
