@@ -1,6 +1,7 @@
 import { ITEM_DEFINITIONS, ITEM_LABELS } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
+import { uiArtwork } from './uiArtwork';
 
 export function formatCountdown(seconds: number): string {
   const safe = Math.max(0, Math.ceil(seconds));
@@ -45,47 +46,52 @@ export class GameUI {
     this.root = document.createElement('div');
     this.root.className = 'game-ui';
     this.root.innerHTML = `
-      <div class="hud">
-        <div class="objective"><span class="eyebrow">OBJECTIVE</span><strong>LOAD THE LIFEBOAT</strong></div>
-        <div class="timer-block"><span class="eyebrow" data-sinking>SHIP LISTING</span><strong data-timer>02:00</strong></div>
-        <div class="capacity"><span class="eyebrow">LIFEBOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
+      <div class="ui-treatment" aria-hidden="true"></div>
+      <div class="hud illustrated-hud">
+        <div class="objective ink-label"><span class="eyebrow">CAPTAIN'S ORDER</span><strong>LOAD THE LIFEBOAT</strong></div>
+        <div class="timer-block pocket-watch">
+          ${uiArtwork('watch', 'pocket-watch__art')}
+          <span class="eyebrow" data-sinking>SHIP LISTING</span>
+          <strong data-timer>02:00</strong>
+        </div>
+        <div class="capacity ink-label"><span class="eyebrow">IN THE BOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
         <div class="crosshair" aria-hidden="true"></div>
-        <div class="prompt" data-prompt aria-live="polite"></div>
-        <div class="carried" data-carried>
-          <span class="eyebrow">CARRY WEIGHT</span>
+        <div class="prompt brush-label" data-prompt aria-live="polite"></div>
+        <div class="carried ink-label" data-carried>
+          <span class="eyebrow">IN YOUR ARMS</span>
           <strong data-carry-weight>0 / 3</strong>
           <div class="carried-list" data-carried-items></div>
-          <div class="feedback" data-feedback aria-live="polite"></div>
+          <div class="feedback brush-label" data-feedback aria-live="polite"></div>
         </div>
       </div>
-      <section class="screen is-visible start-screen" data-start>
-        <div class="screen-rule"></div>
-        <p class="kicker">A THREE.JS SURVIVAL PROTOTYPE</p>
+      <section class="screen is-visible start-screen poster-screen" data-start>
+        <p class="kicker">THE HULL HAS BEEN BREACHED</p>
         <h1>LAST BOAT<br>OUT</h1>
         <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
         <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>E</dd></div></dl>
-        <button type="button" class="primary-action" data-start-button>BEGIN EVACUATION</button>
+        <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>
         <p class="input-error" data-pointer-lock-error aria-live="polite"></p>
         <p class="fine-print">Desktop keyboard and mouse required. Click to enable mouse look.</p>
       </section>
-      <section class="screen pause-screen" data-pause>
-        <p class="kicker">EVACUATION PAUSED</p>
+      <section class="screen pause-screen poster-screen" data-pause>
+        <p class="kicker">THE CLOCK IS STILL</p>
         <h2>Back to the deck?</h2>
         <p class="lead">The countdown is stopped while the mouse is released.</p>
-        <button type="button" class="primary-action" data-resume-button>RESUME</button>
+        <button type="button" class="primary-action timber-action" data-resume-button>RESUME</button>
         <p class="input-error" data-pointer-lock-error aria-live="polite"></p>
       </section>
-      <section class="screen failure-screen" data-failure aria-live="assertive">
+      <section class="screen failure-screen poster-screen" data-failure aria-live="assertive">
+        ${uiArtwork('warning', 'failure-mark')}
         <p class="kicker">EVACUATION FAILED</p>
         <h2>The ship is going under.</h2>
         <p class="lead">Hold on...</p>
       </section>
-      <section class="screen result-screen" data-result>
-        <p class="kicker">RUN COMPLETE</p>
+      <section class="screen result-screen poster-screen" data-result>
+        <p class="kicker">THE SEA KEEPS SCORE</p>
         <h2 data-result-title></h2>
         <p class="lead" data-result-body></p>
         <p class="result-items" data-result-items></p>
-        <button type="button" class="primary-action" data-replay-button>TRY ANOTHER ROUTE</button>
+        <button type="button" class="primary-action timber-action" data-replay-button>TRY ANOTHER ROUTE</button>
       </section>
     `;
     mount.append(this.root);
