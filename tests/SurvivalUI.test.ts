@@ -884,6 +884,25 @@ describe('SurvivalUI', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
+  it('renders illustrated conditions, journal status, tallies, and cinematic overlays', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    expect(mount.querySelector('[data-meter="health"] [data-ui-artwork="health"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="hunger"] [data-ui-artwork="hunger"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')).not.toBeNull();
+    expect(mount.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')).not.toBeNull();
+    expect(mount.querySelector('.journal-marker [data-ui-artwork="journal"]')).not.toBeNull();
+    expect(mount.querySelector('.survival-stores')?.classList).toContain('survival-tallies');
+    expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-outcome]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
+    expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
+
+    ui.dispose();
+  });
+
   it('removes document, pointer, and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
