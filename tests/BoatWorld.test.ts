@@ -11,6 +11,7 @@ import {
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
 import { applyInventoryMutation, createSurvivalInventory } from '../src/survival/inventory';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 
@@ -289,12 +290,47 @@ describe('BoatWorld helpers', () => {
 
     const bar = world.scene.getObjectByName('prop:energyBar-1')!;
     const can = world.scene.getObjectByName('prop:cannedFood-1')!;
+    const barMesh = bar.getObjectByProperty('isMesh', true) as Mesh;
+    const barMaterial = barMesh.material as MeshStandardMaterial;
     const anchors = world.projectInteractionAnchors(800, 600);
     expect(bar.visible).toBe(true);
     expect(bar.userData.depleted).toBe(true);
+    expect(barMaterial.transparent).toBe(true);
+    expect(barMaterial.opacity).toBeLessThan(1);
     expect(anchors).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'energyBar-1', depleted: true }),
     ]));
+    expect(can.visible).toBe(false);
+    expect(anchors.some(({ id }) => id === 'cannedFood-1')).toBe(false);
+    world.dispose();
+  });
+
+  it('keeps a transferred can anchored until its recovered food is eaten', () => {
+    const savedItems = [savedItem('cannedFood')];
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const session = new SurvivalSession(savedItems, { seed: 8 });
+    const transferred = session.snapshot();
+    const can = world.scene.getObjectByName('prop:cannedFood-1')!;
+
+    expect(transferred).toMatchObject({ food: 1, recoveredFood: 1 });
+    expect(transferred.inventory.cannedFood.instances[0]).toMatchObject({
+      instanceId: 'cannedFood-1',
+      condition: 'consumed',
+    });
+    world.syncInventory(transferred);
+    let anchors = world.projectInteractionAnchors(800, 600);
+    expect(can.visible).toBe(true);
+    expect(anchors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'cannedFood-1', remainingUses: 1, depleted: false }),
+    ]));
+
+    expect(session.perform('eat')).toMatchObject({ accepted: true, code: 'ate' });
+    const spent = session.snapshot();
+    expect(spent).toMatchObject({ food: 0, recoveredFood: 0 });
+    world.syncInventory(spent);
+    anchors = world.projectInteractionAnchors(800, 600);
     expect(can.visible).toBe(false);
     expect(anchors.some(({ id }) => id === 'cannedFood-1')).toBe(false);
     world.dispose();
