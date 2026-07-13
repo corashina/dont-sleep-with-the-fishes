@@ -1,7 +1,7 @@
 # Downloaded Low-Poly Item Models Design
 
 **Date:** 2026-07-13  
-**Status:** Approved design, awaiting written-spec review
+**Status:** Approved implementation baseline
 
 ## Objective
 
@@ -34,9 +34,9 @@ Rejected source options:
 | Water jug | [Water Bottle](https://poly.pizza/m/KpxDpidn1Z) | Quaternius | CC0 1.0 | 260 triangles; scale as the game's portable water container |
 | Canned food | `Can` from the [Quaternius Survival Pack](https://poly.pizza/bundle/Survival-Pack-XzvQPP0yWB) | Quaternius | CC0 1.0 | Use a distinct orientation from bait tin and preserve its original can treatment |
 | Flashlight | [Torch](https://poly.pizza/m/WGsvr4KOZd) | Quaternius | CC0 1.0 | 610 triangles; this model is an electric flashlight despite its title |
-| Scuba set | `Scuba equipment` from [Poly Pizza's scuba results](https://poly.pizza/search/scuba) | Steren Giannini | CC-BY 3.0 | Use the complete equipment model, not the separate tank result; record its permanent detail URL and measured triangle count in the asset ledger before committing the file |
+| Scuba set | [Scuba equipment](https://poly.pizza/m/7igrHLjaQlW) | Steren Giannini | CC-BY 3.0 | Source is about 4.7k triangles; use the complete equipment model, not the separate tank result, and simplify offline to at most 3,000 triangles |
 
-The exact scuba result is uniquely identified by the title `Scuba equipment` and creator `Steren Giannini`. The implementation must reject any result whose title, creator, or license differs. Its permanent Poly Pizza detail URL and downloaded GLB resource identifier must be recorded in the repository asset ledger before the asset is accepted.
+The exact scuba result is uniquely identified by public model ID `7igrHLjaQlW`, title `Scuba equipment`, creator `Steren Giannini`, and direct GLB resource ID `efda7497-db5e-47e9-b317-8e8baeb1c616`. The implementation must reject any result whose title, creator, or license differs. Its permanent Poly Pizza detail URL and downloaded GLB resource identifier must be recorded in the repository asset ledger before the asset is accepted.
 
 Every checked-in model must remain under 3,000 triangles after offline processing. Models already below that limit should not be simplified unless inspection reveals redundant geometry. The complete nine-template library must remain under 18,000 triangles. These budgets apply to the committed GLBs, not the source downloads.
 
