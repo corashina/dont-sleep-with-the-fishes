@@ -53,12 +53,14 @@ function screen(
   return section;
 }
 
-function renderLoading(mount: HTMLElement): void {
-  mount.replaceChildren(screen(
+function renderLoading(mount: HTMLElement): HTMLElement {
+  const loading = screen(
     'RECOVERING SUPPLIES',
     'Preparing the ship',
     'Loading the equipment you will need to survive.',
-  ));
+  );
+  mount.replaceChildren(loading);
+  return loading;
 }
 
 function errorMessage(error: unknown): string {
@@ -97,7 +99,7 @@ export function launchGame(
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
   let unownedModels: PropModelLibrary | null = null;
 
-  renderLoading(mount);
+  const loading = renderLoading(mount);
 
   const completion = (async (): Promise<Game | null> => {
     try {
@@ -114,6 +116,7 @@ export function launchGame(
     }
 
     try {
+      loading.remove();
       const createdGame = dependencies.createGame(mount, unownedModels);
       game = createdGame;
       unownedModels = null;

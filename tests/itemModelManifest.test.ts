@@ -68,4 +68,18 @@ describe('item model manifest', () => {
       expect(/^\[[^\]]+\]\(([^)]+)\)$/.exec(row[5]!)?.[1]).toBe(spec.licenseUrl);
     }
   });
+
+  it('uses the browser-measured presentation transforms', () => {
+    expect(ITEM_MODEL_SPECS.flareGun.offset).toEqual([0, 0.07, 0]);
+    expect(ITEM_MODEL_SPECS.ductTape.targetLongestDimension).toBe(0.62);
+    expect(ITEM_MODEL_SPECS.ductTape.offset).toEqual([0, 0, 0]);
+    expect(ITEM_MODEL_SPECS.fishingRod.rotation).toEqual([Math.PI / 2, 0, 0]);
+    expect(ITEM_MODEL_SPECS.fishingRod.offset).toEqual([0, 0, 0]);
+    expect(ITEM_MODEL_SPECS.baitTin.offset).toEqual([0, 0.12, 0]);
+    expect(ITEM_MODEL_SPECS.medicalKit.offset).toEqual([0, 0.07, 0]);
+    expect(ITEM_MODEL_SPECS.waterJug.offset).toEqual([0, 0.22, 0]);
+    expect(ITEM_MODEL_SPECS.cannedFood.offset).toEqual([0, 0.04, 0]);
+    expect(ITEM_MODEL_SPECS.flashlight.offset).toEqual([0, 0.19, 0]);
+    expect(ITEM_MODEL_SPECS.scubaSet.offset).toEqual([0, 0.25, 0]);
+  });
 });
