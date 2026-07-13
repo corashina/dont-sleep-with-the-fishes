@@ -65,7 +65,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown WebGL initialization error';
 }
 
-function renderFailure(mount: HTMLElement, error: unknown): void {
+function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
+  mount.replaceChildren(screen(
+    'WEBGL UNAVAILABLE',
+    'Unable to launch',
+    'This demo needs WebGL 2 in a current desktop browser.',
+    errorMessage(error),
+  ));
+}
+
+function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof ItemModelLoadError) {
     const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
     mount.replaceChildren(screen(
@@ -77,12 +86,7 @@ function renderFailure(mount: HTMLElement, error: unknown): void {
     return;
   }
 
-  mount.replaceChildren(screen(
-    'WEBGL UNAVAILABLE',
-    'Unable to launch',
-    'This demo needs WebGL 2 in a current desktop browser.',
-    errorMessage(error),
-  ));
+  renderWebGlFailure(mount, error);
 }
 
 export function launchGame(
@@ -98,12 +102,18 @@ export function launchGame(
   const completion = (async (): Promise<Game | null> => {
     try {
       unownedModels = await dependencies.loadModels();
-      if (cancelled || !mount.isConnected) {
-        unownedModels.dispose();
-        unownedModels = null;
-        return null;
-      }
+    } catch (error) {
+      if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
+      return null;
+    }
 
+    if (cancelled || !mount.isConnected) {
+      unownedModels.dispose();
+      unownedModels = null;
+      return null;
+    }
+
+    try {
       const createdGame = dependencies.createGame(mount, unownedModels);
       game = createdGame;
       unownedModels = null;
@@ -135,7 +145,7 @@ export function launchGame(
         unownedModels = null;
       }
 
-      if (!cancelled && mount.isConnected) renderFailure(mount, error);
+      if (!cancelled && mount.isConnected) renderWebGlFailure(mount, error);
       return null;
     }
   })();

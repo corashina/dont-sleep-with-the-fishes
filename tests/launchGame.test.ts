@@ -102,6 +102,25 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('renderer failed');
   });
 
+  it('renders WebGL failure UI when construction throws an item-model error', async () => {
+    const mount = connectedMount();
+    const disposeModels = vi.fn();
+    const models = { dispose: disposeModels } as unknown as PropModelLibrary;
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        createGame: () => {
+          throw new ItemModelLoadError('ductTape', 'renderer used an invalid texture');
+        },
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
+    expect(disposeModels).toHaveBeenCalledOnce();
+  });
+
   it('renders hostile error text without creating markup', async () => {
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
@@ -204,5 +223,27 @@ describe('launchGame', () => {
     expect(game.dispose).toHaveBeenCalledOnce();
     expect(disposeModels).not.toHaveBeenCalled();
     expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+  });
+
+  it('renders WebGL failure UI when start throws an item-model error', async () => {
+    const mount = connectedMount();
+    const disposeModels = vi.fn();
+    const models = { dispose: disposeModels } as unknown as PropModelLibrary;
+    const game = {
+      start: vi.fn(() => {
+        throw new ItemModelLoadError('ductTape', 'startup used an invalid texture');
+      }),
+      dispose: vi.fn(),
+    };
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { createGame: () => game },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
+    expect(game.dispose).toHaveBeenCalledOnce();
+    expect(disposeModels).not.toHaveBeenCalled();
   });
 });
