@@ -59,11 +59,54 @@ function disposeRoots(roots: Iterable<Group>): void {
   materials.forEach((material) => material.dispose());
 }
 
-function validateLedgerEntry(id: ItemId, spec: ItemModelSpec): void {
-  const requiredValues = [id, spec.sourceUrl, spec.resourceId, spec.creator, spec.licenseUrl];
-  const missing = requiredValues.find((value) => !ITEM_MODEL_ASSET_LEDGER.includes(value));
-  if (missing) {
-    throw new ItemModelLoadError(id, `asset ledger is missing ${missing}`);
+function ledgerCells(line: string): readonly string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
+  return trimmed.slice(1, -1).split('|').map((cell) => cell.trim());
+}
+
+function inlineCodeValue(cell: string): string | null {
+  return /^`([^`]+)`$/.exec(cell)?.[1] ?? null;
+}
+
+function markdownLinkUrl(cell: string): string | null {
+  return /^\[[^\]]+\]\(([^)]+)\)$/.exec(cell)?.[1] ?? null;
+}
+
+function ledgerCreator(cell: string): string | null {
+  const separator = cell.lastIndexOf(' / ');
+  return separator >= 0 ? cell.slice(separator + 3) : null;
+}
+
+function validateLedgerEntry(
+  id: ItemId,
+  spec: ItemModelSpec,
+  rows: readonly (readonly string[])[],
+): void {
+  const matches = rows.filter((row) => row[0] === id);
+  if (matches.length !== 1) {
+    throw new ItemModelLoadError(
+      id,
+      matches.length === 0 ? 'asset ledger row is missing' : 'asset ledger row is duplicated',
+    );
+  }
+
+  const row = matches[0]!;
+  if (row.length !== 10) throw new ItemModelLoadError(id, 'asset ledger row format is invalid');
+  if (inlineCodeValue(row[1]!) !== `${id}.glb`) {
+    throw new ItemModelLoadError(id, 'asset ledger filename does not match the manifest');
+  }
+  if (row[3] !== spec.sourceUrl) {
+    throw new ItemModelLoadError(id, 'asset ledger source URL does not match the manifest');
+  }
+  if (inlineCodeValue(row[4]!) !== spec.resourceId) {
+    throw new ItemModelLoadError(id, 'asset ledger resource ID does not match the manifest');
+  }
+  if (ledgerCreator(row[2]!) !== spec.creator) {
+    throw new ItemModelLoadError(id, 'asset ledger creator does not match the manifest');
+  }
+  if (markdownLinkUrl(row[5]!) !== spec.licenseUrl) {
+    throw new ItemModelLoadError(id, 'asset ledger license URL does not match the manifest');
   }
 }
 
@@ -174,7 +217,10 @@ export class PropModelLibrary {
   private constructor(private readonly templates: ReadonlyMap<ItemId, Group>) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
-    for (const id of ITEM_IDS) validateLedgerEntry(id, ITEM_MODEL_SPECS[id]);
+    const ledgerRows = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
+      .map(ledgerCells)
+      .filter((row): row is readonly string[] => row !== null);
+    for (const id of ITEM_IDS) validateLedgerEntry(id, ITEM_MODEL_SPECS[id], ledgerRows);
 
     const results = await Promise.allSettled(ITEM_IDS.map(async (id): Promise<LoadedTemplate> => {
       const root = await loader.load(ITEM_MODEL_SPECS[id].url);

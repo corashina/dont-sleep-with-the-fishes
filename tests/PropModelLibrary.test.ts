@@ -16,6 +16,7 @@ import {
   type ItemModelLoader,
 } from '../src/world/PropModelLibrary';
 import {
+  ITEM_MODEL_ASSET_LEDGER,
   ITEM_MODEL_MAX_TOTAL_TRIANGLES,
   ITEM_MODEL_SPECS,
 } from '../src/world/itemModelManifest';
@@ -70,7 +71,112 @@ function firstMesh(root: Group): Mesh<BufferGeometry, Material | Material[]> {
   return found;
 }
 
+function replaceLedgerRow(
+  ledger: string,
+  id: ItemId,
+  replace: (row: string) => string,
+): string {
+  return ledger.split(/\r?\n/).map((row) => (
+    row.startsWith(`| ${id} |`) ? replace(row) : row
+  )).join('\n');
+}
+
+function swapLedgerRowValues(
+  ledger: string,
+  firstId: ItemId,
+  secondId: ItemId,
+  firstValues: readonly string[],
+  secondValues: readonly string[],
+): string {
+  const withFirstChanged = replaceLedgerRow(ledger, firstId, (row) => (
+    firstValues.reduce((changed, value, index) => (
+      changed.replace(value, secondValues[index]!)
+    ), row)
+  ));
+  return replaceLedgerRow(withFirstChanged, secondId, (row) => (
+    secondValues.reduce((changed, value, index) => (
+      changed.replace(value, firstValues[index]!)
+    ), row)
+  ));
+}
+
+async function expectLedgerRejectedBeforeLoad(ledger: string, itemId: ItemId): Promise<void> {
+  vi.resetModules();
+  vi.doMock('../src/world/itemModelManifest', async () => {
+    const actual = await vi.importActual<typeof import('../src/world/itemModelManifest')>(
+      '../src/world/itemModelManifest',
+    );
+    return { ...actual, ITEM_MODEL_ASSET_LEDGER: ledger };
+  });
+  const loader: ItemModelLoader = { load: vi.fn(async () => modelRoot()) };
+
+  try {
+    const { PropModelLibrary: IsolatedPropModelLibrary } = await import('../src/world/PropModelLibrary');
+    await expect(IsolatedPropModelLibrary.load(loader)).rejects.toThrow(new RegExp(itemId));
+    expect(loader.load).not.toHaveBeenCalled();
+  } finally {
+    vi.doUnmock('../src/world/itemModelManifest');
+    vi.resetModules();
+  }
+}
+
 describe('PropModelLibrary preload', () => {
+  it('rejects a stable GLB filename assigned to the wrong item row before loading', async () => {
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
+      row.replace('`flareGun.glb`', '`fishingRod.glb`')
+    ));
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
+  it('rejects source and resource IDs swapped between item rows before loading', async () => {
+    const ledger = swapLedgerRowValues(
+      ITEM_MODEL_ASSET_LEDGER,
+      'flareGun',
+      'fishingRod',
+      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.resourceId],
+      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.resourceId],
+    );
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
+  it('rejects license URLs swapped between item rows before loading', async () => {
+    const ledger = swapLedgerRowValues(
+      ITEM_MODEL_ASSET_LEDGER,
+      'flareGun',
+      'ductTape',
+      [ITEM_MODEL_SPECS.flareGun.licenseUrl],
+      [ITEM_MODEL_SPECS.ductTape.licenseUrl],
+    );
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
+  it('rejects a creator substring instead of the exact creator identity before loading', async () => {
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
+      row.replace('Flare Gun / Quaternius', 'Flare Gun / Quater')
+    ));
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
+  it('rejects a missing item row before loading', async () => {
+    const ledger = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
+      .filter((row) => !row.startsWith('| flareGun |'))
+      .join('\n');
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
+  it('rejects a duplicate item row before loading', async () => {
+    const row = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
+      .find((candidate) => candidate.startsWith('| flareGun |'))!;
+    const ledger = ITEM_MODEL_ASSET_LEDGER.replace(row, `${row}\n${row}`);
+
+    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+  });
+
   it('requests every manifest URL in parallel before any request resolves', async () => {
     const requests = new Map<string, Deferred<Group>>();
     const loader: ItemModelLoader = {

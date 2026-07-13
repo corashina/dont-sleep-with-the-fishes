@@ -28,6 +28,12 @@ const EXPECTED_RESOURCE_IDS: Readonly<Record<ItemId, string>> = {
   scubaSet: 'efda7497-db5e-47e9-b317-8e8baeb1c616',
 };
 
+function ledgerRows(): readonly (readonly string[])[] {
+  return ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
+    .filter((line) => line.trim().startsWith('|') && line.trim().endsWith('|'))
+    .map((line) => line.trim().slice(1, -1).split('|').map((cell) => cell.trim()));
+}
+
 describe('item model manifest', () => {
   it('exhaustively maps every item to its approved local model and provenance', async () => {
     expect(Object.keys(ITEM_MODEL_SPECS).sort()).toEqual([...ITEM_IDS].sort());
@@ -47,13 +53,19 @@ describe('item model manifest', () => {
   });
 
   it('embeds matching asset-ledger provenance for every model', () => {
+    const rows = ledgerRows();
     for (const id of ITEM_IDS) {
       const spec = ITEM_MODEL_SPECS[id];
-      expect(ITEM_MODEL_ASSET_LEDGER).toContain(id);
-      expect(ITEM_MODEL_ASSET_LEDGER).toContain(spec.sourceUrl);
-      expect(ITEM_MODEL_ASSET_LEDGER).toContain(spec.resourceId);
-      expect(ITEM_MODEL_ASSET_LEDGER).toContain(spec.creator);
-      expect(ITEM_MODEL_ASSET_LEDGER).toContain(spec.licenseUrl);
+      const matches = rows.filter((row) => row[0] === id);
+      expect(matches).toHaveLength(1);
+      const row = matches[0]!;
+      expect(row).toHaveLength(10);
+      expect(row[0]).toBe(id);
+      expect(row[1]).toBe(`\`${id}.glb\``);
+      expect(row[3]).toBe(spec.sourceUrl);
+      expect(row[4]).toBe(`\`${spec.resourceId}\``);
+      expect(row[2]!.slice(row[2]!.lastIndexOf(' / ') + 3)).toBe(spec.creator);
+      expect(/^\[[^\]]+\]\(([^)]+)\)$/.exec(row[5]!)?.[1]).toBe(spec.licenseUrl);
     }
   });
 });
