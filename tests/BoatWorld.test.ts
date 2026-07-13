@@ -13,6 +13,7 @@ import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/Boat
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
+import { createTestPropModels } from './helpers/propModels';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -63,20 +64,24 @@ describe('BoatWorld helpers', () => {
   it('keeps the shared camera at a fixed height for reduced motion', () => {
     const camera = new PerspectiveCamera();
     const reducedMotion = { matches: true } as unknown as MediaQueryList;
-    const world = new BoatWorld(camera, reducedMotion);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(camera, reducedMotion, propModels);
     const before = camera.getWorldPosition(new Vector3()).y;
 
     world.update(1, 0.1);
     const after = camera.getWorldPosition(new Vector3()).y;
     world.dispose();
+    propModels.dispose();
 
     expect(after).toBe(before);
   });
 
   it('uploads one exclusion from the motion-rig lifeboat world transform', () => {
+    const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
     );
 
     world.update(1.5, 0.1);
@@ -92,6 +97,7 @@ describe('BoatWorld helpers', () => {
     expect(matrices[1]).toEqual(new Matrix4());
     expect(bounds[1]).toEqual(new Vector4());
     world.dispose();
+    propModels.dispose();
   });
 
   it('builds every saved instance once at its deterministic storage transform', () => {
@@ -101,9 +107,11 @@ describe('BoatWorld helpers', () => {
       savedItem('ductTape', 2),
       savedItem('scubaSet'),
     ];
+    const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
       savedItems,
     );
     const storage = world.scene.getObjectByName('lifeboat-storage')!;
@@ -125,6 +133,7 @@ describe('BoatWorld helpers', () => {
       expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
     });
     world.dispose();
+    propModels.dispose();
   });
 
   it('synchronizes recovered food, bait, and inventory charges without loose gains refilling props', () => {
@@ -136,9 +145,11 @@ describe('BoatWorld helpers', () => {
       savedItem('ductTape'),
       savedItem('ductTape', 2),
     ];
+    const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
       savedItems,
     );
     const inventory = createSurvivalInventory(savedItems);
@@ -158,11 +169,17 @@ describe('BoatWorld helpers', () => {
     const baitTwo = world.scene.getObjectByName('prop:baitTin-2')!;
     const tapeOne = world.scene.getObjectByName('prop:ductTape-1')!;
     const tapeTwo = world.scene.getObjectByName('prop:ductTape-2')!;
+    const tapeOneMaterial = (tapeOne.children[0] as Mesh).material as MeshStandardMaterial;
+    const tapeTwoMaterial = (tapeTwo.children[0] as Mesh).material as MeshStandardMaterial;
+    const tapeOriginalColor = tapeOneMaterial.color.getHex();
     expect([foodOne.visible, foodTwo.visible]).toEqual([true, false]);
     expect([foodOne.userData.depleted, foodTwo.userData.depleted]).toEqual([false, true]);
     expect([baitOne.visible, baitTwo.visible]).toEqual([true, true]);
     expect([baitOne.userData.depleted, baitTwo.userData.depleted]).toEqual([false, true]);
     expect([tapeOne.userData.depleted, tapeTwo.userData.depleted]).toEqual([false, true]);
+    expect(tapeOneMaterial).not.toBe(tapeTwoMaterial);
+    expect(tapeOneMaterial.color.getHex()).toBe(tapeOriginalColor);
+    expect(tapeTwoMaterial.color.getHex()).not.toBe(tapeOriginalColor);
 
     inventory.ductTape.charges = 4;
     world.syncInventory(snapshot(savedItems, {
@@ -176,14 +193,18 @@ describe('BoatWorld helpers', () => {
     expect(foodTwo.userData.depleted).toBe(true);
     expect(baitTwo.userData.depleted).toBe(true);
     expect(tapeTwo.userData.depleted).toBe(false);
+    expect(tapeOneMaterial.color.getHex()).toBe(tapeOriginalColor);
+    expect(tapeTwoMaterial.color.getHex()).toBe(tapeOriginalColor);
     world.dispose();
+    propModels.dispose();
   });
 
   it('projects saved props plus fixed repair and horizon anchors', () => {
     const savedItems = [savedItem('fishingRod'), savedItem('flareGun')];
+    const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
     camera.updateProjectionMatrix();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, savedItems);
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
@@ -196,6 +217,7 @@ describe('BoatWorld helpers', () => {
     ]));
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
     world.dispose();
+    propModels.dispose();
   });
 
   it('projects per-instance remaining uses for duplicate and contextual supplies', () => {
@@ -204,9 +226,10 @@ describe('BoatWorld helpers', () => {
       savedItem('baitTin'), savedItem('baitTin', 2),
       savedItem('flareGun'), savedItem('flashlight'),
     ];
+    const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
     camera.updateProjectionMatrix();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, savedItems);
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, savedItems);
     const inventory = createSurvivalInventory(savedItems);
     inventory.ductTape.charges = 1;
     inventory.flareGun.charges = 1;
@@ -223,12 +246,15 @@ describe('BoatWorld helpers', () => {
       expect.objectContaining({ id: 'flashlight-1', remainingUses: null, depleted: false }),
     ]));
     world.dispose();
+    propModels.dispose();
   });
 
   it('animates fishing cues from the recovered rod and has no hand-line fallback', () => {
+    const propModels = createTestPropModels();
     const rodWorld = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
       [savedItem('fishingRod'), savedItem('scubaSet')],
     );
     const rod = rodWorld.scene.getObjectByName('prop:fishingRod-1')!;
@@ -243,6 +269,7 @@ describe('BoatWorld helpers', () => {
     const emptyWorld = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
       [],
     );
     emptyWorld.play('fish');
@@ -250,22 +277,27 @@ describe('BoatWorld helpers', () => {
     expect(emptyWorld.scene.getObjectByName('fishing-line')?.visible).toBe(false);
     expect(emptyWorld.scene.getObjectByName('fishing-catch')?.visible).toBe(false);
     emptyWorld.dispose();
+    propModels.dispose();
   });
 
   it('resets transient cues after they finish', async () => {
     const camera = new PerspectiveCamera();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, []);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, []);
     const sequence = world.play('rest');
     world.update(0.8, 0.8);
     await sequence;
     expect(world.presentationCueForTest()).toBeNull();
     world.dispose();
+    propModels.dispose();
   });
 
   it('disposes saved prop geometry and material exactly once', () => {
+    const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
+      propModels,
       [savedItem('medicalKit')],
     );
     const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
@@ -278,5 +310,6 @@ describe('BoatWorld helpers', () => {
 
     expect(disposeGeometry).toHaveBeenCalledOnce();
     expect(disposeMaterial).toHaveBeenCalledOnce();
+    propModels.dispose();
   });
 });

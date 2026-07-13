@@ -31,6 +31,7 @@ import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { createShip, selectSpawnPoints } from '../src/world/Ship';
 import { World } from '../src/world/World';
+import { createTestPropModels } from './helpers/propModels';
 
 const pointInside = (point: Vector3, box: CollisionBox): boolean =>
   point.x >= box.minX && point.x <= box.maxX &&
@@ -44,23 +45,12 @@ const playerOverlaps = (point: Vector3, radius: number, box: CollisionBox): bool
   return (point.x - closestX) ** 2 + (point.z - closestZ) ** 2 < radius ** 2;
 };
 
-const geometrySignature = (type: (typeof ITEM_IDS)[number]): string => {
-  const entries: string[] = [];
-  createProp({ instanceId: `${type}-1`, type }).traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    object.geometry.computeBoundingBox();
-    const bounds = object.geometry.boundingBox;
-    if (!bounds) return;
-    const size = bounds.getSize(new Vector3());
-    const values = [
-      size.x, size.y, size.z,
-      object.position.x, object.position.y, object.position.z,
-      object.rotation.x, object.rotation.y, object.rotation.z,
-      object.scale.x, object.scale.y, object.scale.z,
-    ].map((value) => Math.round(value * 1_000) / 1_000);
-    entries.push(`${object.geometry.type}:${values.join(',')}`);
+const meshCount = (root: Object3D): number => {
+  let count = 0;
+  root.traverse((object) => {
+    if (object instanceof Mesh) count += 1;
   });
-  return entries.sort().join('|');
+  return count;
 };
 
 interface RenderResources {
@@ -92,12 +82,14 @@ const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterab
 describe('procedural world builders', () => {
   it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
-    const world = new World(scene, createItemInstances());
+    const propModels = createTestPropModels();
+    const world = new World(scene, propModels, createItemInstances());
     expect(world.itemObjects.size).toBe(14);
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
     world.dispose();
+    propModels.dispose();
   });
 
   it('packs every approved instance and extends into deterministic layers', () => {
@@ -106,17 +98,20 @@ describe('procedural world builders', () => {
       .toBeCloseTo(boatStorageTransform(0).position.y + 0.28);
   });
 
-  it('builds fourteen instance meshes including a distinct scuba set', () => {
-    const world = new World(new Scene(), createItemInstances());
+  it('builds fourteen model instances including a distinct scuba set', () => {
+    const propModels = createTestPropModels();
+    const world = new World(new Scene(), propModels, createItemInstances());
     expect(world.itemObjects.size).toBe(14);
     expect(world.itemObjects.get('scubaSet-1')?.userData.itemType).toBe('scubaSet');
     expect(world.itemObjects.get('scubaSet-1')?.userData.instanceId).toBe('scubaSet-1');
     world.dispose();
+    propModels.dispose();
   });
 
   it('uses the same wave time and amplitude for the ocean and four-point lifeboat pose', () => {
     const scene = new Scene();
-    const world = new World(scene);
+    const propModels = createTestPropModels();
+    const world = new World(scene, propModels);
     const sinking: SinkingState = {
       progress: 0.4,
       rollRadians: -0.12,
@@ -169,11 +164,13 @@ describe('procedural world builders', () => {
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
     expect(scene.getObjectByName('storm-clouds')).toBeDefined();
     world.dispose();
+    propModels.dispose();
   });
 
   it('uploads ship and lifeboat exclusions from their current world transforms', () => {
     const scene = new Scene();
-    const world = new World(scene);
+    const propModels = createTestPropModels();
+    const world = new World(scene, propModels);
     const sinking = getSinkingState(45, 120);
 
     world.update(2.5, 0.1, sinking, new Vector3(12, 5, -9), false);
@@ -198,14 +195,16 @@ describe('procedural world builders', () => {
       { worldToLocal: matrices[1]!, bounds: bounds[1]! },
     )).toBe(true);
     world.dispose();
+    propModels.dispose();
   });
 
   it('slows spray and cloud movement when reduced motion is requested', () => {
     const sinking = getSinkingState(60, 120);
+    const propModels = createTestPropModels();
     const regularScene = new Scene();
     const reducedScene = new Scene();
-    const regular = new World(regularScene);
-    const reduced = new World(reducedScene);
+    const regular = new World(regularScene, propModels);
+    const reduced = new World(reducedScene, propModels);
     const regularSpray = regularScene.getObjectByName('sea-spray') as Points;
     const reducedSpray = reducedScene.getObjectByName('sea-spray') as Points;
     const regularClouds = regularScene.getObjectByName('storm-clouds') as Group;
@@ -227,10 +226,12 @@ describe('procedural world builders', () => {
     expect(reducedClouds.position.x).toBeCloseTo(0.3);
     regular.dispose();
     reduced.dispose();
+    propModels.dispose();
   });
 
   it('packs saved instances into lifeboat storage and detaches lost instances', () => {
-    const world = new World(new Scene(), createItemInstances());
+    const propModels = createTestPropModels();
+    const world = new World(new Scene(), propModels, createItemInstances());
     const saved = world.itemObjects.get('flareGun-1')!;
     const lost = world.itemObjects.get('ductTape-1')!;
     const transform = boatStorageTransform(0);
@@ -244,10 +245,12 @@ describe('procedural world builders', () => {
     expect(saved.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
     expect(lost.parent).toBeNull();
     world.dispose();
+    propModels.dispose();
   });
 
   it('reattaches landed items to the sinking ship and restores their scale', () => {
-    const world = new World(new Scene(), createItemInstances());
+    const propModels = createTestPropModels();
+    const world = new World(new Scene(), propModels, createItemInstances());
     const landed = world.itemObjects.get('waterJug-1')!;
     landed.removeFromParent();
     landed.scale.setScalar(0.85);
@@ -257,6 +260,7 @@ describe('procedural world builders', () => {
     expect(landed.parent).toBe(world.ship);
     expect(landed.scale.toArray()).toEqual([1, 1, 1]);
     world.dispose();
+    propModels.dispose();
   });
 
   it.each([1, 2])('restores the scene and disposes all owned resources once after %i dispose call(s)', (disposeCalls) => {
@@ -265,7 +269,8 @@ describe('procedural world builders', () => {
     const originalFog = new FogExp2(0x112233, 0.004);
     scene.background = originalBackground;
     scene.fog = originalFog;
-    const world = new World(scene);
+    const propModels = createTestPropModels();
+    const world = new World(scene, propModels);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
     const rain = scene.getObjectByName('rain') as Points;
     const spray = scene.getObjectByName('sea-spray') as Points;
@@ -340,6 +345,7 @@ describe('procedural world builders', () => {
     geometryDisposals.forEach((count) => expect(count).toBe(1));
     ownedMaterialDisposals.forEach((count) => expect(count).toBe(1));
     sharedShipMaterialDisposals.forEach((count) => expect(count).toBe(0));
+    propModels.dispose();
   });
 
   it('creates a four-wave subdivided ocean mesh', () => {
@@ -367,20 +373,18 @@ describe('procedural world builders', () => {
   });
 
   it.each(ITEM_IDS)('builds a visible mesh for %s', (type) => {
+    const propModels = createTestPropModels();
     const instance = { instanceId: `${type}-1`, type } as ItemInstance;
-    const prop = createProp(instance);
-    let meshCount = 0;
-    prop.traverse((object) => {
-      if (object instanceof Mesh) meshCount += 1;
+    const prop = createProp(propModels, instance);
+    expect(prop.name).toBe(`prop:${instance.instanceId}`);
+    expect(prop.userData).toMatchObject({
+      instanceId: instance.instanceId,
+      itemType: instance.type,
     });
-    expect(prop.userData.instanceId).toBe(instance.instanceId);
-    expect(prop.userData.itemType).toBe(type);
-    expect(meshCount).toBeGreaterThan(0);
-  });
-
-  it('gives every prop type distinct procedural geometry signatures', () => {
-    const signatures = ITEM_IDS.map(geometrySignature);
-    expect(new Set(signatures)).toHaveLength(ITEM_IDS.length);
+    expect(meshCount(prop)).toBeGreaterThan(0);
+    collectRenderResources(prop).geometries.forEach((geometry) => geometry.dispose());
+    collectRenderResources(prop).materials.forEach((material) => material.dispose());
+    propModels.dispose();
   });
 
   it('builds the two-zone ship contract with fourteen supply spawns', () => {

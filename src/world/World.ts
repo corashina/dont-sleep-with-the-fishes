@@ -24,6 +24,7 @@ import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
 import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from './Lifeboat';
 import { createProp } from './PropFactory';
+import type { PropModelLibrary } from './PropModelLibrary';
 import { createShip, selectSpawnPoints } from './Ship';
 
 function collectOwnedResources(
@@ -60,6 +61,7 @@ export class World {
 
   constructor(
     private readonly scene: Scene,
+    private readonly propModels: PropModelLibrary,
     instances: readonly ItemInstance[] = createItemInstances(),
   ) {
     const shipBuild = createShip();
@@ -72,7 +74,7 @@ export class World {
 
     const selectedSpawnPoints = selectSpawnPoints(shipBuild.itemSpawnPoints);
     instances.forEach((instance, index) => {
-      const prop = createProp(instance);
+      const prop = createProp(this.propModels, instance);
       collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
       prop.position.copy(selectedSpawnPoints[index]!);
       prop.rotation.y = index * 0.73;

@@ -26,6 +26,7 @@ import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
+import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   ACTION_FOR_ITEM,
   projectBoatAnchor,
@@ -183,6 +184,7 @@ export class BoatWorld {
   constructor(
     camera: PerspectiveCamera,
     reducedMotion: MediaQueryList,
+    propModels: PropModelLibrary,
     savedItems: readonly ItemInstance[] = [],
   ) {
     this.scene = new Scene();
@@ -195,7 +197,7 @@ export class BoatWorld {
     const build = createLifeboat();
     this.boat = build.root;
     savedItems.forEach((instance, index) => {
-      const prop = createProp(instance);
+      const prop = createProp(propModels, instance);
       const transform = boatStorageTransform(index);
       prop.position.copy(transform.position);
       prop.rotation.copy(transform.rotation);
