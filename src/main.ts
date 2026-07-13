@@ -6,14 +6,16 @@ const mount = document.querySelector<HTMLElement>('#app');
 if (!mount) throw new Error('Missing #app mount element');
 
 async function startGame(mount: HTMLElement): Promise<void> {
+  let game: Game | null = null;
   let unownedModels: PropModelLibrary | null = null;
   try {
     unownedModels = await PropModelLibrary.load();
-    const game = new Game(mount, unownedModels);
+    game = new Game(mount, unownedModels);
     unownedModels = null;
     game.start();
   } catch (error) {
-    unownedModels?.dispose();
+    if (game !== null) game.dispose();
+    else unownedModels?.dispose();
     const message = error instanceof Error ? error.message : 'Unknown WebGL initialization error';
     mount.innerHTML = `
       <section class="screen is-visible pause-screen">
