@@ -255,7 +255,7 @@ expect(Object.keys(ITEM_MODEL_SPECS).sort()).toEqual([...ITEM_IDS].sort());
 for (const id of ITEM_IDS) {
   const spec = ITEM_MODEL_SPECS[id];
   expect(spec.url).toMatch(/\.glb$/);
-  expect(spec.maxTriangles).toBeLessThanOrEqual(3_000);
+  expect(spec.maxTriangles).toBe(id === 'ductTape' ? 21_000 : 3_000);
   expect(spec.sourceUrl).toBe(`https://poly.pizza/m/${EXPECTED_PUBLIC_IDS[id]}`);
   expect(spec.resourceId).toBe(EXPECTED_RESOURCE_IDS[id]);
   expect(spec.creator.length).toBeGreaterThan(0);
@@ -288,7 +288,7 @@ const normalization: Readonly<Record<ItemId, Pick<ItemModelSpec,
 };
 ```
 
-Set every `maxTriangles` to `3_000`. Encode the exact public/resource IDs and licenses from Task 1.
+Set `ductTape.maxTriangles` to `21_000` for the user-approved unchanged Tape exception and set every other `maxTriangles` to `3_000`. Enforce a `28_000` aggregate template limit. Encode the exact public/resource IDs and licenses from Task 1.
 
 Run: `bun run test -- tests/itemModelManifest.test.ts`
 

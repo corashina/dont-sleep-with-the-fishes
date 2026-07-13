@@ -1,0 +1,256 @@
+import {
+  Box3,
+  BoxGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+} from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import { ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
+import {
+  PropModelLibrary,
+  geometryTriangles,
+  type ItemModelLoader,
+} from '../src/world/PropModelLibrary';
+import {
+  ITEM_MODEL_MAX_TOTAL_TRIANGLES,
+  ITEM_MODEL_SPECS,
+} from '../src/world/itemModelManifest';
+
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  resolve(value: T): void;
+  reject(reason: unknown): void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function triangleGeometry(triangles: number): BufferGeometry {
+  const positions = new Float32Array(triangles * 9);
+  for (let index = 0; index < triangles; index += 1) {
+    positions.set([0, 0, 0, 1, 0, 0, 0, 1, 0], index * 9);
+  }
+  return new BufferGeometry().setAttribute('position', new Float32BufferAttribute(positions, 3));
+}
+
+function modelRoot(
+  triangles = 12,
+  material: Material | Material[] = new MeshStandardMaterial({ color: 0x557799 }),
+): Group {
+  const root = new Group();
+  root.add(new Mesh(triangleGeometry(triangles), material));
+  return root;
+}
+
+function templates(factory: (id: ItemId, index: number) => Group = () => modelRoot()): Map<ItemId, Group> {
+  return new Map(ITEM_IDS.map((id, index) => [id, factory(id, index)]));
+}
+
+function instance(type: ItemId, suffix = 1): ItemInstance {
+  return { instanceId: `${type}-${suffix}`, type };
+}
+
+function firstMesh(root: Group): Mesh<BufferGeometry, Material | Material[]> {
+  let found: Mesh<BufferGeometry, Material | Material[]> | undefined;
+  root.traverse((object) => {
+    if (object instanceof Mesh && !found) found = object;
+  });
+  if (!found) throw new Error('Expected fixture mesh');
+  return found;
+}
+
+describe('PropModelLibrary preload', () => {
+  it('requests every manifest URL in parallel before any request resolves', async () => {
+    const requests = new Map<string, Deferred<Group>>();
+    const loader: ItemModelLoader = {
+      load: vi.fn((url: string) => {
+        const request = deferred<Group>();
+        requests.set(url, request);
+        return request.promise;
+      }),
+    };
+
+    const loading = PropModelLibrary.load(loader);
+
+    expect([...requests.keys()]).toEqual(ITEM_IDS.map((id) => ITEM_MODEL_SPECS[id].url));
+    for (const id of ITEM_IDS) requests.get(ITEM_MODEL_SPECS[id].url)?.resolve(modelRoot());
+    const library = await loading;
+    library.dispose();
+  });
+
+  it('normalizes every valid model to finite non-empty bounds within its triangle budget', async () => {
+    const loader: ItemModelLoader = { load: async () => modelRoot() };
+    const library = await PropModelLibrary.load(loader);
+
+    for (const id of ITEM_IDS) {
+      const created = library.create(instance(id));
+      const bounds = new Box3().setFromObject(created);
+      const size = bounds.getSize(created.scale.clone());
+      const mesh = firstMesh(created);
+      expect(bounds.isEmpty()).toBe(false);
+      expect([...bounds.min.toArray(), ...bounds.max.toArray()].every(Number.isFinite)).toBe(true);
+      expect(Math.max(...size.toArray())).toBeCloseTo(ITEM_MODEL_SPECS[id].targetLongestDimension);
+      expect(geometryTriangles(mesh.geometry)).toBeLessThanOrEqual(ITEM_MODEL_SPECS[id].maxTriangles);
+      expect(mesh.castShadow).toBe(true);
+      expect(mesh.receiveShadow).toBe(true);
+      mesh.geometry.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => material.dispose());
+    }
+
+    library.dispose();
+  });
+
+  it.each([
+    ['no meshes', () => new Group()],
+    ['missing position data', () => {
+      const root = new Group();
+      root.add(new Mesh(new BufferGeometry(), new MeshStandardMaterial()));
+      return root;
+    }],
+    ['empty position data', () => {
+      const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute([], 3));
+      const root = new Group();
+      root.add(new Mesh(geometry, new MeshStandardMaterial()));
+      return root;
+    }],
+    ['non-finite positions', () => {
+      const geometry = new BufferGeometry().setAttribute(
+        'position',
+        new Float32BufferAttribute([0, 0, 0, Number.NaN, 1, 0, 0, 1, 0], 3),
+      );
+      const root = new Group();
+      root.add(new Mesh(geometry, new MeshStandardMaterial()));
+      return root;
+    }],
+    ['non-triangle geometry', () => {
+      const geometry = new BufferGeometry().setAttribute(
+        'position',
+        new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3),
+      );
+      const root = new Group();
+      root.add(new Mesh(geometry, new MeshStandardMaterial()));
+      return root;
+    }],
+    ['zero-length bounds', () => {
+      const geometry = new BufferGeometry().setAttribute(
+        'position',
+        new Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0], 3),
+      );
+      const root = new Group();
+      root.add(new Mesh(geometry, new MeshStandardMaterial()));
+      return root;
+    }],
+    ['an item triangle-budget overflow', () => modelRoot(3_001)],
+  ])('rejects %s with the item ID and disposes its source root', async (_caseName, invalidRoot) => {
+    const badRoot = invalidRoot();
+    const mesh = badRoot.getObjectByProperty('isMesh', true) as Mesh | undefined;
+    const geometryDispose = mesh ? vi.spyOn(mesh.geometry, 'dispose') : undefined;
+    const materials = mesh
+      ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+      : [];
+    const materialDisposes = materials.map((material) => vi.spyOn(material, 'dispose'));
+    const loader: ItemModelLoader = {
+      load: async (url) => url === ITEM_MODEL_SPECS.flareGun.url ? badRoot : modelRoot(),
+    };
+
+    await expect(PropModelLibrary.load(loader)).rejects.toThrow(/flareGun/);
+    if (geometryDispose) expect(geometryDispose).toHaveBeenCalledTimes(1);
+    materialDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+
+  it('rejects an aggregate triangle-budget overflow after disposing every loaded root', async () => {
+    const roots = templates((id) => modelRoot(id === 'ductTape' ? 20_332 : 1_000));
+    const geometryDisposes = [...roots.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    expect(20_332 + 8_000).toBeGreaterThan(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
+    const loader: ItemModelLoader = {
+      load: async (url) => roots.get(ITEM_IDS.find((id) => ITEM_MODEL_SPECS[id].url === url)!)!,
+    };
+
+    await expect(PropModelLibrary.load(loader)).rejects.toThrow(/28,?000|aggregate|total/i);
+    geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports the first failing item in manifest order and disposes every fulfilled template', async () => {
+    const roots = templates();
+    const geometryDisposes = [...roots.entries()]
+      .filter(([id]) => id !== 'ductTape' && id !== 'waterJug')
+      .map(([, root]) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    const loader: ItemModelLoader = {
+      load: async (url) => {
+        const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
+        if (id === 'ductTape' || id === 'waterJug') throw new Error(`failed ${id}`);
+        return roots.get(id)!;
+      },
+    };
+
+    await expect(PropModelLibrary.load(loader)).rejects.toThrow(/ductTape/);
+    geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('PropModelLibrary instance ownership', () => {
+  it('creates independently owned roots, geometries, materials, and stable metadata', () => {
+    const originals = templates((_id, index) => modelRoot(12, [
+      new MeshStandardMaterial({ color: 0x112233 + index }),
+      new MeshStandardMaterial({ color: 0x445566 + index }),
+    ]));
+    const library = PropModelLibrary.fromTemplatesForTest(originals);
+    const first = library.create(instance('ductTape', 1));
+    const second = library.create(instance('ductTape', 2));
+    const templateMesh = firstMesh(originals.get('ductTape')!);
+    const firstOwnedMesh = firstMesh(first);
+    const secondOwnedMesh = firstMesh(second);
+
+    expect(first.name).toBe('prop:ductTape-1');
+    expect(first.userData).toMatchObject({ instanceId: 'ductTape-1', itemType: 'ductTape' });
+    expect(first).not.toBe(second);
+    expect(firstOwnedMesh.geometry).not.toBe(secondOwnedMesh.geometry);
+    expect(firstOwnedMesh.geometry).not.toBe(templateMesh.geometry);
+    expect(Array.isArray(firstOwnedMesh.material)).toBe(true);
+    const firstMaterials = firstOwnedMesh.material as Material[];
+    const secondMaterials = secondOwnedMesh.material as Material[];
+    const templateMaterials = templateMesh.material as Material[];
+    firstMaterials.forEach((material, index) => {
+      expect(material).not.toBe(secondMaterials[index]);
+      expect(material).not.toBe(templateMaterials[index]);
+    });
+
+    (firstMaterials[0] as MeshStandardMaterial).color.set(0xff0000);
+    expect((secondMaterials[0] as MeshStandardMaterial).color.getHex()).not.toBe(0xff0000);
+    expect((templateMaterials[0] as MeshStandardMaterial).color.getHex()).not.toBe(0xff0000);
+
+    firstOwnedMesh.geometry.dispose();
+    secondOwnedMesh.geometry.dispose();
+    firstMaterials.forEach((material) => material.dispose());
+    secondMaterials.forEach((material) => material.dispose());
+    library.dispose();
+  });
+
+  it('disposes each owned template resource exactly once across repeated disposal', () => {
+    const originals = templates();
+    const geometryDisposes = [...originals.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    const materialDisposes = [...originals.values()].map((root) => {
+      const material = firstMesh(root).material;
+      return vi.spyOn(Array.isArray(material) ? material[0]! : material, 'dispose');
+    });
+    const library = PropModelLibrary.fromTemplatesForTest(originals);
+
+    library.dispose();
+    library.dispose();
+
+    geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+    materialDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+});
