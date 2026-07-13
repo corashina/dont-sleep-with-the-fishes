@@ -60,7 +60,7 @@ export class ScavengePhase implements GamePhase {
     this.ui = new GameUI(context.mount);
     const instances = createItemInstances();
     this.session = new ScavengeSession(instances);
-    this.world = new World(this.scene, instances);
+    this.world = new World(this.scene, context.propModels, instances);
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
       instance,

@@ -2,8 +2,9 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase } from '../src/app/GamePhase';
-import { Game } from '../src/Game';
+import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
+import { createTestPropModels } from './helpers/propModels';
 
 function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   return {
@@ -16,6 +17,12 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   };
 }
 
+function testOptions(
+  overrides: Omit<GameTestOptions, 'propModels'> = {},
+): GameTestOptions {
+  return { propModels: createTestPropModels(), ...overrides };
+}
+
 describe('Game director', () => {
   it('starts the shared clock and schedules animation only once', () => {
     const startClock = vi.fn();
@@ -23,9 +30,9 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge: () => phase(),
       createSurvival: () => phase(),
-    }, {
+    }, testOptions({
       clock: { start: startClock, getDelta: () => 0.016 },
-    });
+    }));
 
     game.start();
     game.start();
@@ -41,7 +48,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge: () => active,
       createSurvival: () => phase(),
-    });
+    }, testOptions());
     Object.assign(game, { clock: { start: vi.fn(), getDelta: () => 1 } });
 
     (game as unknown as { handleAnimationFrame: () => void }).handleAnimationFrame();
@@ -71,7 +78,7 @@ describe('Game director', () => {
         receivedResult = result;
         return survival;
       },
-    });
+    }, testOptions());
 
     game.start();
     complete(sourceResult);
@@ -104,7 +111,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge,
       createSurvival: () => survival,
-    });
+    }, testOptions());
     game.start();
     complete({ savedItems: [], elapsedSeconds: 4 });
 
@@ -131,7 +138,7 @@ describe('Game director', () => {
         onRestart();
         return staleSurvival;
       },
-    });
+    }, testOptions());
     game.start();
 
     complete({ savedItems: [], elapsedSeconds: 5 });
@@ -168,7 +175,7 @@ describe('Game director', () => {
         restartSurvival = onRestart;
         return survival;
       },
-    });
+    }, testOptions());
     game.start();
     complete({ savedItems: [], elapsedSeconds: 6 });
 
@@ -207,9 +214,9 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge,
       createSurvival,
-    }, {
+    }, testOptions({
       createSeed,
-    });
+    }));
     game.start();
     completions[0]!({ savedItems: [], elapsedSeconds: 3 });
     calls.length = 0;
@@ -225,13 +232,21 @@ describe('Game director', () => {
   });
 
   it('disposes shared animation, renderer, and canvas resources exactly once', () => {
-    const active = phase();
+    const calls: string[] = [];
+    const active = phase({ dispose: vi.fn(() => calls.push('dispose-phase')) });
+    const propModels = createTestPropModels();
+    const disposeModels = propModels.dispose.bind(propModels);
+    const disposePropModels = vi.spyOn(propModels, 'dispose')
+      .mockImplementation(() => {
+        calls.push('dispose-models');
+        disposeModels();
+      });
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame');
     const game = Game.forTest({
       createScavenge: () => active,
       createSurvival: () => phase(),
-    });
+    }, { propModels });
     const renderer = (game as unknown as {
       renderer: { dispose: () => void; domElement: HTMLCanvasElement };
     }).renderer;
@@ -245,6 +260,8 @@ describe('Game director', () => {
 
     expect(cancelAnimationFrame).toHaveBeenCalledOnce();
     expect(active.dispose).toHaveBeenCalledOnce();
+    expect(disposePropModels).toHaveBeenCalledOnce();
+    expect(calls).toEqual(['dispose-phase', 'dispose-models']);
     expect(disposeRenderer).toHaveBeenCalledOnce();
     expect(renderer.domElement.parentElement).toBeNull();
     expect(removeEventListener).toHaveBeenCalledTimes(1);

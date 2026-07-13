@@ -2,20 +2,66 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
-import type { PhaseContext } from '../src/app/GamePhase';
+import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
+import { Game } from '../src/Game';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 import { ITEM_DEFINITIONS, type ItemInstance } from '../src/game/ItemState';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import { World } from '../src/world/World';
+import { createTestPropModels } from './helpers/propModels';
+
+function gamePhase(): GamePhase {
+  return {
+    start: vi.fn(),
+    update: vi.fn(),
+    resize: vi.fn(),
+    render: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
 
 describe('ScavengePhase lifecycle integration', () => {
+  it('shares one prop model library across phase completion and restart', () => {
+    const propModels = createTestPropModels();
+    const disposePropModels = vi.spyOn(propModels, 'dispose');
+    const scavengeModels: unknown[] = [];
+    const survivalModels: unknown[] = [];
+    let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
+    const game = Game.forTest({
+      createScavenge: (context, onComplete) => {
+        scavengeModels.push(context.propModels);
+        complete = onComplete;
+        return gamePhase();
+      },
+      createSurvival: (context) => {
+        survivalModels.push(context.propModels);
+        return gamePhase();
+      },
+    }, { propModels });
+
+    game.start();
+    complete({ savedItems: [], elapsedSeconds: 3 });
+    game.restart();
+
+    expect(scavengeModels).toHaveLength(2);
+    expect(scavengeModels[0]).toBe(propModels);
+    expect(scavengeModels[1]).toBe(propModels);
+    expect(survivalModels).toHaveLength(1);
+    expect(survivalModels[0]).toBe(propModels);
+    expect(disposePropModels).not.toHaveBeenCalled();
+    game.dispose();
+    expect(disposePropModels).toHaveBeenCalledOnce();
+  });
+
   it('binds all real world instances to interaction and excludes an unavailable prop', () => {
+    const propModels = createTestPropModels();
     const context = {
       mount: document.createElement('main'),
       camera: new PerspectiveCamera(70, 1, 0.1, 100),
       renderer: { domElement: document.createElement('canvas') },
       reducedMotion: { matches: false },
+      propModels,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
     const internals = phase as unknown as {
@@ -53,6 +99,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();
+    propModels.dispose();
   });
 
   it('exits an owned lock and tears down only phase-owned resources once', () => {
