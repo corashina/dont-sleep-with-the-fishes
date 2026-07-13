@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Game } from '../src/Game';
+import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
 
@@ -126,6 +126,49 @@ describe('launchGame', () => {
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
     expect(mount.textContent).toContain('renderer failed');
+  });
+
+  it('disposes unowned models after Game rolls back a failed initial resize', async () => {
+    const mount = connectedMount();
+    const canvas = document.createElement('canvas');
+    const disposeRenderer = vi.fn();
+    const disposePhase = vi.fn();
+    const disposeModels = vi.fn();
+    const models = { dispose: disposeModels } as unknown as PropModelLibrary;
+    const renderer = {
+      domElement: canvas,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(() => { throw new Error('initial resize failed'); }),
+      render: vi.fn(),
+      dispose: disposeRenderer,
+    };
+    const createGame = (gameMount: HTMLElement, propModels: PropModelLibrary) => Game.forTest({
+      createScavenge: () => ({
+        start: vi.fn(),
+        update: vi.fn(),
+        resize: vi.fn(),
+        render: vi.fn(),
+        dispose: disposePhase,
+      }),
+      createSurvival: () => { throw new Error('unexpected survival construction'); },
+    }, {
+      propModels,
+      mount: gameMount,
+      renderer,
+    } as unknown as GameTestOptions);
+
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { createGame },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('initial resize failed');
+    expect(disposePhase).toHaveBeenCalledOnce();
+    expect(disposeRenderer).toHaveBeenCalledOnce();
+    expect(disposeModels).toHaveBeenCalledOnce();
+    expect(canvas.parentElement).toBeNull();
   });
 
   it('renders WebGL failure UI when construction throws an item-model error', async () => {

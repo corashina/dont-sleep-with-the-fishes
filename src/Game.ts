@@ -46,6 +46,8 @@ export interface GameTestOptions {
   propModels: PropModelLibrary;
   clock?: GameClock;
   createSeed?: () => number;
+  mount?: HTMLElement;
+  renderer?: WebGLRenderer;
 }
 
 function createRandomSeed(): number {
@@ -83,34 +85,48 @@ export class Game {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    renderer.outputColorSpace = SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
-    mount.prepend(renderer.domElement);
-
-    this.initialize(
-      mount,
-      renderer,
-      new PerspectiveCamera(65, 1, 0.08, 220),
-      new Clock(),
-      window.matchMedia('(prefers-reduced-motion: reduce)'),
-      propModels,
-      PRODUCTION_FACTORIES,
-      createRandomSeed,
-    );
+    let initializationStarted = false;
+    try {
+      renderer.outputColorSpace = SRGBColorSpace;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = PCFSoftShadowMap;
+      mount.prepend(renderer.domElement);
+      const camera = new PerspectiveCamera(65, 1, 0.08, 220);
+      const clock = new Clock();
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      initializationStarted = true;
+      this.initialize(
+        mount,
+        renderer,
+        camera,
+        clock,
+        reducedMotion,
+        propModels,
+        PRODUCTION_FACTORIES,
+        createRandomSeed,
+      );
+    } catch (error) {
+      if (!initializationStarted) {
+        try {
+          renderer.dispose();
+        } finally {
+          renderer.domElement.remove();
+        }
+      }
+      throw error;
+    }
   }
 
   static forTest(factories: GameFactories, options: GameTestOptions): Game {
-    const mount = document.createElement('main');
-    const canvas = document.createElement('canvas');
-    mount.prepend(canvas);
-    const renderer = {
-      domElement: canvas,
+    const mount = options.mount ?? document.createElement('main');
+    const renderer = options.renderer ?? {
+      domElement: document.createElement('canvas'),
       setPixelRatio: () => undefined,
       setSize: () => undefined,
       render: () => undefined,
       dispose: () => undefined,
     } as unknown as WebGLRenderer;
+    mount.prepend(renderer.domElement);
     const clock: GameClock = options.clock ?? {
       start: () => undefined,
       getDelta: () => 0.016,
@@ -181,12 +197,42 @@ export class Game {
     this.disposed = false;
     this.elapsed = 0;
     this.phaseGeneration = 0;
-    this.seed = this.createSeed();
-    this.onResize = () => this.handleResize();
-    this.animate = () => this.handleAnimationFrame();
-    window.addEventListener('resize', this.onResize);
-    this.activateScavenge(false);
-    this.onResize();
+    let resizeListenerRegistered = false;
+    try {
+      this.seed = this.createSeed();
+      this.onResize = () => this.handleResize();
+      this.animate = () => this.handleAnimationFrame();
+      window.addEventListener('resize', this.onResize);
+      resizeListenerRegistered = true;
+      this.activateScavenge(false);
+      this.onResize();
+    } catch (error) {
+      try {
+        this.rollbackConstruction(resizeListenerRegistered);
+      } finally {
+        throw error;
+      }
+    }
+  }
+
+  private rollbackConstruction(resizeListenerRegistered: boolean): void {
+    this.disposed = true;
+    const activePhase = this.detachActivePhase();
+    try {
+      if (resizeListenerRegistered) {
+        window.removeEventListener('resize', this.onResize);
+      }
+    } finally {
+      try {
+        activePhase?.dispose();
+      } finally {
+        try {
+          this.renderer.dispose();
+        } finally {
+          this.renderer.domElement.remove();
+        }
+      }
+    }
   }
 
   private activateScavenge(start: boolean): void {

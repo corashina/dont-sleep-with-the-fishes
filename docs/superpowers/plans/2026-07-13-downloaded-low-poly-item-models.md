@@ -37,7 +37,7 @@
 | `fishingRod` | `lDlWQjn9Zg` | `c15761f7-4aef-4bf4-9565-50a68a981f34` | Fishing Rod | Quaternius | 910 | Copy unchanged |
 | `baitTin` | `IuoYedcdXQ` | `f6b52ca9-61b1-42d5-a42f-d8748a41eb45` | Can Red | Quaternius | 332 | Copy unchanged |
 | `medicalKit` | `Hp80p6148W` | `41249676-0965-40df-8dd7-eee79dd9e6cf` | First Aid Kit | Quaternius | 268 | Copy unchanged |
-| `waterJug` | `KpxDpidn1Z` | `3ebef9a3-c2df-49ee-abe1-df38b5777bcd` | Water Bottle | Quaternius | 260 | Copy unchanged |
+| `waterJug` | `KpxDpidn1Z` | `3ebef9a3-c2df-49ee-abe1-df38b5777bcd` | Water Bottle | Quaternius | 288 audited GLB (platform listing: 260) | Copy unchanged |
 | `cannedFood` | `YnowJvWqxE` | `e16e13cf-fbc4-48c8-9927-ae34920a498e` | Can | Quaternius | 428 | Copy unchanged |
 | `flashlight` | `WGsvr4KOZd` | `035c4897-22f3-4e9c-b29f-ebafe2b566da` | Torch | Quaternius | 610 | Copy unchanged |
 | `scubaSet` | `7igrHLjaQlW` | `efda7497-db5e-47e9-b317-8e8baeb1c616` | Scuba equipment | Steren Giannini | 4,696 | Weld, then simplify with ratio `0.55`, error `0.005` to 2,786 triangles |

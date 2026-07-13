@@ -7,11 +7,15 @@ function Get-GuardedSwapPath {
   $fullModelsRoot = [System.IO.Path]::GetFullPath($ModelsRoot).TrimEnd(
     [System.IO.Path]::DirectorySeparatorChar,
     [System.IO.Path]::AltDirectorySeparatorChar
-  ) + [System.IO.Path]::DirectorySeparatorChar
+  )
   $fullPath = [System.IO.Path]::GetFullPath($Path)
+  $fullParent = [System.IO.Path]::GetFullPath((Split-Path -Parent $fullPath)).TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
   $leaf = Split-Path -Leaf $fullPath
   if (
-    -not $fullPath.StartsWith($fullModelsRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+    -not $fullParent.Equals($fullModelsRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
     -not $leaf.StartsWith($Prefix, [System.StringComparison]::Ordinal)
   ) {
     throw "Refusing unsafe model swap path: $fullPath"

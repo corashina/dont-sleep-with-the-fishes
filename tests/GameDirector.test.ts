@@ -270,4 +270,43 @@ describe('Game director', () => {
     cancelAnimationFrame.mockRestore();
     removeEventListener.mockRestore();
   });
+
+  it('rolls back acquired construction resources without disposing unowned models', () => {
+    const mount = document.createElement('main');
+    const canvas = document.createElement('canvas');
+    const resizeError = new Error('initial resize failed');
+    const renderer = {
+      domElement: canvas,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(() => { throw resizeError; }),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const active = phase();
+    const propModels = createTestPropModels();
+    const disposeModels = vi.spyOn(propModels, 'dispose');
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+    const removeEventListener = vi.spyOn(window, 'removeEventListener');
+
+    expect(() => Game.forTest({
+      createScavenge: () => active,
+      createSurvival: () => phase(),
+    }, {
+      propModels,
+      mount,
+      renderer,
+    } as unknown as GameTestOptions)).toThrow(resizeError);
+
+    expect(addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(addEventListener).toHaveBeenCalledOnce();
+    expect(removeEventListener).toHaveBeenCalledOnce();
+    expect(active.dispose).toHaveBeenCalledOnce();
+    expect(renderer.dispose).toHaveBeenCalledOnce();
+    expect(canvas.parentElement).toBeNull();
+    expect(disposeModels).not.toHaveBeenCalled();
+
+    addEventListener.mockRestore();
+    removeEventListener.mockRestore();
+  });
 });

@@ -84,4 +84,23 @@ describe('item model directory publication', () => {
     expect(result.stderr).toContain('Refusing unsafe model swap path');
     expect(await readFile(join(unsafePath, 'sentinel.txt'), 'utf8')).toBe('keep');
   });
+
+  it('refuses to recursively clean a prefixed nested descendant of the models root', async () => {
+    const nestedPath = join(modelsRoot, 'nested', '.items-stage-child');
+    await mkdir(nestedPath, { recursive: true });
+    await writeFile(join(nestedPath, 'sentinel.txt'), 'keep');
+    const helperPath = resolve('scripts', 'item-model-publication.ps1');
+    const command = [
+      `. ${quotePowerShell(helperPath)}`,
+      `Remove-GuardedSwapDirectory -ModelsRoot ${quotePowerShell(modelsRoot)} -Path ${quotePowerShell(nestedPath)} -Prefix '.items-stage-'`,
+    ].join('; ');
+
+    const result = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing unsafe model swap path');
+    expect(await readFile(join(nestedPath, 'sentinel.txt'), 'utf8')).toBe('keep');
+  });
 });
