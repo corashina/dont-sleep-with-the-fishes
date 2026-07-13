@@ -53,7 +53,7 @@ In the lifeboat, each day gives four energy for daytime actions:
 - **Rest** consumes one water charge, restores two energy, and is available once per day.
 - **End day** advances into the day and night event sequence.
 
-Health reaches zero when injury or deprivation becomes fatal. Hunger rises overnight and influences recovery. Energy limits daytime work. Hull at zero sinks the boat. Food, bait, repair material, and rescue progress are separate stores shown beside the condition meters.
+Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
 Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable item resolves to the event's fallback result, and **Endure** uses no item. Consumable charges are finite and exhausted supplies remain visible.
 
