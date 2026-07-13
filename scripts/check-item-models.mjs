@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
@@ -51,13 +51,57 @@ function verifyLedgerRow(ledger, itemId) {
   }
 }
 
+function parseArguments(args) {
+  let assetsOnly = false;
+  let modelsDir = resolve('src', 'assets', 'models', 'items');
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === '--assets-only') {
+      assetsOnly = true;
+    } else if (argument === '--models-dir') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) throw new Error('--models-dir requires a path');
+      modelsDir = resolve(value);
+      index += 1;
+    } else {
+      throw new Error(`unknown argument: ${argument}`);
+    }
+  }
+  return { assetsOnly, modelsDir };
+}
+
 async function main() {
-  const assetsOnly = process.argv.slice(2).includes('--assets-only');
+  let options;
+  try {
+    options = parseArguments(process.argv.slice(2));
+  } catch (error) {
+    console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { assetsOnly, modelsDir } = options;
   const errors = [];
   let total = 0;
 
+  try {
+    const expectedEntries = new Set(ITEM_IDS.map((itemId) => `${itemId}.glb`));
+    const entries = await readdir(modelsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !expectedEntries.has(entry.name)) {
+        errors.push(`unexpected model entry: ${entry.name}`);
+      }
+    }
+    const actualEntries = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
+    for (const expectedEntry of expectedEntries) {
+      if (!actualEntries.has(expectedEntry)) errors.push(`missing model entry: ${expectedEntry}`);
+    }
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+
   for (const itemId of ITEM_IDS) {
-    const filePath = resolve('src', 'assets', 'models', 'items', `${itemId}.glb`);
+    const filePath = resolve(modelsDir, `${itemId}.glb`);
     try {
       await access(filePath);
       const triangles = await countTriangles(filePath);

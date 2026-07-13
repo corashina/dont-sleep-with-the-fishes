@@ -14,6 +14,7 @@
 
 - Create `scripts/fetch-item-models.ps1`: reproducibly download the nine approved resource IDs, copy Tape unchanged under its explicit accuracy exception, and weld/simplify only Scuba equipment.
 - Create `scripts/check-item-models.mjs`: parse committed GLBs, print exact triangle counts, and enforce per-file/aggregate budgets.
+- Create `scripts/item-model-publication.ps1`: guard, publish, roll back, and clean same-filesystem item-model directory swaps.
 - Modify `package.json` and `bun.lock`: add glTF Transform tooling and `models:fetch` / `models:check` scripts.
 - Create `src/assets/models/items/*.glb`: nine locally served production assets with stable item-ID filenames.
 - Create `THIRD_PARTY_ASSETS.md`: checked-in provenance, licenses, resource IDs, processing, and measured counts.
@@ -52,6 +53,7 @@ Each direct download uses `https://static.poly.pizza/`, the corresponding resour
 - Modify: `bun.lock`
 - Create: `scripts/fetch-item-models.ps1`
 - Create: `scripts/check-item-models.mjs`
+- Create: `scripts/item-model-publication.ps1`
 - Create: `src/assets/models/items/flareGun.glb`
 - Create: `src/assets/models/items/ductTape.glb`
 - Create: `src/assets/models/items/fishingRod.glb`
@@ -62,6 +64,8 @@ Each direct download uses `https://static.poly.pizza/`, the corresponding resour
 - Create: `src/assets/models/items/flashlight.glb`
 - Create: `src/assets/models/items/scubaSet.glb`
 - Create: `THIRD_PARTY_ASSETS.md`
+- Create: `tests/itemModelAudit.test.ts`
+- Create: `tests/itemModelPublication.test.ts`
 
 **Interfaces:**
 - `bun run models:fetch` produces exactly the nine stable filenames from the approved download matrix.
@@ -131,7 +135,9 @@ The executable portion must:
 4. reject a total over `LIBRARY_LIMIT`;
 5. read `THIRD_PARTY_ASSETS.md` and require the item ID, permanent Poly Pizza URL, resource ID, creator, and license URL for every row;
 6. accept `--assets-only` to skip only the ledger check while retaining every binary and budget check;
-7. print one `itemId: N triangles` line and a final `total: N / 28000 triangles` line.
+7. accept `--models-dir <path>` for pre-publication auditing while defaulting to `src/assets/models/items/`;
+8. reject any directory entry outside the exact nine approved `.glb` filenames;
+9. print one `itemId: N triangles` line and a final `total: N / 28000 triangles` line.
 
 Run: `bun run models:check`
 
@@ -165,7 +171,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Scuba equipment weld failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Scuba equipment simplification failed' }
 ```
 
-Finish by invoking `node scripts/check-item-models.mjs --assets-only`; never accept a partially downloaded or over-budget set.
+Build the exact nine-file output in a guarded sibling staging directory under `src/assets/models/`, then invoke `node scripts/check-item-models.mjs --assets-only --models-dir <stage>`. Publish only an audited exact set by renaming the existing `items/` directory to a guarded backup and renaming the staging directory into place on the same filesystem. Restore the backup if either rename fails, and remove the backup after a successful swap. Never accept or leave a partially downloaded, over-budget, or extra-file set.
 
 - [ ] **Step 5: Download and measure the approved files**
 

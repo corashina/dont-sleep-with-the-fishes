@@ -13,10 +13,16 @@ $models = @(
 )
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$outputRoot = Join-Path $repositoryRoot 'src\assets\models\items'
+$modelsRoot = Join-Path $repositoryRoot 'src\assets\models'
+$outputRoot = Join-Path $modelsRoot 'items'
+$swapId = [guid]::NewGuid().ToString('N')
+$stagedRoot = Join-Path $modelsRoot ".items-stage-$swapId"
+$backupRoot = Join-Path $modelsRoot ".items-backup-$swapId"
 $osTempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $tempRoot = Join-Path $osTempRoot "dont-sleep-item-models-$([guid]::NewGuid().ToString('N'))"
 $sources = @{}
+
+. (Join-Path $PSScriptRoot 'item-model-publication.ps1')
 
 if (-not (Get-Command bunx.cmd -ErrorAction SilentlyContinue)) {
   $bunx = Get-Command bunx.exe -ErrorAction Stop
@@ -24,6 +30,10 @@ if (-not (Get-Command bunx.cmd -ErrorAction SilentlyContinue)) {
 }
 
 try {
+  New-Item -ItemType Directory -Force -Path $modelsRoot | Out-Null
+  $stagedRoot = Get-GuardedSwapPath -ModelsRoot $modelsRoot -Path $stagedRoot -Prefix '.items-stage-'
+  $backupRoot = Get-GuardedSwapPath -ModelsRoot $modelsRoot -Path $backupRoot -Prefix '.items-backup-'
+  New-Item -ItemType Directory -Path $stagedRoot | Out-Null
   New-Item -ItemType Directory -Path $tempRoot | Out-Null
   $tempRoot = (Resolve-Path -LiteralPath $tempRoot).Path
 
@@ -49,9 +59,6 @@ try {
     $sources[$model.ItemId] = $source
   }
 
-  $stagedRoot = Join-Path $tempRoot 'output'
-  New-Item -ItemType Directory -Path $stagedRoot | Out-Null
-
   foreach ($model in $models | Where-Object Processing -eq 'copy') {
     Copy-Item -LiteralPath $sources[$model.ItemId] -Destination (Join-Path $stagedRoot "$($model.ItemId).glb")
   }
@@ -65,28 +72,25 @@ try {
   & bunx.cmd gltf-transform simplify $scubaWelded $scubaOutput --ratio 0.55 --error 0.005
   if ($LASTEXITCODE -ne 0) { throw 'Scuba equipment simplification failed' }
 
-  $stagedFiles = @(Get-ChildItem -LiteralPath $stagedRoot -File -Filter '*.glb')
-  if ($stagedFiles.Count -ne $models.Count) {
-    throw "Expected $($models.Count) staged GLBs, found $($stagedFiles.Count)"
-  }
-
-  New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-  foreach ($model in $models) {
-    $stagedFile = Join-Path $stagedRoot "$($model.ItemId).glb"
-    if (-not (Test-Path -LiteralPath $stagedFile -PathType Leaf)) {
-      throw "Missing staged model for $($model.ItemId)"
-    }
-    Copy-Item -Force -LiteralPath $stagedFile -Destination (Join-Path $outputRoot "$($model.ItemId).glb")
+  $expectedFiles = @($models | ForEach-Object { "$($_.ItemId).glb" } | Sort-Object)
+  $stagedEntries = @(Get-ChildItem -Force -LiteralPath $stagedRoot)
+  $stagedFiles = @($stagedEntries | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
+  $entryDifference = @(Compare-Object -ReferenceObject $expectedFiles -DifferenceObject $stagedFiles)
+  if ($stagedEntries.Count -ne $models.Count -or $entryDifference.Count -ne 0) {
+    throw "Staged item model directory does not contain exactly the nine approved GLBs"
   }
 
   Push-Location $repositoryRoot
   try {
-    & node scripts/check-item-models.mjs --assets-only
-    if ($LASTEXITCODE -ne 0) { throw 'Downloaded item model audit failed' }
+    & node scripts/check-item-models.mjs --assets-only --models-dir $stagedRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Staged item model audit failed' }
   } finally {
     Pop-Location
   }
+
+  Publish-ItemModelDirectory -ModelsRoot $modelsRoot -OutputRoot $outputRoot -StagedRoot $stagedRoot -BackupRoot $backupRoot
 } finally {
+  Remove-GuardedSwapDirectory -ModelsRoot $modelsRoot -Path $stagedRoot -Prefix '.items-stage-'
   if (Test-Path -LiteralPath $tempRoot) {
     $resolvedTempRoot = (Resolve-Path -LiteralPath $tempRoot).Path
     $tempPrefix = $osTempRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
