@@ -13,6 +13,11 @@ import {
 import { CarryController } from '../src/interaction/CarryController';
 import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
 import type { ItemInstance } from '../src/game/ItemState';
+import {
+  createTestPropModels,
+  TEST_PROP_MODEL_TRANSFORM,
+  testPropModel,
+} from './helpers/propModels';
 
 const item = (instanceId: ItemInstance['instanceId'], type: ItemInstance['type']): ItemInstance => ({
   instanceId,
@@ -393,14 +398,29 @@ describe('CarryController', () => {
     const camera = new PerspectiveCamera();
     camera.position.copy(carriedStart).sub(new Vector3(0.56, -0.48, -1.12));
     scene.add(camera);
-    const item = new Group();
-    item.position.set(2, 2.35, 3);
-    ship.add(item);
+    const propModels = createTestPropModels();
+    const instance = item('cannedFood-1', 'cannedFood');
+    const prop = propModels.create(instance);
+    prop.position.set(2, 2.35, 3);
+    ship.add(prop);
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
+    const normalizedModel = testPropModel(prop);
+    const expectNormalizationPreserved = (): void => {
+      expect(normalizedModel.position.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.position);
+      normalizedModel.rotation.toArray().slice(0, 3).forEach((value, index) => {
+        expect(value).toBeCloseTo(TEST_PROP_MODEL_TRANSFORM.rotation[index]!);
+      });
+      expect(normalizedModel.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
+    };
 
-    carry.pickUp({ instanceId: 'cannedFood-1', type: 'cannedFood' }, item);
+    carry.pickUp(instance, prop);
+    expect(prop.parent).toBe(camera);
+    expect(prop.scale.toArray()).toEqual([0.72, 0.72, 0.72]);
+    expectNormalizationPreserved();
     carry.drop();
+    expect(prop.parent).toBe(scene);
+    expectNormalizationPreserved();
     carry.update(
       1,
       new Box3(new Vector3(20, 20, 20), new Vector3(21, 21, 21)),
@@ -413,9 +433,17 @@ describe('CarryController', () => {
     );
 
     expect(outcomes).toEqual(['landed:cannedFood-1']);
-    expect(item.parent).toBe(ship);
-    expect(item.position.y).toBeCloseTo(2.35);
-    expect(item.scale.toArray()).toEqual([1, 1, 1]);
+    expect(prop.parent).toBe(ship);
+    expect(prop.position.y).toBeCloseTo(2.35);
+    expect(prop.scale.toArray()).toEqual([1, 1, 1]);
+    expectNormalizationPreserved();
+    prop.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+    });
+    propModels.dispose();
   });
 
   it('reset restores carried and flying items to their original placement', () => {

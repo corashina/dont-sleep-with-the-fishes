@@ -7,6 +7,8 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
@@ -196,20 +198,46 @@ describe('PropModelLibrary preload', () => {
   });
 
   it('normalizes every valid model to finite non-empty bounds within its triangle budget', async () => {
-    const loader: ItemModelLoader = { load: async () => modelRoot() };
+    const authoredPosition = [0.17, -0.08, 0.29] as const;
+    const authoredRotation = [0.11, -0.22, 0.33] as const;
+    const authoredScale = [0.8, 1.1, 0.9] as const;
+    const loader: ItemModelLoader = {
+      load: async () => {
+        const root = modelRoot();
+        const mesh = firstMesh(root);
+        mesh.position.set(...authoredPosition);
+        mesh.rotation.set(...authoredRotation);
+        mesh.scale.set(...authoredScale);
+        return root;
+      },
+    };
     const library = await PropModelLibrary.load(loader);
 
     for (const id of ITEM_IDS) {
       const created = library.create(instance(id));
       const bounds = new Box3().setFromObject(created);
-      const size = bounds.getSize(created.scale.clone());
+      const size = bounds.getSize(new Vector3());
+      const center = bounds.getCenter(new Vector3());
+      const normalizedModel = created.children[0]!;
       const mesh = firstMesh(created);
+      expect(created.position.toArray()).toEqual([0, 0, 0]);
+      expect(created.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+      expect(created.scale.toArray()).toEqual([1, 1, 1]);
+      expect(normalizedModel.scale.toArray()).not.toEqual([1, 1, 1]);
       expect(bounds.isEmpty()).toBe(false);
       expect([...bounds.min.toArray(), ...bounds.max.toArray()].every(Number.isFinite)).toBe(true);
       expect(Math.max(...size.toArray())).toBeCloseTo(ITEM_MODEL_SPECS[id].targetLongestDimension);
+      center.toArray().forEach((value, index) => {
+        expect(value).toBeCloseTo(ITEM_MODEL_SPECS[id].offset[index]!, 6);
+      });
       expect(geometryTriangles(mesh.geometry)).toBeLessThanOrEqual(ITEM_MODEL_SPECS[id].maxTriangles);
       expect(mesh.castShadow).toBe(true);
       expect(mesh.receiveShadow).toBe(true);
+      expect(mesh.position.toArray()).toEqual(authoredPosition);
+      mesh.rotation.toArray().slice(0, 3).forEach((value, index) => {
+        expect(value).toBeCloseTo(authoredRotation[index]!);
+      });
+      expect(mesh.scale.toArray()).toEqual(authoredScale);
       mesh.geometry.dispose();
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       materials.forEach((material) => material.dispose());
@@ -321,6 +349,9 @@ describe('PropModelLibrary instance ownership', () => {
 
     expect(first.name).toBe('prop:ductTape-1');
     expect(first.userData).toMatchObject({ instanceId: 'ductTape-1', itemType: 'ductTape' });
+    expect(first.position.toArray()).toEqual([0, 0, 0]);
+    expect(first.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+    expect(first.scale.toArray()).toEqual([1, 1, 1]);
     expect(first).not.toBe(second);
     expect(firstOwnedMesh.geometry).not.toBe(secondOwnedMesh.geometry);
     expect(firstOwnedMesh.geometry).not.toBe(templateMesh.geometry);
