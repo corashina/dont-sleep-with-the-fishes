@@ -51,6 +51,9 @@ function instanceOrdinal(instance: ItemInstance): number {
   const suffix = instance.instanceId.startsWith(prefix)
     ? instance.instanceId.slice(prefix.length)
     : '';
+  if (!/^[1-9]\d*$/.test(suffix)) {
+    throw new Error(`No survival boat slot for ${instance.instanceId}`);
+  }
   const oneBased = Number(suffix);
   const ordinal = oneBased - 1;
   if (
