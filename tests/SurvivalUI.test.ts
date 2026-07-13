@@ -246,7 +246,7 @@ describe('SurvivalUI', () => {
     }
   });
 
-  it('shows transferred stores and shared logical item descriptions', () => {
+  it('shows transferred item states and shared logical item descriptions', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const state = snapshot({
@@ -260,8 +260,6 @@ describe('SurvivalUI', () => {
       { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
       { id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
-    expect(mount.querySelector('[data-store="food"]')?.textContent).toBe('2');
-    expect(mount.querySelector('[data-store="bait"]')?.textContent).toBe('3');
     expect(mount.querySelector('[data-item="baitTin"]')?.textContent).toMatch(/bait|fishing/i);
     expect(mount.querySelector('[data-item="fishingRod"]')?.textContent).toMatch(/food|fish/i);
     ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
@@ -367,7 +365,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-weather]')?.textContent).toContain('CALM');
     expect(mount.querySelector('[data-phase]')?.textContent).toContain('DAYLIGHT');
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
-    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('20');
+    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('4');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
     expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
@@ -665,13 +663,16 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({ health: 21, hunger: 20, energy: 4, hull: 21 }), () => null);
 
     const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
-    const hunger = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
+    const food = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
     const energy = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
     const hull = mount.querySelector<HTMLElement>('[data-meter="hull"]')!;
 
-    expect(hunger.classList).not.toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBeNull();
-    expect(hunger.getAttribute('aria-valuemax')).toBe('100');
+    expect(food.getAttribute('aria-label')).toBe('FOOD');
+    expect(food.getAttribute('aria-valuenow')).toBe('80');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('80%');
+    expect(food.querySelector('.survival-meter__label')?.textContent).toContain('FOOD');
+    expect(food.classList).not.toContain('is-danger');
+    expect(food.getAttribute('aria-valuetext')).toBeNull();
     expect(energy.getAttribute('aria-valuemax')).toBe('4');
     expect(energy.style.getPropertyValue('--meter-value')).toBe('100%');
     expect(energy.querySelector('.survival-meter__fill')?.tagName).toBe('DIV');
@@ -682,9 +683,11 @@ describe('SurvivalUI', () => {
     expect(health.classList).toContain('is-danger');
     expect(health.getAttribute('aria-valuetext')).toBe('20, low');
     expect(health.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
-    expect(hunger.classList).toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBe('70, high');
-    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
+    expect(food.getAttribute('aria-valuenow')).toBe('30');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('30%');
+    expect(food.classList).toContain('is-danger');
+    expect(food.getAttribute('aria-valuetext')).toBe('30, low');
+    expect(food.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
     expect(energy.classList).toContain('is-danger');
     expect(energy.getAttribute('aria-valuetext')).toBe('1, low');
     expect(energy.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
@@ -694,9 +697,9 @@ describe('SurvivalUI', () => {
 
     ui.render(snapshot({ hunger: 90 }), () => null);
 
-    expect(hunger.classList).toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBe('90, high');
-    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
+    expect(food.getAttribute('aria-valuenow')).toBe('10');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('10%');
+    expect(food.classList).toContain('is-danger');
   });
 
   it('uses number shortcuts only when no overlay is open', () => {
@@ -903,7 +906,7 @@ describe('SurvivalUI', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
-  it('renders illustrated conditions, journal status, tallies, and cinematic overlays', () => {
+  it('renders illustrated conditions and journal status without persistent tallies', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
@@ -912,7 +915,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')).not.toBeNull();
     expect(mount.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')).not.toBeNull();
     expect(mount.querySelector('.journal-marker [data-ui-artwork="journal"]')).not.toBeNull();
-    expect(mount.querySelector('.survival-stores')?.classList).toContain('survival-tallies');
+    expect(mount.querySelector('.survival-stores')).toBeNull();
+    expect(mount.querySelector('[data-store]')).toBeNull();
     expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-outcome]')?.classList).toContain('cinematic-overlay');

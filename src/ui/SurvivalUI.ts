@@ -39,6 +39,7 @@ interface MeterDefinition {
   min: number;
   max: number;
   dangerLabel: 'LOW' | 'HIGH';
+  displayValue: (value: number) => number;
   isDanger: (value: number) => boolean;
 }
 
@@ -72,11 +73,13 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
   }
 }
 
+const identity = (value: number): number => value;
+
 const METERS: readonly MeterDefinition[] = [
-  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
-  { id: 'hunger', label: 'HUNGER', min: 0, max: 100, dangerLabel: 'HIGH', isDanger: (value) => value >= 70 },
-  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', isDanger: (value) => value <= 1 },
-  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
+  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'hunger', label: 'FOOD', min: 0, max: 100, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
+  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
+  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
 ];
 
 const PHASE_LABELS: Readonly<Record<SurvivalState, string>> = {
@@ -197,12 +200,6 @@ export class SurvivalUI {
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
-      <section class="survival-stores survival-tallies" aria-label="Loose supplies">
-        <span>FOOD <strong data-store="food">0</strong></span>
-        <span>BAIT <strong data-store="bait">0</strong></span>
-        <span>REPAIR <strong data-store="repairMaterial">0</strong></span>
-        <span>RESCUE <strong data-store="rescueProgress">0</strong></span>
-      </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="survival-overlay action-options-overlay cinematic-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
         <p class="eyebrow">FISHING METHOD</p>
@@ -296,10 +293,6 @@ export class SurvivalUI {
     this.updateText('phase', this.phase, PHASE_LABELS[snapshot.state]);
 
     METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
-    this.updateStore('food', snapshot.food);
-    this.updateStore('bait', snapshot.bait);
-    this.updateStore('repairMaterial', snapshot.repairMaterial);
-    this.updateStore('rescueProgress', snapshot.rescueProgress);
     this.availableBait = snapshot.bait;
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
@@ -555,7 +548,8 @@ export class SurvivalUI {
     this.lastValues.set(`meter:${id}`, value);
     const definition = METERS.find((meter) => meter.id === id)!;
     const meter = this.meterElements.get(id)!;
-    const safe = Math.min(definition.max, Math.max(definition.min, value));
+    const displayed = definition.displayValue(value);
+    const safe = Math.min(definition.max, Math.max(definition.min, displayed));
     const danger = definition.isDanger(safe);
     const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
     meter.setAttribute('aria-valuenow', String(safe));
@@ -574,10 +568,6 @@ export class SurvivalUI {
       if (this.disposed || version !== this.announcementVersion) return;
       this.announcer.textContent = message;
     });
-  }
-
-  private updateStore(id: 'food' | 'bait' | 'repairMaterial' | 'rescueProgress', value: number): void {
-    this.updateText(`store:${id}`, requireElement(this.root, `[data-store="${id}"]`), String(value));
   }
 
   private updateText(key: string, element: HTMLElement, value: string): void {
