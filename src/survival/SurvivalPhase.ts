@@ -2,6 +2,7 @@ import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SurvivalUI } from '../ui/SurvivalUI';
+import type { PropModelLibrary } from '../world/PropModelLibrary';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
 import { SurvivalSession } from './SurvivalSession';
@@ -32,6 +33,7 @@ function testContext(): PhaseContext {
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
     camera: new PerspectiveCamera(),
     reducedMotion: { matches: false } as MediaQueryList,
+    propModels: {} as PropModelLibrary,
   };
 }
 
@@ -77,6 +79,7 @@ export class SurvivalPhase implements GamePhase {
         new BoatWorld(
           context.camera,
           context.reducedMotion,
+          context.propModels,
           savedItems,
         ),
         new SurvivalUI(context.mount),

@@ -9,6 +9,7 @@ import type { GamePhase, PhaseContext } from './app/GamePhase';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
 import { SurvivalPhase } from './survival/SurvivalPhase';
+import type { PropModelLibrary } from './world/PropModelLibrary';
 
 export interface GameFactories {
   createScavenge(
@@ -42,6 +43,7 @@ const PRODUCTION_FACTORIES: GameFactories = {
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
 export interface GameTestOptions {
+  propModels: PropModelLibrary;
   clock?: GameClock;
   createSeed?: () => number;
 }
@@ -62,6 +64,7 @@ export class Game {
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private reducedMotion!: MediaQueryList;
+  private propModels!: PropModelLibrary;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -75,7 +78,7 @@ export class Game {
   private onResize!: () => void;
   private animate!: () => void;
 
-  constructor(mount: HTMLElement) {
+  constructor(mount: HTMLElement, propModels: PropModelLibrary) {
     const renderer = new WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
@@ -91,12 +94,13 @@ export class Game {
       new PerspectiveCamera(65, 1, 0.08, 220),
       new Clock(),
       window.matchMedia('(prefers-reduced-motion: reduce)'),
+      propModels,
       PRODUCTION_FACTORIES,
       createRandomSeed,
     );
   }
 
-  static forTest(factories: GameFactories, options: GameTestOptions = {}): Game {
+  static forTest(factories: GameFactories, options: GameTestOptions): Game {
     const mount = document.createElement('main');
     const canvas = document.createElement('canvas');
     mount.prepend(canvas);
@@ -119,6 +123,7 @@ export class Game {
       new PerspectiveCamera(65, 1, 0.08, 220),
       clock,
       reducedMotion,
+      options.propModels,
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -146,6 +151,7 @@ export class Game {
     const outgoing = this.detachActivePhase();
     this.exitPointerLock();
     outgoing?.dispose();
+    this.propModels.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -156,6 +162,7 @@ export class Game {
     camera: PerspectiveCamera,
     clock: GameClock,
     reducedMotion: MediaQueryList,
+    propModels: PropModelLibrary,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -164,9 +171,10 @@ export class Game {
     this.camera = camera;
     this.clock = clock;
     this.reducedMotion = reducedMotion;
+    this.propModels = propModels;
     this.factories = factories;
     this.createSeed = createSeed;
-    this.context = { mount, renderer, camera, reducedMotion };
+    this.context = { mount, renderer, camera, reducedMotion, propModels };
     this.activePhase = null;
     this.animationFrame = 0;
     this.started = false;
