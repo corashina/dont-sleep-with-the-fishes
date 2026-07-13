@@ -68,32 +68,44 @@ describe('survival boat item layout', () => {
   });
 
   it('rejects malformed or out-of-range instance IDs', () => {
-    expect(() => survivalBoatStorageTransform({
-      instanceId: 'ductTape-3',
-      type: 'ductTape',
-    })).toThrow('No survival boat slot for ductTape-3');
+    const invalidInstances: readonly ItemInstance[] = [
+      { instanceId: 'ductTape-3', type: 'ductTape' },
+      { instanceId: 'cannedFood-1e0', type: 'cannedFood' },
+      { instanceId: 'cannedFood-01', type: 'cannedFood' },
+      { instanceId: 'cannedFood-1.0', type: 'cannedFood' },
+      { instanceId: 'ductTape-1', type: 'cannedFood' },
+    ];
+    for (const instance of invalidInstances) {
+      expect(
+        () => survivalBoatStorageTransform(instance),
+        instance.instanceId,
+      ).toThrow(`No survival boat slot for ${instance.instanceId}`);
+    }
   });
 
   it('keeps measured maximum-inventory envelopes separated', () => {
     expect(SURVIVAL_STORAGE_CLEARANCE).toBe(0.05);
     const roots = createItemInstances().map(representativeProp);
-    const envelopes = roots.map((root) => measureSurvivalStorageEnvelope(root));
-    for (let first = 0; first < envelopes.length; first += 1) {
-      for (let second = first + 1; second < envelopes.length; second += 1) {
-        expect(
-          storageEnvelopesOverlap(envelopes[first]!, envelopes[second]!),
-          `${createItemInstances()[first]!.instanceId} overlaps ${createItemInstances()[second]!.instanceId}`,
-        ).toBe(false);
-      }
-    }
-    roots.forEach((root) => {
-      root.traverse((object) => {
-        if (object instanceof Mesh) {
-          object.geometry.dispose();
-          object.material.dispose();
+    try {
+      const envelopes = roots.map((root) => measureSurvivalStorageEnvelope(root));
+      for (let first = 0; first < envelopes.length; first += 1) {
+        for (let second = first + 1; second < envelopes.length; second += 1) {
+          expect(
+            storageEnvelopesOverlap(envelopes[first]!, envelopes[second]!),
+            `${createItemInstances()[first]!.instanceId} overlaps ${createItemInstances()[second]!.instanceId}`,
+          ).toBe(false);
         }
+      }
+    } finally {
+      roots.forEach((root) => {
+        root.traverse((object) => {
+          if (object instanceof Mesh) {
+            object.geometry.dispose();
+            object.material.dispose();
+          }
+        });
       });
-    });
+    }
   });
 
   it('leaves the central longitudinal floor clear outside the bow zone', () => {
