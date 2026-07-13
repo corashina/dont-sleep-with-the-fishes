@@ -27,18 +27,18 @@ Rejected source options:
 | Game item | Poly Pizza model | Creator | License | Source geometry / treatment |
 |---|---|---|---|---|
 | Flare gun | [Flare Gun](https://poly.pizza/m/44H9OBUqTC) | Quaternius | CC0 1.0 | 540 triangles; retain recognizable red rescue-gun silhouette |
-| Duct tape | [Tape](https://poly.pizza/m/fu49rGO7Ukc) | Poly by Google | CC-BY 3.0 | Source is 20.3k triangles; simplify offline to at most 2,000 triangles while preserving the roll silhouette |
+| Duct tape | [Tape](https://poly.pizza/m/fu49rGO7Ukc) | Poly by Google | CC-BY 3.0 | Copy the authoritative 20,332-triangle source GLB byte-for-byte unchanged; this accurate model has a documented 21,000-triangle exception because its disconnected topology cannot be simplified without losing the approved representation |
 | Fishing rod | [Fishing Rod](https://poly.pizza/m/lDlWQjn9Zg) | Quaternius | CC0 1.0 | 910 triangles; retain rod and reel silhouette |
 | Bait tin | `Can Red` from the [Quaternius Survival Pack](https://poly.pizza/bundle/Survival-Pack-XzvQPP0yWB) | Quaternius | CC0 1.0 | Use the red can as the authored bait-tin representation |
 | Medical kit | [First Aid Kit](https://poly.pizza/m/Hp80p6148W) | Quaternius | CC0 1.0 | 268-triangle variant; retain medical marking and case silhouette |
 | Water jug | [Water Bottle](https://poly.pizza/m/KpxDpidn1Z) | Quaternius | CC0 1.0 | 260 triangles; scale as the game's portable water container |
 | Canned food | `Can` from the [Quaternius Survival Pack](https://poly.pizza/bundle/Survival-Pack-XzvQPP0yWB) | Quaternius | CC0 1.0 | Use a distinct orientation from bait tin and preserve its original can treatment |
 | Flashlight | [Torch](https://poly.pizza/m/WGsvr4KOZd) | Quaternius | CC0 1.0 | 610 triangles; this model is an electric flashlight despite its title |
-| Scuba set | [Scuba equipment](https://poly.pizza/m/7igrHLjaQlW) | Steren Giannini | CC-BY 3.0 | Source is about 4.7k triangles; use the complete equipment model, not the separate tank result, and simplify offline to at most 3,000 triangles |
+| Scuba set | [Scuba equipment](https://poly.pizza/m/7igrHLjaQlW) | Steren Giannini | CC-BY 3.0 | Source is about 4.7k triangles; use the complete equipment model, weld it, then simplify at ratio 0.55 and error 0.005 to 2,786 triangles |
 
 The exact scuba result is uniquely identified by public model ID `7igrHLjaQlW`, title `Scuba equipment`, creator `Steren Giannini`, and direct GLB resource ID `efda7497-db5e-47e9-b317-8e8baeb1c616`. The implementation must reject any result whose title, creator, or license differs. Its permanent Poly Pizza detail URL and downloaded GLB resource identifier must be recorded in the repository asset ledger before the asset is accepted.
 
-Every checked-in model must remain under 3,000 triangles after offline processing. Models already below that limit should not be simplified unless inspection reveals redundant geometry. The complete nine-template library must remain under 18,000 triangles. These budgets apply to the committed GLBs, not the source downloads.
+Eight checked-in models must remain at or below 3,000 triangles after offline processing. Duct tape is the explicit exception: its approved source GLB is copied byte-for-byte unchanged at 20,332 triangles and must remain at or below 21,000. The complete nine-template library must remain at or below 28,000 triangles. Models already below their limit should not be simplified unless inspection reveals redundant geometry. These budgets apply to the committed GLBs, not the source downloads. The earlier 19,872 count described a lightly simplified output, not the raw approved source.
 
 ## Repository Asset Layout and Ledger
 
@@ -140,7 +140,7 @@ Verification will use at least 1280x720 and 1920x1080 desktop viewports. Normali
 
 1. Every one of the nine item types uses a checked-in Poly Pizza-derived GLB; no procedural production item branch remains.
 2. All fourteen spawned physical instances and every saved survival instance use the new models.
-3. Every committed item model is at most 3,000 triangles and the nine-template library totals at most 18,000 triangles.
+3. Eight committed item models are at most 3,000 triangles, the byte-for-byte unchanged approved Tape model is at most 21,000 triangles, and the nine-template library totals at most 28,000 triangles.
 4. Props have recognizable silhouettes, correct scale/orientation, shadows, independent depletion state, and safe disposal.
 5. The game makes no runtime request to Poly Pizza or any other external asset host.
 6. `THIRD_PARTY_ASSETS.md` records complete provenance, modifications, triangle counts, and required CC-BY attribution.
