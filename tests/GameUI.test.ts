@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-// @ts-expect-error The app tsconfig omits Node types; Vitest still runs with this built-in.
 import { readFileSync } from 'node:fs';
 import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession, type ScavengeSnapshot } from '../src/game/ScavengeSession';

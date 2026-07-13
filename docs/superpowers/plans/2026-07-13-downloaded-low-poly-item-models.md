@@ -8,11 +8,11 @@
 
 **Tech Stack:** TypeScript 5.9, Three.js 0.180 `GLTFLoader`, Vite 7, Vitest 3, Bun, PowerShell, glTF Transform CLI/Core.
 
-**Global Constraints:** Use only the nine approved Poly Pizza identities. Commit GLBs under `src/assets/models/items/`; never fetch external assets at runtime. Keep every committed file at or below 3,000 triangles and the aggregate at or below 18,000. Preserve independently mutable geometry/material ownership per physical instance. Keep `dev-server.err` untracked and untouched. Apply `superpowers:test-driven-development` during implementation and `superpowers:verification-before-completion` before completion claims.
+**Global Constraints:** Use only the nine approved Poly Pizza identities. Commit GLBs under `src/assets/models/items/`; never fetch external assets at runtime. Keep eight committed files at or below 3,000 triangles, allow only the byte-for-byte unchanged approved Tape GLB up to 21,000 triangles, and keep the aggregate at or below 28,000. Preserve independently mutable geometry/material ownership per physical instance. Keep `dev-server.err` untracked and untouched. Apply `superpowers:test-driven-development` during implementation and `superpowers:verification-before-completion` before completion claims.
 
 ## File and Responsibility Map
 
-- Create `scripts/fetch-item-models.ps1`: reproducibly download the nine approved resource IDs and simplify only Tape and Scuba equipment.
+- Create `scripts/fetch-item-models.ps1`: reproducibly download the nine approved resource IDs, copy Tape unchanged under its explicit accuracy exception, and weld/simplify only Scuba equipment.
 - Create `scripts/check-item-models.mjs`: parse committed GLBs, print exact triangle counts, and enforce per-file/aggregate budgets.
 - Modify `package.json` and `bun.lock`: add glTF Transform tooling and `models:fetch` / `models:check` scripts.
 - Create `src/assets/models/items/*.glb`: nine locally served production assets with stable item-ID filenames.
@@ -32,14 +32,14 @@
 | Item ID | Public model ID | Direct GLB resource ID | Source title | Creator | Source triangles | Processing |
 |---|---|---|---|---|---:|---|
 | `flareGun` | `44H9OBUqTC` | `9ec52cda-c918-43f0-b7af-354e7fe96c37` | Flare Gun | Quaternius | 540 | Copy unchanged |
-| `ductTape` | `fu49rGO7Ukc` | `06934616-1393-451d-bdf6-2101a5e32703` | Tape | Poly by Google | 20,300 | Simplify with ratio `0.08`, error `0.001` |
+| `ductTape` | `fu49rGO7Ukc` | `06934616-1393-451d-bdf6-2101a5e32703` | Tape | Poly by Google | 20,332 | Copy byte-for-byte unchanged; explicit 21,000-triangle accuracy exception (the earlier 19,872 count was a lightly simplified output) |
 | `fishingRod` | `lDlWQjn9Zg` | `c15761f7-4aef-4bf4-9565-50a68a981f34` | Fishing Rod | Quaternius | 910 | Copy unchanged |
 | `baitTin` | `IuoYedcdXQ` | `f6b52ca9-61b1-42d5-a42f-d8748a41eb45` | Can Red | Quaternius | 332 | Copy unchanged |
 | `medicalKit` | `Hp80p6148W` | `41249676-0965-40df-8dd7-eee79dd9e6cf` | First Aid Kit | Quaternius | 268 | Copy unchanged |
 | `waterJug` | `KpxDpidn1Z` | `3ebef9a3-c2df-49ee-abe1-df38b5777bcd` | Water Bottle | Quaternius | 260 | Copy unchanged |
 | `cannedFood` | `YnowJvWqxE` | `e16e13cf-fbc4-48c8-9927-ae34920a498e` | Can | Quaternius | 428 | Copy unchanged |
 | `flashlight` | `WGsvr4KOZd` | `035c4897-22f3-4e9c-b29f-ebafe2b566da` | Torch | Quaternius | 610 | Copy unchanged |
-| `scubaSet` | `7igrHLjaQlW` | `efda7497-db5e-47e9-b317-8e8baeb1c616` | Scuba equipment | Steren Giannini | 4,700 | Simplify with ratio `0.55`, error `0.001` |
+| `scubaSet` | `7igrHLjaQlW` | `efda7497-db5e-47e9-b317-8e8baeb1c616` | Scuba equipment | Steren Giannini | 4,696 | Weld, then simplify with ratio `0.55`, error `0.005` to 2,786 triangles |
 
 Each direct download uses `https://static.poly.pizza/`, the corresponding resource ID in the matrix, and the `.glb` suffix. The acquisition script must also read the detail page formed from `https://poly.pizza/m/` plus the corresponding public ID and reject mismatched `Title`, `Creator.Username`, `Licence`, `PublicID`, or `ResourceID` metadata before downloading.
 
@@ -97,7 +97,8 @@ import { resolve } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 
 export const MODEL_LIMIT = 3_000;
-export const LIBRARY_LIMIT = 18_000;
+export const DUCT_TAPE_LIMIT = 21_000;
+export const LIBRARY_LIMIT = 28_000;
 export const ITEM_IDS = [
   'flareGun', 'ductTape', 'fishingRod', 'baitTin', 'medicalKit',
   'waterJug', 'cannedFood', 'flashlight', 'scubaSet',
@@ -126,11 +127,11 @@ The executable portion must:
 
 1. resolve the corresponding `.glb` inside `src/assets/models/items/` for every item ID;
 2. call `access()` before parsing;
-3. reject zero triangles and counts over `MODEL_LIMIT`;
+3. reject zero triangles, non-Tape counts over `MODEL_LIMIT`, and Tape over `DUCT_TAPE_LIMIT`;
 4. reject a total over `LIBRARY_LIMIT`;
 5. read `THIRD_PARTY_ASSETS.md` and require the item ID, permanent Poly Pizza URL, resource ID, creator, and license URL for every row;
 6. accept `--assets-only` to skip only the ledger check while retaining every binary and budget check;
-7. print one `itemId: N triangles` line and a final `total: N / 18000 triangles` line.
+7. print one `itemId: N triangles` line and a final `total: N / 28000 triangles` line.
 
 Run: `bun run models:check`
 
@@ -154,12 +155,13 @@ Invoke-WebRequest -UseBasicParsing -Uri "https://static.poly.pizza/$resourceId.g
 
 Apply the same explicit equality checks to public ID, creator username, and license. Use a verified temporary folder under `[System.IO.Path]::GetTempPath()`, resolve it before deletion, and reject cleanup unless the resolved path starts with the OS temp root.
 
-Copy the seven already-low-poly files unchanged. Process the two over-budget files exactly as follows:
+Copy the seven already-low-poly files and the approved Tape source unchanged. Process only Scuba equipment exactly as follows:
 
 ```powershell
-& bunx.cmd gltf-transform simplify $ductTapeSource $ductTapeOutput --ratio 0.08 --error 0.001
-if ($LASTEXITCODE -ne 0) { throw 'Tape simplification failed' }
-& bunx.cmd gltf-transform simplify $scubaSource $scubaOutput --ratio 0.55 --error 0.001
+$scubaWelded = Join-Path $tempRoot 'scubaSet.welded.glb'
+& bunx.cmd gltf-transform weld $scubaSource $scubaWelded
+if ($LASTEXITCODE -ne 0) { throw 'Scuba equipment weld failed' }
+& bunx.cmd gltf-transform simplify $scubaWelded $scubaOutput --ratio 0.55 --error 0.005
 if ($LASTEXITCODE -ne 0) { throw 'Scuba equipment simplification failed' }
 ```
 
@@ -169,7 +171,7 @@ Finish by invoking `node scripts/check-item-models.mjs --assets-only`; never acc
 
 Run: `bun run models:fetch`
 
-Expected: all nine GLBs exist under `src/assets/models/items/`; the script's assets-only audit confirms both simplified files are under 3,000 triangles.
+Expected: all nine GLBs exist under `src/assets/models/items/`; the script's assets-only audit confirms byte-for-byte unchanged Tape is at or below 21,000 triangles, the other eight are under 3,000, and the aggregate is under 28,000.
 
 Run: `bun run models:check`
 
@@ -183,11 +185,11 @@ Create `THIRD_PARTY_ASSETS.md` with one row per item and these columns:
 | Item ID | File | Model / creator | Permanent source | Resource ID | License | Original triangles | Committed triangles | Modifications | Downloaded |
 ```
 
-Use [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) for the seven Quaternius rows and [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) for Tape and Scuba equipment. Record the exact integers printed by the auditor for both previously unmeasured cans and all committed files. Record `2026-07-13` as the download date. Tape and Scuba rows must say `glTF Transform simplify`; the other seven must say `None; source GLB copied unchanged`.
+Use [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) for the seven Quaternius rows and [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) for Tape and Scuba equipment. Record the exact integers printed by the auditor for both previously unmeasured cans and all committed files. Record `2026-07-13` as the download date. Tape must say `None; source GLB copied unchanged (approved accuracy exception)`, Scuba must say `glTF Transform weld + simplify (ratio 0.55, error 0.005)`, and the other seven must say `None; source GLB copied unchanged`.
 
 Run: `bun run models:check`
 
-Expected: PASS, every file at or below 3,000 triangles and total at or below 18,000.
+Expected: PASS, eight files at or below 3,000 triangles, Tape at or below 21,000, and total at or below 28,000.
 
 - [ ] **Step 7: Commit the acquisition pipeline and assets**
 
@@ -647,7 +649,7 @@ Expected: source URLs occur only as attribution strings in `itemModelManifest.ts
 
 Run: `bun run models:check`
 
-Expected: nine files pass individual limits and the aggregate is at or below 18,000 triangles.
+Expected: nine files pass their individual limits (3,000 except Tape at 21,000) and the aggregate is at or below 28,000 triangles.
 
 - [ ] **Step 3: Run focused model/world tests**
 
