@@ -74,6 +74,32 @@ describe('launchGame', () => {
     expect(game.start).toHaveBeenCalledOnce();
   });
 
+  it('removes the launcher loading surface before constructing the game', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const game = { start: vi.fn(), dispose: vi.fn() };
+    let contentAtConstruction = '';
+    let childCountAtConstruction = -1;
+    const createGame = vi.fn((gameMount: HTMLElement) => {
+      contentAtConstruction = gameMount.textContent ?? '';
+      childCountAtConstruction = gameMount.childElementCount;
+      const ready = document.createElement('p');
+      ready.textContent = 'GAME READY';
+      gameMount.append(ready);
+      return game;
+    });
+
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { createGame },
+    ));
+
+    await expect(handle.completion).resolves.toBe(game as unknown as Game);
+    expect(contentAtConstruction).not.toContain('RECOVERING SUPPLIES');
+    expect(childCountAtConstruction).toBe(0);
+    expect(mount.textContent).toBe('GAME READY');
+  });
+
   it('renders an item-labelled supply failure without creating a game', async () => {
     const mount = connectedMount();
     const createGame = vi.fn();

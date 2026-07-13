@@ -20,15 +20,15 @@ export const ITEM_MODEL_MAX_TOTAL_TRIANGLES = 28_000;
 
 const normalization: Readonly<Record<ItemId, Pick<ItemModelSpec,
   'targetLongestDimension' | 'rotation' | 'offset'>>> = {
-  flareGun: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  ductTape: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  fishingRod: { targetLongestDimension: 1.80, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  baitTin: { targetLongestDimension: 0.58, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  medicalKit: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  waterJug: { targetLongestDimension: 0.78, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  scubaSet: { targetLongestDimension: 1.10, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  flareGun: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0.07, 0] },
+  ductTape: { targetLongestDimension: 0.62, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  fishingRod: { targetLongestDimension: 1.80, rotation: [Math.PI / 2, 0, 0], offset: [0, 0, 0] },
+  baitTin: { targetLongestDimension: 0.58, rotation: [0, 0, 0], offset: [0, 0.12, 0] },
+  medicalKit: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0.07, 0] },
+  waterJug: { targetLongestDimension: 0.78, rotation: [0, 0, 0], offset: [0, 0.22, 0] },
+  cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
+  flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0.19, 0] },
+  scubaSet: { targetLongestDimension: 1.10, rotation: [0, 0, 0], offset: [0, 0.25, 0] },
 };
 
 export const ITEM_MODEL_SPECS = {
