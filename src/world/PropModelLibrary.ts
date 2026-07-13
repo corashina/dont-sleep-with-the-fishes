@@ -226,7 +226,9 @@ export class PropModelLibrary {
       const root = await loader.load(ITEM_MODEL_SPECS[id].url);
       try {
         const triangles = normalizeTemplate(id, root, ITEM_MODEL_SPECS[id]);
-        return { root, triangles };
+        const template = new Group();
+        template.add(root);
+        return { root: template, triangles };
       } catch (error) {
         disposeRoots([root]);
         throw error;
@@ -271,6 +273,9 @@ export class PropModelLibrary {
     const template = this.templates.get(instance.type);
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
     const clone = cloneOwnedTemplate(template);
+    clone.position.set(0, 0, 0);
+    clone.quaternion.identity();
+    clone.scale.set(1, 1, 1);
     clone.name = `prop:${instance.instanceId}`;
     clone.userData.instanceId = instance.instanceId;
     clone.userData.itemType = instance.type;

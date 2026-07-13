@@ -3,6 +3,7 @@ import {
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PerspectiveCamera,
   ShaderMaterial,
   Vector3,
@@ -13,12 +14,34 @@ import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/Boat
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
-import { createTestPropModels } from './helpers/propModels';
+import {
+  createTestPropModels,
+  TEST_PROP_MODEL_TRANSFORM,
+  testPropModel,
+} from './helpers/propModels';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
   type,
 });
+
+function firstMesh(root: Object3D): Mesh {
+  let found: Mesh | undefined;
+  root.traverse((object) => {
+    if (!found && object instanceof Mesh) found = object;
+  });
+  if (!found) throw new Error('Expected saved prop mesh');
+  return found;
+}
+
+function expectTestModelTransform(root: Object3D): void {
+  const model = testPropModel(root);
+  expect(model.position.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.position);
+  model.rotation.toArray().slice(0, 3).forEach((value, index) => {
+    expect(value).toBeCloseTo(TEST_PROP_MODEL_TRANSFORM.rotation[index]!);
+  });
+  expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
+}
 
 function snapshot(
   savedItems: readonly ItemInstance[],
@@ -131,6 +154,7 @@ describe('BoatWorld helpers', () => {
       expect(prop.position.toArray()).toEqual(transform.position.toArray());
       expect(prop.rotation.toArray().slice(0, 3)).toEqual(transform.rotation.toArray().slice(0, 3));
       expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
+      expectTestModelTransform(prop);
     });
     world.dispose();
     propModels.dispose();
@@ -169,8 +193,8 @@ describe('BoatWorld helpers', () => {
     const baitTwo = world.scene.getObjectByName('prop:baitTin-2')!;
     const tapeOne = world.scene.getObjectByName('prop:ductTape-1')!;
     const tapeTwo = world.scene.getObjectByName('prop:ductTape-2')!;
-    const tapeOneMaterial = (tapeOne.children[0] as Mesh).material as MeshStandardMaterial;
-    const tapeTwoMaterial = (tapeTwo.children[0] as Mesh).material as MeshStandardMaterial;
+    const tapeOneMaterial = firstMesh(tapeOne).material as MeshStandardMaterial;
+    const tapeTwoMaterial = firstMesh(tapeTwo).material as MeshStandardMaterial;
     const tapeOriginalColor = tapeOneMaterial.color.getHex();
     expect([foodOne.visible, foodTwo.visible]).toEqual([true, false]);
     expect([foodOne.userData.depleted, foodTwo.userData.depleted]).toEqual([false, true]);
@@ -301,7 +325,7 @@ describe('BoatWorld helpers', () => {
       [savedItem('medicalKit')],
     );
     const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
-    const mesh = prop.children[0] as Mesh;
+    const mesh = firstMesh(prop);
     const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
     const disposeMaterial = vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose');
 

@@ -14,6 +14,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   Points,
+  Quaternion,
   Scene,
   ShaderMaterial,
   Vector3,
@@ -31,7 +32,11 @@ import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { createShip, selectSpawnPoints } from '../src/world/Ship';
 import { World } from '../src/world/World';
-import { createTestPropModels } from './helpers/propModels';
+import {
+  createTestPropModels,
+  TEST_PROP_MODEL_TRANSFORM,
+  testPropModel,
+} from './helpers/propModels';
 
 const pointInside = (point: Vector3, box: CollisionBox): boolean =>
   point.x >= box.minX && point.x <= box.maxX &&
@@ -51,6 +56,15 @@ const meshCount = (root: Object3D): number => {
     if (object instanceof Mesh) count += 1;
   });
   return count;
+};
+
+const expectTestModelTransform = (root: Object3D): void => {
+  const model = testPropModel(root);
+  expect(model.position.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.position);
+  model.rotation.toArray().slice(0, 3).forEach((value, index) => {
+    expect(value).toBeCloseTo(TEST_PROP_MODEL_TRANSFORM.rotation[index]!);
+  });
+  expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
 };
 
 interface RenderResources {
@@ -79,7 +93,7 @@ const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterab
   return counts;
 };
 
-describe('procedural world builders', () => {
+describe('world builders', () => {
   it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -88,6 +102,10 @@ describe('procedural world builders', () => {
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
+    world.itemObjects.forEach((prop) => {
+      expect(prop.scale.toArray()).toEqual([1, 1, 1]);
+      expectTestModelTransform(prop);
+    });
     world.dispose();
     propModels.dispose();
   });
@@ -243,6 +261,8 @@ describe('procedural world builders', () => {
     expect(saved.position.toArray()).toEqual(transform.position.toArray());
     expect(saved.rotation.toArray()).toEqual(transform.rotation.toArray());
     expect(saved.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
+    expectTestModelTransform(saved);
+    expectTestModelTransform(lost);
     expect(lost.parent).toBeNull();
     world.dispose();
     propModels.dispose();
@@ -259,6 +279,7 @@ describe('procedural world builders', () => {
 
     expect(landed.parent).toBe(world.ship);
     expect(landed.scale.toArray()).toEqual([1, 1, 1]);
+    expectTestModelTransform(landed);
     world.dispose();
     propModels.dispose();
   });
@@ -381,6 +402,10 @@ describe('procedural world builders', () => {
       instanceId: instance.instanceId,
       itemType: instance.type,
     });
+    expect(prop.position.toArray()).toEqual([0, 0, 0]);
+    expect(prop.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+    expect(prop.scale.toArray()).toEqual([1, 1, 1]);
+    expectTestModelTransform(prop);
     expect(meshCount(prop)).toBeGreaterThan(0);
     collectRenderResources(prop).geometries.forEach((geometry) => geometry.dispose());
     collectRenderResources(prop).materials.forEach((material) => material.dispose());
