@@ -3,54 +3,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const doubles = vi.hoisted(() => ({
-  constructGame: vi.fn(),
-  disposeGame: vi.fn(),
-  disposeModels: vi.fn(),
-  loadModels: vi.fn(),
-  startGame: vi.fn(() => {
-    throw new Error('start failed');
-  }),
+  cancel: vi.fn(),
+  completion: Promise.resolve(null),
+  launchGame: vi.fn(),
 }));
 
-vi.mock('../src/Game', () => ({
-  Game: class {
-    readonly start = doubles.startGame;
-    readonly dispose = doubles.disposeGame;
-
-    constructor() {
-      doubles.constructGame();
-    }
-  },
+vi.mock('../src/app/launchGame', () => ({
+  launchGame: doubles.launchGame,
 }));
 
-vi.mock('../src/world/PropModelLibrary', () => ({
-  PropModelLibrary: { load: doubles.loadModels },
-}));
-
-describe('main bootstrap ownership', () => {
+describe('main bootstrap', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     document.body.innerHTML = '<main id="app"></main>';
-    doubles.constructGame.mockImplementation(() => undefined);
-    doubles.loadModels.mockResolvedValue({ dispose: doubles.disposeModels });
-  });
-
-  it('disposes the constructed game when start throws', async () => {
-    await import('../src/main');
-
-    await vi.waitFor(() => expect(doubles.disposeGame).toHaveBeenCalledOnce());
-    expect(doubles.disposeModels).not.toHaveBeenCalled();
-  });
-
-  it('disposes only the unowned models when construction throws', async () => {
-    doubles.constructGame.mockImplementationOnce(() => {
-      throw new Error('construction failed');
+    doubles.launchGame.mockReturnValue({
+      cancel: doubles.cancel,
+      completion: doubles.completion,
     });
+  });
+
+  it('launches into #app and cancels once on pagehide', async () => {
+    const mount = document.querySelector<HTMLElement>('#app')!;
 
     await import('../src/main');
+    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pagehide'));
 
-    await vi.waitFor(() => expect(doubles.disposeModels).toHaveBeenCalledOnce());
-    expect(doubles.disposeGame).not.toHaveBeenCalled();
+    expect(doubles.launchGame).toHaveBeenCalledOnce();
+    expect(doubles.launchGame).toHaveBeenCalledWith(mount);
+    expect(doubles.cancel).toHaveBeenCalledOnce();
   });
 });
