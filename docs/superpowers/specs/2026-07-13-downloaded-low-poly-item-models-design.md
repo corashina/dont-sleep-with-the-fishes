@@ -31,7 +31,7 @@ Rejected source options:
 | Fishing rod | [Fishing Rod](https://poly.pizza/m/lDlWQjn9Zg) | Quaternius | CC0 1.0 | 910 triangles; retain rod and reel silhouette |
 | Bait tin | `Can Red` from the [Quaternius Survival Pack](https://poly.pizza/bundle/Survival-Pack-XzvQPP0yWB) | Quaternius | CC0 1.0 | Use the red can as the authored bait-tin representation |
 | Medical kit | [First Aid Kit](https://poly.pizza/m/Hp80p6148W) | Quaternius | CC0 1.0 | 268-triangle variant; retain medical marking and case silhouette |
-| Water jug | [Water Bottle](https://poly.pizza/m/KpxDpidn1Z) | Quaternius | CC0 1.0 | 260 triangles; scale as the game's portable water container |
+| Water jug | [Water Bottle](https://poly.pizza/m/KpxDpidn1Z) | Quaternius | CC0 1.0 | 288 audited GLB triangles (Poly Pizza lists 260); scale as the game's portable water container |
 | Canned food | `Can` from the [Quaternius Survival Pack](https://poly.pizza/bundle/Survival-Pack-XzvQPP0yWB) | Quaternius | CC0 1.0 | Use a distinct orientation from bait tin and preserve its original can treatment |
 | Flashlight | [Torch](https://poly.pizza/m/WGsvr4KOZd) | Quaternius | CC0 1.0 | 610 triangles; this model is an electric flashlight despite its title |
 | Scuba set | [Scuba equipment](https://poly.pizza/m/7igrHLjaQlW) | Steren Giannini | CC-BY 3.0 | Source is about 4.7k triangles; use the complete equipment model, weld it, then simplify at ratio 0.55 and error 0.005 to 2,786 triangles |
