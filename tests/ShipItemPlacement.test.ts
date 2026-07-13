@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Euler, Vector3 } from 'three';
 import { createItemInstances } from '../src/game/ItemState';
 import {
+  SHIP_ITEM_PROFILES,
   assignShipItems,
   validateShipItemAnchors,
   type ShipItemAnchor,
@@ -37,6 +38,47 @@ describe('ship item placement', () => {
     expect(assignments.size).toBe(14);
     expect(new Set([...assignments.values()].map((value) => value.anchorId)).size).toBe(14);
     assignments.forEach((value) => expect(value.usedEmergencyAnchor).toBe(false));
+  });
+
+  it('assigns every standard instance to an anchor with its profile category', () => {
+    const instances = createItemInstances();
+    const categories = ['foodWater', 'medicalEmergency', 'toolsRepair', 'fishingDiving'] as const;
+    const anchors = Array.from({ length: 28 }, (_, index) =>
+      anchor(`category-anchor-${index}`, [categories[index % categories.length]!], index * 2));
+    const anchorsById = new Map(anchors.map((value) => [value.id, value]));
+    const assignments = assignShipItems(instances, anchors, () => 0.4);
+
+    instances.forEach((instance) => {
+      const assignedAnchor = anchorsById.get(assignments.get(instance.instanceId)!.anchorId)!;
+      expect(assignedAnchor.categories).toContain(SHIP_ITEM_PROFILES[instance.type].category);
+    });
+  });
+
+  it('uses the injected random stream to choose among compatible anchors', () => {
+    const flareGun = createItemInstances().filter(({ type }) => type === 'flareGun');
+    const anchors = [
+      anchor('flare-left', ['medicalEmergency'], 0),
+      anchor('flare-right', ['medicalEmergency'], 4),
+    ];
+
+    expect(assignShipItems(flareGun, anchors, () => 0).get('flareGun-1')!.anchorId)
+      .toBe('flare-right');
+    expect(assignShipItems(flareGun, anchors, () => 0.99).get('flareGun-1')!.anchorId)
+      .toBe('flare-left');
+  });
+
+  it('backtracks when the first compatible choice blocks a later instance', () => {
+    const instances = createItemInstances().filter(
+      ({ type }) => type === 'medicalKit' || type === 'scubaSet',
+    );
+    const anchors = [
+      anchor('shared', ['medicalEmergency', 'fishingDiving'], 0),
+      anchor('diving-only', ['fishingDiving'], 4),
+    ];
+    const assignments = assignShipItems(instances, anchors, () => 0.99);
+
+    expect(assignments.get('scubaSet-1')!.anchorId).toBe('diving-only');
+    expect(assignments.get('medicalKit-1')!.anchorId).toBe('shared');
   });
 
   it('rejects duplicate ids and overlapping sibling anchors', () => {
