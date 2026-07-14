@@ -155,7 +155,7 @@ async function buildComposite(sourceRoot, itemId, recipe) {
       .setRotation(spec.rotation)
       .setScale(spec.scale));
   }
-  await document.transform(prune(), dedup(), unpartition());
+  await document.transform(prune(), unpartition());
   return document;
 }
 

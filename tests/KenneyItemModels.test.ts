@@ -277,6 +277,52 @@ describe('Kenney item model builder', () => {
     });
   });
 
+  it('retains identical same-colored parts in the serialized triangle total', async () => {
+    const entry = 'Models/GLB format/repeated.glb';
+    await writeFixture(join(sourceRoot, 'fixture-pack', ...entry.split('/')), 'repeated');
+
+    await buildKenneyItemModels({
+      sourceRoot,
+      outputRoot,
+      recipes: {
+        repeatedItem: {
+          kind: 'composite',
+          expectedTriangles: 2,
+          parts: [
+            {
+              name: 'first',
+              pack: 'fixture-pack',
+              entry,
+              translation: [-1, 0, 0],
+              rotation: [0, 0, 0, 1],
+              scale: [1, 1, 1],
+              color: [1, 0, 0, 1],
+            },
+            {
+              name: 'second',
+              pack: 'fixture-pack',
+              entry,
+              translation: [1, 0, 0],
+              rotation: [0, 0, 0, 1],
+              scale: [1, 1, 1],
+              color: [1, 0, 0, 1],
+            },
+          ],
+        },
+      },
+    });
+
+    const document = await new NodeIO().read(join(outputRoot, 'repeatedItem.glb'));
+    expect(document.getRoot().listMeshes()).toHaveLength(2);
+    expect(document.getRoot().listMeshes().reduce((total, mesh) => (
+      total + mesh.listPrimitives().reduce((meshTotal, primitive) => (
+        meshTotal + (primitive.getIndices()?.getCount()
+          ?? primitive.getAttribute('POSITION')?.getCount()
+          ?? 0) / 3
+      ), 0)
+    ), 0)).toBe(2);
+  });
+
   it('identifies the item when a source entry is missing', async () => {
     await expect(buildKenneyItemModels({
       sourceRoot,
