@@ -135,6 +135,44 @@ function validatePosition(filePath, position) {
   }
 }
 
+function validateIndices(filePath, indices, position) {
+  if (!indices) return;
+  const positionCount = position.getCount();
+  for (let element = 0; element < indices.getCount(); element += 1) {
+    const index = indices.getScalar(element);
+    if (!Number.isInteger(index) || index < 0 || index >= positionCount) {
+      throw new Error(
+        `${filePath}: triangle index ${index} is out of range for ${positionCount} POSITION vertices`,
+      );
+    }
+  }
+}
+
+function nonDegenerateTriangle(first, second, third) {
+  const firstEdge = [
+    second[0] - first[0],
+    second[1] - first[1],
+    second[2] - first[2],
+  ];
+  const secondEdge = [
+    third[0] - first[0],
+    third[1] - first[1],
+    third[2] - first[2],
+  ];
+  const firstLength = Math.hypot(...firstEdge);
+  const secondLength = Math.hypot(...secondEdge);
+  if (!Number.isFinite(firstLength) || !Number.isFinite(secondLength)) return false;
+  if (firstLength === 0 || secondLength === 0) return false;
+  const firstDirection = firstEdge.map((component) => component / firstLength);
+  const secondDirection = secondEdge.map((component) => component / secondLength);
+  const cross = [
+    firstDirection[1] * secondDirection[2] - firstDirection[2] * secondDirection[1],
+    firstDirection[2] * secondDirection[0] - firstDirection[0] * secondDirection[2],
+    firstDirection[0] * secondDirection[1] - firstDirection[1] * secondDirection[0],
+  ];
+  return Math.hypot(...cross) > Number.EPSILON * 16;
+}
+
 function validateModelBounds(filePath, document) {
   const root = document.getRoot();
   const defaultScene = root.getDefaultScene();
@@ -144,6 +182,7 @@ function validateModelBounds(filePath, document) {
   const visitedNodes = new Set();
   const modelMin = [Infinity, Infinity, Infinity];
   const modelMax = [-Infinity, -Infinity, -Infinity];
+  let hasNonDegenerateTriangle = false;
   for (const scene of scenes) {
     for (const child of scene.listChildren()) {
       child.traverse((node) => {
@@ -159,6 +198,7 @@ function validateModelBounds(filePath, document) {
           const position = primitive.getAttribute('POSITION');
           if (!position) continue;
           const point = [0, 0, 0];
+          const worldPoints = [];
           for (let index = 0; index < position.getCount(); index += 1) {
             position.getElement(index, point);
             const worldPoint = [
@@ -169,9 +209,24 @@ function validateModelBounds(filePath, document) {
             if (!worldPoint.every(Number.isFinite)) {
               throw new Error(`${filePath}: non-finite model bounds`);
             }
+            worldPoints.push(worldPoint);
             for (let component = 0; component < 3; component += 1) {
               modelMin[component] = Math.min(modelMin[component], worldPoint[component]);
               modelMax[component] = Math.max(modelMax[component], worldPoint[component]);
+            }
+          }
+          const indices = primitive.getIndices();
+          const elementCount = indices?.getCount() ?? position.getCount();
+          for (let element = 0; element < elementCount; element += 3) {
+            const firstIndex = indices?.getScalar(element) ?? element;
+            const secondIndex = indices?.getScalar(element + 1) ?? element + 1;
+            const thirdIndex = indices?.getScalar(element + 2) ?? element + 2;
+            if (nonDegenerateTriangle(
+              worldPoints[firstIndex],
+              worldPoints[secondIndex],
+              worldPoints[thirdIndex],
+            )) {
+              hasNonDegenerateTriangle = true;
             }
           }
         }
@@ -183,6 +238,16 @@ function validateModelBounds(filePath, document) {
     || modelMin.some((minimum, index) => minimum > modelMax[index])
   ) {
     throw new Error(`${filePath}: empty model bounds`);
+  }
+  const extents = modelMax.map((maximum, index) => maximum - modelMin[index]);
+  if (!extents.every(Number.isFinite)) {
+    throw new Error(`${filePath}: non-finite model bounds`);
+  }
+  if (!extents.some((extent) => extent > 0)) {
+    throw new Error(`${filePath}: model bounds have no positive extent`);
+  }
+  if (!hasNonDegenerateTriangle) {
+    throw new Error(`${filePath}: contains no non-degenerate world-space triangles`);
   }
 }
 
@@ -198,8 +263,10 @@ export async function countTriangles(filePath) {
       }
       const position = primitive.getAttribute('POSITION');
       validatePosition(filePath, position);
-      const count = primitive.getIndices()?.getCount() ?? position.getCount();
+      const indices = primitive.getIndices();
+      const count = indices?.getCount() ?? position.getCount();
       if (count % 3 !== 0) throw new Error(`${filePath}: triangle index count is not divisible by 3`);
+      validateIndices(filePath, indices, position);
       triangles += count / 3;
     }
   }
