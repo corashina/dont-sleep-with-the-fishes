@@ -42,6 +42,9 @@ const HULL_STATIONS = [
   { z: 3.00, halfWidth: 0.34 },
 ] as const;
 
+const FLOOR_EDGE_INSET = 0.06;
+const FLOOR_HEIGHT = -0.38;
+
 function materialSet(textures: ReturnType<typeof createSurvivalBoatTextures>) {
   return {
     hull: new MeshStandardMaterial({
@@ -99,13 +102,18 @@ function addHullSegments(target: Group, material: MeshStandardMaterial): void {
 
 function floorShape(): Shape {
   const shape = new Shape();
-  shape.moveTo(0, -2.96);
-  shape.bezierCurveTo(1.00, -2.88, 1.45, -2.16, 1.45, -1.20);
-  shape.lineTo(1.45, 1.52);
-  shape.bezierCurveTo(1.42, 2.36, 0.72, 2.90, 0, 2.96);
-  shape.bezierCurveTo(-0.72, 2.90, -1.42, 2.36, -1.45, 1.52);
-  shape.lineTo(-1.45, -1.20);
-  shape.bezierCurveTo(-1.45, -2.16, -1.00, -2.88, 0, -2.96);
+  const starboard = HULL_STATIONS.map(({ halfWidth, z }) => ({
+    x: halfWidth - FLOOR_EDGE_INSET,
+    y: -z,
+  }));
+  const port = [...HULL_STATIONS].reverse().map(({ halfWidth, z }) => ({
+    x: -halfWidth + FLOOR_EDGE_INSET,
+    y: -z,
+  }));
+  const [first, ...remaining] = [...starboard, ...port];
+  if (!first) throw new Error('Survival floor requires hull stations');
+  shape.moveTo(first.x, first.y);
+  remaining.forEach(({ x, y }) => shape.lineTo(x, y));
   shape.closePath();
   return shape;
 }
@@ -189,7 +197,7 @@ export function createSurvivalLifeboat(): SurvivalLifeboatBuild {
   floorGeometry.rotateX(-Math.PI / 2);
   const floor = new Mesh(floorGeometry, materials.wood);
   floor.name = 'survival-floor';
-  floor.position.y = -0.45;
+  floor.position.y = FLOOR_HEIGHT;
   root.add(floor);
 
   const gunwaleCurve = new CatmullRomCurve3(outlinePoints(0.39), true, 'centripetal');
@@ -276,7 +284,7 @@ export function createSurvivalLifeboat(): SurvivalLifeboatBuild {
       new Vector3(-1.45, -0.50, -2.96),
       new Vector3(1.45, 1.00, 2.96),
     ),
-    waterExclusion: { halfWidth: 1.50, halfLength: 3.00 },
+    waterExclusion: { halfWidth: 1.60, halfLength: 3.04 },
     textures: textures.all,
   };
 }

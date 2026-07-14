@@ -258,7 +258,7 @@ describe('BoatWorld helpers', () => {
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
     expect(uniforms.uExclusionCount!.value).toBe(1);
-    expect(bounds[0]!.toArray()).toEqual([-1.5, 1.5, -3, 3]);
+    expect(bounds[0]!.toArray()).toEqual([-1.6, 1.6, -3.04, 3.04]);
     expect(matrices[0]!.elements).toEqual(boat.matrixWorld.clone().invert().elements);
     expect(matrices[1]).toEqual(new Matrix4());
     expect(bounds[1]).toEqual(new Vector4());
