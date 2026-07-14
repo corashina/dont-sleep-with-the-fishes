@@ -134,6 +134,15 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
+  it('omits scavenging feedback text beneath the carried-item circles', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('[data-feedback]')).toBeNull();
+    expect(mount.querySelector('[data-carried]')?.textContent).toBe('');
+    ui.dispose();
+  });
+
   it('fills one circle for one canned food item', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
@@ -200,11 +209,11 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
-  it('defines the original-style top-center circle layout at desktop and narrow widths', () => {
+  it('defines larger top-center circles at desktop and narrow widths', () => {
     expect(mainStyles).toMatch(/\.carried\s*\{[^}]*top:\s*16px;[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*70px\);[^}]*gap:\s*10px;/s);
-    expect(mainStyles).toMatch(/\.weight-circle\s*\{[^}]*border-radius:\s*50%;[^}]*overflow:\s*hidden;/s);
-    expect(mainStyles).toMatch(/@media \(max-width:\s*820px\)\s*\{[^}]*\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*54px\);/s);
+    expect(mainStyles).toMatch(/\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*88px\);[^}]*gap:\s*12px;/s);
+    expect(mainStyles).toMatch(/\.weight-circle\s*\{[^}]*width:\s*88px;[^}]*height:\s*88px;[^}]*border-radius:\s*50%;[^}]*overflow:\s*hidden;/s);
+    expect(mainStyles).toMatch(/@media \(max-width:\s*820px\)\s*\{\s*\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*64px\);[^}]*gap:\s*8px;[^}]*\}\s*\.weight-circle\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s);
   });
 
   it('exposes sinking danger and critical severity at the presentation thresholds', () => {
@@ -251,16 +260,6 @@ describe('GameUI', () => {
     ui.showFailureResult(session.snapshot());
 
     expect(mount.querySelector('[data-result-items]')?.textContent).toContain('SAVED — CANNED FOOD');
-  });
-
-  it('versions repeated feedback so identical saves remain observable', () => {
-    const mount = document.createElement('main');
-    const ui = new GameUI(mount);
-
-    ui.showFeedback('SAVED — CANNED FOOD');
-    ui.showFeedback('SAVED — CANNED FOOD');
-
-    expect(mount.querySelector<HTMLElement>('[data-feedback]')?.dataset.version).toBe('1');
   });
 
   it('reports saved supplies without a five-slot limit', () => {
@@ -377,7 +376,7 @@ describe('GameUI', () => {
     expect(mount.querySelectorAll('[data-weight-circle]')).toHaveLength(3);
     expect(mount.querySelector('[data-carried-items]')?.getAttribute('aria-hidden')).toBe('true');
     expect(mount.querySelector('[data-prompt]')).not.toBeNull();
-    expect(mount.querySelector('[data-feedback]')).not.toBeNull();
+    expect(mount.querySelector('[data-feedback]')).toBeNull();
     expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
     expect(mount.querySelector('.controls')?.textContent).toContain('ACTLEFT CLICK');
     expect(mount.querySelector('[data-start-button]')?.classList).toContain('timber-action');

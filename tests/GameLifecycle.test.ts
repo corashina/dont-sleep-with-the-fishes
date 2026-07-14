@@ -5,7 +5,7 @@ import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession } from '../src/game/ScavengeSession';
-import { ITEM_DEFINITIONS, type ItemInstance } from '../src/game/ItemState';
+import type { ItemInstance } from '../src/game/ItemState';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import { World } from '../src/world/World';
@@ -175,16 +175,15 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it.each([
-    ['onSaved', 'saveCarried', 'saveItem', 'SAVED'],
-    ['onLanded', 'dropCarried', 'landItem', 'DROPPED'],
-    ['onLost', 'loseCarried', 'loseItem', 'LOST'],
+    ['onSaved', 'saveCarried', 'saveItem'],
+    ['onLanded', 'dropCarried', 'landItem'],
+    ['onLost', 'loseCarried', 'loseItem'],
   ] as const)(
-    'routes %s flight results to the matching instance, world, and visible feedback',
-    (handlerName, sessionMethod, worldMethod, feedbackPrefix) => {
+    'routes %s flight results to the matching instance and world',
+    (handlerName, sessionMethod, worldMethod) => {
       const instance = { instanceId: 'cannedFood-2', type: 'cannedFood' } as const;
       const sessionResult = vi.fn().mockReturnValue(instance);
       const worldResult = vi.fn();
-      const showFeedback = vi.fn();
       const carryUpdate = vi.fn((
         _delta: number,
         _acceptance: Box3,
@@ -204,7 +203,6 @@ describe('ScavengePhase lifecycle integration', () => {
           lifeboatAcceptance: new Box3(),
           [worldMethod]: worldResult,
         },
-        ui: { showFeedback },
       });
 
       (phase as unknown as { updateFlight: (delta: number, scale: number) => void })
@@ -215,16 +213,20 @@ describe('ScavengePhase lifecycle integration', () => {
         instance.instanceId,
         ...(worldMethod === 'saveItem' ? [1] : []),
       );
-      expect(showFeedback).toHaveBeenCalledWith(
-        `${feedbackPrefix} — ${ITEM_DEFINITIONS[instance.type].label}`,
-      );
     },
   );
 
-  it('routes capacity rejection to visible item-labelled feedback', () => {
-    const showFeedback = vi.fn();
+  it('handles capacity rejection without mutating gameplay or world state', () => {
+    const session = { pickUp: vi.fn(), evacuate: vi.fn() };
+    const carry = { pickUp: vi.fn(), throw: vi.fn(), drop: vi.fn() };
+    const world = {
+      itemObjects: new Map(),
+      saveItem: vi.fn(),
+      landItem: vi.fn(),
+      loseItem: vi.fn(),
+    };
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, { ui: { showFeedback } });
+    Object.assign(phase, { session, carry, world });
 
     (phase as unknown as {
       performAction: (action: {
@@ -236,7 +238,14 @@ describe('ScavengePhase lifecycle integration', () => {
       prompt: 'SCUBA SET WEIGHS 3 — 2 CAPACITY FREE',
     });
 
-    expect(showFeedback).toHaveBeenCalledWith('SCUBA SET WEIGHS 3 — 2 CAPACITY FREE');
+    expect(session.pickUp).not.toHaveBeenCalled();
+    expect(session.evacuate).not.toHaveBeenCalled();
+    expect(carry.pickUp).not.toHaveBeenCalled();
+    expect(carry.throw).not.toHaveBeenCalled();
+    expect(carry.drop).not.toHaveBeenCalled();
+    expect(world.saveItem).not.toHaveBeenCalled();
+    expect(world.landItem).not.toHaveBeenCalled();
+    expect(world.loseItem).not.toHaveBeenCalled();
   });
 
   it('reports pointer-lock rejection through the UI', async () => {
