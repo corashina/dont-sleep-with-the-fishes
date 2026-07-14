@@ -212,11 +212,11 @@ describe('GameUI', () => {
     document.body.append(mount);
     const ui = new GameUI(mount);
     const prompt = mount.querySelector('[data-prompt]')!;
-    ui.setPrompt('E â€” PICK UP FLARE GUN');
+    ui.setPrompt('LEFT CLICK â€” PICK UP FLARE GUN');
     const observer = new MutationObserver(vi.fn());
     observer.observe(prompt, { childList: true });
 
-    ui.setPrompt('E â€” PICK UP FLARE GUN');
+    ui.setPrompt('LEFT CLICK â€” PICK UP FLARE GUN');
 
     expect(observer.takeRecords()).toHaveLength(0);
     observer.disconnect();
@@ -312,6 +312,7 @@ describe('GameUI', () => {
     expect(mount.querySelector('[data-prompt]')).not.toBeNull();
     expect(mount.querySelector('[data-feedback]')).not.toBeNull();
     expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
+    expect(mount.querySelector('.controls')?.textContent).toContain('ACTLEFT CLICK');
     expect(mount.querySelector('[data-start-button]')?.classList).toContain('timber-action');
     expect(mount.querySelector('[data-ui-artwork="warning"]')).not.toBeNull();
 
