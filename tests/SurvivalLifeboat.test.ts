@@ -4,6 +4,7 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  Raycaster,
   Texture,
   Vector3,
 } from 'three';
@@ -83,6 +84,65 @@ describe('survival lifeboat builder', () => {
     disposeBuild(build.root, build.textures);
   });
 
+  it('overlaps the floor beneath every side-wall segment and excludes water from the seam', () => {
+    const build = createSurvivalLifeboat();
+    const floor = build.root.getObjectByName('survival-floor') as Mesh;
+    const segments: Mesh[] = [];
+    build.root.traverse((object) => {
+      if (object instanceof Mesh && object.name.startsWith('hull-segment-')) {
+        segments.push(object);
+      }
+    });
+    expect(segments).toHaveLength(16);
+
+    build.root.updateWorldMatrix(true, true);
+    const raycaster = new Raycaster();
+    const downward = new Vector3(0, -1, 0);
+    const seamSamples: Vector3[] = [];
+
+    for (const segment of segments) {
+      segment.geometry.computeBoundingBox();
+      const localBounds = segment.geometry.boundingBox!;
+      const halfLength = (localBounds.max.z - localBounds.min.z) / 2;
+      const inward = segment.position.x < 0 ? 1 : -1;
+      const wallBounds = new Box3().setFromObject(segment);
+      expect(floor.position.y, `${segment.name} leaves a vertical floor gap`)
+        .toBeGreaterThan(wallBounds.min.y);
+
+      for (const fraction of [-0.9, 0, 0.9]) {
+        const sample = segment.localToWorld(new Vector3(
+          inward * 0.08,
+          0,
+          fraction * halfLength,
+        ));
+        sample.y = 1;
+        raycaster.set(sample, downward);
+        expect(
+          raycaster.intersectObject(floor, false),
+          `${segment.name} has no floor below its inner edge`,
+        ).not.toHaveLength(0);
+        seamSamples.push(sample);
+      }
+    }
+
+    const margin = 0.02;
+    for (const sample of seamSamples) {
+      expect(Math.abs(sample.x) + margin).toBeLessThanOrEqual(
+        build.waterExclusion.halfWidth,
+      );
+      expect(Math.abs(sample.z) + margin).toBeLessThanOrEqual(
+        build.waterExclusion.halfLength,
+      );
+    }
+    const floorBounds = new Box3().setFromObject(floor);
+    expect(Math.max(Math.abs(floorBounds.min.x), Math.abs(floorBounds.max.x)) + margin)
+      .toBeLessThanOrEqual(build.waterExclusion.halfWidth);
+    expect(Math.max(Math.abs(floorBounds.min.z), Math.abs(floorBounds.max.z)) + margin)
+      .toBeLessThanOrEqual(build.waterExclusion.halfLength);
+
+    disposeBuild(build.root, build.textures);
+  });
+
   it('uses all procedural texture families and matching interior exclusions', () => {
     const build = createSurvivalLifeboat();
     const maps = new Set<Texture>();
@@ -100,7 +160,7 @@ describe('survival lifeboat builder', () => {
     expect(maps).toEqual(new Set(build.textures));
     expect(build.interiorBounds.min.toArray()).toEqual([-1.45, -0.50, -2.96]);
     expect(build.interiorBounds.max.toArray()).toEqual([1.45, 1.00, 2.96]);
-    expect(build.waterExclusion).toEqual({ halfWidth: 1.50, halfLength: 3.00 });
+    expect(build.waterExclusion).toEqual({ halfWidth: 1.60, halfLength: 3.04 });
     disposeBuild(build.root, build.textures);
   });
 });
