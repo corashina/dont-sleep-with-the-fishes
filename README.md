@@ -28,7 +28,7 @@ Open the local URL printed by Vite and select **Begin Evacuation**. The scavengi
 | `WASD` | Move through the ship |
 | Mouse | Look |
 | `Shift` | Sprint |
-| `E` | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
+| Left mouse click | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
 | `Escape` | Pause and release the mouse |
 
 Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The rescue-orange lifeboat has unlimited storage, so every supply thrown aboard remains visible and no full-boat state exists.

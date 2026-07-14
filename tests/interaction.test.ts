@@ -33,7 +33,7 @@ describe('chooseContextAction', () => {
       carriedItem: null,
       remainingCapacity: 3,
       nearEvacuation: false,
-    })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'E — PICK UP FLARE GUN' });
+    })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'LEFT CLICK — PICK UP FLARE GUN' });
   });
 
   it('offers a lifeboat throw while carrying', () => {
@@ -64,7 +64,7 @@ describe('chooseContextAction', () => {
       carriedItem: item('cannedFood-1', 'cannedFood'),
       remainingCapacity: 2,
       nearEvacuation: false,
-    })).toEqual({ type: 'pickUp', item: ductTape, prompt: 'E — PICK UP DUCT TAPE' });
+    })).toEqual({ type: 'pickUp', item: ductTape, prompt: 'LEFT CLICK — PICK UP DUCT TAPE' });
   });
 
   it('offers evacuation near the marker with empty hands', () => {
@@ -74,7 +74,7 @@ describe('chooseContextAction', () => {
       carriedItem: null,
       remainingCapacity: 3,
       nearEvacuation: true,
-    }).type).toBe('evacuate');
+    })).toEqual({ type: 'evacuate', prompt: 'LEFT CLICK — EVACUATE NOW' });
   });
 
   it('offers an exactly labelled drop while carrying away from the lifeboat', () => {
@@ -85,7 +85,7 @@ describe('chooseContextAction', () => {
       carriedItem: flashlight,
       remainingCapacity: 2,
       nearEvacuation: false,
-    })).toEqual({ type: 'drop', item: flashlight, prompt: 'E — DROP FLASHLIGHT' });
+    })).toEqual({ type: 'drop', item: flashlight, prompt: 'LEFT CLICK — DROP FLASHLIGHT' });
   });
 
   it('returns the exact no-action result when no context applies', () => {
@@ -107,7 +107,7 @@ describe('chooseContextAction', () => {
       remainingCapacity: 1,
       nearEvacuation: true,
     })).toEqual({
-      type: 'throwToBoat', item: waterJug, prompt: 'E — THROW WATER JUG TO LIFEBOAT',
+      type: 'throwToBoat', item: waterJug, prompt: 'LEFT CLICK — THROW WATER JUG TO LIFEBOAT',
     });
   });
 });

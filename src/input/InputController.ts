@@ -10,6 +10,7 @@ export class InputController {
   constructor(private readonly canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('blur', this.clear);
   }
@@ -54,17 +55,21 @@ export class InputController {
     this.clear();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('blur', this.clear);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.pressed.add(event.code);
-    if (event.code === 'KeyE' && !event.repeat) this.interactQueued = true;
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     this.pressed.delete(event.code);
+  };
+
+  private readonly onMouseDown = (event: MouseEvent): void => {
+    if (event.button === 0 && this.pointerLocked) this.interactQueued = true;
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
