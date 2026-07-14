@@ -19,6 +19,8 @@
   "devDependencies": {
     "@gltf-transform/cli": "^4.4.1",
     "@gltf-transform/core": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
+    "@gltf-transform/functions": "^4.4.1",
     "@types/three": "^0.180.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.0",
