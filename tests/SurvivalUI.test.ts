@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
@@ -14,6 +15,22 @@ const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
   instanceId: `${type}-${index + 1}` as ItemInstanceId,
   type,
+}));
+
+const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
+  day,
+  weather: day === 1 ? 'calm' : 'overcast',
+  daytime: null,
+  nighttime: {
+    phase: 'night',
+    eventId: `night-${day}`,
+    title: 'Quiet Night',
+    prompt: `Night ${day} settled over the boat.`,
+    attemptedItemId: null,
+    resolution: 'endure',
+    outcomeCode: 'event-resolved',
+    outcomeMessage: 'I made it through until morning.',
+  },
 }));
 
 afterEach(() => {
@@ -47,6 +64,81 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('opens the marker through a callback and browses completed pages newest first', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const open = vi.fn();
+    ui.onJournalOpen = open;
+    mount.querySelector<HTMLButtonElement>('[data-journal-open]')!.click();
+    expect(open).toHaveBeenCalledOnce();
+
+    ui.showJournal(journalEntries, 'manual');
+    expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
+    expect(mount.querySelector('[data-journal-page-count]')?.textContent).toBe('PAGE 2 OF 2');
+    mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!.click();
+    expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 1');
+    expect(mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!.disabled).toBe(true);
+    mount.querySelector<HTMLButtonElement>('[data-journal-next]')!.click();
+    expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
+  });
+
+  it('separates manual close from automatic next-day continuation', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const close = vi.fn();
+    const nextDay = vi.fn();
+    ui.onJournalClose = close;
+    ui.onJournalContinue = nextDay;
+
+    ui.showJournal(journalEntries, 'manual');
+    expect(mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.hidden).toBe(false);
+    expect(mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.hidden).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(close).toHaveBeenCalledOnce();
+
+    ui.showJournal(journalEntries, 'manual');
+    mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.click();
+    expect(close).toHaveBeenCalledTimes(2);
+
+    ui.showJournal(journalEntries, 'automatic');
+    expect(mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.hidden).toBe(true);
+    expect(mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(close).toHaveBeenCalledTimes(2);
+    mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.click();
+    expect(nextDay).toHaveBeenCalledOnce();
+  });
+
+  it('shows empty history safely and traps focus in the journal', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.showJournal([], 'manual');
+    expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('NO COMPLETED ENTRIES YET');
+    const previous = mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!;
+    const close = mount.querySelector<HTMLButtonElement>('[data-journal-close]')!;
+    expect(previous.disabled).toBe(true);
+    close.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(document.activeElement).toBe(close);
+    expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('restores focus to the marker after manual Escape closes the journal', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const marker = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    ui.onJournalClose = () => ui.hideJournal();
+    marker.focus();
+    ui.showJournal(journalEntries, 'manual');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.activeElement).toBe(marker);
+    expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
+  });
+
   it('publishes item hover and focus while ignoring fixed anchors and clearing for modals', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
