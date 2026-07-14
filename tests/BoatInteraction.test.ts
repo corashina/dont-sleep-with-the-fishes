@@ -51,6 +51,29 @@ describe('BoatInteraction', () => {
     expect(projected.depth).toBeCloseTo(2);
   });
 
+  it('adds eight pixels of padding to every side of a fully visible projected box', () => {
+    const camera = new PerspectiveCamera(65, 2, 0.1, 100);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const viewportWidth = 1000;
+    const viewportHeight = 500;
+    const bounds = new Box3(
+      new Vector3(-0.5, -0.3, -2),
+      new Vector3(0.5, 0.3, -2),
+    );
+    const projectedMin = bounds.min.clone().project(camera);
+    const projectedMax = bounds.max.clone().project(camera);
+    const noPaddingWidth = Math.abs(projectedMax.x - projectedMin.x) * viewportWidth / 2;
+    const noPaddingHeight = Math.abs(projectedMax.y - projectedMin.y) * viewportHeight / 2;
+
+    const projected = projectBoatBounds(bounds, camera, viewportWidth, viewportHeight);
+
+    expect(noPaddingWidth).toBeGreaterThan(44);
+    expect(noPaddingHeight).toBeGreaterThan(44);
+    expect(projected.width).toBeCloseTo(noPaddingWidth + 16);
+    expect(projected.height).toBeCloseTo(noPaddingHeight + 16);
+  });
+
   it('clips partial bounds and hides empty, off-screen, and behind-camera bounds', () => {
     const camera = new PerspectiveCamera(65, 2, 0.1, 100);
     camera.updateProjectionMatrix();
