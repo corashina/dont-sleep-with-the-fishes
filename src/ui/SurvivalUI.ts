@@ -311,6 +311,24 @@ export class SurvivalUI {
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
       button.hidden = !anchor.visible;
       button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
+      const itemTarget = anchor.itemType !== null;
+      button.dataset.targetKind = itemTarget ? 'item' : 'fixed';
+      if (itemTarget) {
+        const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
+        const targetWidth = Math.round(hitArea.width);
+        const targetHeight = Math.round(hitArea.height);
+        button.style.width = `${targetWidth}px`;
+        button.style.height = `${targetHeight}px`;
+        button.style.marginLeft = `${-targetWidth / 2}px`;
+        button.style.marginTop = `${-targetHeight / 2}px`;
+        button.style.zIndex = String(Math.max(1, 100000 - Math.round(hitArea.depth * 100)));
+      } else {
+        button.style.removeProperty('width');
+        button.style.removeProperty('height');
+        button.style.removeProperty('margin-left');
+        button.style.removeProperty('margin-top');
+        button.style.removeProperty('z-index');
+      }
       this.placeAnchorTooltip(button, anchor);
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);

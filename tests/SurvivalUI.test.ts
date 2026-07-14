@@ -64,7 +64,9 @@ describe('SurvivalUI', () => {
   });
 
   it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
-    expect(mainStyles).toMatch(/\.boat-anchor:not\(:disabled\):not\(\[aria-disabled="true"\]\):active::before\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\) scale\(0\.78\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]::before\s*\{[^}]*content:\s*none;/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="fixed"\]::before\s*\{[^}]*background:\s*var\(--anchor-accent\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]\[aria-disabled="true"\]\s*\{[^}]*border-color:\s*transparent;/s);
     expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
@@ -72,13 +74,25 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
+    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
+    expect(fixed.dataset.targetKind).toBe('fixed');
+    expect(fixed.style.width).toBe('');
+    expect(fixed.style.height).toBe('');
+
     ui.setAnchors([{
       id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
+      hitArea: { width: 96, height: 52, depth: 2.4 },
     }]);
 
     const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
-    expect(anchor.style.transform).toContain('320px');
+    expect(anchor.dataset.targetKind).toBe('item');
+    expect(anchor.style.transform).toBe('translate(320px, 240px)');
+    expect(anchor.style.width).toBe('96px');
+    expect(anchor.style.height).toBe('52px');
+    expect(anchor.style.marginLeft).toBe('-48px');
+    expect(anchor.style.marginTop).toBe('-26px');
+    expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
     expect(anchor.getAttribute('aria-keyshortcuts')).toBe('1');
     expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/FISHING ROD.*FISH.*2 ENERGY/is);
     expect(mount.querySelector('.survival-actions')).toBeNull();
