@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from 'three';
+import { Box3, Mesh, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,
@@ -12,26 +12,17 @@ import {
   storageEnvelopesOverlap,
   survivalBoatStorageTransform,
 } from '../src/survival/SurvivalBoatLayout';
+import { createSurvivalLifeboat } from '../src/survival/SurvivalLifeboat';
+import {
+  PRODUCTION_NORMALIZED_PROP_BOUNDS,
+  loadProductionPropModels,
+} from './helpers/productionPropModels';
 
-const REPRESENTATIVE_SIZE: Readonly<Record<ItemId, readonly [number, number, number]>> = {
-  flareGun: [0.62, 0.24, 0.34],
-  ductTape: [0.54, 0.24, 0.28],
-  fishingRod: [0.12, 0.16, 1.80],
-  baitTin: [0.50, 0.25, 0.36],
-  medicalKit: [0.66, 0.42, 0.48],
-  waterJug: [0.52, 0.78, 0.52],
-  cannedFood: [0.34, 0.42, 0.34],
-  flashlight: [0.24, 0.26, 0.68],
-  scubaSet: [0.92, 0.70, 0.62],
-};
-
-function representativeProp(instance: ItemInstance): Group {
-  const root = new Group();
-  const [width, height, depth] = REPRESENTATIVE_SIZE[instance.type];
-  root.add(new Mesh(
-    new BoxGeometry(width, height, depth),
-    new MeshBasicMaterial(),
-  ));
+function placedProductionProp(
+  library: Awaited<ReturnType<typeof loadProductionPropModels>>,
+  instance: ItemInstance,
+): Object3D {
+  const root = library.create(instance);
   const transform = survivalBoatStorageTransform(instance);
   root.position.copy(transform.position);
   root.rotation.copy(transform.rotation);
@@ -39,7 +30,36 @@ function representativeProp(instance: ItemInstance): Group {
   return root;
 }
 
+function disposeOwnedMeshes(root: Object3D): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry.dispose();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => material.dispose());
+  });
+}
+
 describe('survival boat item layout', () => {
+  it('keeps the normalized production bounds fixture synchronized with checked-in models', async () => {
+    const library = await loadProductionPropModels();
+    try {
+      for (const type of Object.keys(ITEM_DEFINITIONS) as ItemId[]) {
+        const root = library.create({ instanceId: `${type}-1`, type });
+        const bounds = new Box3().setFromObject(root);
+        const fixture = PRODUCTION_NORMALIZED_PROP_BOUNDS[type];
+        bounds.min.toArray().forEach((value, index) => {
+          expect(value, `${type} min[${index}]`).toBeCloseTo(fixture.min[index]!, 6);
+        });
+        bounds.max.toArray().forEach((value, index) => {
+          expect(value, `${type} max[${index}]`).toBeCloseTo(fixture.max[index]!, 6);
+        });
+        disposeOwnedMeshes(root);
+      }
+    } finally {
+      library.dispose();
+    }
+  });
+
   it('defines exactly one stable transform per possible item instance', () => {
     const instances = createItemInstances();
     expect(instances).toHaveLength(14);
@@ -83,28 +103,50 @@ describe('survival boat item layout', () => {
     }
   });
 
-  it('keeps measured maximum-inventory envelopes separated', () => {
+  it('keeps normalized production-model maximum-inventory envelopes separated', async () => {
     expect(SURVIVAL_STORAGE_CLEARANCE).toBe(0.05);
-    const roots = createItemInstances().map(representativeProp);
+    const library = await loadProductionPropModels();
+    const instances = createItemInstances();
+    const roots = instances.map((instance) => placedProductionProp(library, instance));
     try {
       const envelopes = roots.map((root) => measureSurvivalStorageEnvelope(root));
       for (let first = 0; first < envelopes.length; first += 1) {
         for (let second = first + 1; second < envelopes.length; second += 1) {
           expect(
             storageEnvelopesOverlap(envelopes[first]!, envelopes[second]!),
-            `${createItemInstances()[first]!.instanceId} overlaps ${createItemInstances()[second]!.instanceId}`,
+            `${instances[first]!.instanceId} overlaps ${instances[second]!.instanceId}`,
           ).toBe(false);
         }
       }
     } finally {
-      roots.forEach((root) => {
-        root.traverse((object) => {
-          if (object instanceof Mesh) {
-            object.geometry.dispose();
-            object.material.dispose();
-          }
-        });
+      roots.forEach(disposeOwnedMeshes);
+      library.dispose();
+    }
+  });
+
+  it('keeps the medical kit clear of the damaged repair patch', async () => {
+    const library = await loadProductionPropModels();
+    const medicalKit = placedProductionProp(
+      library,
+      { instanceId: 'medicalKit-1', type: 'medicalKit' },
+    );
+    const lifeboat = createSurvivalLifeboat();
+    const repairPatch = lifeboat.root.getObjectByName('damaged-plank-patch')!;
+    try {
+      const medicalEnvelope = measureSurvivalStorageEnvelope(medicalKit);
+      const patchEnvelope = measureSurvivalStorageEnvelope(repairPatch, 0);
+      expect(storageEnvelopesOverlap(medicalEnvelope, patchEnvelope)).toBe(false);
+    } finally {
+      disposeOwnedMeshes(medicalKit);
+      library.dispose();
+      lifeboat.root.traverse((object) => {
+        if (object instanceof Mesh) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
       });
+      lifeboat.textures.forEach((texture) => texture.dispose());
     }
   });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   Matrix4,
+  Material,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -156,6 +157,64 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     world.dispose();
     textureSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it('disposes every unique survival boat geometry and material exactly once', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      [],
+    );
+    const boat = world.scene.getObjectByName('lifeboat')!;
+    const geometries = new Set<Mesh['geometry']>();
+    const materials = new Set<Material>();
+    boat.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      geometries.add(object.geometry);
+      const assigned = Array.isArray(object.material) ? object.material : [object.material];
+      assigned.forEach((material) => materials.add(material));
+    });
+    expect(geometries.size).toBeGreaterThan(0);
+    expect(materials.size).toBeGreaterThan(0);
+    const geometrySpies = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'));
+    const materialSpies = [...materials].map((material) => vi.spyOn(material, 'dispose'));
+
+    world.dispose();
+    world.dispose();
+
+    geometrySpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    materialSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it('keeps every visible actionable anchor clear of fixed repair and horizon anchors', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createItemInstances(),
+    );
+    const actionable = world.projectInteractionAnchors(1280, 720)
+      .filter((anchor) => anchor.visible && anchor.action !== null);
+    expect(actionable).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'repair-patch', action: 'repair' }),
+      expect.objectContaining({ id: 'horizon', action: 'endDay' }),
+    ]));
+    for (let first = 0; first < actionable.length; first += 1) {
+      for (let second = first + 1; second < actionable.length; second += 1) {
+        const distance = Math.hypot(
+          actionable[first]!.x - actionable[second]!.x,
+          actionable[first]!.y - actionable[second]!.y,
+        );
+        expect(distance, `${actionable[first]!.id} is too close to ${actionable[second]!.id}`)
+          .toBeGreaterThanOrEqual(40);
+      }
+    }
+    world.dispose();
     propModels.dispose();
   });
 
