@@ -131,33 +131,29 @@ describe('PropModelLibrary preload', () => {
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
   });
 
-  it('rejects source and resource IDs swapped between item rows before loading', async () => {
+  it('rejects source URLs and source asset IDs swapped between item rows before loading', async () => {
     const ledger = swapLedgerRowValues(
       ITEM_MODEL_ASSET_LEDGER,
       'flareGun',
       'fishingRod',
-      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.resourceId],
-      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.resourceId],
+      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.sourceAssetId],
+      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.sourceAssetId],
     );
 
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
   });
 
-  it('rejects license URLs swapped between item rows before loading', async () => {
-    const ledger = swapLedgerRowValues(
-      ITEM_MODEL_ASSET_LEDGER,
-      'flareGun',
-      'ductTape',
-      [ITEM_MODEL_SPECS.flareGun.licenseUrl],
-      [ITEM_MODEL_SPECS.ductTape.licenseUrl],
-    );
+  it('rejects a license URL that does not match the manifest before loading', async () => {
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
+      row.replace(ITEM_MODEL_SPECS.flareGun.licenseUrl, 'https://example.com/wrong-license')
+    ));
 
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
   });
 
   it('rejects a creator substring instead of the exact creator identity before loading', async () => {
     const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace('Flare Gun / Quaternius', 'Flare Gun / Quater')
+      row.replace('Blaster N / Kenney', 'Blaster N / Kenn')
     ));
 
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
@@ -304,15 +300,16 @@ describe('PropModelLibrary preload', () => {
     materialDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
   });
 
-  it('rejects an aggregate triangle-budget overflow after disposing every loaded root', async () => {
-    const roots = templates((id) => modelRoot(id === 'ductTape' ? 20_332 : 1_000));
+  it('accepts the maximum per-item aggregate within the library triangle budget', async () => {
+    const roots = templates(() => modelRoot(3_000));
     const geometryDisposes = [...roots.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
-    expect(20_332 + 8_000).toBeGreaterThan(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
+    expect(ITEM_IDS.length * 3_000).toBeLessThanOrEqual(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
     const loader: ItemModelLoader = {
       load: async (url) => roots.get(ITEM_IDS.find((id) => ITEM_MODEL_SPECS[id].url === url)!)!,
     };
 
-    await expect(PropModelLibrary.load(loader)).rejects.toThrow(/28,?000|aggregate|total/i);
+    const library = await PropModelLibrary.load(loader);
+    library.dispose();
     geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
   });
 

@@ -15,40 +15,40 @@ export interface NormalizedPropBoundsFixture {
 
 export const PRODUCTION_NORMALIZED_PROP_BOUNDS = {
   flareGun: {
-    min: [-0.36, -0.167995944, -0.086690118],
-    max: [0.36, 0.307995944, 0.086690118],
+    min: [-0.36, -0.115595999, -0.095610057],
+    max: [0.36, 0.255595999, 0.095610057],
   },
   ductTape: {
-    min: [-0.276331326, -0.16113336, -0.31],
-    max: [0.276331326, 0.16113336, 0.31],
+    min: [-0.275, -0.275, -0.09625],
+    max: [0.275, 0.275, 0.09625],
   },
   fishingRod: {
-    min: [-0.049159715, -0.058700467, -0.9],
-    max: [0.049159715, 0.058700467, 0.9],
+    min: [-0.050769230769, -0.032307692308, -0.9],
+    max: [0.050769230769, 0.032307692308, 0.9],
   },
   baitTin: {
-    min: [-0.215327494, -0.17, -0.215327504],
-    max: [0.215327494, 0.41, 0.215327504],
+    min: [-0.24, -0.008897803, -0.24],
+    max: [0.24, 0.248897803, 0.24],
   },
   medicalKit: {
-    min: [-0.36, -0.174063448, -0.129382124],
-    max: [0.36, 0.314063448, 0.129382124],
+    min: [-0.36, -0.182, -0.1224],
+    max: [0.36, 0.322, 0.1224],
   },
   waterJug: {
-    min: [-0.135738786, -0.17, -0.135738837],
-    max: [0.135738786, 0.61, 0.135738837],
+    min: [-0.196390751, -0.17, -0.226772491],
+    max: [0.196390751, 0.61, 0.226772491],
   },
   cannedFood: {
-    min: [-0.155926806, -0.17, -0.155926813],
-    max: [0.155926806, 0.25, 0.155926813],
+    min: [-0.196875012, -0.17, -0.196875012],
+    max: [0.196875012, 0.25, 0.196875012],
   },
   flashlight: {
-    min: [-0.096927612, -0.17, -0.095455089],
-    max: [0.096927612, 0.55, 0.095455089],
+    min: [-0.0864, -0.17, -0.1008],
+    max: [0.0864, 0.55, 0.1008],
   },
   scubaSet: {
-    min: [-0.535653676, -0.169785282, -0.55],
-    max: [0.535653676, 0.669785282, 0.55],
+    min: [-0.225641026, -0.19, -0.139145299],
+    max: [0.225641026, 0.69, 0.139145299],
   },
 } as const satisfies Readonly<Record<ItemId, NormalizedPropBoundsFixture>>;
 
@@ -59,6 +59,10 @@ class CheckedInItemModelLoader implements ItemModelLoader {
     const bytes = await readFile(resolve('src', 'assets', 'models', 'items', `${id}.glb`));
     const data = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(data).set(bytes);
+    // Three's embedded-image path expects the browser worker alias even when tests only need geometry.
+    if (typeof globalThis.self === 'undefined') {
+      Object.defineProperty(globalThis, 'self', { configurable: true, value: globalThis });
+    }
     return new Promise<Awaited<ReturnType<ItemModelLoader['load']>>>((onLoad, onError) => {
       new GLTFLoader().parse(data, '', (gltf) => onLoad(gltf.scene), onError);
     });

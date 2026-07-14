@@ -15,7 +15,7 @@ export interface ItemModelSpec {
   readonly offset: readonly [number, number, number];
   readonly maxTriangles: number;
   readonly sourceUrl: string;
-  readonly resourceId: string;
+  readonly sourceAssetId: string;
   readonly creator: string;
   readonly licenseUrl: string;
 }
@@ -25,15 +25,15 @@ export const ITEM_MODEL_MAX_TOTAL_TRIANGLES = 28_000;
 
 const normalization: Readonly<Record<ItemId, Pick<ItemModelSpec,
   'targetLongestDimension' | 'normalizedSize' | 'rotation' | 'offset'>>> = {
-  flareGun: { targetLongestDimension: 0.72, normalizedSize: [0.721, 0.477, 0.175], rotation: [0, 0, 0], offset: [0, 0.07, 0] },
-  ductTape: { targetLongestDimension: 0.62, normalizedSize: [0.554, 0.323, 0.621], rotation: [0, 0, 0], offset: [0, 0, 0] },
-  fishingRod: { targetLongestDimension: 1.80, normalizedSize: [0.1, 0.119, 1.801], rotation: [Math.PI / 2, 0, 0], offset: [0, 0, 0] },
-  baitTin: { targetLongestDimension: 0.58, normalizedSize: [0.432, 0.581, 0.432], rotation: [0, 0, 0], offset: [0, 0.12, 0] },
-  medicalKit: { targetLongestDimension: 0.72, normalizedSize: [0.721, 0.489, 0.26], rotation: [0, 0, 0], offset: [0, 0.07, 0] },
-  waterJug: { targetLongestDimension: 0.78, normalizedSize: [0.273, 0.781, 0.273], rotation: [0, 0, 0], offset: [0, 0.22, 0] },
-  cannedFood: { targetLongestDimension: 0.42, normalizedSize: [0.313, 0.421, 0.313], rotation: [0, 0, 0], offset: [0, 0.04, 0] },
-  flashlight: { targetLongestDimension: 0.72, normalizedSize: [0.195, 0.721, 0.192], rotation: [0, 0, 0], offset: [0, 0.19, 0] },
-  scubaSet: { targetLongestDimension: 1.10, normalizedSize: [1.072, 0.841, 1.101], rotation: [0, 0, 0], offset: [0, 0.25, 0] },
+  flareGun: { targetLongestDimension: 0.72, normalizedSize: [0.72, 0.371191998, 0.191220115], rotation: [0, Math.PI / 2, 0], offset: [0, 0.07, 0] },
+  ductTape: { targetLongestDimension: 0.55, normalizedSize: [0.55, 0.55, 0.1925], rotation: [Math.PI / 2, 0, 0], offset: [0, 0, 0] },
+  fishingRod: { targetLongestDimension: 1.80, normalizedSize: [0.12, 0.083076923, 1.8], rotation: [Math.PI / 2, 0, 0], offset: [0, 0, 0] },
+  baitTin: { targetLongestDimension: 0.48, normalizedSize: [0.48, 0.257795606, 0.48], rotation: [0, 0, 0], offset: [0, 0.12, 0] },
+  medicalKit: { targetLongestDimension: 0.72, normalizedSize: [0.72, 0.504, 0.2448], rotation: [0, 0, 0], offset: [0, 0.07, 0] },
+  waterJug: { targetLongestDimension: 0.78, normalizedSize: [0.392781501, 0.78, 0.453544982], rotation: [0, 0, 0], offset: [0, 0.22, 0] },
+  cannedFood: { targetLongestDimension: 0.42, normalizedSize: [0.393750024, 0.42, 0.393750024], rotation: [0, 0, 0], offset: [0, 0.04, 0] },
+  flashlight: { targetLongestDimension: 0.72, normalizedSize: [0.1728, 0.72, 0.2016], rotation: [0, 0, 0], offset: [0, 0.19, 0] },
+  scubaSet: { targetLongestDimension: 0.88, normalizedSize: [0.451282051, 0.88, 0.278290598], rotation: [0, 0, 0], offset: [0, 0.25, 0] },
 };
 
 const BOUNDS_EPSILON = 1e-9;
@@ -47,40 +47,40 @@ const conservativeBounds = (
 
 const normalizedBounds: Readonly<Record<ItemId, ItemModelSpec['normalizedBounds']>> = {
   flareGun: conservativeBounds(
-    [-0.36, -0.167995937843, -0.086690087891],
-    [0.36, 0.307995937843, 0.086690087891],
+    [-0.36, -0.115595999, -0.095610057],
+    [0.36, 0.255595999, 0.095610057],
   ),
   ductTape: conservativeBounds(
-    [-0.276331325672, -0.16113336008, -0.31],
-    [0.276331325672, 0.16113336008, 0.31],
+    [-0.275, -0.275, -0.09625],
+    [0.275, 0.275, 0.09625],
   ),
   fishingRod: conservativeBounds(
-    [-0.049159715243, -0.058700466158, -0.9],
-    [0.049159715243, 0.058700466158, 0.9],
+    [-0.050769230769, -0.032307692308, -0.9],
+    [0.050769230769, 0.032307692308, 0.9],
   ),
   baitTin: conservativeBounds(
-    [-0.215327493999, -0.17, -0.21532746642],
-    [0.215327493999, 0.41, 0.21532746642],
+    [-0.24, -0.008897803, -0.24],
+    [0.24, 0.248897803, 0.24],
   ),
   medicalKit: conservativeBounds(
-    [-0.36, -0.174063443494, -0.129382113377],
-    [0.36, 0.314063443494, 0.129382113377],
+    [-0.36, -0.182, -0.1224],
+    [0.36, 0.322, 0.1224],
   ),
   waterJug: conservativeBounds(
-    [-0.135738786864, -0.17, -0.135738788512],
-    [0.135738786864, 0.61, 0.135738788512],
+    [-0.196390751, -0.17, -0.226772491],
+    [0.196390751, 0.61, 0.226772491],
   ),
   cannedFood: conservativeBounds(
-    [-0.155926805999, -0.17, -0.155926786028],
-    [0.155926805999, 0.25, 0.155926786028],
+    [-0.196875012, -0.17, -0.196875012],
+    [0.196875012, 0.25, 0.196875012],
   ),
   flashlight: conservativeBounds(
-    [-0.096927613402, -0.17, -0.095455043051],
-    [0.096927613402, 0.55, 0.095455043051],
+    [-0.0864, -0.17, -0.1008],
+    [0.0864, 0.55, 0.1008],
   ),
   scubaSet: conservativeBounds(
-    [-0.535653675561, -0.169785281651, -0.55],
-    [0.535653675561, 0.669785281651, 0.55],
+    [-0.225641026, -0.19, -0.139145299],
+    [0.225641026, 0.69, 0.139145299],
   ),
 };
 
@@ -90,29 +90,29 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.flareGun,
     normalizedBounds: normalizedBounds.flareGun,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/44H9OBUqTC',
-    resourceId: '9ec52cda-c918-43f0-b7af-354e7fe96c37',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/blaster-kit',
+    sourceAssetId: 'blaster-kit@2.1:Models/GLB format/blaster-n.glb',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   ductTape: {
     url: new URL('../assets/models/items/ductTape.glb', import.meta.url).href,
     ...normalization.ductTape,
     normalizedBounds: normalizedBounds.ductTape,
-    maxTriangles: 21_000,
-    sourceUrl: 'https://poly.pizza/m/fu49rGO7Ukc',
-    resourceId: '06934616-1393-451d-bdf6-2101a5e32703',
-    creator: 'Poly by Google',
-    licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
+    maxTriangles: 3_000,
+    sourceUrl: 'https://kenney.nl/assets/prototype-kit',
+    sourceAssetId: 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb',
+    creator: 'Kenney',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   fishingRod: {
     url: new URL('../assets/models/items/fishingRod.glb', import.meta.url).href,
     ...normalization.fishingRod,
     normalizedBounds: normalizedBounds.fishingRod,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/lDlWQjn9Zg',
-    resourceId: 'c15761f7-4aef-4bf4-9565-50a68a981f34',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/prototype-kit',
+    sourceAssetId: 'prototype-kit@1.0:composite/fishingRod',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   baitTin: {
@@ -120,9 +120,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.baitTin,
     normalizedBounds: normalizedBounds.baitTin,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/IuoYedcdXQ',
-    resourceId: 'f6b52ca9-61b1-42d5-a42f-d8748a41eb45',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/food-kit',
+    sourceAssetId: 'food-kit@2.0:Models/GLB format/can-small.glb',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   medicalKit: {
@@ -130,9 +130,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.medicalKit,
     normalizedBounds: normalizedBounds.medicalKit,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/Hp80p6148W',
-    resourceId: '41249676-0965-40df-8dd7-eee79dd9e6cf',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/prototype-kit',
+    sourceAssetId: 'prototype-kit@1.0:composite/medicalKit',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   waterJug: {
@@ -140,9 +140,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.waterJug,
     normalizedBounds: normalizedBounds.waterJug,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/KpxDpidn1Z',
-    resourceId: '3ebef9a3-c2df-49ee-abe1-df38b5777bcd',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/survival-kit',
+    sourceAssetId: 'survival-kit@2.0:Models/GLB format/bottle-large.glb',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   cannedFood: {
@@ -150,9 +150,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.cannedFood,
     normalizedBounds: normalizedBounds.cannedFood,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/YnowJvWqxE',
-    resourceId: 'e16e13cf-fbc4-48c8-9927-ae34920a498e',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/food-kit',
+    sourceAssetId: 'food-kit@2.0:Models/GLB format/can.glb',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   flashlight: {
@@ -160,9 +160,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.flashlight,
     normalizedBounds: normalizedBounds.flashlight,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/WGsvr4KOZd',
-    resourceId: '035c4897-22f3-4e9c-b29f-ebafe2b566da',
-    creator: 'Quaternius',
+    sourceUrl: 'https://kenney.nl/assets/prototype-kit',
+    sourceAssetId: 'prototype-kit@1.0:composite/flashlight',
+    creator: 'Kenney',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
   scubaSet: {
@@ -170,9 +170,9 @@ export const ITEM_MODEL_SPECS = {
     ...normalization.scubaSet,
     normalizedBounds: normalizedBounds.scubaSet,
     maxTriangles: 3_000,
-    sourceUrl: 'https://poly.pizza/m/7igrHLjaQlW',
-    resourceId: 'efda7497-db5e-47e9-b317-8e8baeb1c616',
-    creator: 'Steren Giannini',
-    licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
+    sourceUrl: 'https://kenney.nl/assets/prototype-kit',
+    sourceAssetId: 'prototype-kit@1.0:composite/scubaSet',
+    creator: 'Kenney',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
 } satisfies Readonly<Record<ItemId, ItemModelSpec>>;
