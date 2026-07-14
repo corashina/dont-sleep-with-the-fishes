@@ -63,4 +63,15 @@ describe('formatJournalEntry', () => {
     expect(page.nighttime).toBe('That night, I encountered hull impact. I faced it without using any supplies.');
     expect(JSON.stringify(page)).not.toMatch(/charges|repairMaterial|hull:\s*-/i);
   });
+
+  it.each(['suitableItem', 'unsuitableItem'] as const)(
+    'throws a clear error when %s has no attempted item',
+    (resolution) => {
+      expect(() => formatJournalEntry(entry({
+        nighttime: event({ attemptedItemId: null, resolution }),
+      }))).toThrowError(
+        `Journal event night-hull-impact with ${resolution} resolution requires an attempted item.`,
+      );
+    },
+  );
 });
