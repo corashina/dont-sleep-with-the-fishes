@@ -48,7 +48,7 @@ describe('formatJournalEntry', () => {
         outcomeMessage: 'That item cannot help. The squall tore open weak seams in the hull.',
       }),
     }));
-    expect(page.daytime).toBe('During the day, I encountered sudden squall. I tried the water jug, but it did not help.');
+    expect(page.daytime).toBe('During the day, I encountered sudden squall. I tried the water bottle, but it did not help.');
     expect(page.daytime).not.toContain('That item cannot help');
   });
 

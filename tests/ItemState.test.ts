@@ -6,7 +6,9 @@ describe('physical item catalog', () => {
     expect(ITEM_DEFINITIONS.scubaSet).toMatchObject({ weight: 3, spawnCount: 1, durable: true });
     expect(ITEM_DEFINITIONS.fishingRod.weight).toBe(2);
     expect(ITEM_DEFINITIONS.cannedFood).toMatchObject({ weight: 1, spawnCount: 3, charges: 1 });
-    expect(ITEM_DEFINITIONS.waterJug).toMatchObject({ weight: 2, spawnCount: 2, charges: 3 });
+    expect(ITEM_DEFINITIONS.waterJug).toMatchObject({
+      label: 'WATER BOTTLE', weight: 2, spawnCount: 2, charges: 3,
+    });
     expect(ITEM_IDS).toHaveLength(9);
   });
 
