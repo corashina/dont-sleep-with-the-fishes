@@ -95,20 +95,35 @@ describe('InputController', () => {
     await expect(input.requestPointerLock()).resolves.toBe(false);
   });
 
-  it('queues interaction on the non-repeating KeyE edge', () => {
-    const { input } = createInput();
+  it('queues one interaction for a primary mouse press while pointer locked', () => {
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
 
-    dispatch('keydown', { code: 'KeyE', repeat: false });
+    dispatch('mousedown', { button: 0 });
     expect(input.consumeInteract()).toBe(true);
     expect(input.consumeInteract()).toBe(false);
 
-    dispatch('keydown', { code: 'KeyE', repeat: true });
+    dispatch('mousedown', { button: 2 });
+    expect(input.consumeInteract()).toBe(false);
+
+    browserDocument.pointerLockElement = null;
+    dispatch('mousedown', { button: 0 });
+    expect(input.consumeInteract()).toBe(false);
+  });
+
+  it('does not queue interaction from the former KeyE binding', () => {
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
+
+    dispatch('keydown', { code: 'KeyE', repeat: false });
+
     expect(input.consumeInteract()).toBe(false);
   });
 
   it('clears queued interaction on blur', () => {
-    const { input } = createInput();
-    dispatch('keydown', { code: 'KeyE', repeat: false });
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
+    dispatch('mousedown', { button: 0 });
 
     dispatch('blur');
 
@@ -119,7 +134,7 @@ describe('InputController', () => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;
     dispatch('keydown', { code: 'KeyW', repeat: false });
-    dispatch('keydown', { code: 'KeyE', repeat: false });
+    dispatch('mousedown', { button: 0 });
     dispatch('mousemove', { movementX: 5, movementY: 6 });
 
     input.dispose();
@@ -137,8 +152,10 @@ describe('InputController', () => {
     input.dispose();
     dispatch('keydown', { code: 'KeyW', repeat: false });
     dispatch('mousemove', { movementX: 5, movementY: 6 });
+    dispatch('mousedown', { button: 0 });
 
     expect(input.movement).toEqual({ x: 0, z: 0 });
     expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
+    expect(input.consumeInteract()).toBe(false);
   });
 });

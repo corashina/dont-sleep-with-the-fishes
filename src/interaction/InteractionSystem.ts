@@ -37,7 +37,7 @@ export function chooseContextAction(input: ContextInput): ContextAction {
     return {
       type: 'throwToBoat',
       item: input.carriedItem,
-      prompt: `E — THROW ${ITEM_LABELS[input.carriedItem.type]} TO LIFEBOAT`,
+      prompt: `LEFT CLICK — THROW ${ITEM_LABELS[input.carriedItem.type]} TO LIFEBOAT`,
     };
   }
   if (input.target === 'item' && input.targetItem) {
@@ -51,17 +51,17 @@ export function chooseContextAction(input: ContextInput): ContextAction {
     return {
       type: 'pickUp',
       item: input.targetItem,
-      prompt: `E — PICK UP ${definition.label}`,
+      prompt: `LEFT CLICK — PICK UP ${definition.label}`,
     };
   }
   if (input.nearEvacuation && !input.carriedItem) {
-    return { type: 'evacuate', prompt: 'E — EVACUATE NOW' };
+    return { type: 'evacuate', prompt: 'LEFT CLICK — EVACUATE NOW' };
   }
   if (input.carriedItem) {
     return {
       type: 'drop',
       item: input.carriedItem,
-      prompt: `E — DROP ${ITEM_LABELS[input.carriedItem.type]}`,
+      prompt: `LEFT CLICK — DROP ${ITEM_LABELS[input.carriedItem.type]}`,
     };
   }
   return { type: 'none', prompt: '' };
