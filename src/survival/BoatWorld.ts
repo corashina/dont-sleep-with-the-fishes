@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -30,6 +31,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   ACTION_FOR_ITEM,
   projectBoatAnchor,
+  projectBoatBounds,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
 import type {
@@ -286,20 +288,22 @@ export class BoatWorld {
     this.scene.updateMatrixWorld(true);
 
     const itemAnchors = this.savedProps.map(({ instance, prop }) => {
-      const projected = projectBoatAnchor(
-        prop.getWorldPosition(new Vector3()),
+      const projection = projectBoatBounds(
+        new Box3().setFromObject(prop, true),
         this.camera,
         width,
         height,
       );
+      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
       return {
         id: instance.instanceId,
         itemType: instance.type,
         action: ACTION_FOR_ITEM[instance.type] ?? null,
-        ...projected,
-        visible: prop.visible && projected.visible,
+        ...point,
+        visible: prop.visible && point.visible,
         depleted: prop.userData.depleted === true,
         remainingUses: prop.userData.remainingUses as number | null,
+        hitArea: { width: hitWidth, height: hitHeight, depth },
       } satisfies BoatInteractionAnchor;
     });
     const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
