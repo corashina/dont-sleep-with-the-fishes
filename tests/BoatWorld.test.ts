@@ -353,6 +353,42 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('highlights only the selected instance and restores depleted presentation', () => {
+    const savedItems = [savedItem('ductTape'), savedItem('ductTape', 2)];
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      savedItems,
+    );
+    const inventory = createSurvivalInventory(savedItems);
+    inventory.ductTape.charges = 1;
+    world.syncInventory(snapshot(savedItems, { inventory }));
+
+    const first = world.scene.getObjectByName('prop:ductTape-1')!;
+    const second = world.scene.getObjectByName('prop:ductTape-2')!;
+    const firstMaterial = firstMesh(first).material as MeshStandardMaterial;
+    const secondMaterial = firstMesh(second).material as MeshStandardMaterial;
+    const firstEmissive = firstMaterial.emissive.getHex();
+    const secondEmissive = secondMaterial.emissive.getHex();
+    const depletedColor = secondMaterial.color.getHex();
+
+    world.setHighlightedItem('ductTape-2');
+    expect(secondMaterial.emissive.getHex()).not.toBe(secondEmissive);
+    expect(firstMaterial.emissive.getHex()).toBe(firstEmissive);
+
+    world.setHighlightedItem(null);
+    expect(secondMaterial.emissive.getHex()).toBe(secondEmissive);
+    expect(secondMaterial.color.getHex()).toBe(depletedColor);
+
+    world.setHighlightedItem('missing-instance');
+    expect(firstMaterial.emissive.getHex()).toBe(firstEmissive);
+    expect(secondMaterial.emissive.getHex()).toBe(secondEmissive);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('projects saved props plus fixed repair and horizon anchors', () => {
     const savedItems = [savedItem('fishingRod'), savedItem('flareGun')];
     const propModels = createTestPropModels();
@@ -370,6 +406,16 @@ describe('BoatWorld helpers', () => {
       expect.objectContaining({ id: 'horizon', itemType: null, action: 'endDay', visible: true }),
     ]));
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+    const itemAnchor = anchors.find(({ id }) => id === 'fishingRod-1')!;
+    const fixedAnchor = anchors.find(({ id }) => id === 'horizon')!;
+    expect(itemAnchor.hitArea).toEqual({
+      width: expect.any(Number),
+      height: expect.any(Number),
+      depth: expect.any(Number),
+    });
+    expect(itemAnchor.hitArea!.width).toBeGreaterThanOrEqual(44);
+    expect(itemAnchor.hitArea!.height).toBeGreaterThanOrEqual(44);
+    expect(fixedAnchor.hitArea).toBeUndefined();
     world.dispose();
     propModels.dispose();
   });

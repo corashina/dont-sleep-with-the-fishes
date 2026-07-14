@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -29,6 +30,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   ACTION_FOR_ITEM,
   projectBoatAnchor,
+  projectBoatBounds,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
 import { survivalBoatStorageTransform } from './SurvivalBoatLayout';
@@ -106,6 +108,11 @@ interface SavedProp {
   prop: Object3D;
 }
 
+interface InteractionHighlightState {
+  emissive: number;
+  emissiveIntensity: number;
+}
+
 interface FixedAnchor {
   id: string;
   action: DayActionId;
@@ -141,6 +148,28 @@ function setPropDepleted(root: Object3D, depleted: boolean): void {
     if (depleted) material.color.lerp(new Color(0x4f5756), 0.65);
   });
   root.userData.depleted = depleted;
+}
+
+function setPropHighlighted(root: Object3D, highlighted: boolean): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
+    const material = object.material;
+    const state = material.userData.interactionHighlight as InteractionHighlightState | undefined;
+    if (state === undefined) {
+      material.userData.interactionHighlight = {
+        emissive: material.emissive.getHex(),
+        emissiveIntensity: material.emissiveIntensity,
+      } satisfies InteractionHighlightState;
+    }
+    const original = material.userData.interactionHighlight as InteractionHighlightState;
+    if (highlighted) {
+      material.emissive.setHex(0x6f4218);
+      material.emissiveIntensity = Math.max(.65, original.emissiveIntensity);
+    } else {
+      material.emissive.setHex(original.emissive);
+      material.emissiveIntensity = original.emissiveIntensity;
+    }
+  });
 }
 
 export class BoatWorld {
@@ -185,6 +214,7 @@ export class BoatWorld {
   private smoothedRoll = 0;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
+  private highlightedItemId: string | null = null;
   private disposed = false;
 
   constructor(
@@ -287,6 +317,24 @@ export class BoatWorld {
       syncedTypes.add(instance.type);
       this.syncType(instance.type, snapshot);
     });
+    if (this.highlightedItemId !== null) {
+      const highlighted = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
+      if (highlighted === undefined || !highlighted.visible) this.setHighlightedItem(null);
+    }
+  }
+
+  setHighlightedItem(instanceId: string | null): void {
+    if (this.disposed || instanceId === this.highlightedItemId) return;
+    if (this.highlightedItemId !== null) {
+      const previous = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
+      if (previous !== undefined) setPropHighlighted(previous, false);
+    }
+    this.highlightedItemId = null;
+    if (instanceId === null) return;
+    const next = this.savedPropByInstanceId.get(instanceId as ItemInstance['instanceId']);
+    if (next === undefined || !next.visible) return;
+    setPropHighlighted(next, true);
+    this.highlightedItemId = instanceId;
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -294,20 +342,22 @@ export class BoatWorld {
     this.scene.updateMatrixWorld(true);
 
     const itemAnchors = this.savedProps.map(({ instance, prop }) => {
-      const projected = projectBoatAnchor(
-        prop.getWorldPosition(new Vector3()),
+      const projection = projectBoatBounds(
+        new Box3().setFromObject(prop, true),
         this.camera,
         width,
         height,
       );
+      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
       return {
         id: instance.instanceId,
         itemType: instance.type,
         action: ACTION_FOR_ITEM[instance.type] ?? null,
-        ...projected,
-        visible: prop.visible && projected.visible,
+        ...point,
+        visible: prop.visible && point.visible,
         depleted: prop.userData.depleted === true,
         remainingUses: prop.userData.remainingUses as number | null,
+        hitArea: { width: hitWidth, height: hitHeight, depth },
       } satisfies BoatInteractionAnchor;
     });
     const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
@@ -404,6 +454,7 @@ export class BoatWorld {
 
   dispose(): void {
     if (this.disposed) return;
+    this.setHighlightedItem(null);
     this.disposed = true;
     this.cancelActiveSequence();
     this.ocean.dispose();

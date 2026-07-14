@@ -172,11 +172,13 @@ git commit -m "feat: present hunger as food meter"
 **Files:**
 - Modify: `tests/SurvivalUI.test.ts:48-66, 907-922`
 - Modify: `tests/GameUI.test.ts:20-35`
+- Modify: `src/ui/SurvivalUI.ts`
+- Modify: `src/ui/GameUI.ts`
 - Modify: `src/styles/main.css:66-80, 475-530, 537-556`
 
 **Interfaces:**
 - Consumes: existing `.poster-screen`, `.cinematic-overlay`, `.survival-meters`, `.journal-marker`, and `.performance-stats` classes.
-- Produces: one stylesheet contract with top-center journal, top-right conditions, FPS below conditions, and viewport-centered overlay content/backdrops.
+- Produces: top-center journal, top-right conditions, FPS below conditions, fixed viewport-centered overlay backdrops, and bounded inner content wrappers that own vertical scrolling.
 
 - [ ] **Step 1: Replace top-biased style assertions with centered contracts**
 
@@ -186,7 +188,8 @@ In `tests/SurvivalUI.test.ts`, replace `aligns cinematic backing panels...` with
 it('centers survival HUD zones, overlay content, and vignette backing', () => {
   expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
   expect(mainStyles).toMatch(/\.journal-marker\s*\{[^}]*right:\s*auto;[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
-  expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow-y:\s*auto;[^}]*circle at 50% 50%/s);
+  expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*circle at 50% 50%/s);
+  expect(mainStyles).toMatch(/\.cinematic-overlay__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
   expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
   expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
 });
@@ -211,7 +214,8 @@ Add to `tests/GameUI.test.ts`:
 
 ```ts
 it('centers every scavenging poster screen and its vignette', () => {
-  expect(mainStyles).toMatch(/\.screen\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow-y:\s*auto;[^}]*text-align:\s*center;/s);
+  expect(mainStyles).toMatch(/\.screen\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*text-align:\s*center;/s);
+  expect(mainStyles).toMatch(/\.screen__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
   expect(mainStyles).toMatch(/\.poster-screen\s*\{[^}]*background:\s*radial-gradient\(circle at 50% 50%/s);
 });
 ```
@@ -222,9 +226,9 @@ Run: `bun run test -- tests/SurvivalUI.test.ts tests/GameUI.test.ts`
 
 Expected: FAIL because survival overlays still use `50% 38%`, poster screens are left-aligned, and HUD groups occupy the old corners.
 
-- [ ] **Step 3: Center the scavenging screens**
+- [ ] **Step 3: Wrap and center the scavenging screens**
 
-Replace the base `.screen` rule and final `.poster-screen` override with these complete rules:
+Wrap the existing contents of each `GameUI` full-screen section in one `<div class="screen__content">`. Keep every section attribute and every existing descendant role, data attribute, live region, and focus target unchanged. Replace the base `.screen` rule and final `.poster-screen` override with these complete rules:
 
 ```css
 .screen {
@@ -233,9 +237,8 @@ Replace the base `.screen` rule and final `.poster-screen` override with these c
   display: grid;
   align-content: safe center;
   justify-items: center;
-  gap: 18px;
   padding: clamp(28px, 7vw, 96px);
-  overflow-y: auto;
+  overflow: hidden;
   text-align: center;
   background: radial-gradient(circle at 50% 50%, #172227f5 0 24%, #101719eb 56%, #030404f5 100%);
   opacity: 0;
@@ -244,13 +247,24 @@ Replace the base `.screen` rule and final `.poster-screen` override with these c
   transition: opacity 260ms ease, visibility 260ms ease;
 }
 
+.screen__content {
+  display: grid;
+  align-content: safe center;
+  justify-items: center;
+  gap: 18px;
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .poster-screen {
   justify-items: center;
   background: radial-gradient(circle at 50% 50%, #101415f2 0 24%, #07090ae8 60%, #020303fa 100%);
 }
 ```
 
-Keep all existing heading, control, error, and animation rules. The existing direct children form the bounded content region; `align-content: safe center` centers normal content and starts oversized content at the scrollable top edge.
+Keep all existing heading, control, error, and animation rules. The outer screen keeps its backdrop fixed with `overflow: hidden`; the bounded inner wrapper centers normal content and uses safe-start scrolling when its contents exceed the available height.
 
 - [ ] **Step 4: Move the survival HUD groups and protect FPS placement**
 
@@ -302,19 +316,29 @@ Replace the final illustrated-HUD position overrides with:
 
 Remove the unused `.survival-tallies` overrides after Task 1 deletes the node.
 
-- [ ] **Step 5: Center survival overlays and their backing vignette**
+- [ ] **Step 5: Wrap and center survival overlays and their backing vignette**
 
-Replace the final cinematic rules and low-height override with:
+Wrap the existing contents of each `SurvivalUI` cinematic overlay in one `<div class="cinematic-overlay__content">`. Keep each section role, modal state, accessible label, data attribute, live region, focus target, and button unchanged. Replace the final cinematic rules and low-height override with:
 
 ```css
 .cinematic-overlay {
   align-content: safe center;
   justify-items: center;
-  gap: 14px;
   padding: 24px;
-  overflow-y: auto;
+  overflow: hidden;
   background: radial-gradient(circle at 50% 50%, #090b0cbb, #030404f2 72%);
   text-align: center;
+}
+
+.cinematic-overlay__content {
+  display: grid;
+  align-content: safe center;
+  justify-items: center;
+  gap: 14px;
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .cinematic-overlay::before {
@@ -331,7 +355,7 @@ Replace the final cinematic rules and low-height override with:
   transform: translate(-50%, -50%);
 }
 
-.cinematic-overlay > * {
+.cinematic-overlay__content > * {
   width: min(620px, calc(100vw - 96px));
   text-align: center;
 }
@@ -353,7 +377,7 @@ Replace the final cinematic rules and low-height override with:
 }
 
 @media (max-height: 760px) and (min-width: 761px) {
-  .cinematic-overlay { gap: 8px; }
+  .cinematic-overlay__content { gap: 8px; }
   .cinematic-overlay::before { min-height: min(360px, calc(100dvh - 32px)); }
   .event-items { max-height: 126px; }
 }
@@ -366,7 +390,7 @@ Run: `bun run test -- tests/SurvivalUI.test.ts tests/GameUI.test.ts`
 Expected: PASS.
 
 ```bash
-git add src/styles/main.css tests/SurvivalUI.test.ts tests/GameUI.test.ts
+git add src/ui/SurvivalUI.ts src/ui/GameUI.ts src/styles/main.css tests/SurvivalUI.test.ts tests/GameUI.test.ts
 git commit -m "feat: center hud and full-screen states"
 ```
 
