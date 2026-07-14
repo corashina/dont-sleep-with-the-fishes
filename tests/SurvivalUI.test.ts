@@ -278,6 +278,15 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
   });
 
+  it('styles the journal as a centered bounded paper page with reduced-motion support', () => {
+    expect(mainStyles).toMatch(/\.journal-marker:focus-visible\s*\{/);
+    expect(mainStyles).toMatch(/\.journal-overlay::before\s*\{[^}]*display:\s*none/s);
+    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*width:\s*min\(680px/s);
+    expect(mainStyles).toMatch(/\.journal-page__story\s*\{[^}]*overflow-y:\s*auto/s);
+    expect(mainStyles).toMatch(/@media \(max-height:\s*760px\)[\s\S]*\.journal-page/s);
+    expect(mainStyles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.journal-page/s);
+  });
+
   it('wraps every survival cinematic overlay in one bounded content region', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
