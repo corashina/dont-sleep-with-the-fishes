@@ -12,7 +12,6 @@ import {
 } from '../game/ScavengeSession';
 import {
   createItemInstances,
-  ITEM_LABELS,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -232,7 +231,7 @@ export class ScavengePhase implements GamePhase {
     } else if (action.type === 'evacuate') {
       this.session.evacuate();
     } else if (action.type === 'capacityFull') {
-      this.ui.showFeedback(action.prompt);
+      return;
     }
   }
 
@@ -249,17 +248,14 @@ export class ScavengePhase implements GamePhase {
         onSaved: (instance) => {
           if (!this.session.saveCarried()) return;
           this.world.saveItem(instance.instanceId, this.session.snapshot().savedCount - 1);
-          this.ui.showFeedback(`SAVED — ${ITEM_LABELS[instance.type]}`);
         },
         onLost: (instance) => {
           if (!this.session.loseCarried()) return;
           this.world.loseItem(instance.instanceId);
-          this.ui.showFeedback(`LOST — ${ITEM_LABELS[instance.type]}`);
         },
         onLanded: (instance) => {
           if (!this.session.dropCarried()) return;
           this.world.landItem(instance.instanceId);
-          this.ui.showFeedback(`DROPPED — ${ITEM_LABELS[instance.type]}`);
         },
       },
     );

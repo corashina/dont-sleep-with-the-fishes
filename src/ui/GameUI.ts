@@ -30,7 +30,6 @@ export class GameUI {
   private readonly capacity: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly carriedItems: HTMLElement;
-  private readonly feedback: HTMLElement;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
   private readonly resultItems: HTMLElement;
@@ -56,10 +55,7 @@ export class GameUI {
         <div class="capacity ink-label"><span class="eyebrow">IN THE BOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
         <div class="crosshair" aria-hidden="true"></div>
         <div class="prompt brush-label" data-prompt aria-live="polite"></div>
-        <div class="carried" data-carried>
-          <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
-          <div class="feedback brush-label" data-feedback aria-live="polite"></div>
-        </div>
+        <div class="carried" data-carried><div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div></div>
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
@@ -115,7 +111,6 @@ export class GameUI {
     this.capacity = requireElement(this.root, '[data-capacity]');
     this.prompt = requireElement(this.root, '[data-prompt]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
-    this.feedback = requireElement(this.root, '[data-feedback]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
     this.resultItems = requireElement(this.root, '[data-result-items]');
@@ -155,14 +150,6 @@ export class GameUI {
     if (this.prompt.textContent === text) return;
     this.prompt.textContent = text;
     this.prompt.classList.toggle('is-visible', text.length > 0);
-  }
-
-  showFeedback(text: string): void {
-    if (this.feedback.textContent === text) {
-      this.feedback.dataset.version = String(Number(this.feedback.dataset.version ?? 0) + 1);
-    }
-    this.feedback.textContent = text;
-    this.feedback.classList.toggle('is-visible', text.length > 0);
   }
 
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
