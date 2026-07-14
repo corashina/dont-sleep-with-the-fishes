@@ -20,12 +20,14 @@ import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import type { CollisionBox } from '../player/collisions';
+import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
 import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from './Lifeboat';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
-import { createShip, selectSpawnPoints } from './Ship';
+import { createShip, type ShipBuild } from './Ship';
+import { assignShipItems } from './ShipItemPlacement';
 
 function collectOwnedResources(
   root: Object3D,
@@ -48,39 +50,56 @@ export class World {
   readonly colliders: CollisionBox[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
+  readonly playerNavigationBounds: PlayerNavigationBounds;
   readonly lifeboatAcceptance: Box3;
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
   private readonly boatStorage: Group;
   private readonly buoyancy: BoatBuoyancy;
+  private readonly shipBuild: ShipBuild;
+  private readonly boatAnchor: Vector3;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-  private readonly boatAnchor = new Vector3(5.5, 0.35, -5.8);
   private disposed = false;
 
   constructor(
     private readonly scene: Scene,
     private readonly propModels: PropModelLibrary,
     instances: readonly ItemInstance[] = createItemInstances(),
+    random: () => number = Math.random,
   ) {
-    const shipBuild = createShip();
-    this.ship = shipBuild.root;
-    this.colliders = shipBuild.colliders;
-    this.playerStart = shipBuild.playerStart.clone();
-    this.evacuationPoint = shipBuild.evacuationPoint.clone();
+    this.shipBuild = createShip();
+    this.ship = this.shipBuild.root;
+    this.colliders = this.shipBuild.colliders;
+    this.playerStart = this.shipBuild.playerStart.clone();
+    this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
+    this.playerNavigationBounds = this.shipBuild.playerNavigationBounds;
+    this.boatAnchor = this.shipBuild.lifeboatAnchor.clone();
     scene.add(this.ship);
-    collectOwnedResources(this.ship, this.ownedGeometries);
 
-    const selectedSpawnPoints = selectSpawnPoints(shipBuild.itemSpawnPoints);
-    instances.forEach((instance, index) => {
-      const prop = createProp(this.propModels, instance);
-      collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
-      prop.position.copy(selectedSpawnPoints[index]!);
-      prop.rotation.y = index * 0.73;
-      this.ship.add(prop);
-      this.itemObjects.set(instance.instanceId, prop);
-    });
+    try {
+      const assignments = assignShipItems(instances, this.shipBuild.itemAnchors, random);
+      instances.forEach((instance) => {
+        const transform = assignments.get(instance.instanceId)!;
+        const prop = createProp(this.propModels, instance);
+        collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials);
+        prop.position.copy(transform.position);
+        prop.rotation.copy(transform.rotation);
+        prop.scale.setScalar(transform.scale);
+        prop.userData.shipAnchorId = transform.anchorId;
+        this.ship.add(prop);
+        this.itemObjects.set(instance.instanceId, prop);
+      });
+    } catch (error) {
+      scene.remove(this.ship);
+      this.shipBuild.dispose();
+      this.ownedGeometries.forEach((geometry) => geometry.dispose());
+      this.ownedMaterials.forEach((material) => material.dispose());
+      this.ownedGeometries.clear();
+      this.ownedMaterials.clear();
+      throw error;
+    }
 
     const boatBuild = createLifeboat();
     this.lifeboat = boatBuild.root;
@@ -108,6 +127,7 @@ export class World {
     if (this.disposed) return;
     this.ship.position.y = sinking.sinkOffset;
     this.ship.rotation.set(sinking.pitchRadians, 0, sinking.rollRadians);
+    this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
 
     this.ocean.update(time, sinking.waveAmplitudeScale, 0.018 + sinking.progress * 0.009);
     this.ocean.follow(cameraPosition.x, cameraPosition.z);
@@ -125,7 +145,11 @@ export class World {
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.ocean.setExclusions([
-      createWaterExclusion(this.ship, 3.72, 10.25),
+      createWaterExclusion(
+        this.ship,
+        this.shipBuild.waterExclusion.halfWidth,
+        this.shipBuild.waterExclusion.halfLength,
+      ),
       createWaterExclusion(
         this.lifeboat,
         LIFEBOAT_WATER_EXCLUSION.halfWidth,
@@ -169,6 +193,7 @@ export class World {
     this.ocean.dispose();
     this.environment.dispose();
     this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh);
+    this.shipBuild.dispose();
     this.ownedGeometries.forEach((geometry) => geometry.dispose());
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedGeometries.clear();
