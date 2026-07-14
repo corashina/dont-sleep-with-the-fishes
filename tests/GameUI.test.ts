@@ -118,9 +118,41 @@ describe('GameUI', () => {
     expect(mount.querySelector('[data-result-title]')?.textContent).toBe('Taken by the Sea');
   });
 
-  it('renders carry weight, items, and save feedback without slot markers', () => {
+  it('starts with three empty visual weight circles and no capacity text', () => {
     const mount = document.createElement('main');
-    document.body.append(mount);
+    const ui = new GameUI(mount);
+    const indicator = mount.querySelector<HTMLElement>('[data-carried-items]')!;
+    const circles = [...indicator.querySelectorAll<HTMLElement>('[data-weight-circle]')];
+
+    expect(circles).toHaveLength(3);
+    expect(circles.every((circle) => !circle.classList.contains('is-filled'))).toBe(true);
+    expect(indicator.textContent).toBe('');
+    expect(indicator.getAttribute('aria-label')).toBeNull();
+    expect(indicator.getAttribute('role')).toBeNull();
+    expect(indicator.getAttribute('aria-hidden')).toBe('true');
+    expect(mount.querySelector('[data-carry-weight]')?.textContent).toBe('');
+    ui.dispose();
+  });
+
+  it('fills one circle for one canned food item', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    ui.render(snapshot({
+      carriedWeight: 1,
+      carriedItems: [{ instanceId: 'cannedFood-1', type: 'cannedFood' }],
+    }), getSinkingState(0, 120));
+    const circles = [...mount.querySelectorAll<HTMLElement>('[data-weight-circle]')];
+
+    expect(circles.map((circle) => circle.dataset.itemType ?? null)).toEqual([
+      'cannedFood', null, null,
+    ]);
+    expect(circles[0]?.querySelector('[data-item-artwork="cannedFood"]')).not.toBeNull();
+    expect(mount.querySelectorAll('.weight-circle.is-filled')).toHaveLength(1);
+    ui.dispose();
+  });
+
+  it('keeps mixed weight-one items in pickup order', () => {
+    const mount = document.createElement('main');
     const ui = new GameUI(mount);
     ui.render(snapshot({
       carriedWeight: 2,
@@ -129,16 +161,50 @@ describe('GameUI', () => {
         { instanceId: 'ductTape-1', type: 'ductTape' },
       ],
     }), getSinkingState(0, 120));
-    ui.showFeedback('SAVED — CANNED FOOD');
+    const itemTypes = [...mount.querySelectorAll<HTMLElement>('[data-weight-circle]')]
+      .map((circle) => circle.dataset.itemType ?? null);
 
-    expect(mount.querySelector('[data-carry-weight]')?.textContent).toBe('2 / 3');
-    expect(mount.querySelector('[data-carried-items]')?.textContent).toContain('CANNED FOOD · 1');
-    expect(mount.querySelector('[data-feedback]')?.textContent).toBe('SAVED — CANNED FOOD');
-    expect(mount.querySelector('.slot')).toBeNull();
-    expect(mount.querySelector('[data-carried-items]')?.classList).toContain('carried-list');
-    expect(mount.querySelectorAll('.carried-row')).toHaveLength(2);
-    expect(mainStyles).toMatch(/\.carried-list\s*\{[^}]*display:\s*grid[^}]*gap:/s);
-    expect(mainStyles).toMatch(/\.carried-row\s*\{[^}]*display:\s*block/s);
+    expect(itemTypes).toEqual(['cannedFood', 'ductTape', null]);
+    ui.dispose();
+  });
+
+  it('repeats a medical kit portrait for both weight units', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    ui.render(snapshot({
+      carriedWeight: 2,
+      carriedItems: [{ instanceId: 'medicalKit-1', type: 'medicalKit' }],
+    }), getSinkingState(0, 120));
+    const itemTypes = [...mount.querySelectorAll<HTMLElement>('[data-weight-circle]')]
+      .map((circle) => circle.dataset.itemType ?? null);
+
+    expect(itemTypes).toEqual(['medicalKit', 'medicalKit', null]);
+    ui.dispose();
+  });
+
+  it('fills all three circles with a scuba set and clears them after release', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    ui.render(snapshot({
+      carriedWeight: 3,
+      carriedItems: [{ instanceId: 'scubaSet-1', type: 'scubaSet' }],
+    }), getSinkingState(0, 120));
+    expect([...mount.querySelectorAll<HTMLElement>('[data-weight-circle]')]
+      .map((circle) => circle.dataset.itemType)).toEqual([
+      'scubaSet', 'scubaSet', 'scubaSet',
+    ]);
+
+    ui.render(snapshot({ carriedWeight: 0, carriedItems: [] }), getSinkingState(0, 120));
+    expect(mount.querySelectorAll('.weight-circle.is-filled')).toHaveLength(0);
+    expect(mount.querySelector('[data-carried-items]')?.textContent).toBe('');
+    ui.dispose();
+  });
+
+  it('defines the original-style top-center circle layout at desktop and narrow widths', () => {
+    expect(mainStyles).toMatch(/\.carried\s*\{[^}]*top:\s*16px;[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(mainStyles).toMatch(/\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*70px\);[^}]*gap:\s*10px;/s);
+    expect(mainStyles).toMatch(/\.weight-circle\s*\{[^}]*border-radius:\s*50%;[^}]*overflow:\s*hidden;/s);
+    expect(mainStyles).toMatch(/@media \(max-width:\s*820px\)\s*\{[^}]*\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*54px\);/s);
   });
 
   it('exposes sinking danger and critical severity at the presentation thresholds', () => {
@@ -308,7 +374,8 @@ describe('GameUI', () => {
     expect(mount.querySelector('.timer-block')?.classList).toContain('pocket-watch');
     expect(mount.querySelector('[data-timer]')?.textContent).toBe('02:00');
     expect(mount.querySelector('[data-capacity]')).not.toBeNull();
-    expect(mount.querySelector('[data-carry-weight]')).not.toBeNull();
+    expect(mount.querySelectorAll('[data-weight-circle]')).toHaveLength(3);
+    expect(mount.querySelector('[data-carried-items]')?.getAttribute('aria-hidden')).toBe('true');
     expect(mount.querySelector('[data-prompt]')).not.toBeNull();
     expect(mount.querySelector('[data-feedback]')).not.toBeNull();
     expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
