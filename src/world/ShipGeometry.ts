@@ -238,6 +238,7 @@ function addPlankedFloor(
   length: number,
   centerZ: number,
   family: WoodMaterialFamily,
+  grainMaterial: Material,
 ): void {
   const plankPitch = 0.48;
   const plankWidth = plankPitch - DECK_PLANK_GAP;
@@ -256,7 +257,7 @@ function addPlankedFloor(
         name: `${name}-grain-${index}`,
         size: [GRAIN_HEIGHT, GRAIN_HEIGHT, length * 0.84],
         position: [x + plankWidth * 0.18, DECK_Y + DECK_THICKNESS / 2 + DECK_PLANK_THICKNESS + GRAIN_HEIGHT / 2, centerZ],
-        material: woodVariant(family, index + 1),
+        material: grainMaterial,
       });
     }
   }
@@ -316,43 +317,40 @@ function addWheelhouse(
     collider: true,
   });
 
-  [minZ, maxZ].forEach((z, faceIndex) => {
-    const faceName = faceIndex === 0 ? 'aft' : 'front';
-    addBlock(root, geometries, shellColliders, {
-      name: `wheelhouse-${faceName}-sill`,
-      size: [WHEELHOUSE_WIDTH, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
-      position: [0, sillY, z],
-      material: woodVariant(materials.wallPanels, faceIndex),
-      collider: true,
-    });
-    addBlock(root, geometries, shellColliders, {
-      name: `wheelhouse-${faceName}-header`,
-      size: [WHEELHOUSE_WIDTH, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
-      position: [0, headerY, z],
-      material: woodVariant(materials.wallPanels, faceIndex + 1),
-      collider: true,
-    });
-    for (let pillar = 0; pillar < 4; pillar += 1) {
-      const x = -WHEELHOUSE_WIDTH / 2 + WINDOW_PILLAR_WIDTH / 2 + pillar * (frontWindowWidth + WINDOW_PILLAR_WIDTH);
-      addBlock(root, geometries, shellColliders, {
-        name: `wheelhouse-${faceName}-pillar-${pillar}`,
-        size: [WINDOW_PILLAR_WIDTH, windowHeight, WALL_THICKNESS],
-        position: [x, windowY, z],
-        material: materials.paintedSteel,
-        collider: true,
-      });
-    }
-    for (let windowIndex = 0; windowIndex < 3; windowIndex += 1) {
-      const x = -WHEELHOUSE_WIDTH / 2 + WINDOW_PILLAR_WIDTH + frontWindowWidth / 2
-        + windowIndex * (frontWindowWidth + WINDOW_PILLAR_WIDTH);
-      addBlock(root, geometries, shellColliders, {
-        name: `wheelhouse-${faceName}-window-${windowIndex}`,
-        size: [frontWindowWidth, windowHeight, WINDOW_GLASS_THICKNESS],
-        position: [x, windowY, z],
-        material: materials.glass,
-      });
-    }
+  addBlock(root, geometries, shellColliders, {
+    name: 'wheelhouse-front-sill',
+    size: [WHEELHOUSE_WIDTH, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
+    position: [0, sillY, maxZ],
+    material: woodVariant(materials.wallPanels, 0),
+    collider: true,
   });
+  addBlock(root, geometries, shellColliders, {
+    name: 'wheelhouse-front-header',
+    size: [WHEELHOUSE_WIDTH, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
+    position: [0, headerY, maxZ],
+    material: woodVariant(materials.wallPanels, 1),
+    collider: true,
+  });
+  for (let pillar = 0; pillar < 4; pillar += 1) {
+    const x = -WHEELHOUSE_WIDTH / 2 + WINDOW_PILLAR_WIDTH / 2 + pillar * (frontWindowWidth + WINDOW_PILLAR_WIDTH);
+    addBlock(root, geometries, shellColliders, {
+      name: `wheelhouse-front-pillar-${pillar}`,
+      size: [WINDOW_PILLAR_WIDTH, windowHeight, WALL_THICKNESS],
+      position: [x, windowY, maxZ],
+      material: materials.paintedSteel,
+      collider: true,
+    });
+  }
+  for (let windowIndex = 0; windowIndex < 3; windowIndex += 1) {
+    const x = -WHEELHOUSE_WIDTH / 2 + WINDOW_PILLAR_WIDTH + frontWindowWidth / 2
+      + windowIndex * (frontWindowWidth + WINDOW_PILLAR_WIDTH);
+    addBlock(root, geometries, shellColliders, {
+      name: `wheelhouse-front-window-${windowIndex}`,
+      size: [frontWindowWidth, windowHeight, WINDOW_GLASS_THICKNESS],
+      position: [x, windowY, maxZ],
+      material: materials.glass,
+    });
+  }
 
   [-sideX, sideX].forEach((x, sideIndex) => {
     const sideName = sideIndex === 0 ? 'port' : 'starboard';
@@ -394,9 +392,9 @@ function addWheelhouse(
 
   const doorSideWidth = (WHEELHOUSE_WIDTH - WHEELHOUSE_DOOR_WIDTH) / 2;
   [-1, 1].forEach((direction, index) => addBlock(root, geometries, shellColliders, {
-    name: `wheelhouse-door-side-${index}`,
+    name: `wheelhouse-aft-door-side-${index}`,
     size: [doorSideWidth, WHEELHOUSE_WALL_HEIGHT, WALL_THICKNESS],
-    position: [direction * (WHEELHOUSE_DOOR_WIDTH / 2 + doorSideWidth / 2), baseY + WHEELHOUSE_WALL_HEIGHT / 2, minZ - WALL_THICKNESS],
+    position: [direction * (WHEELHOUSE_DOOR_WIDTH / 2 + doorSideWidth / 2), baseY + WHEELHOUSE_WALL_HEIGHT / 2, minZ],
     material: woodVariant(materials.wallPanels, index),
     collider: true,
   }));
@@ -564,10 +562,10 @@ export function createShipGeometry(materials: ShipMaterials): ShipGeometryBuild 
 
   addRoom(root, geometries, shellColliders, materials.wallPanels, 'crew-cabin', CABIN_WIDTH, CABIN_MIN_Z, CABIN_MAX_Z, CABIN_DOOR_Z);
   addRoom(root, geometries, shellColliders, materials.wallPanels, 'storage-room', STORAGE_WIDTH, STORAGE_MIN_Z, STORAGE_MAX_Z, STORAGE_DOOR_Z);
-  addPlankedFloor(root, geometries, shellColliders, 'crew-cabin-floor', CABIN_WIDTH - 0.5, CABIN_MAX_Z - CABIN_MIN_Z - 0.5, CABIN_Z - 0.8, materials.floorPlanks);
-  addPlankedFloor(root, geometries, shellColliders, 'storage-room-floor', STORAGE_WIDTH - 0.5, STORAGE_MAX_Z - STORAGE_MIN_Z - 0.5, STORAGE_Z, materials.floorPlanks);
+  addPlankedFloor(root, geometries, shellColliders, 'crew-cabin-floor', CABIN_WIDTH - 0.5, CABIN_MAX_Z - CABIN_MIN_Z - 0.5, CABIN_Z - 0.8, materials.floorPlanks, materials.darkMetal);
+  addPlankedFloor(root, geometries, shellColliders, 'storage-room-floor', STORAGE_WIDTH - 0.5, STORAGE_MAX_Z - STORAGE_MIN_Z - 0.5, STORAGE_Z, materials.floorPlanks, materials.darkMetal);
   addWheelhouse(root, geometries, shellColliders, materials);
-  addPlankedFloor(root, geometries, shellColliders, 'wheelhouse-floor', WHEELHOUSE_WIDTH - 0.5, WHEELHOUSE_LENGTH - 0.5, WHEELHOUSE_Z, materials.floorPlanks);
+  addPlankedFloor(root, geometries, shellColliders, 'wheelhouse-floor', WHEELHOUSE_WIDTH - 0.5, WHEELHOUSE_LENGTH - 0.5, WHEELHOUSE_Z, materials.floorPlanks, materials.darkMetal);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials);
   addRails(root, geometries, shellColliders, materials);

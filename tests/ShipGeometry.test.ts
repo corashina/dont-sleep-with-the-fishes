@@ -14,6 +14,17 @@ describe('freighter geometry', () => {
     expect([...build.zoneCenters.keys()].sort()).toEqual([
       'cargoDeck', 'crewCabin', 'lifeboatStation', 'storageRoom', 'wheelhouse',
     ]);
+    expect([...build.zoneCenters]).toEqual([
+      ['crewCabin', new Vector3(0, 3.72, 7.5)],
+      ['wheelhouse', new Vector3(0, 3.72, 13.2)],
+      ['cargoDeck', new Vector3(0, 3.72, -1.5)],
+      ['storageRoom', new Vector3(0, 3.72, -9.2)],
+      ['lifeboatStation', new Vector3(5.4, 3.72, -6.5)],
+    ]);
+    expect(build.stackOutlets).toEqual([
+      new Vector3(-1.35, 7.1, -13),
+      new Vector3(1.35, 7.1, -13),
+    ]);
     expect(build.root.getObjectByName('smokestack-port')).toBeInstanceOf(Mesh);
     expect(build.root.getObjectByName('smokestack-starboard')).toBeInstanceOf(Mesh);
     expect(build.root.getObjectByName('alarm-beacon')).toBeInstanceOf(Mesh);
@@ -36,6 +47,32 @@ describe('freighter geometry', () => {
       point.x >= box.minX && point.x <= box.maxX &&
       point.y >= box.minY && point.y <= box.maxY &&
       point.z >= box.minZ && point.z <= box.maxZ)).toBe(false));
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('leaves the wheelhouse aft doorway visibly open', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const doorwayCenter = new Vector3(0, 3.72, 11.4);
+    const blockers: string[] = [];
+    build.root.traverse((object) => {
+      if (object instanceof Mesh && new Box3().setFromObject(object).containsPoint(doorwayCenter)) {
+        blockers.push(object.name);
+      }
+    });
+    expect(blockers).toEqual([]);
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('uses dark material for every interior plank grain strip', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const interiorGrain = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.includes('-floor-grain-'));
+    expect(interiorGrain.length).toBeGreaterThan(0);
+    interiorGrain.forEach((mesh) => expect(mesh.material).toBe(materials.darkMetal));
     build.disposeGeometry();
     materials.dispose();
   });
