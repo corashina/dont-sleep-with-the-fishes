@@ -50,16 +50,17 @@ describe('SurvivalUI', () => {
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');
-    expect(mainStyles).toContain('.survival-tallies');
     expect(mainStyles).toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
     expect(mainStyles).toContain('.cinematic-overlay::before');
     expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
   });
 
-  it('aligns cinematic backing panels with their clamp-based content padding', () => {
-    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*clamp\(68px,\s*12vh,\s*150px\);[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay\.is-visible::before\s*\{[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/@media\s*\(max-height:\s*760px\)\s*and\s*\(min-width:\s*761px\)\s*\{\s*\.cinematic-overlay\s*\{[^}]*padding-top:\s*44px;[^}]*\}\s*\.cinematic-overlay::before\s*\{[^}]*top:\s*44px;/s);
+  it('centers survival HUD zones, overlay content, and vignette backing', () => {
+    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
+    expect(mainStyles).toMatch(/\.journal-marker\s*\{[^}]*right:\s*auto;[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow-y:\s*auto;[^}]*circle at 50% 50%/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
+    expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
   });
 
   it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
@@ -923,6 +924,17 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
 
+    ui.dispose();
+  });
+
+  it('keeps day, phase, weather, and artwork in one journal marker', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const journal = mount.querySelector('.journal-marker')!;
+    expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
+    expect(journal.querySelector('[data-day]')).not.toBeNull();
+    expect(journal.querySelector('[data-phase]')).not.toBeNull();
+    expect(journal.querySelector('[data-weather]')).not.toBeNull();
     ui.dispose();
   });
 
