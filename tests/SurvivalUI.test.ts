@@ -126,7 +126,15 @@ describe('SurvivalUI', () => {
     const close = mount.querySelector<HTMLButtonElement>('[data-journal-close]')!;
     expect(previous.disabled).toBe(true);
     close.focus();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    const forward = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    document.dispatchEvent(forward);
+    expect(forward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(close);
+    const backward = new KeyboardEvent('keydown', {
+      key: 'Tab', shiftKey: true, bubbles: true, cancelable: true,
+    });
+    document.dispatchEvent(backward);
+    expect(backward.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(close);
     expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
   });

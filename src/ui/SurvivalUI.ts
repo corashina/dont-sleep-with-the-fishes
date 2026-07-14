@@ -913,7 +913,11 @@ export class SurvivalUI {
     if (event.key !== 'Tab') return false;
     const controls = [...modal.querySelectorAll<HTMLElement>(
       'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => !element.hasAttribute('inert') && element.getAttribute('aria-hidden') !== 'true');
+    )].filter((element) => (
+      element.closest('[hidden]') === null
+      && !element.hasAttribute('inert')
+      && element.getAttribute('aria-hidden') !== 'true'
+    ));
     if (controls.length === 0) {
       event.preventDefault();
       this.focusModal(modal);
