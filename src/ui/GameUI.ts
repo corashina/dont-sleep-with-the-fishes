@@ -1,7 +1,7 @@
-import { ITEM_DEFINITIONS, ITEM_LABELS } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
-import { uiArtwork } from './uiArtwork';
+import { itemArtwork, uiArtwork } from './uiArtwork';
 
 export function formatCountdown(seconds: number): string {
   const safe = Math.max(0, Math.ceil(seconds));
@@ -29,7 +29,6 @@ export class GameUI {
   private readonly sinking: HTMLElement;
   private readonly capacity: HTMLElement;
   private readonly prompt: HTMLElement;
-  private readonly carryWeight: HTMLElement;
   private readonly carriedItems: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly resultTitle: HTMLElement;
@@ -57,10 +56,8 @@ export class GameUI {
         <div class="capacity ink-label"><span class="eyebrow">IN THE BOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
         <div class="crosshair" aria-hidden="true"></div>
         <div class="prompt brush-label" data-prompt aria-live="polite"></div>
-        <div class="carried ink-label" data-carried>
-          <span class="eyebrow">IN YOUR ARMS</span>
-          <strong data-carry-weight>0 / 3</strong>
-          <div class="carried-list" data-carried-items></div>
+        <div class="carried" data-carried>
+          <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
           <div class="feedback brush-label" data-feedback aria-live="polite"></div>
         </div>
       </div>
@@ -117,7 +114,6 @@ export class GameUI {
     this.sinking = requireElement(this.root, '[data-sinking]');
     this.capacity = requireElement(this.root, '[data-capacity]');
     this.prompt = requireElement(this.root, '[data-prompt]');
-    this.carryWeight = requireElement(this.root, '[data-carry-weight]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
     this.feedback = requireElement(this.root, '[data-feedback]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
@@ -228,13 +224,22 @@ export class GameUI {
   }
 
   private renderCarry(snapshot: ScavengeSnapshot): void {
-    this.carryWeight.textContent = `${snapshot.carriedWeight} / 3`;
-    this.carriedItems.replaceChildren(...snapshot.carriedItems.map((item) => {
-      const row = document.createElement('span');
-      row.className = 'carried-row';
-      const definition = ITEM_DEFINITIONS[item.type];
-      row.textContent = `${definition.label} · ${definition.weight}`;
-      return row;
+    const filled = snapshot.carriedItems.flatMap(({ type }) => (
+      Array.from({ length: ITEM_DEFINITIONS[type].weight }, () => type)
+    )).slice(0, 3);
+    const slots: Array<ItemId | null> = [...filled];
+    while (slots.length < 3) slots.push(null);
+
+    this.carriedItems.replaceChildren(...slots.map((type) => {
+      const circle = document.createElement('span');
+      circle.className = 'weight-circle';
+      circle.dataset.weightCircle = '';
+      if (type !== null) {
+        circle.classList.add('is-filled');
+        circle.dataset.itemType = type;
+        circle.innerHTML = itemArtwork(type, 'weight-circle__art');
+      }
+      return circle;
     }));
   }
 
