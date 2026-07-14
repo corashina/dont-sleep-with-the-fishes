@@ -1,4 +1,5 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
+import type { JournalEntry } from './journal';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 export type WeatherId = 'calm' | 'overcast' | 'squall';
@@ -78,6 +79,7 @@ export interface SurvivalSnapshot {
   weather: WeatherId;
   restedToday: boolean;
   actedToday: boolean;
+  readonly journalEntries: readonly JournalEntry[];
   inventory: Readonly<SurvivalInventory>;
   savedItems: readonly ItemInstance[];
   pendingEventId: string | null;

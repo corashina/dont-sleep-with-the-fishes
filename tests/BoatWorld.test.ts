@@ -71,6 +71,7 @@ function snapshot(
     weather: 'calm',
     restedToday: false,
     actedToday: false,
+    journalEntries: [],
     inventory: createSurvivalInventory(savedItems),
     savedItems,
     pendingEventId: null,

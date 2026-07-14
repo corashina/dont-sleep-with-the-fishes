@@ -32,6 +32,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     weather: 'calm',
     restedToday: false,
     actedToday: false,
+    journalEntries: [],
     inventory: inventory(),
     savedItems: [],
     pendingEventId: null,
