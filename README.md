@@ -2,7 +2,7 @@
 
 A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
-The 3D world uses original procedural geometry and shaders. No external art assets or game framework are required.
+The 3D world combines original procedural geometry and shaders with locally committed CC0 item models from [Kenney](https://kenney.nl/assets). The game makes no runtime asset requests.
 
 The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
 
@@ -64,6 +64,10 @@ Health, Food, Energy, and Hull remain visible as condition meters. Food is the i
 Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable item resolves to the event's fallback result, and **Endure** uses no item. Consumable charges are finite and exhausted supplies remain visible.
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
+
+## Asset policy
+
+Kenney is the project's store for third-party game assets. Downloaded assets must come from an individual free CC0 pack, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
 
 ## Commands
 
