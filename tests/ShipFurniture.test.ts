@@ -1,4 +1,4 @@
-import { Material, Mesh } from 'three';
+import { Box3, Material, Mesh, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { createItemInstances } from '../src/game/ItemState';
 import type { CollisionBox } from '../src/player/collisions';
@@ -164,6 +164,54 @@ describe('ship furniture', () => {
     const scubaSupports = build.anchors.filter(({ id }) => id.includes('scuba'));
     expect(rodSupports.every(({ footprint }) => footprint.width >= 1.85)).toBe(true);
     expect(scubaSupports.every(({ footprint }) => footprint.width >= 1.05 && footprint.depth >= 0.72)).toBe(true);
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('keeps every anchor upward-clearance volume free of surrounding broad geometry', () => {
+    const materials = createShipMaterials();
+    const build = createShipFurniture(materials);
+    const broadFamilies = new Set([
+      'bunk', 'desk', 'wall-shelf', 'locker', 'workbench', 'equipment-rack', 'cargo-crate',
+    ]);
+    const broadMeshes: Mesh[] = [];
+    build.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      let ancestor = object.parent;
+      let family: string | undefined;
+      while (ancestor && ancestor !== build.root) {
+        family = ancestor.userData.furnitureFamily as string | undefined;
+        if (family) break;
+        ancestor = ancestor.parent;
+      }
+      const isBroadCandidate = object.userData.anchorSupport
+        || (family !== undefined && broadFamilies.has(family))
+        || ['machinery-block', 'deck-vent-', 'winch-drum-'].some((name) => object.name.startsWith(name));
+      if (!isBroadCandidate) return;
+      const size = new Box3().setFromObject(object).getSize(new Vector3());
+      if (size.x >= 0.3 && size.z >= 0.3) broadMeshes.push(object);
+    });
+
+    build.anchors.forEach((anchor) => {
+      const clearance = new Box3(
+        new Vector3(
+          anchor.position.x - anchor.footprint.width / 2 + 0.001,
+          anchor.position.y + 0.001,
+          anchor.position.z - anchor.footprint.depth / 2 + 0.001,
+        ),
+        new Vector3(
+          anchor.position.x + anchor.footprint.width / 2 - 0.001,
+          anchor.position.y + anchor.clearanceHeight,
+          anchor.position.z + anchor.footprint.depth / 2 - 0.001,
+        ),
+      );
+      const blockers = broadMeshes.filter((mesh) => {
+        const support = mesh.userData.anchorSupport as AnchorSupportMetadata | undefined;
+        if (support?.surfaceGroupId === anchor.surfaceGroupId) return false;
+        return clearance.intersectsBox(new Box3().setFromObject(mesh));
+      }).map(({ name }) => name);
+      expect(blockers, anchor.id).toEqual([]);
+    });
     build.disposeGeometry();
     materials.dispose();
   });
