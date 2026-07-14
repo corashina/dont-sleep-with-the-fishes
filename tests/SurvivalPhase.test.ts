@@ -4,6 +4,7 @@ import { ITEM_IDS } from '../src/game/ItemState';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import type { SurvivalInventory, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
 function inventory(overrides: Partial<Record<ItemId, Partial<SurvivalInventory[ItemId]>>> = {}): SurvivalInventory {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, {
@@ -356,6 +357,25 @@ describe('SurvivalPhase orchestration', () => {
     expect(setPointer).toHaveBeenCalled();
     expect(skipSequence).toHaveBeenCalledOnce();
     expect(restart).toHaveBeenCalledOnce();
+  });
+
+  it('relays item highlight identity to the world and ignores it after disposal', () => {
+    const setHighlightedItem = vi.fn();
+    const ui: Partial<SurvivalUI> = { dispose: vi.fn() };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { setHighlightedItem, dispose: vi.fn() },
+      ui,
+    });
+
+    ui.onAnchorHighlight?.('fishingRod-1');
+    ui.onAnchorHighlight?.(null);
+    expect(setHighlightedItem).toHaveBeenNthCalledWith(1, 'fishingRod-1');
+    expect(setHighlightedItem).toHaveBeenNthCalledWith(2, null);
+
+    phase.dispose();
+    ui.onAnchorHighlight?.('fishingRod-1');
+    expect(setHighlightedItem).toHaveBeenCalledTimes(2);
   });
 
   it('ignores async sequence completion after disposal and disposes owned resources once', async () => {

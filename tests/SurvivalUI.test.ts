@@ -47,23 +47,162 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('publishes item hover and focus while ignoring fixed anchors and clearing for modals', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    ui.render(snapshot(), () => null);
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    item.focus();
+    item.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    item.blur();
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    fixed.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves.', danger: 'dangerous' }, snapshot());
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears item highlighting when busy, removed, and disposed', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.setBusy(true);
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    ui.setBusy(false);
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.setAnchors([]);
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    ui.dispose();
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears item highlighting when the same anchor becomes invisible', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    ui.setAnchors([{
+      id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 140, y: 180, visible: false, depleted: false,
+    }]);
+
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears item highlighting when the same anchor becomes a fixed target', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    ui.setAnchors([{
+      id: 'fishingRod-test', itemType: null, action: 'endDay', remainingUses: null,
+      x: 140, y: 180, visible: true, depleted: false,
+    }]);
+
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it.each([
+    {
+      state: 'invisible',
+      anchor: {
+        id: 'fishingRod-test', itemType: 'fishingRod' as const, action: 'fish' as const, remainingUses: null,
+        x: 140, y: 180, visible: false, depleted: false,
+      },
+    },
+    {
+      state: 'fixed',
+      anchor: {
+        id: 'fishingRod-test', itemType: null, action: 'endDay' as const, remainingUses: null,
+        x: 140, y: 180, visible: true, depleted: false,
+      },
+    },
+  ])('does not republish latent hover after the anchor becomes $state', ({ anchor }) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const hovered = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const focused = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-test"]')!;
+
+    hovered.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    focused.focus();
+    expect(highlight.mock.calls).toEqual([['fishingRod-test'], ['scubaSet-test']]);
+    highlight.mockClear();
+
+    ui.setAnchors([
+      anchor,
+      {
+        id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null,
+        x: 240, y: 250, visible: true, depleted: false,
+      },
+    ]);
+    focused.blur();
+
+    expect(highlight).not.toHaveBeenCalledWith('fishingRod-test');
+    expect(highlight.mock.calls).toEqual([[null]]);
+  });
+
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');
-    expect(mainStyles).toContain('.survival-tallies');
     expect(mainStyles).toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
     expect(mainStyles).toContain('.cinematic-overlay::before');
     expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
   });
 
-  it('aligns cinematic backing panels with their clamp-based content padding', () => {
-    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*clamp\(68px,\s*12vh,\s*150px\);[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay\.is-visible::before\s*\{[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/@media\s*\(max-height:\s*760px\)\s*and\s*\(min-width:\s*761px\)\s*\{\s*\.cinematic-overlay\s*\{[^}]*padding-top:\s*44px;[^}]*\}\s*\.cinematic-overlay::before\s*\{[^}]*top:\s*44px;/s);
+  it('centers survival HUD zones, overlay content, and vignette backing', () => {
+    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
+    expect(mainStyles).toMatch(/\.journal-marker\s*\{[^}]*right:\s*auto;[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*circle at 50% 50%/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
+    expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
+  });
+
+  it('wraps every survival cinematic overlay in one bounded content region', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    for (const selector of ['[data-action-options]', '[data-event]', '[data-outcome]', '[data-pause]', '[data-ending]']) {
+      const overlay = mount.querySelector<HTMLElement>(selector)!;
+      expect(overlay.children).toHaveLength(1);
+      expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
+    }
+
+    ui.dispose();
   });
 
   it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
-    expect(mainStyles).toMatch(/\.boat-anchor:not\(:disabled\):not\(\[aria-disabled="true"\]\):active::before\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\) scale\(0\.78\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]::before\s*\{[^}]*content:\s*none;/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="fixed"\]::before\s*\{[^}]*background:\s*var\(--anchor-accent\);/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]\[aria-disabled="true"\]\s*\{[^}]*border-color:\s*transparent;/s);
     expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
@@ -71,17 +210,87 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
+    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
+    expect(fixed.dataset.targetKind).toBe('fixed');
+    expect(fixed.style.width).toBe('');
+    expect(fixed.style.height).toBe('');
+
+    ui.setAnchors([{
+      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+      hitArea: { width: 96, height: 52, depth: 2.4 },
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
+    expect(anchor.dataset.targetKind).toBe('item');
+    expect(anchor.style.transform).toBe('translate(320px, 240px)');
+    expect(anchor.style.width).toBe('96px');
+    expect(anchor.style.height).toBe('52px');
+    expect(anchor.style.marginLeft).toBe('-48px');
+    expect(anchor.style.marginTop).toBe('-26px');
+    expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
+    expect(anchor.getAttribute('aria-keyshortcuts')).toBe('1');
+    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/FISHING ROD.*FISH.*2 ENERGY/is);
+    expect(mount.querySelector('.survival-actions')).toBeNull();
+    expect(mount.querySelector('.inventory-tray')).toBeNull();
+  });
+
+  it('uses the exact minimum target geometry for an item anchor without a hit area', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
     ui.setAnchors([{
       id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
     const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
-    expect(anchor.style.transform).toContain('320px');
-    expect(anchor.getAttribute('aria-keyshortcuts')).toBe('1');
-    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/FISHING ROD.*FISH.*2 ENERGY/is);
-    expect(mount.querySelector('.survival-actions')).toBeNull();
-    expect(mount.querySelector('.inventory-tray')).toBeNull();
+    expect(anchor.style.width).toBe('54px');
+    expect(anchor.style.height).toBe('54px');
+    expect(anchor.style.marginLeft).toBe('-27px');
+    expect(anchor.style.marginTop).toBe('-27px');
+  });
+
+  it('clears item geometry and stacking when an anchor ID becomes fixed', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setAnchors([{
+      id: 'shared', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+      hitArea: { width: 96, height: 52, depth: 2.4 },
+    }]);
+    ui.setAnchors([{
+      id: 'shared', itemType: null, action: 'endDay', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="shared"]')!;
+    expect(anchor.dataset.targetKind).toBe('fixed');
+    expect(anchor.style.width).toBe('');
+    expect(anchor.style.height).toBe('');
+    expect(anchor.style.marginLeft).toBe('');
+    expect(anchor.style.marginTop).toBe('');
+    expect(anchor.style.zIndex).toBe('');
+  });
+
+  it('stacks a nearer positive-depth item target above a farther one', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'near', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+        x: 320, y: 240, visible: true, depleted: false,
+        hitArea: { width: 96, height: 52, depth: 1.25 },
+      },
+      {
+        id: 'far', itemType: 'scubaSet', action: 'dive', remainingUses: null,
+        x: 320, y: 240, visible: true, depleted: false,
+        hitArea: { width: 96, height: 52, depth: 3.75 },
+      },
+    ]);
+
+    const near = mount.querySelector<HTMLButtonElement>('[data-anchor-id="near"]')!;
+    const far = mount.querySelector<HTMLButtonElement>('[data-anchor-id="far"]')!;
+    expect(Number(near.style.zIndex)).toBeGreaterThan(Number(far.style.zIndex));
   });
 
   it('keeps unavailable anchors focusable and suppresses their commands', () => {
@@ -246,7 +455,7 @@ describe('SurvivalUI', () => {
     }
   });
 
-  it('shows transferred stores and shared logical item descriptions', () => {
+  it('shows transferred item states and shared logical item descriptions', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const state = snapshot({
@@ -260,8 +469,6 @@ describe('SurvivalUI', () => {
       { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
       { id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
-    expect(mount.querySelector('[data-store="food"]')?.textContent).toBe('2');
-    expect(mount.querySelector('[data-store="bait"]')?.textContent).toBe('3');
     expect(mount.querySelector('[data-item="baitTin"]')?.textContent).toMatch(/bait|fishing/i);
     expect(mount.querySelector('[data-item="fishingRod"]')?.textContent).toMatch(/food|fish/i);
     ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
@@ -367,7 +574,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-weather]')?.textContent).toContain('CALM');
     expect(mount.querySelector('[data-phase]')?.textContent).toContain('DAYLIGHT');
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
-    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('20');
+    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('4');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
     expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
@@ -665,13 +872,16 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({ health: 21, hunger: 20, energy: 4, hull: 21 }), () => null);
 
     const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
-    const hunger = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
+    const food = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
     const energy = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
     const hull = mount.querySelector<HTMLElement>('[data-meter="hull"]')!;
 
-    expect(hunger.classList).not.toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBeNull();
-    expect(hunger.getAttribute('aria-valuemax')).toBe('100');
+    expect(food.getAttribute('aria-label')).toBe('FOOD');
+    expect(food.getAttribute('aria-valuenow')).toBe('80');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('80%');
+    expect(food.querySelector('.survival-meter__label')?.textContent).toContain('FOOD');
+    expect(food.classList).not.toContain('is-danger');
+    expect(food.getAttribute('aria-valuetext')).toBeNull();
     expect(energy.getAttribute('aria-valuemax')).toBe('4');
     expect(energy.style.getPropertyValue('--meter-value')).toBe('100%');
     expect(energy.querySelector('.survival-meter__fill')?.tagName).toBe('DIV');
@@ -682,9 +892,11 @@ describe('SurvivalUI', () => {
     expect(health.classList).toContain('is-danger');
     expect(health.getAttribute('aria-valuetext')).toBe('20, low');
     expect(health.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
-    expect(hunger.classList).toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBe('70, high');
-    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
+    expect(food.getAttribute('aria-valuenow')).toBe('30');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('30%');
+    expect(food.classList).toContain('is-danger');
+    expect(food.getAttribute('aria-valuetext')).toBe('30, low');
+    expect(food.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
     expect(energy.classList).toContain('is-danger');
     expect(energy.getAttribute('aria-valuetext')).toBe('1, low');
     expect(energy.querySelector('[data-meter-danger]')?.textContent).toBe('LOW');
@@ -694,9 +906,9 @@ describe('SurvivalUI', () => {
 
     ui.render(snapshot({ hunger: 90 }), () => null);
 
-    expect(hunger.classList).toContain('is-danger');
-    expect(hunger.getAttribute('aria-valuetext')).toBe('90, high');
-    expect(hunger.querySelector('[data-meter-danger]')?.textContent).toBe('HIGH');
+    expect(food.getAttribute('aria-valuenow')).toBe('10');
+    expect(food.style.getPropertyValue('--meter-value')).toBe('10%');
+    expect(food.classList).toContain('is-danger');
   });
 
   it('uses number shortcuts only when no overlay is open', () => {
@@ -903,7 +1115,7 @@ describe('SurvivalUI', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
-  it('renders illustrated conditions, journal status, tallies, and cinematic overlays', () => {
+  it('renders illustrated conditions and journal status without persistent tallies', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
@@ -912,13 +1124,25 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')).not.toBeNull();
     expect(mount.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')).not.toBeNull();
     expect(mount.querySelector('.journal-marker [data-ui-artwork="journal"]')).not.toBeNull();
-    expect(mount.querySelector('.survival-stores')?.classList).toContain('survival-tallies');
+    expect(mount.querySelector('.survival-stores')).toBeNull();
+    expect(mount.querySelector('[data-store]')).toBeNull();
     expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-outcome]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
 
+    ui.dispose();
+  });
+
+  it('keeps day, phase, weather, and artwork in one journal marker', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const journal = mount.querySelector('.journal-marker')!;
+    expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
+    expect(journal.querySelector('[data-day]')).not.toBeNull();
+    expect(journal.querySelector('[data-phase]')).not.toBeNull();
+    expect(journal.querySelector('[data-weather]')).not.toBeNull();
     ui.dispose();
   });
 

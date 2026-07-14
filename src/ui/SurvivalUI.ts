@@ -39,6 +39,7 @@ interface MeterDefinition {
   min: number;
   max: number;
   dangerLabel: 'LOW' | 'HIGH';
+  displayValue: (value: number) => number;
   isDanger: (value: number) => boolean;
 }
 
@@ -72,11 +73,13 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
   }
 }
 
+const identity = (value: number): number => value;
+
 const METERS: readonly MeterDefinition[] = [
-  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
-  { id: 'hunger', label: 'HUNGER', min: 0, max: 100, dangerLabel: 'HIGH', isDanger: (value) => value >= 70 },
-  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', isDanger: (value) => value <= 1 },
-  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', isDanger: (value) => value <= 20 },
+  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'hunger', label: 'FOOD', min: 0, max: 100, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
+  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
+  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
 ];
 
 const PHASE_LABELS: Readonly<Record<SurvivalState, string>> = {
@@ -136,6 +139,7 @@ export class SurvivalUI {
   onContinue: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onPointer: (x: number, y: number) => void = () => undefined;
+  onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onSkip: () => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
 
@@ -182,6 +186,9 @@ export class SurvivalUI {
   private pauseReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
+  private hoveredAnchorId: string | null = null;
+  private focusedAnchorId: string | null = null;
+  private publishedAnchorId: string | null = null;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -197,51 +204,55 @@ export class SurvivalUI {
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
-      <section class="survival-stores survival-tallies" aria-label="Loose supplies">
-        <span>FOOD <strong data-store="food">0</strong></span>
-        <span>BAIT <strong data-store="bait">0</strong></span>
-        <span>REPAIR <strong data-store="repairMaterial">0</strong></span>
-        <span>RESCUE <strong data-store="rescueProgress">0</strong></span>
-      </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="survival-overlay action-options-overlay cinematic-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
-        <p class="eyebrow">FISHING METHOD</p>
-        <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
-        <p>Cast now, or spend one bait for a better chance.</p>
-        <div class="action-options">
-          <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
-          <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">FISHING METHOD</p>
+          <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
+          <p>Cast now, or spend one bait for a better chance.</p>
+          <div class="action-options">
+            <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
+            <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
+          </div>
         </div>
       </section>
       <section class="survival-overlay event-overlay cinematic-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
-        <p class="event-danger" data-event-danger></p>
-        <h2 data-event-title tabindex="-1"></h2>
-        <p data-event-prompt></p>
-        <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
-        <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
+        <div class="cinematic-overlay__content">
+          <p class="event-danger" data-event-danger></p>
+          <h2 data-event-title tabindex="-1"></h2>
+          <p data-event-prompt></p>
+          <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
+          <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
+        </div>
       </section>
       <section class="survival-overlay outcome-overlay cinematic-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
-        <p class="eyebrow">AFTERMATH</p>
-        <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
-        <p data-outcome-message></p>
-        <ul class="outcome-deltas" data-outcome-deltas></ul>
-        <div class="outcome-actions">
-          <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
-          <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">AFTERMATH</p>
+          <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
+          <p data-outcome-message></p>
+          <ul class="outcome-deltas" data-outcome-deltas></ul>
+          <div class="outcome-actions">
+            <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
+            <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
+          </div>
         </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
-        <p class="eyebrow">PAUSED</p>
-        <h2>Hold Fast</h2>
-        <p>The sea will wait until you return.</p>
-        <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">PAUSED</p>
+          <h2>Hold Fast</h2>
+          <p>The sea will wait until you return.</p>
+          <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
+        </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
-        <p class="eyebrow">JOURNEY ENDED</p>
-        <h2 data-ending-title tabindex="-1" role="alert"></h2>
-        <p data-ending-body></p>
-        <p class="ending-stats" data-ending-stats></p>
-        <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">JOURNEY ENDED</p>
+          <h2 data-ending-title tabindex="-1" role="alert"></h2>
+          <p data-ending-body></p>
+          <p class="ending-stats" data-ending-stats></p>
+          <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
+        </div>
       </section>
     `;
     mount.append(this.root);
@@ -284,6 +295,10 @@ export class SurvivalUI {
     METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
 
     this.root.addEventListener('click', this.handleClick);
+    this.root.addEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
+    this.root.addEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     window.addEventListener('pointermove', this.handlePointer);
     document.addEventListener('keydown', this.handleKeyDown);
   }
@@ -296,10 +311,6 @@ export class SurvivalUI {
     this.updateText('phase', this.phase, PHASE_LABELS[snapshot.state]);
 
     METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
-    this.updateStore('food', snapshot.food);
-    this.updateStore('bait', snapshot.bait);
-    this.updateStore('repairMaterial', snapshot.repairMaterial);
-    this.updateStore('rescueProgress', snapshot.rescueProgress);
     this.availableBait = snapshot.bait;
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
@@ -312,22 +323,46 @@ export class SurvivalUI {
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     const seen = new Set<string>();
+    let highlightInvalidated = false;
     for (const anchor of anchors) {
       seen.add(anchor.id);
+      if (!anchor.visible || anchor.itemType === null) {
+        highlightInvalidated = this.invalidateAnchorHighlight(anchor.id) || highlightInvalidated;
+      }
       this.anchors.set(anchor.id, anchor);
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
       button.hidden = !anchor.visible;
       button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
+      const itemTarget = anchor.itemType !== null;
+      button.dataset.targetKind = itemTarget ? 'item' : 'fixed';
+      if (itemTarget) {
+        const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
+        const targetWidth = Math.round(hitArea.width);
+        const targetHeight = Math.round(hitArea.height);
+        button.style.width = `${targetWidth}px`;
+        button.style.height = `${targetHeight}px`;
+        button.style.marginLeft = `${-targetWidth / 2}px`;
+        button.style.marginTop = `${-targetHeight / 2}px`;
+        button.style.zIndex = String(Math.max(1, 100000 - Math.round(hitArea.depth * 100)));
+      } else {
+        button.style.removeProperty('width');
+        button.style.removeProperty('height');
+        button.style.removeProperty('margin-left');
+        button.style.removeProperty('margin-top');
+        button.style.removeProperty('z-index');
+      }
       this.placeAnchorTooltip(button, anchor);
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);
     }
     this.anchorButtons.forEach((button, id) => {
       if (seen.has(id)) return;
+      highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
       button.remove();
       this.anchorButtons.delete(id);
       this.anchors.delete(id);
     });
+    if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCommandState();
   }
 
@@ -414,8 +449,12 @@ export class SurvivalUI {
   setBusy(busy: boolean): void {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
-    if (busy) this.root.setAttribute('aria-busy', 'true');
-    else this.root.removeAttribute('aria-busy');
+    if (busy) {
+      this.clearAnchorHighlight();
+      this.root.setAttribute('aria-busy', 'true');
+    } else {
+      this.root.removeAttribute('aria-busy');
+    }
     this.syncCommandState();
   }
 
@@ -469,9 +508,14 @@ export class SurvivalUI {
 
   dispose(): void {
     if (this.disposed) return;
+    this.clearAnchorHighlight();
     this.disposed = true;
     this.announcementVersion += 1;
     this.root.removeEventListener('click', this.handleClick);
+    this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
+    this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
     window.removeEventListener('pointermove', this.handlePointer);
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
@@ -480,6 +524,7 @@ export class SurvivalUI {
     this.onContinue = () => undefined;
     this.onRestart = () => undefined;
     this.onPointer = () => undefined;
+    this.onAnchorHighlight = () => undefined;
     this.onSkip = () => undefined;
     this.onPauseChange = () => undefined;
     this.root.remove();
@@ -555,7 +600,8 @@ export class SurvivalUI {
     this.lastValues.set(`meter:${id}`, value);
     const definition = METERS.find((meter) => meter.id === id)!;
     const meter = this.meterElements.get(id)!;
-    const safe = Math.min(definition.max, Math.max(definition.min, value));
+    const displayed = definition.displayValue(value);
+    const safe = Math.min(definition.max, Math.max(definition.min, displayed));
     const danger = definition.isDanger(safe);
     const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
     meter.setAttribute('aria-valuenow', String(safe));
@@ -574,10 +620,6 @@ export class SurvivalUI {
       if (this.disposed || version !== this.announcementVersion) return;
       this.announcer.textContent = message;
     });
-  }
-
-  private updateStore(id: 'food' | 'bait' | 'repairMaterial' | 'rescueProgress', value: number): void {
-    this.updateText(`store:${id}`, requireElement(this.root, `[data-store="${id}"]`), String(value));
   }
 
   private updateText(key: string, element: HTMLElement, value: string): void {
@@ -600,7 +642,65 @@ export class SurvivalUI {
     this.endureButton.disabled = this.busy;
   }
 
+  private itemAnchorId(target: EventTarget | null): string | null {
+    if (!(target instanceof Element)) return null;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor[data-target-kind="item"]');
+    return button !== null && this.root.contains(button) ? button.dataset.anchorId ?? null : null;
+  }
+
+  private publishAnchorHighlight(): void {
+    const next = this.focusedAnchorId ?? this.hoveredAnchorId;
+    if (next === this.publishedAnchorId) return;
+    this.publishedAnchorId = next;
+    this.onAnchorHighlight(next);
+  }
+
+  private invalidateAnchorHighlight(anchorId: string): boolean {
+    let invalidated = false;
+    if (this.hoveredAnchorId === anchorId) {
+      this.hoveredAnchorId = null;
+      invalidated = true;
+    }
+    if (this.focusedAnchorId === anchorId) {
+      this.focusedAnchorId = null;
+      invalidated = true;
+    }
+    return invalidated;
+  }
+
+  private clearAnchorHighlight(): void {
+    this.hoveredAnchorId = null;
+    this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
+  }
+
+  private readonly handleAnchorPointerOver = (event: Event): void => {
+    this.hoveredAnchorId = this.itemAnchorId(event.target);
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorPointerOut = (event: Event): void => {
+    const pointerEvent = event as MouseEvent;
+    const current = this.itemAnchorId(event.target);
+    if (current === null || this.itemAnchorId(pointerEvent.relatedTarget) === current) return;
+    if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
+    this.focusedAnchorId = this.itemAnchorId(event.target);
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusOut = (event: FocusEvent): void => {
+    const current = this.itemAnchorId(event.target);
+    if (current === null || this.itemAnchorId(event.relatedTarget) === current) return;
+    if (this.focusedAnchorId === current) this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
+  };
+
   private showLayer(layer: HTMLElement): void {
+    this.clearAnchorHighlight();
     layer.classList.add('is-visible');
     this.syncBackgroundInteraction();
   }

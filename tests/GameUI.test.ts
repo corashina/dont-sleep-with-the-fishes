@@ -31,6 +31,29 @@ describe('GameUI', () => {
     expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
+  it('centers every scavenging poster screen and its vignette', () => {
+    expect(mainStyles).toMatch(/\.screen\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*text-align:\s*center;/s);
+    expect(mainStyles).toMatch(/\.screen__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
+    expect(mainStyles).toMatch(/\.poster-screen\s*\{[^}]*background:\s*radial-gradient\(circle at 50% 50%/s);
+  });
+
+  it('wraps every scavenging screen in one bounded content region', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    for (const selector of ['[data-start]', '[data-pause]', '[data-failure]', '[data-result]']) {
+      const screen = mount.querySelector<HTMLElement>(selector)!;
+      expect(screen.children).toHaveLength(1);
+      expect(screen.firstElementChild?.classList).toContain('screen__content');
+    }
+
+    ui.dispose();
+  });
+
+  it('keeps scavenging screens centered at narrow viewport widths', () => {
+    expect(mainStyles).not.toMatch(/\.screen\s*\{[^}]*align-content:\s*end;/s);
+  });
+
   it('keeps the critical watch timer at least 3:1 against its gold face', () => {
     expect(mainStyles).toMatch(/\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\(--ink-red\);/s);
     const criticalColor = mainStyles.match(/--ink-red:\s*(#[0-9a-f]{6})/i)?.[1];

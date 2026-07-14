@@ -262,6 +262,9 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onContinue = () => this.handleContinue();
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onPointer = (x, y) => this.handlePointer(x, y);
+    this.ui.onAnchorHighlight = (anchorId) => {
+      if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
+    };
     this.ui.onSkip = () => {
       if (!this.disposed) this.world.skipSequence?.();
     };
