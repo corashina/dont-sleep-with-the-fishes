@@ -279,22 +279,44 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   pointer-events: auto;
 }
 
-.boat-anchor::before {
+.boat-anchor[data-target-kind="item"] {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.boat-anchor[aria-disabled="true"] { border-style: dashed; border-color: #c96d3d80; }
+.boat-anchor[data-target-kind="item"]::before {
+  content: none;
+}
+
+.boat-anchor[data-target-kind="item"][aria-disabled="true"] {
+  border-color: transparent;
+}
+
+.boat-anchor[data-target-kind="fixed"]::before {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
+  border: 3px solid #090b0c;
   border-radius: 50%;
   background: var(--anchor-accent);
+  box-shadow: 0 0 0 2px #f2ead799;
   transform: translate(-50%, -50%);
 }
 
-.boat-anchor:not(:disabled):not([aria-disabled="true"]):active::before { transform: translate(-50%, -50%) scale(0.78); }
-.boat-anchor[aria-disabled="true"] { border-style: dashed; border-color: #c96d3d80; }
-.boat-anchor[aria-disabled="true"]::before,
-.boat-anchor.is-depleted::before { opacity: 0.46; }
+.boat-anchor[data-target-kind="fixed"]:not(:disabled):not([aria-disabled="true"]):active::before {
+  transform: translate(-50%, -50%) scale(.78);
+}
+
+.boat-anchor[data-target-kind="fixed"][aria-disabled="true"]::before,
+.boat-anchor[data-target-kind="fixed"].is-depleted::before {
+  opacity: .46;
+}
+
 .boat-anchor.is-depleted { filter: saturate(0.25); }
 .boat-anchor:disabled { cursor: not-allowed; opacity: 0.42; }
 
@@ -549,7 +571,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   pointer-events: none;
   user-select: none;
 }
-.boat-anchor::before { width: 12px; height: 12px; border: 3px solid #090b0c; background: var(--anchor-accent); box-shadow: 0 0 0 2px #f2ead799; }
 .boat-tooltip { max-width: min(290px, calc(100vw - 32px)); padding: 10px 14px; border: 0; background: #090b0cf2; color: var(--ink-bone); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; clip-path: polygon(2% 2%, 98% 0, 100% 92%, 5% 100%, 0 54%); }
 .boat-anchor[data-action="endDay"] .boat-tooltip { min-width: 130px; background: linear-gradient(174deg, #795338, #4d2d1e 60%, #6c472f); font-size: .76rem; text-align: center; }
 @keyframes condition-jolt { 50% { transform: rotate(calc(var(--condition-tilt) - 2deg)) translateY(-2px); } }
