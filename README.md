@@ -4,6 +4,12 @@ A desktop-browser survival game built with TypeScript and Three.js. Scavenge a s
 
 The 3D world uses original procedural geometry and shaders. No external art assets or game framework are required.
 
+The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
+
+Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and fishing or diving gear stays on large equipment racks. The fourteen-item distribution and carrying rules remain unchanged.
+
+The ship uses original procedural materials and geometry: varied wooden planks and panels, worn furniture, painted steel, rust details, railings, working-deck fittings, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
+
 ## Run
 
 ```bash
@@ -41,7 +47,7 @@ Recovered supplies remain as physical props in the survival boat; there is no bo
 
 ## Game loop
 
-The ship sinks in two minutes. Search the cabin and upper deck, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
+The ship sinks in two minutes. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
 
 In the lifeboat, each day gives four energy for daytime actions:
 
@@ -78,6 +84,11 @@ bun run preview
 - `src/game` — scavenging timer, item state, score, and sinking progression.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
+- `src/world/ShipItemPlacement` — category-compatible item profiles, anchor validation, and randomized assignment to authored surfaces.
+- `src/world/ShipMaterials` — deterministic procedural wood families, ship-surface materials, and owned-material disposal.
+- `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
+- `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
+- `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.
 - `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
 - `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
 

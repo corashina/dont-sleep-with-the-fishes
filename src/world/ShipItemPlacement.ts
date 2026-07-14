@@ -1,5 +1,6 @@
 import { Euler, Vector3 } from 'three';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export type ShipItemCategory =
   | 'foodWater'
@@ -37,17 +38,42 @@ export interface ShipItemTransform {
   usedEmergencyAnchor: boolean;
 }
 
+function itemProfile(id: ItemId, category: ShipItemCategory): ShipItemProfile {
+  const [width, height, depth] = ITEM_MODEL_SPECS[id].normalizedSize;
+  return { category, width, depth, height };
+}
+
 export const SHIP_ITEM_PROFILES: Readonly<Record<ItemId, ShipItemProfile>> = {
-  flareGun: { category: 'medicalEmergency', width: 0.58, depth: 0.28, height: 0.22 },
-  ductTape: { category: 'toolsRepair', width: 0.32, depth: 0.32, height: 0.18 },
-  fishingRod: { category: 'fishingDiving', width: 1.85, depth: 0.24, height: 0.22 },
-  baitTin: { category: 'fishingDiving', width: 0.34, depth: 0.34, height: 0.2 },
-  medicalKit: { category: 'medicalEmergency', width: 0.62, depth: 0.42, height: 0.38 },
-  waterJug: { category: 'foodWater', width: 0.46, depth: 0.46, height: 0.72 },
-  cannedFood: { category: 'foodWater', width: 0.26, depth: 0.26, height: 0.28 },
-  flashlight: { category: 'toolsRepair', width: 0.42, depth: 0.2, height: 0.2 },
-  scubaSet: { category: 'fishingDiving', width: 1.05, depth: 0.72, height: 0.76 },
+  flareGun: itemProfile('flareGun', 'medicalEmergency'),
+  ductTape: itemProfile('ductTape', 'toolsRepair'),
+  fishingRod: itemProfile('fishingRod', 'fishingDiving'),
+  baitTin: itemProfile('baitTin', 'fishingDiving'),
+  medicalKit: itemProfile('medicalKit', 'medicalEmergency'),
+  waterJug: itemProfile('waterJug', 'foodWater'),
+  cannedFood: itemProfile('cannedFood', 'foodWater'),
+  flashlight: itemProfile('flashlight', 'toolsRepair'),
+  scubaSet: itemProfile('scubaSet', 'fishingDiving'),
 };
+
+function orientedItemBounds(
+  id: ItemId,
+  rotation: Euler,
+  scale: number,
+): { min: Vector3; max: Vector3 } {
+  const normalized = ITEM_MODEL_SPECS[id].normalizedBounds;
+  const min = new Vector3(Infinity, Infinity, Infinity);
+  const max = new Vector3(-Infinity, -Infinity, -Infinity);
+  for (const x of [normalized.min[0], normalized.max[0]]) {
+    for (const y of [normalized.min[1], normalized.max[1]]) {
+      for (const z of [normalized.min[2], normalized.max[2]]) {
+        const corner = new Vector3(x, y, z).multiplyScalar(scale).applyEuler(rotation);
+        min.min(corner);
+        max.max(corner);
+      }
+    }
+  }
+  return { min, max };
+}
 
 function rectanglesOverlap(left: ShipItemAnchor, right: ShipItemAnchor): boolean {
   const xDistance = Math.abs(left.position.x - right.position.x);
@@ -65,11 +91,14 @@ function shuffled<T>(values: readonly T[], random: () => number): T[] {
   return result;
 }
 
-function anchorFits(anchor: ShipItemAnchor, profile: ShipItemProfile): boolean {
+function anchorFits(anchor: ShipItemAnchor, profile: ShipItemProfile, id: ItemId): boolean {
+  const oriented = orientedItemBounds(id, anchor.rotation, anchor.scale);
   return anchor.categories.includes(profile.category)
-    && anchor.footprint.width >= profile.width
-    && anchor.footprint.depth >= profile.depth
-    && anchor.clearanceHeight >= profile.height;
+    && oriented.min.x >= -anchor.footprint.width / 2
+    && oriented.max.x <= anchor.footprint.width / 2
+    && oriented.min.z >= -anchor.footprint.depth / 2
+    && oriented.max.z <= anchor.footprint.depth / 2
+    && oriented.max.y - oriented.min.y <= anchor.clearanceHeight;
 }
 
 export function validateShipItemAnchors(anchors: readonly ShipItemAnchor[]): void {
@@ -123,11 +152,13 @@ export function assignShipItems(
     for (const instance of sortedInstances) {
       const profile = SHIP_ITEM_PROFILES[instance.type];
       const regular = shuffled(
-        anchors.filter((candidate) => !candidate.emergency && anchorFits(candidate, profile)),
+        anchors.filter((candidate) =>
+          !candidate.emergency && anchorFits(candidate, profile, instance.type)),
         random,
       );
       const emergency = includeEmergency
-        ? anchors.filter((candidate) => candidate.emergency && anchorFits(candidate, profile))
+        ? anchors.filter((candidate) =>
+          candidate.emergency && anchorFits(candidate, profile, instance.type))
         : [];
       eligibleAnchors.set(instance.instanceId, [...regular, ...emergency]);
     }
@@ -143,9 +174,12 @@ export function assignShipItems(
         if (usedAnchorIds.has(candidate.id)) continue;
 
         usedAnchorIds.add(candidate.id);
+        const oriented = orientedItemBounds(instance.type, candidate.rotation, candidate.scale);
+        const position = candidate.position.clone();
+        position.y -= oriented.min.y;
         assignments.set(instance.instanceId, {
           anchorId: candidate.id,
-          position: candidate.position.clone(),
+          position,
           rotation: candidate.rotation.clone(),
           scale: candidate.scale,
           usedEmergencyAnchor: candidate.emergency,

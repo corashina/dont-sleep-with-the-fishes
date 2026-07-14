@@ -21,6 +21,7 @@ export interface ShipMaterials {
   rope: MeshStandardMaterial;
   glass: MeshPhysicalMaterial;
   emergency: MeshStandardMaterial;
+  beacon: MeshStandardMaterial;
   ownedMaterialsForTest(): readonly Material[];
   dispose(): void;
 }
@@ -80,6 +81,7 @@ export function createShipMaterials(seed = 0x51f15e): ShipMaterials {
   const rope = new MeshStandardMaterial({ color: 0x3d3022, roughness: 1, metalness: 0, flatShading: true });
   const glass = new MeshPhysicalMaterial({ color: 0x6d8790, roughness: 0.18, transmission: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
   const emergency = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
+  const beacon = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
 
   const ownedMaterials = new Set<Material>([
     ...floorPlanks,
@@ -95,6 +97,7 @@ export function createShipMaterials(seed = 0x51f15e): ShipMaterials {
     rope,
     glass,
     emergency,
+    beacon,
   ]);
   let disposed = false;
 
@@ -112,6 +115,7 @@ export function createShipMaterials(seed = 0x51f15e): ShipMaterials {
     rope,
     glass,
     emergency,
+    beacon,
     ownedMaterialsForTest: () => [...ownedMaterials],
     dispose: () => {
       if (disposed) return;

@@ -3,6 +3,21 @@ import type { InputController } from '../input/InputController';
 import type { CollisionBox, LocalPlayerPosition } from './collisions';
 import { resolveLocalMovement } from './collisions';
 
+export interface PlayerNavigationBounds {
+  safe: { minX: number; maxX: number; minZ: number; maxZ: number };
+  fall: { minX: number; maxX: number; minZ: number; maxZ: number };
+}
+
+function containsLocalPosition(
+  bounds: PlayerNavigationBounds['safe'],
+  position: Vector3,
+): boolean {
+  return position.x >= bounds.minX
+    && position.x <= bounds.maxX
+    && position.z >= bounds.minZ
+    && position.z <= bounds.maxZ;
+}
+
 export class PlayerController {
   readonly localPosition: Vector3;
   private readonly safePosition: Vector3;
@@ -17,6 +32,7 @@ export class PlayerController {
     private readonly ship: Object3D,
     start: Vector3,
     private readonly colliders: readonly CollisionBox[],
+    private readonly navigationBounds: PlayerNavigationBounds,
     private readonly onFall: () => void,
   ) {
     this.localPosition = start.clone();
@@ -51,14 +67,10 @@ export class PlayerController {
     const resolved = resolveLocalMovement(current, desired, 0.35, this.colliders);
     this.localPosition.set(resolved.x, resolved.y, resolved.z);
 
-    if (
-      Math.abs(this.localPosition.x) < 3.45 &&
-      this.localPosition.z > -10.2 &&
-      this.localPosition.z < 8.7
-    ) {
+    if (containsLocalPosition(this.navigationBounds.safe, this.localPosition)) {
       this.safePosition.copy(this.localPosition);
     }
-    if (Math.abs(this.localPosition.x) > 7 || Math.abs(this.localPosition.z) > 14) {
+    if (!containsLocalPosition(this.navigationBounds.fall, this.localPosition)) {
       this.localPosition.copy(this.safePosition);
       this.onFall();
     }

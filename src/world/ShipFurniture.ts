@@ -46,6 +46,7 @@ interface AnchorSpec {
   id: string;
   categories: readonly ShipItemCategory[];
   position: readonly [number, number, number];
+  rotation?: readonly [number, number, number];
   surface: ShipSurface;
   surfaceGroupId: string;
   footprint: { width: number; depth: number };
@@ -295,7 +296,7 @@ function makeAnchor(spec: AnchorSpec): ShipItemAnchor {
     id: spec.id,
     categories: spec.categories,
     position: new Vector3(...spec.position),
-    rotation: new Euler(0, 0, 0),
+    rotation: new Euler(...(spec.rotation ?? [0, 0, 0])),
     scale: 1,
     surface: spec.surface,
     surfaceGroupId: spec.surfaceGroupId,
@@ -315,22 +316,22 @@ const REGULAR_ANCHOR_SPECS: readonly AnchorSpec[] = [
   { id: 'crate-top-food-starboard', categories: ['foodWater'], position: [1.5, 3.27, -4.1], surface: 'crate', surfaceGroupId: 'crate-top-food-starboard', footprint: { width: 0.8, depth: 0.7 }, clearanceHeight: 0.85, emergency: false },
   { id: 'crate-top-food-forward', categories: ['foodWater'], position: [1.5, 3.27, 1.9], surface: 'crate', surfaceGroupId: 'crate-top-food-forward', footprint: { width: 0.8, depth: 0.7 }, clearanceHeight: 0.85, emergency: false },
 
-  { id: 'instrument-cabinet-port', categories: ['medicalEmergency'], position: [-3.2, 4.14, 14], surface: 'cabinet', surfaceGroupId: 'instrument-cabinet-port', footprint: { width: 0.7, depth: 0.5 }, clearanceHeight: 0.55, emergency: false },
-  { id: 'instrument-cabinet-starboard', categories: ['medicalEmergency'], position: [3.2, 4.14, 14], surface: 'cabinet', surfaceGroupId: 'instrument-cabinet-starboard', footprint: { width: 0.7, depth: 0.5 }, clearanceHeight: 0.55, emergency: false },
-  { id: 'wheelhouse-helm-port', categories: ['medicalEmergency'], position: [-0.45, 3.26, 14.45], surface: 'desk', surfaceGroupId: 'wheelhouse-helm-port', footprint: { width: 0.65, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
-  { id: 'wheelhouse-helm-starboard', categories: ['medicalEmergency'], position: [0.45, 3.26, 14.45], surface: 'desk', surfaceGroupId: 'wheelhouse-helm-starboard', footprint: { width: 0.65, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
-  { id: 'wheelhouse-chart-port', categories: ['medicalEmergency'], position: [-0.45, 3.26, 12.65], surface: 'desk', surfaceGroupId: 'wheelhouse-chart-port', footprint: { width: 0.65, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
-  { id: 'wheelhouse-chart-starboard', categories: ['medicalEmergency'], position: [0.45, 3.26, 12.65], surface: 'desk', surfaceGroupId: 'wheelhouse-chart-starboard', footprint: { width: 0.65, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
+  { id: 'instrument-cabinet-port', categories: ['medicalEmergency'], position: [-3.2, 4.14, 14], surface: 'cabinet', surfaceGroupId: 'instrument-cabinet-port', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.55, emergency: false },
+  { id: 'instrument-cabinet-starboard', categories: ['medicalEmergency'], position: [3.2, 4.14, 14], surface: 'cabinet', surfaceGroupId: 'instrument-cabinet-starboard', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.55, emergency: false },
+  { id: 'wheelhouse-helm-port', categories: ['medicalEmergency'], position: [-0.45, 3.26, 14.45], surface: 'desk', surfaceGroupId: 'wheelhouse-helm-port', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
+  { id: 'wheelhouse-helm-starboard', categories: ['medicalEmergency'], position: [0.45, 3.26, 14.45], surface: 'desk', surfaceGroupId: 'wheelhouse-helm-starboard', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
+  { id: 'wheelhouse-chart-port', categories: ['medicalEmergency'], position: [-0.45, 3.26, 12.85], surface: 'desk', surfaceGroupId: 'wheelhouse-chart-port', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
+  { id: 'wheelhouse-chart-starboard', categories: ['medicalEmergency'], position: [0.45, 3.26, 12.85], surface: 'desk', surfaceGroupId: 'wheelhouse-chart-starboard', footprint: { width: 0.73, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
 
-  { id: 'workbench-port', categories: ['toolsRepair'], position: [-2.2, 3.16, -10.7], surface: 'workbench', surfaceGroupId: 'workbench-port', footprint: { width: 0.55, depth: 0.5 }, clearanceHeight: 0.7, emergency: false },
-  { id: 'workbench-starboard', categories: ['toolsRepair'], position: [2.3, 3.16, -10.1], surface: 'workbench', surfaceGroupId: 'workbench-starboard', footprint: { width: 0.55, depth: 0.5 }, clearanceHeight: 0.7, emergency: false },
+  { id: 'workbench-port', categories: ['toolsRepair'], position: [-2.2, 3.16, -10.7], surface: 'workbench', surfaceGroupId: 'workbench-port', footprint: { width: 0.56, depth: 0.63 }, clearanceHeight: 0.75, emergency: false },
+  { id: 'workbench-starboard', categories: ['toolsRepair'], position: [2.3, 3.16, -10.1], surface: 'workbench', surfaceGroupId: 'workbench-starboard', footprint: { width: 0.56, depth: 0.63 }, clearanceHeight: 0.75, emergency: false },
   { id: 'storage-shelf-tools-port', categories: ['toolsRepair'], position: [-4.6, 3.89, -11.2], surface: 'shelf', surfaceGroupId: 'storage-shelf-tools-port', footprint: { width: 0.38, depth: 0.75 }, clearanceHeight: 0.65, emergency: false },
   { id: 'storage-shelf-tools-starboard', categories: ['toolsRepair'], position: [4.6, 3.89, -11.2], surface: 'shelf', surfaceGroupId: 'storage-shelf-tools-starboard', footprint: { width: 0.38, depth: 0.75 }, clearanceHeight: 0.65, emergency: false },
-  { id: 'crate-top-tools', categories: ['toolsRepair'], position: [-1.5, 3.27, -1.1], surface: 'crate', surfaceGroupId: 'crate-top-tools', footprint: { width: 0.7, depth: 0.7 }, clearanceHeight: 0.65, emergency: false },
-  { id: 'machinery-service', categories: ['toolsRepair'], position: [0, 3.43, -9.4], surface: 'workbench', surfaceGroupId: 'machinery-service', footprint: { width: 0.7, depth: 0.6 }, clearanceHeight: 0.65, emergency: false },
+  { id: 'crate-top-tools', categories: ['toolsRepair'], position: [-1.5, 3.27, -1.1], surface: 'crate', surfaceGroupId: 'crate-top-tools', footprint: { width: 0.7, depth: 0.7 }, clearanceHeight: 0.75, emergency: false },
+  { id: 'machinery-service', categories: ['toolsRepair'], position: [0, 3.43, -9.4], surface: 'workbench', surfaceGroupId: 'machinery-service', footprint: { width: 0.7, depth: 0.63 }, clearanceHeight: 0.75, emergency: false },
 
-  { id: 'deck-rack-rod-port', categories: ['fishingDiving'], position: [-3.8, 2.42, -8.55], surface: 'rack', surfaceGroupId: 'deck-rack-rod-port', footprint: { width: 1.9, depth: 0.32 }, clearanceHeight: 0.7, emergency: false },
-  { id: 'deck-rack-scuba-port', categories: ['fishingDiving'], position: [-3.8, 2.42, -7.8], surface: 'rack', surfaceGroupId: 'deck-rack-scuba-port', footprint: { width: 1.1, depth: 0.8 }, clearanceHeight: 0.9, emergency: false },
+  { id: 'deck-rack-rod-port', categories: ['fishingDiving'], position: [-3.8, 2.42, -3.22], rotation: [0, Math.PI / 2, 0], surface: 'rack', surfaceGroupId: 'deck-rack-rod-port', footprint: { width: 1.82, depth: 0.14 }, clearanceHeight: 0.7, emergency: false },
+  { id: 'deck-rack-scuba-port', categories: ['fishingDiving'], position: [-3.8, 2.42, -2.42], surface: 'rack', surfaceGroupId: 'deck-rack-scuba-port', footprint: { width: 1.1, depth: 1.12 }, clearanceHeight: 0.9, emergency: false },
   { id: 'crate-top-bait-aft', categories: ['fishingDiving'], position: [1.5, 3.27, -1.1], surface: 'crate', surfaceGroupId: 'crate-top-bait-aft', footprint: { width: 0.5, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
   { id: 'crate-top-bait-forward', categories: ['fishingDiving'], position: [-1.5, 3.27, 1.9], surface: 'crate', surfaceGroupId: 'crate-top-bait-forward', footprint: { width: 0.5, depth: 0.5 }, clearanceHeight: 0.65, emergency: false },
 ];
@@ -339,7 +340,7 @@ const EMERGENCY_ANCHOR_SPECS: readonly AnchorSpec[] = [
   { id: 'emergency-food', categories: ['foodWater'], position: [-3.8, 3.05, 8.8], surface: 'shelf', surfaceGroupId: 'emergency-food-surface', footprint: { width: 2.1, depth: 1.2 }, clearanceHeight: 1.3, emergency: true },
   { id: 'emergency-medical', categories: ['medicalEmergency'], position: [3.7, 3.35, 12.4], surface: 'cabinet', surfaceGroupId: 'emergency-medical-surface', footprint: { width: 2.1, depth: 1.2 }, clearanceHeight: 1.3, emergency: true },
   { id: 'emergency-tools', categories: ['toolsRepair'], position: [-3.5, 3.08, -9.4], surface: 'workbench', surfaceGroupId: 'emergency-tools-surface', footprint: { width: 2.1, depth: 1.2 }, clearanceHeight: 1.3, emergency: true },
-  { id: 'emergency-gear', categories: ['fishingDiving'], position: [3.8, 2.42, -8.4], surface: 'rack', surfaceGroupId: 'emergency-gear-surface', footprint: { width: 2.1, depth: 1.2 }, clearanceHeight: 1.3, emergency: true },
+  { id: 'emergency-gear', categories: ['fishingDiving'], position: [3.8, 2.42, -2.6], surface: 'rack', surfaceGroupId: 'emergency-gear-surface', footprint: { width: 2.1, depth: 1.2 }, clearanceHeight: 1.3, emergency: true },
 ];
 
 function supportMaterial(materials: ShipMaterials, spec: AnchorSpec): Material {
@@ -358,7 +359,11 @@ function supportMaterial(materials: ShipMaterials, spec: AnchorSpec): Material {
   }
 }
 
-function createAnchorsAndSupports(root: Group, materials: ShipMaterials): ShipItemAnchor[] {
+function createAnchorsAndSupports(
+  root: Group,
+  materials: ShipMaterials,
+  colliders: CollisionBox[],
+): ShipItemAnchor[] {
   const specs = [...REGULAR_ANCHOR_SPECS, ...EMERGENCY_ANCHOR_SPECS];
   specs.forEach((spec) => {
     const [x, topY, z] = spec.position;
@@ -379,13 +384,21 @@ function createAnchorsAndSupports(root: Group, materials: ShipMaterials): ShipIt
       depth: spec.footprint.depth,
     };
     mesh.userData.anchorSupport = metadata;
+    if (spec.id === 'emergency-tools') {
+      addCollider(
+        colliders,
+        new Vector3(x, 2.22, z),
+        [spec.footprint.width, topY - 2.22, spec.footprint.depth],
+        'workbench',
+      );
+    }
   });
   return specs.map(makeAnchor);
 }
 
 function addDecorations(root: Group, materials: ShipMaterials): void {
   const charts: readonly [number, number, number][] = [
-    [-0.55, 3.23, 12.35], [0.55, 3.23, 12.35], [-2.25, 3.23, 6.15], [2.25, 3.23, 6.15],
+    [-0.55, 3.23, 12.55], [0.55, 3.23, 12.55], [-2.25, 3.23, 6.15], [2.25, 3.23, 6.15],
   ];
   charts.forEach((position, index) => addBox(root, `chart-${index + 1}`, [0.72, 0.018, 0.46], position, materials.wallPanels[index % 4]!));
 
@@ -462,7 +475,7 @@ export function createShipFurniture(materials: ShipMaterials): ShipFurnitureBuil
   const helm = addDesk(root, materials, new Vector3(0, 2.32, 14.45), 0);
   helm.name = 'helm-desk';
   addCollider(colliders, helm.position, [1.7, 0.94, 0.78], 'desk');
-  const chartTable = addDesk(root, materials, new Vector3(0, 2.32, 12.65), 0);
+  const chartTable = addDesk(root, materials, new Vector3(0, 2.32, 12.85), 0);
   chartTable.name = 'chart-table';
   addCollider(colliders, chartTable.position, [1.7, 0.94, 0.78], 'desk');
   [new Vector3(-3.2, 2.32, 14), new Vector3(3.2, 2.32, 14)].forEach((position, index) => {
@@ -489,7 +502,7 @@ export function createShipFurniture(materials: ShipMaterials): ShipFurnitureBuil
     addLocker(root, materials, position, 0);
     addCollider(colliders, position, [0.78, 1.82, 0.64], 'locker');
   });
-  [new Vector3(-3.8, 2.2, -8), new Vector3(3.8, 2.2, -8.4)].forEach((position) => {
+  [new Vector3(-3.8, 2.2, -2.6), new Vector3(3.8, 2.2, -2.6)].forEach((position) => {
     addEquipmentRack(root, materials, position, 0);
     addCollider(colliders, position, [2.6, 0.82, 1.6], 'equipment-rack');
   });
@@ -513,7 +526,7 @@ export function createShipFurniture(materials: ShipMaterials): ShipFurnitureBuil
     new Vector3(-5.6, 3.72, z),
     new Vector3(5.6, 3.72, z),
   ]);
-  const anchors = createAnchorsAndSupports(root, materials);
+  const anchors = createAnchorsAndSupports(root, materials, colliders);
   let disposed = false;
 
   return {

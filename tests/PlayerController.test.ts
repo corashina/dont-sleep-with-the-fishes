@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
 import type { MovementAxes } from '../src/player/collisions';
-import { PlayerController } from '../src/player/PlayerController';
+import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
 import { createShip } from '../src/world/Ship';
+
+const TEST_NAVIGATION_BOUNDS: PlayerNavigationBounds = {
+  safe: { minX: -5.9, maxX: 5.9, minZ: -16, maxZ: 15.2 },
+  fall: { minX: -7, maxX: 7, minZ: -18, maxZ: 18 },
+};
 
 class TestInput {
   movement: MovementAxes = { x: 0, z: 0 };
@@ -40,7 +45,9 @@ describe('PlayerController', () => {
     ship.rotation.set(0.2, 0.35, -0.1);
     const camera = new PerspectiveCamera();
     const start = new Vector3(1.25, 3.7, -2.5);
-    const controller = new PlayerController(camera, ship, start, [], vi.fn());
+    const controller = new PlayerController(
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
 
     controller.update(0, new TestInput().asControllerInput());
 
@@ -60,7 +67,9 @@ describe('PlayerController', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();
     const input = new TestInput();
-    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
     input.queueLook(0, movementY);
 
     controller.update(0, input.asControllerInput());
@@ -75,10 +84,12 @@ describe('PlayerController', () => {
     const input = new TestInput();
     input.movement = { x: 0, z: -1 };
     const walking = new PlayerController(
-      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], vi.fn(),
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
+      TEST_NAVIGATION_BOUNDS, vi.fn(),
     );
     const sprinting = new PlayerController(
-      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], vi.fn(),
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
+      TEST_NAVIGATION_BOUNDS, vi.fn(),
     );
 
     walking.update(1, input.asControllerInput());
@@ -100,7 +111,9 @@ describe('PlayerController', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();
     const input = new TestInput();
-    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
     input.queueLook(Math.PI / (2 * 0.0018), 0);
     controller.update(0, input.asControllerInput());
     const visibleDirection = cameraDirection.clone().applyQuaternion(camera.quaternion);
@@ -123,20 +136,22 @@ describe('PlayerController', () => {
       shipBuild.root,
       shipBuild.playerStart,
       shipBuild.colliders,
+      shipBuild.playerNavigationBounds,
       vi.fn(),
     );
 
     controller.update(0, input.asControllerInput());
-    expect(controller.localPosition.z).toBeCloseTo(7.9);
+    expect(controller.localPosition.z).toBeCloseTo(7.5);
     const resolvedStart = controller.localPosition.clone();
 
     input.movement = { x: 0, z: 1 };
     controller.update(0.1, input.asControllerInput());
-    expectVector(controller.localPosition, resolvedStart);
+    expect(controller.localPosition.z).toBeLessThan(resolvedStart.z);
+    const forwardPosition = controller.localPosition.clone();
 
     input.movement = { x: 0, z: -1 };
     controller.update(0.1, input.asControllerInput());
-    expect(controller.localPosition.z).toBeGreaterThan(resolvedStart.z);
+    expect(controller.localPosition.z).toBeGreaterThan(forwardPosition.z);
   });
 
   it('restores the latest safe inboard position and reports a fall', () => {
@@ -144,7 +159,8 @@ describe('PlayerController', () => {
     const input = new TestInput();
     input.movement = { x: 1, z: 0 };
     const controller = new PlayerController(
-      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [], onFall,
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
+      TEST_NAVIGATION_BOUNDS, onFall,
     );
 
     controller.update(0.5, input.asControllerInput());
@@ -155,13 +171,36 @@ describe('PlayerController', () => {
     expect(onFall).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ['forward port exterior', new Vector3(-5.6, 3.72, 14.5)],
+    ['forward starboard exterior', new Vector3(5.6, 3.72, 14.5)],
+    ['aft port exterior', new Vector3(-5.6, 3.72, -16)],
+    ['storage room', new Vector3(0, 3.72, -9.2)],
+    ['lifeboat approach', new Vector3(5.9, 3.72, -6.5)],
+  ])('keeps the freighter %s inside the playable bounds', (_label, position) => {
+    const shipBuild = createShip();
+    const onFall = vi.fn();
+    const controller = new PlayerController(
+      new PerspectiveCamera(), shipBuild.root, position, shipBuild.colliders,
+      shipBuild.playerNavigationBounds, onFall,
+    );
+
+    controller.update(0, new TestInput().asControllerInput());
+
+    expectVector(controller.localPosition, position);
+    expect(onFall).not.toHaveBeenCalled();
+    shipBuild.dispose();
+  });
+
   it('reset restores the supplied local start and default view', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();
     const input = new TestInput();
     input.movement = { x: 1, z: 0 };
     input.queueLook(250, -400);
-    const controller = new PlayerController(camera, ship, new Vector3(0, 3.7, 0), [], vi.fn());
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
     controller.update(0.25, input.asControllerInput());
     const resetStart = new Vector3(2, 3.8, -1);
 

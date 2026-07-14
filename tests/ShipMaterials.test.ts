@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Material } from 'three';
+import { Material, MeshStandardMaterial } from 'three';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 
 describe('ship materials', () => {
@@ -25,5 +25,14 @@ describe('ship materials', () => {
     materials.dispose();
     materials.dispose();
     counts.forEach((count) => expect(count).toBe(1));
+  });
+
+  it('owns a beacon material independently from emergency surfaces', () => {
+    const materials = createShipMaterials();
+    const owned = materials.ownedMaterialsForTest();
+    expect(materials.beacon).toBeInstanceOf(MeshStandardMaterial);
+    expect(materials.beacon).not.toBe(materials.emergency);
+    expect(owned).toContain(materials.beacon);
+    materials.dispose();
   });
 });

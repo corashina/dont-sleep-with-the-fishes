@@ -65,7 +65,7 @@ const STORAGE_MAX_Z = -7;
 const STORAGE_DOOR_Z = -8.2;
 
 const WHEELHOUSE_WIDTH = 7.8;
-const WHEELHOUSE_LENGTH = 4.4;
+const WHEELHOUSE_LENGTH = 4.3;
 const WHEELHOUSE_WALL_HEIGHT = 3.4;
 const WHEELHOUSE_RAISE = 0.24;
 const WINDOW_SILL_HEIGHT = 0.82;
@@ -87,6 +87,8 @@ const STACK_COLLAR_HEIGHT = 0.22;
 
 const RAIL_X = 6;
 const RAIL_THICKNESS = 0.2;
+const RAIL_COLLIDER_THICKNESS = 0.25;
+const RAIL_COLLIDER_OUTWARD_OFFSET = 0.075;
 const RAIL_HEIGHT = 1.8;
 const RAIL_TOP_THICKNESS = 0.14;
 const RAIL_POST_WIDTH = 0.12;
@@ -101,6 +103,17 @@ interface BlockOptions {
   position: readonly [number, number, number];
   material: Material;
   collider?: boolean;
+}
+
+const boxGeometries = new WeakMap<Group, BoxGeometry>();
+
+function sharedBoxGeometry(root: Group, geometries: Set<BufferGeometry>): BoxGeometry {
+  const existing = boxGeometries.get(root);
+  if (existing) return existing;
+  const geometry = new BoxGeometry(1, 1, 1);
+  boxGeometries.set(root, geometry);
+  geometries.add(geometry);
+  return geometry;
 }
 
 function woodVariant(family: WoodMaterialFamily, index: number): Material {
@@ -127,14 +140,14 @@ function addBlock(
   shellColliders: CollisionBox[],
   options: BlockOptions,
 ): Mesh {
-  const geometry = new BoxGeometry(...options.size);
+  const geometry = sharedBoxGeometry(root, geometries);
   const mesh = new Mesh(geometry, options.material);
   mesh.name = options.name;
   mesh.position.set(...options.position);
+  mesh.scale.set(...options.size);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   root.add(mesh);
-  geometries.add(geometry);
   if (options.collider) shellColliders.push(toCollisionBox(options.position, options.size));
   return mesh;
 }
@@ -349,11 +362,58 @@ function addWheelhouse(
       size: [frontWindowWidth, windowHeight, WINDOW_GLASS_THICKNESS],
       position: [x, windowY, maxZ],
       material: materials.glass,
+      collider: true,
     });
   }
 
   [-sideX, sideX].forEach((x, sideIndex) => {
     const sideName = sideIndex === 0 ? 'port' : 'starboard';
+    if (sideName === 'port') {
+      const doorCenterZ = 12.8;
+      const doorMinZ = doorCenterZ - WHEELHOUSE_DOOR_WIDTH / 2;
+      const doorMaxZ = doorCenterZ + WHEELHOUSE_DOOR_WIDTH / 2;
+      const aftLength = doorMinZ - minZ;
+      const forwardLength = maxZ - doorMaxZ;
+      const forwardCenterZ = (doorMaxZ + maxZ) / 2;
+      addBlock(root, geometries, shellColliders, {
+        name: 'wheelhouse-port-aft-door-side',
+        size: [WALL_THICKNESS, WHEELHOUSE_WALL_HEIGHT, aftLength],
+        position: [x, baseY + WHEELHOUSE_WALL_HEIGHT / 2, minZ + aftLength / 2],
+        material: woodVariant(materials.wallPanels, 2),
+        collider: true,
+      });
+      addBlock(root, geometries, shellColliders, {
+        name: 'wheelhouse-port-forward-sill',
+        size: [WALL_THICKNESS, WINDOW_SILL_HEIGHT, forwardLength],
+        position: [x, sillY, forwardCenterZ],
+        material: woodVariant(materials.wallPanels, 3),
+        collider: true,
+      });
+      addBlock(root, geometries, shellColliders, {
+        name: 'wheelhouse-port-forward-header',
+        size: [WALL_THICKNESS, WINDOW_HEADER_HEIGHT, forwardLength],
+        position: [x, headerY, forwardCenterZ],
+        material: woodVariant(materials.wallPanels, 2),
+        collider: true,
+      });
+      [doorMaxZ + WINDOW_PILLAR_WIDTH / 2, maxZ - WINDOW_PILLAR_WIDTH / 2]
+        .forEach((z, pillar) => addBlock(root, geometries, shellColliders, {
+          name: `wheelhouse-port-forward-pillar-${pillar}`,
+          size: [WALL_THICKNESS, windowHeight, WINDOW_PILLAR_WIDTH],
+          position: [x, windowY, z],
+          material: materials.paintedSteel,
+          collider: true,
+        }));
+      const glassLength = forwardLength - WINDOW_PILLAR_WIDTH * 2;
+      addBlock(root, geometries, shellColliders, {
+        name: 'wheelhouse-port-window-0',
+        size: [WINDOW_GLASS_THICKNESS, windowHeight, glassLength],
+        position: [x, windowY, doorMaxZ + WINDOW_PILLAR_WIDTH + glassLength / 2],
+        material: materials.glass,
+        collider: true,
+      });
+      return;
+    }
     addBlock(root, geometries, shellColliders, {
       name: `wheelhouse-${sideName}-sill`,
       size: [WALL_THICKNESS, WINDOW_SILL_HEIGHT, WHEELHOUSE_LENGTH],
@@ -386,6 +446,7 @@ function addWheelhouse(
         size: [WINDOW_GLASS_THICKNESS, windowHeight, sideWindowLength],
         position: [x, windowY, z],
         material: materials.glass,
+        collider: true,
       });
     }
   });
@@ -489,9 +550,42 @@ function addRailSegment(
       material: materials.darkMetal,
     });
   }
+  const colliderX = x + (sideName === 'port' ? -1 : 1) * RAIL_COLLIDER_OUTWARD_OFFSET;
   shellColliders.push(toCollisionBox(
-    [x, WALL_BOTTOM_Y + RAIL_HEIGHT / 2, centerZ],
-    [RAIL_THICKNESS, RAIL_HEIGHT, length],
+    [colliderX, WALL_BOTTOM_Y + RAIL_HEIGHT / 2, centerZ],
+    [RAIL_COLLIDER_THICKNESS, RAIL_HEIGHT, length],
+  ));
+}
+
+function addTransverseRail(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  shellColliders: CollisionBox[],
+  materials: ShipMaterials,
+  end: 'bow' | 'stern',
+  z: number,
+): void {
+  const width = RAIL_X * 2;
+  const railTopY = WALL_BOTTOM_Y + RAIL_HEIGHT;
+  addBlock(root, geometries, shellColliders, {
+    name: `rail-${end}-top`,
+    size: [width, RAIL_TOP_THICKNESS, RAIL_THICKNESS],
+    position: [0, railTopY - RAIL_TOP_THICKNESS / 2, z],
+    material: materials.darkMetal,
+  });
+  const postCount = Math.ceil(width / RAIL_POST_SPACING);
+  for (let index = 0; index <= postCount; index += 1) {
+    const x = -RAIL_X + (width * index) / postCount;
+    addBlock(root, geometries, shellColliders, {
+      name: `rail-${end}-post-${index}`,
+      size: [RAIL_POST_WIDTH, RAIL_HEIGHT, RAIL_POST_WIDTH],
+      position: [x, WALL_BOTTOM_Y + RAIL_HEIGHT / 2, z],
+      material: materials.darkMetal,
+    });
+  }
+  shellColliders.push(toCollisionBox(
+    [0, WALL_BOTTOM_Y + RAIL_HEIGHT / 2, z],
+    [width, RAIL_HEIGHT, RAIL_COLLIDER_THICKNESS],
   ));
 }
 
@@ -506,6 +600,8 @@ function addRails(
   addRailSegment(root, geometries, shellColliders, materials, 'port', RAIL_MIN_Z, RAIL_MAX_Z);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', RAIL_MIN_Z, gapMinZ);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', gapMaxZ, RAIL_MAX_Z);
+  addTransverseRail(root, geometries, shellColliders, materials, 'bow', RAIL_MAX_Z);
+  addTransverseRail(root, geometries, shellColliders, materials, 'stern', RAIL_MIN_Z);
 }
 
 function addWeathering(
@@ -572,7 +668,7 @@ export function createShipGeometry(materials: ShipMaterials): ShipGeometryBuild 
   addWeathering(root, geometries, shellColliders, materials);
 
   const beaconRoofY = WALL_BOTTOM_Y + WHEELHOUSE_RAISE + WHEELHOUSE_WALL_HEIGHT + 0.24;
-  addCylinder(root, geometries, 'alarm-beacon', 0.22, 0.5, [0, beaconRoofY + 0.25, WHEELHOUSE_Z], materials.emergency);
+  addCylinder(root, geometries, 'alarm-beacon', 0.22, 0.5, [0, beaconRoofY + 0.25, WHEELHOUSE_Z], materials.beacon);
 
   const zoneCenters = new Map<ShipZoneId, Vector3>([
     ['crewCabin', new Vector3(0, 3.72, 7.5)],
