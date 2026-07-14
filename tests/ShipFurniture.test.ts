@@ -171,6 +171,7 @@ describe('ship furniture', () => {
   it('keeps every anchor upward-clearance volume free of surrounding broad geometry', () => {
     const materials = createShipMaterials();
     const build = createShipFurniture(materials);
+    build.root.updateWorldMatrix(true, true);
     const broadFamilies = new Set([
       'bunk', 'desk', 'wall-shelf', 'locker', 'workbench', 'equipment-rack', 'cargo-crate',
     ]);
@@ -212,6 +213,41 @@ describe('ship furniture', () => {
       }).map(({ name }) => name);
       expect(blockers, anchor.id).toEqual([]);
     });
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('keeps simultaneously usable anchor placement volumes disjoint', () => {
+    const materials = createShipMaterials();
+    const build = createShipFurniture(materials);
+    const volumes = build.anchors.map((anchor) => ({
+      id: anchor.id,
+      bounds: new Box3(
+        new Vector3(
+          anchor.position.x - anchor.footprint.width / 2,
+          anchor.position.y,
+          anchor.position.z - anchor.footprint.depth / 2,
+        ),
+        new Vector3(
+          anchor.position.x + anchor.footprint.width / 2,
+          anchor.position.y + anchor.clearanceHeight,
+          anchor.position.z + anchor.footprint.depth / 2,
+        ),
+      ),
+    }));
+    const overlaps: string[] = [];
+    volumes.forEach((left, leftIndex) => {
+      volumes.slice(leftIndex + 1).forEach((right) => {
+        const positiveVolume = left.bounds.min.x < right.bounds.max.x
+          && left.bounds.max.x > right.bounds.min.x
+          && left.bounds.min.y < right.bounds.max.y
+          && left.bounds.max.y > right.bounds.min.y
+          && left.bounds.min.z < right.bounds.max.z
+          && left.bounds.max.z > right.bounds.min.z;
+        if (positiveVolume) overlaps.push(`${left.id}:${right.id}`);
+      });
+    });
+    expect(overlaps).toEqual([]);
     build.disposeGeometry();
     materials.dispose();
   });
