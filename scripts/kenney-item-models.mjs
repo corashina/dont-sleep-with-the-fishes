@@ -31,7 +31,7 @@ export const KENNEY_PACKS = Object.freeze({
     archiveUrl: 'https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip',
     sha256: 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
     licenseUrl: CC0,
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle-large.glb'],
+    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle.glb'],
   },
   'prototype-kit': {
     version: '1.0',
@@ -77,7 +77,7 @@ export const KENNEY_ITEM_RECIPES = Object.freeze({
       part('cross-horizontal', 'Models/GLB format/shape-cube-half.glb', [0, 0.29, 0.17], [0.4, 0.24, 0.04], [1, 1, 1, 1]),
     ],
   },
-  waterJug: direct('survival-kit', 'Models/GLB format/bottle-large.glb', 96),
+  waterJug: direct('survival-kit', 'Models/GLB format/bottle.glb', 96),
   cannedFood: direct('food-kit', 'Models/GLB format/can.glb', 156),
   flashlight: {
     kind: 'composite', expectedTriangles: 340, parts: [
