@@ -21,12 +21,14 @@ describe('Kenney item source guards', () => {
     await writeFile(join(inputRoot, 'License.txt'), 'CC0');
     await writeFile(join(inputRoot, 'Models', 'GLB format', 'model.glb'), 'model');
     await writeFile(join(inputRoot, 'Models', 'GLB format', 'Textures', 'colormap.png'), 'texture');
+    await writeFile(join(inputRoot, 'unapproved-sentinel.txt'), 'must stay archived');
     archivePath = join(root, 'pack.zip');
 
     const archiveEntries: Array<readonly [string, string]> = [
       [join(inputRoot, 'License.txt'), 'License.txt'],
       [join(inputRoot, 'Models', 'GLB format', 'model.glb'), 'Models/GLB format/model.glb'],
       [join(inputRoot, 'Models', 'GLB format', 'Textures', 'colormap.png'), 'Models/GLB format/Textures/colormap.png'],
+      [join(inputRoot, 'unapproved-sentinel.txt'), 'unapproved-sentinel.txt'],
     ];
     const createEntries = archiveEntries
       .map(([source, entry]) => `[System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, ${quotePowerShell(source)}, ${quotePowerShell(entry)}) | Out-Null`)
@@ -95,6 +97,7 @@ describe('Kenney item source guards', () => {
     await expect(readFile(join(destinationRoot, 'License.txt'), 'utf8')).resolves.toBe('CC0');
     await expect(readFile(join(destinationRoot, 'Models', 'GLB format', 'model.glb'), 'utf8')).resolves.toBe('model');
     await expect(readFile(join(destinationRoot, 'Models', 'GLB format', 'Textures', 'colormap.png'), 'utf8')).resolves.toBe('texture');
+    await expect(readFile(join(destinationRoot, 'unapproved-sentinel.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('rejects a missing approved archive entry', () => {
