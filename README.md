@@ -42,6 +42,7 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | `Enter` | Activate the focused control |
 | `Escape` | Close the fishing-choice dialog first; otherwise pause or resume |
 | `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
+| Center journal marker | Open and browse completed daily event entries |
 
 Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, remaining uses, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Depleted multi-use props stay in place with subdued markers, while consumed cans disappear as their individual instances are spent. **Fish** exists only when a fishing rod was rescued, and **Dive** only when scuba gear was rescued; without those tools, shortcuts `1` and `2` do nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
 
@@ -62,6 +63,8 @@ In the lifeboat, each day gives four energy for daytime actions:
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
 Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable item resolves to the event's fallback result, and **Endure** uses no item. Consumable charges are finite and exhausted supplies remain visible.
+
+After each nighttime outcome, a journal page retells that day's daytime and nighttime events as a short first-person entry. The entry mentions supplies only when they were attempted during an event. Continue from the page to begin dawn, or use the centered journal marker later to browse completed days.
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 
