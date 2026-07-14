@@ -139,6 +139,7 @@ export class SurvivalUI {
   onContinue: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onPointer: (x: number, y: number) => void = () => undefined;
+  onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onSkip: () => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
 
@@ -185,6 +186,9 @@ export class SurvivalUI {
   private pauseReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
+  private hoveredAnchorId: string | null = null;
+  private focusedAnchorId: string | null = null;
+  private publishedAnchorId: string | null = null;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -281,6 +285,10 @@ export class SurvivalUI {
     METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
 
     this.root.addEventListener('click', this.handleClick);
+    this.root.addEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
+    this.root.addEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     window.addEventListener('pointermove', this.handlePointer);
     document.addEventListener('keydown', this.handleKeyDown);
   }
@@ -332,6 +340,9 @@ export class SurvivalUI {
       this.placeAnchorTooltip(button, anchor);
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);
+    }
+    if (this.publishedAnchorId !== null && !seen.has(this.publishedAnchorId)) {
+      this.clearAnchorHighlight();
     }
     this.anchorButtons.forEach((button, id) => {
       if (seen.has(id)) return;
@@ -425,8 +436,12 @@ export class SurvivalUI {
   setBusy(busy: boolean): void {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
-    if (busy) this.root.setAttribute('aria-busy', 'true');
-    else this.root.removeAttribute('aria-busy');
+    if (busy) {
+      this.clearAnchorHighlight();
+      this.root.setAttribute('aria-busy', 'true');
+    } else {
+      this.root.removeAttribute('aria-busy');
+    }
     this.syncCommandState();
   }
 
@@ -480,9 +495,14 @@ export class SurvivalUI {
 
   dispose(): void {
     if (this.disposed) return;
+    this.clearAnchorHighlight();
     this.disposed = true;
     this.announcementVersion += 1;
     this.root.removeEventListener('click', this.handleClick);
+    this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
+    this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
     window.removeEventListener('pointermove', this.handlePointer);
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
@@ -491,6 +511,7 @@ export class SurvivalUI {
     this.onContinue = () => undefined;
     this.onRestart = () => undefined;
     this.onPointer = () => undefined;
+    this.onAnchorHighlight = () => undefined;
     this.onSkip = () => undefined;
     this.onPauseChange = () => undefined;
     this.root.remove();
@@ -608,7 +629,52 @@ export class SurvivalUI {
     this.endureButton.disabled = this.busy;
   }
 
+  private itemAnchorId(target: EventTarget | null): string | null {
+    if (!(target instanceof Element)) return null;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor[data-target-kind="item"]');
+    return button !== null && this.root.contains(button) ? button.dataset.anchorId ?? null : null;
+  }
+
+  private publishAnchorHighlight(): void {
+    const next = this.focusedAnchorId ?? this.hoveredAnchorId;
+    if (next === this.publishedAnchorId) return;
+    this.publishedAnchorId = next;
+    this.onAnchorHighlight(next);
+  }
+
+  private clearAnchorHighlight(): void {
+    this.hoveredAnchorId = null;
+    this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
+  }
+
+  private readonly handleAnchorPointerOver = (event: Event): void => {
+    this.hoveredAnchorId = this.itemAnchorId(event.target);
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorPointerOut = (event: Event): void => {
+    const pointerEvent = event as MouseEvent;
+    const current = this.itemAnchorId(event.target);
+    if (current === null || this.itemAnchorId(pointerEvent.relatedTarget) === current) return;
+    if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
+    this.focusedAnchorId = this.itemAnchorId(event.target);
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusOut = (event: FocusEvent): void => {
+    const current = this.itemAnchorId(event.target);
+    if (current === null || this.itemAnchorId(event.relatedTarget) === current) return;
+    if (this.focusedAnchorId === current) this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
+  };
+
   private showLayer(layer: HTMLElement): void {
+    this.clearAnchorHighlight();
     layer.classList.add('is-visible');
     this.syncBackgroundInteraction();
   }

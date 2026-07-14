@@ -47,6 +47,52 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('SurvivalUI', () => {
+  it('publishes item hover and focus while ignoring fixed anchors and clearing for modals', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    ui.render(snapshot(), () => null);
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    item.focus();
+    item.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    item.blur();
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    fixed.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves.', danger: 'dangerous' }, snapshot());
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears item highlighting when busy, removed, and disposed', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.setBusy(true);
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    ui.setBusy(false);
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    ui.setAnchors([]);
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    ui.dispose();
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');
