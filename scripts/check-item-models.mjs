@@ -10,6 +10,10 @@ export const ITEM_IDS = [
   'waterJug', 'cannedFood', 'flashlight', 'scubaSet',
 ];
 
+const GLB_MAGIC = 0x46546c67;
+const JSON_CHUNK = 0x4e4f534a;
+const BIN_CHUNK = 0x004e4942;
+
 const LEDGER_REQUIREMENTS = {
   flareGun: ['https://kenney.nl/assets/blaster-kit', 'blaster-kit@2.1:Models/GLB format/blaster-n.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
   ductTape: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
@@ -22,7 +26,169 @@ const LEDGER_REQUIREMENTS = {
   scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
 };
 
+function dataUriByteLength(uri) {
+  const separator = uri.indexOf(',');
+  if (separator < 0) return 0;
+  const metadata = uri.slice(0, separator);
+  const payload = uri.slice(separator + 1);
+  try {
+    return metadata.endsWith(';base64')
+      ? Buffer.from(payload, 'base64').byteLength
+      : Buffer.from(decodeURIComponent(payload)).byteLength;
+  } catch {
+    return 0;
+  }
+}
+
+function parseGlb(filePath, bytes) {
+  if (bytes.byteLength < 20) throw new Error(`${filePath}: invalid GLB header`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== GLB_MAGIC || view.getUint32(4, true) !== 2) {
+    throw new Error(`${filePath}: invalid glTF 2.0 binary`);
+  }
+  const jsonLength = view.getUint32(12, true);
+  if (view.getUint32(16, true) !== JSON_CHUNK || 20 + jsonLength > bytes.byteLength) {
+    throw new Error(`${filePath}: invalid GLB JSON chunk`);
+  }
+  const jsonText = new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength));
+  const json = JSON.parse(jsonText);
+  const binaryOffset = 20 + jsonLength;
+  const binaryLength = binaryOffset + 8 <= bytes.byteLength
+    && view.getUint32(binaryOffset + 4, true) === BIN_CHUNK
+    ? Math.min(view.getUint32(binaryOffset, true), bytes.byteLength - binaryOffset - 8)
+    : 0;
+  return { binaryLength, json };
+}
+
+function collectReferencedTextures(value, key, indices) {
+  if (!value || typeof value !== 'object') return;
+  if (key.endsWith('Texture') && Number.isInteger(value.index)) indices.add(value.index);
+  for (const [childKey, childValue] of Object.entries(value)) {
+    collectReferencedTextures(childValue, childKey, indices);
+  }
+}
+
+function textureSource(texture) {
+  return texture?.source
+    ?? texture?.extensions?.KHR_texture_basisu?.source
+    ?? texture?.extensions?.EXT_texture_webp?.source
+    ?? texture?.extensions?.EXT_texture_avif?.source;
+}
+
+function imageHasEmbeddedBytes(json, binaryLength, image) {
+  if (!image) return false;
+  if (typeof image.uri === 'string') {
+    return image.uri.startsWith('data:') && dataUriByteLength(image.uri) > 0;
+  }
+  if (!Number.isInteger(image.bufferView)) return false;
+  const bufferView = json.bufferViews?.[image.bufferView];
+  if (!bufferView || !Number.isInteger(bufferView.byteLength) || bufferView.byteLength <= 0) {
+    return false;
+  }
+  const buffer = json.buffers?.[bufferView.buffer];
+  const availableBytes = typeof buffer?.uri === 'string'
+    ? (buffer.uri.startsWith('data:') ? dataUriByteLength(buffer.uri) : 0)
+    : binaryLength;
+  const byteOffset = bufferView.byteOffset ?? 0;
+  return Number.isInteger(byteOffset)
+    && byteOffset >= 0
+    && byteOffset + bufferView.byteLength <= availableBytes;
+}
+
+function validateEmbeddedResources(filePath, descriptor) {
+  const { binaryLength, json } = descriptor;
+  for (const buffer of json.buffers ?? []) {
+    if (typeof buffer.uri === 'string' && !buffer.uri.startsWith('data:')) {
+      throw new Error(`${filePath}: external buffer URI: ${buffer.uri}`);
+    }
+  }
+  for (const image of json.images ?? []) {
+    if (typeof image.uri === 'string' && !image.uri.startsWith('data:')) {
+      throw new Error(`${filePath}: external texture URI: ${image.uri}`);
+    }
+  }
+
+  const referencedTextures = new Set();
+  for (const material of json.materials ?? []) {
+    collectReferencedTextures(material, '', referencedTextures);
+  }
+  for (const textureIndex of referencedTextures) {
+    const source = textureSource(json.textures?.[textureIndex]);
+    if (!Number.isInteger(source) || !imageHasEmbeddedBytes(json, binaryLength, json.images?.[source])) {
+      throw new Error(`${filePath}: referenced texture has no embedded image bytes`);
+    }
+  }
+}
+
+function validatePosition(filePath, position) {
+  if (!position) throw new Error(`${filePath}: missing POSITION geometry`);
+  const values = position.getArray();
+  if (position.getCount() === 0 || !values || values.length === 0) {
+    throw new Error(`${filePath}: empty POSITION geometry`);
+  }
+  for (const value of values) {
+    if (!Number.isFinite(value)) throw new Error(`${filePath}: non-finite POSITION data`);
+  }
+  const bounds = [...position.getMin([]), ...position.getMax([])];
+  if (!bounds.every(Number.isFinite)) {
+    throw new Error(`${filePath}: non-finite POSITION bounds`);
+  }
+}
+
+function validateModelBounds(filePath, document) {
+  const root = document.getRoot();
+  const defaultScene = root.getDefaultScene();
+  const scenes = defaultScene ? [defaultScene] : root.listScenes();
+  if (scenes.length === 0) throw new Error(`${filePath}: empty model bounds`);
+
+  const visitedNodes = new Set();
+  const modelMin = [Infinity, Infinity, Infinity];
+  const modelMax = [-Infinity, -Infinity, -Infinity];
+  for (const scene of scenes) {
+    for (const child of scene.listChildren()) {
+      child.traverse((node) => {
+        if (visitedNodes.has(node)) return;
+        visitedNodes.add(node);
+        const mesh = node.getMesh();
+        if (!mesh) return;
+        const matrix = node.getWorldMatrix();
+        if (!matrix.every(Number.isFinite)) {
+          throw new Error(`${filePath}: non-finite model bounds`);
+        }
+        for (const primitive of mesh.listPrimitives()) {
+          const position = primitive.getAttribute('POSITION');
+          if (!position) continue;
+          const point = [0, 0, 0];
+          for (let index = 0; index < position.getCount(); index += 1) {
+            position.getElement(index, point);
+            const worldPoint = [
+              matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+              matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+              matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+            ];
+            if (!worldPoint.every(Number.isFinite)) {
+              throw new Error(`${filePath}: non-finite model bounds`);
+            }
+            for (let component = 0; component < 3; component += 1) {
+              modelMin[component] = Math.min(modelMin[component], worldPoint[component]);
+              modelMax[component] = Math.max(modelMax[component], worldPoint[component]);
+            }
+          }
+        }
+      });
+    }
+  }
+  if (
+    ![...modelMin, ...modelMax].every(Number.isFinite)
+    || modelMin.some((minimum, index) => minimum > modelMax[index])
+  ) {
+    throw new Error(`${filePath}: empty model bounds`);
+  }
+}
+
 export async function countTriangles(filePath) {
+  const bytes = await readFile(filePath);
+  validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
   const document = await new NodeIO().read(filePath);
   let triangles = 0;
   for (const mesh of document.getRoot().listMeshes()) {
@@ -30,13 +196,14 @@ export async function countTriangles(filePath) {
       if (primitive.getMode() !== 4) {
         throw new Error(`${filePath}: primitive mode ${primitive.getMode()} is not TRIANGLES`);
       }
-      const count = primitive.getIndices()?.getCount()
-        ?? primitive.getAttribute('POSITION')?.getCount()
-        ?? 0;
+      const position = primitive.getAttribute('POSITION');
+      validatePosition(filePath, position);
+      const count = primitive.getIndices()?.getCount() ?? position.getCount();
       if (count % 3 !== 0) throw new Error(`${filePath}: triangle index count is not divisible by 3`);
       triangles += count / 3;
     }
   }
+  validateModelBounds(filePath, document);
   return triangles;
 }
 
