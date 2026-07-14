@@ -634,7 +634,9 @@ export class SurvivalUI {
     const maximum = Math.max(0, this.journalEntries.length - 1);
     this.journalIndex = Math.min(maximum, Math.max(0, this.journalIndex + delta));
     this.renderJournalPage();
-    (delta < 0 ? this.journalPrevious : this.journalNext).focus();
+    const requested = delta < 0 ? this.journalPrevious : this.journalNext;
+    const available = delta < 0 ? this.journalNext : this.journalPrevious;
+    (requested.disabled ? available : requested).focus();
   }
 
   private createAnchorButton(anchor: BoatInteractionAnchor): HTMLButtonElement {
