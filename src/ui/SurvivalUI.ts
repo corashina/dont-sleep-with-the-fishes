@@ -1,5 +1,6 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { DayActionOption } from '../survival/SurvivalSession';
+import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
@@ -142,11 +143,15 @@ export class SurvivalUI {
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onSkip: () => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
+  onJournalOpen: () => void = () => undefined;
+  onJournalClose: () => void = () => undefined;
+  onJournalContinue: () => void = () => undefined;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
   private readonly weather: HTMLElement;
   private readonly phase: HTMLElement;
+  private readonly journalMarker: HTMLButtonElement;
   private readonly announcer: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventLayer: HTMLElement;
@@ -164,6 +169,16 @@ export class SurvivalUI {
   private readonly fishingOptionButtons: HTMLButtonElement[];
   private readonly pauseLayer: HTMLElement;
   private readonly resumeButton: HTMLButtonElement;
+  private readonly journalLayer: HTMLElement;
+  private readonly journalTitle: HTMLElement;
+  private readonly journalWeather: HTMLElement;
+  private readonly journalDay: HTMLElement;
+  private readonly journalNight: HTMLElement;
+  private readonly journalPageCount: HTMLElement;
+  private readonly journalPrevious: HTMLButtonElement;
+  private readonly journalNext: HTMLButtonElement;
+  private readonly journalClose: HTMLButtonElement;
+  private readonly journalContinue: HTMLButtonElement;
   private readonly endingLayer: HTMLElement;
   private readonly endingTitle: HTMLElement;
   private readonly endingBody: HTMLElement;
@@ -186,6 +201,9 @@ export class SurvivalUI {
   private pauseReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
+  private journalEntries: readonly JournalEntry[] = [];
+  private journalIndex = 0;
+  private journalMode: 'manual' | 'automatic' = 'manual';
   private hoveredAnchorId: string | null = null;
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
@@ -196,11 +214,11 @@ export class SurvivalUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <header class="survival-status journal-marker" aria-label="Survival status">
+      <button type="button" class="survival-status journal-marker" data-journal-open aria-label="Open completed journal entries">
         ${uiArtwork('journal', 'journal-marker__art')}
-        <div class="survival-status__time"><span data-day>DAY 1</span><span data-phase>DAYLIGHT</span></div>
-        <div class="survival-status__weather"><span class="eyebrow">WEATHER</span><strong data-weather>CALM</strong></div>
-      </header>
+        <span class="survival-status__time"><span data-day>DAY 1</span><span data-phase>DAYLIGHT</span></span>
+        <span class="survival-status__weather"><span class="eyebrow">WEATHER</span><strong data-weather>CALM</strong></span>
+      </button>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
@@ -237,6 +255,29 @@ export class SurvivalUI {
           </div>
         </div>
       </section>
+      <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
+        <article class="journal-page">
+          <p class="journal-page__weather" data-journal-weather></p>
+          <h2 data-journal-title tabindex="-1"></h2>
+          <div class="journal-page__story" data-journal-story>
+            <section aria-labelledby="journal-day-label">
+              <h3 id="journal-day-label">DAY</h3>
+              <p data-journal-day></p>
+            </section>
+            <section aria-labelledby="journal-night-label">
+              <h3 id="journal-night-label">NIGHT</h3>
+              <p data-journal-night></p>
+            </section>
+          </div>
+          <nav class="journal-page__navigation" aria-label="Journal pages">
+            <button type="button" class="secondary-action" data-journal-previous>PREVIOUS</button>
+            <span data-journal-page-count>PAGE 0 OF 0</span>
+            <button type="button" class="secondary-action" data-journal-next>NEXT</button>
+          </nav>
+          <button type="button" class="secondary-action" data-journal-close>CLOSE JOURNAL</button>
+          <button type="button" class="primary-action timber-action" data-journal-continue hidden>BEGIN NEXT DAY</button>
+        </article>
+      </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <div class="cinematic-overlay__content">
           <p class="eyebrow">PAUSED</p>
@@ -260,6 +301,7 @@ export class SurvivalUI {
     this.day = requireElement(this.root, '[data-day]');
     this.weather = requireElement(this.root, '[data-weather]');
     this.phase = requireElement(this.root, '[data-phase]');
+    this.journalMarker = requireElement(this.root, '[data-journal-open]');
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventLayer = requireElement(this.root, '[data-event]');
@@ -277,14 +319,25 @@ export class SurvivalUI {
     this.fishingOptionButtons = [...this.actionOptionsLayer.querySelectorAll<HTMLButtonElement>('[data-action-option]')];
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.resumeButton = requireElement(this.root, '[data-resume]');
+    this.journalLayer = requireElement(this.root, '[data-journal]');
+    this.journalTitle = requireElement(this.root, '[data-journal-title]');
+    this.journalWeather = requireElement(this.root, '[data-journal-weather]');
+    this.journalDay = requireElement(this.root, '[data-journal-day]');
+    this.journalNight = requireElement(this.root, '[data-journal-night]');
+    this.journalPageCount = requireElement(this.root, '[data-journal-page-count]');
+    this.journalPrevious = requireElement(this.root, '[data-journal-previous]');
+    this.journalNext = requireElement(this.root, '[data-journal-next]');
+    this.journalClose = requireElement(this.root, '[data-journal-close]');
+    this.journalContinue = requireElement(this.root, '[data-journal-continue]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.endingBody = requireElement(this.root, '[data-ending-body]');
     this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.backgroundRegions = [this.anchorLayer];
+    this.backgroundRegions = [this.journalMarker, this.anchorLayer];
     this.modalLayers = [
       this.pauseLayer,
+      this.journalLayer,
       this.actionOptionsLayer,
       this.endingLayer,
       this.outcomeLayer,
@@ -446,6 +499,29 @@ export class SurvivalUI {
     this.restoreFocus();
   }
 
+  showJournal(entries: readonly JournalEntry[], mode: 'manual' | 'automatic'): void {
+    if (this.disposed) return;
+    this.focusReturnTarget = mode === 'manual' ? this.journalMarker : this.resolveCommandOrigin();
+    this.journalEntries = entries.map((entry) => ({
+      ...entry,
+      daytime: entry.daytime === null ? null : { ...entry.daytime },
+      nighttime: { ...entry.nighttime },
+    }));
+    this.journalMode = mode;
+    this.journalIndex = Math.max(0, this.journalEntries.length - 1);
+    this.renderJournalPage();
+    this.journalClose.hidden = mode !== 'manual';
+    this.journalContinue.hidden = mode !== 'automatic';
+    this.showLayer(this.journalLayer);
+    this.journalTitle.focus();
+  }
+
+  hideJournal(): void {
+    if (this.disposed) return;
+    this.hideLayer(this.journalLayer);
+    this.restoreFocus();
+  }
+
   setBusy(busy: boolean): void {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
@@ -527,7 +603,40 @@ export class SurvivalUI {
     this.onAnchorHighlight = () => undefined;
     this.onSkip = () => undefined;
     this.onPauseChange = () => undefined;
+    this.onJournalOpen = () => undefined;
+    this.onJournalClose = () => undefined;
+    this.onJournalContinue = () => undefined;
     this.root.remove();
+  }
+
+  private renderJournalPage(): void {
+    const entry = this.journalEntries[this.journalIndex];
+    if (entry === undefined) {
+      this.journalTitle.textContent = 'NO COMPLETED ENTRIES YET';
+      this.journalWeather.textContent = '';
+      this.journalDay.textContent = 'The journal is still waiting for its first completed day.';
+      this.journalNight.textContent = '';
+      this.journalPageCount.textContent = 'PAGE 0 OF 0';
+    } else {
+      const page = formatJournalEntry(entry);
+      this.journalTitle.textContent = page.heading;
+      this.journalWeather.textContent = page.weather;
+      this.journalDay.textContent = page.daytime;
+      this.journalNight.textContent = page.nighttime;
+      this.journalPageCount.textContent = `PAGE ${this.journalIndex + 1} OF ${this.journalEntries.length}`;
+    }
+    this.journalPrevious.disabled = this.journalIndex <= 0;
+    this.journalNext.disabled = this.journalEntries.length === 0
+      || this.journalIndex >= this.journalEntries.length - 1;
+  }
+
+  private moveJournalPage(delta: -1 | 1): void {
+    const maximum = Math.max(0, this.journalEntries.length - 1);
+    this.journalIndex = Math.min(maximum, Math.max(0, this.journalIndex + delta));
+    this.renderJournalPage();
+    const requested = delta < 0 ? this.journalPrevious : this.journalNext;
+    const available = delta < 0 ? this.journalNext : this.journalPrevious;
+    (requested.disabled ? available : requested).focus();
   }
 
   private createAnchorButton(anchor: BoatInteractionAnchor): HTMLButtonElement {
@@ -629,6 +738,7 @@ export class SurvivalUI {
   }
 
   private syncCommandState(): void {
+    this.journalMarker.disabled = this.busy;
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
@@ -734,6 +844,7 @@ export class SurvivalUI {
     else if (layer === this.outcomeLayer) this.outcomeTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.actionOptionsLayer) this.actionOptionsTitle.focus();
+    else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
   }
 
@@ -802,7 +913,11 @@ export class SurvivalUI {
     if (event.key !== 'Tab') return false;
     const controls = [...modal.querySelectorAll<HTMLElement>(
       'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => !element.hasAttribute('inert') && element.getAttribute('aria-hidden') !== 'true');
+    )].filter((element) => (
+      element.closest('[hidden]') === null
+      && !element.hasAttribute('inert')
+      && element.getAttribute('aria-hidden') !== 'true'
+    ));
     if (controls.length === 0) {
       event.preventDefault();
       this.focusModal(modal);
@@ -832,6 +947,27 @@ export class SurvivalUI {
     if (!button || !this.root.contains(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && !topmostModal.contains(button)) return;
+
+    if (button.hasAttribute('data-journal-open')) {
+      this.onJournalOpen();
+      return;
+    }
+    if (button.hasAttribute('data-journal-previous')) {
+      this.moveJournalPage(-1);
+      return;
+    }
+    if (button.hasAttribute('data-journal-next')) {
+      this.moveJournalPage(1);
+      return;
+    }
+    if (button.hasAttribute('data-journal-close')) {
+      this.onJournalClose();
+      return;
+    }
+    if (button.hasAttribute('data-journal-continue')) {
+      this.onJournalContinue();
+      return;
+    }
 
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (action !== undefined) {
@@ -869,7 +1005,10 @@ export class SurvivalUI {
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
     if (event.key === 'Escape') {
-      if (this.topmostModal() === this.actionOptionsLayer) {
+      if (topmostModal === this.journalLayer) {
+        event.preventDefault();
+        if (this.journalMode === 'manual') this.onJournalClose();
+      } else if (topmostModal === this.actionOptionsLayer) {
         event.preventDefault();
         this.closeActionOptions();
       } else {

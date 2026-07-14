@@ -1,6 +1,11 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
 import { createSurvivalInventory } from './inventory';
+import type {
+  JournalEntry,
+  JournalEventRecord,
+  JournalResolution,
+} from './journal';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
@@ -55,6 +60,9 @@ export class SurvivalSession {
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
+  private pendingJournalDaytime: JournalEventRecord | null = null;
+  private pendingJournalNighttime: JournalEventRecord | null = null;
+  private readonly journalEntries: JournalEntry[] = [];
   private readonly seed: number;
   private readonly random: RandomSource;
 
@@ -114,6 +122,7 @@ export class SurvivalSession {
       weather: this.weather,
       restedToday: this.restedToday,
       actedToday: this.actedToday,
+      journalEntries: this.journalSnapshot(),
       inventory,
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
@@ -176,6 +185,9 @@ export class SurvivalSession {
     const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
     const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
     const response = itemId === null ? event.endure : usable ? matching! : event.unsuitable;
+    const resolution: JournalResolution = itemId === null
+      ? 'endure'
+      : usable ? 'suitableItem' : 'unsuitableItem';
 
     if (usable && matching!.consume) this.consumeCharge(matching!.itemId);
     this.lastEventId = event.id;
@@ -185,6 +197,7 @@ export class SurvivalSession {
 
     if (usable && matching!.rescue === true) this.state = 'rescued';
     const outcome = this.commit('event-resolved', response.message, { ...response.deltas }, response.cue);
+    this.recordJournalEvent(event, itemId, resolution, outcome);
 
     if (!this.isTerminal()) {
       if (phase === 'day') this.state = 'day';
@@ -198,6 +211,8 @@ export class SurvivalSession {
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
 
     this.day += 1;
+    this.pendingJournalDaytime = null;
+    this.pendingJournalNighttime = null;
     this.restedToday = false;
     this.actedToday = false;
     this.dayEventOccurred = false;
@@ -423,6 +438,49 @@ export class SurvivalSession {
       lastSeenDay: this.lastSeenDay,
     });
     return drawWeightedEvent(pool, this.random, phase);
+  }
+
+  private recordJournalEvent(
+    event: SurvivalEventDefinition,
+    attemptedItemId: ItemId | null,
+    resolution: JournalResolution,
+    outcome: ActionOutcome,
+  ): void {
+    const record: JournalEventRecord = {
+      phase: event.phase,
+      eventId: event.id,
+      title: event.title,
+      prompt: event.prompt,
+      attemptedItemId,
+      resolution,
+      outcomeCode: outcome.code,
+      outcomeMessage: outcome.message,
+    };
+    if (event.phase === 'day') {
+      this.pendingJournalDaytime = record;
+      return;
+    }
+    this.pendingJournalNighttime = record;
+    this.finalizeJournalDay();
+  }
+
+  private finalizeJournalDay(): void {
+    if (this.pendingJournalNighttime === null) return;
+    if (this.journalEntries.some((entry) => entry.day === this.day)) return;
+    this.journalEntries.push({
+      day: this.day,
+      weather: this.weather,
+      daytime: this.pendingJournalDaytime,
+      nighttime: this.pendingJournalNighttime,
+    });
+  }
+
+  private journalSnapshot(): readonly JournalEntry[] {
+    return this.journalEntries.map((entry) => ({
+      ...entry,
+      daytime: entry.daytime === null ? null : { ...entry.daytime },
+      nighttime: { ...entry.nighttime },
+    }));
   }
 
   private openEvent(event: SurvivalEventDefinition): void {

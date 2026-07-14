@@ -242,4 +242,71 @@ describe('SurvivalSession daytime actions', () => {
     expect(stateAfterDawn(4, 100, 0.299999)).toBe('rescued');
     expect(stateAfterDawn(4, 100, 0.300001)).toBe('day');
   });
+
+  it('finalizes one journal entry from resolved day and night events', () => {
+    const session = new SurvivalSession(saved('waterJug', 'flashlight'), {
+      seed: 9,
+      random: sequenceRandom([0]),
+      initialEventId: 'day-heat-haze',
+    });
+    session.resolveEvent('waterJug');
+    session.perform('endDay');
+    session.resolveEvent('flashlight');
+
+    expect(session.snapshot().journalEntries).toEqual([expect.objectContaining({
+      day: 1,
+      weather: 'calm',
+      daytime: expect.objectContaining({
+        eventId: 'day-heat-haze',
+        attemptedItemId: 'waterJug',
+        resolution: 'suitableItem',
+      }),
+      nighttime: expect.objectContaining({
+        phase: 'night',
+        attemptedItemId: 'flashlight',
+      }),
+    })]);
+  });
+
+  it('records a quiet day and protects internal history from snapshot mutation', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 10,
+      initialEventId: 'night-calm-water',
+    });
+    session.resolveEvent(null);
+    const first = session.snapshot();
+    expect(first.journalEntries).toHaveLength(1);
+    expect(first.journalEntries[0]!.daytime).toBeNull();
+    (first.journalEntries as unknown as Array<{ day: number }>)[0]!.day = 99;
+    expect(session.snapshot().journalEntries[0]!.day).toBe(1);
+    expect(session.resolveEvent(null).accepted).toBe(false);
+    expect(session.snapshot().journalEntries).toHaveLength(1);
+  });
+
+  it('records unsuitable item attempts without consuming the item', () => {
+    const session = new SurvivalSession(saved('waterJug'), {
+      seed: 11,
+      initialEventId: 'night-hull-impact',
+    });
+    const charges = session.snapshot().inventory.waterJug.charges;
+    session.resolveEvent('waterJug');
+    expect(session.snapshot().journalEntries[0]!.nighttime).toMatchObject({
+      attemptedItemId: 'waterJug',
+      resolution: 'unsuitableItem',
+    });
+    expect(session.snapshot().inventory.waterJug.charges).toBe(charges);
+  });
+
+  it('finalizes the journal before a night consequence ends the run', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 12,
+      initial: { hull: 5 },
+      initialEventId: 'night-hull-impact',
+    });
+    session.resolveEvent(null);
+    expect(session.snapshot()).toMatchObject({
+      state: 'sunk',
+      journalEntries: [expect.objectContaining({ day: 1 })],
+    });
+  });
 });
