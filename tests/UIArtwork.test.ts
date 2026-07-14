@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { UI_ARTWORK_IDS, uiArtwork } from '../src/ui/uiArtwork';
+import { ITEM_IDS } from '../src/game/ItemState';
+import { ITEM_ARTWORK_IDS, UI_ARTWORK_IDS, itemArtwork, uiArtwork } from '../src/ui/uiArtwork';
+
+describe('itemArtwork', () => {
+  it('renders one decorative portrait for every scavenging item type', () => {
+    expect(ITEM_ARTWORK_IDS).toEqual(ITEM_IDS);
+
+    ITEM_IDS.forEach((id) => {
+      const markup = itemArtwork(id, 'weight-circle__art');
+      expect(markup).toContain('<svg');
+      expect(markup).toContain(`data-item-artwork="${id}"`);
+      expect(markup).toContain(`item-artwork--${id}`);
+      expect(markup).toContain('weight-circle__art');
+      expect(markup).toContain('aria-hidden="true"');
+      expect(markup).not.toContain('<title');
+      expect(markup).not.toContain('<text');
+      expect(markup).not.toMatch(/https?:\/\//);
+    });
+  });
+
+  it('filters unsafe presentation classes from item portraits', () => {
+    const markup = itemArtwork('cannedFood', 'safe-token bad" onload="alert(1)');
+
+    expect(markup).toContain('class="item-artwork item-artwork--cannedFood safe-token"');
+    expect(markup).not.toContain('onload');
+  });
+});
 
 describe('uiArtwork', () => {
   it('renders every original symbol as decorative inline SVG', () => {
