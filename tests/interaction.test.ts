@@ -107,7 +107,7 @@ describe('chooseContextAction', () => {
       remainingCapacity: 1,
       nearEvacuation: true,
     })).toEqual({
-      type: 'throwToBoat', item: waterJug, prompt: 'LEFT CLICK — THROW WATER JUG TO LIFEBOAT',
+      type: 'throwToBoat', item: waterJug, prompt: 'LEFT CLICK — THROW WATER BOTTLE TO LIFEBOAT',
     });
   });
 });

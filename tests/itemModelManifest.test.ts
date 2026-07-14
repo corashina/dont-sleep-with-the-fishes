@@ -11,7 +11,7 @@ const EXPECTED_SOURCES: Readonly<Record<ItemId, readonly [string, string]>> = {
   fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod'],
   baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb'],
   medicalKit: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/medicalKit'],
-  waterJug: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bottle-large.glb'],
+  waterJug: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bottle.glb'],
   cannedFood: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can.glb'],
   flashlight: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/flashlight'],
   scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet'],
