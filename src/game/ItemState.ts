@@ -27,7 +27,7 @@ export const ITEM_DEFINITIONS: Readonly<Record<ItemId, ItemDefinition>> = {
   fishingRod: { label: 'FISHING ROD', weight: 2, spawnCount: 1, charges: null, durable: true },
   baitTin: { label: 'BAIT TIN', weight: 1, spawnCount: 2, charges: 3, durable: false },
   medicalKit: { label: 'MEDICAL KIT', weight: 2, spawnCount: 1, charges: 2, durable: false },
-  waterJug: { label: 'WATER JUG', weight: 2, spawnCount: 2, charges: 3, durable: false },
+  waterJug: { label: 'WATER BOTTLE', weight: 2, spawnCount: 2, charges: 3, durable: false },
   cannedFood: { label: 'CANNED FOOD', weight: 1, spawnCount: 3, charges: 1, durable: false },
   flashlight: { label: 'FLASHLIGHT', weight: 1, spawnCount: 1, charges: null, durable: true },
   scubaSet: { label: 'SCUBA SET', weight: 3, spawnCount: 1, charges: null, durable: true },

@@ -68,7 +68,7 @@ const expectedPacks = {
     archiveUrl: 'https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip',
     sha256: 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle-large.glb'],
+    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle.glb'],
   },
   'prototype-kit': {
     version: '1.0',
@@ -117,7 +117,7 @@ const expectedRecipes = {
     ],
   },
   waterJug: {
-    kind: 'direct', pack: 'survival-kit', entry: 'Models/GLB format/bottle-large.glb',
+    kind: 'direct', pack: 'survival-kit', entry: 'Models/GLB format/bottle.glb',
     expectedTriangles: 96, scale: [1, 1, 1],
   },
   cannedFood: {
