@@ -80,7 +80,7 @@ const anchor = (
   categories: ShipItemAnchor['categories'],
   x: number,
   surfaceGroupId = id,
-  width = 1.4,
+  width = 2.1,
   depth = 1.1,
   clearanceHeight = 1.2,
 ): ShipItemAnchor => ({
