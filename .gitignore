@@ -4,3 +4,13 @@ coverage/
 .superpowers/
 .worktrees/
 *.log
+
+# Local environment and tool state
+*.err
+.env
+.env.*
+!.env.example
+.vite/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
