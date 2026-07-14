@@ -76,11 +76,16 @@ describe('SurvivalUI', () => {
     ui.showJournal(journalEntries, 'manual');
     expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
     expect(mount.querySelector('[data-journal-page-count]')?.textContent).toBe('PAGE 2 OF 2');
-    mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!.click();
+    const previous = mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!;
+    const next = mount.querySelector<HTMLButtonElement>('[data-journal-next]')!;
+    previous.focus();
+    previous.click();
     expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 1');
-    expect(mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!.disabled).toBe(true);
-    mount.querySelector<HTMLButtonElement>('[data-journal-next]')!.click();
+    expect(previous.disabled).toBe(true);
+    expect(document.activeElement).toBe(next);
+    next.click();
     expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
+    expect(document.activeElement).toBe(previous);
   });
 
   it('separates manual close from automatic next-day continuation', () => {
