@@ -13,6 +13,7 @@ import {
   PerspectiveCamera,
   Quaternion,
   Scene,
+  Texture,
   Vector3,
 } from 'three';
 import {
@@ -23,8 +24,6 @@ import {
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
-import { boatStorageTransform } from '../world/BoatStorage';
-import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
@@ -32,6 +31,11 @@ import {
   projectBoatAnchor,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
+import { survivalBoatStorageTransform } from './SurvivalBoatLayout';
+import {
+  createSurvivalLifeboat,
+  type SurvivalLifeboatBuild,
+} from './SurvivalLifeboat';
 import type {
   DayActionId,
   PresentationCue,
@@ -158,6 +162,8 @@ export class BoatWorld {
   });
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly ownedTextures = new Set<Texture>();
+  private readonly waterExclusion: SurvivalLifeboatBuild['waterExclusion'];
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
@@ -194,11 +200,13 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
 
-    const build = createLifeboat();
+    const build = createSurvivalLifeboat();
     this.boat = build.root;
-    savedItems.forEach((instance, index) => {
+    this.waterExclusion = build.waterExclusion;
+    build.textures.forEach((texture) => this.ownedTextures.add(texture));
+    savedItems.forEach((instance) => {
       const prop = createProp(propModels, instance);
-      const transform = boatStorageTransform(index);
+      const transform = survivalBoatStorageTransform(instance);
       prop.position.copy(transform.position);
       prop.rotation.copy(transform.rotation);
       prop.scale.setScalar(transform.scale);
@@ -222,8 +230,8 @@ export class BoatWorld {
     this.cameraRig.name = 'boat-camera-rig';
     this.motionRig.add(this.boat, this.cameraRig);
     this.cameraRig.add(camera);
-    camera.position.set(0, 0.65, 1.55);
-    camera.lookAt(0, 0.08, -2.7);
+    camera.position.set(0, 0.88, 2.35);
+    camera.lookAt(0, -0.18, -1.35);
     this.baseCameraQuaternion = camera.quaternion.clone();
 
     const rodInstance = savedItems.find(({ type }) => type === 'fishingRod');
@@ -386,8 +394,8 @@ export class BoatWorld {
     this.ocean.setExclusions([
       createWaterExclusion(
         this.boat,
-        LIFEBOAT_WATER_EXCLUSION.halfWidth,
-        LIFEBOAT_WATER_EXCLUSION.halfLength,
+        this.waterExclusion.halfWidth,
+        this.waterExclusion.halfLength,
       ),
     ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
@@ -413,8 +421,10 @@ export class BoatWorld {
     this.originalCameraParent?.add(this.camera);
     this.ownedGeometries.forEach((geometry) => geometry.dispose());
     this.ownedMaterials.forEach((material) => material.dispose());
+    this.ownedTextures.forEach((texture) => texture.dispose());
     this.ownedGeometries.clear();
     this.ownedMaterials.clear();
+    this.ownedTextures.clear();
   }
 
   private buildDistantVessel(): void {

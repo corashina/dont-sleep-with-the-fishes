@@ -6,14 +6,20 @@ import {
   Object3D,
   PerspectiveCamera,
   ShaderMaterial,
+  Texture,
   Vector3,
   Vector4,
 } from 'three';
-import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import {
+  createItemInstances,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../src/game/ItemState';
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
+import { survivalBoatStorageTransform } from '../src/survival/SurvivalBoatLayout';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
-import { boatStorageTransform } from '../src/world/BoatStorage';
 import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
@@ -84,6 +90,75 @@ describe('BoatWorld helpers', () => {
     expect(survivalLighting('squall', 'day').fogDensity).toBeGreaterThan(0.02);
   });
 
+  it('frames the enlarged boat from the higher stern seat without changing FOV', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.1, 100);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, []);
+    expect(camera.position.toArray()).toEqual([0, 0.88, 2.35]);
+    expect(camera.fov).toBe(65);
+    expect(world.scene.getObjectByName('survival-hull-geometry')).toBeDefined();
+    expect(world.scene.getObjectByName('paddle-port')).toBeDefined();
+    expect(world.scene.getObjectByName('paddle-starboard')).toBeDefined();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps all maximum-inventory item anchor centers at least 40 pixels apart', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    camera.updateProjectionMatrix();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createItemInstances(),
+    );
+    const anchors = world.projectInteractionAnchors(1280, 720)
+      .filter((anchor) => anchor.itemType !== null && anchor.visible);
+    expect(anchors).toHaveLength(14);
+    for (let first = 0; first < anchors.length; first += 1) {
+      for (let second = first + 1; second < anchors.length; second += 1) {
+        const distance = Math.hypot(
+          anchors[first]!.x - anchors[second]!.x,
+          anchors[first]!.y - anchors[second]!.y,
+        );
+        expect(distance, `${anchors[first]!.id} is too close to ${anchors[second]!.id}`)
+          .toBeGreaterThanOrEqual(40);
+      }
+    }
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('disposes each survival boat texture exactly once', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      [],
+    );
+    const seen = new Set<Texture>();
+    world.scene.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const assigned = Array.isArray(object.material) ? object.material : [object.material];
+      assigned.forEach((material) => {
+        if (!(material instanceof MeshStandardMaterial)) return;
+        for (const texture of [material.map, material.roughnessMap]) {
+          if (texture && !seen.has(texture)) {
+            seen.add(texture);
+          }
+        }
+      });
+    });
+    expect(seen.size).toBe(6);
+    const textureSpies = [...seen].map((texture) => vi.spyOn(texture, 'dispose'));
+    world.dispose();
+    world.dispose();
+    textureSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
   it('keeps the shared camera at a fixed height for reduced motion', () => {
     const camera = new PerspectiveCamera();
     const reducedMotion = { matches: true } as unknown as MediaQueryList;
@@ -115,7 +190,7 @@ describe('BoatWorld helpers', () => {
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
     expect(uniforms.uExclusionCount!.value).toBe(1);
-    expect(bounds[0]!.toArray()).toEqual([-1.18, 1.18, -2.48, 2.48]);
+    expect(bounds[0]!.toArray()).toEqual([-1.5, 1.5, -3, 3]);
     expect(matrices[0]!.elements).toEqual(boat.matrixWorld.clone().invert().elements);
     expect(matrices[1]).toEqual(new Matrix4());
     expect(bounds[1]).toEqual(new Vector4());
@@ -123,10 +198,10 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('builds every saved instance once at its deterministic storage transform', () => {
+  it('builds every saved instance once at its stable type-aware transform', () => {
     const savedItems = [
+      savedItem('cannedFood', 3),
       savedItem('fishingRod'),
-      savedItem('ductTape'),
       savedItem('ductTape', 2),
       savedItem('scubaSet'),
     ];
@@ -139,18 +214,14 @@ describe('BoatWorld helpers', () => {
     );
     const storage = world.scene.getObjectByName('lifeboat-storage')!;
 
-    expect(storage.children).toHaveLength(savedItems.length);
     expect(storage.children.map(({ name }) => name)).toEqual([
+      'prop:cannedFood-3',
       'prop:fishingRod-1',
-      'prop:ductTape-1',
       'prop:ductTape-2',
       'prop:scubaSet-1',
     ]);
-    expect(storage.getObjectByName('prop:ductTape-1')).not.toBe(
-      storage.getObjectByName('prop:ductTape-2'),
-    );
     storage.children.forEach((prop, index) => {
-      const transform = boatStorageTransform(index);
+      const transform = survivalBoatStorageTransform(savedItems[index]!);
       expect(prop.position.toArray()).toEqual(transform.position.toArray());
       expect(prop.rotation.toArray().slice(0, 3)).toEqual(transform.rotation.toArray().slice(0, 3));
       expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
