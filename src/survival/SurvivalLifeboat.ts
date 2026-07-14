@@ -142,7 +142,7 @@ function createPaddle(
   }), wood);
   blade.name = `paddle-blade-${side}`;
   blade.rotation.x = -Math.PI / 2;
-  blade.position.z = -1.78;
+  blade.position.z = -1.49;
   paddle.add(blade);
 
   for (const z of [-0.62, 0.62]) {

@@ -68,6 +68,21 @@ describe('survival lifeboat builder', () => {
     disposeBuild(build.root, build.textures);
   });
 
+  it('connects each named paddle blade to its matching shaft', () => {
+    const build = createSurvivalLifeboat();
+    for (const side of ['port', 'starboard'] as const) {
+      const blade = build.root.getObjectByName(`paddle-blade-${side}`)!;
+      const shaft = build.root.getObjectByName(`paddle-shaft-${side}`)!;
+      const bladeBounds = new Box3().setFromObject(blade);
+      const shaftBounds = new Box3().setFromObject(shaft);
+      expect(
+        bladeBounds.intersectsBox(shaftBounds),
+        `${side} paddle blade must overlap its matching shaft`,
+      ).toBe(true);
+    }
+    disposeBuild(build.root, build.textures);
+  });
+
   it('uses all procedural texture families and matching interior exclusions', () => {
     const build = createSurvivalLifeboat();
     const maps = new Set<Texture>();
