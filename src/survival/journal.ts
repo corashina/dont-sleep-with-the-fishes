@@ -40,7 +40,12 @@ function formatEvent(record: JournalEventRecord): string {
   if (record.resolution === 'endure') {
     return `${situation} I faced it without using any supplies.`;
   }
-  const label = ITEM_LABELS[record.attemptedItemId!].toLocaleLowerCase('en-US');
+  if (record.attemptedItemId === null) {
+    throw new Error(
+      `Journal event ${record.eventId} with ${record.resolution} resolution requires an attempted item.`,
+    );
+  }
+  const label = ITEM_LABELS[record.attemptedItemId].toLocaleLowerCase('en-US');
   const action = record.resolution === 'suitableItem'
     ? `I used the ${label} to handle it, and it helped.`
     : `I tried the ${label}, but it did not help.`;
