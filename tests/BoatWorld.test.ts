@@ -26,6 +26,7 @@ import {
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
 } from './helpers/propModels';
+import { loadProductionPropModels } from './helpers/productionPropModels';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -104,31 +105,35 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps all maximum-inventory item anchor centers at least 40 pixels apart', () => {
+  it('keeps all maximum-inventory item anchor centers at least 40 pixels apart', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     camera.updateProjectionMatrix();
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      { matches: false } as MediaQueryList,
-      propModels,
-      createItemInstances(),
-    );
-    const anchors = world.projectInteractionAnchors(1280, 720)
-      .filter((anchor) => anchor.itemType !== null && anchor.visible);
-    expect(anchors).toHaveLength(14);
-    for (let first = 0; first < anchors.length; first += 1) {
-      for (let second = first + 1; second < anchors.length; second += 1) {
-        const distance = Math.hypot(
-          anchors[first]!.x - anchors[second]!.x,
-          anchors[first]!.y - anchors[second]!.y,
-        );
-        expect(distance, `${anchors[first]!.id} is too close to ${anchors[second]!.id}`)
-          .toBeGreaterThanOrEqual(40);
+    const propModels = await loadProductionPropModels();
+    let world: BoatWorld | undefined;
+    try {
+      world = new BoatWorld(
+        camera,
+        { matches: false } as MediaQueryList,
+        propModels,
+        createItemInstances(),
+      );
+      const anchors = world.projectInteractionAnchors(1280, 720)
+        .filter((anchor) => anchor.itemType !== null && anchor.visible);
+      expect(anchors).toHaveLength(14);
+      for (let first = 0; first < anchors.length; first += 1) {
+        for (let second = first + 1; second < anchors.length; second += 1) {
+          const distance = Math.hypot(
+            anchors[first]!.x - anchors[second]!.x,
+            anchors[first]!.y - anchors[second]!.y,
+          );
+          expect(distance, `${anchors[first]!.id} is too close to ${anchors[second]!.id}`)
+            .toBeGreaterThanOrEqual(40);
+        }
       }
+    } finally {
+      world?.dispose();
+      propModels.dispose();
     }
-    world.dispose();
-    propModels.dispose();
   });
 
   it('disposes each survival boat texture exactly once', () => {
@@ -190,32 +195,36 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps every visible actionable anchor clear of fixed repair and horizon anchors', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createItemInstances(),
-    );
-    const actionable = world.projectInteractionAnchors(1280, 720)
-      .filter((anchor) => anchor.visible && anchor.action !== null);
-    expect(actionable).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'repair-patch', action: 'repair' }),
-      expect.objectContaining({ id: 'horizon', action: 'endDay' }),
-    ]));
-    for (let first = 0; first < actionable.length; first += 1) {
-      for (let second = first + 1; second < actionable.length; second += 1) {
-        const distance = Math.hypot(
-          actionable[first]!.x - actionable[second]!.x,
-          actionable[first]!.y - actionable[second]!.y,
-        );
-        expect(distance, `${actionable[first]!.id} is too close to ${actionable[second]!.id}`)
-          .toBeGreaterThanOrEqual(40);
+  it('keeps every visible actionable anchor clear of fixed repair and horizon anchors', async () => {
+    const propModels = await loadProductionPropModels();
+    let world: BoatWorld | undefined;
+    try {
+      world = new BoatWorld(
+        new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+        { matches: false } as MediaQueryList,
+        propModels,
+        createItemInstances(),
+      );
+      const actionable = world.projectInteractionAnchors(1280, 720)
+        .filter((anchor) => anchor.visible && anchor.action !== null);
+      expect(actionable).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'repair-patch', action: 'repair' }),
+        expect.objectContaining({ id: 'horizon', action: 'endDay' }),
+      ]));
+      for (let first = 0; first < actionable.length; first += 1) {
+        for (let second = first + 1; second < actionable.length; second += 1) {
+          const distance = Math.hypot(
+            actionable[first]!.x - actionable[second]!.x,
+            actionable[first]!.y - actionable[second]!.y,
+          );
+          expect(distance, `${actionable[first]!.id} is too close to ${actionable[second]!.id}`)
+            .toBeGreaterThanOrEqual(40);
+        }
       }
+    } finally {
+      world?.dispose();
+      propModels.dispose();
     }
-    world.dispose();
-    propModels.dispose();
   });
 
   it('keeps the shared camera at a fixed height for reduced motion', () => {
