@@ -240,6 +240,16 @@ describe('BoatWorld helpers', () => {
       expect.objectContaining({ id: 'horizon', itemType: null, action: 'endDay', visible: true }),
     ]));
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+    const itemAnchor = anchors.find(({ id }) => id === 'fishingRod-1')!;
+    const fixedAnchor = anchors.find(({ id }) => id === 'horizon')!;
+    expect(itemAnchor.hitArea).toEqual({
+      width: expect.any(Number),
+      height: expect.any(Number),
+      depth: expect.any(Number),
+    });
+    expect(itemAnchor.hitArea!.width).toBeGreaterThanOrEqual(44);
+    expect(itemAnchor.hitArea!.height).toBeGreaterThanOrEqual(44);
+    expect(fixedAnchor.hitArea).toBeUndefined();
     world.dispose();
     propModels.dispose();
   });
