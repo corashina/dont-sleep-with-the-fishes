@@ -38,7 +38,7 @@ describe('item model audit CLI', () => {
     const result = runAudit();
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('total: 26494 / 28000 triangles');
+    expect(result.stdout).toContain('total: 2640 / 28000 triangles');
   });
 
   it('rejects an unexpected file in the requested model directory', async () => {

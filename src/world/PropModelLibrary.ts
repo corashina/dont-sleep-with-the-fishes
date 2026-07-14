@@ -99,8 +99,8 @@ function validateLedgerEntry(
   if (row[3] !== spec.sourceUrl) {
     throw new ItemModelLoadError(id, 'asset ledger source URL does not match the manifest');
   }
-  if (inlineCodeValue(row[4]!) !== spec.resourceId) {
-    throw new ItemModelLoadError(id, 'asset ledger resource ID does not match the manifest');
+  if (inlineCodeValue(row[4]!) !== spec.sourceAssetId) {
+    throw new ItemModelLoadError(id, 'asset ledger source asset ID does not match the manifest');
   }
   if (ledgerCreator(row[2]!) !== spec.creator) {
     throw new ItemModelLoadError(id, 'asset ledger creator does not match the manifest');
