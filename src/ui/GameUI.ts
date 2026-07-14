@@ -65,39 +65,47 @@ export class GameUI {
         </div>
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
-        <p class="kicker">THE HULL HAS BEEN BREACHED</p>
-        <h1>LAST BOAT<br>OUT</h1>
-        <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
-        <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>E</dd></div></dl>
-        <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>
-        <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
-          ${uiArtwork('warning', 'illustrated-warning__art')}
-          <span data-pointer-lock-error-copy></span>
-        </p>
-        <p class="fine-print">Desktop keyboard and mouse required. Click to enable mouse look.</p>
+        <div class="screen__content">
+          <p class="kicker">THE HULL HAS BEEN BREACHED</p>
+          <h1>LAST BOAT<br>OUT</h1>
+          <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
+          <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>E</dd></div></dl>
+          <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>
+          <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+            ${uiArtwork('warning', 'illustrated-warning__art')}
+            <span data-pointer-lock-error-copy></span>
+          </p>
+          <p class="fine-print">Desktop keyboard and mouse required. Click to enable mouse look.</p>
+        </div>
       </section>
       <section class="screen pause-screen poster-screen" data-pause>
-        <p class="kicker">THE CLOCK IS STILL</p>
-        <h2>Back to the deck?</h2>
-        <p class="lead">The countdown is stopped while the mouse is released.</p>
-        <button type="button" class="primary-action timber-action" data-resume-button>RESUME</button>
-        <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
-          ${uiArtwork('warning', 'illustrated-warning__art')}
-          <span data-pointer-lock-error-copy></span>
-        </p>
+        <div class="screen__content">
+          <p class="kicker">THE CLOCK IS STILL</p>
+          <h2>Back to the deck?</h2>
+          <p class="lead">The countdown is stopped while the mouse is released.</p>
+          <button type="button" class="primary-action timber-action" data-resume-button>RESUME</button>
+          <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+            ${uiArtwork('warning', 'illustrated-warning__art')}
+            <span data-pointer-lock-error-copy></span>
+          </p>
+        </div>
       </section>
       <section class="screen failure-screen poster-screen" data-failure aria-live="assertive">
-        ${uiArtwork('warning', 'failure-mark')}
-        <p class="kicker">EVACUATION FAILED</p>
-        <h2>The ship is going under.</h2>
-        <p class="lead">Hold on...</p>
+        <div class="screen__content">
+          ${uiArtwork('warning', 'failure-mark')}
+          <p class="kicker">EVACUATION FAILED</p>
+          <h2>The ship is going under.</h2>
+          <p class="lead">Hold on...</p>
+        </div>
       </section>
       <section class="screen result-screen poster-screen" data-result>
-        <p class="kicker">THE SEA KEEPS SCORE</p>
-        <h2 data-result-title></h2>
-        <p class="lead" data-result-body></p>
-        <p class="result-items" data-result-items></p>
-        <button type="button" class="primary-action timber-action" data-replay-button>TRY ANOTHER ROUTE</button>
+        <div class="screen__content">
+          <p class="kicker">THE SEA KEEPS SCORE</p>
+          <h2 data-result-title></h2>
+          <p class="lead" data-result-body></p>
+          <p class="result-items" data-result-items></p>
+          <button type="button" class="primary-action timber-action" data-replay-button>TRY ANOTHER ROUTE</button>
+        </div>
       </section>
     `;
     mount.append(this.root);

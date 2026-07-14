@@ -93,6 +93,40 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
+  it('clears item highlighting when the same anchor becomes invisible', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    ui.setAnchors([{
+      id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 140, y: 180, visible: false, depleted: false,
+    }]);
+
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears item highlighting when the same anchor becomes a fixed target', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+
+    item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    ui.setAnchors([{
+      id: 'fishingRod-test', itemType: null, action: 'endDay', remainingUses: null,
+      x: 140, y: 180, visible: true, depleted: false,
+    }]);
+
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');
@@ -104,9 +138,23 @@ describe('SurvivalUI', () => {
   it('centers survival HUD zones, overlay content, and vignette backing', () => {
     expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
     expect(mainStyles).toMatch(/\.journal-marker\s*\{[^}]*right:\s*auto;[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow-y:\s*auto;[^}]*circle at 50% 50%/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*circle at 50% 50%/s);
+    expect(mainStyles).toMatch(/\.cinematic-overlay__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
     expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
     expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
+  });
+
+  it('wraps every survival cinematic overlay in one bounded content region', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    for (const selector of ['[data-action-options]', '[data-event]', '[data-outcome]', '[data-pause]', '[data-ending]']) {
+      const overlay = mount.querySelector<HTMLElement>(selector)!;
+      expect(overlay.children).toHaveLength(1);
+      expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
+    }
+
+    ui.dispose();
   });
 
   it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
@@ -143,6 +191,64 @@ describe('SurvivalUI', () => {
     expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/FISHING ROD.*FISH.*2 ENERGY/is);
     expect(mount.querySelector('.survival-actions')).toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
+  });
+
+  it('uses the exact minimum target geometry for an item anchor without a hit area', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setAnchors([{
+      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
+    expect(anchor.style.width).toBe('54px');
+    expect(anchor.style.height).toBe('54px');
+    expect(anchor.style.marginLeft).toBe('-27px');
+    expect(anchor.style.marginTop).toBe('-27px');
+  });
+
+  it('clears item geometry and stacking when an anchor ID becomes fixed', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setAnchors([{
+      id: 'shared', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+      hitArea: { width: 96, height: 52, depth: 2.4 },
+    }]);
+    ui.setAnchors([{
+      id: 'shared', itemType: null, action: 'endDay', remainingUses: null,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="shared"]')!;
+    expect(anchor.dataset.targetKind).toBe('fixed');
+    expect(anchor.style.width).toBe('');
+    expect(anchor.style.height).toBe('');
+    expect(anchor.style.marginLeft).toBe('');
+    expect(anchor.style.marginTop).toBe('');
+    expect(anchor.style.zIndex).toBe('');
+  });
+
+  it('stacks a nearer positive-depth item target above a farther one', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'near', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+        x: 320, y: 240, visible: true, depleted: false,
+        hitArea: { width: 96, height: 52, depth: 1.25 },
+      },
+      {
+        id: 'far', itemType: 'scubaSet', action: 'dive', remainingUses: null,
+        x: 320, y: 240, visible: true, depleted: false,
+        hitArea: { width: 96, height: 52, depth: 3.75 },
+      },
+    ]);
+
+    const near = mount.querySelector<HTMLButtonElement>('[data-anchor-id="near"]')!;
+    const far = mount.querySelector<HTMLButtonElement>('[data-anchor-id="far"]')!;
+    expect(Number(near.style.zIndex)).toBeGreaterThan(Number(far.style.zIndex));
   });
 
   it('keeps unavailable anchors focusable and suppresses their commands', () => {

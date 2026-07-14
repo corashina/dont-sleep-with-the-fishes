@@ -206,43 +206,53 @@ export class SurvivalUI {
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="survival-overlay action-options-overlay cinematic-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
-        <p class="eyebrow">FISHING METHOD</p>
-        <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
-        <p>Cast now, or spend one bait for a better chance.</p>
-        <div class="action-options">
-          <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
-          <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">FISHING METHOD</p>
+          <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
+          <p>Cast now, or spend one bait for a better chance.</p>
+          <div class="action-options">
+            <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
+            <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
+          </div>
         </div>
       </section>
       <section class="survival-overlay event-overlay cinematic-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
-        <p class="event-danger" data-event-danger></p>
-        <h2 data-event-title tabindex="-1"></h2>
-        <p data-event-prompt></p>
-        <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
-        <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
+        <div class="cinematic-overlay__content">
+          <p class="event-danger" data-event-danger></p>
+          <h2 data-event-title tabindex="-1"></h2>
+          <p data-event-prompt></p>
+          <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
+          <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
+        </div>
       </section>
       <section class="survival-overlay outcome-overlay cinematic-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
-        <p class="eyebrow">AFTERMATH</p>
-        <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
-        <p data-outcome-message></p>
-        <ul class="outcome-deltas" data-outcome-deltas></ul>
-        <div class="outcome-actions">
-          <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
-          <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">AFTERMATH</p>
+          <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
+          <p data-outcome-message></p>
+          <ul class="outcome-deltas" data-outcome-deltas></ul>
+          <div class="outcome-actions">
+            <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
+            <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
+          </div>
         </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
-        <p class="eyebrow">PAUSED</p>
-        <h2>Hold Fast</h2>
-        <p>The sea will wait until you return.</p>
-        <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">PAUSED</p>
+          <h2>Hold Fast</h2>
+          <p>The sea will wait until you return.</p>
+          <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
+        </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
-        <p class="eyebrow">JOURNEY ENDED</p>
-        <h2 data-ending-title tabindex="-1" role="alert"></h2>
-        <p data-ending-body></p>
-        <p class="ending-stats" data-ending-stats></p>
-        <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">JOURNEY ENDED</p>
+          <h2 data-ending-title tabindex="-1" role="alert"></h2>
+          <p data-ending-body></p>
+          <p class="ending-stats" data-ending-stats></p>
+          <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
+        </div>
       </section>
     `;
     mount.append(this.root);
@@ -315,6 +325,9 @@ export class SurvivalUI {
     const seen = new Set<string>();
     for (const anchor of anchors) {
       seen.add(anchor.id);
+      if (this.publishedAnchorId === anchor.id && (!anchor.visible || anchor.itemType === null)) {
+        this.clearAnchorHighlight();
+      }
       this.anchors.set(anchor.id, anchor);
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
       button.hidden = !anchor.visible;
