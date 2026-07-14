@@ -127,6 +127,48 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
+  it.each([
+    {
+      state: 'invisible',
+      anchor: {
+        id: 'fishingRod-test', itemType: 'fishingRod' as const, action: 'fish' as const, remainingUses: null,
+        x: 140, y: 180, visible: false, depleted: false,
+      },
+    },
+    {
+      state: 'fixed',
+      anchor: {
+        id: 'fishingRod-test', itemType: null, action: 'endDay' as const, remainingUses: null,
+        x: 140, y: 180, visible: true, depleted: false,
+      },
+    },
+  ])('does not republish latent hover after the anchor becomes $state', ({ anchor }) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    const hovered = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const focused = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-test"]')!;
+
+    hovered.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    focused.focus();
+    expect(highlight.mock.calls).toEqual([['fishingRod-test'], ['scubaSet-test']]);
+    highlight.mockClear();
+
+    ui.setAnchors([
+      anchor,
+      {
+        id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null,
+        x: 240, y: 250, visible: true, depleted: false,
+      },
+    ]);
+    focused.blur();
+
+    expect(highlight).not.toHaveBeenCalledWith('fishingRod-test');
+    expect(highlight.mock.calls).toEqual([[null]]);
+  });
+
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');

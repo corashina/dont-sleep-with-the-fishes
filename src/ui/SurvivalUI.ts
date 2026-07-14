@@ -323,10 +323,11 @@ export class SurvivalUI {
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     const seen = new Set<string>();
+    let highlightInvalidated = false;
     for (const anchor of anchors) {
       seen.add(anchor.id);
-      if (this.publishedAnchorId === anchor.id && (!anchor.visible || anchor.itemType === null)) {
-        this.clearAnchorHighlight();
+      if (!anchor.visible || anchor.itemType === null) {
+        highlightInvalidated = this.invalidateAnchorHighlight(anchor.id) || highlightInvalidated;
       }
       this.anchors.set(anchor.id, anchor);
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
@@ -354,15 +355,14 @@ export class SurvivalUI {
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);
     }
-    if (this.publishedAnchorId !== null && !seen.has(this.publishedAnchorId)) {
-      this.clearAnchorHighlight();
-    }
     this.anchorButtons.forEach((button, id) => {
       if (seen.has(id)) return;
+      highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
       button.remove();
       this.anchorButtons.delete(id);
       this.anchors.delete(id);
     });
+    if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCommandState();
   }
 
@@ -653,6 +653,19 @@ export class SurvivalUI {
     if (next === this.publishedAnchorId) return;
     this.publishedAnchorId = next;
     this.onAnchorHighlight(next);
+  }
+
+  private invalidateAnchorHighlight(anchorId: string): boolean {
+    let invalidated = false;
+    if (this.hoveredAnchorId === anchorId) {
+      this.hoveredAnchorId = null;
+      invalidated = true;
+    }
+    if (this.focusedAnchorId === anchorId) {
+      this.focusedAnchorId = null;
+      invalidated = true;
+    }
+    return invalidated;
   }
 
   private clearAnchorHighlight(): void {
