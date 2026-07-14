@@ -26,29 +26,17 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
-import type { CollisionBox } from '../src/player/collisions';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
-import { createShip, selectSpawnPoints } from '../src/world/Ship';
+import { createShip } from '../src/world/Ship';
+import { assignShipItems } from '../src/world/ShipItemPlacement';
 import { World } from '../src/world/World';
 import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
 } from './helpers/propModels';
-
-const pointInside = (point: Vector3, box: CollisionBox): boolean =>
-  point.x >= box.minX && point.x <= box.maxX &&
-  point.y >= box.minY && point.y <= box.maxY &&
-  point.z >= box.minZ && point.z <= box.maxZ;
-
-const playerOverlaps = (point: Vector3, radius: number, box: CollisionBox): boolean => {
-  if (point.y < box.minY || point.y > box.maxY) return false;
-  const closestX = Math.max(box.minX, Math.min(point.x, box.maxX));
-  const closestZ = Math.max(box.minZ, Math.min(point.z, box.maxZ));
-  return (point.x - closestX) ** 2 + (point.z - closestZ) ** 2 < radius ** 2;
-};
 
 const meshCount = (root: Object3D): number => {
   let count = 0;
@@ -76,7 +64,7 @@ const collectRenderResources = (root: Object3D): RenderResources => {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
+    if (!(object instanceof Mesh || object instanceof Points)) return;
     geometries.add(object.geometry);
     const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
     meshMaterials.forEach((meshMaterial) => materials.add(meshMaterial));
@@ -94,6 +82,20 @@ const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterab
 };
 
 describe('world builders', () => {
+  it('removes and disposes the ship when construction fails during item assignment', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const oversizedInventory = Array.from({ length: 40 }, (_, index): ItemInstance => ({
+      instanceId: `waterJug-${index + 1}` as ItemInstance['instanceId'],
+      type: 'waterJug',
+    }));
+
+    expect(() => new World(scene, propModels, oversizedInventory, () => 0.4))
+      .toThrow('Unable to place ship item');
+    expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    propModels.dispose();
+  });
+
   it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -144,13 +146,18 @@ describe('world builders', () => {
     const cameraPosition = new Vector3(14, 7, -11);
     const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
       sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-    const target = buoyancy.sampleTarget(time, 5.5, -5.8, sinking.waveAmplitudeScale);
+    const target = buoyancy.sampleTarget(time, 7.6, -6.5, sinking.waveAmplitudeScale);
     const expectedPose = smoothBoatPose(
       { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
       target,
       delta,
       7,
     );
+    const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
+    const emergencySupport = scene.getObjectByName('anchor-support-emergency-tools') as Mesh;
+    const emergencyMaterial = emergencySupport.material as MeshStandardMaterial;
+    const emergencyIntensity = emergencyMaterial.emissiveIntensity;
+    expect(beacon.material).not.toBe(emergencyMaterial);
 
     world.update(time, delta, sinking, cameraPosition, false);
 
@@ -158,9 +165,9 @@ describe('world builders', () => {
     const oceanMaterial = ocean.material as ShaderMaterial;
     expect(oceanMaterial.uniforms.uTime!.value).toBe(time);
     expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
-    expect(world.lifeboat.position.x).toBeCloseTo(5.5 + expectedPose.driftX);
+    expect(world.lifeboat.position.x).toBeCloseTo(7.6 + expectedPose.driftX);
     expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
-    expect(world.lifeboat.position.z).toBeCloseTo(-5.8 + expectedPose.driftZ);
+    expect(world.lifeboat.position.z).toBeCloseTo(-6.5 + expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
     expect(world.lifeboat.scale.toArray()).toEqual([1.15, 1.15, 1.15]);
@@ -174,13 +181,18 @@ describe('world builders', () => {
     expect((scene.fog as FogExp2).density).toBeCloseTo(0.018 + sinking.progress * 0.009);
     const keyLight = scene.children.find((object) => object instanceof DirectionalLight) as DirectionalLight;
     expect(keyLight.intensity).toBeCloseTo(2.1 - sinking.progress * 0.45);
-    const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
     expect(beacon).toBeInstanceOf(Mesh);
     const expectedPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
     expect((beacon.material as MeshStandardMaterial).emissiveIntensity)
       .toBeCloseTo(0.25 + expectedPulse * 1.35);
+    expect(emergencyMaterial.emissiveIntensity).toBe(emergencyIntensity);
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
     expect(scene.getObjectByName('storm-clouds')).toBeDefined();
+    const smoke = scene.getObjectByName('freighter-smoke') as Points;
+    const smokePositions = smoke.geometry.getAttribute('position') as BufferAttribute;
+    const smokeVersion = smokePositions.version;
+    world.update(1, 0.1, { ...sinking, progress: 1 }, cameraPosition, false);
+    expect(smokePositions.version).toBeGreaterThan(smokeVersion);
     world.dispose();
     propModels.dispose();
   });
@@ -199,7 +211,7 @@ describe('world builders', () => {
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
-      [-3.72, 3.72, -10.25, 10.25],
+      [-6.05, 6.05, -17.6, 17.6],
       [-1.18, 1.18, -2.48, 2.48],
     ]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
@@ -299,10 +311,10 @@ describe('world builders', () => {
     const cloudResources = collectRenderResources(clouds);
     expect([...cloudResources.materials].every((material) => material instanceof MeshBasicMaterial)).toBe(true);
 
-    const shipMeshes = world.ship.children.filter((child): child is Mesh => child instanceof Mesh);
-    const shipGeometries = new Set(shipMeshes.map((mesh) => mesh.geometry));
-    const sharedShipMaterials = new Set(shipMeshes.flatMap((mesh) =>
-      Array.isArray(mesh.material) ? mesh.material : [mesh.material]));
+    const freighter = world.ship.getObjectByName('coastal-freighter')!;
+    const shipResources = collectRenderResources(freighter);
+    const shipGeometries = shipResources.geometries;
+    const shipMaterials = shipResources.materials;
     const lifeboatMeshes: Mesh[] = [];
     world.lifeboat.traverse((object) => {
       if (object instanceof Mesh) lifeboatMeshes.push(object);
@@ -311,17 +323,22 @@ describe('world builders', () => {
     const propResources = [...world.itemObjects.values()].map(collectRenderResources);
     const propGeometries = new Set(propResources.flatMap((resources) => [...resources.geometries]));
     const propMaterials = new Set(propResources.flatMap((resources) => [...resources.materials]));
+    expect([...shipResources.geometries].every((geometry) =>
+      !propGeometries.has(geometry) && !lifeboatResources.geometries.has(geometry))).toBe(true);
+    expect([...shipResources.materials].every((material) =>
+      !propMaterials.has(material) && !lifeboatResources.materials.has(material))).toBe(true);
     const ownedTask6Geometries = new Set([
       ...shipGeometries,
       ...lifeboatResources.geometries,
       ...propGeometries,
     ]);
     const ownedTask6Materials = new Set([
+      ...shipMaterials,
       ...lifeboatResources.materials,
       ...propMaterials,
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
-    expect(sharedShipMaterials.size).toBeGreaterThan(0);
+    expect(shipMaterials.size).toBeGreaterThan(0);
     expect(propResources).toHaveLength(14);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
@@ -344,8 +361,6 @@ describe('world builders', () => {
       spray.material as Material,
       ...cloudResources.materials,
     ]);
-    const sharedShipMaterialDisposals = observeDisposals(sharedShipMaterials);
-
     world.saveItem('flareGun-1', 0);
     world.loseItem('ductTape-1');
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
@@ -365,7 +380,6 @@ describe('world builders', () => {
     expect(scene.fog).toBe(originalFog);
     geometryDisposals.forEach((count) => expect(count).toBe(1));
     ownedMaterialDisposals.forEach((count) => expect(count).toBe(1));
-    sharedShipMaterialDisposals.forEach((count) => expect(count).toBe(0));
     propModels.dispose();
   });
 
@@ -412,47 +426,41 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('builds the two-zone ship contract with fourteen supply spawns', () => {
+  it('builds the furnished freighter contract with surplus authored anchors', () => {
     const ship = createShip();
-    expect(ship.itemSpawnPoints).toHaveLength(14);
-    expect(ship.colliders.length).toBeGreaterThanOrEqual(10);
-    expect(ship.playerStart.y).toBeGreaterThan(2);
-    expect(ship.evacuationPoint.x).toBeGreaterThan(3);
+    expect(ship.itemAnchors.length).toBeGreaterThanOrEqual(28);
+    expect(ship.colliders.length).toBeGreaterThanOrEqual(24);
+    expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.5]);
+    expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, -6.5]);
+    expect(ship.lifeboatAnchor.toArray()).toEqual([7.6, 0.35, -6.5]);
+    expect(ship.waterExclusion).toEqual({ halfWidth: 6.05, halfLength: 17.6 });
+    expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
+    expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();
+    ship.dispose();
   });
 
-  it('selects every authored spawn point exactly once', () => {
-    const points = createShip().itemSpawnPoints;
-    const values = [0.12, 0.81, 0.34, 0.67, 0.05, 0.92, 0.48];
-    let index = 0;
-    const selected = selectSpawnPoints(points, () => values[index++] ?? 0.5);
-    expect(selected).toHaveLength(14);
-    expect(new Set(selected.map((point) => `${point.x},${point.y},${point.z}`)).size).toBe(14);
-    expect(selected.every((point) => !points.includes(point))).toBe(true);
-  });
-
-  it.each([
-    ['starboard rail forward span', new Vector3(3.93, 3.72, 2.2)],
-    ['port rail stern span', new Vector3(-3.93, 3.72, -10.6)],
-    ['bridge console', new Vector3(0, 3.72, 7.1)],
-    ['starboard cargo', new Vector3(1.6, 3.72, -5.5)],
-    ['port cargo', new Vector3(-1.8, 3.72, -7.5)],
-  ])('blocks the planned player height at the %s', (_label, point) => {
-    const ship = createShip();
-    expect(ship.colliders.some((box) => pointInside(point, box))).toBe(true);
-  });
-
-  it('keeps an inboard route within the evacuation threshold', () => {
-    const ship = createShip();
-    const routeStart = new Vector3(3.15, 3.72, 0);
-    const reachablePoint = new Vector3(3.15, 3.72, -5);
-    const route = Array.from({ length: 11 }, (_, index) =>
-      new Vector3().lerpVectors(routeStart, reachablePoint, index / 10));
-
-    expect(route.every((point) =>
-      ship.colliders.every((box) => !playerOverlaps(point, 0.35, box)))).toBe(true);
-    expect(reachablePoint.distanceTo(ship.evacuationPoint)).toBeLessThanOrEqual(1.7);
-    expect(ship.evacuationPoint.x).toBeGreaterThan(3);
-    expect(ship.evacuationPoint.x).toBeLessThan(3.5);
+  it('places all world items on unique authored anchors', () => {
+    const propModels = createTestPropModels();
+    const world = new World(new Scene(), propModels, createItemInstances(), () => 0.35);
+    const referenceShip = createShip();
+    const anchorsById = new Map(referenceShip.itemAnchors.map((anchor) => [anchor.id, anchor]));
+    const assignments = assignShipItems(createItemInstances(), referenceShip.itemAnchors, () => 0.35);
+    const anchorIds = [...world.itemObjects.values()].map((item) => item.userData.shipAnchorId as string);
+    expect(anchorIds).toHaveLength(14);
+    expect(new Set(anchorIds).size).toBe(14);
+    expect(anchorIds.every(Boolean)).toBe(true);
+    world.itemObjects.forEach((item, instanceId) => {
+      const anchor = anchorsById.get(item.userData.shipAnchorId as string);
+      const assignment = assignments.get(instanceId);
+      expect(anchor).toBeDefined();
+      expect(assignment).toBeDefined();
+      expect(item.position.toArray()).toEqual(assignment!.position.toArray());
+      expect(item.rotation.toArray()).toEqual(assignment!.rotation.toArray());
+      expect(item.scale.toArray()).toEqual([assignment!.scale, assignment!.scale, assignment!.scale]);
+    });
+    world.dispose();
+    referenceShip.dispose();
+    propModels.dispose();
   });
 
   it('builds an unmarked storage root inside the lifeboat', () => {
