@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import { ITEM_IDS } from '../src/game/ItemState';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
+import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import type { SurvivalInventory, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
@@ -39,6 +40,24 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     lastOutcome: null,
     seed: 8,
     ...overrides,
+  };
+}
+
+function completedEntry(day: number): JournalEntry {
+  return {
+    day,
+    weather: 'calm',
+    daytime: null,
+    nighttime: {
+      phase: 'night',
+      eventId: `night-${day}`,
+      title: 'Quiet Night',
+      prompt: 'The night passed without incident.',
+      attemptedItemId: null,
+      resolution: 'endure',
+      outcomeCode: 'event-resolved',
+      outcomeMessage: 'The night remained quiet.',
+    },
   };
 }
 
@@ -296,6 +315,94 @@ describe('SurvivalPhase orchestration', () => {
     phase.update(3, 0.016);
     expect(hideOutcome).toHaveBeenCalledOnce();
     expect(showEnding).toHaveBeenCalledOnce();
+  });
+
+  it('shows a completed night journal before dawn and advances only from it', async () => {
+    let current = snapshot({ state: 'nightEvent', day: 3, pendingEventId: null });
+    const showJournal = vi.fn();
+    const hideJournal = vi.fn();
+    const beginDawn = vi.fn(() => {
+      current = snapshot({ state: 'day', day: 4, journalEntries: [completedEntry(3)] });
+      return accepted({ code: 'dawn', cue: 'dawn', message: 'Another dawn.' });
+    });
+    const ui: Partial<SurvivalUI> = {
+      render: vi.fn(), showOutcome: vi.fn(), hideOutcome: vi.fn(),
+      showJournal, hideJournal, setBusy: vi.fn(), dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent', day: 3, pendingEventId: null,
+            journalEntries: [completedEntry(3)],
+          });
+          return accepted({ code: 'event-resolved', cue: 'none' });
+        }),
+        beginDawn,
+      },
+      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      ui,
+    });
+
+    phase.handleEndure();
+    await flushPromises();
+    phase.handleContinue();
+    expect(showJournal).toHaveBeenCalledWith([completedEntry(3)], 'automatic');
+    expect(beginDawn).not.toHaveBeenCalled();
+
+    ui.onJournalContinue?.();
+    expect(hideJournal).toHaveBeenCalledOnce();
+    expect(beginDawn).toHaveBeenCalledOnce();
+  });
+
+  it('shows a terminal night journal before the ending and never calls dawn', async () => {
+    let current = snapshot({ state: 'nightEvent', day: 5 });
+    const showJournal = vi.fn();
+    const showEnding = vi.fn();
+    const beginDawn = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      render: vi.fn(), showOutcome: vi.fn(), hideOutcome: vi.fn(),
+      showJournal, hideJournal: vi.fn(), showEnding, setBusy: vi.fn(), dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'sunk', day: 5, journalEntries: [completedEntry(5)] });
+          return accepted({ code: 'event-resolved', cue: 'sinking' });
+        }),
+        beginDawn,
+      },
+      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      ui,
+    });
+    phase.handleEndure();
+    await flushPromises();
+    phase.handleContinue();
+    expect(showJournal).toHaveBeenCalledOnce();
+    expect(showEnding).not.toHaveBeenCalled();
+    ui.onJournalContinue?.();
+    expect(showEnding).toHaveBeenCalledOnce();
+    expect(beginDawn).not.toHaveBeenCalled();
+  });
+
+  it('opens and closes manual history without advancing survival state', () => {
+    const entries = [completedEntry(1), completedEntry(2)];
+    const showJournal = vi.fn();
+    const hideJournal = vi.fn();
+    const beginDawn = vi.fn();
+    const ui: Partial<SurvivalUI> = { showJournal, hideJournal, dispose: vi.fn() };
+    SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ day: 3, journalEntries: entries })), beginDawn },
+      world: { dispose: vi.fn() },
+      ui,
+    });
+    ui.onJournalOpen?.();
+    expect(showJournal).toHaveBeenCalledWith(entries, 'manual');
+    ui.onJournalClose?.();
+    expect(hideJournal).toHaveBeenCalledOnce();
+    expect(beginDawn).not.toHaveBeenCalled();
   });
 
   it('pauses while hidden and requires the UI resume action before updates continue', () => {
