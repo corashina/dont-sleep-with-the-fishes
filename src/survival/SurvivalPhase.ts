@@ -51,6 +51,8 @@ export class SurvivalPhase implements GamePhase {
   private started = false;
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
+  private awaitingJournalDay: number | null = null;
+  private readonly presentedJournalDays = new Set<number>();
   private pendingDayEventDay: number | null = null;
   private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
@@ -181,21 +183,8 @@ export class SurvivalPhase implements GamePhase {
     this.awaitingContinue = false;
     let snapshot = this.renderSnapshot(false, false);
     this.ui.hideOutcome?.();
+    if (this.presentLatestJournal(snapshot)) return;
     this.presentTerminalOnce(snapshot);
-    if (snapshot.state === 'nightEvent' && snapshot.pendingEventId === null) {
-      const dawn = this.session.beginDawn?.();
-      if (dawn?.accepted) {
-        this.busy = true;
-        this.ui.setBusy?.(true);
-        void (this.world.play?.(dawn.cue) ?? Promise.resolve()).finally(() => {
-          if (this.disposed) return;
-          this.busy = false;
-          this.ui.setBusy?.(false);
-          this.renderSnapshot(false);
-        });
-        return;
-      }
-    }
     if (
       this.pendingDayEventDay !== null
       && snapshot.day === this.pendingDayEventDay
@@ -212,6 +201,35 @@ export class SurvivalPhase implements GamePhase {
       snapshot = this.renderSnapshot(false);
     }
     this.openPendingEvent(snapshot);
+  }
+
+  handleJournalOpen(): void {
+    if (
+      this.disposed
+      || this.busy
+      || this.awaitingContinue
+      || this.paused
+      || this.awaitingJournalDay !== null
+      || this.documentIsHidden()
+    ) return;
+    this.ui.showJournal?.(this.session.snapshot().journalEntries, 'manual');
+  }
+
+  handleJournalClose(): void {
+    if (this.disposed || this.awaitingJournalDay !== null) return;
+    this.ui.hideJournal?.();
+  }
+
+  handleJournalContinue(): void {
+    if (this.disposed || this.awaitingJournalDay === null) return;
+    this.awaitingJournalDay = null;
+    this.ui.hideJournal?.();
+    const snapshot = this.session.snapshot();
+    if (isTerminal(snapshot.state)) {
+      this.presentTerminalOnce(snapshot);
+      return;
+    }
+    this.beginDawnAfterJournal(snapshot);
   }
 
   setPaused(paused: boolean): void {
@@ -269,6 +287,9 @@ export class SurvivalPhase implements GamePhase {
       if (!this.disposed) this.world.skipSequence?.();
     };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
+    this.ui.onJournalOpen = () => this.handleJournalOpen();
+    this.ui.onJournalClose = () => this.handleJournalClose();
+    this.ui.onJournalContinue = () => this.handleJournalContinue();
   }
 
   private handlePointer(clientX: number, clientY: number): void {
@@ -290,8 +311,42 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private canAcceptCommand(): boolean {
-    if (this.disposed || this.busy || this.awaitingContinue || this.paused || this.documentIsHidden()) return false;
+    if (
+      this.disposed
+      || this.busy
+      || this.awaitingContinue
+      || this.awaitingJournalDay !== null
+      || this.paused
+      || this.documentIsHidden()
+    ) return false;
     return !isTerminal(this.session.snapshot().state);
+  }
+
+  private beginDawnAfterJournal(snapshot: SurvivalSnapshot): void {
+    if (snapshot.state !== 'nightEvent' || snapshot.pendingEventId !== null) return;
+    const dawn = this.session.beginDawn?.();
+    if (!dawn?.accepted) return;
+    this.busy = true;
+    this.ui.setBusy?.(true);
+    void (this.world.play?.(dawn.cue) ?? Promise.resolve()).finally(() => {
+      if (this.disposed) return;
+      this.busy = false;
+      this.ui.setBusy?.(false);
+      this.renderSnapshot(false);
+    });
+  }
+
+  private presentLatestJournal(snapshot: SurvivalSnapshot): boolean {
+    const latest = snapshot.journalEntries.at(-1);
+    if (
+      latest === undefined
+      || latest.day !== snapshot.day
+      || this.presentedJournalDays.has(latest.day)
+    ) return false;
+    this.presentedJournalDays.add(latest.day);
+    this.awaitingJournalDay = latest.day;
+    this.ui.showJournal?.(snapshot.journalEntries, 'automatic');
+    return true;
   }
 
   private present(outcome: ActionOutcome): void {
@@ -345,6 +400,7 @@ export class SurvivalPhase implements GamePhase {
     if (
       this.busy
       || this.awaitingContinue
+      || this.awaitingJournalDay !== null
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;
