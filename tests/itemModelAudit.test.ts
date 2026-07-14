@@ -18,6 +18,8 @@ interface InvalidModelOptions {
   readonly nonFiniteBounds?: boolean;
   readonly emptyBounds?: boolean;
   readonly missingTextureBytes?: boolean;
+  readonly collinearTriangle?: boolean;
+  readonly outOfRangeIndex?: boolean;
 }
 
 function padToFour(bytes: Uint8Array, fill = 0): Uint8Array {
@@ -52,12 +54,14 @@ async function writeInvalidModel(
   modelsDir: string,
   options: InvalidModelOptions,
 ): Promise<void> {
-  const positions = new Float32Array([
-    options.nonFinitePosition ? Number.NaN : 0, 0, 0,
-    2, 0, 0,
-    0, 1, 0,
-  ]);
-  const indices = new Uint16Array([0, 1, 2]);
+  const positions = new Float32Array(options.collinearTriangle
+    ? [0, 0, 0, 1, 1, 1, 2, 2, 2]
+    : [
+        options.nonFinitePosition ? Number.NaN : 0, 0, 0,
+        2, 0, 0,
+        0, 1, 0,
+      ]);
+  const indices = new Uint16Array(options.outOfRangeIndex ? [0, 1, 3] : [0, 1, 2]);
   const binary = new Uint8Array(44);
   binary.set(new Uint8Array(positions.buffer), 0);
   binary.set(new Uint8Array(indices.buffer), 36);
@@ -76,7 +80,7 @@ async function writeInvalidModel(
       ];
   const primitive: Record<string, unknown> = {
     attributes: options.missingPosition ? {} : { POSITION: 0 },
-    indices: 1,
+    ...(options.collinearTriangle ? {} : { indices: 1 }),
     mode: 4,
   };
   const json: Record<string, unknown> = {
@@ -149,6 +153,14 @@ describe('item model audit CLI', () => {
     expect(result.stderr).toContain('unexpected model entry: unexpected.glb');
   });
 
+  it('accepts a non-degenerate planar triangle', async () => {
+    await writeInvalidModel(modelsDir, {});
+
+    const result = runAudit();
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it.each([
     ['missing POSITION geometry', { missingPosition: true }, 'missing POSITION geometry'],
     ['empty POSITION geometry', { emptyPosition: true }, 'empty POSITION geometry'],
@@ -158,6 +170,8 @@ describe('item model audit CLI', () => {
     ['an external buffer URI', { externalBuffer: true }, 'external buffer URI: external.bin'],
     ['an external texture URI', { externalTexture: true }, 'external texture URI: texture.png'],
     ['a referenced texture without embedded bytes', { missingTextureBytes: true }, 'referenced texture has no embedded image bytes'],
+    ['a collinear zero-area triangle', { collinearTriangle: true }, 'contains no non-degenerate world-space triangles'],
+    ['an out-of-range triangle index', { outOfRangeIndex: true }, 'triangle index 3 is out of range for 3 POSITION vertices'],
   ] as const)('rejects %s', async (_caseName, options, expectedError) => {
     await writeInvalidModel(modelsDir, options);
 
