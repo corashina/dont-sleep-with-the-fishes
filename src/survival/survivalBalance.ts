@@ -15,5 +15,6 @@ export const SURVIVAL_BALANCE = {
     flashlightInjury: 0.10, injuryDamage: 10, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
   },
+  night: { quietChance: 0.25 },
   rescue: { firstDay: 5, initialChance: 0.05, dailyIncrease: 0.08, chanceCap: 0.60, progressCap: 25 },
 } as const;
