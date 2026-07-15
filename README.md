@@ -43,9 +43,12 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | `Enter` | Activate the focused control |
 | `Escape` | Close the fishing-choice dialog first; otherwise pause or resume |
 | `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
-| Center journal marker | Open and browse completed daily event entries |
+| Top-center journal button | Open completed entries; `NEW` marks unread history |
+| Top-center End Day button / `7` | Fade into sleep and advance to an event or quiet night |
 
-Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, remaining uses, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Depleted multi-use props stay in place with subdued markers, while consumed cans disappear as their individual instances are spent. **Fish** exists only when a fishing rod was rescued, and **Dive** only when scuba gear was rescued; without those tools, shortcuts `1` and `2` do nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
+Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, remaining uses, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Depleted multi-use props stay in place with subdued markers, while consumed cans disappear as their individual instances are spent. **Fish** exists only when a fishing rod was rescued, and **Dive** only when scuba gear was rescued; without those tools, shortcuts `1` and `2` do nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event dialogs keep keyboard focus until they are resolved.
+
+Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
 
 ## Game loop
 
@@ -65,7 +68,9 @@ Health, Food, Energy, and Hull remain visible as condition meters. Food is the i
 
 Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable item resolves to the event's fallback result, and **Endure** uses no item. Consumable charges are finite and exhausted supplies remain visible.
 
-After each nighttime outcome, a journal page retells that day's daytime and nighttime events as a short first-person entry. The entry mentions supplies only when they were attempted during an event. Continue from the page to begin dawn, or use the centered journal marker later to browse completed days.
+End Day fades the survivor to sleep. Most nights open an event decision; some nights pass quietly. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
+
+Each journal page retells that day's daytime and nighttime events as a short first-person entry. The entry mentions supplies only when they were attempted during an event.
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 
