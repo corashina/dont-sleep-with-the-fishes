@@ -50,14 +50,12 @@ export class SurvivalPhase implements GamePhase {
   private onRestart!: () => void;
   private scavengeElapsedSeconds = 0;
   private busy = false;
-  private awaitingContinue = false;
   private paused = false;
   private disposed = false;
   private started = false;
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
-  private awaitingJournalDay: number | null = null;
-  private readonly presentedJournalDays = new Set<number>();
+  private lastReadJournalDay = 0;
   private pendingDayEventDay: number | null = null;
   private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
@@ -90,7 +88,7 @@ export class SurvivalPhase implements GamePhase {
           context.skyAssets.moonTexture,
           savedItems,
         ),
-        new SurvivalUI(context.mount),
+        new SurvivalUI(context.mount, context.reducedMotion),
         scavengeElapsedSeconds,
         onRestart,
       );
@@ -164,78 +162,40 @@ export class SurvivalPhase implements GamePhase {
     const selectedOption = action === 'repair' ? this.repairOption() : option;
     const outcome = this.session.perform?.(action, selectedOption);
     if (outcome === undefined) return;
-
-    if (outcome.accepted && action !== 'endDay' && (outcome.deltas.energy ?? 0) < 0) {
+    if (!outcome.accepted) {
+      this.ui.showFeedback?.(outcome);
+      return;
+    }
+    if (action === 'endDay') {
+      void this.runEndDay(outcome);
+      return;
+    }
+    if ((outcome.deltas.energy ?? 0) < 0) {
       const day = this.session.snapshot().day;
       if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     }
-    this.present(outcome);
+    void this.runDayAction(outcome);
   }
 
   handleEventItem(itemId: ItemId): void {
-    if (!this.canAcceptCommand()) return;
-    const outcome = this.session.resolveEvent?.(itemId);
-    if (outcome !== undefined) this.present(outcome);
+    this.resolveEvent(itemId);
   }
 
   handleEndure(): void {
-    if (!this.canAcceptCommand()) return;
-    const outcome = this.session.resolveEvent?.(null);
-    if (outcome !== undefined) this.present(outcome);
-  }
-
-  handleContinue(): void {
-    if (this.disposed || !this.awaitingContinue) return;
-    this.awaitingContinue = false;
-    let snapshot = this.renderSnapshot(false, false);
-    this.ui.hideOutcome?.();
-    if (this.presentLatestJournal(snapshot)) return;
-    this.presentTerminalOnce(snapshot);
-    if (
-      this.pendingDayEventDay !== null
-      && snapshot.day === this.pendingDayEventDay
-      && snapshot.state === 'day'
-    ) {
-      const eventDay = this.pendingDayEventDay;
-      this.pendingDayEventDay = null;
-      this.requestedDayEventDays.add(eventDay);
-      const eventOutcome = this.session.requestDayEvent?.();
-      if (eventOutcome?.accepted) {
-        this.present(eventOutcome);
-        return;
-      }
-      snapshot = this.renderSnapshot(false);
-    }
-    this.openPendingEvent(snapshot);
+    this.resolveEvent(null);
   }
 
   handleJournalOpen(): void {
-    if (
-      this.disposed
-      || this.busy
-      || this.awaitingContinue
-      || this.paused
-      || this.awaitingJournalDay !== null
-      || this.documentIsHidden()
-    ) return;
-    this.ui.showJournal?.(this.session.snapshot().journalEntries, 'manual');
+    if (this.disposed || this.busy || this.paused || this.documentIsHidden()) return;
+    const snapshot = this.session.snapshot();
+    this.lastReadJournalDay = this.latestJournalDay(snapshot);
+    this.ui.setJournalUnread?.(false);
+    this.ui.showJournal?.(snapshot.journalEntries);
   }
 
   handleJournalClose(): void {
-    if (this.disposed || this.awaitingJournalDay !== null) return;
+    if (this.disposed) return;
     this.ui.hideJournal?.();
-  }
-
-  handleJournalContinue(): void {
-    if (this.disposed || this.awaitingJournalDay === null) return;
-    this.awaitingJournalDay = null;
-    this.ui.hideJournal?.();
-    const snapshot = this.session.snapshot();
-    if (isTerminal(snapshot.state)) {
-      this.presentTerminalOnce(snapshot);
-      return;
-    }
-    this.beginDawnAfterJournal(snapshot);
   }
 
   setPaused(paused: boolean): void {
@@ -283,19 +243,14 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
     this.ui.onEventItem = (itemId) => this.handleEventItem(itemId);
     this.ui.onEndure = () => this.handleEndure();
-    this.ui.onContinue = () => this.handleContinue();
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onPointer = (x, y) => this.handlePointer(x, y);
     this.ui.onAnchorHighlight = (anchorId) => {
       if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
     };
-    this.ui.onSkip = () => {
-      if (!this.disposed) this.world.skipSequence?.();
-    };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
-    this.ui.onJournalContinue = () => this.handleJournalContinue();
   }
 
   private handlePointer(clientX: number, clientY: number): void {
@@ -320,56 +275,131 @@ export class SurvivalPhase implements GamePhase {
     if (
       this.disposed
       || this.busy
-      || this.awaitingContinue
-      || this.awaitingJournalDay !== null
       || this.paused
       || this.documentIsHidden()
     ) return false;
     return !isTerminal(this.session.snapshot().state);
   }
 
-  private beginDawnAfterJournal(snapshot: SurvivalSnapshot): void {
-    if (snapshot.state !== 'nightEvent' || snapshot.pendingEventId !== null) return;
-    const dawn = this.session.beginDawn?.();
-    if (!dawn?.accepted) return;
-    this.busy = true;
-    this.ui.setBusy?.(true);
-    void (this.world.play?.(dawn.cue) ?? Promise.resolve()).finally(() => {
-      if (this.disposed) return;
-      this.busy = false;
-      this.ui.setBusy?.(false);
-      this.renderSnapshot(false);
-    });
+  private setBusy(busy: boolean): void {
+    this.busy = busy;
+    this.ui.setBusy?.(busy);
   }
 
-  private presentLatestJournal(snapshot: SurvivalSnapshot): boolean {
-    const latest = snapshot.journalEntries.at(-1);
-    if (
-      latest === undefined
-      || latest.day !== snapshot.day
-      || this.presentedJournalDays.has(latest.day)
-    ) return false;
-    this.presentedJournalDays.add(latest.day);
-    this.awaitingJournalDay = latest.day;
-    this.ui.showJournal?.(snapshot.journalEntries, 'automatic');
-    return true;
-  }
-
-  private present(outcome: ActionOutcome): void {
-    this.ui.showOutcome?.(outcome);
-    if (!outcome.accepted) {
-      this.awaitingContinue = true;
+  private async runDayAction(outcome: ActionOutcome): Promise<void> {
+    this.setBusy(true);
+    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
+    if (this.disposed) return;
+    let snapshot = this.renderSnapshot(false, false);
+    this.ui.showFeedback?.(outcome);
+    if (isTerminal(snapshot.state)) {
+      this.setBusy(false);
+      this.presentTerminalOnce(snapshot);
       return;
     }
-    this.busy = true;
-    this.ui.setBusy?.(true);
-    const sequence = this.world.play?.(outcome.cue) ?? Promise.resolve();
-    void sequence.finally(() => {
+    snapshot = await this.openScheduledDayEvent(snapshot);
+    if (this.disposed) return;
+    this.setBusy(false);
+    if (snapshot.pendingEventId !== null) this.openPendingEvent(snapshot);
+    else this.ui.restoreCommandFocus?.();
+  }
+
+  private async openScheduledDayEvent(snapshot: SurvivalSnapshot): Promise<SurvivalSnapshot> {
+    if (
+      this.pendingDayEventDay === null
+      || snapshot.day !== this.pendingDayEventDay
+      || snapshot.state !== 'day'
+    ) return snapshot;
+
+    const eventDay = this.pendingDayEventDay;
+    this.pendingDayEventDay = null;
+    this.requestedDayEventDays.add(eventDay);
+    const eventOutcome = this.session.requestDayEvent?.();
+    if (eventOutcome === undefined) return snapshot;
+    if (!eventOutcome.accepted) {
+      this.ui.showFeedback?.(eventOutcome);
+      return this.renderSnapshot(false, false);
+    }
+    await (this.world.play?.(eventOutcome.cue) ?? Promise.resolve());
+    if (this.disposed) return snapshot;
+    return this.renderSnapshot(false, false);
+  }
+
+  private async runEndDay(outcome: ActionOutcome): Promise<void> {
+    this.setBusy(true);
+    await Promise.all([
+      this.world.play?.(outcome.cue) ?? Promise.resolve(),
+      this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
+    ]);
+    if (this.disposed) return;
+    let snapshot = this.renderSnapshot(false, false);
+
+    if (outcome.code === 'quiet-night') {
+      await (this.ui.holdSleep?.() ?? Promise.resolve());
       if (this.disposed) return;
-      this.busy = false;
-      this.ui.setBusy?.(false);
-      this.awaitingContinue = true;
-    });
+      snapshot = await this.runDawn();
+      if (this.disposed) return;
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+      if (this.disposed) return;
+      this.setBusy(false);
+      this.presentTerminalOnce(snapshot);
+      this.ui.restoreCommandFocus?.();
+      return;
+    }
+
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (this.disposed) return;
+    this.setBusy(false);
+    this.openPendingEvent(snapshot);
+  }
+
+  private resolveEvent(itemId: ItemId | null): void {
+    if (!this.canAcceptCommand()) return;
+    const eventState = this.session.snapshot().state;
+    const outcome = this.session.resolveEvent?.(itemId);
+    if (outcome === undefined) return;
+    if (!outcome.accepted) {
+      this.ui.showFeedback?.(outcome);
+      return;
+    }
+    this.ui.hideEvent?.();
+    void this.runEventResolution(outcome, eventState);
+  }
+
+  private async runEventResolution(
+    outcome: ActionOutcome,
+    eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
+  ): Promise<void> {
+    this.setBusy(true);
+    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
+    if (this.disposed) return;
+    let snapshot = this.renderSnapshot(false, false);
+    this.ui.showFeedback?.(outcome);
+    if (isTerminal(snapshot.state)) {
+      this.setBusy(false);
+      this.presentTerminalOnce(snapshot);
+      return;
+    }
+    if (eventState === 'nightEvent') snapshot = await this.runDawn();
+    if (this.disposed) return;
+    this.setBusy(false);
+    this.presentTerminalOnce(snapshot);
+    this.ui.restoreCommandFocus?.();
+  }
+
+  private async runDawn(): Promise<SurvivalSnapshot> {
+    const dawn = this.session.beginDawn?.();
+    if (dawn?.accepted) await (this.world.play?.(dawn.cue) ?? Promise.resolve());
+    if (this.disposed) return this.session.snapshot();
+    return this.renderSnapshot(false, false);
+  }
+
+  private latestJournalDay(snapshot: SurvivalSnapshot): number {
+    return snapshot.journalEntries.at(-1)?.day ?? 0;
+  }
+
+  private syncJournalUnread(snapshot: SurvivalSnapshot): void {
+    this.ui.setJournalUnread?.(this.latestJournalDay(snapshot) > this.lastReadJournalDay);
   }
 
   private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
@@ -383,6 +413,7 @@ export class SurvivalPhase implements GamePhase {
         action === 'repair' ? this.repairOption() : undefined,
       ) ?? null,
     );
+    this.syncJournalUnread(snapshot);
     this.syncPresentation(snapshot);
     if (presentTerminal) this.presentTerminalOnce(snapshot);
     if (openPendingEvent && !isTerminal(snapshot.state)) this.openPendingEvent(snapshot);
@@ -405,8 +436,6 @@ export class SurvivalPhase implements GamePhase {
   private presentTerminalOnce(snapshot: SurvivalSnapshot): void {
     if (
       this.busy
-      || this.awaitingContinue
-      || this.awaitingJournalDay !== null
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;
