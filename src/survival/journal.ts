@@ -14,11 +14,15 @@ export interface JournalEventRecord {
   outcomeMessage: string;
 }
 
+export type JournalNightRecord =
+  | { kind: 'event'; event: JournalEventRecord }
+  | { kind: 'quiet' };
+
 export interface JournalEntry {
   day: number;
   weather: WeatherId;
   daytime: JournalEventRecord | null;
-  nighttime: JournalEventRecord;
+  nighttime: JournalNightRecord;
 }
 
 export interface JournalPageCopy {
@@ -52,6 +56,12 @@ function formatEvent(record: JournalEventRecord): string {
   return `${situation} ${action}`;
 }
 
+function formatNight(record: JournalNightRecord): string {
+  return record.kind === 'quiet'
+    ? 'That night, the sea stayed calm, and I slept without interruption.'
+    : formatEvent(record.event);
+}
+
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
   return {
     heading: `DAY ${entry.day}`,
@@ -59,6 +69,6 @@ export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
     daytime: entry.daytime === null
       ? 'The daylight hours passed quietly.'
       : formatEvent(entry.daytime),
-    nighttime: formatEvent(entry.nighttime),
+    nighttime: formatNight(entry.nighttime),
   };
 }

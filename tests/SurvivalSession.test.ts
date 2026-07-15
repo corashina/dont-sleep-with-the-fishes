@@ -37,7 +37,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('guards dawn while an event is pending and exposes nightfall then dawn cues', () => {
-    const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0, 0.99]) });
+    const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0.5, 0, 0.99]) });
     expect(session.perform('endDay').cue).toBe('nightfall');
     const pending = session.snapshot();
     expect(session.beginDawn()).toMatchObject({ accepted: false, code: 'event-pending' });
@@ -172,7 +172,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('draws a night event, advances dawn, and applies increasing rescue chance', () => {
-    const session = new SurvivalSession(saved(), { seed: 2, random: sequenceRandom([0, 0.99, 0.99, 0.99, 0]) });
+    const session = new SurvivalSession(saved(), { seed: 2, random: sequenceRandom([0.5, 0, 0.99, 0.99, 0.99, 0]) });
     session.perform('endDay');
     expect(session.snapshot().state).toBe('nightEvent');
     session.resolveEvent(null);
@@ -246,7 +246,7 @@ describe('SurvivalSession daytime actions', () => {
   it('finalizes one journal entry from resolved day and night events', () => {
     const session = new SurvivalSession(saved('waterJug', 'flashlight'), {
       seed: 9,
-      random: sequenceRandom([0]),
+      random: sequenceRandom([0.5, 0]),
       initialEventId: 'day-heat-haze',
     });
     session.resolveEvent('waterJug');
@@ -261,10 +261,13 @@ describe('SurvivalSession daytime actions', () => {
         attemptedItemId: 'waterJug',
         resolution: 'suitableItem',
       }),
-      nighttime: expect.objectContaining({
-        phase: 'night',
-        attemptedItemId: 'flashlight',
-      }),
+      nighttime: {
+        kind: 'event',
+        event: expect.objectContaining({
+          phase: 'night',
+          attemptedItemId: 'flashlight',
+        }),
+      },
     })]);
   });
 
@@ -291,8 +294,11 @@ describe('SurvivalSession daytime actions', () => {
     const charges = session.snapshot().inventory.waterJug.charges;
     session.resolveEvent('waterJug');
     expect(session.snapshot().journalEntries[0]!.nighttime).toMatchObject({
-      attemptedItemId: 'waterJug',
-      resolution: 'unsuitableItem',
+      kind: 'event',
+      event: {
+        attemptedItemId: 'waterJug',
+        resolution: 'unsuitableItem',
+      },
     });
     expect(session.snapshot().inventory.waterJug.charges).toBe(charges);
   });
@@ -307,6 +313,42 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({
       state: 'sunk',
       journalEntries: [expect.objectContaining({ day: 1 })],
+    });
+  });
+
+  it('finalizes a quiet night below the 25 percent threshold', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 21,
+      random: sequenceRandom([0.249999]),
+    });
+
+    expect(session.perform('endDay')).toMatchObject({
+      accepted: true,
+      code: 'quiet-night',
+      cue: 'nightfall',
+    });
+    expect(session.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      pendingEventId: null,
+      journalEntries: [{ day: 1, nighttime: { kind: 'quiet' } }],
+    });
+  });
+
+  it('opens a night event at the 25 percent threshold', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 22,
+      random: sequenceRandom([0.25, 0]),
+    });
+
+    expect(session.perform('endDay')).toMatchObject({
+      accepted: true,
+      code: 'event-opened',
+      cue: 'nightfall',
+    });
+    expect(session.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      pendingEventId: expect.any(String),
+      journalEntries: [],
     });
   });
 });

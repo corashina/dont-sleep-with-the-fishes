@@ -49,14 +49,17 @@ function completedEntry(day: number): JournalEntry {
     weather: 'calm',
     daytime: null,
     nighttime: {
-      phase: 'night',
-      eventId: `night-${day}`,
-      title: 'Quiet Night',
-      prompt: 'The night passed without incident.',
-      attemptedItemId: null,
-      resolution: 'endure',
-      outcomeCode: 'event-resolved',
-      outcomeMessage: 'The night remained quiet.',
+      kind: 'event',
+      event: {
+        phase: 'night',
+        eventId: `night-${day}`,
+        title: 'Quiet Night',
+        prompt: `Night ${day} settled over the boat.`,
+        attemptedItemId: null,
+        resolution: 'endure',
+        outcomeCode: 'event-resolved',
+        outcomeMessage: 'I made it through until morning.',
+      },
     },
   };
 }
