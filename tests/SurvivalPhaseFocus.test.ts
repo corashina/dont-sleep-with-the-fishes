@@ -19,6 +19,25 @@ const canAnchor: BoatInteractionAnchor = {
   visible: true,
   depleted: false,
 };
+
+const rod: ItemInstance = { instanceId: 'fishingRod-1', type: 'fishingRod' };
+const bait: ItemInstance = { instanceId: 'baitTin-1', type: 'baitTin' };
+const scuba: ItemInstance = { instanceId: 'scubaSet-1', type: 'scubaSet' };
+const scubaAnchor: BoatInteractionAnchor = {
+  id: scuba.instanceId, itemType: scuba.type, action: 'dive', remainingUses: null,
+  x: 220, y: 220, visible: true, depleted: false,
+};
+const rodAnchor: BoatInteractionAnchor = {
+  id: rod.instanceId, itemType: rod.type, action: 'fish', remainingUses: null,
+  x: 360, y: 220, visible: true, depleted: false,
+};
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -50,6 +69,41 @@ describe('SurvivalPhase focus synchronization', () => {
 
     expect(eat.isConnected && !eat.hidden).toBe(false);
     expect(document.activeElement).toBe(mount.querySelector('[data-action="endDay"]'));
+    phase.dispose();
+  });
+
+  it('restores accepted baited fishing to Fish when another action precedes it', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    const session = new SurvivalSession([rod, bait, scuba], { seed: 1 });
+    let finishCue!: () => void;
+    const cue = new Promise<void>((resolve) => { finishCue = resolve; });
+    const world = {
+      syncInventory: () => undefined,
+      projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
+      play: () => cue,
+      dispose: () => undefined,
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: () => session.snapshot(),
+        perform: (action, option) => session.perform(action, option),
+      },
+      world,
+      ui,
+    });
+    phase.start();
+
+    const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
+    fish.click();
+    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
+    expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(true);
+
+    finishCue();
+    await flushPromises();
+
+    expect(document.activeElement).toBe(fish);
     phase.dispose();
   });
 });
