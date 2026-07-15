@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kenney Item Model Menu</title>
+  <style>
+    :root { color-scheme:dark; font-family:Inter,"Segoe UI",sans-serif; background:#0e151a; color:#edf3f4; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(#111b21,#0b1115); }
+    header { position:sticky; top:0; z-index:5; padding:18px 24px; background:#10191eed; border-bottom:1px solid #36505c; backdrop-filter:blur(12px); }
+    h1 { margin:0 0 6px; font-size:clamp(22px,3vw,34px); }
+    header p, .fit { color:#b8c7cc; }
+    main { width:min(1500px,100%); margin:auto; padding:20px 24px 180px; }
+    .item-row { margin:0 0 28px; }
+    .item-row h2 { margin:0 0 10px; font-size:20px; }
+    .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .card { position:relative; overflow:hidden; cursor:pointer; border:2px solid #29404a; border-radius:14px; background:#152229; color:inherit; text-align:left; font:inherit; padding:0; transition:border-color .15s,transform .15s; }
+    .card:hover:not([aria-disabled="true"]), .card:focus-visible:not([aria-disabled="true"]) { transform:translateY(-2px); border-color:#6594a6; outline:none; }
+    .card:has(.select-choice:focus-visible) { transform:translateY(-2px); border-color:#6594a6; outline:2px solid #8fcde2; outline-offset:2px; }
+    .card.selected { border-color:#ef8a4c; box-shadow:0 0 0 2px #ef8a4c40; }
+    .card[aria-disabled="true"] { cursor:not-allowed; border-color:#974e52; opacity:.78; }
+    .preview { display:block; width:100%; aspect-ratio:3/2; object-fit:cover; background:#172027; }
+    .select-choice { position:absolute; inset:0; z-index:1; cursor:pointer; border:0; background:transparent; }
+    .preview-error { display:none; position:absolute; inset:0 0 auto; min-height:42%; align-items:center; justify-content:center; padding:18px; background:#321d22e8; color:#ffd7d9; font-size:13px; line-height:1.35; text-align:center; }
+    .card[aria-disabled="true"] .preview-error { display:flex; }
+    .card-body { padding:12px; }
+    .card h3 { margin:0 0 6px; font-size:16px; }
+    .meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .badge { padding:3px 7px; border-radius:99px; background:#263942; color:#d7e2e5; font-size:11px; text-transform:uppercase; }
+    .badge.error { background:#6d2930; color:#ffd7d9; }
+    .source { position:relative; z-index:2; color:#8fcde2; font-size:12px; }
+    .fit { margin:8px 0 0; font-size:13px; line-height:1.35; }
+    aside { position:fixed; left:0; right:0; bottom:0; z-index:6; padding:12px 24px 18px; background:#0b1216f2; border-top:1px solid #36505c; }
+    #summary { width:min(1500px,100%); margin:auto; display:grid; grid-template-columns:repeat(9,minmax(90px,1fr)); gap:8px; }
+    .summary-item { min-width:0; padding:8px; border-radius:8px; background:#18262d; }
+    .summary-item strong, .summary-item span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+    .summary-item span { color:#efb28d; margin-top:3px; }
+    @media (max-width:900px) { .cards { grid-template-columns:repeat(2,minmax(0,1fr)); } #summary { grid-template-columns:repeat(3,1fr); } }
+    @media (max-width:560px) { main, header { padding-left:14px; padding-right:14px; } .cards { grid-template-columns:1fr; } aside { position:static; } main { padding-bottom:20px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Choose the item models</h1>
+    <p>Each row starts on the current model. Pick one card per row. <span id="progress">Preparing 0 / 36 previews…</span></p>
+  </header>
+  <main id="items" aria-live="polite"></main>
+  <aside aria-label="Current selections"><div id="summary"></div></aside>
+  <script type="module" src="/board.js"></script>
+</body>
+</html>
