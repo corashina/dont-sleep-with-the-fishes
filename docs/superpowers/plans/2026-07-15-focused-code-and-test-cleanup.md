@@ -589,16 +589,32 @@ keeps day, phase, weather, and artwork in one journal marker
 
 Keep the minimum target-size test, clipped edge-tooltip test, reduced-motion behavior outside CSS-source assertions, command routing, modal isolation, focus restoration, announcements, and disposal.
 
-- [ ] **Step 4: Trim artwork enumeration tests**
+- [ ] **Step 4: Replace artwork enumeration with one accessibility contract**
 
-Delete these `UIArtwork.test.ts` cases because the typed `Record<ItemId, string>` and `Record<UiArtworkId, string>` already enforce complete catalogs:
+Delete these catalog-wide `UIArtwork.test.ts` cases because the typed `Record<ItemId, string>` and `Record<UiArtworkId, string>` enforce complete catalogs:
 
 ```text
 renders one decorative portrait for every scavenging item type
 renders every original symbol as decorative inline SVG
 ```
 
-Keep decorative ARIA semantics and CSS class-token filtering.
+Replace them with one representative contract that covers both artwork functions:
+
+```ts
+it('renders local decorative inline SVG for item and UI artwork', () => {
+  [itemArtwork('cannedFood'), uiArtwork('warning')].forEach((markup) => {
+    expect(markup).toContain('<svg');
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain('focusable="false"');
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('<title');
+    expect(markup).not.toContain('<text');
+    expect(markup).not.toMatch(/https?:\/\//);
+  });
+});
+```
+
+Keep the CSS class-token filtering tests.
 
 - [ ] **Step 5: Run UI verification**
 
@@ -801,9 +817,16 @@ it.each([
 
 The retained cases cover absent geometry, invalid numbers, external runtime dependencies, missing embedded data, and degenerate triangles.
 
-- [ ] **Step 3: Remove duplicated repeated-mesh audit coverage**
+- [ ] **Step 3: Preserve independent repeated-mesh audit coverage**
 
-Delete the `shipFurnitureModelAudit.test.ts` case `counts repeated scene-node mesh instances in the rendered triangle total`. Keep `KenneyShipFurnitureModels.test.ts` case `retains repeated source mesh parts in the committed triangle total`, which protects the same counting rule at the builder boundary.
+Keep both of these tests because the builder and audit scripts implement triangle counting independently:
+
+```text
+tests/shipFurnitureModelAudit.test.ts: counts repeated scene-node mesh instances in the rendered triangle total
+tests/KenneyShipFurnitureModels.test.ts: retains repeated source mesh parts in the committed triangle total
+```
+
+The builder test protects artifact creation. The audit test protects committed-asset verification.
 
 - [ ] **Step 4: Collapse equivalent ledger-field mismatch tests**
 
