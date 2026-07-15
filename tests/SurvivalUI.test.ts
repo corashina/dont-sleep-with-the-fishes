@@ -890,6 +890,72 @@ describe('SurvivalUI', () => {
     expect(fish.disabled).toBe(true);
   });
 
+  it('shows one visible rejection for an unavailable action click without locking or moving focus', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const reason = 'The line is tangled.';
+    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => {
+      if (announcer.textContent) publications.push(announcer.textContent);
+    });
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+    ui.onAction = action;
+    ui.render(snapshot(), (id) => id === 'fish' ? reason : null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const feedback = mount.querySelector<HTMLElement>('[data-survival-feedback]')!;
+
+    fish.focus();
+    fish.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(feedback.textContent).toBe(reason);
+    expect(feedback.classList).toContain('is-visible');
+    expect(feedback.dataset.accepted).toBe('false');
+    expect(publications.filter((message) => message === reason)).toHaveLength(1);
+    expect(action).not.toHaveBeenCalled();
+    expect(mount.querySelector('.survival-ui')?.hasAttribute('aria-busy')).toBe(false);
+    expect(fish.disabled).toBe(false);
+    expect(document.activeElement).toBe(fish);
+  });
+
+  it('shows one visible rejection for an unavailable numeric shortcut without locking or moving focus', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const reason = 'The line is tangled.';
+    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => {
+      if (announcer.textContent) publications.push(announcer.textContent);
+    });
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+    ui.onAction = action;
+    ui.render(snapshot(), (id) => id === 'fish' ? reason : null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const feedback = mount.querySelector<HTMLElement>('[data-survival-feedback]')!;
+
+    fish.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(feedback.textContent).toBe(reason);
+    expect(feedback.classList).toContain('is-visible');
+    expect(feedback.dataset.accepted).toBe('false');
+    expect(publications.filter((message) => message === reason)).toHaveLength(1);
+    expect(action).not.toHaveBeenCalled();
+    expect(mount.querySelector('.survival-ui')?.hasAttribute('aria-busy')).toBe(false);
+    expect(fish.disabled).toBe(false);
+    expect(document.activeElement).toBe(fish);
+  });
+
   it('shows unavailable reasons and event item selection accessibly', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

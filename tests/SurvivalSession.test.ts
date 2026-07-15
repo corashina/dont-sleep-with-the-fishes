@@ -286,6 +286,48 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().journalEntries).toHaveLength(1);
   });
 
+  it('protects nested daytime and nighttime event records from snapshot mutation', () => {
+    const session = new SurvivalSession(saved('waterJug', 'flashlight'), {
+      seed: 9,
+      random: sequenceRandom([0.5, 0]),
+      initialEventId: 'day-heat-haze',
+    });
+    session.resolveEvent('waterJug');
+    session.perform('endDay');
+    session.resolveEvent('flashlight');
+    const first = session.snapshot().journalEntries[0]!;
+    const daytime = first.daytime;
+    const nighttime = first.nighttime;
+    if (daytime === null || nighttime.kind !== 'event') throw new Error('Expected resolved day and night events.');
+    const daytimeTitle = daytime.title;
+    const nighttimeTitle = nighttime.event.title;
+
+    (daytime as { title: string }).title = 'Mutated daytime title';
+    (nighttime.event as { title: string }).title = 'Mutated nighttime title';
+
+    const fresh = session.snapshot().journalEntries[0]!;
+    expect(fresh.daytime?.title).toBe(daytimeTitle);
+    expect(fresh.nighttime).toMatchObject({
+      kind: 'event',
+      event: { title: nighttimeTitle },
+    });
+  });
+
+  it('protects quiet-night records from snapshot mutation', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 10,
+      random: sequenceRandom([0]),
+    });
+    expect(session.perform('endDay').code).toBe('quiet-night');
+    const first = session.snapshot().journalEntries[0]!;
+    expect(first.daytime).toBeNull();
+    expect(first.nighttime).toEqual({ kind: 'quiet' });
+
+    (first.nighttime as { kind: string }).kind = 'event';
+
+    expect(session.snapshot().journalEntries[0]!.nighttime).toEqual({ kind: 'quiet' });
+  });
+
   it('records unsuitable item attempts without consuming the item', () => {
     const session = new SurvivalSession(saved('waterJug'), {
       seed: 11,

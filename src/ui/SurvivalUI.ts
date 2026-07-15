@@ -459,7 +459,7 @@ export class SurvivalUI {
     }
     this.endureButton.disabled = this.busy;
     this.showLayer(this.eventLayer);
-    this.eventTitle.focus();
+    if (this.topmostModal() === this.eventLayer) this.eventTitle.focus();
   }
 
   hideEvent(): void {
@@ -709,6 +709,13 @@ export class SurvivalUI {
     requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(safe);
   }
 
+  private showUnavailableActionFeedback(action: DayActionId): boolean {
+    const reason = this.actionReasons.get(action);
+    if (reason === null || reason === undefined) return false;
+    this.showFeedback({ accepted: false, message: reason });
+    return true;
+  }
+
   private publishAnnouncement(message: string): void {
     const version = ++this.announcementVersion;
     this.announcer.textContent = '';
@@ -939,9 +946,14 @@ export class SurvivalUI {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLButtonElement>('button');
-    if (!button || !this.root.contains(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+    if (!button || !this.root.contains(button) || button.disabled) return;
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && !topmostModal.contains(button)) return;
+    const action = ACTIONS.find(({ id }) => id === button.dataset.action);
+    if (button.getAttribute('aria-disabled') === 'true') {
+      if (action !== undefined && !this.overlayOpen()) this.showUnavailableActionFeedback(action.id);
+      return;
+    }
 
     if (button.hasAttribute('data-journal-open')) {
       this.onJournalOpen();
@@ -959,7 +971,6 @@ export class SurvivalUI {
       this.onJournalClose();
       return;
     }
-    const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (action !== undefined) {
       if (this.overlayOpen()) return;
       this.activateDayAction(action.id, button);
@@ -1008,10 +1019,8 @@ export class SurvivalUI {
     if (this.overlayOpen() || this.busy) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);
     if (action === undefined) return;
-    const unavailableReason = this.actionReasons.get(action.id);
-    if (unavailableReason !== null && unavailableReason !== undefined) {
+    if (this.showUnavailableActionFeedback(action.id)) {
       event.preventDefault();
-      this.publishAnnouncement(unavailableReason);
       return;
     }
     event.preventDefault();
