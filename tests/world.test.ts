@@ -1,16 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
   DirectionalLight,
   FogExp2,
-  Group,
   HemisphereLight,
   Material,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Points,
@@ -27,9 +26,9 @@ import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { Environment } from '../src/world/Environment';
+import { LIFEBOAT_DIMENSIONS, createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
-import { createShip } from '../src/world/Ship';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
 import { World } from '../src/world/World';
 import {
@@ -37,6 +36,8 @@ import {
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
 } from './helpers/propModels';
+import { createTestMoonTexture } from './helpers/skyAssets';
+import { createTestShip, createTestShipFurniture } from './helpers/shipFurniture';
 
 const meshCount = (root: Object3D): number => {
   let count = 0;
@@ -81,7 +82,56 @@ const observeDisposals = <T extends BufferGeometry | Material>(resources: Iterab
   return counts;
 };
 
+const createTestWorld = (
+  scene: Scene,
+  propModels: ReturnType<typeof createTestPropModels>,
+  moonTexture = createTestMoonTexture(),
+  instances: readonly ItemInstance[] = createItemInstances(),
+  random: () => number = Math.random,
+): World => {
+  const furniture = createTestShipFurniture();
+  try {
+    const world = new World(scene, propModels, furniture, 1, moonTexture, instances, random);
+    const disposeWorld = world.dispose.bind(world);
+    world.dispose = () => {
+      disposeWorld();
+      furniture.dispose();
+    };
+    return world;
+  } catch (error) {
+    furniture.dispose();
+    throw error;
+  }
+};
+
 describe('world builders', () => {
+  it('integrates the shared furniture library, anisotropy, owned surfaces, and exact start', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const world = new World(
+      scene,
+      propModels,
+      shipFurniture,
+      8,
+      createTestMoonTexture(),
+      createItemInstances(),
+      () => 0.35,
+    );
+    const libraryDispose = vi.spyOn(shipFurniture, 'dispose');
+    const surfaceIds = [...world.itemObjects.values()]
+      .map((object) => object.userData.shipSurfaceId as string);
+
+    expect(world.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
+    expect(surfaceIds).toHaveLength(14);
+    expect(new Set(surfaceIds).size).toBe(14);
+    expect(surfaceIds.every(Boolean)).toBe(true);
+    world.dispose();
+    expect(libraryDispose).not.toHaveBeenCalled();
+    shipFurniture.dispose();
+    propModels.dispose();
+  });
+
   it('removes and disposes the ship when construction fails during item assignment', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -90,37 +140,269 @@ describe('world builders', () => {
       type: 'waterJug',
     }));
 
-    expect(() => new World(scene, propModels, oversizedInventory, () => 0.4))
+    expect(() => createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      oversizedInventory,
+      () => 0.4,
+    ))
       .toThrow('Unable to place ship item');
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
     propModels.dispose();
   });
 
+  it.each(['lifeboat', 'ocean', 'environment', 'buoyancy'] as const)(
+    'rolls back every owned resource when construction fails after %s creation',
+    (failureStage) => {
+      const scene = new Scene();
+      const sentinel = new Object3D();
+      scene.add(sentinel);
+      const originalBackground = new Color(0x123456);
+      const originalFog = new FogExp2(0x123456, 0.004);
+      scene.background = originalBackground;
+      scene.fog = originalFog;
+      const propModels = createTestPropModels();
+      const furniture = createTestShipFurniture();
+      const moonTexture = createTestMoonTexture();
+      const propDispose = vi.spyOn(propModels, 'dispose');
+      const furnitureDispose = vi.spyOn(furniture, 'dispose');
+      const moonDispose = vi.spyOn(moonTexture, 'dispose');
+      const failure = new Error(`fail after ${failureStage}`);
+      let observed: Map<BufferGeometry | Material, number> | undefined;
+      let constructed: World | undefined;
+      let caught: unknown;
+
+      try {
+        constructed = Reflect.construct(World, [
+          scene, propModels, furniture, 1, moonTexture, [], () => 0.4,
+          {
+            checkpoint: (stage: typeof failureStage) => {
+              if (stage !== failureStage) return;
+              const resources = new Set<BufferGeometry | Material>();
+              ['lifeboat', 'procedural-ocean', 'procedural-skybox', 'rain', 'sea-spray']
+                .forEach((name) => {
+                  const object = scene.getObjectByName(name);
+                  if (!object) return;
+                  const found = collectRenderResources(object);
+                  found.geometries.forEach((resource) => resources.add(resource));
+                  found.materials.forEach((resource) => resources.add(resource));
+                });
+              observed = observeDisposals(resources);
+              throw failure;
+            },
+          },
+        ]);
+      } catch (error) {
+        caught = error;
+      }
+
+      try {
+        constructed?.dispose();
+        expect(caught).toBe(failure);
+        expect(scene.children).toEqual([sentinel]);
+        expect(scene.background).toBe(originalBackground);
+        expect(scene.fog).toBe(originalFog);
+        expect(observed?.size).toBeGreaterThan(0);
+        observed?.forEach((count) => expect(count).toBe(1));
+        expect(propDispose).not.toHaveBeenCalled();
+        expect(furnitureDispose).not.toHaveBeenCalled();
+        expect(moonDispose).not.toHaveBeenCalled();
+      } finally {
+        furniture.dispose();
+        propModels.dispose();
+        moonTexture.dispose();
+      }
+    },
+  );
+
+  it('continues rollback after disposer failures and preserves the construction error', () => {
+    const scene = new Scene();
+    const sentinel = new Object3D();
+    scene.add(sentinel);
+    const originalBackground = new Color(0x112233);
+    const originalFog = new FogExp2(0x112233, 0.004);
+    scene.background = originalBackground;
+    scene.fog = originalFog;
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const moonTexture = createTestMoonTexture();
+    const failure = new Error('environment checkpoint failure');
+    const originalEnvironmentDispose = Environment.prototype.dispose;
+    const originalOceanDispose = OceanRenderer.prototype.dispose;
+    const environmentDispose = vi.spyOn(Environment.prototype, 'dispose')
+      .mockImplementation(function disposeThenThrow(this: Environment) {
+        originalEnvironmentDispose.call(this);
+        throw new Error('environment cleanup failure');
+      });
+    const oceanDispose = vi.spyOn(OceanRenderer.prototype, 'dispose')
+      .mockImplementation(function disposeThenThrow(this: OceanRenderer) {
+        originalOceanDispose.call(this);
+        throw new Error('ocean cleanup failure');
+      });
+    let constructed: World | undefined;
+    let caught: unknown;
+
+    try {
+      try {
+        constructed = Reflect.construct(World, [
+          scene, propModels, furniture, 1, moonTexture, [], () => 0.4,
+          { checkpoint: (stage: string) => { if (stage === 'environment') throw failure; } },
+        ]);
+      } catch (error) {
+        caught = error;
+      }
+      constructed?.dispose();
+      expect(caught).toBe(failure);
+      expect(environmentDispose).toHaveBeenCalledTimes(1);
+      expect(oceanDispose).toHaveBeenCalledTimes(1);
+      expect(scene.children).toEqual([sentinel]);
+      expect(scene.background).toBe(originalBackground);
+      expect(scene.fog).toBe(originalFog);
+    } finally {
+      environmentDispose.mockRestore();
+      oceanDispose.mockRestore();
+      furniture.dispose();
+      propModels.dispose();
+      moonTexture.dispose();
+    }
+  });
+
+  it('rolls back a buoyancy failure in strict reverse acquisition order', () => {
+    const scene = new Scene();
+    const sentinel = new Object3D();
+    scene.add(sentinel);
+    const originalBackground = new Color(0x223344);
+    const originalFog = new FogExp2(0x223344, 0.006);
+    scene.background = originalBackground;
+    scene.fog = originalFog;
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const moonTexture = createTestMoonTexture();
+    const propLibraryDispose = vi.spyOn(propModels, 'dispose');
+    const furnitureLibraryDispose = vi.spyOn(furniture, 'dispose');
+    const moonDispose = vi.spyOn(moonTexture, 'dispose');
+    const order: string[] = [];
+    const counts = new Map<string, number>();
+    const mark = (label: string, resource: BufferGeometry | Material): void => {
+      counts.set(label, 0);
+      resource.addEventListener('dispose', () => {
+        counts.set(label, counts.get(label)! + 1);
+        order.push(label);
+      });
+    };
+    const originalEnvironmentDispose = Environment.prototype.dispose;
+    const originalOceanDispose = OceanRenderer.prototype.dispose;
+    const environmentDispose = vi.spyOn(Environment.prototype, 'dispose')
+      .mockImplementation(function orderedDispose(this: Environment) {
+        order.push('environment');
+        originalEnvironmentDispose.call(this);
+      });
+    const oceanDispose = vi.spyOn(OceanRenderer.prototype, 'dispose')
+      .mockImplementation(function orderedDispose(this: OceanRenderer) {
+        order.push('ocean');
+        originalOceanDispose.call(this);
+      });
+    const failure = new Error('buoyancy checkpoint failure');
+    let caught: unknown;
+
+    try {
+      try {
+        Reflect.construct(World, [
+          scene,
+          propModels,
+          furniture,
+          1,
+          moonTexture,
+          [createItemInstances()[0]!],
+          () => 0.4,
+          {
+            checkpoint: (stage: string) => {
+              if (stage !== 'buoyancy') return;
+              const shipResources = collectRenderResources(scene.getObjectByName('coastal-freighter')!);
+              const propResources = collectRenderResources(scene.getObjectByName('prop:flareGun-1')!);
+              const lifeboatResources = collectRenderResources(
+                scene.getObjectByName('lifeboat-hull-geometry')!,
+              );
+              mark('ship', shipResources.geometries.values().next().value!);
+              mark('prop', propResources.geometries.values().next().value!);
+              mark('lifeboat', lifeboatResources.geometries.values().next().value!);
+              throw failure;
+            },
+          },
+        ]);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBe(failure);
+      expect(order).toEqual(expect.arrayContaining([
+        'environment', 'ocean', 'lifeboat', 'prop', 'ship',
+      ]));
+      expect(order.indexOf('environment')).toBeLessThan(order.indexOf('ocean'));
+      expect(order.indexOf('ocean')).toBeLessThan(order.indexOf('lifeboat'));
+      expect(order.indexOf('lifeboat')).toBeLessThan(order.indexOf('prop'));
+      expect(order.indexOf('prop')).toBeLessThan(order.indexOf('ship'));
+      counts.forEach((count) => expect(count).toBe(1));
+      expect(environmentDispose).toHaveBeenCalledTimes(1);
+      expect(oceanDispose).toHaveBeenCalledTimes(1);
+      expect(scene.children).toEqual([sentinel]);
+      expect(scene.background).toBe(originalBackground);
+      expect(scene.fog).toBe(originalFog);
+      expect(propLibraryDispose).not.toHaveBeenCalled();
+      expect(furnitureLibraryDispose).not.toHaveBeenCalled();
+      expect(moonDispose).not.toHaveBeenCalled();
+    } finally {
+      environmentDispose.mockRestore();
+      oceanDispose.mockRestore();
+      furniture.dispose();
+      propModels.dispose();
+      moonTexture.dispose();
+    }
+  });
+
   it('assembles one object for every supply instance and exposes gameplay markers', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
-    const world = new World(scene, propModels, createItemInstances());
+    const world = createTestWorld(scene, propModels, createTestMoonTexture(), createItemInstances());
     expect(world.itemObjects.size).toBe(14);
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
     world.itemObjects.forEach((prop) => {
-      expect(prop.scale.toArray()).toEqual([1, 1, 1]);
+      expect(prop.scale.x).toBeGreaterThanOrEqual(0.75);
+      expect(prop.scale.x).toBeLessThanOrEqual(1);
+      expect(prop.scale.toArray()).toEqual([prop.scale.x, prop.scale.x, prop.scale.x]);
       expectTestModelTransform(prop);
     });
     world.dispose();
     propModels.dispose();
   });
 
-  it('packs every approved instance and extends into deterministic layers', () => {
-    expect(boatStorageTransform(0)).toEqual(boatStorageTransform(0));
-    expect(boatStorageTransform(14).position.y)
-      .toBeCloseTo(boatStorageTransform(0).position.y + 0.28);
+  it('binds but does not own the shared moon texture', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const moonTexture = createTestMoonTexture();
+    const textureDispose = vi.spyOn(moonTexture, 'dispose');
+    const world = createTestWorld(scene, propModels, moonTexture);
+    const sky = scene.getObjectByName('procedural-skybox') as Mesh;
+
+    expect((sky.material as ShaderMaterial).uniforms.uMoonMap!.value).toBe(moonTexture);
+
+    world.dispose();
+    world.dispose();
+    expect(textureDispose).not.toHaveBeenCalled();
+    propModels.dispose();
   });
 
   it('builds fourteen model instances including a distinct scuba set', () => {
     const propModels = createTestPropModels();
-    const world = new World(new Scene(), propModels, createItemInstances());
+    const world = createTestWorld(
+      new Scene(),
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+    );
     expect(world.itemObjects.size).toBe(14);
     expect(world.itemObjects.get('scubaSet-1')?.userData.itemType).toBe('scubaSet');
     expect(world.itemObjects.get('scubaSet-1')?.userData.instanceId).toBe('scubaSet-1');
@@ -131,7 +413,8 @@ describe('world builders', () => {
   it('uses the same wave time and amplitude for the ocean and four-point lifeboat pose', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
-    const world = new World(scene, propModels);
+    const moonTexture = createTestMoonTexture();
+    const world = createTestWorld(scene, propModels, moonTexture);
     const sinking: SinkingState = {
       progress: 0.4,
       rollRadians: -0.12,
@@ -146,7 +429,7 @@ describe('world builders', () => {
     const cameraPosition = new Vector3(14, 7, -11);
     const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
       sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-    const target = buoyancy.sampleTarget(time, 7.6, -6.5, sinking.waveAmplitudeScale);
+    const target = buoyancy.sampleTarget(time, 9.0, -6.5, sinking.waveAmplitudeScale);
     const expectedPose = smoothBoatPose(
       { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
       target,
@@ -154,10 +437,6 @@ describe('world builders', () => {
       7,
     );
     const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
-    const emergencySupport = scene.getObjectByName('anchor-support-emergency-tools') as Mesh;
-    const emergencyMaterial = emergencySupport.material as MeshStandardMaterial;
-    const emergencyIntensity = emergencyMaterial.emissiveIntensity;
-    expect(beacon.material).not.toBe(emergencyMaterial);
 
     world.update(time, delta, sinking, cameraPosition, false);
 
@@ -165,12 +444,12 @@ describe('world builders', () => {
     const oceanMaterial = ocean.material as ShaderMaterial;
     expect(oceanMaterial.uniforms.uTime!.value).toBe(time);
     expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
-    expect(world.lifeboat.position.x).toBeCloseTo(7.6 + expectedPose.driftX);
+    expect(world.lifeboat.position.x).toBeCloseTo(9.0 + expectedPose.driftX);
     expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
     expect(world.lifeboat.position.z).toBeCloseTo(-6.5 + expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
-    expect(world.lifeboat.scale.toArray()).toEqual([1.15, 1.15, 1.15]);
+    expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
     expect(world.ship.position.y).toBe(sinking.sinkOffset);
     expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
     expect(world.ship.rotation.z).toBe(sinking.rollRadians);
@@ -178,16 +457,23 @@ describe('world builders', () => {
     const rain = scene.getObjectByName('rain') as Points;
     expect(rain.position.x).toBe(cameraPosition.x);
     expect(rain.position.z).toBe(cameraPosition.z);
-    expect((scene.fog as FogExp2).density).toBeCloseTo(0.018 + sinking.progress * 0.009);
-    const keyLight = scene.children.find((object) => object instanceof DirectionalLight) as DirectionalLight;
-    expect(keyLight.intensity).toBeCloseTo(2.1 - sinking.progress * 0.45);
+    expect((scene.fog as FogExp2).density).toBeGreaterThan(0.028);
     expect(beacon).toBeInstanceOf(Mesh);
     const expectedPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
     expect((beacon.material as MeshStandardMaterial).emissiveIntensity)
       .toBeCloseTo(0.25 + expectedPulse * 1.35);
-    expect(emergencyMaterial.emissiveIntensity).toBe(emergencyIntensity);
+    const sky = scene.getObjectByName('procedural-skybox') as Mesh;
+    expect(sky).toBeInstanceOf(Mesh);
+    expect(sky.position.toArray()).toEqual(cameraPosition.toArray());
+    expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
+    expect(scene.getObjectByName('rain')).toBeInstanceOf(Points);
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
-    expect(scene.getObjectByName('storm-clouds')).toBeDefined();
+    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
+    expect(skyUniforms.uMoonMap!.value).toBe(moonTexture);
+    expect(skyUniforms.uSunVisibility!.value).toBeLessThan(0.2);
+    expect(oceanMaterial.uniforms.uHorizonColor!.value).toEqual(
+      skyUniforms.uHorizonColor!.value,
+    );
     const smoke = scene.getObjectByName('freighter-smoke') as Points;
     const smokePositions = smoke.geometry.getAttribute('position') as BufferAttribute;
     const smokeVersion = smokePositions.version;
@@ -200,7 +486,7 @@ describe('world builders', () => {
   it('uploads ship and lifeboat exclusions from their current world transforms', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
-    const world = new World(scene, propModels);
+    const world = createTestWorld(scene, propModels, createTestMoonTexture());
     const sinking = getSinkingState(45, 120);
 
     world.update(2.5, 0.1, sinking, new Vector3(12, 5, -9), false);
@@ -212,7 +498,7 @@ describe('world builders', () => {
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
       [-6.05, 6.05, -17.6, 17.6],
-      [-1.18, 1.18, -2.48, 2.48],
+      [-1.6, 1.6, -3.04, 3.04],
     ]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
@@ -228,17 +514,15 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('slows spray and cloud movement when reduced motion is requested', () => {
+  it('slows spray while keeping the procedural sky fixed to the camera', () => {
     const sinking = getSinkingState(60, 120);
     const propModels = createTestPropModels();
     const regularScene = new Scene();
     const reducedScene = new Scene();
-    const regular = new World(regularScene, propModels);
-    const reduced = new World(reducedScene, propModels);
+    const regular = createTestWorld(regularScene, propModels, createTestMoonTexture());
+    const reduced = createTestWorld(reducedScene, propModels, createTestMoonTexture());
     const regularSpray = regularScene.getObjectByName('sea-spray') as Points;
     const reducedSpray = reducedScene.getObjectByName('sea-spray') as Points;
-    const regularClouds = regularScene.getObjectByName('storm-clouds') as Group;
-    const reducedClouds = reducedScene.getObjectByName('storm-clouds') as Group;
     const regularY = (regularSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number;
     const reducedY = (reducedSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number;
 
@@ -252,45 +536,82 @@ describe('world builders', () => {
       ((reducedSpray.geometry.getAttribute('position') as BufferAttribute).array[1] as number) - reducedY + 2.2
     ) % 2.2;
     expect(regularDistance).toBeGreaterThan(reducedDistance);
-    expect(regularClouds.position.x).toBeCloseTo(0.9);
-    expect(reducedClouds.position.x).toBeCloseTo(0.3);
+    expect(regularScene.getObjectByName('storm-clouds')).toBeUndefined();
+    expect(reducedScene.getObjectByName('storm-clouds')).toBeUndefined();
+    expect(regularScene.getObjectByName('procedural-skybox')).toBeDefined();
+    expect(reducedScene.getObjectByName('procedural-skybox')).toBeDefined();
     regular.dispose();
     reduced.dispose();
     propModels.dispose();
   });
 
-  it('packs saved instances into lifeboat storage and detaches lost instances', () => {
+  it('saves scavenged items in the shared type-aware boat slots', () => {
     const propModels = createTestPropModels();
-    const world = new World(new Scene(), propModels, createItemInstances());
-    const saved = world.itemObjects.get('flareGun-1')!;
-    const lost = world.itemObjects.get('ductTape-1')!;
-    const transform = boatStorageTransform(0);
+    const instances = createItemInstances();
+    const world = createTestWorld(
+      new Scene(),
+      propModels,
+      createTestMoonTexture(),
+      instances,
+      () => 0.35,
+    );
+    const cannedFood = instances.find(({ instanceId }) => instanceId === 'cannedFood-3')!;
+    const flareGun = instances.find(({ instanceId }) => instanceId === 'flareGun-1')!;
 
-    world.saveItem('flareGun-1', 0);
-    world.loseItem('ductTape-1');
+    world.saveItem(cannedFood);
+    world.saveItem(flareGun);
 
-    expect(saved.parent?.name).toBe('lifeboat-storage');
-    expect(saved.position.toArray()).toEqual(transform.position.toArray());
-    expect(saved.rotation.toArray()).toEqual(transform.rotation.toArray());
-    expect(saved.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
-    expectTestModelTransform(saved);
-    expectTestModelTransform(lost);
-    expect(lost.parent).toBeNull();
+    for (const instance of [cannedFood, flareGun]) {
+      const prop = world.itemObjects.get(instance.instanceId)!;
+      const transform = boatStorageTransform(instance);
+      expect(prop.parent?.name).toBe('lifeboat-storage');
+      expect(prop.position.toArray()).toEqual(transform.position.toArray());
+      expect(prop.rotation.toArray().slice(0, 3))
+        .toEqual(transform.rotation.toArray().slice(0, 3));
+      expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
+    }
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses the shared detailed lifeboat at its authored size', () => {
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      new Scene(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      () => 0.35,
+    );
+    const hull = world.lifeboat.getObjectByName('lifeboat-hull-geometry')!;
+    const size = new Box3().setFromObject(hull).getSize(new Vector3());
+
+    expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
+    expect(size.x).toBeCloseTo(LIFEBOAT_DIMENSIONS.width, 1);
+    expect(size.z).toBeCloseTo(LIFEBOAT_DIMENSIONS.length, 1);
     world.dispose();
     propModels.dispose();
   });
 
   it('reattaches landed items to the sinking ship and restores their scale', () => {
     const propModels = createTestPropModels();
-    const world = new World(new Scene(), propModels, createItemInstances());
-    const landed = world.itemObjects.get('waterJug-1')!;
+    const world = createTestWorld(
+      new Scene(),
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+    );
+    const landed = world.itemObjects.get('cannedFood-1')!;
+    const assignedScale = landed.scale.x;
     landed.removeFromParent();
-    landed.scale.setScalar(0.85);
+    landed.scale.setScalar(0.37);
+    expect(landed.scale.x).not.toBe(assignedScale);
 
-    world.landItem('waterJug-1');
+    world.landItem('cannedFood-1');
 
     expect(landed.parent).toBe(world.ship);
-    expect(landed.scale.toArray()).toEqual([1, 1, 1]);
+    expect(landed.scale.toArray()).toEqual([assignedScale, assignedScale, assignedScale]);
     expectTestModelTransform(landed);
     world.dispose();
     propModels.dispose();
@@ -303,13 +624,15 @@ describe('world builders', () => {
     scene.background = originalBackground;
     scene.fog = originalFog;
     const propModels = createTestPropModels();
-    const world = new World(scene, propModels);
+    const moonTexture = createTestMoonTexture();
+    const moonTextureDispose = vi.spyOn(moonTexture, 'dispose');
+    const world = createTestWorld(scene, propModels, moonTexture);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
     const rain = scene.getObjectByName('rain') as Points;
     const spray = scene.getObjectByName('sea-spray') as Points;
-    const clouds = scene.getObjectByName('storm-clouds') as Group;
-    const cloudResources = collectRenderResources(clouds);
-    expect([...cloudResources.materials].every((material) => material instanceof MeshBasicMaterial)).toBe(true);
+    const sky = scene.getObjectByName('procedural-skybox') as Mesh;
+    const skyGeometryDispose = vi.spyOn(sky.geometry, 'dispose');
+    const skyMaterialDispose = vi.spyOn(sky.material as Material, 'dispose');
 
     const freighter = world.ship.getObjectByName('coastal-freighter')!;
     const shipResources = collectRenderResources(freighter);
@@ -344,24 +667,21 @@ describe('world builders', () => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
     });
-    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.geometries.size);
-    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.materials.size);
+    expect(lifeboatMeshes.length).toBeGreaterThan(0);
 
     const geometryDisposals = observeDisposals([
       ...ownedTask6Geometries,
       ocean.geometry,
       rain.geometry,
       spray.geometry,
-      ...cloudResources.geometries,
     ]);
     const ownedMaterialDisposals = observeDisposals([
       ...ownedTask6Materials,
       ocean.material as Material,
       rain.material as Material,
       spray.material as Material,
-      ...cloudResources.materials,
     ]);
-    world.saveItem('flareGun-1', 0);
+    world.saveItem({ instanceId: 'flareGun-1', type: 'flareGun' });
     world.loseItem('ductTape-1');
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
@@ -373,7 +693,11 @@ describe('world builders', () => {
     expect(scene.getObjectByName('procedural-ocean')).toBeUndefined();
     expect(scene.getObjectByName('rain')).toBeUndefined();
     expect(scene.getObjectByName('sea-spray')).toBeUndefined();
+    expect(scene.getObjectByName('procedural-skybox')).toBeUndefined();
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
+    expect(skyGeometryDispose).toHaveBeenCalledOnce();
+    expect(skyMaterialDispose).toHaveBeenCalledOnce();
+    expect(moonTextureDispose).not.toHaveBeenCalled();
     expect(scene.children.some((object) =>
       object instanceof DirectionalLight || object instanceof HemisphereLight)).toBe(false);
     expect(scene.background).toBe(originalBackground);
@@ -388,6 +712,41 @@ describe('world builders', () => {
     expect(ocean.mesh.name).toBe('procedural-ocean');
     expect(ocean.mesh.geometry.getAttribute('position').count).toBeGreaterThan(16_000);
     expect(ocean.material.uniforms.uDirections!.value).toHaveLength(4);
+    expect(ocean.material.uniforms).toMatchObject({
+      uSkyColor: { value: expect.any(Color) },
+      uHorizonColor: { value: expect.any(Color) },
+      uSunColor: { value: expect.any(Color) },
+    });
+    ocean.dispose();
+  });
+
+  it('layers view-dependent reflection, sun glints, ripples, and broken crest foam', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+
+    expect(shader).toContain('float fresnel =');
+    expect(shader).toContain('reflect(-viewDirection, normal)');
+    expect(shader).toContain('vec2 rippleSlope(');
+    expect(shader).toContain('float sunGlint =');
+    expect(shader).toContain('float foamBreakup =');
+    ocean.dispose();
+  });
+
+  it('updates each ocean atmosphere uniform from explicit colors', () => {
+    const ocean = new OceanRenderer();
+    const atmosphere = {
+      fogColor: new Color(0x102030),
+      horizonColor: new Color(0x405060),
+      skyColor: new Color(0x708090),
+      sunColor: new Color(0xffcc88),
+    };
+
+    ocean.update(3, 0.8, 0.012, atmosphere);
+
+    expect(ocean.material.uniforms.uFogColor!.value).toEqual(atmosphere.fogColor);
+    expect(ocean.material.uniforms.uHorizonColor!.value).toEqual(atmosphere.horizonColor);
+    expect(ocean.material.uniforms.uSkyColor!.value).toEqual(atmosphere.skyColor);
+    expect(ocean.material.uniforms.uSunColor!.value).toEqual(atmosphere.sunColor);
     ocean.dispose();
   });
 
@@ -427,12 +786,12 @@ describe('world builders', () => {
   });
 
   it('builds the furnished freighter contract with surplus authored anchors', () => {
-    const ship = createShip();
-    expect(ship.itemAnchors.length).toBeGreaterThanOrEqual(28);
+    const ship = createTestShip();
+    expect(ship.itemSurfaces.length).toBeGreaterThan(createItemInstances().length);
     expect(ship.colliders.length).toBeGreaterThanOrEqual(24);
-    expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.5]);
+    expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
     expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, -6.5]);
-    expect(ship.lifeboatAnchor.toArray()).toEqual([7.6, 0.35, -6.5]);
+    expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, -6.5]);
     expect(ship.waterExclusion).toEqual({ halfWidth: 6.05, halfLength: 17.6 });
     expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
     expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();
@@ -441,18 +800,24 @@ describe('world builders', () => {
 
   it('places all world items on unique authored anchors', () => {
     const propModels = createTestPropModels();
-    const world = new World(new Scene(), propModels, createItemInstances(), () => 0.35);
-    const referenceShip = createShip();
-    const anchorsById = new Map(referenceShip.itemAnchors.map((anchor) => [anchor.id, anchor]));
-    const assignments = assignShipItems(createItemInstances(), referenceShip.itemAnchors, () => 0.35);
-    const anchorIds = [...world.itemObjects.values()].map((item) => item.userData.shipAnchorId as string);
-    expect(anchorIds).toHaveLength(14);
-    expect(new Set(anchorIds).size).toBe(14);
-    expect(anchorIds.every(Boolean)).toBe(true);
+    const world = createTestWorld(
+      new Scene(),
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      () => 0.35,
+    );
+    const referenceShip = createTestShip();
+    const surfacesById = new Map(referenceShip.itemSurfaces.map((surface) => [surface.id, surface]));
+    const assignments = assignShipItems(createItemInstances(), referenceShip.itemSurfaces, () => 0.35);
+    const surfaceIds = [...world.itemObjects.values()].map((item) => item.userData.shipSurfaceId as string);
+    expect(surfaceIds).toHaveLength(14);
+    expect(new Set(surfaceIds).size).toBe(14);
+    expect(surfaceIds.every(Boolean)).toBe(true);
     world.itemObjects.forEach((item, instanceId) => {
-      const anchor = anchorsById.get(item.userData.shipAnchorId as string);
+      const surface = surfacesById.get(item.userData.shipSurfaceId as string);
       const assignment = assignments.get(instanceId);
-      expect(anchor).toBeDefined();
+      expect(surface).toBeDefined();
       expect(assignment).toBeDefined();
       expect(item.position.toArray()).toEqual(assignment!.position.toArray());
       expect(item.rotation.toArray()).toEqual(assignment!.rotation.toArray());
@@ -473,16 +838,13 @@ describe('world builders', () => {
   it('limits acceptance to the lifeboat interior above its floor', () => {
     const { acceptanceBox } = createLifeboat();
     expect(acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);
-    expect(acceptanceBox.min.x).toBeGreaterThanOrEqual(-1.05);
-    expect(acceptanceBox.max.x).toBeLessThanOrEqual(1.05);
-    expect(acceptanceBox.min.y).toBeGreaterThan(-0.275);
-    expect(acceptanceBox.min.z).toBeGreaterThan(-2.375);
-    expect(acceptanceBox.max.z).toBeLessThan(2.375);
+    expect(acceptanceBox.min.toArray()).toEqual([-1.35, -0.3, -2.72]);
+    expect(acceptanceBox.max.toArray()).toEqual([1.35, 1, 2.72]);
   });
 
   it.each([
-    ['hull side', new Vector3(1.25, 0, 0)],
-    ['endcap', new Vector3(0, 0, 2.55)],
+    ['hull side', new Vector3(1.5, 0, 0)],
+    ['endcap', new Vector3(0, 0, 2.9)],
     ['underside', new Vector3(0, -0.4, 0)],
   ])('rejects a thrown item at the lifeboat %s', (_label, point) => {
     expect(createLifeboat().acceptanceBox.containsPoint(point)).toBe(false);

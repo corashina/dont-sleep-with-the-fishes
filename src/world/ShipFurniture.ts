@@ -20,14 +20,15 @@ import type { ShipItemSurface } from './ShipItemPlacement';
 import type { ShipMaterials } from './ShipMaterials';
 
 export interface ShipFurnitureCollider extends CollisionBox {
-  readonly furnitureId?: string;
-  readonly furnitureModelId?: ShipFurniturePlacementSpec['modelId'];
+  readonly furnitureId: string;
+  readonly furnitureModelId: ShipFurniturePlacementSpec['modelId'];
   readonly furnitureFamily: string;
 }
 
 export interface ShipFurnitureBuild {
   root: Group;
   colliders: ShipFurnitureCollider[];
+  colliderByFurnitureId: ReadonlyMap<string, ShipFurnitureCollider>;
   surfaces: ShipItemSurface[];
   disposeGeometry(): void;
 }
@@ -118,9 +119,9 @@ function createCargoRack(
 function worldCollider(placementSpec: ShipFurniturePlacementSpec): ShipFurnitureCollider {
   const quarterTurn = Math.abs(Math.sin(placementSpec.rotationY)) > 0.5;
   const width = (quarterTurn ? placementSpec.colliderSize[2] : placementSpec.colliderSize[0])
-    * placementSpec.scale[0];
+    * (quarterTurn ? placementSpec.scale[2] : placementSpec.scale[0]);
   const depth = (quarterTurn ? placementSpec.colliderSize[0] : placementSpec.colliderSize[2])
-    * placementSpec.scale[2];
+    * (quarterTurn ? placementSpec.scale[0] : placementSpec.scale[2]);
   return {
     minX: placementSpec.position[0] - width / 2,
     maxX: placementSpec.position[0] + width / 2,
@@ -139,6 +140,7 @@ function transformedSurfaces(
   ownerRoot: Group,
 ): ShipItemSurface[] {
   ownerRoot.updateMatrixWorld(true);
+  const quarterTurn = Math.abs(Math.sin(owner.rotationY)) > 0.5;
   return owner.surfaces.map((surface) => {
     const localRotation = new Euler(...surface.localRotation);
     const rotation = new Euler().setFromQuaternion(
@@ -153,8 +155,13 @@ function transformedSurfaces(
       categories: surface.categories,
       position: new Vector3(...surface.localPosition).applyMatrix4(ownerRoot.matrixWorld),
       rotation,
-      footprint: { ...surface.footprint },
-      clearanceHeight: surface.clearanceHeight,
+      footprint: {
+        width: (quarterTurn ? surface.footprint.depth : surface.footprint.width)
+          * (quarterTurn ? owner.scale[2] : owner.scale[0]),
+        depth: (quarterTurn ? surface.footprint.width : surface.footprint.depth)
+          * (quarterTurn ? owner.scale[0] : owner.scale[2]),
+      },
+      clearanceHeight: surface.clearanceHeight * owner.scale[1],
       standingPoints: surface.standingPoints.map((point) =>
         new Vector3(...point).applyMatrix4(ownerRoot.matrixWorld)),
       fallback: surface.fallback,
@@ -171,6 +178,7 @@ export function createShipFurniture(
   root.name = 'ship-furniture';
   const geometry = createGeneratedGeometry();
   const colliders: ShipFurnitureCollider[] = [];
+  const colliderByFurnitureId = new Map<string, ShipFurnitureCollider>();
   const surfaces: ShipItemSurface[] = [];
 
   for (const placementSpec of layout.furniture) {
@@ -189,7 +197,9 @@ export function createShipFurniture(
       placementRoot.add(library.clone(placementSpec.modelId));
     }
     root.add(placementRoot);
-    colliders.push(worldCollider(placementSpec));
+    const collider = worldCollider(placementSpec);
+    colliders.push(collider);
+    colliderByFurnitureId.set(placementSpec.id, collider);
     surfaces.push(...transformedSurfaces(placementSpec, placementRoot));
   }
   const reachableStandingPoints = new Set(
@@ -209,6 +219,7 @@ export function createShipFurniture(
   return {
     root,
     colliders,
+    colliderByFurnitureId,
     surfaces: usableSurfaces,
     disposeGeometry: () => {
       if (disposed) return;

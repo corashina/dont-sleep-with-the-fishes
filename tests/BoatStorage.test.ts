@@ -7,12 +7,12 @@ import {
   type ItemInstance,
 } from '../src/game/ItemState';
 import {
-  SURVIVAL_STORAGE_CLEARANCE,
-  measureSurvivalStorageEnvelope,
-  storageEnvelopesOverlap,
-  survivalBoatStorageTransform,
-} from '../src/survival/SurvivalBoatLayout';
-import { createSurvivalLifeboat } from '../src/survival/SurvivalLifeboat';
+  BOAT_STORAGE_CLEARANCE,
+  boatStorageEnvelopesOverlap,
+  boatStorageTransform,
+  measureBoatStorageEnvelope,
+} from '../src/world/BoatStorage';
+import { createLifeboat } from '../src/world/Lifeboat';
 import {
   PRODUCTION_NORMALIZED_PROP_BOUNDS,
   loadProductionPropModels,
@@ -23,7 +23,7 @@ function placedProductionProp(
   instance: ItemInstance,
 ): Object3D {
   const root = library.create(instance);
-  const transform = survivalBoatStorageTransform(instance);
+  const transform = boatStorageTransform(instance);
   root.position.copy(transform.position);
   root.rotation.copy(transform.rotation);
   root.scale.setScalar(transform.scale);
@@ -64,8 +64,8 @@ describe('survival boat item layout', () => {
     const instances = createItemInstances();
     expect(instances).toHaveLength(14);
     for (const instance of instances) {
-      const first = survivalBoatStorageTransform(instance);
-      const second = survivalBoatStorageTransform(instance);
+      const first = boatStorageTransform(instance);
+      const second = boatStorageTransform(instance);
       expect(second.position.toArray()).toEqual(first.position.toArray());
       expect(second.rotation.toArray()).toEqual(first.rotation.toArray());
       expect(second.scale).toBe(first.scale);
@@ -78,10 +78,10 @@ describe('survival boat item layout', () => {
   });
 
   it('keeps duplicate transforms distinct and independent of missing siblings', () => {
-    const first = survivalBoatStorageTransform({ instanceId: 'cannedFood-1', type: 'cannedFood' });
-    const third = survivalBoatStorageTransform({ instanceId: 'cannedFood-3', type: 'cannedFood' });
+    const first = boatStorageTransform({ instanceId: 'cannedFood-1', type: 'cannedFood' });
+    const third = boatStorageTransform({ instanceId: 'cannedFood-3', type: 'cannedFood' });
     expect(first.position.equals(third.position)).toBe(false);
-    expect(survivalBoatStorageTransform({
+    expect(boatStorageTransform({
       instanceId: 'cannedFood-3',
       type: 'cannedFood',
     }).position.toArray()).toEqual(third.position.toArray());
@@ -97,23 +97,23 @@ describe('survival boat item layout', () => {
     ];
     for (const instance of invalidInstances) {
       expect(
-        () => survivalBoatStorageTransform(instance),
+        () => boatStorageTransform(instance),
         instance.instanceId,
       ).toThrow(`No survival boat slot for ${instance.instanceId}`);
     }
   });
 
   it('keeps normalized production-model maximum-inventory envelopes separated', async () => {
-    expect(SURVIVAL_STORAGE_CLEARANCE).toBe(0.05);
+    expect(BOAT_STORAGE_CLEARANCE).toBe(0.05);
     const library = await loadProductionPropModels();
     const instances = createItemInstances();
     const roots = instances.map((instance) => placedProductionProp(library, instance));
     try {
-      const envelopes = roots.map((root) => measureSurvivalStorageEnvelope(root));
+      const envelopes = roots.map((root) => measureBoatStorageEnvelope(root));
       for (let first = 0; first < envelopes.length; first += 1) {
         for (let second = first + 1; second < envelopes.length; second += 1) {
           expect(
-            storageEnvelopesOverlap(envelopes[first]!, envelopes[second]!),
+            boatStorageEnvelopesOverlap(envelopes[first]!, envelopes[second]!),
             `${instances[first]!.instanceId} overlaps ${instances[second]!.instanceId}`,
           ).toBe(false);
         }
@@ -130,12 +130,12 @@ describe('survival boat item layout', () => {
       library,
       { instanceId: 'medicalKit-1', type: 'medicalKit' },
     );
-    const lifeboat = createSurvivalLifeboat();
+    const lifeboat = createLifeboat();
     const repairPatch = lifeboat.root.getObjectByName('damaged-plank-patch')!;
     try {
-      const medicalEnvelope = measureSurvivalStorageEnvelope(medicalKit);
-      const patchEnvelope = measureSurvivalStorageEnvelope(repairPatch, 0);
-      expect(storageEnvelopesOverlap(medicalEnvelope, patchEnvelope)).toBe(false);
+      const medicalEnvelope = measureBoatStorageEnvelope(medicalKit);
+      const patchEnvelope = measureBoatStorageEnvelope(repairPatch, 0);
+      expect(boatStorageEnvelopesOverlap(medicalEnvelope, patchEnvelope)).toBe(false);
     } finally {
       disposeOwnedMeshes(medicalKit);
       library.dispose();
@@ -152,7 +152,7 @@ describe('survival boat item layout', () => {
 
   it('leaves the central longitudinal floor clear outside the bow zone', () => {
     for (const instance of createItemInstances()) {
-      const { position } = survivalBoatStorageTransform(instance);
+      const { position } = boatStorageTransform(instance);
       if (position.z > -2.05 && instance.type !== 'fishingRod') {
         expect(Math.abs(position.x), instance.instanceId).toBeGreaterThanOrEqual(0.58);
       }

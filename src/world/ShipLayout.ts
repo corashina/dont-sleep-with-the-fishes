@@ -282,7 +282,7 @@ function bookcaseSurfaces(
     furnitureId,
     `level-${levelIndex + 1}`,
     categories,
-    [0, height, -0.03],
+    [0, height, -0.08],
     { width: 0.7, depth: 0.35 },
     levelIndex < 3 ? 0.43 : 0.82,
     [[0, 0, -0.85]],
@@ -308,6 +308,7 @@ function cabinetTopSurfaces(
 function sideTableSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
+  standingZ = -0.9,
 ): readonly ShipItemSurfaceSpec[] {
   return [itemSurface(
     furnitureId,
@@ -316,7 +317,7 @@ function sideTableSurfaces(
     [0, 0.75, 0],
     { width: 0.85, depth: 0.32 },
     0.75,
-    [[0, 0, -0.9]],
+    [[0, 0, standingZ]],
   )];
 }
 
@@ -338,14 +339,14 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   placement('cabin-desk-aft', 'desk', 'crewCabin', [-1.8, 2.22, 4.05], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', ['foodWater'])),
   placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 9.48], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', ['foodWater'])),
   placement('helm-desk-forward', 'desk', 'wheelhouse', [0, 2.22, 13.25], 0, [1.7, 0.89, 0.908], deskSurfaces('helm-desk-forward', ['medicalEmergency'])),
-  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [2.1, 2.22, 11.06], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', ['medicalEmergency'])),
-  placement('instrument-cabinet-starboard-aft', 'sideTableDrawers', 'wheelhouse', [3.42, 2.22, 12.2], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-aft', ['medicalEmergency'])),
-  placement('instrument-cabinet-starboard-forward', 'sideTableDrawers', 'wheelhouse', [3.42, 2.22, 13.25], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-forward', ['medicalEmergency'])),
+  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [2.1, 2.22, 11.2], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', ['medicalEmergency'], 0.9)),
+  placement('instrument-cabinet-starboard-aft', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 12], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-aft', ['medicalEmergency'])),
+  placement('instrument-cabinet-starboard-forward', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 13.15], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-forward', ['medicalEmergency'])),
   placement('workbench-port', 'table', 'storageWorkroom', [-2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', ['toolsRepair'])),
   placement('workbench-starboard', 'table', 'storageWorkroom', [2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', ['toolsRepair'])),
   placement('storage-shelf-port', 'bookcaseOpen', 'storageWorkroom', [-1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-port', ['toolsRepair'])),
   placement('storage-shelf-starboard', 'bookcaseOpen', 'storageWorkroom', [1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-starboard', ['toolsRepair'])),
-  placement('cargo-rod-rack-forward-port', 'cargoRack', 'cargoDeck', [-2.6, 2.22, 2.8], 0, [2.1, 0.55, 0.75], [itemSurface(
+  placement('cargo-rod-rack-forward-port', 'cargoRack', 'cargoDeck', [-2.6, 2.22, 2.3], 0, [2.1, 0.55, 0.75], [itemSurface(
     'cargo-rod-rack-forward-port', 'rod', ['fishingDiving'], [0, 0.55, 0],
     { width: 1.9, depth: 0.5 }, 0.82, [[0, 0, -1.15], [0, 0, 1.15]],
     { localRotation: [0, PI_OVER_TWO, 0] },
@@ -968,6 +969,14 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   }
 
   const analysis = analyzeShipNavigation(layout);
+  const reachableStandingPoints = new Set(analysis.reachableSurfaceStandingPointIds);
+  layout.furniture.forEach((owner) => owner.surfaces.forEach((surface) => {
+    const reachable = surface.standingPoints.some((_point, index) =>
+      reachableStandingPoints.has(`${surface.id}-standing-${index}`));
+    if (!reachable) {
+      throw new Error(`Surface ${surface.id} has no reachable standing point`);
+    }
+  }));
   analysis.secondaryAccessRectangles.forEach((access) => {
     if (!validRect(access.bounds) || measuredAccessClearance(access) < 1.4 - 1e-6) {
       throw new Error(`Secondary access lane ${access.id} is invalid`);

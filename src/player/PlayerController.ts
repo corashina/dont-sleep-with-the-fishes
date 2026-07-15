@@ -1,7 +1,14 @@
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../input/InputController';
 import type { CollisionBox, LocalPlayerPosition } from './collisions';
-import { resolveLocalMovement } from './collisions';
+import {
+  findSupportEyeHeight,
+  resolveLocalMovement,
+} from './collisions';
+
+const JUMP_SPEED = 5.2;
+const GRAVITY = 14;
+const GROUND_EPSILON = 1e-6;
 
 export interface PlayerNavigationBounds {
   safe: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -26,6 +33,8 @@ export class PlayerController {
   private readonly localView = new Quaternion();
   private readonly worldPosition = new Vector3();
   private readonly movement = new Vector3();
+  private deckEyeHeight: number;
+  private verticalVelocity = 0;
 
   constructor(
     private readonly camera: PerspectiveCamera,
@@ -37,6 +46,7 @@ export class PlayerController {
   ) {
     this.localPosition = start.clone();
     this.safePosition = start.clone();
+    this.deckEyeHeight = start.y;
   }
 
   update(delta: number, input: InputController, reducedMotionShake = 0): void {
@@ -54,6 +64,21 @@ export class PlayerController {
       (-axes.x * sin + axes.z * cos) * speed * delta,
     );
 
+    const currentSupport = findSupportEyeHeight(
+      this.localPosition,
+      0.35,
+      this.deckEyeHeight,
+      this.colliders,
+    );
+    const grounded = this.localPosition.y <= currentSupport + GROUND_EPSILON
+      && this.verticalVelocity <= 0;
+    if (input.consumeJump() && grounded) this.verticalVelocity = JUMP_SPEED;
+
+    const nextY = this.localPosition.y
+      + this.verticalVelocity * delta
+      - 0.5 * GRAVITY * delta * delta;
+    this.verticalVelocity -= GRAVITY * delta;
+
     const current: LocalPlayerPosition = {
       x: this.localPosition.x,
       y: this.localPosition.y,
@@ -61,17 +86,32 @@ export class PlayerController {
     };
     const desired: LocalPlayerPosition = {
       x: current.x + this.movement.x,
-      y: current.y,
+      y: Math.max(this.deckEyeHeight, nextY),
       z: current.z + this.movement.z,
     };
     const resolved = resolveLocalMovement(current, desired, 0.35, this.colliders);
+    const support = findSupportEyeHeight(
+      resolved,
+      0.35,
+      this.deckEyeHeight,
+      this.colliders,
+    );
+    if (
+      this.verticalVelocity <= 0
+      && current.y >= support - GROUND_EPSILON
+      && resolved.y <= support + GROUND_EPSILON
+    ) {
+      resolved.y = support;
+      this.verticalVelocity = 0;
+    }
     this.localPosition.set(resolved.x, resolved.y, resolved.z);
 
     if (containsLocalPosition(this.navigationBounds.safe, this.localPosition)) {
-      this.safePosition.copy(this.localPosition);
+      this.safePosition.set(this.localPosition.x, this.deckEyeHeight, this.localPosition.z);
     }
     if (!containsLocalPosition(this.navigationBounds.fall, this.localPosition)) {
       this.localPosition.copy(this.safePosition);
+      this.verticalVelocity = 0;
       this.onFall();
     }
 
@@ -85,6 +125,8 @@ export class PlayerController {
   reset(start: Vector3): void {
     this.localPosition.copy(start);
     this.safePosition.copy(start);
+    this.deckEyeHeight = start.y;
+    this.verticalVelocity = 0;
     this.yaw = Math.PI;
     this.pitch = 0;
   }

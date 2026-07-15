@@ -4,6 +4,11 @@ import {
   ItemModelLoadError,
   PropModelLibrary,
 } from '../world/PropModelLibrary';
+import {
+  ShipFurnitureLibrary,
+  ShipFurnitureLoadError,
+} from '../world/ShipFurnitureLibrary';
+import { SkyAssetLoadError, SkyAssets } from '../world/SkyAssets';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -12,13 +17,79 @@ export interface LaunchHandle {
 
 export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
-  createGame(mount: HTMLElement, models: PropModelLibrary): Pick<Game, 'start' | 'dispose'>;
+  loadShipFurniture(): Promise<ShipFurnitureLibrary>;
+  loadSkyAssets(): Promise<SkyAssets>;
+  createGame(
+    mount: HTMLElement,
+    models: PropModelLibrary,
+    shipFurniture: ShipFurnitureLibrary,
+    skyAssets: SkyAssets,
+  ): Pick<Game, 'start' | 'dispose'>;
 }
 
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
-  createGame: (mount, models) => new Game(mount, models),
+  loadShipFurniture: () => ShipFurnitureLibrary.load(),
+  loadSkyAssets: () => SkyAssets.load(),
+  createGame: (mount, models, shipFurniture, skyAssets) => (
+    new Game(mount, models, shipFurniture, skyAssets)
+  ),
 };
+
+interface LoadedGameAssets {
+  models: PropModelLibrary;
+  shipFurniture: ShipFurnitureLibrary;
+  skyAssets: SkyAssets;
+}
+
+async function loadGameAssets(
+  dependencies: LaunchDependencies,
+): Promise<LoadedGameAssets> {
+  const [models, shipFurniture, skyAssets] = await Promise.allSettled([
+    dependencies.loadModels(),
+    dependencies.loadShipFurniture(),
+    dependencies.loadSkyAssets(),
+  ]);
+  const results = [models, shipFurniture, skyAssets] as const;
+  const firstFailure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (firstFailure) {
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      try {
+        result.value.dispose();
+      } catch {
+        // Preserve deterministic dependency failure precedence while cleaning every sibling.
+      }
+    }
+    throw firstFailure.reason;
+  }
+  if (
+    models.status !== 'fulfilled'
+    || shipFurniture.status !== 'fulfilled'
+    || skyAssets.status !== 'fulfilled'
+  ) {
+    throw new Error('Asset preload settled without a result');
+  }
+  return {
+    models: models.value,
+    shipFurniture: shipFurniture.value,
+    skyAssets: skyAssets.value,
+  };
+}
+
+function disposeGameAssets(assets: LoadedGameAssets): void {
+  try {
+    assets.models.dispose();
+  } finally {
+    try {
+      assets.shipFurniture.dispose();
+    } finally {
+      assets.skyAssets.dispose();
+    }
+  }
+}
 
 function screen(
   kicker: string,
@@ -88,6 +159,26 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
     return;
   }
 
+  if (error instanceof SkyAssetLoadError) {
+    mount.replaceChildren(screen(
+      'ATMOSPHERE UNAVAILABLE',
+      'Unable to prepare the sky',
+      'A required local sky texture could not be loaded.',
+      error.message,
+    ));
+    return;
+  }
+
+  if (error instanceof ShipFurnitureLoadError) {
+    mount.replaceChildren(screen(
+      'FURNITURE UNAVAILABLE',
+      `Unable to prepare ${error.modelId}`,
+      'A required local ship furniture model could not be loaded.',
+      error.message,
+    ));
+    return;
+  }
+
   renderWebGlFailure(mount, error);
 }
 
@@ -97,29 +188,34 @@ export function launchGame(
 ): LaunchHandle {
   let cancelled = false;
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
-  let unownedModels: PropModelLibrary | null = null;
+  let unownedAssets: LoadedGameAssets | null = null;
 
   const loading = renderLoading(mount);
 
   const completion = (async (): Promise<Game | null> => {
     try {
-      unownedModels = await dependencies.loadModels();
+      unownedAssets = await loadGameAssets(dependencies);
     } catch (error) {
       if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
       return null;
     }
 
     if (cancelled || !mount.isConnected) {
-      unownedModels.dispose();
-      unownedModels = null;
+      disposeGameAssets(unownedAssets);
+      unownedAssets = null;
       return null;
     }
 
     try {
       loading.remove();
-      const createdGame = dependencies.createGame(mount, unownedModels);
+      const createdGame = dependencies.createGame(
+        mount,
+        unownedAssets.models,
+        unownedAssets.shipFurniture,
+        unownedAssets.skyAssets,
+      );
       game = createdGame;
-      unownedModels = null;
+      unownedAssets = null;
 
       if (cancelled || !mount.isConnected) {
         if (game !== null) {
@@ -143,9 +239,9 @@ export function launchGame(
       if (game !== null) {
         game.dispose();
         game = null;
-      } else if (unownedModels !== null) {
-        unownedModels.dispose();
-        unownedModels = null;
+      } else if (unownedAssets !== null) {
+        disposeGameAssets(unownedAssets);
+        unownedAssets = null;
       }
 
       if (!cancelled && mount.isConnected) renderWebGlFailure(mount, error);
@@ -161,9 +257,9 @@ export function launchGame(
       if (game !== null) {
         game.dispose();
         game = null;
-      } else if (unownedModels !== null) {
-        unownedModels.dispose();
-        unownedModels = null;
+      } else if (unownedAssets !== null) {
+        disposeGameAssets(unownedAssets);
+        unownedAssets = null;
       }
     },
   };

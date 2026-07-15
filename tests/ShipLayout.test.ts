@@ -73,14 +73,14 @@ describe('scavenging ship layout', () => {
         { id: 'cabin-desk-aft', modelId: 'desk', position: [-1.8, 2.22, 4.05] },
         { id: 'cabin-bookcase-forward', modelId: 'bookcaseOpen', position: [0, 2.22, 9.48] },
         { id: 'helm-desk-forward', modelId: 'desk', position: [0, 2.22, 13.25] },
-        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [2.1, 2.22, 11.06] },
-        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.42, 2.22, 12.2] },
-        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.42, 2.22, 13.25] },
+        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [2.1, 2.22, 11.2] },
+        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.2, 2.22, 12] },
+        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.2, 2.22, 13.15] },
         { id: 'workbench-port', modelId: 'table', position: [-2.55, 2.22, -9.78] },
         { id: 'workbench-starboard', modelId: 'table', position: [2.55, 2.22, -9.78] },
         { id: 'storage-shelf-port', modelId: 'bookcaseOpen', position: [-1.7, 2.22, -6.82] },
         { id: 'storage-shelf-starboard', modelId: 'bookcaseOpen', position: [1.7, 2.22, -6.82] },
-        { id: 'cargo-rod-rack-forward-port', modelId: 'cargoRack', position: [-2.6, 2.22, 2.8] },
+        { id: 'cargo-rod-rack-forward-port', modelId: 'cargoRack', position: [-2.6, 2.22, 2.3] },
         { id: 'cargo-crate-forward-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, 2.8] },
         { id: 'cargo-crate-aft-port', modelId: 'cargoCrate', position: [-2.6, 2.22, -5.8] },
         { id: 'cargo-crate-aft-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, -5.8] },
@@ -262,6 +262,24 @@ describe('scavenging ship layout', () => {
       bounds: { minX: -0.35, maxX: 2.35, minZ: -9.35, maxZ: -8.65 },
     }]);
     expect(() => validateShipLayout(fixture)).not.toThrow();
+  });
+
+  it('rejects an authored surface when every standing point is blocked', () => {
+    const blocked = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'cabin-desk-aft'
+          ? {
+              ...placement,
+              surfaces: placement.surfaces.map((surface, index) => index === 0
+                ? { ...surface, standingPoints: [[0, 0, 0] as const] }
+                : surface),
+            }
+          : placement),
+    };
+
+    expect(() => validateShipLayout(blocked))
+      .toThrow(/cabin-desk-aft:top-left.*reachable standing point/i);
   });
 
   it.each([1.7, 2.3])('rejects door width %s outside the approved range', (width) => {

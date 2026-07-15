@@ -38,18 +38,22 @@ function Remove-GuardedSwapDirectory {
   Remove-Item -Recurse -Force -LiteralPath $resolvedPath
 }
 
-function Publish-ItemModelDirectory {
+function Publish-ModelDirectory {
   param(
     [Parameter(Mandatory = $true)][string]$ModelsRoot,
     [Parameter(Mandatory = $true)][string]$OutputRoot,
     [Parameter(Mandatory = $true)][string]$StagedRoot,
     [Parameter(Mandatory = $true)][string]$BackupRoot,
+    [Parameter(Mandatory = $true)][string]$StagePrefix,
+    [Parameter(Mandatory = $true)][string]$BackupPrefix,
     [scriptblock]$MoveDirectory = {
       param([string]$Source, [string]$Destination)
       Move-Item -LiteralPath $Source -Destination $Destination
     }
   )
 
+  $StagedRoot = Get-GuardedSwapPath -ModelsRoot $ModelsRoot -Path $StagedRoot -Prefix $StagePrefix
+  $BackupRoot = Get-GuardedSwapPath -ModelsRoot $ModelsRoot -Path $BackupRoot -Prefix $BackupPrefix
   $previousMoved = $false
   $newPublished = $false
   $published = $false
@@ -73,18 +77,60 @@ function Publish-ItemModelDirectory {
           $previousMoved = $false
         }
       } catch {
-        throw "Item model publication failed and rollback also failed: $($publishError.Exception.Message); $($_.Exception.Message)"
+        throw "Model directory publication failed and rollback also failed: $($publishError.Exception.Message); $($_.Exception.Message)"
       }
       throw $publishError
     }
 
     if ($previousMoved) {
-      Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $BackupRoot -Prefix '.items-backup-'
+      Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $BackupRoot -Prefix $BackupPrefix
     }
     $published = $true
   } finally {
     if (-not $published) {
-      Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $StagedRoot -Prefix '.items-stage-'
+      Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $StagedRoot -Prefix $StagePrefix
     }
   }
+}
+
+function Publish-ItemModelDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string]$ModelsRoot,
+    [Parameter(Mandatory = $true)][string]$OutputRoot,
+    [Parameter(Mandatory = $true)][string]$StagedRoot,
+    [Parameter(Mandatory = $true)][string]$BackupRoot,
+    [scriptblock]$MoveDirectory = {
+      param([string]$Source, [string]$Destination)
+      Move-Item -LiteralPath $Source -Destination $Destination
+    }
+  )
+  Publish-ModelDirectory `
+    -ModelsRoot $ModelsRoot `
+    -OutputRoot $OutputRoot `
+    -StagedRoot $StagedRoot `
+    -BackupRoot $BackupRoot `
+    -StagePrefix '.items-stage-' `
+    -BackupPrefix '.items-backup-' `
+    -MoveDirectory $MoveDirectory
+}
+
+function Publish-ShipFurnitureDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string]$ModelsRoot,
+    [Parameter(Mandatory = $true)][string]$OutputRoot,
+    [Parameter(Mandatory = $true)][string]$StagedRoot,
+    [Parameter(Mandatory = $true)][string]$BackupRoot,
+    [scriptblock]$MoveDirectory = {
+      param([string]$Source, [string]$Destination)
+      Move-Item -LiteralPath $Source -Destination $Destination
+    }
+  )
+  Publish-ModelDirectory `
+    -ModelsRoot $ModelsRoot `
+    -OutputRoot $OutputRoot `
+    -StagedRoot $StagedRoot `
+    -BackupRoot $BackupRoot `
+    -StagePrefix '.ship-stage-' `
+    -BackupPrefix '.ship-backup-' `
+    -MoveDirectory $MoveDirectory
 }

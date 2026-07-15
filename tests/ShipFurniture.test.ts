@@ -111,6 +111,50 @@ describe('ship furniture', () => {
     library.dispose();
   });
 
+  it('applies non-uniform local scale to rotated colliders and authored surfaces', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const fixture = {
+      id: 'scaled-table',
+      modelId: 'table' as const,
+      zoneId: 'cargoDeck' as const,
+      position: [0, 2.22, 0] as const,
+      rotationY: 1.5707963267948966 as const,
+      colliderSize: [2, 1, 3] as const,
+      scale: [4, 2, 5] as const,
+      surfaces: [{
+        id: 'scaled-table:top',
+        physicalSlotId: 'scaled-table:top',
+        categories: ['toolsRepair' as const],
+        localPosition: [0, 1, 0] as const,
+        localRotation: [0, 0, 0] as const,
+        footprint: { width: 0.5, depth: 0.25 },
+        clearanceHeight: 0.4,
+        standingPoints: [[0, 0, -1] as const],
+        fallback: false,
+      }],
+    };
+    const build = createShipFurniture(materials, library, {
+      ...SHIP_LAYOUT,
+      furniture: [fixture],
+    });
+
+    expect(build.colliders[0]!.minX).toBeCloseTo(-7.5);
+    expect(build.colliders[0]!.maxX).toBeCloseTo(7.5);
+    expect(build.colliders[0]!.minY).toBeCloseTo(2.22);
+    expect(build.colliders[0]!.maxY).toBeCloseTo(4.22);
+    expect(build.colliders[0]!.minZ).toBeCloseTo(-4);
+    expect(build.colliders[0]!.maxZ).toBeCloseTo(4);
+    expect(build.surfaces[0]).toMatchObject({
+      footprint: { width: 1.25, depth: 2 },
+      clearanceHeight: 0.8,
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
   it('keeps every standing point outside inflated colliders, within reach, and connected', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();

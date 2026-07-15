@@ -9,6 +9,7 @@ import {
   SHIP_ITEM_PROFILES,
   assignShipItems,
   shipItemTransformBounds,
+  validateShipItemSurfaces,
   type ShipItemSurface,
 } from '../src/world/ShipItemPlacement';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -150,6 +151,44 @@ describe('ship item placement', () => {
       furnitureId: 'desk', physicalSlotId: 'desk-top', fallback: true,
     });
     expect(() => assignShipItems([], [regular, fallback])).not.toThrow();
+
+    expect(() => assignShipItems([], [
+      surface('first-owner', ['toolsRepair'], 0),
+      surface('second-owner', ['toolsRepair'], 0.2),
+    ])).toThrow(/overlapping ship item surfaces: first-owner, second-owner/i);
+  });
+
+  it('requires a real owner and keeps surface clearance away from structure', () => {
+    const owned = surface('structural', ['toolsRepair'], 0, {
+      furnitureId: 'fixture-structural',
+      position: new Vector3(0, 3, 0),
+      footprint: { width: 2, depth: 2 },
+    });
+    const owner = {
+      minX: -1, maxX: 1, minY: 2, maxY: 3, minZ: -1, maxZ: 1,
+      furnitureId: 'fixture-structural', furnitureModelId: 'table' as const,
+    };
+
+    expect(() => validateShipItemSurfaces([owned], [], new Map()))
+      .toThrow(/owner fixture-structural/i);
+    expect(() => validateShipItemSurfaces([owned], [{
+      minX: 1.05, maxX: 1.2, minY: 2, maxY: 5, minZ: -2, maxZ: 2,
+    }], new Map([[owner.furnitureId, owner]])))
+      .toThrow(/structural.*wall clearance.*0\.1/i);
+
+    const foreign = {
+      minX: 0.8, maxX: 1.2, minY: 3, maxY: 4, minZ: -0.5, maxZ: 0.5,
+      furnitureId: 'foreign-fixture', furnitureModelId: 'desk' as const,
+    };
+    const furniture = new Map<string, typeof owner | typeof foreign>([
+      [owner.furnitureId, owner],
+      [foreign.furnitureId, foreign],
+    ]);
+    expect(() => validateShipItemSurfaces(
+      [owned],
+      [],
+      furniture,
+    )).toThrow(/structural.*foreign-fixture/i);
   });
 
   it('rejects unreachable surfaces and an item that cannot fit rotated bounds', () => {
