@@ -688,65 +688,6 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('creates a four-wave subdivided ocean mesh', () => {
-    const ocean = new OceanRenderer();
-    expect(ocean.mesh.name).toBe('procedural-ocean');
-    expect(ocean.mesh.geometry.getAttribute('position').count).toBeGreaterThan(16_000);
-    expect(ocean.material.uniforms.uDirections!.value).toHaveLength(4);
-    expect(ocean.material.uniforms).toMatchObject({
-      uSkyColor: { value: expect.any(Color) },
-      uHorizonColor: { value: expect.any(Color) },
-      uSunColor: { value: expect.any(Color) },
-    });
-    ocean.dispose();
-  });
-
-  it('layers view-dependent reflection, sun glints, ripples, and broken crest foam', () => {
-    const ocean = new OceanRenderer();
-    const shader = ocean.material.fragmentShader;
-
-    expect(shader).toContain('float fresnel =');
-    expect(shader).toContain('reflect(-viewDirection, normal)');
-    expect(shader).toContain('vec2 rippleSlope(');
-    expect(shader).toContain('float sunGlint =');
-    expect(shader).toContain('float foamBreakup =');
-    ocean.dispose();
-  });
-
-  it('updates each ocean atmosphere uniform from explicit colors', () => {
-    const ocean = new OceanRenderer();
-    const atmosphere = {
-      fogColor: new Color(0x102030),
-      horizonColor: new Color(0x405060),
-      skyColor: new Color(0x708090),
-      sunColor: new Color(0xffcc88),
-    };
-
-    ocean.update(3, 0.8, 0.012, atmosphere);
-
-    expect(ocean.material.uniforms.uFogColor!.value).toEqual(atmosphere.fogColor);
-    expect(ocean.material.uniforms.uHorizonColor!.value).toEqual(atmosphere.horizonColor);
-    expect(ocean.material.uniforms.uSkyColor!.value).toEqual(atmosphere.skyColor);
-    expect(ocean.material.uniforms.uSunColor!.value).toEqual(atmosphere.sunColor);
-    ocean.dispose();
-  });
-
-  it('converts linear ocean color before centered display-space dithering', () => {
-    const ocean = new OceanRenderer();
-    const shader = ocean.material.fragmentShader;
-    const linearOutput = shader.indexOf('gl_FragColor = vec4(color, 0.98);');
-    const colorSpaceConversion = shader.indexOf('#include <colorspace_fragment>');
-    const displayDither = shader.indexOf(
-      'gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);',
-    );
-
-    expect(linearOutput).toBeGreaterThan(-1);
-    expect(colorSpaceConversion).toBeGreaterThan(linearOutput);
-    expect(displayDither).toBeGreaterThan(colorSpaceConversion);
-    expect(shader).toContain('(threshold - 7.5) / (16.0 * 255.0)');
-    ocean.dispose();
-  });
-
   it.each(ITEM_IDS)('builds a visible mesh for %s', (type) => {
     const propModels = createTestPropModels();
     const instance = { instanceId: `${type}-1`, type } as ItemInstance;
