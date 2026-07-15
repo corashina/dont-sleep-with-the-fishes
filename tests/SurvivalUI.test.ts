@@ -37,6 +37,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   activeUIs.splice(0).forEach((ui) => ui.dispose());
   document.body.innerHTML = '';
 });
@@ -75,7 +76,7 @@ describe('SurvivalUI', () => {
     mount.querySelector<HTMLButtonElement>('[data-journal-open]')!.click();
     expect(open).toHaveBeenCalledOnce();
 
-    ui.showJournal(journalEntries, 'manual');
+    ui.showJournal(journalEntries);
     expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
     expect(mount.querySelector('[data-journal-page-count]')?.textContent).toBe('PAGE 2 OF 2');
     const previous = mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!;
@@ -90,39 +91,29 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(previous);
   });
 
-  it('separates manual close from automatic next-day continuation', () => {
+  it('keeps the journal browsing-only and closes it from Escape or its bookmark', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const close = vi.fn();
-    const nextDay = vi.fn();
     ui.onJournalClose = close;
-    ui.onJournalContinue = nextDay;
 
-    ui.showJournal(journalEntries, 'manual');
-    expect(mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.hidden).toBe(false);
-    expect(mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.hidden).toBe(true);
+    ui.showJournal(journalEntries);
+    expect(mount.querySelector('[data-journal-close]')).not.toBeNull();
+    expect(mount.querySelector('[data-journal-continue]')).toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(close).toHaveBeenCalledOnce();
 
-    ui.showJournal(journalEntries, 'manual');
+    ui.showJournal(journalEntries);
     mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.click();
     expect(close).toHaveBeenCalledTimes(2);
-
-    ui.showJournal(journalEntries, 'automatic');
-    expect(mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.hidden).toBe(true);
-    expect(mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.hidden).toBe(false);
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(close).toHaveBeenCalledTimes(2);
-    mount.querySelector<HTMLButtonElement>('[data-journal-continue]')!.click();
-    expect(nextDay).toHaveBeenCalledOnce();
   });
 
   it('shows empty history safely and traps focus in the journal', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.showJournal([], 'manual');
+    ui.showJournal([]);
     expect(mount.querySelector('[data-journal-title]')?.textContent).toBe('NO COMPLETED ENTRIES YET');
     const previous = mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!;
     const close = mount.querySelector<HTMLButtonElement>('[data-journal-close]')!;
@@ -148,7 +139,7 @@ describe('SurvivalUI', () => {
     const marker = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
     ui.onJournalClose = () => ui.hideJournal();
     marker.focus();
-    ui.showJournal(journalEntries, 'manual');
+    ui.showJournal(journalEntries);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.activeElement).toBe(marker);
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
@@ -297,16 +288,27 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.journal-marker:focus-visible\s*\{/);
     expect(mainStyles).toMatch(/\.journal-overlay::before\s*\{[^}]*display:\s*none/s);
     expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*width:\s*min\(680px/s);
+    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*repeating-linear-gradient/s);
+    expect(mainStyles).toMatch(/\.journal-page::before\s*\{[^}]*repeating-radial-gradient/s);
+    expect(mainStyles).toMatch(/\.journal-page::after\s*\{[^}]*box-shadow:\s*inset/s);
+    expect(mainStyles).toMatch(/\.journal-page__edge-arrow\s*\{/);
+    expect(mainStyles).toMatch(/\.journal-page__folio\s*\{/);
+    expect(mainStyles).toMatch(/\.journal-page__bookmark\s*\{/);
     expect(mainStyles).toMatch(/\.journal-page__story\s*\{[^}]*overflow-y:\s*auto/s);
     expect(mainStyles).toMatch(/@media \(max-height:\s*760px\)[\s\S]*\.journal-page/s);
-    expect(mainStyles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.journal-page/s);
+    expect(mainStyles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.sleep-cover[^}]*transition-duration:\s*1ms/s);
+  });
+
+  it('styles feedback as noninteractive and keeps the sleep cover noninteractive', () => {
+    expect(mainStyles).toMatch(/\.survival-feedback\s*\{[^}]*pointer-events:\s*none/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*pointer-events:\s*none/s);
   });
 
   it('wraps every survival cinematic overlay in one bounded content region', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    for (const selector of ['[data-action-options]', '[data-event]', '[data-outcome]', '[data-pause]', '[data-ending]']) {
+    for (const selector of ['[data-action-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
       const overlay = mount.querySelector<HTMLElement>(selector)!;
       expect(overlay.children).toHaveLength(1);
       expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
@@ -622,13 +624,54 @@ describe('SurvivalUI', () => {
     const liveRegion = mount.querySelector('[data-survival-announcer]');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
-    expect(mount.querySelector('[data-outcome-message]')?.hasAttribute('aria-live')).toBe(false);
+    expect(mount.querySelector('[data-outcome-message]')).toBeNull();
     expect(liveRegion?.closest('[aria-hidden="true"], [inert]')).toBeNull();
 
     ui.showEnding('dead', 3, 77, 12);
     const alerts = mount.querySelectorAll('[role="alert"]');
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toBe(mount.querySelector('[data-ending-title]'));
+  });
+
+  it('uses nonmodal feedback and removes outcome continuation controls', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showFeedback({ accepted: true, message: 'The patch holds.' });
+
+    expect(mount.querySelector('[data-survival-feedback]')?.textContent).toBe('The patch holds.');
+    expect(mount.querySelector('[data-survival-feedback]')?.classList).toContain('is-visible');
+    expect(mount.querySelector('[data-survival-feedback]')?.closest('[role="dialog"]')).toBeNull();
+    expect(mount.querySelector('[data-outcome]')).toBeNull();
+    expect(mount.querySelector('[data-continue]')).toBeNull();
+    expect(mount.querySelector('[data-skip]')).toBeNull();
+    expect(mount.querySelector('[data-journal-continue]')).toBeNull();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mount.querySelector('[data-survival-announcer]')?.textContent).toBe('The patch holds.');
+  });
+
+  it('covers, holds, and uncovers sleep without becoming interactive', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount, { matches: false });
+    activeUIs.push(ui);
+    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
+
+    const closing = ui.setSleepCovered(true);
+    expect(cover.classList).toContain('is-covered');
+    expect(cover.getAttribute('aria-hidden')).toBe('true');
+    await vi.advanceTimersByTimeAsync(650);
+    await closing;
+
+    const hold = ui.holdSleep();
+    await vi.advanceTimersByTimeAsync(450);
+    await hold;
+
+    const opening = ui.setSleepCovered(false);
+    await vi.advanceTimersByTimeAsync(650);
+    await opening;
+    expect(cover.classList).not.toContain('is-covered');
+    vi.useRealTimers();
   });
 
   it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
@@ -642,23 +685,15 @@ describe('SurvivalUI', () => {
       if (announcer.textContent) publications.push(announcer.textContent);
     });
     observer.observe(announcer, { childList: true, characterData: true, subtree: true });
-    const outcome = {
-      accepted: true,
-      code: 'repeat',
-      message: 'The patch holds.',
-      deltas: {},
-      cue: 'none',
-    } as const;
-
-    ui.showOutcome(outcome);
+    ui.showFeedback({ accepted: true, message: 'The patch holds.' });
     await Promise.resolve();
     await Promise.resolve();
-    ui.showOutcome(outcome);
+    ui.showFeedback({ accepted: true, message: 'The patch holds.' });
     await Promise.resolve();
     await Promise.resolve();
 
     observer.disconnect();
-    expect(publications.filter((message) => message === outcome.message)).toHaveLength(2);
+    expect(publications.filter((message) => message === 'The patch holds.')).toHaveLength(2);
   });
 
   it('cancels a deferred live announcement when disposed', async () => {
@@ -671,7 +706,7 @@ describe('SurvivalUI', () => {
     const observer = new MutationObserver(() => publications.push(announcer.textContent ?? ''));
     observer.observe(announcer, { childList: true, characterData: true, subtree: true });
 
-    ui.showOutcome({ accepted: true, code: 'late', message: 'Too late.', deltas: {}, cue: 'none' });
+    ui.showFeedback({ accepted: true, message: 'Too late.' });
     ui.dispose();
     await Promise.resolve();
     await Promise.resolve();
@@ -873,18 +908,14 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
-  it('routes event choices, endurance, outcomes, and continue without duplicate commands', () => {
+  it('routes event choices and endurance without duplicate commands', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const eventItem = vi.fn();
     const endure = vi.fn();
-    const continued = vi.fn();
-    const skipped = vi.fn();
     ui.onEventItem = eventItem;
     ui.onEndure = endure;
-    ui.onContinue = continued;
-    ui.onSkip = skipped;
     ui.render(snapshot(), () => null);
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     fish.focus();
@@ -894,53 +925,28 @@ describe('SurvivalUI', () => {
     mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
     expect(eventItem).toHaveBeenCalledWith('waterJug');
     expect(endure).toHaveBeenCalledOnce();
-
-    ui.showOutcome({
-      accepted: true,
-      code: 'survived',
-      message: 'The shadow turns away.',
-      deltas: { health: -8, rescueProgress: 10 },
-      cue: 'impact',
-    });
-    expect(mount.querySelector('[data-outcome]')?.classList).toContain('is-visible');
-    expect(mount.querySelector('[data-outcome-deltas]')?.textContent).toContain('HEALTH -8');
-    expect(mount.querySelector('[data-outcome-deltas]')?.textContent).toContain('RESCUE +10');
-    mount.querySelector<HTMLButtonElement>('[data-skip]')!.click();
-    mount.querySelector<HTMLButtonElement>('[data-continue]')!.click();
-    expect(skipped).toHaveBeenCalledOnce();
-    expect(continued).toHaveBeenCalledOnce();
-
-    ui.hideOutcome();
-    expect(mount.querySelector('[data-outcome]')?.hasAttribute('inert')).toBe(true);
-    expect(document.activeElement).toBe(fish);
   });
 
-  it('restores direct-click and numeric-shortcut command origins after outcomes', () => {
+  it('restores direct-click and numeric-shortcut command origins after cues', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
     const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
-    ui.onAction = () => ui.showOutcome({
-      accepted: true,
-      code: 'complete',
-      message: 'The work is done.',
-      deltas: {},
-      cue: 'none',
-    });
+    ui.onAction = () => undefined;
 
     dive.click();
-    ui.hideOutcome();
+    ui.restoreCommandFocus();
     expect(document.activeElement).toBe(dive);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '7' }));
-    ui.hideOutcome();
+    ui.restoreCommandFocus();
     expect(document.activeElement).toBe(endDay);
 
     endDay.click();
     ui.render(snapshot(), (id) => id === 'endDay' ? 'Night has already fallen.' : null);
-    ui.hideOutcome();
+    ui.restoreCommandFocus();
     expect(document.activeElement).toBe(mount.querySelector('[data-action="fish"]'));
   });
 
@@ -952,16 +958,10 @@ describe('SurvivalUI', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
     fish.focus();
-    ui.onAction = () => ui.showOutcome({
-      accepted: true,
-      code: 'complete',
-      message: 'The work is done.',
-      deltas: {},
-      cue: 'none',
-    });
+    ui.onAction = () => undefined;
 
     dive.click();
-    ui.hideOutcome();
+    ui.restoreCommandFocus();
 
     expect(document.activeElement).toBe(dive);
   });
@@ -1095,10 +1095,7 @@ describe('SurvivalUI', () => {
     fish.click();
     expect(action).not.toHaveBeenCalled();
 
-    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
-    fish.click();
-    expect(action).not.toHaveBeenCalled();
-    ui.hideOutcome();
+    ui.hideEvent();
     expect(anchorLayer.hasAttribute('inert')).toBe(false);
     fish.click();
     expect(action).toHaveBeenCalledOnce();
@@ -1121,13 +1118,9 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const eventItem = vi.fn();
     const endure = vi.fn();
-    const continued = vi.fn();
-    const skipped = vi.fn();
     const restarted = vi.fn();
     ui.onEventItem = eventItem;
     ui.onEndure = endure;
-    ui.onContinue = continued;
-    ui.onSkip = skipped;
     ui.onRestart = restarted;
     ui.render(snapshot(), () => null);
     const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
@@ -1147,19 +1140,7 @@ describe('SurvivalUI', () => {
     expect(eventLayer.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(eventTitle);
 
-    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
-    const outcomeLayer = mount.querySelector<HTMLElement>('[data-outcome]')!;
-    const outcomeTitle = mount.querySelector<HTMLElement>('[data-outcome-title]')!;
-    ui.setPaused(true);
-    expect(outcomeLayer.hasAttribute('inert')).toBe(true);
-    mount.querySelector<HTMLButtonElement>('[data-continue]')!.click();
-    mount.querySelector<HTMLButtonElement>('[data-skip]')!.click();
-    expect(continued).not.toHaveBeenCalled();
-    expect(skipped).not.toHaveBeenCalled();
-    ui.setPaused(false);
-    expect(outcomeLayer.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(outcomeTitle);
-    ui.hideOutcome();
+    ui.hideEvent();
 
     ui.showEnding('sunk', 2, 7, 40);
     const endingLayer = mount.querySelector<HTMLElement>('[data-ending]')!;
@@ -1173,7 +1154,7 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(endingTitle);
   });
 
-  it('traps keyboard focus inside event and outcome dialogs', () => {
+  it('traps keyboard focus inside the event dialog', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1189,15 +1170,6 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(firstEventItem);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
     expect(document.activeElement).toBe(endure);
-
-    ui.showOutcome({ accepted: true, code: 'safe', message: 'It passes.', deltas: {}, cue: 'none' });
-    const skip = mount.querySelector<HTMLButtonElement>('[data-skip]')!;
-    const continueButton = mount.querySelector<HTMLButtonElement>('[data-continue]')!;
-    continueButton.focus();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
-    expect(document.activeElement).toBe(skip);
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
-    expect(document.activeElement).toBe(continueButton);
   });
 
   it('routes projected actions and pointer coordinates', () => {
@@ -1244,7 +1216,6 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-store]')).toBeNull();
     expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
-    expect(mount.querySelector('[data-outcome]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
     expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
 

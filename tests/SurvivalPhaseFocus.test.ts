@@ -19,31 +19,20 @@ const canAnchor: BoatInteractionAnchor = {
   visible: true,
   depleted: false,
 };
-const horizonAnchor: BoatInteractionAnchor = {
-  id: 'horizon',
-  itemType: null,
-  action: 'endDay',
-  remainingUses: null,
-  x: 400,
-  y: 80,
-  visible: true,
-  depleted: false,
-};
-
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
 describe('SurvivalPhase focus synchronization', () => {
-  it('moves focus to a visible usable anchor after Continue consumes the last can', async () => {
+  it('moves focus to stable End Day after a cue consumes the last can', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
     const session = new SurvivalSession([can], { seed: 1, initial: { hunger: 80 } });
-    let anchors: BoatInteractionAnchor[] = [canAnchor, horizonAnchor];
+    let anchors: BoatInteractionAnchor[] = [canAnchor];
     const world = {
       syncInventory(current: SurvivalSnapshot) {
-        anchors = current.food > 0 ? [canAnchor, horizonAnchor] : [horizonAnchor];
+        anchors = current.food > 0 ? [canAnchor] : [];
       },
       projectInteractionAnchors: () => anchors,
       play: () => Promise.resolve(),
@@ -56,10 +45,11 @@ describe('SurvivalPhase focus synchronization', () => {
     eat.click();
     await Promise.resolve();
     await Promise.resolve();
-    mount.querySelector<HTMLButtonElement>('[data-continue]')!.click();
+    await Promise.resolve();
+    await Promise.resolve();
 
     expect(eat.isConnected && !eat.hidden).toBe(false);
-    expect(document.activeElement).toBe(mount.querySelector('[data-anchor-id="horizon"]'));
+    expect(document.activeElement).toBe(mount.querySelector('[data-action="endDay"]'));
     phase.dispose();
   });
 });
