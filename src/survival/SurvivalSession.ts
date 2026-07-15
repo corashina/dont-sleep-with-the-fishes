@@ -4,6 +4,7 @@ import { createSurvivalInventory } from './inventory';
 import type {
   JournalEntry,
   JournalEventRecord,
+  JournalNightRecord,
   JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
@@ -61,7 +62,7 @@ export class SurvivalSession {
   private readonly lastSeenDay = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalEventRecord | null = null;
-  private pendingJournalNighttime: JournalEventRecord | null = null;
+  private pendingJournalNighttime: JournalNightRecord | null = null;
   private readonly journalEntries: JournalEntry[] = [];
   private readonly seed: number;
   private readonly random: RandomSource;
@@ -165,6 +166,13 @@ export class SurvivalSession {
   endDay(): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
+
+    if (this.random.next() < SURVIVAL_BALANCE.night.quietChance) {
+      this.state = 'nightEvent';
+      this.pendingJournalNighttime = { kind: 'quiet' };
+      this.finalizeJournalDay();
+      return this.commit('quiet-night', 'The night passes without incident.', {}, 'nightfall');
+    }
 
     const event = this.drawEvent('night');
     this.openEvent(event);
@@ -460,7 +468,7 @@ export class SurvivalSession {
       this.pendingJournalDaytime = record;
       return;
     }
-    this.pendingJournalNighttime = record;
+    this.pendingJournalNighttime = { kind: 'event', event: record };
     this.finalizeJournalDay();
   }
 
@@ -475,11 +483,17 @@ export class SurvivalSession {
     });
   }
 
+  private cloneJournalNight(record: JournalNightRecord): JournalNightRecord {
+    return record.kind === 'quiet'
+      ? { kind: 'quiet' }
+      : { kind: 'event', event: { ...record.event } };
+  }
+
   private journalSnapshot(): readonly JournalEntry[] {
     return this.journalEntries.map((entry) => ({
       ...entry,
       daytime: entry.daytime === null ? null : { ...entry.daytime },
-      nighttime: { ...entry.nighttime },
+      nighttime: this.cloneJournalNight(entry.nighttime),
     }));
   }
 
