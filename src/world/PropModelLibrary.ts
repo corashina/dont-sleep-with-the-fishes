@@ -14,6 +14,7 @@ import {
   ITEM_MODEL_SPECS,
   type ItemModelSpec,
 } from './itemModelManifest';
+import { collectMeshResources, disposeMeshResources } from './SceneResources';
 
 export interface ItemModelLoader {
   load(url: string): Promise<Group>;
@@ -47,16 +48,10 @@ function disposeRoots(roots: Iterable<Group>): void {
   const materials = new Set<Material>();
 
   for (const root of roots) {
-    root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-      meshMaterials.forEach((material) => materials.add(material));
-    });
+    collectMeshResources(root, geometries, materials);
   }
 
-  geometries.forEach((geometry) => geometry.dispose());
-  materials.forEach((material) => material.dispose());
+  disposeMeshResources(geometries, materials);
 }
 
 function ledgerCells(line: string): readonly string[] | null {
