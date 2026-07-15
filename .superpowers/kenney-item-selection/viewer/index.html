@@ -19,11 +19,12 @@
     .card:hover:not([aria-disabled="true"]), .card:focus-visible:not([aria-disabled="true"]) { transform:translateY(-2px); border-color:#6594a6; outline:none; }
     .card:has(.select-choice:focus-visible) { transform:translateY(-2px); border-color:#6594a6; outline:2px solid #8fcde2; outline-offset:2px; }
     .card.selected { border-color:#ef8a4c; box-shadow:0 0 0 2px #ef8a4c40; }
-    .card[aria-disabled="true"] { cursor:not-allowed; border-color:#974e52; opacity:.78; }
+    .card[data-preview-state="pending"] { cursor:wait; opacity:.72; }
+    .card[data-preview-state="failed"] { cursor:not-allowed; border-color:#974e52; opacity:.78; }
     .preview { display:block; width:100%; aspect-ratio:3/2; object-fit:cover; background:#172027; }
     .select-choice { position:absolute; inset:0; z-index:1; cursor:pointer; border:0; background:transparent; }
     .preview-error { display:none; position:absolute; inset:0 0 auto; min-height:42%; align-items:center; justify-content:center; padding:18px; background:#321d22e8; color:#ffd7d9; font-size:13px; line-height:1.35; text-align:center; }
-    .card[aria-disabled="true"] .preview-error { display:flex; }
+    .card[data-preview-state="failed"] .preview-error { display:flex; }
     .card-body { padding:12px; }
     .card h3 { margin:0 0 6px; font-size:16px; }
     .meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
