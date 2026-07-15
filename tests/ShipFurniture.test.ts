@@ -1,320 +1,232 @@
-import { Box3, Material, Mesh, Vector3 } from 'three';
+import { Euler, Material, Mesh, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { createItemInstances } from '../src/game/ItemState';
-import type { CollisionBox } from '../src/player/collisions';
+import { PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT, analyzeShipNavigation } from '../src/world/ShipLayout';
 import { createShipFurniture } from '../src/world/ShipFurniture';
-import {
-  assignShipItems,
-  validateShipItemAnchors,
-  type ShipSurface,
-} from '../src/world/ShipItemPlacement';
+import { createShip, isShipSurfaceStandingPointVisible } from '../src/world/Ship';
 import { createShipMaterials } from '../src/world/ShipMaterials';
+import { SHIP_FURNITURE_MODEL_SPECS } from '../src/world/shipFurnitureManifest';
+import { createTestShipFurniture } from './helpers/shipFurniture';
 
-interface FurnitureCollider extends CollisionBox {
-  furnitureFamily: string;
-}
-
-interface AnchorSupportMetadata {
-  surfaceGroupId: string;
-  surface: ShipSurface;
-  centerX: number;
-  centerZ: number;
-  topY: number;
-  width: number;
-  depth: number;
-}
-
-const familyGroups = (root: ReturnType<typeof createShipFurniture>['root'], family: string) =>
-  root.children.filter((object) => object.userData.furnitureFamily === family);
+const overlap = (
+  left: { minX: number; maxX: number; minZ: number; maxZ: number },
+  right: { minX: number; maxX: number; minZ: number; maxZ: number },
+): boolean => left.minX < right.maxX && left.maxX > right.minX
+  && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
-  it('builds every required furniture count inside its approved room band', () => {
+  it('builds exactly the 16 layout-owned fixtures with one collider each', () => {
     const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const inBand = (family: string, minZ: number, maxZ: number) =>
-      familyGroups(build.root, family).filter(({ position }) => position.z >= minZ && position.z <= maxZ);
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
 
-    expect(inBand('bunk', 5.2, 10.8)).toHaveLength(2);
-    expect(inBand('desk', 5.2, 10.8)).toHaveLength(3);
-    expect(inBand('chair', 5.2, 10.8)).toHaveLength(2);
-    expect(inBand('wall-shelf', 5.2, 10.8)).toHaveLength(2);
-    expect(inBand('locker', 5.2, 10.8)).toHaveLength(2);
-    expect(inBand('desk', 11.2, 15.2)).toHaveLength(2);
-    expect(inBand('locker', 11.2, 15.2)).toHaveLength(3);
-    expect(inBand('wall-shelf', -11.4, -7)).toHaveLength(2);
-    expect(inBand('workbench', -11.4, -7)).toHaveLength(2);
-    expect(inBand('locker', -11.4, -7)).toHaveLength(3);
-    expect(inBand('equipment-rack', -3.5, -1.7)).toHaveLength(2);
-    expect(inBand('cargo-crate', -6, 3)).toHaveLength(6);
-    ['bunk', 'desk', 'chair', 'wall-shelf', 'locker', 'workbench', 'equipment-rack', 'cargo-crate']
-      .forEach((name) => expect(build.root.getObjectByName(name)).toBeDefined());
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('authors a regular surplus and preserves the four exact emergency anchors', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const emergency = build.anchors.filter((anchor) => anchor.emergency);
-    expect(build.anchors.filter((anchor) => !anchor.emergency).length).toBeGreaterThanOrEqual(24);
-    expect(() => validateShipItemAnchors(build.anchors)).not.toThrow();
-    expect(emergency).toHaveLength(4);
-    expect(emergency.map((anchor) => ({
-      id: anchor.id,
-      categories: anchor.categories,
-      position: anchor.position.toArray(),
-      surface: anchor.surface,
-    }))).toEqual([
-      { id: 'emergency-food', categories: ['foodWater'], position: [-3.8, 3.05, 8.8], surface: 'shelf' },
-      { id: 'emergency-medical', categories: ['medicalEmergency'], position: [3.7, 3.35, 12.4], surface: 'cabinet' },
-      { id: 'emergency-tools', categories: ['toolsRepair'], position: [-3.5, 3.08, -9.4], surface: 'workbench' },
-      { id: 'emergency-gear', categories: ['fishingDiving'], position: [3.8, 2.42, -2.6], surface: 'rack' },
-    ]);
-    emergency.forEach((anchor) => {
-      expect(anchor.footprint).toEqual({ width: 2.1, depth: 1.2 });
-      expect(anchor.clearanceHeight).toBe(1.3);
-    });
-    expect(new Set(emergency.map(({ surfaceGroupId }) => surfaceGroupId)).size).toBe(4);
-    expect(assignShipItems(createItemInstances(), build.anchors, () => 0.4).size).toBe(14);
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('adds exact non-interactive decoration counts', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const decorations = new Map<string, Mesh[]>();
-    const prefixes = ['chart-', 'mug-or-dish-', 'rope-coil-', 'hand-tool-', 'machine-part-'];
-    prefixes.forEach((prefix) => decorations.set(prefix, []));
-    build.root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      prefixes.forEach((prefix) => {
-        if (object.name.startsWith(prefix)) decorations.get(prefix)!.push(object);
+    for (const placement of SHIP_LAYOUT.furniture) {
+      const root = build.root.children.find(({ userData }) =>
+        userData.furnitureId === placement.id && userData.modelId === placement.modelId);
+      expect(root, placement.id).toBeDefined();
+      const colliders = build.colliders.filter((box) => box.furnitureId === placement.id);
+      expect(colliders, placement.id).toHaveLength(1);
+      expect(colliders[0]).toMatchObject({
+        minY: placement.position[1],
+        maxY: placement.position[1] + placement.colliderSize[1],
       });
-    });
-    expect([...decorations.values()].map((meshes) => meshes.length)).toEqual([4, 6, 2, 6, 4]);
-    decorations.forEach((meshes) => meshes.forEach(({ userData }) => {
-      expect(userData.itemType).toBeUndefined();
-      expect(userData.instanceId).toBeUndefined();
-    }));
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('blocks every broad furniture and deck-equipment family at player eye height', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const colliders = build.colliders as FurnitureCollider[];
-    const requiredCounts: Readonly<Record<string, number>> = {
-      bunk: 2,
-      desk: 5,
-      'wall-shelf': 4,
-      locker: 8,
-      workbench: 3,
-      'equipment-rack': 2,
-      'cargo-crate': 6,
-      'machinery-block': 1,
-      'deck-vent': 2,
-      'winch-drum': 2,
-    };
-    Object.entries(requiredCounts).forEach(([family, count]) => {
-      const familyColliders = colliders.filter(({ furnitureFamily }) => furnitureFamily === family);
-      expect(familyColliders, family).toHaveLength(count);
-      familyColliders.forEach(({ maxY }) => expect(maxY, family).toBeGreaterThanOrEqual(4.2));
-    });
-    ['deck-vent', 'winch-drum'].forEach((family) => {
-      [1, 2].map((index) => build.root.getObjectByName(`${family}-${index}`)!).forEach((mesh) =>
-        expect(colliders.some((box) =>
-        box.furnitureFamily === family
-        && mesh.position.x >= box.minX && mesh.position.x <= box.maxX
-        && mesh.position.z >= box.minZ && mesh.position.z <= box.maxZ)).toBe(true));
-    });
-    expect(colliders.some(({ furnitureFamily }) => furnitureFamily === 'chair')).toBe(false);
-    expect(colliders.some((box) =>
-      box.furnitureFamily === 'workbench'
-      && -4.4 >= box.minX && -4.4 <= box.maxX
-      && 3.72 >= box.minY && 3.72 <= box.maxY
-      && -9.4 >= box.minZ && -9.4 <= box.maxZ)).toBe(true);
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('places every anchor on a matching physical support with an honest footprint', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const supports = new Map<string, { mesh: Mesh; metadata: AnchorSupportMetadata }>();
-    build.root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      const support = object.userData.anchorSupport as AnchorSupportMetadata | undefined;
-      if (support) supports.set(support.surfaceGroupId, { mesh: object, metadata: support });
-    });
-    expect(supports.size).toBe(build.anchors.length);
-    build.anchors.forEach((anchor) => {
-      const match = supports.get(anchor.surfaceGroupId);
-      expect(match, anchor.id).toBeDefined();
-      const { mesh, metadata } = match!;
-      expect(metadata.surface).toBe(anchor.surface);
-      expect(mesh.position.x).toBeCloseTo(metadata.centerX, 6);
-      expect(mesh.position.z).toBeCloseTo(metadata.centerZ, 6);
-      expect(mesh.position.y + mesh.scale.y / 2).toBeCloseTo(metadata.topY, 6);
-      expect(mesh.scale.x).toBeCloseTo(metadata.width, 6);
-      expect(mesh.scale.z).toBeCloseTo(metadata.depth, 6);
-      expect(metadata.topY).toBeCloseTo(anchor.position.y, 6);
-      expect(Math.abs(anchor.position.x - metadata.centerX) + anchor.footprint.width / 2)
-        .toBeLessThanOrEqual(metadata.width / 2 + 1e-6);
-      expect(Math.abs(anchor.position.z - metadata.centerZ) + anchor.footprint.depth / 2)
-        .toBeLessThanOrEqual(metadata.depth / 2 + 1e-6);
-    });
-    const rodSupports = build.anchors.filter(({ id }) => id.includes('rod'));
-    const scubaSupports = build.anchors.filter(({ id }) => id.includes('scuba'));
-    expect(rodSupports.every(({ footprint }) => footprint.width >= 1.8)).toBe(true);
-    expect(scubaSupports.every(({ footprint }) => footprint.width >= 1.05 && footprint.depth >= 0.72)).toBe(true);
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('keeps every anchor upward-clearance volume free of surrounding broad geometry', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    build.root.updateWorldMatrix(true, true);
-    const broadFamilies = new Set([
-      'bunk', 'desk', 'wall-shelf', 'locker', 'workbench', 'equipment-rack', 'cargo-crate',
-    ]);
-    const broadMeshes: Mesh[] = [];
-    build.root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      let ancestor = object.parent;
-      let family: string | undefined;
-      while (ancestor && ancestor !== build.root) {
-        family = ancestor.userData.furnitureFamily as string | undefined;
-        if (family) break;
-        ancestor = ancestor.parent;
+      if (placement.modelId !== 'cargoCrate' && placement.modelId !== 'cargoRack') {
+        expect(root!.getObjectByName(`ship-furniture:${placement.modelId}`)).toBeDefined();
       }
-      const isBroadCandidate = object.userData.anchorSupport
-        || (family !== undefined && broadFamilies.has(family))
-        || ['machinery-block', 'deck-vent-', 'winch-drum-'].some((name) => object.name.startsWith(name));
-      if (!isBroadCandidate) return;
-      const size = new Box3().setFromObject(object).getSize(new Vector3());
-      if (size.x >= 0.3 && size.z >= 0.3) broadMeshes.push(object);
-    });
+    }
 
-    build.anchors.forEach((anchor) => {
-      const clearance = new Box3(
-        new Vector3(
-          anchor.position.x - anchor.footprint.width / 2 + 0.001,
-          anchor.position.y + 0.001,
-          anchor.position.z - anchor.footprint.depth / 2 + 0.001,
-        ),
-        new Vector3(
-          anchor.position.x + anchor.footprint.width / 2 - 0.001,
-          anchor.position.y + anchor.clearanceHeight,
-          anchor.position.z + anchor.footprint.depth / 2 - 0.001,
-        ),
-      );
-      const blockers = broadMeshes.filter((mesh) => {
-        const support = mesh.userData.anchorSupport as AnchorSupportMetadata | undefined;
-        if (support?.surfaceGroupId === anchor.surfaceGroupId) return false;
-        return clearance.intersectsBox(new Box3().setFromObject(mesh));
-      }).map(({ name }) => name);
-      expect(blockers, anchor.id).toEqual([]);
-    });
+    expect(build.root.children).toHaveLength(16);
+    expect(build.colliders).toHaveLength(16);
+    const legacyClutter = /anchor-support|mug|dish|hand-tool|machine-part|deck-vent|rope-coil|winch/i;
+    const objectNames: string[] = [];
+    build.root.traverse(({ name }) => objectNames.push(name));
+    expect(objectNames.filter((name) => legacyClutter.test(name))).toEqual([]);
+
+    const rack = build.root.children.find(({ userData }) =>
+      userData.furnitureId === 'cargo-rod-rack-forward-port')!;
+    expect(rack.getObjectByName('cargo-rack-top')).toBeInstanceOf(Mesh);
+    expect(rack.getObjectByName('crate-body')).toBeUndefined();
+
     build.disposeGeometry();
     materials.dispose();
+    library.dispose();
   });
 
-  it('keeps simultaneously usable anchor placement volumes disjoint', () => {
+  it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const volumes = build.anchors.map((anchor) => ({
-      id: anchor.id,
-      bounds: new Box3(
-        new Vector3(
-          anchor.position.x - anchor.footprint.width / 2,
-          anchor.position.y,
-          anchor.position.z - anchor.footprint.depth / 2,
-        ),
-        new Vector3(
-          anchor.position.x + anchor.footprint.width / 2,
-          anchor.position.y + anchor.clearanceHeight,
-          anchor.position.z + anchor.footprint.depth / 2,
-        ),
-      ),
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+    const colliders = SHIP_LAYOUT.furniture.map((placement) => ({
+      id: placement.id,
+      box: build.colliders.find((box) => box.furnitureId === placement.id)!,
     }));
-    const overlaps: string[] = [];
-    volumes.forEach((left, leftIndex) => {
-      volumes.slice(leftIndex + 1).forEach((right) => {
-        const positiveVolume = left.bounds.min.x < right.bounds.max.x
-          && left.bounds.max.x > right.bounds.min.x
-          && left.bounds.min.y < right.bounds.max.y
-          && left.bounds.max.y > right.bounds.min.y
-          && left.bounds.min.z < right.bounds.max.z
-          && left.bounds.max.z > right.bounds.min.z;
-        if (positiveVolume) overlaps.push(`${left.id}:${right.id}`);
+
+    colliders.forEach((left, index) => {
+      colliders.slice(index + 1).forEach((right) =>
+        expect(overlap(left.box, right.box), `${left.id}:${right.id}`).toBe(false));
+      SHIP_LAYOUT.doors.forEach((door) =>
+        expect(overlap(left.box, door.approach), `${left.id}:${door.id}`).toBe(false));
+      SHIP_LAYOUT.lanes.filter(({ className }) => className === 'primary').forEach((lane) =>
+        expect(overlap(left.box, lane.bounds), `${left.id}:${lane.id}`).toBe(false));
+      expect(overlap(left.box, SHIP_LAYOUT.evacuationRect), left.id).toBe(false);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
+  it('exposes exactly 27 ordinary owned surfaces and no fallback clutter surfaces', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+    const owners = new Map(SHIP_LAYOUT.furniture.map((placement) => [placement.id, placement]));
+
+    expect(build.surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
+    expect(build.surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
+    expect(build.surfaces.map(({ id }) => id)).toEqual(
+      SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)),
+    );
+    expect(new Set(build.surfaces.map(({ id }) => id)).size).toBe(27);
+
+    for (const surface of build.surfaces) {
+      const owner = owners.get(surface.furnitureId)!;
+      expect(owner, surface.id).toBeDefined();
+      expect(surface.furnitureModelId).toBe(owner.modelId);
+      expect(surface.furnitureModelId).not.toMatch(/bedBunk|chairDesk/);
+      const canonical = owner.modelId === 'cargoCrate' || owner.modelId === 'cargoRack'
+        ? owner.colliderSize
+        : SHIP_FURNITURE_MODEL_SPECS[owner.modelId].canonicalSize;
+      expect(surface.position.y, surface.id)
+        .toBeLessThanOrEqual(owner.position[1] + canonical[1] + 1e-6);
+      expect(surface.position.y, surface.id).toBeGreaterThan(owner.position[1]);
+    }
+
+    const physicalCounts = new Map<string, number>();
+    build.surfaces.forEach(({ physicalSlotId }) =>
+      physicalCounts.set(physicalSlotId, (physicalCounts.get(physicalSlotId) ?? 0) + 1));
+    expect([...physicalCounts.values()].every((count) => count === 1)).toBe(true);
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
+  it('keeps every standing point outside inflated colliders, within reach, and connected', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+
+    expect(analyzeShipNavigation(SHIP_LAYOUT).unreachableTargetIds).toEqual([]);
+    const usableSurfaces = build.surfaces.filter(({ standingPoints }) => standingPoints.length > 0);
+    expect(usableSurfaces.length).toBeGreaterThan(0);
+    usableSurfaces.forEach((surface) => {
+      surface.standingPoints.forEach((point) => {
+        expect(new Vector3(point.x, surface.position.y, point.z).distanceTo(surface.position), surface.id)
+          .toBeLessThanOrEqual(2.2);
+        expect(build.colliders.every((box) =>
+          point.x < box.minX - PLAYER_LAYOUT_RADIUS
+          || point.x > box.maxX + PLAYER_LAYOUT_RADIUS
+          || point.z < box.minZ - PLAYER_LAYOUT_RADIUS
+          || point.z > box.maxZ + PLAYER_LAYOUT_RADIUS), surface.id).toBe(true);
       });
     });
-    expect(overlaps).toEqual([]);
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('keeps rod and scuba anchors on visible racks outside both storage approaches', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const racks = build.root.children
-      .filter((object) => object.userData.furnitureFamily === 'equipment-rack')
-      .map((object) => new Box3().setFromObject(object));
-    const rackAnchors = build.anchors.filter((anchor) =>
-      anchor.id.includes('rack-rod') || anchor.id.includes('rack-scuba') || anchor.id === 'emergency-gear');
-
-    expect(rackAnchors).toHaveLength(3);
-    rackAnchors.forEach((anchor) => {
-      expect(racks.some((rack) =>
-        anchor.position.x - anchor.footprint.width / 2 >= rack.min.x - 1e-6
-        && anchor.position.x + anchor.footprint.width / 2 <= rack.max.x + 1e-6
-        && anchor.position.z - anchor.footprint.depth / 2 >= rack.min.z - 1e-6
-        && anchor.position.z + anchor.footprint.depth / 2 <= rack.max.z + 1e-6), anchor.id).toBe(true);
-      expect(anchor.position.z < -9.65 || anchor.position.z > -6.75, anchor.id).toBe(true);
-    });
 
     build.disposeGeometry();
     materials.dispose();
+    library.dispose();
   });
 
-  it('samples the full loop and keeps every route zone clear by 0.35 units', () => {
-    const materials = createShipMaterials();
-    const build = createShipFurniture(materials);
-    const points = build.routeClearancePoints;
-    const hasBothSidesInBand = (minZ: number, maxZ: number) =>
-      points.some(({ x, z }) => x < 0 && z >= minZ && z <= maxZ)
-      && points.some(({ x, z }) => x > 0 && z >= minZ && z <= maxZ);
-    expect(points.length).toBeGreaterThanOrEqual(12);
-    expect(hasBothSidesInBand(5.2, 10.8)).toBe(true);
-    expect(hasBothSidesInBand(11.2, 15.2)).toBe(true);
-    expect(hasBothSidesInBand(-6, 3)).toBe(true);
-    expect(hasBothSidesInBand(-11.4, -7)).toBe(true);
-    expect(points.some(({ x, z }) => x > 5 && Math.abs(z + 6.5) < 0.01)).toBe(true);
-    points.forEach((point) => expect(build.colliders.every((box) =>
-      point.x < box.minX - 0.35 || point.x > box.maxX + 0.35
-      || point.z < box.minZ - 0.35 || point.z > box.maxZ + 0.35)).toBe(true));
-    build.disposeGeometry();
-    materials.dispose();
+  it('rejects a shelf slot whose camera-height ray enters its owner above the opening', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 1);
+
+    expect(ship.itemSurfaces.map(({ id }) => id)).not.toContain(
+      'cabin-bookcase-forward:level-1',
+    );
+    expect(ship.itemSurfaces.map(({ id }) => id)).toContain(
+      'cabin-bookcase-forward:level-2',
+    );
+    ship.itemSurfaces.forEach((surface) => surface.standingPoints.forEach((point) =>
+      expect(isShipSurfaceStandingPointVisible(surface, point, ship.colliders), surface.id)
+        .toBe(true)));
+
+    ship.dispose();
+    library.dispose();
   });
 
-  it('disposes each shared geometry once while leaving materials caller-owned', () => {
+  it('does not treat arbitrary owner volume as a surface access aperture', () => {
+    const surface = {
+      id: 'solid-table:inside',
+      physicalSlotId: 'solid-table:inside',
+      furnitureId: 'solid-table',
+      furnitureModelId: 'table' as const,
+      categories: ['toolsRepair' as const],
+      position: new Vector3(0, 2.5, 0),
+      rotation: new Euler(),
+      footprint: { width: 0.5, depth: 0.5 },
+      clearanceHeight: 2,
+      standingPoints: [new Vector3(0, 2.22, -1)],
+      fallback: false,
+    };
+    const owner = {
+      minX: -0.5, maxX: 0.5, minY: 2.22, maxY: 4,
+      minZ: -0.5, maxZ: 0.5, furnitureId: 'solid-table',
+    };
+
+    expect(isShipSurfaceStandingPointVisible(surface, surface.standingPoints[0]!, [owner]))
+      .toBe(false);
+  });
+
+  it('rejects forged and moved open-shelf surfaces as owner apertures', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 1);
+    const authored = ship.itemSurfaces.find(({ id }) =>
+      id === 'cabin-bookcase-forward:level-2')!;
+    const owner = ship.colliders.find((collider) =>
+      (collider as typeof collider & { furnitureId?: string }).furnitureId === authored.furnitureId)!;
+    const point = authored.standingPoints[0]!;
+    const forged = {
+      ...authored,
+      id: 'cabin-bookcase-forward:forged-opening',
+      physicalSlotId: 'cabin-bookcase-forward:forged-opening',
+    };
+    const moved = {
+      ...authored,
+      position: authored.position.clone().add(new Vector3(0, 0, -1.2)),
+    };
+
+    expect(isShipSurfaceStandingPointVisible(authored, point, [owner])).toBe(true);
+    expect(isShipSurfaceStandingPointVisible(forged, point, [owner])).toBe(false);
+    expect(isShipSurfaceStandingPointVisible(moved, point, [owner])).toBe(false);
+
+    ship.dispose();
+    library.dispose();
+  });
+
+  it('never disposes shared library resources', () => {
     const materials = createShipMaterials();
-    const materialDisposals = materials.ownedMaterialsForTest().map((material) =>
-      vi.spyOn(material as Material, 'dispose'));
-    const build = createShipFurniture(materials);
-    const geometries = new Set<Mesh['geometry']>();
-    build.root.traverse((object) => {
-      if (object instanceof Mesh) geometries.add(object.geometry);
-    });
-    const geometryDisposals = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'));
+    const library = createTestShipFurniture();
+    const libraryGeometries = new Set<Mesh['geometry']>();
+    const libraryMaterials = new Set<Material>();
+    for (const modelId of Object.keys(SHIP_FURNITURE_MODEL_SPECS)) {
+      library.clone(modelId as keyof typeof SHIP_FURNITURE_MODEL_SPECS).traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        libraryGeometries.add(object.geometry);
+        (Array.isArray(object.material) ? object.material : [object.material])
+          .forEach((material) => libraryMaterials.add(material));
+      });
+    }
+    const geometryDisposals = [...libraryGeometries].map((geometry) => vi.spyOn(geometry, 'dispose'));
+    const materialDisposals = [...libraryMaterials].map((material) => vi.spyOn(material, 'dispose'));
+    const build = createShipFurniture(materials, library);
+
     build.disposeGeometry();
     build.disposeGeometry();
-    geometryDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+    geometryDisposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     materialDisposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
-    materials.dispose();
+    library.dispose();
+    geometryDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
     materialDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+    materials.dispose();
   });
 });
