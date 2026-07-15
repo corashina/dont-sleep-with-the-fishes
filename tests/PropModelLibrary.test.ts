@@ -13,6 +13,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
 import {
+  ItemModelLoadError,
   PropModelLibrary,
   geometryTriangles,
   type ItemModelLoader,
@@ -281,6 +282,31 @@ describe('PropModelLibrary preload', () => {
 
     await expect(PropModelLibrary.load(loader)).rejects.toThrow(/ductTape/);
     geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+
+  it('continues failed-load rollback without masking the primary item error', async () => {
+    const roots = templates();
+    const loadFailure = new Error('duct tape download failed');
+    const cleanupFailure = new Error('flare cleanup failed');
+    const firstGeometryDispose = vi.spyOn(firstMesh(roots.get('flareGun')!).geometry, 'dispose')
+      .mockImplementation(() => {
+        throw cleanupFailure;
+      });
+    const laterGeometryDispose = vi.spyOn(firstMesh(roots.get('fishingRod')!).geometry, 'dispose');
+    const loader: ItemModelLoader = {
+      load: async (url) => {
+        const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
+        if (id === 'ductTape') throw loadFailure;
+        return roots.get(id)!;
+      },
+    };
+
+    const failure = await PropModelLibrary.load(loader).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ItemModelLoadError);
+    expect(failure).toMatchObject({ itemId: 'ductTape', cause: loadFailure });
+    expect(firstGeometryDispose).toHaveBeenCalledOnce();
+    expect(laterGeometryDispose).toHaveBeenCalledOnce();
   });
 });
 

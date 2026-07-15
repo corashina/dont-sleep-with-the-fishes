@@ -4,6 +4,14 @@ export type MeshResourceAddition =
   | { readonly kind: 'geometry'; readonly resource: BufferGeometry }
   | { readonly kind: 'material'; readonly resource: Material };
 
+interface DisposableResource {
+  dispose(): void;
+}
+
+interface OwnedDisposableSet<T extends DisposableResource = DisposableResource> extends Iterable<T> {
+  clear(): void;
+}
+
 export function collectMeshResources(
   root: Object3D,
   geometries: Set<BufferGeometry>,
@@ -29,8 +37,29 @@ export function disposeMeshResources(
   geometries: Set<BufferGeometry>,
   materials: Set<Material>,
 ): void {
-  geometries.forEach((geometry) => geometry.dispose());
-  materials.forEach((material) => material.dispose());
-  geometries.clear();
-  materials.clear();
+  disposeResourceSets(geometries, materials);
+}
+
+export function disposeResourceSets(
+  ...sets: readonly OwnedDisposableSet[]
+): void {
+  let firstError: unknown;
+  let failed = false;
+  try {
+    for (const resources of sets) {
+      for (const resource of resources) {
+        try {
+          resource.dispose();
+        } catch (error) {
+          if (!failed) {
+            failed = true;
+            firstError = error;
+          }
+        }
+      }
+    }
+  } finally {
+    sets.forEach((resources) => resources.clear());
+  }
+  if (failed) throw firstError;
 }

@@ -15,6 +15,7 @@ import {
   Quaternion,
   Scene,
   ShaderMaterial,
+  Texture,
   Vector3,
   Vector4,
 } from 'three';
@@ -684,6 +685,52 @@ describe('world builders', () => {
     expect(scene.fog).toBe(originalFog);
     geometryDisposals.forEach((count) => expect(count).toBe(1));
     ownedMaterialDisposals.forEach((count) => expect(count).toBe(1));
+    propModels.dispose();
+  });
+
+  it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new World(
+      scene,
+      propModels,
+      furniture,
+      1,
+      createTestMoonTexture(),
+      [createItemInstances()[0]!],
+    );
+    const propResources = collectRenderResources(world.itemObjects.values().next().value!);
+    const geometry = propResources.geometries.values().next().value!;
+    const material = propResources.materials.values().next().value!;
+    const textures = new Set<Texture>();
+    collectRenderResources(world.lifeboat).materials.forEach((ownedMaterial) => {
+      Object.values(ownedMaterial).forEach((value) => {
+        if (value instanceof Texture) textures.add(value);
+      });
+    });
+    const texture = textures.values().next().value!;
+    expect(texture).toBeInstanceOf(Texture);
+    const firstError = new Error('world geometry disposal failed');
+    const laterError = new Error('world material disposal failed');
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      throw firstError;
+    });
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      throw laterError;
+    });
+    const textureDispose = vi.spyOn(texture, 'dispose');
+
+    expect(() => world.dispose()).toThrow(firstError);
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+    expect(() => world.dispose()).not.toThrow();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+
+    furniture.dispose();
     propModels.dispose();
   });
 
