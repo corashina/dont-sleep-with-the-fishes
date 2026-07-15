@@ -50,7 +50,6 @@ function createUI(mount: HTMLElement): SurvivalUI {
     { id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 440, y: 280, visible: true, depleted: false },
     { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
     { id: 'waterJug-test', itemType: 'waterJug', action: 'rest', remainingUses: 3, x: 640, y: 220, visible: true, depleted: false },
-    { id: 'horizon', itemType: null, action: 'endDay', remainingUses: null, x: 400, y: 80, visible: true, depleted: false },
   ]);
   activeUIs.push(ui);
   return ui;
@@ -228,7 +227,7 @@ describe('SurvivalUI', () => {
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
     ui.setAnchors([{
-      id: 'fishingRod-test', itemType: null, action: 'endDay', remainingUses: null,
+      id: 'fishingRod-test', itemType: null, action: 'repair', remainingUses: null,
       x: 140, y: 180, visible: true, depleted: false,
     }]);
 
@@ -246,7 +245,7 @@ describe('SurvivalUI', () => {
     {
       state: 'fixed',
       anchor: {
-        id: 'fishingRod-test', itemType: null, action: 'endDay' as const, remainingUses: null,
+        id: 'fishingRod-test', itemType: null, action: 'repair' as const, remainingUses: null,
         x: 140, y: 180, visible: true, depleted: false,
       },
     },
@@ -280,14 +279,14 @@ describe('SurvivalUI', () => {
   it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
     expect(mainStyles).toContain('.survival-condition__art');
     expect(mainStyles).toContain('.journal-marker__art');
-    expect(mainStyles).toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
+    expect(mainStyles).not.toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
     expect(mainStyles).toContain('.cinematic-overlay::before');
     expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
   });
 
   it('centers survival HUD zones, overlay content, and vignette backing', () => {
     expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
-    expect(mainStyles).toMatch(/\.journal-marker\s*\{[^}]*right:\s*auto;[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
+    expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
     expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*circle at 50% 50%/s);
     expect(mainStyles).toMatch(/\.cinematic-overlay__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
     expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
@@ -376,7 +375,7 @@ describe('SurvivalUI', () => {
       hitArea: { width: 96, height: 52, depth: 2.4 },
     }]);
     ui.setAnchors([{
-      id: 'shared', itemType: null, action: 'endDay', remainingUses: null,
+      id: 'shared', itemType: null, action: 'repair', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
@@ -482,7 +481,7 @@ describe('SurvivalUI', () => {
     ui.setAnchors([
       { id: 'left', itemType: 'flareGun', action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
       { id: 'right', itemType: 'flashlight', action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
-      { id: 'top', itemType: null, action: 'endDay', remainingUses: null, x: window.innerWidth / 2, y: 8, visible: true, depleted: false },
+      { id: 'top', itemType: null, action: 'repair', remainingUses: null, x: window.innerWidth / 2, y: 8, visible: true, depleted: false },
     ]);
 
     expect(mount.querySelector('[data-anchor-id="left"]')?.getAttribute('data-tooltip-x')).toBe('left');
@@ -596,7 +595,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot({ inventory: new SurvivalSession(saved(), { seed: 1 }).snapshot().inventory }), () => null);
-    ui.setAnchors([{ id: 'horizon', itemType: null, action: 'endDay', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
+    ui.setAnchors([{ id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
     expect(mount.textContent).not.toMatch(/hand-line/i);
     expect(mount.querySelector('[data-action="fish"]')).toBeNull();
   });
@@ -695,7 +694,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('4');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
     expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
-    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(7);
+    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
   });
 
@@ -1252,14 +1251,34 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
-  it('keeps day, phase, weather, and artwork in one journal marker', () => {
+  it('separates journal, status, and stable End Day controls', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    const journal = mount.querySelector('.journal-marker')!;
+    ui.render(snapshot(), () => null);
+
+    const top = mount.querySelector('[data-survival-top]')!;
+    const status = top.querySelector('[data-survival-status]')!;
+    const journal = top.querySelector('[data-journal-open]')!;
+    const endDay = top.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
+
+    expect(status.querySelector('[data-day]')?.textContent).toBe('DAY 1');
+    expect(status.querySelector('[data-phase]')?.textContent).toBe('DAYLIGHT');
+    expect(status.querySelector('[data-weather]')?.textContent).toBe('CALM');
+    expect(status.querySelector('[data-ui-artwork="journal"]')).toBeNull();
     expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
-    expect(journal.querySelector('[data-day]')).not.toBeNull();
-    expect(journal.querySelector('[data-phase]')).not.toBeNull();
-    expect(journal.querySelector('[data-weather]')).not.toBeNull();
+    expect(endDay.closest('[data-boat-anchors]')).toBeNull();
+    expect(endDay.getAttribute('aria-keyshortcuts')).toBe('7');
+    ui.dispose();
+  });
+
+  it('marks journal history unread until the marker opens', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.setJournalUnread(true);
+    expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(false);
+    expect(mount.querySelector('[data-journal-open]')?.getAttribute('aria-label')).toContain('new entry');
+    ui.setJournalUnread(false);
+    expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
     ui.dispose();
   });
 

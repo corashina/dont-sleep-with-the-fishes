@@ -151,7 +151,10 @@ export class SurvivalUI {
   private readonly day: HTMLElement;
   private readonly weather: HTMLElement;
   private readonly phase: HTMLElement;
+  private readonly topControls: HTMLElement;
   private readonly journalMarker: HTMLButtonElement;
+  private readonly journalUnread: HTMLElement;
+  private readonly endDayButton: HTMLButtonElement;
   private readonly announcer: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventLayer: HTMLElement;
@@ -214,11 +217,21 @@ export class SurvivalUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <button type="button" class="survival-status journal-marker" data-journal-open aria-label="Open completed journal entries">
-        ${uiArtwork('journal', 'journal-marker__art')}
-        <span class="survival-status__time"><span data-day>DAY 1</span><span data-phase>DAYLIGHT</span></span>
-        <span class="survival-status__weather"><span class="eyebrow">WEATHER</span><strong data-weather>CALM</strong></span>
-      </button>
+      <div class="survival-top" data-survival-top>
+        <div class="survival-top__status-row">
+          <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
+            ${uiArtwork('journal', 'journal-marker__art')}
+            <span class="journal-marker__unread" data-journal-unread hidden>NEW</span>
+          </button>
+          <section class="survival-status" data-survival-status aria-label="Current survival day">
+            <strong data-day>DAY 1</strong>
+            <span class="survival-status__detail"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
+          </section>
+        </div>
+        <button type="button" class="end-day-button timber-action" data-action="endDay" aria-keyshortcuts="7">
+          END DAY
+        </button>
+      </div>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
@@ -301,7 +314,10 @@ export class SurvivalUI {
     this.day = requireElement(this.root, '[data-day]');
     this.weather = requireElement(this.root, '[data-weather]');
     this.phase = requireElement(this.root, '[data-phase]');
+    this.topControls = requireElement(this.root, '[data-survival-top]');
     this.journalMarker = requireElement(this.root, '[data-journal-open]');
+    this.journalUnread = requireElement(this.root, '[data-journal-unread]');
+    this.endDayButton = requireElement(this.root, '[data-action="endDay"]');
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventLayer = requireElement(this.root, '[data-event]');
@@ -334,7 +350,7 @@ export class SurvivalUI {
     this.endingBody = requireElement(this.root, '[data-ending-body]');
     this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.backgroundRegions = [this.journalMarker, this.anchorLayer];
+    this.backgroundRegions = [this.topControls, this.anchorLayer];
     this.modalLayers = [
       this.pauseLayer,
       this.journalLayer,
@@ -417,6 +433,16 @@ export class SurvivalUI {
     });
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCommandState();
+  }
+
+  setJournalUnread(unread: boolean): void {
+    if (this.disposed) return;
+    this.journalUnread.hidden = !unread;
+    this.journalMarker.dataset.unread = String(unread);
+    this.journalMarker.setAttribute(
+      'aria-label',
+      unread ? 'Open journal, new entry available' : 'Open journal',
+    );
   }
 
   showEvent(
@@ -654,11 +680,9 @@ export class SurvivalUI {
   }
 
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
-    const itemLabel = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'HORIZON' : 'HULL PATCH'
-      : ITEM_LABELS[anchor.itemType];
+    const itemLabel = anchor.itemType === null ? 'HULL PATCH' : ITEM_LABELS[anchor.itemType];
     const itemDescription = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.' : 'Inspect the lifeboat repair patch.'
+      ? 'Inspect the lifeboat repair patch.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
     const reason = this.anchorUnavailableReason(anchor);
@@ -739,6 +763,14 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
+    const endDayReason = this.actionReasons.get('endDay') ?? null;
+    this.endDayButton.disabled = this.busy;
+    this.endDayButton.setAttribute('aria-disabled', endDayReason === null ? 'false' : 'true');
+    this.endDayButton.setAttribute(
+      'aria-description',
+      endDayReason ?? 'End the current day and go to sleep.',
+    );
+    this.endDayButton.title = endDayReason ?? 'End the current day';
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
@@ -879,15 +911,13 @@ export class SurvivalUI {
   }
 
   private isCommandControl(element: Element | null): element is HTMLButtonElement {
-    return element instanceof HTMLButtonElement
-      && element.hasAttribute('data-anchor-id')
-      && element.hasAttribute('data-action');
+    return element instanceof HTMLButtonElement && element.hasAttribute('data-action');
   }
 
   private firstUsableAction(): HTMLButtonElement | null {
     return [...this.anchorButtons.values()].find((button) => (
       button.dataset.action !== '' && this.isUsableCommand(button)
-    )) ?? null;
+    )) ?? (this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
   }
 
   private resolveCommandOrigin(): HTMLElement | null {
@@ -1027,9 +1057,11 @@ export class SurvivalUI {
       return;
     }
     event.preventDefault();
-    const button = [...this.anchorButtons.values()].find((candidate) => (
-      candidate.dataset.action === action.id && this.isUsableCommand(candidate)
-    )) ?? null;
+    const button = action.id === 'endDay'
+      ? this.endDayButton
+      : [...this.anchorButtons.values()].find((candidate) => (
+        candidate.dataset.action === action.id && this.isUsableCommand(candidate)
+      )) ?? null;
     button?.focus();
     this.activateDayAction(action.id, button);
   };

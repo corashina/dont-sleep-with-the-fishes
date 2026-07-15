@@ -257,11 +257,6 @@ export class BoatWorld {
     if (repairPatch !== undefined) {
       this.fixedAnchors.push({ id: 'repair-patch', action: 'repair', target: repairPatch });
     }
-    const horizon = new Object3D();
-    horizon.name = 'horizon-anchor';
-    horizon.position.set(0, 1.15, -12);
-    this.boat.add(horizon);
-    this.fixedAnchors.push({ id: 'horizon', action: 'endDay', target: horizon });
 
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
