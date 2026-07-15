@@ -1,0 +1,682 @@
+{
+  "packs": {
+    "blaster-kit": {
+      "pageUrl": "https://kenney.nl/assets/blaster-kit",
+      "version": "2.1",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip",
+      "sha256": "91E3093E95427D59625E7E2CE2D0399B861600160FD0B4ADA7714796B67CEA8C",
+      "requiredEntries": [
+        "License.txt",
+        "Models/GLB format/Textures/colormap.png",
+        "Models/GLB format/blaster-a.glb",
+        "Models/GLB format/blaster-b.glb",
+        "Models/GLB format/blaster-n.glb"
+      ]
+    },
+    "food-kit": {
+      "pageUrl": "https://kenney.nl/assets/food-kit",
+      "version": "2.0",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/food-kit/83086fa91c-1719418518/kenney_food-kit.zip",
+      "sha256": "CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7C6F6F",
+      "requiredEntries": [
+        "License.txt",
+        "Models/GLB format/Textures/colormap.png",
+        "Models/GLB format/can-open.glb",
+        "Models/GLB format/can-small.glb",
+        "Models/GLB format/can.glb",
+        "Models/GLB format/fish-bones.glb",
+        "Models/GLB format/pizza-box.glb",
+        "Models/GLB format/soda-bottle.glb",
+        "Models/GLB format/styrofoam.glb"
+      ]
+    },
+    "survival-kit": {
+      "pageUrl": "https://kenney.nl/assets/survival-kit",
+      "version": "2.0",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip",
+      "sha256": "C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E",
+      "requiredEntries": [
+        "License.txt",
+        "Models/GLB format/Textures/colormap.png",
+        "Models/GLB format/bottle-large.glb",
+        "Models/GLB format/bottle.glb",
+        "Models/GLB format/box.glb"
+      ]
+    },
+    "prototype-kit": {
+      "pageUrl": "https://kenney.nl/assets/prototype-kit",
+      "version": "1.0",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/prototype-kit/4d3b7073ed-1724832076/kenney_prototype-kit.zip",
+      "sha256": "213B522FB12BCC9B9AC66C4F7581F7C74623293272212E40A70C39936AD3DA95",
+      "requiredEntries": [
+        "License.txt",
+        "Models/GLB format/Textures/colormap.png",
+        "Models/GLB format/shape-cube-half.glb",
+        "Models/GLB format/shape-cube-rounded.glb",
+        "Models/GLB format/shape-cylinder-detailed.glb",
+        "Models/GLB format/shape-cylinder.glb",
+        "Models/GLB format/shape-hollow-cylinder-detailed.glb",
+        "Models/GLB format/shape-hollow-cylinder-half-detailed.glb",
+        "Models/GLB format/shape-hollow-cylinder-half.glb",
+        "Models/GLB format/shape-hollow-cylinder.glb"
+      ]
+    }
+  },
+  "items": {
+    "flareGun": [
+      {
+        "id": "current",
+        "label": "Current — Blaster N",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/blaster-kit",
+        "sourceAssetId": "blaster-kit@2.1:Models/GLB format/blaster-n.glb",
+        "modelFile": "flareGun--current.glb",
+        "triangles": 410,
+        "fit": "The checked-in compact orange pistol already reads as a dedicated flare launcher."
+      },
+      {
+        "id": "a",
+        "label": "Tube Signal Pistol",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/blaster-kit",
+        "sourceAssetId": "blaster-kit@2.1:Models/GLB format/blaster-a.glb",
+        "modelFile": "flareGun--a.glb",
+        "triangles": 470,
+        "fit": "A short tube, oversized muzzle, and single grip give this pistol a strong maritime signal-gun silhouette.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "blaster-kit",
+          "entry": "Models/GLB format/blaster-a.glb",
+          "expectedTriangles": 470,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Boxy Flare Launcher",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/blaster-kit",
+        "sourceAssetId": "blaster-kit@2.1:Models/GLB format/blaster-b.glb",
+        "modelFile": "flareGun--b.glb",
+        "triangles": 368,
+        "fit": "The bright case, broad muzzle, and compact handle remain readable as emergency signaling equipment.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "blaster-kit",
+          "entry": "Models/GLB format/blaster-b.glb",
+          "expectedTriangles": 368,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Composite Signal Pistol",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/flareGun-c",
+        "modelFile": "flareGun--c.glb",
+        "triangles": 500,
+        "fit": "The orange body, dark grip, long barrel, and pale open muzzle reproduce a purpose-built flare pistol.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 500,
+          "parts": [
+            { "name": "receiver", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-rounded.glb", "translation": [0, 0.1, 0], "rotation": [0, 0, 0, 1], "scale": [0.72, 0.34, 0.28], "color": [0.92, 0.23, 0.06, 1] },
+            { "name": "barrel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0.62, 0.16, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.18, 0.72, 0.18], "color": [0.92, 0.23, 0.06, 1] },
+            { "name": "open-muzzle", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [1.28, 0.16, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.23, 0.13, 0.23], "color": [0.88, 0.9, 0.92, 1] },
+            { "name": "grip", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [-0.23, -0.52, 0], "rotation": [0, 0, -0.13052619222005157, 0.9914448613738104], "scale": [0.28, 0.72, 0.24], "color": [0.1, 0.12, 0.15, 1] }
+          ]
+        }
+      }
+    ],
+    "ductTape": [
+      {
+        "id": "current",
+        "label": "Current — Detailed Repair Roll",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb",
+        "modelFile": "ductTape--current.glb",
+        "triangles": 192,
+        "fit": "The checked-in flattened hollow cylinder presents the tape hole clearly."
+      },
+      {
+        "id": "a",
+        "label": "Clean Tape Roll",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder.glb",
+        "modelFile": "ductTape--a.glb",
+        "triangles": 96,
+        "fit": "The low-poly ring keeps the defining central tape hole visible with a cleaner silhouette.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "prototype-kit",
+          "entry": "Models/GLB format/shape-hollow-cylinder.glb",
+          "expectedTriangles": 96,
+          "scale": [1, 0.32, 1]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Cardboard-Core Tape",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/ductTape-b",
+        "modelFile": "ductTape--b.glb",
+        "triangles": 292,
+        "fit": "A gray outer roll and recessed tan liner preserve a conspicuous open center while adding tape-roll detail.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 292,
+          "parts": [
+            { "name": "tape-roll", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 0.28, 1], "color": [0.28, 0.31, 0.34, 1] },
+            { "name": "cardboard-liner", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half-detailed.glb", "translation": [0, 0.16, 0], "rotation": [0, 0, 0, 1], "scale": [0.68, 0.08, 0.68], "color": [0.63, 0.42, 0.22, 1] }
+          ]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Loose-End Tape Roll",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/ductTape-c",
+        "modelFile": "ductTape--c.glb",
+        "triangles": 108,
+        "fit": "The dark hollow roll retains its visible hole and a raised loose tab makes it unmistakably tape.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 108,
+          "parts": [
+            { "name": "tape-roll", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 0.3, 1], "color": [0.2, 0.23, 0.26, 1] },
+            { "name": "loose-tab", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0.72, 0.22, 0], "rotation": [0, 0, -0.13052619222005157, 0.9914448613738104], "scale": [0.68, 0.07, 0.42], "color": [0.22, 0.25, 0.28, 1] }
+          ]
+        }
+      }
+    ],
+    "fishingRod": [
+      {
+        "id": "current",
+        "label": "Current — Orange Fishing Rod",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/fishingRod",
+        "modelFile": "fishingRod--current.glb",
+        "triangles": 376,
+        "fit": "The checked-in long pole, dark grip, and side reel already expose the defining reel."
+      },
+      {
+        "id": "a",
+        "label": "Travel Fishing Rod",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/fishingRod-a",
+        "modelFile": "fishingRod--a.glb",
+        "triangles": 244,
+        "fit": "A slim blue pole, cork grip, open side spool, and crank create a readable compact fishing rod.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 244,
+          "parts": [
+            { "name": "pole", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, 0.34, 0], "rotation": [0, 0, 0, 1], "scale": [0.022, 1.45, 0.022], "color": [0.08, 0.32, 0.62, 1] },
+            { "name": "cork-grip", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, -0.82, 0], "rotation": [0, 0, 0, 1], "scale": [0.065, 0.34, 0.065], "color": [0.62, 0.4, 0.2, 1] },
+            { "name": "open-reel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder.glb", "translation": [0.11, -0.55, 0], "rotation": [0.7071067811865476, 0, 0, 0.7071067811865476], "scale": [0.15, 0.07, 0.15], "color": [0.16, 0.19, 0.23, 1] },
+            { "name": "reel-crank", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0.25, -0.55, 0.03], "rotation": [0, 0, 0, 1], "scale": [0.2, 0.04, 0.04], "color": [0.84, 0.47, 0.08, 1] }
+          ]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Heavy Surf Rod",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/fishingRod-b",
+        "modelFile": "fishingRod--b.glb",
+        "triangles": 420,
+        "fit": "The long red shaft, broad grip, large open reel, and offset handle read as a sturdy surf rod.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 420,
+          "parts": [
+            { "name": "pole", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, 0.42, 0], "rotation": [0, 0, 0, 1], "scale": [0.03, 1.65, 0.03], "color": [0.78, 0.12, 0.08, 1] },
+            { "name": "grip", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, -0.92, 0], "rotation": [0, 0, 0, 1], "scale": [0.085, 0.42, 0.085], "color": [0.08, 0.1, 0.12, 1] },
+            { "name": "large-reel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [0.14, -0.56, 0], "rotation": [0.7071067811865476, 0, 0, 0.7071067811865476], "scale": [0.19, 0.09, 0.19], "color": [0.78, 0.82, 0.86, 1] },
+            { "name": "reel-handle", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0.3, -0.56, 0.06], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.045, 0.18, 0.045], "color": [0.08, 0.1, 0.12, 1] }
+          ]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Compact Boat Rod",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/fishingRod-c",
+        "modelFile": "fishingRod--c.glb",
+        "triangles": 372,
+        "fit": "A shorter yellow pole with a thick grip, dark open reel, and bright crank suits close-quarters boat fishing.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 372,
+          "parts": [
+            { "name": "pole", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.25, 0], "rotation": [0, 0, 0, 1], "scale": [0.032, 1.2, 0.032], "color": [0.94, 0.6, 0.06, 1] },
+            { "name": "grip", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, -0.7, 0], "rotation": [0, 0, 0, 1], "scale": [0.095, 0.38, 0.095], "color": [0.12, 0.14, 0.16, 1] },
+            { "name": "reel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [0.15, -0.4, 0], "rotation": [0.7071067811865476, 0, 0, 0.7071067811865476], "scale": [0.2, 0.1, 0.2], "color": [0.1, 0.13, 0.17, 1] },
+            { "name": "crank", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0.32, -0.4, 0.06], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.045, 0.18, 0.045], "color": [0.94, 0.6, 0.06, 1] }
+          ]
+        }
+      }
+    ],
+    "baitTin": [
+      {
+        "id": "current",
+        "label": "Current — Small Bait Tin",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/can-small.glb",
+        "modelFile": "baitTin--current.glb",
+        "triangles": 154,
+        "fit": "The checked-in squat pull-tab can reads as a portable bait tin."
+      },
+      {
+        "id": "a",
+        "label": "Open Bait Can",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/can-open.glb",
+        "modelFile": "baitTin--a.glb",
+        "triangles": 216,
+        "fit": "The open rim and visible contents immediately distinguish this as a tin prepared for baiting hooks.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "food-kit",
+          "entry": "Models/GLB format/can-open.glb",
+          "expectedTriangles": 216,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Hinged Bait Box",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/styrofoam.glb",
+        "modelFile": "baitTin--b.glb",
+        "triangles": 152,
+        "fit": "A small hinged container with its lid raised reads clearly as an accessible bait box.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "food-kit",
+          "entry": "Models/GLB format/styrofoam.glb",
+          "expectedTriangles": 152,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Fish-Marked Bait Tin",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:composite/baitTin-c",
+        "modelFile": "baitTin--c.glb",
+        "triangles": 508,
+        "fit": "A compact lidded can with a small fish-bone emblem makes the bait purpose explicit at preview scale.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 508,
+          "parts": [
+            { "name": "tin", "pack": "food-kit", "entry": "Models/GLB format/can-small.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1], "color": [0.28, 0.55, 0.66, 1] },
+            { "name": "fish-mark", "pack": "food-kit", "entry": "Models/GLB format/fish-bones.glb", "translation": [0, 0.54, 0], "rotation": [0, 0.7071067811865476, 0, 0.7071067811865476], "scale": [0.22, 0.22, 0.22], "color": [0.92, 0.78, 0.24, 1] }
+          ]
+        }
+      }
+    ],
+    "medicalKit": [
+      {
+        "id": "current",
+        "label": "Current — Red Medical Case",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/medicalKit",
+        "modelFile": "medicalKit--current.glb",
+        "triangles": 228,
+        "fit": "The checked-in red rounded case presents a large white medical cross."
+      },
+      {
+        "id": "a",
+        "label": "Box First-Aid Kit",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/survival-kit",
+        "sourceAssetId": "survival-kit@2.0+prototype-kit@1.0:composite/medicalKit-a",
+        "modelFile": "medicalKit--a.glb",
+        "triangles": 148,
+        "fit": "A durable red survival box carries a raised white plus that remains visible from the board camera.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 148,
+          "parts": [
+            { "name": "case", "pack": "survival-kit", "entry": "Models/GLB format/box.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1.1, 0.72, 0.42], "color": [0.78, 0.08, 0.06, 1] },
+            { "name": "cross-vertical", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.12, 0.25], "rotation": [0, 0, 0, 1], "scale": [0.12, 0.62, 0.05], "color": [0.98, 0.98, 0.95, 1] },
+            { "name": "cross-horizontal", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.12, 0.25], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.12, 0.62, 0.05], "color": [0.98, 0.98, 0.95, 1] }
+          ]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Flat Medic Pouch",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0+prototype-kit@1.0:composite/medicalKit-b",
+        "modelFile": "medicalKit--b.glb",
+        "triangles": 68,
+        "fit": "A flat red zip-case silhouette with a centered white plus resembles a compact marine first-aid pouch.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 68,
+          "parts": [
+            { "name": "pouch", "pack": "food-kit", "entry": "Models/GLB format/pizza-box.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 0.55, 0.72], "color": [0.72, 0.06, 0.05, 1] },
+            { "name": "cross-vertical", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.22, 0], "rotation": [0, 0, 0, 1], "scale": [0.11, 0.58, 0.05], "color": [1, 1, 0.97, 1] },
+            { "name": "cross-horizontal", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.22, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.11, 0.58, 0.05], "color": [1, 1, 0.97, 1] }
+          ]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Handled Medical Case",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/medicalKit-c",
+        "modelFile": "medicalKit--c.glb",
+        "triangles": 328,
+        "fit": "The cream handled case uses a bold red plus on its face for an unmistakable medical read.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 328,
+          "parts": [
+            { "name": "case", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-rounded.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 0.68, 0.32], "color": [0.92, 0.88, 0.76, 1] },
+            { "name": "cross-vertical", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.12, 0.2], "rotation": [0, 0, 0, 1], "scale": [0.12, 0.68, 0.045], "color": [0.78, 0.04, 0.035, 1] },
+            { "name": "cross-horizontal", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.12, 0.2], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.12, 0.68, 0.045], "color": [0.78, 0.04, 0.035, 1] },
+            { "name": "handle", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half-detailed.glb", "translation": [0, 0.72, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.28, 0.08, 0.3], "color": [0.22, 0.12, 0.08, 1] }
+          ]
+        }
+      }
+    ],
+    "waterJug": [
+      {
+        "id": "current",
+        "label": "Current — Green Water Bottle",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/survival-kit",
+        "sourceAssetId": "survival-kit@2.0:Models/GLB format/bottle.glb",
+        "modelFile": "waterJug--current.glb",
+        "triangles": 96,
+        "fit": "The checked-in capped survival bottle is a compact, readable water vessel."
+      },
+      {
+        "id": "a",
+        "label": "Large Water Bottle",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/survival-kit",
+        "sourceAssetId": "survival-kit@2.0:Models/GLB format/bottle-large.glb",
+        "modelFile": "waterJug--a.glb",
+        "triangles": 96,
+        "fit": "The broad square shoulders, cap, and label give this large bottle the mass of an emergency water jug.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "survival-kit",
+          "entry": "Models/GLB format/bottle-large.glb",
+          "expectedTriangles": 96,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Sealed Water Bottle",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/soda-bottle.glb",
+        "modelFile": "waterJug--b.glb",
+        "triangles": 100,
+        "fit": "A familiar sealed bottle silhouette provides an immediately legible reserve-water option.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "food-kit",
+          "entry": "Models/GLB format/soda-bottle.glb",
+          "expectedTriangles": 100,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Handled Water Canteen",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/survival-kit",
+        "sourceAssetId": "survival-kit@2.0+prototype-kit@1.0:composite/waterJug-c",
+        "modelFile": "waterJug--c.glb",
+        "triangles": 196,
+        "fit": "A large blue bottle with a dark side handle reads as a carryable water canteen rather than a drink prop.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 196,
+          "parts": [
+            { "name": "jug", "pack": "survival-kit", "entry": "Models/GLB format/bottle-large.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1], "color": [0.14, 0.48, 0.7, 1] },
+            { "name": "side-handle", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half-detailed.glb", "translation": [0.42, 0.28, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.3, 0.1, 0.42], "color": [0.08, 0.18, 0.26, 1] }
+          ]
+        }
+      }
+    ],
+    "cannedFood": [
+      {
+        "id": "current",
+        "label": "Current — Food Can",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/can.glb",
+        "modelFile": "cannedFood--current.glb",
+        "triangles": 156,
+        "fit": "The checked-in tall red can has a conventional sealed-food silhouette."
+      },
+      {
+        "id": "a",
+        "label": "Opened Ration Can",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/can-open.glb",
+        "modelFile": "cannedFood--a.glb",
+        "triangles": 216,
+        "fit": "The lifted lid and visible food make this the clearest ready-to-eat canned ration.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "food-kit",
+          "entry": "Models/GLB format/can-open.glb",
+          "expectedTriangles": 216,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Compact Ration Tin",
+        "kind": "direct",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:Models/GLB format/can-small.glb",
+        "modelFile": "cannedFood--b.glb",
+        "triangles": 154,
+        "fit": "The squat faceted can and pull tab resemble a dense single-serving ration tin.",
+        "recipe": {
+          "kind": "direct",
+          "pack": "food-kit",
+          "entry": "Models/GLB format/can-small.glb",
+          "expectedTriangles": 154,
+          "scale": [1, 1, 1]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Fish Ration Can",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/food-kit",
+        "sourceAssetId": "food-kit@2.0:composite/cannedFood-c",
+        "modelFile": "cannedFood--c.glb",
+        "triangles": 540,
+        "fit": "A blue sealed can with a pale fish-bone badge reads specifically as preserved food.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 540,
+          "parts": [
+            { "name": "can", "pack": "food-kit", "entry": "Models/GLB format/can.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1], "color": [0.1, 0.38, 0.62, 1] },
+            { "name": "fish-label", "pack": "food-kit", "entry": "Models/GLB format/fish-bones.glb", "translation": [0, 0.05, 0.35], "rotation": [0, 0, 0, 1], "scale": [0.2, 0.2, 0.2], "color": [0.9, 0.88, 0.72, 1] }
+          ]
+        }
+      }
+    ],
+    "flashlight": [
+      {
+        "id": "current",
+        "label": "Current — Orange Flashlight",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/flashlight",
+        "modelFile": "flashlight--current.glb",
+        "triangles": 340,
+        "fit": "The checked-in dark body, orange head, bright lens ring, and switch form a readable flashlight."
+      },
+      {
+        "id": "a",
+        "label": "Classic Hand Torch",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/flashlight-a",
+        "modelFile": "flashlight--a.glb",
+        "triangles": 288,
+        "fit": "A tapered yellow head, dark grip, pale lens disk, open bezel, and switch produce a classic torch profile.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 288,
+          "parts": [
+            { "name": "body", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.16, 0.82, 0.16], "color": [0.12, 0.14, 0.16, 1] },
+            { "name": "head", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.86, 0], "rotation": [0, 0, 0, 1], "scale": [0.28, 0.22, 0.28], "color": [0.94, 0.58, 0.06, 1] },
+            { "name": "bezel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder.glb", "translation": [0, 1.08, 0], "rotation": [0, 0, 0, 1], "scale": [0.3, 0.08, 0.3], "color": [0.82, 0.85, 0.88, 1] },
+            { "name": "lens", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 1.09, 0], "rotation": [0, 0, 0, 1], "scale": [0.23, 0.03, 0.23], "color": [0.9, 0.96, 1, 1] },
+            { "name": "switch", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.48, 0.17], "rotation": [0, 0, 0, 1], "scale": [0.07, 0.12, 0.05], "color": [0.94, 0.58, 0.06, 1] }
+          ]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Wide-Beam Work Light",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/flashlight-b",
+        "modelFile": "flashlight--b.glb",
+        "triangles": 496,
+        "fit": "A rugged blue body supports an oversized silver bezel and luminous lens for a strong wide-beam read.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 496,
+          "parts": [
+            { "name": "body", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-rounded.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.28, 0.72, 0.26], "color": [0.08, 0.28, 0.48, 1] },
+            { "name": "head", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.75, 0], "rotation": [0, 0, 0, 1], "scale": [0.38, 0.22, 0.38], "color": [0.08, 0.28, 0.48, 1] },
+            { "name": "bezel", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [0, 0.97, 0], "rotation": [0, 0, 0, 1], "scale": [0.4, 0.08, 0.4], "color": [0.72, 0.77, 0.82, 1] },
+            { "name": "lens", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.98, 0], "rotation": [0, 0, 0, 1], "scale": [0.32, 0.03, 0.32], "color": [0.82, 0.94, 1, 1] },
+            { "name": "switch", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.3, 0.28], "rotation": [0, 0, 0, 1], "scale": [0.09, 0.13, 0.05], "color": [0.95, 0.42, 0.05, 1] }
+          ]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Pocket Flashlight",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/flashlight-c",
+        "modelFile": "flashlight--c.glb",
+        "triangles": 340,
+        "fit": "The slim red barrel, flared head, bright open lens ring, and raised switch remain readable at small scale.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 340,
+          "parts": [
+            { "name": "body", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.12, 0.68, 0.12], "color": [0.68, 0.05, 0.04, 1] },
+            { "name": "head", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0, 0.7, 0], "rotation": [0, 0, 0, 1], "scale": [0.22, 0.18, 0.22], "color": [0.76, 0.07, 0.05, 1] },
+            { "name": "lens-ring", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-detailed.glb", "translation": [0, 0.88, 0], "rotation": [0, 0, 0, 1], "scale": [0.23, 0.07, 0.23], "color": [0.9, 0.95, 1, 1] },
+            { "name": "switch", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0.32, 0.13], "rotation": [0, 0, 0, 1], "scale": [0.055, 0.1, 0.04], "color": [0.95, 0.66, 0.08, 1] }
+          ]
+        }
+      }
+    ],
+    "scubaSet": [
+      {
+        "id": "current",
+        "label": "Current — Orange Twin Tanks",
+        "kind": "current",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/scubaSet",
+        "modelFile": "scubaSet--current.glb",
+        "triangles": 688,
+        "fit": "The checked-in orange twin cylinders, dark harness, straps, and regulator read clearly as scuba gear."
+      },
+      {
+        "id": "a",
+        "label": "Twin Steel Dive Tanks",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/scubaSet-a",
+        "modelFile": "scubaSet--a.glb",
+        "triangles": 544,
+        "fit": "Two pale steel tanks remain separated by a dark harness, shoulder loops, and a top regulator.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 544,
+          "parts": [
+            { "name": "tank-left", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [-0.2, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.22, 0.92, 0.22], "color": [0.68, 0.74, 0.78, 1] },
+            { "name": "tank-right", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder-detailed.glb", "translation": [0.2, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.22, 0.92, 0.22], "color": [0.68, 0.74, 0.78, 1] },
+            { "name": "harness", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-rounded.glb", "translation": [0, 0.05, 0.16], "rotation": [0, 0, 0, 1], "scale": [0.5, 0.68, 0.15], "color": [0.05, 0.1, 0.14, 1] },
+            { "name": "strap-left", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half.glb", "translation": [-0.2, 0.48, 0.15], "rotation": [0, 0, 0, 1], "scale": [0.18, 0.44, 0.14], "color": [0.05, 0.1, 0.14, 1] },
+            { "name": "strap-right", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half.glb", "translation": [0.2, 0.48, 0.15], "rotation": [0, 0, 0, 1], "scale": [0.18, 0.44, 0.14], "color": [0.05, 0.1, 0.14, 1] },
+            { "name": "regulator", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder-half.glb", "translation": [0, 0.98, 0.17], "rotation": [0, 0, 0, 1], "scale": [0.13, 0.1, 0.13], "color": [0.9, 0.52, 0.06, 1] }
+          ]
+        }
+      },
+      {
+        "id": "b",
+        "label": "Compact Twin Air Set",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/prototype-kit",
+        "sourceAssetId": "prototype-kit@1.0:composite/scubaSet-b",
+        "modelFile": "scubaSet--b.glb",
+        "triangles": 336,
+        "fit": "Two short yellow tanks, twin dark valve rings, and a shared black manifold form a compact scuba silhouette.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 336,
+          "parts": [
+            { "name": "tank-left", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [-0.19, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.21, 0.72, 0.21], "color": [0.92, 0.58, 0.05, 1] },
+            { "name": "tank-right", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0.19, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.21, 0.72, 0.21], "color": [0.92, 0.58, 0.05, 1] },
+            { "name": "harness", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-half.glb", "translation": [0, 0, 0.16], "rotation": [0, 0, 0, 1], "scale": [0.48, 0.55, 0.14], "color": [0.05, 0.08, 0.1, 1] },
+            { "name": "valve-left", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder.glb", "translation": [-0.19, 0.73, 0], "rotation": [0, 0, 0, 1], "scale": [0.11, 0.08, 0.11], "color": [0.08, 0.1, 0.12, 1] },
+            { "name": "valve-right", "pack": "prototype-kit", "entry": "Models/GLB format/shape-hollow-cylinder.glb", "translation": [0.19, 0.73, 0], "rotation": [0, 0, 0, 1], "scale": [0.11, 0.08, 0.11], "color": [0.08, 0.1, 0.12, 1] },
+            { "name": "manifold", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.82, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.06, 0.28, 0.06], "color": [0.08, 0.1, 0.12, 1] }
+          ]
+        }
+      },
+      {
+        "id": "c",
+        "label": "Twin Survival Canisters",
+        "kind": "composite",
+        "sourceUrl": "https://kenney.nl/assets/survival-kit",
+        "sourceAssetId": "survival-kit@2.0+prototype-kit@1.0:composite/scubaSet-c",
+        "modelFile": "scubaSet--c.glb",
+        "triangles": 440,
+        "fit": "Paired blue capped canisters, a broad harness, and a top manifold keep both scuba tanks plainly visible.",
+        "recipe": {
+          "kind": "composite",
+          "expectedTriangles": 440,
+          "parts": [
+            { "name": "tank-left", "pack": "survival-kit", "entry": "Models/GLB format/bottle-large.glb", "translation": [-0.22, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.72, 1.08, 0.72], "color": [0.12, 0.4, 0.68, 1] },
+            { "name": "tank-right", "pack": "survival-kit", "entry": "Models/GLB format/bottle-large.glb", "translation": [0.22, 0, 0], "rotation": [0, 0, 0, 1], "scale": [0.72, 1.08, 0.72], "color": [0.12, 0.4, 0.68, 1] },
+            { "name": "harness", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cube-rounded.glb", "translation": [0, 0.05, 0.16], "rotation": [0, 0, 0, 1], "scale": [0.54, 0.66, 0.16], "color": [0.04, 0.08, 0.12, 1] },
+            { "name": "manifold", "pack": "prototype-kit", "entry": "Models/GLB format/shape-cylinder.glb", "translation": [0, 0.92, 0], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [0.07, 0.32, 0.07], "color": [0.82, 0.48, 0.06, 1] }
+          ]
+        }
+      }
+    ]
+  }
+}
