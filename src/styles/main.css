@@ -596,26 +596,38 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-meter__track { position: absolute; left: 6px; right: 4px; bottom: -7px; height: 4px; border: 0; background: #070808cc; transform: skewX(-12deg); }
 .survival-meter__fill { background: currentColor; }
 .survival-meter.is-danger { animation: condition-jolt .75s steps(2, end) infinite; }
+.survival-top {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.survival-top__status-row { display: flex; align-items: center; gap: 10px; }
+.survival-status { position: static; inset: auto; display: grid; gap: 2px; min-width: 150px; padding: 7px 12px; border: 0; text-align: center; }
+.survival-status [data-day] { color: var(--ink-bone); font-size: 1.15rem; text-shadow: 2px 2px 0 var(--ink-outline); }
+.survival-status__detail { color: var(--ink-faded); font-size: .62rem; letter-spacing: .12em; }
 .journal-marker {
   appearance: none;
-  top: 18px;
-  right: auto;
-  bottom: auto;
-  left: 50%;
-  min-width: 180px;
-  padding: 8px 12px 8px 58px;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  text-align: left;
-  transform: translateX(-50%) rotate(1.2deg);
-  transform-origin: top center;
   cursor: pointer;
 }
 .journal-marker:focus-visible { outline: 3px solid var(--ink-yellow); outline-offset: 6px; }
 .journal-marker:disabled { cursor: default; opacity: .72; }
-.journal-marker__art { position: absolute; left: 0; top: -5px; width: 64px; color: #8d5d37; }
+.journal-marker__art { width: 52px; color: #8d5d37; }
+.journal-marker__unread { position: absolute; top: -4px; right: -14px; padding: 2px 6px; color: var(--ink-yellow); background: #32100ee8; transform: rotate(5deg); }
+.end-day-button { min-width: 190px; min-height: 48px; padding: 10px 28px; color: var(--ink-bone); }
 .journal-overlay {
   place-content: center;
   justify-items: center;
@@ -671,7 +683,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .journal-page__navigation [data-journal-next] { justify-self: end; }
 .journal-page > [data-journal-close],
 .journal-page > [data-journal-continue] { justify-self: center; }
-.survival-status__time [data-day] { color: var(--ink-bone); font-size: 1.15rem; text-shadow: 2px 2px 0 var(--ink-outline); }
 .performance-stats {
   position: fixed;
   top: 112px;
@@ -690,7 +701,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   user-select: none;
 }
 .boat-tooltip { max-width: min(290px, calc(100vw - 32px)); padding: 10px 14px; border: 0; background: #090b0cf2; color: var(--ink-bone); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; clip-path: polygon(2% 2%, 98% 0, 100% 92%, 5% 100%, 0 54%); }
-.boat-anchor[data-action="endDay"] .boat-tooltip { min-width: 130px; background: linear-gradient(174deg, #795338, #4d2d1e 60%, #6c472f); font-size: .76rem; text-align: center; }
 @keyframes condition-jolt { 50% { transform: rotate(calc(var(--condition-tilt) - 2deg)) translateY(-2px); } }
 
 /* Cinematic survival overlays and semantic state treatments */
@@ -744,15 +754,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .outcome-deltas .is-negative { color: #f0a099; border-color: #b72f2b99; }
 
 @media (max-width: 980px) {
+  .survival-top { top: 12px; gap: 6px; }
+
   .survival-meters {
     gap: 5px;
     transform: scale(.86);
     transform-origin: top right;
-  }
-
-  .journal-marker {
-    transform: translateX(-50%) scale(.88) rotate(1.2deg);
-    transform-origin: top center;
   }
 
   .performance-stats { right: 16px; }

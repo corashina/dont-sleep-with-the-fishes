@@ -411,7 +411,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps every visible actionable anchor clear of fixed repair and horizon anchors', async () => {
+  it('keeps every visible actionable anchor clear of the fixed repair anchor', async () => {
     const propModels = await loadProductionPropModels();
     let world: BoatWorld | undefined;
     try {
@@ -426,7 +426,6 @@ describe('BoatWorld helpers', () => {
         .filter((anchor) => anchor.visible && anchor.action !== null);
       expect(actionable).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: 'repair-patch', action: 'repair' }),
-        expect.objectContaining({ id: 'horizon', action: 'endDay' }),
       ]));
       for (let first = 0; first < actionable.length; first += 1) {
         for (let second = first + 1; second < actionable.length; second += 1) {
@@ -619,7 +618,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects saved props plus fixed repair and horizon anchors', () => {
+  it('projects saved props plus the fixed repair anchor', () => {
     const savedItems = [savedItem('fishingRod'), savedItem('flareGun')];
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
@@ -634,16 +633,17 @@ describe('BoatWorld helpers', () => {
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
-    expect(anchors).toHaveLength(savedItems.length + 2);
+    expect(anchors).toHaveLength(savedItems.length + 1);
     expect(anchors).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish' }),
       expect.objectContaining({ id: 'flareGun-1', itemType: 'flareGun', action: null }),
       expect.objectContaining({ id: 'repair-patch', itemType: null, action: 'repair' }),
-      expect.objectContaining({ id: 'horizon', itemType: null, action: 'endDay', visible: true }),
     ]));
+    expect(anchors.some(({ id }) => id === 'horizon')).toBe(false);
+    expect(anchors.some(({ action }) => action === 'endDay')).toBe(false);
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
     const itemAnchor = anchors.find(({ id }) => id === 'fishingRod-1')!;
-    const fixedAnchor = anchors.find(({ id }) => id === 'horizon')!;
+    const fixedAnchor = anchors.find(({ id }) => id === 'repair-patch')!;
     expect(itemAnchor.hitArea).toEqual({
       width: expect.any(Number),
       height: expect.any(Number),
