@@ -26,6 +26,26 @@ describe('BoatDriftMotion', () => {
       .toEqual(sampleBoatWaveHeights(3.25, 0.78));
   });
 
+  it('produces a stronger squall hull response than calm at the same wave time', () => {
+    const time = 1;
+    const calm = new BoatDriftMotion().update(
+      sampleBoatWaveHeights(time, weatherAmplitudeScale('calm')),
+      time,
+      1 / 60,
+      false,
+    );
+    const squall = new BoatDriftMotion().update(
+      sampleBoatWaveHeights(time, weatherAmplitudeScale('squall')),
+      time,
+      1 / 60,
+      false,
+    );
+    const hullResponse = ({ heave, pitch, roll }: typeof calm.boat): number =>
+      Math.abs(heave) + Math.abs(pitch) + Math.abs(roll);
+
+    expect(hullResponse(squall.boat)).toBeGreaterThan(hullResponse(calm.boat));
+  });
+
   it('derives positive bow pitch and starboard roll from height differences', () => {
     const motion = new BoatDriftMotion();
     const frame = motion.update({
@@ -73,14 +93,23 @@ describe('BoatDriftMotion', () => {
     expect(resumed.boat.pitch).toBeLessThan(BOAT_DRIFT_CONFIG.pitchLimit);
   });
 
-  it('clamps long frame gaps and reports bounded bow impact', () => {
+  it('suppresses bow impact when a long frame gap loses sample continuity', () => {
     const motion = new BoatDriftMotion();
     motion.update(level(), 0, 1 / 60, false);
     const frame = motion.update({ ...level(), bow: 2 }, 5, 5, false);
 
-    expect(frame.bowImpact).toBeGreaterThanOrEqual(0);
-    expect(frame.bowImpact).toBeLessThanOrEqual(1);
+    expect(frame.bowImpact).toBe(0);
     expect(Number.isFinite(frame.angularVelocity.pitch)).toBe(true);
     expect(Number.isFinite(frame.angularVelocity.roll)).toBe(true);
+  });
+
+  it('suppresses long-gap impact while the hull integrates downward', () => {
+    const motion = new BoatDriftMotion();
+    motion.update(level(), 0, 1 / 60, false);
+
+    const frame = motion.update(level(-2), 5, 5, false);
+
+    expect(frame.boat.heave).toBeLessThan(0);
+    expect(frame.bowImpact).toBe(0);
   });
 });

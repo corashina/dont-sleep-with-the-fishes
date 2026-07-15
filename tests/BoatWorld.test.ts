@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  BufferAttribute,
   Matrix4,
   Material,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
+  Points,
   ShaderMaterial,
   Texture,
   Vector3,
@@ -82,6 +84,118 @@ function snapshot(
 }
 
 describe('BoatWorld helpers', () => {
+  it('moves the hull and rider rigs while preserving saved-item local transforms', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const savedItems = [savedItem('medicalKit')];
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      savedItems,
+    );
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
+    const localPosition = prop.position.clone();
+    const localQuaternion = prop.quaternion.clone();
+
+    for (let index = 1; index <= 40; index += 1) world.update(index * 0.1, 0.1);
+
+    expect(Math.abs(motionRig.rotation.x) + Math.abs(motionRig.rotation.y) + Math.abs(motionRig.rotation.z))
+      .toBeGreaterThan(0);
+    expect(Math.abs(cameraRig.rotation.x) + Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.rotation.z))
+      .toBeGreaterThan(0);
+    expect(Math.abs(cameraRig.rotation.x)).toBeLessThanOrEqual(Math.PI / 180);
+    expect(Math.abs(cameraRig.rotation.z)).toBeLessThanOrEqual(Math.PI / 180);
+    expect(prop.position.toArray()).toEqual(localPosition.toArray());
+    expect(prop.quaternion.toArray()).toEqual(localQuaternion.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps reduced-motion rigs and secondary cues neutral', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: true } as MediaQueryList,
+      propModels,
+      [savedItem('fishingRod')],
+    );
+    const line = world.scene.getObjectByName('fishing-line')!;
+    const authoredLineRotation = line.rotation.clone();
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
+    const oceanUniforms = (ocean.material as ShaderMaterial).uniforms;
+    const initialOceanTime = oceanUniforms.uTime!.value as number;
+    world.play('fish');
+    world.update(4, 0.2);
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
+
+    expect(motionRig.position.y).toBeCloseTo(0.22);
+    expect(motionRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(line.visible).toBe(true);
+    expect(line.rotation.toArray()).toEqual(authoredLineRotation.toArray());
+    expect(oceanUniforms.uTime!.value).toBeGreaterThan(initialOceanTime);
+    expect(oceanUniforms.uTime!.value).toBe(4);
+    const sprayPositions = (
+      spray.geometry.getAttribute('position') as BufferAttribute
+    ).array as Float32Array;
+    for (let index = 1; index < sprayPositions.length; index += 3) {
+      expect(sprayPositions[index]).toBe(-1000);
+    }
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps projected controls finite throughout the calm motion envelope', async () => {
+    const propModels = await loadProductionPropModels();
+    const savedItems = createItemInstances();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      savedItems,
+    );
+
+    for (let index = 1; index <= 80; index += 1) {
+      world.update(index * 0.1, 0.1);
+      const anchors = world.projectInteractionAnchors(1280, 720);
+      const itemAnchors = anchors.filter(({ itemType }) => itemType !== null);
+      expect(itemAnchors).toHaveLength(savedItems.length);
+      expect(itemAnchors.every(({ visible, x, y }) =>
+        visible && Number.isFinite(x) && Number.isFinite(y)
+        && x >= 0 && x <= 1280 && y >= 0 && y <= 720,
+      )).toBe(true);
+    }
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('applies fishing-line lag after the fishing cue makes the line visible', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      [savedItem('fishingRod')],
+    );
+    const line = world.scene.getObjectByName('fishing-line')!;
+    const authoredRotation = line.rotation.clone();
+    world.play('fish');
+    for (let index = 1; index <= 8; index += 1) world.update(index * 0.1, 0.1);
+    expect(line.visible).toBe(true);
+    expect(
+      Math.abs(line.rotation.x - authoredRotation.x)
+      + Math.abs(line.rotation.z - authoredRotation.z),
+    ).toBeGreaterThan(0);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('clamps mouse parallax and disables it for reduced motion', () => {
     expect(clampParallax(2, -2, false)).toEqual({ yaw: 0.045, pitch: -0.025 });
     expect(clampParallax(0.4, -0.4, true)).toEqual({ yaw: 0, pitch: 0 });
@@ -193,6 +307,25 @@ describe('BoatWorld helpers', () => {
 
     geometrySpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
     materialSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it('disposes bow-spray geometry and material once across repeated world disposal', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+    );
+    const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
+    const geometryDispose = vi.spyOn(spray.geometry, 'dispose');
+    const materialDispose = vi.spyOn(spray.material as Material, 'dispose');
+
+    world.dispose();
+    world.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 

@@ -16,13 +16,21 @@ describe('BoatSpray', () => {
     spray.dispose();
   });
 
-  it('advances active particles and resets them', () => {
+  it('moves emitted particles and lets them expire naturally', () => {
     const spray = new BoatSpray();
+    const positions = (
+      spray.points.geometry.getAttribute('position') as BufferAttribute
+    ).array as Float32Array;
     spray.emit(new Vector3(1, 2, 3), 0.8);
     expect(spray.activeCount()).toBeGreaterThan(0);
+    const emittedPosition = Array.from(positions.slice(0, 3));
+
     spray.update(0.1);
-    spray.reset();
+    expect(Array.from(positions.slice(0, 3))).not.toEqual(emittedPosition);
+
+    for (let index = 0; index < 10; index += 1) spray.update(0.1);
     expect(spray.activeCount()).toBe(0);
+    expect(positions[1]).toBe(-1000);
     spray.dispose();
   });
 
