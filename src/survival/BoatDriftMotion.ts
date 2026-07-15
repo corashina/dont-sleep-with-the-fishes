@@ -126,6 +126,7 @@ export class BoatDriftMotion {
     reducedMotion: boolean,
   ): BoatDriftFrame {
     const dt = clamp(delta, 0, BOAT_DRIFT_CONFIG.maxDelta);
+    const hasContinuousSample = delta > 0 && delta <= BOAT_DRIFT_CONFIG.maxDelta;
     if (reducedMotion) {
       this.setNeutral(samples.bow);
       return NEUTRAL_BOAT_DRIFT_FRAME;
@@ -151,7 +152,12 @@ export class BoatDriftMotion {
       stepCritical(this.rider.yaw, targetRider.yaw, BOAT_DRIFT_CONFIG.riderResponse, dt);
     }
 
-    const bowSpeed = dt > 0 ? (samples.bow - this.lastBowHeight) / dt : 0;
+    if (!hasContinuousSample) {
+      this.lastBowHeight = samples.bow;
+      return this.frame(0);
+    }
+
+    const bowSpeed = (samples.bow - this.lastBowHeight) / dt;
     this.lastBowHeight = samples.bow;
     const bowImpact = clamp((bowSpeed - this.boat.heave.velocity - 0.2) / 0.8, 0, 1);
     return this.frame(bowImpact);
