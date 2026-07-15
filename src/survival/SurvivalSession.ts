@@ -1,6 +1,6 @@
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
-import { createSurvivalInventory } from './inventory';
+import { SurvivalInventoryState } from './inventory';
 import type {
   JournalEntry,
   JournalEventRecord,
@@ -15,7 +15,6 @@ import type {
   RandomSource,
   ResourceDelta,
   SurvivalEventDefinition,
-  SurvivalInventory,
   SurvivalSnapshot,
   SurvivalState,
   WeatherId,
@@ -53,7 +52,7 @@ export class SurvivalSession {
   private restedToday = false;
   private actedToday = false;
   private dayEventOccurred = false;
-  private readonly inventory: SurvivalInventory;
+  private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
@@ -78,7 +77,7 @@ export class SurvivalSession {
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
-    this.inventory = createSurvivalInventory(this.savedItems);
+    this.inventory = new SurvivalInventoryState(this.savedItems);
 
     if (options.initialEventId !== undefined) {
       const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
@@ -87,21 +86,16 @@ export class SurvivalSession {
       this.dayEventOccurred = initialEvent.phase === 'day';
     }
 
-    this.recoveredBait = this.inventory.baitTin.charges ?? 0;
-    this.recoveredFood = this.inventory.cannedFood.charges ?? 0;
+    this.recoveredFood = this.inventory.count('cannedFood', 'usable');
+    this.recoveredBait = this.inventory.count('baitTin', 'usable');
     this.bait = this.recoveredBait;
     this.food = this.recoveredFood;
-    this.inventory.baitTin.charges = 0;
-    this.inventory.cannedFood.charges = 0;
 
     this.clampMeters();
     this.resolveTerminal();
   }
 
   snapshot(): SurvivalSnapshot {
-    const inventory = Object.fromEntries(
-      Object.entries(this.inventory).map(([id, entry]) => [id, { ...entry }]),
-    ) as SurvivalInventory;
     const lastOutcome = this.lastOutcome === null
       ? null
       : { ...this.lastOutcome, deltas: { ...this.lastOutcome.deltas } };
@@ -123,7 +117,7 @@ export class SurvivalSession {
       restedToday: this.restedToday,
       actedToday: this.actedToday,
       journalEntries: this.journalSnapshot(),
-      inventory,
+      inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
       lastOutcome,
@@ -261,7 +255,7 @@ export class SurvivalSession {
 
     switch (action) {
       case 'fish':
-        if (!this.inventory.fishingRod.owned) {
+        if (!this.inventory.hasUsable('fishingRod')) {
           return { code: 'no-fishing-rod', message: 'Fishing requires a recovered fishing rod.' };
         }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
@@ -272,7 +266,7 @@ export class SurvivalSession {
         }
         return null;
       case 'dive':
-        if (!this.inventory.scubaSet.owned) {
+        if (!this.inventory.hasUsable('scubaSet')) {
           return { code: 'no-scuba-set', message: 'Diving requires a recovered scuba set.' };
         }
         if (this.weather === 'squall') {
@@ -347,7 +341,7 @@ export class SurvivalSession {
   }
 
   private dive(): ActionOutcome {
-    const hasFlashlight = this.inventory.flashlight.owned;
+    const hasFlashlight = this.inventory.hasUsable('flashlight');
     const weatherSuccessDelta = this.weather === 'overcast' ? SURVIVAL_BALANCE.diving.overcastSuccessDelta : 0;
     const weatherInjuryDelta = this.weather === 'overcast' ? SURVIVAL_BALANCE.diving.overcastInjuryDelta : 0;
     const successChance = (hasFlashlight ? SURVIVAL_BALANCE.diving.flashlightSuccess : SURVIVAL_BALANCE.diving.success)
@@ -490,8 +484,7 @@ export class SurvivalSession {
   }
 
   private canUseEventItem(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    return entry.owned && (entry.durable || (entry.charges !== null && entry.charges > 0));
+    return this.inventory.hasUsable(id);
   }
 
   private reject(code: string, message: string): ActionOutcome {
@@ -550,15 +543,11 @@ export class SurvivalSession {
   }
 
   private consumeCharge(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    if (!entry.owned || entry.charges === null || entry.charges <= 0) return false;
-    entry.charges -= 1;
-    return true;
+    return this.inventory.consume(id).length > 0;
   }
 
   private hasCharge(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    return entry.owned && entry.charges !== null && entry.charges > 0;
+    return this.inventory.count(id, 'usable') > 0;
   }
 
   private resolveTerminal(): void {

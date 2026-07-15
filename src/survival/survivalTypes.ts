@@ -1,4 +1,4 @@
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { JournalEntry } from './journal';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
@@ -10,13 +10,15 @@ export type PresentationCue =
   | 'storm' | 'impact' | 'darkness' | 'sighting' | 'nightfall' | 'dawn'
   | 'rescue' | 'death' | 'sinking';
 
-export interface ItemInventoryState {
-  owned: boolean;
-  charges: number | null;
-  durable: boolean;
+export type ItemCondition = 'usable' | 'broken' | 'consumed' | 'lost';
+
+export interface SurvivalItemState extends ItemInstance {
+  readonly condition: ItemCondition;
 }
 
-export type SurvivalInventory = Record<ItemId, ItemInventoryState>;
+export type SurvivalInventorySnapshot = Readonly<
+  Partial<Record<ItemInstanceId, Readonly<SurvivalItemState>>>
+>;
 
 export interface ResourceDelta {
   health?: number;
@@ -80,7 +82,7 @@ export interface SurvivalSnapshot {
   restedToday: boolean;
   actedToday: boolean;
   readonly journalEntries: readonly JournalEntry[];
-  inventory: Readonly<SurvivalInventory>;
+  inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
   pendingEventId: string | null;
   lastOutcome: ActionOutcome | null;

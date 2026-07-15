@@ -3,10 +3,14 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
 
-const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
-  instanceId: `${type}-${index + 1}` as ItemInstanceId,
-  type,
-}));
+const saved = (...types: ItemId[]): ItemInstance[] => {
+  const counts = new Map<ItemId, number>();
+  return types.map((type) => {
+    const number = (counts.get(type) ?? 0) + 1;
+    counts.set(type, number);
+    return { instanceId: `${type}-${number}` as ItemInstanceId, type };
+  });
+};
 
 function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number) {
   const session = new SurvivalSession(saved(), {
@@ -54,13 +58,18 @@ describe('SurvivalSession daytime actions', () => {
     expect(sunk.resolveEvent(null).cue).toBe('sinking');
   });
   it('starts day one with frozen cloned supplies and one food per can', () => {
-    const savedItems = saved('cannedFood', 'waterJug');
+    const savedItems = saved('cannedFood', 'compass');
     const session = new SurvivalSession(savedItems, { seed: 9, random: sequenceRandom([0]) });
     savedItems.length = 0;
     const state = session.snapshot();
     expect(state).toMatchObject({ state: 'day', day: 1, health: 100, hunger: 20, energy: 4, hull: 75, food: 1 });
-    expect(state.inventory.waterJug.charges).toBe(3);
-    expect(state.savedItems).toEqual(saved('cannedFood', 'waterJug'));
+    expect(state.inventory['cannedFood-1']).toEqual({
+      instanceId: 'cannedFood-1', type: 'cannedFood', condition: 'usable',
+    });
+    expect(state.inventory['compass-1']).toEqual({
+      instanceId: 'compass-1', type: 'compass', condition: 'usable',
+    });
+    expect(state.savedItems).toEqual(saved('cannedFood', 'compass'));
     expect(state.savedItems).not.toBe(savedItems);
     expect(Object.isFrozen(state.savedItems)).toBe(true);
     expect(state.savedItems.every(Object.isFrozen)).toBe(true);
@@ -72,7 +81,7 @@ describe('SurvivalSession daytime actions', () => {
       random: sequenceRandom([0.1, 0.1]),
     });
     expect(session.perform('fish', 'useBait')).toMatchObject({ accepted: true, deltas: { energy: -2, food: 2, bait: -1 } });
-    expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 2, actedToday: true });
+    expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 0, actedToday: true });
   });
 
   it('does not restore a consumed recovered can when diving finds loose food', () => {
@@ -97,10 +106,10 @@ describe('SurvivalSession daytime actions', () => {
     });
 
     session.perform('fish', 'useBait');
-    expect(session.snapshot()).toMatchObject({ bait: 2, recoveredBait: 2 });
+    expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
     session.perform('dive');
 
-    expect(session.snapshot()).toMatchObject({ bait: 3, recoveredBait: 2 });
+    expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
   });
 
   it('requires a rod for fishing and scuba for diving', () => {
@@ -155,9 +164,9 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().state).toBe('dayEvent');
     const first = session.resolveEvent('waterJug');
     expect(first.accepted).toBe(true);
-    const charges = session.snapshot().inventory.waterJug.charges;
+    const inventory = session.snapshot().inventory;
     expect(session.resolveEvent('waterJug').accepted).toBe(false);
-    expect(session.snapshot().inventory.waterJug.charges).toBe(charges);
+    expect(session.snapshot().inventory).toEqual(inventory);
   });
 
   it('does not consume an unsuitable item and applies the authored fallback consequence', () => {
@@ -166,9 +175,9 @@ describe('SurvivalSession daytime actions', () => {
       random: sequenceRandom([0]),
       initialEventId: 'day-sudden-squall',
     });
-    const before = session.snapshot().inventory.waterJug.charges;
+    const before = session.snapshot().inventory;
     expect(session.resolveEvent('waterJug')).toMatchObject({ accepted: true, deltas: { hull: -15 } });
-    expect(session.snapshot().inventory.waterJug.charges).toBe(before);
+    expect(session.snapshot().inventory).toEqual(before);
   });
 
   it('draws a night event, advances dawn, and applies increasing rescue chance', () => {
@@ -288,13 +297,13 @@ describe('SurvivalSession daytime actions', () => {
       seed: 11,
       initialEventId: 'night-hull-impact',
     });
-    const charges = session.snapshot().inventory.waterJug.charges;
+    const inventory = session.snapshot().inventory;
     session.resolveEvent('waterJug');
     expect(session.snapshot().journalEntries[0]!.nighttime).toMatchObject({
       attemptedItemId: 'waterJug',
       resolution: 'unsuitableItem',
     });
-    expect(session.snapshot().inventory.waterJug.charges).toBe(charges);
+    expect(session.snapshot().inventory).toEqual(inventory);
   });
 
   it('finalizes the journal before a night consequence ends the run', () => {
