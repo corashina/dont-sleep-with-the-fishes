@@ -89,6 +89,24 @@ describe('scavenging ship layout', () => {
     expect(surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
     expect(surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
     expect(new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size).toBe(27);
+    const categoriesByFurniture = Object.fromEntries(SHIP_LAYOUT.furniture.map(({ id, surfaces }) => [
+      id,
+      [...new Set(surfaces.flatMap(({ categories }) => categories))].sort(),
+    ]));
+    expect(categoriesByFurniture['cabin-desk-aft']).toEqual(['provisions']);
+    expect(categoriesByFurniture['cabin-bookcase-forward']).toEqual(['provisions']);
+    expect(categoriesByFurniture['helm-desk-forward']).toEqual(['navigation']);
+    expect(categoriesByFurniture['chart-table-port']).toEqual(['navigation']);
+    expect(categoriesByFurniture['instrument-cabinet-starboard-aft']).toEqual(['navigation']);
+    expect(categoriesByFurniture['instrument-cabinet-starboard-forward']).toEqual(['navigation']);
+    expect(categoriesByFurniture['workbench-port']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['workbench-starboard']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['storage-shelf-port']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['storage-shelf-starboard']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['cargo-rod-rack-forward-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-forward-starboard']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-aft-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-aft-starboard']).toEqual(['deckGear']);
   });
 
   it('rejects the old blocked cabin exit and overlapping cargo arrangement by object id', () => {
@@ -238,7 +256,7 @@ describe('scavenging ship layout', () => {
         surfaces: [{
           id: surfaceId,
           physicalSlotId: surfaceId,
-          categories: ['foodWater' as const],
+          categories: ['provisions' as const],
           localPosition: [0, 1, 0] as const,
           localRotation: [0, 0, 0] as const,
           footprint: { width: 0.5, depth: 0.5 },
