@@ -79,15 +79,9 @@ try {
     Pop-Location
   }
 
-  foreach ($buildRoot in @($kenneyBuildRoot, $projectBuildRoot)) {
-    foreach ($generatedFile in @(Get-ChildItem -File -LiteralPath $buildRoot)) {
-      $destination = Join-Path $stagedRoot $generatedFile.Name
-      if (Test-Path -LiteralPath $destination) {
-        throw "Duplicate generated item model output: $($generatedFile.Name)"
-      }
-      Copy-Item -LiteralPath $generatedFile.FullName -Destination $destination
-    }
-  }
+  Copy-UniqueModelBuildOutputs `
+    -BuildRoots @($kenneyBuildRoot, $projectBuildRoot) `
+    -DestinationRoot $stagedRoot
 
   Push-Location $repositoryRoot
   try {
@@ -97,12 +91,10 @@ try {
     Pop-Location
   }
 
-  $stagedEntries = @(Get-ChildItem -Force -LiteralPath $stagedRoot)
-  $stagedFiles = @($stagedEntries | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
-  $entryDifference = @(Compare-Object -ReferenceObject @($expectedFiles | Sort-Object) -DifferenceObject $stagedFiles)
-  if ($stagedEntries.Count -ne 20 -or $entryDifference.Count -ne 0) {
-    throw 'Staged item model directory does not contain exactly 19 approved GLBs plus item-model-metadata.json'
-  }
+  Assert-ExactModelDirectory `
+    -Directory $stagedRoot `
+    -ExpectedFiles $expectedFiles `
+    -Description 'Staged item model directory'
 
   Push-Location $repositoryRoot
   try {

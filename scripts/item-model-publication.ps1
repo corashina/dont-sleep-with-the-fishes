@@ -38,6 +38,37 @@ function Remove-GuardedSwapDirectory {
   Remove-Item -Recurse -Force -LiteralPath $resolvedPath
 }
 
+function Copy-UniqueModelBuildOutputs {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$BuildRoots,
+    [Parameter(Mandatory = $true)][string]$DestinationRoot
+  )
+  foreach ($buildRoot in $BuildRoots) {
+    foreach ($generatedFile in @(Get-ChildItem -File -LiteralPath $buildRoot | Sort-Object Name)) {
+      $destination = Join-Path $DestinationRoot $generatedFile.Name
+      if (Test-Path -LiteralPath $destination) {
+        throw "Duplicate generated item model output: $($generatedFile.Name)"
+      }
+      Copy-Item -LiteralPath $generatedFile.FullName -Destination $destination
+    }
+  }
+}
+
+function Assert-ExactModelDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string]$Directory,
+    [Parameter(Mandatory = $true)][string[]]$ExpectedFiles,
+    [Parameter(Mandatory = $true)][string]$Description
+  )
+  $entries = @(Get-ChildItem -Force -LiteralPath $Directory)
+  $actualFiles = @($entries | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
+  $expected = @($ExpectedFiles | Sort-Object)
+  $difference = @(Compare-Object -CaseSensitive -ReferenceObject $expected -DifferenceObject $actualFiles)
+  if ($entries.Count -ne $expected.Count -or $difference.Count -ne 0) {
+    throw "$Description does not match the expected exact inventory"
+  }
+}
+
 function Publish-ModelDirectory {
   param(
     [Parameter(Mandatory = $true)][string]$ModelsRoot,
@@ -65,6 +96,9 @@ function Publish-ModelDirectory {
       }
       & $MoveDirectory $StagedRoot $OutputRoot
       $newPublished = $true
+      if ($previousMoved) {
+        Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $BackupRoot -Prefix $BackupPrefix
+      }
     } catch {
       $publishError = $_
       try {
@@ -82,9 +116,6 @@ function Publish-ModelDirectory {
       throw $publishError
     }
 
-    if ($previousMoved) {
-      Remove-GuardedSwapDirectory -ModelsRoot $ModelsRoot -Path $BackupRoot -Prefix $BackupPrefix
-    }
     $published = $true
   } finally {
     if (-not $published) {
