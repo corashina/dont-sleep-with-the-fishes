@@ -66,11 +66,9 @@ function createRandomSeed(): number {
 }
 
 export class Game {
-  private mount!: HTMLElement;
   private renderer!: WebGLRenderer;
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
-  private reducedMotion!: MediaQueryList;
   private propModels!: PropModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
@@ -248,11 +246,9 @@ export class Game {
     factories: GameFactories,
     createSeed: () => number,
   ): void {
-    this.mount = mount;
     this.renderer = renderer;
     this.camera = camera;
     this.clock = clock;
-    this.reducedMotion = reducedMotion;
     this.propModels = propModels;
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;

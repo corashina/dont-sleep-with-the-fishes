@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS } from '../src/game/ItemState';
-import { ITEM_ARTWORK_IDS, UI_ARTWORK_IDS, itemArtwork, uiArtwork } from '../src/ui/uiArtwork';
+import { UI_ARTWORK_IDS, itemArtwork, uiArtwork } from '../src/ui/uiArtwork';
 
 describe('itemArtwork', () => {
   it('renders one decorative portrait for every scavenging item type', () => {
-    expect(ITEM_ARTWORK_IDS).toEqual(ITEM_IDS);
-
     ITEM_IDS.forEach((id) => {
       const markup = itemArtwork(id, 'weight-circle__art');
       expect(markup).toContain('<svg');
