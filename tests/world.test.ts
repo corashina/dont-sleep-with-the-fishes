@@ -23,7 +23,7 @@ import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/It
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
+import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';

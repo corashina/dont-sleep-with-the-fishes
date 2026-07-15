@@ -1,10 +1,8 @@
 import { Group, Matrix4, Vector3, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import {
-  createWaterExclusion,
-  pointInWaterExclusion,
-} from '../src/ocean/WaterExclusion';
+import { createWaterExclusion } from '../src/ocean/WaterExclusion';
+import { pointInWaterExclusion } from './helpers/waterExclusion';
 
 describe('water exclusions', () => {
   it('keeps containment aligned with a moved and rotated vessel', () => {

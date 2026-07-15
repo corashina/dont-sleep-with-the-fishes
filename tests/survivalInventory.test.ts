@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { createSurvivalInventory } from '../src/survival/inventory';
-import { mulberry32, sequenceRandom } from '../src/survival/random';
+import { mulberry32 } from '../src/survival/random';
+import { sequenceRandom } from './helpers/random';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
