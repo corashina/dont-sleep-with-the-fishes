@@ -1,4 +1,4 @@
-import { ITEM_IDS, type ItemId } from '../game/ItemState';
+import type { ItemId } from '../game/ItemState';
 
 export const UI_ARTWORK_IDS = [
   'health', 'hunger', 'energy', 'hull', 'watch', 'journal', 'warning',
