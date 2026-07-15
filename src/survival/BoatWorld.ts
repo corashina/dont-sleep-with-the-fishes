@@ -29,7 +29,7 @@ import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
-import { collectMeshResources, disposeMeshResources } from '../world/SceneResources';
+import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
@@ -475,9 +475,7 @@ export class BoatWorld {
     this.camera.position.copy(this.originalCameraPosition);
     this.camera.quaternion.copy(this.originalCameraQuaternion);
     this.originalCameraParent?.add(this.camera);
-    disposeMeshResources(this.ownedGeometries, this.ownedMaterials);
-    this.ownedTextures.forEach((texture) => texture.dispose());
-    this.ownedTextures.clear();
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures);
   }
 
   private buildDistantVessel(): void {

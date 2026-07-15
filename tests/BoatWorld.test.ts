@@ -333,6 +333,54 @@ describe('BoatWorld helpers', () => {
     spies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
     propModels.dispose();
   });
+
+  it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('medicalKit')],
+    );
+    const propMesh = firstMesh(world.scene.getObjectByName('prop:medicalKit-1')!);
+    const lifeboatMaterials = new Set<Material>();
+    collectMeshResources(
+      world.scene.getObjectByName('lifeboat')!,
+      new Set<BufferGeometry>(),
+      lifeboatMaterials,
+    );
+    const textures = new Set<Texture>();
+    lifeboatMaterials.forEach((material) => {
+      Object.values(material).forEach((value) => {
+        if (value instanceof Texture) textures.add(value);
+      });
+    });
+    const texture = textures.values().next().value!;
+    expect(texture).toBeInstanceOf(Texture);
+    const firstError = new Error('boat geometry disposal failed');
+    const laterError = new Error('boat material disposal failed');
+    const geometryDispose = vi.spyOn(propMesh.geometry, 'dispose').mockImplementation(() => {
+      throw firstError;
+    });
+    const material = Array.isArray(propMesh.material) ? propMesh.material[0]! : propMesh.material;
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      throw laterError;
+    });
+    const textureDispose = vi.spyOn(texture, 'dispose');
+
+    expect(() => world.dispose()).toThrow(firstError);
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+    expect(() => world.dispose()).not.toThrow();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+
+    propModels.dispose();
+  });
+
   it('keeps all maximum-inventory item anchor centers at least 40 pixels apart', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     camera.updateProjectionMatrix();
