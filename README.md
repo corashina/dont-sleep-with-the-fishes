@@ -62,7 +62,7 @@ In the lifeboat, each day gives four energy for daytime actions:
 - **Repair** restores hull using recovered material or a duct-tape charge.
 - **Treat** spends a medical-kit charge to restore health.
 - **Rest** consumes one water charge, restores two energy, and is available once per day.
-- **End day** advances into the day and night event sequence.
+- **End day** starts sleep and the night sequence; dawn follows after the night resolves.
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
