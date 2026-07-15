@@ -247,7 +247,7 @@ export class ScavengePhase implements GamePhase {
       {
         onSaved: (instance) => {
           if (!this.session.saveCarried()) return;
-          this.world.saveItem(instance.instanceId, this.session.snapshot().savedCount - 1);
+          this.world.saveItem(instance);
         },
         onLost: (instance) => {
           if (!this.session.loseCarried()) return;

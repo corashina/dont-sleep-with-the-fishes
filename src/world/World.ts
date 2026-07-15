@@ -7,6 +7,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   Scene,
+  Texture,
   Vector3,
 } from 'three';
 import {
@@ -23,7 +24,7 @@ import type { CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
-import { createLifeboat, LIFEBOAT_WATER_EXCLUSION } from './Lifeboat';
+import { createLifeboat, type LifeboatBuild } from './Lifeboat';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
 import { createShip, type ShipBuild } from './Ship';
@@ -55,11 +56,13 @@ export class World {
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
   private readonly boatStorage: Group;
+  private readonly lifeboatWaterExclusion: LifeboatBuild['waterExclusion'];
   private readonly buoyancy: BoatBuoyancy;
   private readonly shipBuild: ShipBuild;
   private readonly boatAnchor: Vector3;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly ownedTextures = new Set<Texture>();
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private disposed = false;
 
@@ -103,10 +106,11 @@ export class World {
 
     const boatBuild = createLifeboat();
     this.lifeboat = boatBuild.root;
-    this.lifeboat.scale.setScalar(1.15);
     this.lifeboat.position.copy(this.boatAnchor);
     this.boatStorage = boatBuild.storageRoot;
     this.lifeboatAcceptance = boatBuild.acceptanceBox;
+    this.lifeboatWaterExclusion = boatBuild.waterExclusion;
+    boatBuild.textures.forEach((texture) => this.ownedTextures.add(texture));
     scene.add(this.lifeboat);
     collectOwnedResources(this.lifeboat, this.ownedGeometries, this.ownedMaterials);
 
@@ -152,8 +156,8 @@ export class World {
       ),
       createWaterExclusion(
         this.lifeboat,
-        LIFEBOAT_WATER_EXCLUSION.halfWidth,
-        LIFEBOAT_WATER_EXCLUSION.halfLength,
+        this.lifeboatWaterExclusion.halfWidth,
+        this.lifeboatWaterExclusion.halfLength,
       ),
     ]);
     this.environment.update(delta, sinking, cameraPosition.x, cameraPosition.z, reducedMotion);
@@ -165,10 +169,10 @@ export class World {
     }
   }
 
-  saveItem(instanceId: ItemInstanceId, storageIndex: number): void {
-    const item = this.itemObjects.get(instanceId);
-    if (!item) return;
-    const transform = boatStorageTransform(storageIndex);
+  saveItem(instance: ItemInstance): void {
+    const item = this.itemObjects.get(instance.instanceId);
+    if (!item || item.userData.itemType !== instance.type) return;
+    const transform = boatStorageTransform(instance);
     item.removeFromParent();
     this.boatStorage.add(item);
     item.position.copy(transform.position);
@@ -196,7 +200,9 @@ export class World {
     this.shipBuild.dispose();
     this.ownedGeometries.forEach((geometry) => geometry.dispose());
     this.ownedMaterials.forEach((material) => material.dispose());
+    this.ownedTextures.forEach((texture) => texture.dispose());
     this.ownedGeometries.clear();
     this.ownedMaterials.clear();
+    this.ownedTextures.clear();
   }
 }
