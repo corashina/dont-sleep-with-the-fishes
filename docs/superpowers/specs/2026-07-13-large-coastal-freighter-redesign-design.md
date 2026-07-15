@@ -1,4 +1,4 @@
-# Last Boat Out: Large Coastal Freighter Redesign
+# Don't Sleep With The Fishes: Large Coastal Freighter Redesign
 
 - **Status:** Approved design; awaiting written-spec review
 - **Date:** 2026-07-13
@@ -320,4 +320,3 @@ The redesign is complete when:
 11. The existing item rules, physical carrying, lifeboat storage, survival handoff, pause, restart, and accessibility behavior continue to work.
 12. Water exclusion follows the enlarged hull through the full sinking transform.
 13. Automated tests, type checking, the production build, and browser QA pass.
-

@@ -5,6 +5,7 @@ export class InputController {
   private lookX = 0;
   private lookY = 0;
   private interactQueued = false;
+  private jumpQueued = false;
   private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -49,6 +50,12 @@ export class InputController {
     return queued;
   }
 
+  consumeJump(): boolean {
+    const queued = this.jumpQueued;
+    this.jumpQueued = false;
+    return queued;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -62,10 +69,15 @@ export class InputController {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.pressed.add(event.code);
+    if (event.code === 'Space') {
+      if (this.pointerLocked) event.preventDefault();
+      if (!event.repeat) this.jumpQueued = true;
+    }
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     this.pressed.delete(event.code);
+    if (event.code === 'Space' && this.pointerLocked) event.preventDefault();
   };
 
   private readonly onMouseDown = (event: MouseEvent): void => {
@@ -83,5 +95,6 @@ export class InputController {
     this.lookX = 0;
     this.lookY = 0;
     this.interactQueued = false;
+    this.jumpQueued = false;
   };
 }

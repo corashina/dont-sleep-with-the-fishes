@@ -2,7 +2,7 @@
 
 ## Goal
 
-Bring Last Boat Out's survival gameplay close to the Don't Sleep With The Fishes Fandom wiki while keeping this project independent of story content. The checked-in game data must reproduce every exact, relevant value documented by the selected wiki snapshot. Where the wiki is silent, incomplete, or contradictory, the game preserves its current behavior. New ship items that have no documented weight or spawn count use weight `1` and spawn count `1`.
+Bring Don't Sleep With The Fishes' survival gameplay close to the Don't Sleep With The Fishes Fandom wiki while keeping this project independent of story content. The checked-in game data must reproduce every exact, relevant value documented by the selected wiki snapshot. Where the wiki is silent, incomplete, or contradictory, the game preserves its current behavior. New ship items that have no documented weight or spawn count use weight `1` and spawn count `1`.
 
 Canonical source pages:
 

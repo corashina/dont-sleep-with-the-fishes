@@ -1,4 +1,4 @@
-# Last Boat Out First-Person Scavenging Demo Implementation Plan
+# Don't Sleep With The Fishes First-Person Scavenging Demo Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -114,7 +114,7 @@ Create `package.json`:
 
 ```json
 {
-  "name": "last-boat-out",
+  "name": "dont-sleep-with-the-fishes",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -2315,7 +2315,7 @@ export class GameUI {
       <section class="screen is-visible start-screen" data-start>
         <div class="screen-rule"></div>
         <p class="kicker">A THREE.JS SURVIVAL PROTOTYPE</p>
-        <h1>LAST BOAT<br>OUT</h1>
+        <h1>DON'T SLEEP<br>WITH THE<br>FISHES</h1>
         <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
         <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>E</dd></div></dl>
         <button type="button" class="primary-action" data-start-button>BEGIN EVACUATION</button>
@@ -2408,11 +2408,11 @@ Create `index.html`:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1b292f">
-    <meta name="description" content="Last Boat Out — a first-person Three.js sinking-ship scavenging demo.">
-    <title>Last Boat Out</title>
+    <meta name="description" content="Don't Sleep With The Fishes — a first-person Three.js sinking-ship scavenging demo.">
+    <title>Don't Sleep With The Fishes</title>
   </head>
   <body>
-    <main id="app" aria-label="Last Boat Out game"></main>
+    <main id="app" aria-label="Don't Sleep With The Fishes game"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
@@ -2988,7 +2988,7 @@ Expected: all tests PASS, TypeScript reports no errors, and Vite builds `dist/`.
 Create `README.md`:
 
 ````markdown
-# Last Boat Out
+# Don't Sleep With The Fishes
 
 A desktop-browser first-person scavenging demo inspired by the opening pressure of *Don't Sleep With The Fishes*. Built from scratch with TypeScript and Three.js using original procedural geometry and shaders.
 

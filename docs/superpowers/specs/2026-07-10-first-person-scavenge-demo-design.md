@@ -1,4 +1,4 @@
-# Last Boat Out — First-Person Scavenging Demo Design
+# Don't Sleep With The Fishes — First-Person Scavenging Demo Design
 
 - **Status:** Approved design; awaiting written-spec review
 - **Date:** 2026-07-10
@@ -10,7 +10,7 @@
 
 Build a polished, replayable first-person web demo inspired by the opening scavenging sequence of *Don't Sleep With The Fishes*. The player has 120 seconds to search a sinking ship, carry supplies to a nearby lifeboat, and reach the evacuation point before the vessel submerges.
 
-This is a clean implementation from scratch. All geometry, writing, interface design, effects, and branding are original. The working title is **Last Boat Out**.
+This is a clean implementation from scratch. All geometry, writing, interface design, effects, and branding are original. The game title is **Don't Sleep With The Fishes**.
 
 The demo must prove four things:
 

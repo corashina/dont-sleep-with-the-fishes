@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "last-boat-out",
+      "name": "dont-sleep-with-the-fishes",
       "dependencies": {
         "three": "^0.180.0",
       },

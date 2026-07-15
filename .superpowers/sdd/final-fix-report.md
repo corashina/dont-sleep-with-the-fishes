@@ -1,155 +1,197 @@
-# Final Physical Inventory Review Fix Report
+# Kenney Model Audit Final-Fix Report
 
-Date: 2026-07-12
+Date: 2026-07-14
 
 ## Scope
 
-Implemented only the five findings from the final whole-branch review:
+Hardened the final pre-publication model audit without changing fetch orchestration, gameplay,
+trusted custom recipe paths, the required nine-file set, triangle budgets, ledger checks, or
+`--models-dir` behavior.
 
-1. Recovered canned-food and bait-tin depletion is now tracked separately from loose aggregate gains.
-2. Unavailable numeric day-action shortcuts announce their stored reason through the polite live region.
-3. Continue renders and synchronizes updated props/anchors before closing the outcome and restoring focus.
-4. Scavenging failure summaries enumerate saved instance states rather than deprecated type aliases.
-5. Carried items use explicit list/row classes with visible block/grid spacing.
+The audit now rejects, with the affected GLB path in each diagnostic:
 
-## Root Causes
+- missing or empty `POSITION` geometry;
+- non-finite position components or computed position bounds;
+- empty or non-finite world-space model bounds;
+- non-data external buffer URIs;
+- non-data external image/texture URIs; and
+- material-referenced textures whose image source has no non-empty embedded bytes.
 
-- `BoatWorld` derived physical canned-food and bait-tin uses from aggregate stores. Fishing/diving gains therefore refilled recovered props after consumption.
-- `SurvivalUI.handleKeyDown` returned immediately for unavailable actions without publishing the reason.
-- `SurvivalPhase.handleContinue` called `hideOutcome` before `renderSnapshot`; focus restoration evaluated stale anchors, after which synchronization removed the focused control.
-- `GameUI.showFailureResult` inspected one deprecated type-level status per item type, so it missed a saved non-first duplicate.
-- Carried rows were unclassified inline spans with no explicit list layout.
+The archive-source fixture also contains `unapproved-sentinel.txt` and proves that the allowlisted
+extractor leaves it inside the archive.
 
 ## RED Evidence
 
-### Recovered food/bait and BoatWorld sync
-
-Command:
+Tests were added before production changes. Command:
 
 ```text
-bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts -t "recovered|refill"
+bun run test -- tests/itemModelAudit.test.ts tests/KenneyItemSources.test.ts
 ```
 
-Observed before production changes: exit 1; 3 failed, 1 passed, 29 skipped. Both session snapshots lacked `recoveredFood`/`recoveredBait`, and the second canned-food prop remained visible after aggregate food increased (`expected true to be false`).
+Observed: exit 1; 7 failed and 8 passed across 15 tests.
 
-### Unavailable numeric shortcuts
+- Missing `POSITION`, empty `POSITION`, non-finite positions, and non-finite model bounds were
+  incorrectly accepted with exit status 0.
+- External buffer and texture fixtures were rejected only by the existing unexpected-entry guard;
+  the required item-specific URI diagnostic was absent.
+- A referenced texture without image bytes reached the parser's generic
+  `Missing resource URI or buffer view.` error instead of an item-specific audit error.
+- All 6 Kenney source-guard tests passed, including the new archive sentinel assertion.
 
-Command:
+This is the exact RED summary printed by Vitest:
 
 ```text
-bun run test tests/SurvivalUI.test.ts -t "announces unavailable numeric shortcuts"
+Test Files  1 failed | 1 passed (2)
+Tests       7 failed | 8 passed (15)
 ```
-
-Observed before production changes: exit 1; the publication list was empty (`expected [] to have a length of 2`).
-
-### Continue synchronization and focus
-
-Command:
-
-```text
-bun run test tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts -t "Continue|moves focus"
-```
-
-Observed before production changes: exit 1; 2 failed. The UI render invocation occurred after `hideOutcome` (`expected 12 to be less than 8`), and after consuming the last can focus fell to `<body>` instead of the horizon anchor.
-
-### Saved duplicate failure summary
-
-Command:
-
-```text
-bun run test tests/GameUI.test.ts -t "saved duplicate"
-```
-
-Observed before production changes: exit 1; summary contained `SAVED — NONE` rather than `SAVED — CANNED FOOD` when only `cannedFood-2` was saved.
-
-### Carried list DOM/CSS
-
-Command:
-
-```text
-bun run test tests/GameUI.test.ts -t "renders carry weight"
-```
-
-Observed before production changes: exit 1; the carried container had no `carried-list` class.
 
 ## GREEN Evidence
 
-Focused commands after implementation:
+First GREEN attempt:
 
 ```text
-bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts -t "recovered|refill"
-# 2 files passed; 4 tests passed
-
-bun run test tests/SurvivalUI.test.ts -t "announces unavailable numeric shortcuts"
-# 1 file passed; 1 test passed
-
-bun run test tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts -t "Continue|moves focus"
-# 2 files passed; 5 tests passed
-
-bun run test tests/GameUI.test.ts -t "saved duplicate|renders carry weight"
-# 1 file passed; 2 tests passed
+bun run test -- tests/itemModelAudit.test.ts tests/KenneyItemSources.test.ts
 ```
 
-Affected suites:
+Observed: exit 1; 14 passed and 1 failed. All validation worked; only the model-bounds diagnostic
+wording did not match the intentional item-specific wording. The production diagnostic was
+tightened, then the focused gate passed. A separate empty-model-bounds fixture was retained in the
+final focused suite.
+
+Final focused command:
 
 ```text
-bun run test tests/SurvivalSession.test.ts tests/BoatWorld.test.ts tests/SurvivalUI.test.ts tests/SurvivalPhase.test.ts tests/SurvivalPhaseFocus.test.ts tests/GameUI.test.ts
-# 6 files passed; 92 tests passed
+bun run test -- tests/itemModelAudit.test.ts tests/KenneyItemSources.test.ts
 ```
 
-Final verification:
+Observed: exit 0.
 
 ```text
+Test Files  2 passed (2)
+Tests       16 passed (16)
+```
+
+## Verification Results
+
+```text
+bun run models:check
+# exit 0; all nine GLBs accepted; total: 2640 / 28000 triangles
+
+bun run typecheck
+# first run: exit 1 because concurrent, unrelated BoatWorld.ts work referenced missing
+# legacyOceanAtmosphere and survivalLighting
+# fresh run after that workspace work settled: exit 0
+
+bun run test
+# an initial run overlapped the same incomplete unrelated BoatWorld.ts edit and exited 1 with
+# 18 BoatWorld.test.ts ReferenceError failures; both scoped suites passed in that run
+# fresh final-tree run after the workspace settled: exit 0; 45 files and 463 tests passed
+
+bun run build
+# exit 0; its tsc --noEmit gate passed and Vite emitted all nine GLBs
+
+git diff --check -- scripts/check-item-models.mjs tests/itemModelAudit.test.ts tests/KenneyItemSources.test.ts
+# exit 0
+```
+
+## Self-Review
+
+- Error messages identify the affected GLB and distinguish missing/empty positions, non-finite
+  positions, empty/non-finite model bounds, external resource URIs, and missing embedded image data.
+- Bounds are computed from every scene-instanced mesh in world space. A malformed mesh cannot be
+  hidden by a valid sibling because each transformed position must remain finite.
+- Material texture references include core texture slots and extension texture slots discovered
+  recursively; common alternative image-source extensions are resolved.
+- Embedded image validation accepts non-empty buffer-view or data-URI bytes and rejects absent,
+  zero-length, truncated, or external image sources.
+- The requested staging directory remains authoritative. Tests copy the exact nine-file set into a
+  temporary `--models-dir`, mutate only one model, and continue to exercise the exact-set guard.
+- Existing nine-file, triangle, aggregate budget, ledger, `--assets-only`, argument parsing, and
+  `--models-dir` paths remain in place.
+- The current nine committed Kenney GLBs pass the hardened audit unchanged.
+- The commit is limited to the audit script, its two requested test files, and this report.
+
+## Concerns
+
+- An earlier full-suite attempt overlapped an incomplete unrelated `BoatWorld.ts` edit. The fresh
+  final-tree run passes all 45 files and 463 tests; the earlier transient result is retained above
+  for exact chronology.
+- `@gltf-transform/core` continues to print its existing optional `KHR_texture_transform` warnings
+  while reading the nine current GLBs. The audit exits 0.
+- Vite continues to emit the existing advisory for a JavaScript chunk larger than 500 kB. The build
+  exits 0; bundle splitting is outside this fix.
+
+## Final Re-review: Triangle Validity Hardening
+
+Date: 2026-07-14
+
+### Root Cause
+
+The audit counted indexed elements without dereferencing them, so an accessor containing index `3`
+for three `POSITION` vertices still contributed one triangle. It also treated finite, ordered model
+bounds as sufficient evidence of geometry, allowing a collinear zero-area triangle to pass.
+
+### RED Evidence
+
+The CLI-boundary fixtures were added before the second production change. Both replace only
+`flareGun.glb` inside a temporary copy of the exact nine-file staged set and assert item-specific
+errors.
+
+```text
+bun run test tests/itemModelAudit.test.ts
+```
+
+Observed against the unchanged audit: exit 1. The non-indexed collinear triangle and indexed
+out-of-range triangle were both incorrectly accepted with exit status 0.
+
+```text
+Test Files  1 failed (1)
+Tests       2 failed | 10 passed (12)
+```
+
+### GREEN Evidence
+
+```text
+bun run test tests/itemModelAudit.test.ts
+```
+
+Observed after implementation: exit 0.
+
+```text
+Test Files  1 passed (1)
+Tests       13 passed (13)
+```
+
+The final suite includes a positive non-degenerate planar triangle fixture, proving that a zero
+volume on one bounding-box axis is not mistaken for zero triangle area.
+
+### Verification
+
+```text
+bun run models:check
+# exit 0; all nine production GLBs pass; total: 2640 / 28000 triangles
+
 bun run typecheck
 # exit 0
 
 bun run test
-# 25 files passed; 260 tests passed
+# exit 0; 45 files and 466 tests passed
 
 bun run build
-# exit 0; TypeScript and Vite production build succeeded
-
-git diff --check
-# exit 0
+# exit 0; TypeScript and Vite production build passed and emitted all nine GLBs
 ```
 
-## Files Changed
+### Self-Review
 
-Production:
-
-- `src/survival/survivalTypes.ts`
-- `src/survival/SurvivalSession.ts`
-- `src/survival/BoatWorld.ts`
-- `src/survival/SurvivalPhase.ts`
-- `src/ui/SurvivalUI.ts`
-- `src/ui/GameUI.ts`
-- `src/styles/main.css`
-
-Tests:
-
-- `tests/SurvivalSession.test.ts`
-- `tests/BoatWorld.test.ts`
-- `tests/SurvivalUI.test.ts`
-- `tests/SurvivalPhase.test.ts`
-- `tests/SurvivalPhaseFocus.test.ts`
-- `tests/GameUI.test.ts`
-
-## Self-Review
-
-- Recovered counters initialize directly from saved-instance inventory contributions, decrement only for actually consumable negative aggregate deltas, never increase on positive gains, and are exposed as required snapshot fields.
-- Aggregate food/bait behavior and seeded random action behavior are unchanged.
-- `BoatWorld` uses only recovered counters for physical can/tin presentation; all other item charge paths are unchanged.
-- Shortcut handling prevents the unavailable numeric key default and reuses the existing versioned polite-announcement path, so identical repeated reasons remain observable.
-- Continue synchronizes snapshot/UI/world anchors first, then closes the outcome. Terminal presentation remains after outcome closure so ending focus is not overwritten.
-- Focus validation rejects disconnected controls, direct or ancestor-hidden controls, inert controls, aria-hidden controls, disabled controls, and aria-disabled controls before falling back to the first usable anchor.
-- Failure summary iteration sees enumerable instance records (legacy aliases are non-enumerable) and retains duplicates.
-- No unrelated functionality or dependencies were added.
-
-## Independent Review
-
-A read-only reviewer inspected the complete working-tree diff against the five findings and the approved design. Verdict: **Ready to merge**, with no Critical, Important, or Minor findings. The reviewer independently passed `bun run typecheck`, `bun run test` (25 files, 260 tests), and `git diff --check` and did not modify the checkout.
-
-## Concerns
-
-- Vite continues to emit the existing advisory that the main minified JavaScript chunk exceeds 500 kB. The build succeeds; bundle splitting is outside this review scope.
-- No browser visual run was added for these review-only fixes; DOM/CSS, focus, state, full-suite, typecheck, and production-build verification are green.
+- Every index is required to be an integer in `[0, POSITION.count)` before model-bounds traversal.
+- Existing triangle-mode and element-count divisibility checks retain their order and diagnostics.
+- Indexed and non-indexed primitives are grouped into triangle triplets after each node's world
+  transform.
+- Triangle area is tested from scale-normalized edge directions, avoiding overflow/underflow while
+  rejecting repeated and collinear points.
+- The model must have finite bounds, at least one positive extent, and at least one non-degenerate
+  world-space triangle. Legitimate planar meshes remain valid.
+- A valid sibling cannot conceal an invalid index, while one valid world-space triangle is enough
+  for the item/model-level visibility requirement.
+- Fetch orchestration, custom recipe paths, gameplay, exact-file checks, budgets, ledger validation,
+  and `--models-dir` behavior remain unchanged.
