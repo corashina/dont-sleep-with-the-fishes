@@ -734,6 +734,106 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
+  it('continues every owner cleanup step after early failures and keeps the first error', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new World(
+      scene,
+      propModels,
+      furniture,
+      1,
+      createTestMoonTexture(),
+      [createItemInstances()[0]!],
+    );
+    const internals = world as unknown as {
+      ocean: OceanRenderer;
+      environment: Environment;
+      shipBuild: { dispose(): void };
+      ownedGeometries: Set<BufferGeometry>;
+      ownedMaterials: Set<Material>;
+      ownedTextures: Set<Texture>;
+    };
+    const geometry = internals.ownedGeometries.values().next().value!;
+    const material = internals.ownedMaterials.values().next().value!;
+    const texture = internals.ownedTextures.values().next().value!;
+    const firstError = new Error('ocean owner cleanup failed');
+    const laterError = new Error('environment owner cleanup failed');
+    const calls: string[] = [];
+    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
+    const oceanDispose = vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+      calls.push('ocean');
+      originalOceanDispose();
+      throw firstError;
+    });
+    const originalEnvironmentDispose = internals.environment.dispose.bind(internals.environment);
+    const environmentDispose = vi.spyOn(internals.environment, 'dispose').mockImplementation(() => {
+      calls.push('environment');
+      originalEnvironmentDispose();
+      throw laterError;
+    });
+    const originalSceneRemove = scene.remove.bind(scene);
+    let ownerSceneRemoveCalls = 0;
+    const sceneRemove = vi.spyOn(scene, 'remove').mockImplementation((...objects: Object3D[]) => {
+      if (objects.length > 1 && objects.includes(world.ship)) {
+        ownerSceneRemoveCalls += 1;
+        calls.push('scene');
+      }
+      return originalSceneRemove(...objects);
+    });
+    const originalShipDispose = internals.shipBuild.dispose.bind(internals.shipBuild);
+    const shipDispose = vi.spyOn(internals.shipBuild, 'dispose').mockImplementation(() => {
+      calls.push('ship');
+      originalShipDispose();
+    });
+    const originalGeometryDispose = geometry.dispose.bind(geometry);
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      calls.push('geometry');
+      originalGeometryDispose();
+    });
+    const originalMaterialDispose = material.dispose.bind(material);
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      calls.push('material');
+      originalMaterialDispose();
+    });
+    const originalTextureDispose = texture.dispose.bind(texture);
+    const textureDispose = vi.spyOn(texture, 'dispose').mockImplementation(() => {
+      calls.push('texture');
+      originalTextureDispose();
+    });
+
+    expect(() => world.dispose()).toThrow(firstError);
+
+    expect(calls).toEqual([
+      'ocean',
+      'environment',
+      'scene',
+      'ship',
+      'geometry',
+      'material',
+      'texture',
+    ]);
+    expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    expect(scene.getObjectByName('lifeboat')).toBeUndefined();
+    expect(internals.ownedGeometries.size).toBe(0);
+    expect(internals.ownedMaterials.size).toBe(0);
+    expect(internals.ownedTextures.size).toBe(0);
+    expect(() => world.dispose()).not.toThrow();
+    [
+      oceanDispose,
+      environmentDispose,
+      shipDispose,
+      geometryDispose,
+      materialDispose,
+      textureDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(sceneRemove).toHaveBeenCalled();
+    expect(ownerSceneRemoveCalls).toBe(1);
+
+    furniture.dispose();
+    propModels.dispose();
+  });
+
   it.each(ITEM_IDS)('builds a visible mesh for %s', (type) => {
     const propModels = createTestPropModels();
     const instance = { instanceId: `${type}-1`, type } as ItemInstance;

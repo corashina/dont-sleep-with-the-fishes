@@ -27,7 +27,7 @@ import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
-import { collectMeshResources, disposeResourceSets } from './SceneResources';
+import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import { assignShipItems } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -284,10 +284,16 @@ export class World {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.ocean.dispose();
-    this.environment.dispose();
-    this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh);
-    this.shipBuild.dispose();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures);
+    runCleanupSteps([
+      () => this.ocean.dispose(),
+      () => this.environment.dispose(),
+      () => this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh),
+      () => this.shipBuild.dispose(),
+      () => disposeResourceSets(
+        this.ownedGeometries,
+        this.ownedMaterials,
+        this.ownedTextures,
+      ),
+    ]);
   }
 }

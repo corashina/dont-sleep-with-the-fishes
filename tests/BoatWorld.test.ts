@@ -3,6 +3,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   FogExp2,
+  Group,
   Matrix4,
   Material,
   Mesh,
@@ -377,6 +378,126 @@ describe('BoatWorld helpers', () => {
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(textureDispose).toHaveBeenCalledOnce();
+
+    propModels.dispose();
+  });
+
+  it('continues every owner and camera cleanup step after early failures', () => {
+    const originalParent = new Group();
+    const camera = new PerspectiveCamera();
+    camera.position.set(4, 5, 6);
+    camera.rotation.set(0.2, -0.3, 0.1);
+    originalParent.add(camera);
+    const originalPosition = camera.position.clone();
+    const originalQuaternion = camera.quaternion.clone();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('medicalKit')],
+    );
+    const internals = world as unknown as {
+      ocean: { dispose(): void };
+      spray: { dispose(): void };
+      sky: { dispose(): void };
+      ownedGeometries: Set<BufferGeometry>;
+      ownedMaterials: Set<Material>;
+      ownedTextures: Set<Texture>;
+    };
+    const geometry = internals.ownedGeometries.values().next().value!;
+    const material = internals.ownedMaterials.values().next().value!;
+    const texture = internals.ownedTextures.values().next().value!;
+    const firstError = new Error('survival ocean cleanup failed');
+    const laterSkyError = new Error('survival sky cleanup failed');
+    const laterCameraError = new Error('camera detach cleanup failed');
+    const calls: string[] = [];
+    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
+    const oceanDispose = vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+      calls.push('ocean');
+      originalOceanDispose();
+      throw firstError;
+    });
+    const originalSprayDispose = internals.spray.dispose.bind(internals.spray);
+    const sprayDispose = vi.spyOn(internals.spray, 'dispose').mockImplementation(() => {
+      calls.push('spray');
+      originalSprayDispose();
+    });
+    const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
+    const skyDispose = vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+      originalSkyDispose();
+      throw laterSkyError;
+    });
+    const originalSceneRemove = world.scene.remove.bind(world.scene);
+    let ownerSceneRemoveCalls = 0;
+    const sceneRemove = vi.spyOn(world.scene, 'remove')
+      .mockImplementation((...objects: Object3D[]) => {
+        if (objects.length > 1 && objects.some(({ name }) => name === 'boat-motion-rig')) {
+          ownerSceneRemoveCalls += 1;
+          calls.push('scene');
+        }
+        return originalSceneRemove(...objects);
+      });
+    const originalCameraRemove = camera.removeFromParent.bind(camera);
+    let injectCameraFailure = true;
+    const cameraRemove = vi.spyOn(camera, 'removeFromParent').mockImplementation(() => {
+      const result = originalCameraRemove();
+      if (injectCameraFailure) {
+        injectCameraFailure = false;
+        calls.push('camera');
+        throw laterCameraError;
+      }
+      return result;
+    });
+    const originalGeometryDispose = geometry.dispose.bind(geometry);
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      calls.push('geometry');
+      originalGeometryDispose();
+    });
+    const originalMaterialDispose = material.dispose.bind(material);
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      calls.push('material');
+      originalMaterialDispose();
+    });
+    const originalTextureDispose = texture.dispose.bind(texture);
+    const textureDispose = vi.spyOn(texture, 'dispose').mockImplementation(() => {
+      calls.push('texture');
+      originalTextureDispose();
+    });
+
+    expect(() => world.dispose()).toThrow(firstError);
+
+    expect(calls).toEqual([
+      'ocean',
+      'spray',
+      'sky',
+      'scene',
+      'camera',
+      'geometry',
+      'material',
+      'texture',
+    ]);
+    expect(world.scene.children).toEqual([]);
+    expect(camera.parent).toBe(originalParent);
+    expect(camera.position.toArray()).toEqual(originalPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(originalQuaternion.toArray());
+    expect(internals.ownedGeometries.size).toBe(0);
+    expect(internals.ownedMaterials.size).toBe(0);
+    expect(internals.ownedTextures.size).toBe(0);
+    expect(() => world.dispose()).not.toThrow();
+    [
+      oceanDispose,
+      sprayDispose,
+      skyDispose,
+      geometryDispose,
+      materialDispose,
+      textureDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(sceneRemove).toHaveBeenCalled();
+    expect(ownerSceneRemoveCalls).toBe(1);
+    expect(cameraRemove).toHaveBeenCalledTimes(2);
 
     propModels.dispose();
   });
