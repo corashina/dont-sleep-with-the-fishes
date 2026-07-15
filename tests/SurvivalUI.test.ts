@@ -674,6 +674,39 @@ describe('SurvivalUI', () => {
     vi.useRealTimers();
   });
 
+  it('keeps Pause and terminal modals above covered sleep with focus isolated', () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot(), () => null);
+
+    void ui.setSleepCovered(true);
+    ui.setPaused(true);
+
+    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
+    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+    const resume = mount.querySelector<HTMLButtonElement>('[data-resume]')!;
+    expect(cover.classList).toContain('is-covered');
+    expect(pause.classList).toContain('is-visible');
+    expect(pause.hasAttribute('inert')).toBe(false);
+    expect(pause.getAttribute('aria-hidden')).toBe('false');
+    expect(document.activeElement).toBe(resume);
+    expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
+
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
+    expect(action).not.toHaveBeenCalled();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    document.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(resume);
+
+    expect(mainStyles).toMatch(/\.ending-overlay\s*\{[^}]*z-index:\s*21/s);
+    expect(mainStyles).toMatch(/\.pause-overlay\s*\{[^}]*z-index:\s*22/s);
+  });
+
   it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -767,6 +800,7 @@ describe('SurvivalUI', () => {
 
   it('emits both fishing choices with their matching option values', () => {
     const mount = document.createElement('main');
+    document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
     ui.onAction = action;
@@ -777,11 +811,13 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
     mount.querySelector<HTMLButtonElement>('[data-action-option="fish"]')!.click();
     expect(action).toHaveBeenLastCalledWith('fish', undefined);
+    expect(document.activeElement).toBe(fish);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
     mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
     expect(action).toHaveBeenLastCalledWith('fish', 'useBait');
     expect(action).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(fish);
   });
 
   it('isolates fishing choices and restores their command origin on Escape', () => {

@@ -855,7 +855,9 @@ export class SurvivalUI {
   private chooseFishingOption(option: DayActionOption | undefined): void {
     this.hideLayer(this.actionOptionsLayer);
     this.onAction('fish', option);
-    if (this.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
+    if (this.topmostModal() === null && !this.busy) {
+      this.restoreCommandFocus(this.latestCommandOrigin);
+    }
   }
 
   private closeActionOptions(): void {
