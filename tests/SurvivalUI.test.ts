@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { sequenceRandom } from '../src/survival/random';
+import { sequenceRandom } from './helpers/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
