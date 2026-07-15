@@ -12,7 +12,7 @@ $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $selectionRoot '..\..
 $catalog = Get-Content -Raw (Join-Path $selectionRoot 'selection-catalog.json') | ConvertFrom-Json
 $archivesRoot = Join-Path $selectionRoot 'archives'
 $sourcesRoot = Join-Path $selectionRoot 'sources'
-New-Item -ItemType Directory -Force $sourcesRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $archivesRoot, $sourcesRoot | Out-Null
 
 foreach ($property in $catalog.packs.PSObject.Properties) {
   $packId = $property.Name
