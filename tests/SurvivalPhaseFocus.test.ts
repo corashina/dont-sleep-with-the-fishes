@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import type { BoatInteractionAnchor } from '../src/survival/BoatInteraction';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { sequenceRandom } from '../src/survival/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
@@ -105,5 +106,54 @@ describe('SurvivalPhase focus synchronization', () => {
 
     expect(document.activeElement).toBe(fish);
     phase.dispose();
+  });
+
+  it('keeps Pause focused while sleep completion opens an event underneath it', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount, { matches: true });
+    const session = new SurvivalSession([], {
+      seed: 4,
+      random: sequenceRandom([0.5, 0]),
+    });
+    let finishNightfall!: () => void;
+    const nightfall = new Promise<void>((resolve) => { finishNightfall = resolve; });
+    const world = {
+      syncInventory: () => undefined,
+      projectInteractionAnchors: () => [],
+      play: () => nightfall,
+      dispose: () => undefined,
+    };
+    const phase = SurvivalPhase.forTest({ session, world, ui });
+
+    try {
+      phase.start();
+      mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.click();
+      phase.setPaused(true);
+      const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+      const resume = mount.querySelector<HTMLButtonElement>('[data-resume]')!;
+      const event = mount.querySelector<HTMLElement>('[data-event]')!;
+      const eventTitle = mount.querySelector<HTMLElement>('[data-event-title]')!;
+      expect(document.activeElement).toBe(resume);
+
+      finishNightfall();
+      await vi.runAllTimersAsync();
+      await flushPromises();
+      await vi.runAllTimersAsync();
+      await flushPromises();
+
+      expect(pause.classList).toContain('is-visible');
+      expect(event.classList).toContain('is-visible');
+      expect(event.hasAttribute('inert')).toBe(true);
+      expect(document.activeElement).toBe(resume);
+
+      phase.setPaused(false);
+      expect(event.hasAttribute('inert')).toBe(false);
+      expect(document.activeElement).toBe(eventTitle);
+    } finally {
+      phase.dispose();
+      vi.useRealTimers();
+    }
   });
 });
