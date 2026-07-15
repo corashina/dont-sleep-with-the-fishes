@@ -1,27 +1,96 @@
-import { Euler, Vector3 } from 'three';
+import { Box2, Box3, Euler, Object3D, Vector2, Vector3 } from 'three';
+import { ITEM_DEFINITIONS, type ItemId, type ItemInstance } from '../game/ItemState';
+
+export const BOAT_STORAGE_CLEARANCE = 0.05;
 
 export interface BoatStorageTransform {
-  position: Vector3;
-  rotation: Euler;
-  scale: number;
+  readonly position: Vector3;
+  readonly rotation: Euler;
+  readonly scale: number;
 }
 
-const BASE_POSITIONS: readonly [number, number, number][] = [
-  [-0.72, -0.10, -1.82], [0, -0.10, -1.82], [0.72, -0.10, -1.82],
-  [-0.72, -0.10, -1.16], [0, -0.10, -1.16], [0.72, -0.10, -1.16],
-  [-0.72, -0.10, -0.50], [0.72, -0.10, -0.50],
-  [-0.72, -0.10, 0.16], [0.72, -0.10, 0.16],
-  [-0.72, -0.10, 0.82], [0, -0.10, 0.82], [0.72, -0.10, 0.82],
-  [0, -0.10, 1.48],
-];
+interface SlotSpec {
+  readonly position: readonly [number, number, number];
+  readonly rotation: readonly [number, number, number];
+  readonly scale: number;
+}
 
-export function boatStorageTransform(index: number): BoatStorageTransform {
-  const safe = Math.max(0, Math.floor(index));
-  const layer = Math.floor(safe / BASE_POSITIONS.length);
-  const [x, y, z] = BASE_POSITIONS[safe % BASE_POSITIONS.length]!;
+const slot = (
+  position: SlotSpec['position'],
+  yaw: number,
+  scale: number,
+): SlotSpec => ({ position, rotation: [0, yaw, 0], scale });
+
+const BOAT_STORAGE_SLOTS = {
+  flareGun: [slot([0.62, -0.10, 1.48], -0.20, 0.82)],
+  ductTape: [
+    slot([0.98, -0.24, 0.34], 0.28, 0.82),
+    slot([1.28, -0.24, 1.02], -0.24, 0.82),
+  ],
+  fishingRod: [slot([1.45, 0.12, -0.28], -0.08, 0.84)],
+  baitTin: [
+    slot([0.65, -0.24, -1.35], -0.18, 0.82),
+    slot([1.30, -0.24, -1.92], 0.20, 0.82),
+  ],
+  medicalKit: [slot([-1.28, -0.23, 1.28], 0.18, 0.82)],
+  waterJug: [
+    slot([0.18, -0.22, -2.52], -0.10, 0.84),
+    slot([0.95, -0.22, -2.48], 0.16, 0.84),
+  ],
+  cannedFood: [
+    slot([-1.20, -0.24, -1.42], -0.18, 0.84),
+    slot([-1.20, -0.24, -0.76], 0.16, 0.84),
+    slot([-1.20, -0.24, -0.10], -0.10, 0.84),
+  ],
+  flashlight: [slot([-0.66, -0.10, 1.48], 0.10, 0.82)],
+  scubaSet: [slot([-0.94, -0.22, -2.36], -0.16, 0.84)],
+} satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
+
+function instanceOrdinal(instance: ItemInstance): number {
+  const prefix = `${instance.type}-`;
+  const suffix = instance.instanceId.startsWith(prefix)
+    ? instance.instanceId.slice(prefix.length)
+    : '';
+  if (!/^[1-9]\d*$/.test(suffix)) {
+    throw new Error(`No boat storage slot for ${instance.instanceId}`);
+  }
+  const oneBased = Number(suffix);
+  const ordinal = oneBased - 1;
+  if (
+    !Number.isInteger(oneBased)
+    || oneBased < 1
+    || ordinal >= ITEM_DEFINITIONS[instance.type].spawnCount
+  ) {
+    throw new Error(`No boat storage slot for ${instance.instanceId}`);
+  }
+  return ordinal;
+}
+
+export function boatStorageTransform(
+  instance: ItemInstance,
+): BoatStorageTransform {
+  const spec = BOAT_STORAGE_SLOTS[instance.type][instanceOrdinal(instance)];
+  if (!spec) throw new Error(`No boat storage slot for ${instance.instanceId}`);
   return {
-    position: new Vector3(x, y + layer * 0.28, z),
-    rotation: new Euler(0, (safe % 5) * 0.32 - 0.64, 0),
-    scale: 0.78,
+    position: new Vector3(...spec.position),
+    rotation: new Euler(...spec.rotation),
+    scale: spec.scale,
   };
+}
+
+export function measureBoatStorageEnvelope(
+  root: Object3D,
+  clearance = BOAT_STORAGE_CLEARANCE,
+): Box2 {
+  root.updateWorldMatrix(true, true);
+  const bounds = new Box3().setFromObject(root);
+  if (bounds.isEmpty()) throw new Error(`Cannot measure empty boat prop ${root.name}`);
+  return new Box2(
+    new Vector2(bounds.min.x - clearance, bounds.min.z - clearance),
+    new Vector2(bounds.max.x + clearance, bounds.max.z + clearance),
+  );
+}
+
+export function boatStorageEnvelopesOverlap(first: Box2, second: Box2): boolean {
+  return first.intersectsBox(second);
 }

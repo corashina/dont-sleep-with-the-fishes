@@ -18,7 +18,7 @@ interface PatternOptions {
   readonly repeat: readonly [number, number];
 }
 
-export interface SurvivalBoatTextures {
+export interface LifeboatTextures {
   readonly paintColor: DataTexture;
   readonly paintRoughness: DataTexture;
   readonly woodColor: DataTexture;
@@ -65,7 +65,7 @@ function createPattern(options: PatternOptions): DataTexture {
   return texture;
 }
 
-export function createSurvivalBoatTextures(): SurvivalBoatTextures {
+export function createLifeboatTextures(): LifeboatTextures {
   const paintColor = createPattern({
     seed: 0x19a3, base: [177, 83, 47], variation: 34,
     streakAxis: 'y', color: true, repeat: [3, 5],

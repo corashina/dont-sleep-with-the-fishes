@@ -113,9 +113,10 @@ describe('world builders', () => {
   });
 
   it('packs every approved instance and extends into deterministic layers', () => {
-    expect(boatStorageTransform(0)).toEqual(boatStorageTransform(0));
-    expect(boatStorageTransform(14).position.y)
-      .toBeCloseTo(boatStorageTransform(0).position.y + 0.28);
+    const [first, second] = createItemInstances();
+    expect(boatStorageTransform(first!)).toEqual(boatStorageTransform(first!));
+    expect(boatStorageTransform(second!).position.toArray())
+      .not.toEqual(boatStorageTransform(first!).position.toArray());
   });
 
   it('builds fourteen model instances including a distinct scuba set', () => {
@@ -170,7 +171,7 @@ describe('world builders', () => {
     expect(world.lifeboat.position.z).toBeCloseTo(-6.5 + expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
-    expect(world.lifeboat.scale.toArray()).toEqual([1.15, 1.15, 1.15]);
+    expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
     expect(world.ship.position.y).toBe(sinking.sinkOffset);
     expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
     expect(world.ship.rotation.z).toBe(sinking.rollRadians);
@@ -212,7 +213,7 @@ describe('world builders', () => {
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
       [-6.05, 6.05, -17.6, 17.6],
-      [-1.18, 1.18, -2.48, 2.48],
+      [-1.6, 1.6, -3.04, 3.04],
     ]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
@@ -259,14 +260,16 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('packs saved instances into lifeboat storage and detaches lost instances', () => {
+  it('packs saved instances into shared type-aware lifeboat storage and detaches lost instances', () => {
     const propModels = createTestPropModels();
-    const world = new World(new Scene(), propModels, createItemInstances());
+    const instances = createItemInstances();
+    const world = new World(new Scene(), propModels, instances);
+    const flareGun = instances.find(({ instanceId }) => instanceId === 'flareGun-1')!;
     const saved = world.itemObjects.get('flareGun-1')!;
     const lost = world.itemObjects.get('ductTape-1')!;
-    const transform = boatStorageTransform(0);
+    const transform = boatStorageTransform(flareGun);
 
-    world.saveItem('flareGun-1', 0);
+    world.saveItem(flareGun);
     world.loseItem('ductTape-1');
 
     expect(saved.parent?.name).toBe('lifeboat-storage');
@@ -276,6 +279,18 @@ describe('world builders', () => {
     expectTestModelTransform(saved);
     expectTestModelTransform(lost);
     expect(lost.parent).toBeNull();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('rejects a saved identity whose item type does not match the world prop', () => {
+    const propModels = createTestPropModels();
+    const world = new World(new Scene(), propModels, createItemInstances());
+    const flareGun = world.itemObjects.get('flareGun-1')!;
+
+    world.saveItem({ instanceId: 'flareGun-1', type: 'medicalKit' });
+
+    expect(flareGun.parent).toBe(world.ship);
     world.dispose();
     propModels.dispose();
   });
@@ -344,8 +359,8 @@ describe('world builders', () => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
     });
-    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.geometries.size);
-    expect(lifeboatMeshes.length).toBeGreaterThan(lifeboatResources.materials.size);
+    expect(lifeboatResources.geometries.size).toBeGreaterThan(0);
+    expect(lifeboatResources.materials.size).toBeGreaterThan(0);
 
     const geometryDisposals = observeDisposals([
       ...ownedTask6Geometries,
@@ -361,7 +376,7 @@ describe('world builders', () => {
       spray.material as Material,
       ...cloudResources.materials,
     ]);
-    world.saveItem('flareGun-1', 0);
+    world.saveItem({ instanceId: 'flareGun-1', type: 'flareGun' });
     world.loseItem('ductTape-1');
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
@@ -473,16 +488,13 @@ describe('world builders', () => {
   it('limits acceptance to the lifeboat interior above its floor', () => {
     const { acceptanceBox } = createLifeboat();
     expect(acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);
-    expect(acceptanceBox.min.x).toBeGreaterThanOrEqual(-1.05);
-    expect(acceptanceBox.max.x).toBeLessThanOrEqual(1.05);
-    expect(acceptanceBox.min.y).toBeGreaterThan(-0.275);
-    expect(acceptanceBox.min.z).toBeGreaterThan(-2.375);
-    expect(acceptanceBox.max.z).toBeLessThan(2.375);
+    expect(acceptanceBox.min.toArray()).toEqual([-1.35, -0.3, -2.72]);
+    expect(acceptanceBox.max.toArray()).toEqual([1.35, 1, 2.72]);
   });
 
   it.each([
-    ['hull side', new Vector3(1.25, 0, 0)],
-    ['endcap', new Vector3(0, 0, 2.55)],
+    ['hull side', new Vector3(1.5, 0, 0)],
+    ['endcap', new Vector3(0, 0, 2.9)],
     ['underside', new Vector3(0, -0.4, 0)],
   ])('rejects a thrown item at the lifeboat %s', (_label, point) => {
     expect(createLifeboat().acceptanceBox.containsPoint(point)).toBe(false);

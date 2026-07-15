@@ -25,6 +25,8 @@ import {
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
+import { boatStorageTransform } from '../world/BoatStorage';
+import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
@@ -33,11 +35,6 @@ import {
   projectBoatBounds,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
-import { survivalBoatStorageTransform } from './SurvivalBoatLayout';
-import {
-  createSurvivalLifeboat,
-  type SurvivalLifeboatBuild,
-} from './SurvivalLifeboat';
 import type {
   DayActionId,
   PresentationCue,
@@ -192,7 +189,7 @@ export class BoatWorld {
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
-  private readonly waterExclusion: SurvivalLifeboatBuild['waterExclusion'];
+  private readonly waterExclusion: LifeboatBuild['waterExclusion'];
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
@@ -230,13 +227,13 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
 
-    const build = createSurvivalLifeboat();
+    const build = createLifeboat();
     this.boat = build.root;
     this.waterExclusion = build.waterExclusion;
     build.textures.forEach((texture) => this.ownedTextures.add(texture));
     savedItems.forEach((instance) => {
       const prop = createProp(propModels, instance);
-      const transform = survivalBoatStorageTransform(instance);
+      const transform = boatStorageTransform(instance);
       prop.position.copy(transform.position);
       prop.rotation.copy(transform.rotation);
       prop.scale.setScalar(transform.scale);

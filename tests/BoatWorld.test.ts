@@ -18,7 +18,7 @@ import {
   type ItemInstanceId,
 } from '../src/game/ItemState';
 import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
-import { survivalBoatStorageTransform } from '../src/survival/SurvivalBoatLayout';
+import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import {
@@ -99,7 +99,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, []);
     expect(camera.position.toArray()).toEqual([0, 0.88, 2.35]);
     expect(camera.fov).toBe(65);
-    expect(world.scene.getObjectByName('survival-hull-geometry')).toBeDefined();
+    expect(world.scene.getObjectByName('lifeboat-hull-geometry')).toBeDefined();
     expect(world.scene.getObjectByName('paddle-port')).toBeDefined();
     expect(world.scene.getObjectByName('paddle-starboard')).toBeDefined();
     world.dispose();
@@ -290,7 +290,7 @@ describe('BoatWorld helpers', () => {
       'prop:scubaSet-1',
     ]);
     storage.children.forEach((prop, index) => {
-      const transform = survivalBoatStorageTransform(savedItems[index]!);
+      const transform = boatStorageTransform(savedItems[index]!);
       expect(prop.position.toArray()).toEqual(transform.position.toArray());
       expect(prop.rotation.toArray().slice(0, 3)).toEqual(transform.rotation.toArray().slice(0, 3));
       expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);

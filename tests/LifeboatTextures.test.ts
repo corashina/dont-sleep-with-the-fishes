@@ -1,14 +1,14 @@
 import { DataTexture, NoColorSpace, RepeatWrapping, SRGBColorSpace } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { createSurvivalBoatTextures } from '../src/survival/SurvivalBoatTextures';
+import { createLifeboatTextures } from '../src/world/LifeboatTextures';
 
 const bytes = (texture: DataTexture): number[] =>
   Array.from(texture.image.data as Uint8Array);
 
 describe('survival boat procedural textures', () => {
   it('generates deterministic but distinct surface maps', () => {
-    const first = createSurvivalBoatTextures();
-    const second = createSurvivalBoatTextures();
+    const first = createLifeboatTextures();
+    const second = createLifeboatTextures();
     expect(first.all).toHaveLength(6);
     first.all.forEach((texture, index) => {
       expect(bytes(texture)).toEqual(bytes(second.all[index]!));
@@ -24,7 +24,7 @@ describe('survival boat procedural textures', () => {
   });
 
   it('uses sRGB only for color textures and disposes each owned map once', () => {
-    const textures = createSurvivalBoatTextures();
+    const textures = createLifeboatTextures();
     expect(textures.paintColor.colorSpace).toBe(SRGBColorSpace);
     expect(textures.woodColor.colorSpace).toBe(SRGBColorSpace);
     expect(textures.ropeColor.colorSpace).toBe(SRGBColorSpace);

@@ -9,13 +9,12 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { createLifeboat } from '../src/world/Lifeboat';
 import {
-  SURVIVAL_LIFEBOAT_DIMENSIONS,
-  createSurvivalLifeboat,
-} from '../src/survival/SurvivalLifeboat';
+  LIFEBOAT_DIMENSIONS,
+  createLifeboat,
+} from '../src/world/Lifeboat';
 
-function disposeBuild(root: ReturnType<typeof createSurvivalLifeboat>['root'], textures: readonly Texture[]): void {
+function disposeBuild(root: ReturnType<typeof createLifeboat>['root'], textures: readonly Texture[]): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   root.traverse((object) => {
@@ -30,30 +29,22 @@ function disposeBuild(root: ReturnType<typeof createSurvivalLifeboat>['root'], t
 }
 
 describe('survival lifeboat builder', () => {
-  it('builds an 18–22 percent larger named rounded hull', () => {
-    const build = createSurvivalLifeboat();
-    const hull = build.root.getObjectByName('survival-hull-geometry')!;
+  it('builds the detailed rounded lifeboat with gameplay bounds', () => {
+    const build = createLifeboat();
+    const hull = build.root.getObjectByName('lifeboat-hull-geometry')!;
     const size = new Box3().setFromObject(hull).getSize(new Vector3());
-    const scavenging = createLifeboat();
-    const scavengingHullBounds = new Box3();
-    for (const name of ['hull-port', 'hull-starboard', 'boat-bow', 'boat-stern', 'boat-floor']) {
-      scavengingHullBounds.union(new Box3().setFromObject(scavenging.root.getObjectByName(name)!));
-    }
-    const scavengingSize = scavengingHullBounds.getSize(new Vector3());
-    expect(size.x).toBeCloseTo(SURVIVAL_LIFEBOAT_DIMENSIONS.width, 1);
-    expect(size.z).toBeCloseTo(SURVIVAL_LIFEBOAT_DIMENSIONS.length, 1);
-    expect(size.x / scavengingSize.x).toBeGreaterThanOrEqual(1.18);
-    expect(size.x / scavengingSize.x).toBeLessThanOrEqual(1.22);
-    expect(size.z / scavengingSize.z).toBeGreaterThanOrEqual(1.18);
-    expect(size.z / scavengingSize.z).toBeLessThanOrEqual(1.22);
+    expect(size.x).toBeCloseTo(LIFEBOAT_DIMENSIONS.width, 1);
+    expect(size.z).toBeCloseTo(LIFEBOAT_DIMENSIONS.length, 1);
     expect(hull.children.filter(({ name }) => name.startsWith('hull-segment-')).length)
       .toBeGreaterThanOrEqual(16);
+    expect(build.acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);
+    expect(build.acceptanceBox.containsPoint(new Vector3(1.6, 0, 0))).toBe(false);
+    expect(build.waterExclusion).toEqual({ halfWidth: 1.60, halfLength: 3.04 });
     disposeBuild(build.root, build.textures);
-    disposeBuild(scavenging.root, []);
   });
 
   it('provides named storage, repair, cue, paddle, and fitting objects', () => {
-    const build = createSurvivalLifeboat();
+    const build = createLifeboat();
     expect(build.root.name).toBe('lifeboat');
     expect(build.storageRoot.name).toBe('lifeboat-storage');
     expect(build.root.getObjectByName('damaged-plank-patch')).toBeDefined();
@@ -70,7 +61,7 @@ describe('survival lifeboat builder', () => {
   });
 
   it('connects each named paddle blade to its matching shaft', () => {
-    const build = createSurvivalLifeboat();
+    const build = createLifeboat();
     for (const side of ['port', 'starboard'] as const) {
       const blade = build.root.getObjectByName(`paddle-blade-${side}`)!;
       const shaft = build.root.getObjectByName(`paddle-shaft-${side}`)!;
@@ -85,7 +76,7 @@ describe('survival lifeboat builder', () => {
   });
 
   it('overlaps the floor beneath every side-wall segment and excludes water from the seam', () => {
-    const build = createSurvivalLifeboat();
+    const build = createLifeboat();
     const floor = build.root.getObjectByName('survival-floor') as Mesh;
     const segments: Mesh[] = [];
     build.root.traverse((object) => {
@@ -144,7 +135,7 @@ describe('survival lifeboat builder', () => {
   });
 
   it('uses all procedural texture families and matching interior exclusions', () => {
-    const build = createSurvivalLifeboat();
+    const build = createLifeboat();
     const maps = new Set<Texture>();
     build.root.traverse((object) => {
       if (!(object instanceof Mesh)) return;

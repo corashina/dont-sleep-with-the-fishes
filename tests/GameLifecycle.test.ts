@@ -210,8 +210,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
       expect(sessionResult).toHaveBeenCalledOnce();
       expect(worldResult).toHaveBeenCalledWith(
-        instance.instanceId,
-        ...(worldMethod === 'saveItem' ? [1] : []),
+        worldMethod === 'saveItem' ? instance : instance.instanceId,
       );
     },
   );
