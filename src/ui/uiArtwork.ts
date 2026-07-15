@@ -4,8 +4,6 @@ export const UI_ARTWORK_IDS = [
   'health', 'hunger', 'energy', 'hull', 'watch', 'journal', 'warning',
 ] as const;
 
-export const ITEM_ARTWORK_IDS = ITEM_IDS;
-
 export type UiArtworkId = typeof UI_ARTWORK_IDS[number];
 
 const ARTWORK: Record<UiArtworkId, string> = {

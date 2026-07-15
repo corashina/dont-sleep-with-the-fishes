@@ -289,22 +289,6 @@ function bookcaseSurfaces(
   ));
 }
 
-function cabinetTopSurfaces(
-  furnitureId: string,
-  categories: readonly ShipItemCategory[],
-  localY = 1.85,
-): readonly ShipItemSurfaceSpec[] {
-  return ([-0.2, 0.2] as const).map((x, index) => itemSurface(
-    furnitureId,
-    `top-${index === 0 ? 'left' : 'right'}`,
-    categories,
-    [x, localY, 0],
-    { width: 0.32, depth: 0.4 },
-    0.82,
-    [[x, 0, -0.85]],
-  ));
-}
-
 function sideTableSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],

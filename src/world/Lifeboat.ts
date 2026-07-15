@@ -17,11 +17,6 @@ import {
 } from 'three';
 import { createLifeboatTextures } from './LifeboatTextures';
 
-export const LIFEBOAT_DIMENSIONS = {
-  width: 3.56,
-  length: 6.54,
-} as const;
-
 export interface LifeboatBuild {
   readonly root: Group;
   readonly storageRoot: Group;

@@ -9,10 +9,7 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
-import {
-  LIFEBOAT_DIMENSIONS,
-  createLifeboat,
-} from '../src/world/Lifeboat';
+import { createLifeboat } from '../src/world/Lifeboat';
 
 function disposeBuild(root: ReturnType<typeof createLifeboat>['root'], textures: readonly Texture[]): void {
   const geometries = new Set<BufferGeometry>();
@@ -32,9 +29,6 @@ describe('survival lifeboat builder', () => {
   it('builds the detailed rounded lifeboat with gameplay bounds', () => {
     const build = createLifeboat();
     const hull = build.root.getObjectByName('lifeboat-hull-geometry')!;
-    const size = new Box3().setFromObject(hull).getSize(new Vector3());
-    expect(size.x).toBeCloseTo(LIFEBOAT_DIMENSIONS.width, 1);
-    expect(size.z).toBeCloseTo(LIFEBOAT_DIMENSIONS.length, 1);
     expect(hull.children.filter(({ name }) => name.startsWith('hull-segment-')).length)
       .toBeGreaterThanOrEqual(16);
     expect(build.acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);

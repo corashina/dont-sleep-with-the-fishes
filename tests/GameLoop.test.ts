@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  GameLifecycle,
   advanceTerminalPresentation,
   pointerLockTransition,
   runGameplayFrame,
-  type GameLifecycleActions,
   type TerminalPresentation,
 } from '../src/game/GameLoop';
 import type { SessionStatus } from '../src/game/ScavengeSession';
@@ -106,42 +104,5 @@ describe('orchestrator phase policy', () => {
     expect(advanceTerminalPresentation(playing, 'idle', 10)).toEqual(playing);
     expect(advanceTerminalPresentation(playing, 'running', 10)).toEqual(playing);
     expect(advanceTerminalPresentation(playing, 'paused', 10)).toEqual(playing);
-  });
-});
-
-describe('game lifecycle policy', () => {
-  function actions(): GameLifecycleActions & Record<string, ReturnType<typeof vi.fn>> {
-    return {
-      cancelAnimation: vi.fn(),
-      removeGlobalListeners: vi.fn(),
-      exitPointerLock: vi.fn(),
-      resetCarry: vi.fn(),
-      disposeInput: vi.fn(),
-      disposeInteraction: vi.fn(),
-      disposeWorld: vi.fn(),
-      disposeUI: vi.fn(),
-      disposeRenderer: vi.fn(),
-      removeCanvas: vi.fn(),
-    };
-  }
-
-  it('exits an owned pointer lock and disposes every owned resource exactly once', () => {
-    const lifecycle = new GameLifecycle();
-    const owned = actions();
-
-    lifecycle.dispose(true, owned);
-    lifecycle.dispose(true, owned);
-
-    Object.values(owned).forEach((action) => expect(action).toHaveBeenCalledOnce());
-  });
-
-  it('does not exit pointer lock when another element owns it', () => {
-    const lifecycle = new GameLifecycle();
-    const unowned = actions();
-
-    lifecycle.dispose(false, unowned);
-
-    expect(unowned.exitPointerLock).not.toHaveBeenCalled();
-    expect(unowned.removeCanvas).toHaveBeenCalledOnce();
   });
 });

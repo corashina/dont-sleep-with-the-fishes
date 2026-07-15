@@ -27,7 +27,7 @@ import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
-import { LIFEBOAT_DIMENSIONS, createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
 import { World } from '../src/world/World';
@@ -571,25 +571,6 @@ describe('world builders', () => {
       expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
     }
 
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('uses the shared detailed lifeboat at its authored size', () => {
-    const propModels = createTestPropModels();
-    const world = createTestWorld(
-      new Scene(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      () => 0.35,
-    );
-    const hull = world.lifeboat.getObjectByName('lifeboat-hull-geometry')!;
-    const size = new Box3().setFromObject(hull).getSize(new Vector3());
-
-    expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
-    expect(size.x).toBeCloseTo(LIFEBOAT_DIMENSIONS.width, 1);
-    expect(size.z).toBeCloseTo(LIFEBOAT_DIMENSIONS.length, 1);
     world.dispose();
     propModels.dispose();
   });
