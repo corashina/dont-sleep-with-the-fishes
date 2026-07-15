@@ -104,7 +104,7 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
       part('shaft', 'cylinder', [0.035, 0.92, 0.035], [0, -0.08, 0], DARK),
       part('tip', 'cone', [0.075, 0.16, 0.075], [0, -0.61, 0], STEEL, QX180),
       part('handle', 'torus', [0.18, 0.025, 0.18], [0.045, -0.51, 0], DARK, QX90),
-      part('grip', 'box', [0.11, 0.18, 0.08], [-0.02, -0.45, 0], DARK),
+      part('grip', 'box', [0.16, 0.24, 0.08], [-0.02, -0.46, 0], DARK),
     ],
   },
   swimRing: {
@@ -236,7 +236,8 @@ function torusGeometry([width, tubeDiameter, depth], tubularSegments) {
       const second = torusPoint(majorX, majorZ, tubeRadius, secondAround, firstRadial);
       const third = torusPoint(majorX, majorZ, tubeRadius, secondAround, secondRadial);
       const fourth = torusPoint(majorX, majorZ, tubeRadius, firstAround, secondRadial);
-      pushFace(geometry, [first, fourth, third, second], normal(first, fourth, third));
+      pushFace(geometry, [first, fourth, third], normal(first, fourth, third), [0, 1, 2]);
+      pushFace(geometry, [first, third, second], normal(first, third, second), [0, 1, 2]);
     }
   }
   return geometry;
