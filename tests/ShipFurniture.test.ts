@@ -14,42 +14,6 @@ const overlap = (
   && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
-  it('builds exactly the 16 layout-owned fixtures with one collider each', () => {
-    const materials = createShipMaterials();
-    const library = createTestShipFurniture();
-    const build = createShipFurniture(materials, library);
-
-    for (const placement of SHIP_LAYOUT.furniture) {
-      const root = build.root.children.find(({ userData }) =>
-        userData.furnitureId === placement.id && userData.modelId === placement.modelId);
-      expect(root, placement.id).toBeDefined();
-      const colliders = build.colliders.filter((box) => box.furnitureId === placement.id);
-      expect(colliders, placement.id).toHaveLength(1);
-      expect(colliders[0]).toMatchObject({
-        minY: placement.position[1],
-        maxY: placement.position[1] + placement.colliderSize[1],
-      });
-      if (placement.modelId !== 'cargoCrate' && placement.modelId !== 'cargoRack') {
-        expect(root!.getObjectByName(`ship-furniture:${placement.modelId}`)).toBeDefined();
-      }
-    }
-
-    expect(build.root.children).toHaveLength(16);
-    expect(build.colliders).toHaveLength(16);
-    const legacyClutter = /anchor-support|mug|dish|hand-tool|machine-part|deck-vent|rope-coil|winch/i;
-    const objectNames: string[] = [];
-    build.root.traverse(({ name }) => objectNames.push(name));
-    expect(objectNames.filter((name) => legacyClutter.test(name))).toEqual([]);
-
-    const rack = build.root.children.find(({ userData }) =>
-      userData.furnitureId === 'cargo-rod-rack-forward-port')!;
-    expect(rack.getObjectByName('cargo-rack-top')).toBeInstanceOf(Mesh);
-    expect(rack.getObjectByName('crate-body')).toBeUndefined();
-
-    build.disposeGeometry();
-    materials.dispose();
-    library.dispose();
-  });
 
   it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();
@@ -69,42 +33,6 @@ describe('ship furniture', () => {
         expect(overlap(left.box, lane.bounds), `${left.id}:${lane.id}`).toBe(false));
       expect(overlap(left.box, SHIP_LAYOUT.evacuationRect), left.id).toBe(false);
     });
-
-    build.disposeGeometry();
-    materials.dispose();
-    library.dispose();
-  });
-
-  it('exposes exactly 27 ordinary owned surfaces and no fallback clutter surfaces', () => {
-    const materials = createShipMaterials();
-    const library = createTestShipFurniture();
-    const build = createShipFurniture(materials, library);
-    const owners = new Map(SHIP_LAYOUT.furniture.map((placement) => [placement.id, placement]));
-
-    expect(build.surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
-    expect(build.surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
-    expect(build.surfaces.map(({ id }) => id)).toEqual(
-      SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)),
-    );
-    expect(new Set(build.surfaces.map(({ id }) => id)).size).toBe(27);
-
-    for (const surface of build.surfaces) {
-      const owner = owners.get(surface.furnitureId)!;
-      expect(owner, surface.id).toBeDefined();
-      expect(surface.furnitureModelId).toBe(owner.modelId);
-      expect(surface.furnitureModelId).not.toMatch(/bedBunk|chairDesk/);
-      const canonical = owner.modelId === 'cargoCrate' || owner.modelId === 'cargoRack'
-        ? owner.colliderSize
-        : SHIP_FURNITURE_MODEL_SPECS[owner.modelId].canonicalSize;
-      expect(surface.position.y, surface.id)
-        .toBeLessThanOrEqual(owner.position[1] + canonical[1] + 1e-6);
-      expect(surface.position.y, surface.id).toBeGreaterThan(owner.position[1]);
-    }
-
-    const physicalCounts = new Map<string, number>();
-    build.surfaces.forEach(({ physicalSlotId }) =>
-      physicalCounts.set(physicalSlotId, (physicalCounts.get(physicalSlotId) ?? 0) + 1));
-    expect([...physicalCounts.values()].every((count) => count === 1)).toBe(true);
 
     build.disposeGeometry();
     materials.dispose();

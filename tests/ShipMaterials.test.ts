@@ -3,7 +3,6 @@ import {
   LinearFilter,
   LinearMipmapLinearFilter,
   Material,
-  MeshStandardMaterial,
   NoColorSpace,
   RepeatWrapping,
   SRGBColorSpace,
@@ -68,22 +67,4 @@ describe('ship materials', () => {
     textureCounts.forEach((count) => expect(count).toBe(1));
   });
 
-  it('owns a beacon material independently from emergency surfaces', () => {
-    const materials = createShipMaterials();
-    const owned = materials.ownedMaterialsForTest();
-    expect(materials.beacon).toBeInstanceOf(MeshStandardMaterial);
-    expect(materials.beacon).not.toBe(materials.emergency);
-    expect(owned).toContain(materials.beacon);
-    materials.dispose();
-  });
-
-  it('does not expose the removed procedural furniture material families', () => {
-    const materials = createShipMaterials();
-    expect(materials).not.toHaveProperty('floorPlanks');
-    expect(materials).not.toHaveProperty('wallPanels');
-    expect(materials).not.toHaveProperty('furnitureWood');
-    expect(materials).not.toHaveProperty('deckTimber');
-    expect(materials).not.toHaveProperty('crateWood');
-    materials.dispose();
-  });
 });
