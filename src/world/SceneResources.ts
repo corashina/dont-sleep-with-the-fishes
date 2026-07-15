@@ -43,23 +43,29 @@ export function disposeMeshResources(
 export function disposeResourceSets(
   ...sets: readonly OwnedDisposableSet[]
 ): void {
-  let firstError: unknown;
-  let failed = false;
+  const steps: Array<() => void> = [];
+  for (const resources of sets) {
+    for (const resource of resources) steps.push(() => resource.dispose());
+  }
   try {
-    for (const resources of sets) {
-      for (const resource of resources) {
-        try {
-          resource.dispose();
-        } catch (error) {
-          if (!failed) {
-            failed = true;
-            firstError = error;
-          }
-        }
-      }
-    }
+    runCleanupSteps(steps);
   } finally {
     sets.forEach((resources) => resources.clear());
+  }
+}
+
+export function runCleanupSteps(steps: Iterable<() => void>): void {
+  let firstError: unknown;
+  let failed = false;
+  for (const step of steps) {
+    try {
+      step();
+    } catch (error) {
+      if (!failed) {
+        failed = true;
+        firstError = error;
+      }
+    }
   }
   if (failed) throw firstError;
 }

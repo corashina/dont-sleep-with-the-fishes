@@ -29,7 +29,11 @@ import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
-import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  runCleanupSteps,
+} from '../world/SceneResources';
 import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
@@ -456,26 +460,32 @@ export class BoatWorld {
 
   dispose(): void {
     if (this.disposed) return;
-    this.setHighlightedItem(null);
-    this.disposed = true;
-    this.cancelActiveSequence();
-    this.ocean.dispose();
-    this.spray.dispose();
-    this.sky.dispose();
-    this.scene.remove(
-      this.motionRig,
-      this.ocean.mesh,
-      this.spray.points,
-      this.ambient,
-      this.key,
-      this.key.target,
-      this.distantVessel,
-    );
-    this.camera.removeFromParent();
-    this.camera.position.copy(this.originalCameraPosition);
-    this.camera.quaternion.copy(this.originalCameraQuaternion);
-    this.originalCameraParent?.add(this.camera);
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures);
+    runCleanupSteps([
+      () => this.setHighlightedItem(null),
+      () => { this.disposed = true; },
+      () => this.cancelActiveSequence(),
+      () => this.ocean.dispose(),
+      () => this.spray.dispose(),
+      () => this.sky.dispose(),
+      () => this.scene.remove(
+        this.motionRig,
+        this.ocean.mesh,
+        this.spray.points,
+        this.ambient,
+        this.key,
+        this.key.target,
+        this.distantVessel,
+      ),
+      () => this.camera.removeFromParent(),
+      () => this.camera.position.copy(this.originalCameraPosition),
+      () => this.camera.quaternion.copy(this.originalCameraQuaternion),
+      () => this.originalCameraParent?.add(this.camera),
+      () => disposeResourceSets(
+        this.ownedGeometries,
+        this.ownedMaterials,
+        this.ownedTextures,
+      ),
+    ]);
   }
 
   private buildDistantVessel(): void {
