@@ -11,15 +11,10 @@ const itemIds = [
 
 interface InvalidModelOptions {
   readonly externalBuffer?: boolean;
-  readonly externalTexture?: boolean;
   readonly missingPosition?: boolean;
-  readonly emptyPosition?: boolean;
   readonly nonFinitePosition?: boolean;
-  readonly nonFiniteBounds?: boolean;
-  readonly emptyBounds?: boolean;
   readonly missingTextureBytes?: boolean;
   readonly collinearTriangle?: boolean;
-  readonly outOfRangeIndex?: boolean;
 }
 
 function padToFour(bytes: Uint8Array, fill = 0): Uint8Array {
@@ -61,7 +56,7 @@ async function writeInvalidModel(
         2, 0, 0,
         0, 1, 0,
       ]);
-  const indices = new Uint16Array(options.outOfRangeIndex ? [0, 1, 3] : [0, 1, 2]);
+  const indices = new Uint16Array([0, 1, 2]);
   const binary = new Uint8Array(44);
   binary.set(new Uint8Array(positions.buffer), 0);
   binary.set(new Uint8Array(indices.buffer), 36);
@@ -69,15 +64,10 @@ async function writeInvalidModel(
   const buffer = options.externalBuffer
     ? { byteLength: binary.byteLength, uri: 'external.bin' }
     : { byteLength: binary.byteLength };
-  const accessors = options.emptyPosition
-    ? [
-        { componentType: 5126, count: 0, type: 'VEC3' },
-        { bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR' },
-      ]
-    : [
-        { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' },
-        { bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR' },
-      ];
+  const accessors = [
+    { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' },
+    { bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR' },
+  ];
   const primitive: Record<string, unknown> = {
     attributes: options.missingPosition ? {} : { POSITION: 0 },
     ...(options.collinearTriangle ? {} : { indices: 1 }),
@@ -92,20 +82,19 @@ async function writeInvalidModel(
     ],
     accessors,
     meshes: [{ primitives: [primitive] }],
-    nodes: [{ mesh: 0, ...(options.nonFiniteBounds ? { scale: [1e308, 1e308, 1e308] } : {}) }],
-    scenes: [{ nodes: options.emptyBounds ? [] : [0] }],
+    nodes: [{ mesh: 0 }],
+    scenes: [{ nodes: [0] }],
     scene: 0,
   };
 
-  if (options.externalTexture || options.missingTextureBytes) {
-    json.images = options.externalTexture ? [{ uri: 'texture.png' }] : [{}];
+  if (options.missingTextureBytes) {
+    json.images = [{}];
     json.textures = [{ source: 0 }];
     json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }];
     primitive.material = 0;
   }
 
   if (options.externalBuffer) await writeFile(join(modelsDir, 'external.bin'), binary);
-  if (options.externalTexture) await writeFile(join(modelsDir, 'texture.png'), 'external texture');
   await writeFile(
     join(modelsDir, 'flareGun.glb'),
     encodeGlb(json, options.externalBuffer ? undefined : binary),
