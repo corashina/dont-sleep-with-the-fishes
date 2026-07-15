@@ -1,14 +1,16 @@
 import { Box3, Euler, Vector3 } from 'three';
-import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import {
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  type ItemId,
+  type ShipPlacementCategory,
+} from '../game/itemCatalog';
+import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { CollisionBox } from '../player/collisions';
 import type { ShipFurnitureKind } from './ShipLayout';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
-export type ShipItemCategory =
-  | 'foodWater'
-  | 'medicalEmergency'
-  | 'toolsRepair'
-  | 'fishingDiving';
+export type ShipItemCategory = ShipPlacementCategory;
 
 export interface ShipItemSurface {
   readonly id: string;
@@ -42,7 +44,7 @@ export interface ShipItemTransform {
 }
 
 const ITEM_CATEGORIES = new Set<ShipItemCategory>([
-  'foodWater', 'medicalEmergency', 'toolsRepair', 'fishingDiving',
+  'provisions', 'navigation', 'workshop', 'deckGear',
 ]);
 const MAX_INTERACTION_DISTANCE = 2.2;
 const MIN_UNIFORM_SCALE = 0.75;
@@ -50,22 +52,17 @@ const STANDING_EYE_HEIGHT = 1.5;
 const STRUCTURE_CLEARANCE = 0.1;
 const EPSILON = 1e-6;
 
-function itemProfile(id: ItemId, category: ShipItemCategory): ShipItemProfile {
-  const [width, height, depth] = ITEM_MODEL_SPECS[id].normalizedSize;
-  return { category, width, depth, height };
-}
-
-export const SHIP_ITEM_PROFILES: Readonly<Record<ItemId, ShipItemProfile>> = {
-  flareGun: itemProfile('flareGun', 'medicalEmergency'),
-  ductTape: itemProfile('ductTape', 'toolsRepair'),
-  fishingRod: itemProfile('fishingRod', 'fishingDiving'),
-  baitTin: itemProfile('baitTin', 'fishingDiving'),
-  medicalKit: itemProfile('medicalKit', 'medicalEmergency'),
-  waterJug: itemProfile('waterJug', 'foodWater'),
-  cannedFood: itemProfile('cannedFood', 'foodWater'),
-  flashlight: itemProfile('flashlight', 'toolsRepair'),
-  scubaSet: itemProfile('scubaSet', 'fishingDiving'),
-};
+export const SHIP_ITEM_PROFILES = Object.freeze(Object.fromEntries(
+  ITEM_IDS.map((id) => {
+    const [width, height, depth] = ITEM_MODEL_SPECS[id].normalizedSize;
+    return [id, {
+      category: ITEM_DEFINITIONS[id].placementCategory,
+      width,
+      depth,
+      height,
+    }];
+  }),
+) as Record<ItemId, ShipItemProfile>);
 
 function orientedItemBounds(id: ItemId, rotation: Euler): Box3 {
   const normalized = ITEM_MODEL_SPECS[id].normalizedBounds;
