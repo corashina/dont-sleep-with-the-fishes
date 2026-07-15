@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import {
+  findSupportEyeHeight,
+  MAX_JUMPABLE_SUPPORT_HEIGHT,
   PLAYER_BODY_HEIGHT,
   movementAxes,
   resolveLocalMovement,
@@ -98,6 +100,51 @@ describe('player movement helpers', () => {
     );
 
     expect(result.x).toBeCloseTo(1.2);
+  });
+
+  it('selects the highest collider top within the 0.6-unit support limit', () => {
+    const deckEyeHeight = 3.72;
+    const deckFeetY = deckEyeHeight - PLAYER_BODY_HEIGHT;
+    const boxes: CollisionBox[] = [
+      { minX: -0.8, maxX: 0.8, minY: deckFeetY, maxY: deckFeetY + 0.3, minZ: -0.8, maxZ: 0.8 },
+      { minX: -0.6, maxX: 0.6, minY: deckFeetY, maxY: deckFeetY + 0.6, minZ: -0.6, maxZ: 0.6 },
+    ];
+
+    expect(MAX_JUMPABLE_SUPPORT_HEIGHT).toBe(0.6);
+    expect(findSupportEyeHeight({ x: 0, z: 0 }, 0.35, deckEyeHeight, boxes))
+      .toBeCloseTo(deckEyeHeight + 0.6);
+  });
+
+  it('keeps the deck as support for a taller object', () => {
+    const deckEyeHeight = 3.72;
+    const deckFeetY = deckEyeHeight - PLAYER_BODY_HEIGHT;
+    const tall: CollisionBox = {
+      minX: -0.6, maxX: 0.6,
+      minY: deckFeetY, maxY: deckFeetY + 0.61,
+      minZ: -0.6, maxZ: 0.6,
+    };
+
+    expect(findSupportEyeHeight({ x: 0, z: 0 }, 0.35, deckEyeHeight, [tall]))
+      .toBe(deckEyeHeight);
+  });
+
+  it('rejects a low support when another collider would contain the player body', () => {
+    const deckEyeHeight = 3.72;
+    const deckFeetY = deckEyeHeight - PLAYER_BODY_HEIGHT;
+    const support: CollisionBox = {
+      minX: -0.6, maxX: 0.6,
+      minY: deckFeetY, maxY: deckFeetY + 0.6,
+      minZ: -0.6, maxZ: 0.6,
+    };
+    const obstruction: CollisionBox = {
+      minX: -0.6, maxX: 0.6,
+      minY: deckFeetY + 0.9, maxY: deckFeetY + 2.2,
+      minZ: -0.6, maxZ: 0.6,
+    };
+
+    expect(findSupportEyeHeight(
+      { x: 0, z: 0 }, 0.35, deckEyeHeight, [support, obstruction],
+    )).toBe(deckEyeHeight);
   });
 
   it('blocks a standing player body from crossing the production waist rail', () => {

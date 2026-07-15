@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
-import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
+import {
+  Box3,
+  Group,
+  PerspectiveCamera,
+  Vector3,
+  type WebGLRenderer,
+} from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession } from '../src/game/ScavengeSession';
@@ -10,6 +16,8 @@ import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
+import { createTestShipFurniture } from './helpers/shipFurniture';
+import { createTestSkyAssets } from './helpers/skyAssets';
 
 function gamePhase(): GamePhase {
   return {
@@ -22,23 +30,35 @@ function gamePhase(): GamePhase {
 }
 
 describe('ScavengePhase lifecycle integration', () => {
-  it('shares one prop model library across phase completion and restart', () => {
+  it('shares one asset context across phase completion and restart', () => {
     const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
     const disposePropModels = vi.spyOn(propModels, 'dispose');
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
     const scavengeModels: unknown[] = [];
     const survivalModels: unknown[] = [];
+    const scavengeSkyAssets: unknown[] = [];
+    const survivalSkyAssets: unknown[] = [];
+    const scavengeFurniture: unknown[] = [];
+    const survivalFurniture: unknown[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
       createScavenge: (context, onComplete) => {
         scavengeModels.push(context.propModels);
+        scavengeSkyAssets.push(context.skyAssets);
+        scavengeFurniture.push(context.shipFurniture);
         complete = onComplete;
         return gamePhase();
       },
       createSurvival: (context) => {
         survivalModels.push(context.propModels);
+        survivalSkyAssets.push(context.skyAssets);
+        survivalFurniture.push(context.shipFurniture);
         return gamePhase();
       },
-    }, { propModels });
+    }, { propModels, shipFurniture, skyAssets });
 
     game.start();
     complete({ savedItems: [], elapsedSeconds: 3 });
@@ -49,19 +69,192 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(scavengeModels[1]).toBe(propModels);
     expect(survivalModels).toHaveLength(1);
     expect(survivalModels[0]).toBe(propModels);
+    expect(scavengeSkyAssets).toEqual([skyAssets, skyAssets]);
+    expect(survivalSkyAssets).toEqual([skyAssets]);
+    expect(scavengeFurniture).toEqual([shipFurniture, shipFurniture]);
+    expect(survivalFurniture).toEqual([shipFurniture]);
     expect(disposePropModels).not.toHaveBeenCalled();
+    expect(disposeShipFurniture).not.toHaveBeenCalled();
+    expect(disposeSkyAssets).not.toHaveBeenCalled();
     game.dispose();
     expect(disposePropModels).toHaveBeenCalledOnce();
+    expect(disposeShipFurniture).toHaveBeenCalledOnce();
+    expect(disposeSkyAssets).toHaveBeenCalledOnce();
+  });
+
+  it('disposes the active phase before shared furniture and sky assets exactly once', () => {
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const disposePhase = vi.fn();
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
+    const game = Game.forTest({
+      createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
+      createSurvival: () => gamePhase(),
+    }, { propModels, shipFurniture, skyAssets });
+
+    game.dispose();
+    game.dispose();
+
+    expect(disposePhase).toHaveBeenCalledOnce();
+    expect(disposeShipFurniture).toHaveBeenCalledOnce();
+    expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(disposePhase.mock.invocationCallOrder[0])
+      .toBeLessThan(disposeShipFurniture.mock.invocationCallOrder[0]!);
+    expect(disposeShipFurniture.mock.invocationCallOrder[0])
+      .toBeLessThan(disposeSkyAssets.mock.invocationCallOrder[0]!);
+  });
+
+  it('continues owned cleanup and preserves a throwing phase disposal error', () => {
+    const calls: string[] = [];
+    const phaseError = new Error('phase disposal failed');
+    const laterModelError = new Error('model disposal also failed');
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const disposePhase = vi.fn(() => {
+      calls.push('phase');
+      throw phaseError;
+    });
+    const disposePropModels = vi.spyOn(propModels, 'dispose').mockImplementation(() => {
+      calls.push('models');
+      throw laterModelError;
+    });
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose').mockImplementation(() => {
+      calls.push('furniture');
+    });
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+    });
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      capabilities: { getMaxAnisotropy: () => 1 },
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(() => calls.push('renderer')),
+    } as unknown as WebGLRenderer;
+    const removeCanvas = vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => {
+      calls.push('canvas');
+    });
+    const game = Game.forTest({
+      createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
+      createSurvival: () => gamePhase(),
+    }, { propModels, shipFurniture, skyAssets, renderer });
+    const performanceStats = (game as unknown as {
+      performanceStats: { dispose(): void };
+    }).performanceStats;
+    const disposePerformanceStats = vi.spyOn(performanceStats, 'dispose')
+      .mockImplementation(() => calls.push('performance'));
+
+    let thrown: unknown;
+    try {
+      game.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(phaseError);
+    expect(calls).toEqual([
+      'phase',
+      'performance',
+      'models',
+      'furniture',
+      'sky',
+      'renderer',
+      'canvas',
+    ]);
+    expect(disposePhase).toHaveBeenCalledOnce();
+    expect(disposePerformanceStats).toHaveBeenCalledOnce();
+    expect(disposePropModels).toHaveBeenCalledOnce();
+    expect(disposeShipFurniture).toHaveBeenCalledOnce();
+    expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(renderer.dispose).toHaveBeenCalledOnce();
+    expect(removeCanvas).toHaveBeenCalledOnce();
+    expect(() => game.dispose()).not.toThrow();
+  });
+
+  it('continues sky, renderer, and canvas cleanup after model disposal throws', () => {
+    const calls: string[] = [];
+    const modelError = new Error('model disposal failed');
+    const laterSkyError = new Error('sky disposal also failed');
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const disposePhase = vi.fn(() => calls.push('phase'));
+    const disposePropModels = vi.spyOn(propModels, 'dispose').mockImplementation(() => {
+      calls.push('models');
+      throw modelError;
+    });
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose').mockImplementation(() => {
+      calls.push('furniture');
+    });
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+      throw laterSkyError;
+    });
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      capabilities: { getMaxAnisotropy: () => 1 },
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(() => calls.push('renderer')),
+    } as unknown as WebGLRenderer;
+    const removeCanvas = vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => {
+      calls.push('canvas');
+    });
+    const game = Game.forTest({
+      createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
+      createSurvival: () => gamePhase(),
+    }, { propModels, shipFurniture, skyAssets, renderer });
+    const performanceStats = (game as unknown as {
+      performanceStats: { dispose(): void };
+    }).performanceStats;
+    const disposePerformanceStats = vi.spyOn(performanceStats, 'dispose')
+      .mockImplementation(() => calls.push('performance'));
+
+    let thrown: unknown;
+    try {
+      game.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(modelError);
+    expect(calls).toEqual([
+      'phase',
+      'performance',
+      'models',
+      'furniture',
+      'sky',
+      'renderer',
+      'canvas',
+    ]);
+    expect(disposePhase).toHaveBeenCalledOnce();
+    expect(disposePerformanceStats).toHaveBeenCalledOnce();
+    expect(disposePropModels).toHaveBeenCalledOnce();
+    expect(disposeShipFurniture).toHaveBeenCalledOnce();
+    expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(renderer.dispose).toHaveBeenCalledOnce();
+    expect(removeCanvas).toHaveBeenCalledOnce();
+    expect(() => game.dispose()).not.toThrow();
   });
 
   it('binds all real world instances to interaction and excludes an unavailable prop', () => {
     const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
     const context = {
       mount: document.createElement('main'),
       camera: new PerspectiveCamera(70, 1, 0.1, 100),
       renderer: { domElement: document.createElement('canvas') },
       reducedMotion: { matches: false },
       propModels,
+      shipFurniture,
+      skyAssets,
+      maxTextureAnisotropy: 1,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
     const internals = phase as unknown as {
@@ -100,6 +293,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();
     propModels.dispose();
+    skyAssets.dispose();
   });
 
   it('exits an owned lock and tears down only phase-owned resources once', () => {
@@ -174,8 +368,36 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(loseItem).not.toHaveBeenCalled();
   });
 
+  it('passes the accepted item identity to world save', () => {
+    const accepted = { instanceId: 'flareGun-1', type: 'flareGun' } as const;
+    const saveCarried = vi.fn().mockReturnValue(accepted);
+    const saveItem = vi.fn();
+    const carryUpdate = vi.fn((
+      _delta: number,
+      _acceptance: Box3,
+      _waterHeight: (x: number, z: number) => number,
+      handlers: { onSaved: (item: ItemInstance) => void },
+    ) => handlers.onSaved(accepted));
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      elapsed: 0,
+      session: { saveCarried },
+      carry: { update: carryUpdate },
+      world: {
+        lifeboat: new Group(),
+        lifeboatAcceptance: new Box3(),
+        saveItem,
+      },
+    });
+
+    (phase as unknown as { updateFlight: (delta: number, scale: number) => void })
+      .updateFlight(0.016, 1);
+
+    expect(saveCarried).toHaveBeenCalledOnce();
+    expect(saveItem).toHaveBeenCalledWith(accepted);
+  });
+
   it.each([
-    ['onSaved', 'saveCarried', 'saveItem'],
     ['onLanded', 'dropCarried', 'landItem'],
     ['onLost', 'loseCarried', 'loseItem'],
   ] as const)(
@@ -195,7 +417,6 @@ describe('ScavengePhase lifecycle integration', () => {
         elapsed: 0,
         session: {
           [sessionMethod]: sessionResult,
-          snapshot: () => ({ savedCount: 2 }),
         },
         carry: { update: carryUpdate },
         world: {
@@ -209,10 +430,7 @@ describe('ScavengePhase lifecycle integration', () => {
         .updateFlight(0.016, 1);
 
       expect(sessionResult).toHaveBeenCalledOnce();
-      expect(worldResult).toHaveBeenCalledWith(
-        instance.instanceId,
-        ...(worldMethod === 'saveItem' ? [1] : []),
-      );
+      expect(worldResult).toHaveBeenCalledWith(instance.instanceId);
     },
   );
 

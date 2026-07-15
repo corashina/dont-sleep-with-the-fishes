@@ -4,7 +4,7 @@ import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
-import type { ShipItemSurface } from './ShipItemPlacement';
+import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
 import { ShipSmoke } from './ShipSmoke';
@@ -13,6 +13,7 @@ export interface ShipBuild {
   root: Group;
   colliders: CollisionBox[];
   itemSurfaces: ShipItemSurface[];
+  furnitureColliderById: ReadonlyMap<string, CollisionBox>;
   playerStart: Vector3;
   evacuationPoint: Vector3;
   lifeboatAnchor: Vector3;
@@ -163,6 +164,11 @@ export function createShip(
   try {
     geometry = createShipGeometry(materials);
     furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT);
+    validateShipItemSurfaces(
+      furniture.surfaces,
+      geometry.shellColliders,
+      furniture.colliderByFurnitureId,
+    );
     smoke = new ShipSmoke(geometry.stackOutlets);
     smoke.points.name = 'freighter-smoke';
     geometry.root.add(furniture.root, smoke.points);
@@ -186,9 +192,10 @@ export function createShip(
     root,
     colliders,
     itemSurfaces,
+    furnitureColliderById: assembledFurniture.colliderByFurnitureId,
     playerStart: new Vector3(0, 3.72, 7.2),
     evacuationPoint: new Vector3(5.4, 3.72, -6.5),
-    lifeboatAnchor: new Vector3(7.6, 0.35, -6.5),
+    lifeboatAnchor: new Vector3(9.0, 0.35, -6.5),
     playerNavigationBounds: {
       safe: { minX: -5.9, maxX: 5.9, minZ: -17.2, maxZ: 17.2 },
       fall: { minX: -7, maxX: 7, minZ: -18, maxZ: 18 },

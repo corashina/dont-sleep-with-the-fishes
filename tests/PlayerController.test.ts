@@ -3,7 +3,7 @@ import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
 import type { MovementAxes } from '../src/player/collisions';
 import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
-import { createShip } from '../src/world/Ship';
+import { createTestShip } from './helpers/shipFurniture';
 
 const TEST_NAVIGATION_BOUNDS: PlayerNavigationBounds = {
   safe: { minX: -5.9, maxX: 5.9, minZ: -16, maxZ: 15.2 },
@@ -14,6 +14,7 @@ class TestInput {
   movement: MovementAxes = { x: 0, z: 0 };
   sprinting = false;
   private look = { x: 0, y: 0 };
+  private jumpQueued = false;
 
   queueLook(x: number, y: number): void {
     this.look = { x, y };
@@ -23,6 +24,16 @@ class TestInput {
     const look = this.look;
     this.look = { x: 0, y: 0 };
     return look;
+  }
+
+  queueJump(): void {
+    this.jumpQueued = true;
+  }
+
+  consumeJump(): boolean {
+    const queued = this.jumpQueued;
+    this.jumpQueued = false;
+    return queued;
   }
 
   asControllerInput(): InputController {
@@ -100,6 +111,73 @@ describe('PlayerController', () => {
     expect(sprinting.localPosition.z).toBeCloseTo(6.2);
   });
 
+  it('jumps, ignores another jump while airborne, and can jump again after landing', () => {
+    const start = new Vector3(0, 3.7, 0);
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+
+    input.queueJump();
+    controller.update(0.1, input.asControllerInput());
+    expect(controller.localPosition.y).toBeGreaterThan(start.y);
+
+    input.queueJump();
+    for (let index = 0; index < 10; index += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    expect(controller.localPosition.y).toBeCloseTo(start.y);
+
+    input.queueJump();
+    controller.update(0.1, input.asControllerInput());
+    expect(controller.localPosition.y).toBeGreaterThan(start.y);
+  });
+
+  it('lands on a 0.6-unit object, stands on it, then falls to deck after stepping off', () => {
+    const deckEyeHeight = 3.72;
+    const supportTop = deckEyeHeight - 1.5 + 0.6;
+    const support = {
+      minX: -0.7, maxX: 0.7,
+      minY: deckEyeHeight - 1.5, maxY: supportTop,
+      minZ: 0.75, maxZ: 2.0,
+    };
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, deckEyeHeight, 0),
+      [support],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+    );
+
+    input.movement = { x: 0, z: -1 };
+    input.queueJump();
+    for (let frame = 0; frame < 4; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    input.movement = { x: 0, z: 0 };
+    for (let frame = 0; frame < 12; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.y).toBeCloseTo(supportTop + 1.5);
+    const standingY = controller.localPosition.y;
+    controller.update(0.1, input.asControllerInput());
+    expect(controller.localPosition.y).toBeCloseTo(standingY);
+
+    input.movement = { x: 0, z: -1 };
+    for (let frame = 0; frame < 5; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    input.movement = { x: 0, z: 0 };
+    for (let frame = 0; frame < 12; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.y).toBeCloseTo(deckEyeHeight);
+  });
+
   it.each([
     ['KeyW', { x: 0, z: -1 }, new Vector3(0, 0, -1)],
     ['KeyD', { x: 1, z: 0 }, new Vector3(1, 0, 0)],
@@ -128,8 +206,8 @@ describe('PlayerController', () => {
     expect(displacement.dot(visibleDirection)).toBeCloseTo(1, 8);
   });
 
-  it('resolves the approved near-console start deterministically without trapping movement', () => {
-    const shipBuild = createShip();
+  it('preserves the approved cabin start without trapping movement', () => {
+    const shipBuild = createTestShip();
     const input = new TestInput();
     const controller = new PlayerController(
       new PerspectiveCamera(),
@@ -141,7 +219,7 @@ describe('PlayerController', () => {
     );
 
     controller.update(0, input.asControllerInput());
-    expect(controller.localPosition.z).toBeCloseTo(7.5);
+    expect(controller.localPosition.z).toBeCloseTo(7.2);
     const resolvedStart = controller.localPosition.clone();
 
     input.movement = { x: 0, z: 1 };
@@ -172,13 +250,13 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['forward port exterior', new Vector3(-5.6, 3.72, 14.5)],
-    ['forward starboard exterior', new Vector3(5.6, 3.72, 14.5)],
-    ['aft port exterior', new Vector3(-5.6, 3.72, -16)],
+    ['forward port exterior', new Vector3(-4.5, 3.72, 14.5)],
+    ['forward starboard exterior', new Vector3(4.5, 3.72, 14.5)],
+    ['aft port exterior', new Vector3(-3.4, 3.72, -15.9)],
     ['storage room', new Vector3(0, 3.72, -9.2)],
     ['lifeboat approach', new Vector3(5.9, 3.72, -6.5)],
   ])('keeps the freighter %s inside the playable bounds', (_label, position) => {
-    const shipBuild = createShip();
+    const shipBuild = createTestShip();
     const onFall = vi.fn();
     const controller = new PlayerController(
       new PerspectiveCamera(), shipBuild.root, position, shipBuild.colliders,

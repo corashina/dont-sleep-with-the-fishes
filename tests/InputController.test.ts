@@ -130,6 +130,27 @@ describe('InputController', () => {
     expect(input.consumeInteract()).toBe(false);
   });
 
+  it('queues one jump for each non-repeating Space press', () => {
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
+
+    dispatch('keydown', { code: 'Space', repeat: false });
+    expect(input.consumeJump()).toBe(true);
+    expect(input.consumeJump()).toBe(false);
+
+    dispatch('keydown', { code: 'Space', repeat: true });
+    expect(input.consumeJump()).toBe(false);
+  });
+
+  it('clears a queued jump on blur', () => {
+    const { input } = createInput();
+    dispatch('keydown', { code: 'Space', repeat: false });
+
+    dispatch('blur');
+
+    expect(input.consumeJump()).toBe(false);
+  });
+
   it('clears held, look, and queued interaction state when disposed', () => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;
@@ -142,6 +163,7 @@ describe('InputController', () => {
     expect(input.movement).toEqual({ x: 0, z: 0 });
     expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
     expect(input.consumeInteract()).toBe(false);
+    expect(input.consumeJump()).toBe(false);
   });
 
   it('removes all event listeners when disposed', () => {

@@ -4,19 +4,31 @@ import {
   Color,
   DirectionalLight,
   FogExp2,
-  Group,
   HemisphereLight,
-  Mesh,
-  MeshBasicMaterial,
-  PlaneGeometry,
   Points,
   PointsMaterial,
   Scene,
+  Texture,
+  Vector3,
 } from 'three';
 import type { SinkingState } from '../game/sinking';
+import { Skybox } from './Skybox';
+import type { SkyPalette } from './skyPalette';
 
 const RAIN_DROP_COUNT = 900;
 const SPRAY_DROP_COUNT = 220;
+
+export const SCAVENGE_SHADOW_CONFIG = Object.freeze({
+  mapSize: 2048,
+  left: -24,
+  right: 24,
+  top: 24,
+  bottom: -24,
+  near: 0.5,
+  far: 80,
+  bias: -0.0005,
+  normalBias: 0.03,
+});
 
 function particleField(
   count: number,
@@ -39,25 +51,47 @@ export class Environment {
   private readonly rainPositions: Float32Array;
   private readonly spray: Points<BufferGeometry, PointsMaterial>;
   private readonly sprayPositions: Float32Array;
-  private readonly clouds = new Group();
+  private readonly sky: Skybox;
   private readonly keyLight: DirectionalLight;
   private readonly fillLight: HemisphereLight;
-  private readonly stormBackground = new Color(0x27343b);
+  private readonly fallbackBackground = new Color(0x27343b);
   private readonly stormFog = new FogExp2(0x27343b, 0.018);
   private readonly previousBackground: Scene['background'];
   private readonly previousFog: Scene['fog'];
   private disposed = false;
 
-  constructor(private readonly scene: Scene) {
+  get atmosphere(): Readonly<SkyPalette> { return this.sky.palette; }
+
+  constructor(private readonly scene: Scene, moonTexture: Texture) {
     this.previousBackground = scene.background;
     this.previousFog = scene.fog;
-    scene.background = this.stormBackground;
+    scene.background = this.fallbackBackground;
     scene.fog = this.stormFog;
+    this.sky = new Skybox(
+      scene,
+      { weather: 'squall', phase: 'day', severity: 0 },
+      moonTexture,
+    );
 
     this.fillLight = new HemisphereLight(0x8fa0a1, 0x182226, 1.2);
     this.keyLight = new DirectionalLight(0xc7c0aa, 2.1);
     this.keyLight.position.set(-12, 18, 8);
     this.keyLight.castShadow = true;
+    const shadow = this.keyLight.shadow;
+    const shadowCamera = shadow.camera;
+    shadow.mapSize.set(
+      SCAVENGE_SHADOW_CONFIG.mapSize,
+      SCAVENGE_SHADOW_CONFIG.mapSize,
+    );
+    shadowCamera.left = SCAVENGE_SHADOW_CONFIG.left;
+    shadowCamera.right = SCAVENGE_SHADOW_CONFIG.right;
+    shadowCamera.top = SCAVENGE_SHADOW_CONFIG.top;
+    shadowCamera.bottom = SCAVENGE_SHADOW_CONFIG.bottom;
+    shadowCamera.near = SCAVENGE_SHADOW_CONFIG.near;
+    shadowCamera.far = SCAVENGE_SHADOW_CONFIG.far;
+    shadow.bias = SCAVENGE_SHADOW_CONFIG.bias;
+    shadow.normalBias = SCAVENGE_SHADOW_CONFIG.normalBias;
+    shadowCamera.updateProjectionMatrix();
     scene.add(this.fillLight, this.keyLight);
 
     const rainField = particleField(RAIN_DROP_COUNT, 60, 30);
@@ -84,29 +118,12 @@ export class Environment {
     this.spray.name = 'sea-spray';
     scene.add(this.spray);
 
-    for (let index = 0; index < 7; index += 1) {
-      const cloud = new Mesh(
-        new PlaneGeometry(26 + index * 3, 5 + (index % 3) * 2),
-        new MeshBasicMaterial({
-          color: 0x4b565a,
-          transparent: true,
-          opacity: 0.38,
-          depthWrite: false,
-        }),
-      );
-      cloud.position.set(-60 + index * 20, 22 + (index % 2) * 4, -42 - (index % 3) * 12);
-      cloud.rotation.x = -0.22;
-      this.clouds.add(cloud);
-    }
-    this.clouds.name = 'storm-clouds';
-    scene.add(this.clouds);
   }
 
   update(
     delta: number,
     sinking: SinkingState,
-    cameraX: number,
-    cameraZ: number,
+    cameraPosition: Vector3,
     reducedMotion: boolean,
   ): void {
     if (this.disposed) return;
@@ -116,7 +133,7 @@ export class Environment {
       this.rainPositions[offset] = (this.rainPositions[offset]! - delta * rainSpeed + 30) % 30;
     }
     (this.rain.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
-    this.rain.position.set(cameraX, 0, cameraZ);
+    this.rain.position.set(cameraPosition.x, 0, cameraPosition.z);
 
     const spraySpeed = reducedMotion ? 0.5 : 1.3 + sinking.progress;
     for (let index = 0; index < SPRAY_DROP_COUNT; index += 1) {
@@ -125,12 +142,20 @@ export class Environment {
     }
     (this.spray.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
     this.spray.position.set(4.5, 0, -5.8);
-    this.clouds.position.x = (
-      (this.clouds.position.x + delta * (reducedMotion ? 0.3 : 0.9) + 70) % 140
-    ) - 70;
 
-    this.stormFog.density = 0.018 + sinking.progress * 0.009;
-    this.keyLight.intensity = 2.1 - sinking.progress * 0.45;
+    this.sky.resetTransient();
+    const atmosphere = this.sky.update(
+      delta,
+      { weather: 'squall', phase: 'day', severity: sinking.progress },
+      cameraPosition,
+    );
+    this.fallbackBackground.copy(atmosphere.horizonColor);
+    this.stormFog.color.copy(atmosphere.fogColor);
+    this.stormFog.density = atmosphere.fogDensity;
+    this.fillLight.color.copy(atmosphere.ambientLightColor);
+    this.fillLight.intensity = atmosphere.ambientLightIntensity;
+    this.keyLight.color.copy(atmosphere.keyLightColor);
+    this.keyLight.intensity = atmosphere.keyLightIntensity;
   }
 
   dispose(): void {
@@ -140,13 +165,9 @@ export class Environment {
     this.rain.material.dispose();
     this.spray.geometry.dispose();
     this.spray.material.dispose();
-    this.clouds.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      object.geometry.dispose();
-      if (object.material instanceof MeshBasicMaterial) object.material.dispose();
-    });
-    this.scene.remove(this.rain, this.spray, this.clouds, this.keyLight, this.fillLight);
-    if (this.scene.background === this.stormBackground) this.scene.background = this.previousBackground;
+    this.sky.dispose();
+    this.scene.remove(this.rain, this.spray, this.keyLight, this.fillLight);
+    if (this.scene.background === this.fallbackBackground) this.scene.background = this.previousBackground;
     if (this.scene.fog === this.stormFog) this.scene.fog = this.previousFog;
   }
 }

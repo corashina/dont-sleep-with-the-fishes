@@ -47,6 +47,7 @@ const ITEM_CATEGORIES = new Set<ShipItemCategory>([
 const MAX_INTERACTION_DISTANCE = 2.2;
 const MIN_UNIFORM_SCALE = 0.75;
 const STANDING_EYE_HEIGHT = 1.5;
+const STRUCTURE_CLEARANCE = 0.1;
 const EPSILON = 1e-6;
 
 function itemProfile(id: ItemId, category: ShipItemCategory): ShipItemProfile {
@@ -97,18 +98,16 @@ function finiteVector(vector: Vector3): boolean {
 function surfaceVolume(surface: ShipItemSurface): Box3 {
   const halfWidth = surface.footprint.width / 2;
   const halfDepth = surface.footprint.depth / 2;
-  const planar = new Box3();
-  for (const x of [-halfWidth, halfWidth]) {
-    for (const z of [-halfDepth, halfDepth]) {
-      planar.expandByPoint(new Vector3(x, 0, z).applyEuler(surface.rotation).add(surface.position));
-    }
-  }
   return new Box3(
-    new Vector3(planar.min.x, surface.position.y, planar.min.z),
     new Vector3(
-      planar.max.x,
+      surface.position.x - halfWidth,
+      surface.position.y,
+      surface.position.z - halfDepth,
+    ),
+    new Vector3(
+      surface.position.x + halfWidth,
       surface.position.y + surface.clearanceHeight,
-      planar.max.z,
+      surface.position.z + halfDepth,
     ),
   );
 }
@@ -135,7 +134,11 @@ function sameTransform(left: ShipItemSurface, right: ShipItemSurface): boolean {
     && Math.abs(left.clearanceHeight - right.clearanceHeight) <= EPSILON;
 }
 
-export function validateShipItemSurfaces(surfaces: readonly ShipItemSurface[]): void {
+export function validateShipItemSurfaces(
+  surfaces: readonly ShipItemSurface[],
+  shellColliders: readonly CollisionBox[] = [],
+  furnitureColliderById?: ReadonlyMap<string, CollisionBox>,
+): void {
   const ids = new Set<string>();
   const physicalSlots = new Map<string, ShipItemSurface[]>();
   for (const surface of surfaces) {
@@ -168,6 +171,43 @@ export function validateShipItemSurfaces(surfaces: readonly ShipItemSurface[]): 
     if (surface.standingPoints.every((point) => point.distanceTo(surface.position) > MAX_INTERACTION_DISTANCE + EPSILON)) {
       throw new Error(`Ship item surface ${surface.id} has no standing point within interaction reach`);
     }
+    if (furnitureColliderById) {
+      const owner = furnitureColliderById.get(surface.furnitureId);
+      if (!owner) {
+        throw new Error(`Ship item surface ${surface.id} has missing furniture owner ${surface.furnitureId}`);
+      }
+      const owned = owner as CollisionBox & { furnitureModelId?: ShipFurnitureKind };
+      if (owned.furnitureModelId && owned.furnitureModelId !== surface.furnitureModelId) {
+        throw new Error(`Ship item surface ${surface.id} does not match owner ${surface.furnitureId}`);
+      }
+      const volume = surfaceVolume(surface);
+      if (volume.min.x < owner.minX - EPSILON || volume.max.x > owner.maxX + EPSILON
+        || volume.min.z < owner.minZ - EPSILON || volume.max.z > owner.maxZ + EPSILON
+        || surface.position.y < owner.minY - EPSILON
+        || surface.position.y > owner.maxY + EPSILON) {
+        throw new Error(`Ship item surface ${surface.id} exceeds owner ${surface.furnitureId} bounds`);
+      }
+      if (surface.furnitureModelId !== 'bookcaseOpen'
+        && owner.maxY > surface.position.y + EPSILON) {
+        throw new Error(`Ship item surface ${surface.id} is blocked above owner ${surface.furnitureId}`);
+      }
+      const clearance = volume.clone().expandByVector(
+        new Vector3(STRUCTURE_CLEARANCE, 0, STRUCTURE_CLEARANCE),
+      );
+      shellColliders.forEach((collider, index) => {
+        if (positiveVolumeOverlap(clearance, collisionBounds(collider))) {
+          throw new Error(
+            `Ship item surface ${surface.id} violates wall clearance ${STRUCTURE_CLEARANCE} at shell collider ${index}`,
+          );
+        }
+      });
+      furnitureColliderById.forEach((collider, furnitureId) => {
+        if (furnitureId !== surface.furnitureId
+          && positiveVolumeOverlap(clearance, collisionBounds(collider))) {
+          throw new Error(`Ship item surface ${surface.id} intersects furniture ${furnitureId}`);
+        }
+      });
+    }
     const aliases = physicalSlots.get(surface.physicalSlotId) ?? [];
     aliases.push(surface);
     physicalSlots.set(surface.physicalSlotId, aliases);
@@ -185,7 +225,6 @@ export function validateShipItemSurfaces(surfaces: readonly ShipItemSurface[]): 
   }
 
   surfaces.forEach((left, leftIndex) => surfaces.slice(leftIndex + 1).forEach((right) => {
-    if (left.furnitureId !== right.furnitureId) return;
     if (left.physicalSlotId === right.physicalSlotId) return;
     if (positiveVolumeOverlap(surfaceVolume(left), surfaceVolume(right))) {
       throw new Error(`Overlapping ship item surfaces: ${left.id}, ${right.id}`);
@@ -256,7 +295,18 @@ export function assignShipItems(
   random: () => number = Math.random,
   blockers: readonly CollisionBox[] = [],
 ): Map<ItemInstanceId, ShipItemTransform> {
-  validateShipItemSurfaces(surfaces);
+  const furnitureColliderById = new Map<string, CollisionBox>();
+  const shellColliders = blockers.filter((blocker) => {
+    const furnitureId = (blocker as CollisionBox & { furnitureId?: string }).furnitureId;
+    if (!furnitureId) return true;
+    furnitureColliderById.set(furnitureId, blocker);
+    return false;
+  });
+  validateShipItemSurfaces(
+    surfaces,
+    shellColliders,
+    blockers.length > 0 ? furnitureColliderById : undefined,
+  );
   const sortedInstances = [...instances].sort((left, right) => {
     const leftProfile = SHIP_ITEM_PROFILES[left.type];
     const rightProfile = SHIP_ITEM_PROFILES[right.type];

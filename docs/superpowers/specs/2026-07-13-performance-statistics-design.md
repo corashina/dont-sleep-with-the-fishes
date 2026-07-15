@@ -1,4 +1,4 @@
-# Last Boat Out — FPS Performance Statistics Design
+# Don't Sleep With The Fishes — FPS Performance Statistics Design
 
 - **Status:** Approved
 - **Date:** 2026-07-13

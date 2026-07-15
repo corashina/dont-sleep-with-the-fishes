@@ -24,9 +24,9 @@ export function getSinkingState(elapsedSeconds: number, durationSeconds: number)
 
   return {
     progress,
-    rollRadians: -0.05 - 0.27 * eased,
-    pitchRadians: 0.015 + 0.055 * eased,
-    sinkOffset: -4.2 * eased,
+    rollRadians: 0,
+    pitchRadians: 0,
+    sinkOffset: 0,
     alarmRate: 0.7 + 1.3 * finalRush,
     waveAmplitudeScale: 1 + 0.35 * eased,
     cameraShake: 0.003 + 0.018 * finalRush,

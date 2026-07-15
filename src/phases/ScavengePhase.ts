@@ -59,7 +59,14 @@ export class ScavengePhase implements GamePhase {
     this.ui = new GameUI(context.mount);
     const instances = createItemInstances();
     this.session = new ScavengeSession(instances);
-    this.world = new World(this.scene, context.propModels, instances);
+    this.world = new World(
+      this.scene,
+      context.propModels,
+      context.shipFurniture,
+      context.maxTextureAnisotropy,
+      context.skyAssets.moonTexture,
+      instances,
+    );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
       instance,
@@ -247,7 +254,7 @@ export class ScavengePhase implements GamePhase {
       {
         onSaved: (instance) => {
           if (!this.session.saveCarried()) return;
-          this.world.saveItem(instance.instanceId, this.session.snapshot().savedCount - 1);
+          this.world.saveItem(instance);
         },
         onLost: (instance) => {
           if (!this.session.loseCarried()) return;

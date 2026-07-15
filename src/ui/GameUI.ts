@@ -60,7 +60,7 @@ export class GameUI {
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
           <p class="kicker">THE HULL HAS BEEN BREACHED</p>
-          <h1>LAST BOAT<br>OUT</h1>
+          <h1>DON'T SLEEP<br>WITH THE<br>FISHES</h1>
           <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
           <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>LEFT CLICK</dd></div></dl>
           <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>

@@ -1,5 +1,7 @@
 import type { PerspectiveCamera, WebGLRenderer } from 'three';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
+import type { SkyAssets } from '../world/SkyAssets';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -7,6 +9,9 @@ export interface PhaseContext {
   camera: PerspectiveCamera;
   reducedMotion: MediaQueryList;
   propModels: PropModelLibrary;
+  shipFurniture: ShipFurnitureLibrary;
+  maxTextureAnisotropy: number;
+  skyAssets: SkyAssets;
 }
 
 export interface GamePhase {
