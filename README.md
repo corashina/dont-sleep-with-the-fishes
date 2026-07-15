@@ -1,8 +1,8 @@
-# Last Boat Out
+# Don't Sleep With The Fishes
 
 A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
-The 3D world combines original procedural geometry and shaders with locally committed CC0 item models from [Kenney](https://kenney.nl/assets). The game makes no runtime asset requests.
+The 3D world uses original procedural geometry and shaders. Its shared cloudless atmosphere combines grounded maritime scattering, a locally committed original gibbous-moon texture, weather-aware celestial light, fog, lighting, and synchronized ocean reflections without external sky art.
 
 The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
 
@@ -28,6 +28,7 @@ Open the local URL printed by Vite and select **Begin Evacuation**. The scavengi
 | `WASD` | Move through the ship |
 | Mouse | Look |
 | `Shift` | Sprint |
+| `Space` | Jump |
 | Left mouse click | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
 | `Escape` | Pause and release the mouse |
 
@@ -96,6 +97,7 @@ bun run preview
 - `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.
+- `src/world/Skybox`, `src/world/SkyAssets`, and `src/world/skyPalette` — shared cloudless atmosphere rendering, app-owned moon art, grounded weather and day/night palettes, celestial bodies, and ocean/fog color synchronization.
 - `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
 - `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
 

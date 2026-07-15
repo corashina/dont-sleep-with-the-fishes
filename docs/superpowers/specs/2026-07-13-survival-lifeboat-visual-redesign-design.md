@@ -1,4 +1,4 @@
-# Last Boat Out — Survival Lifeboat Visual Redesign
+# Don't Sleep With The Fishes — Survival Lifeboat Visual Redesign
 
 - **Status:** Approved
 - **Date:** 2026-07-13

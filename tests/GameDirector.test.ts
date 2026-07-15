@@ -5,6 +5,15 @@ import type { GamePhase } from '../src/app/GamePhase';
 import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import { createTestPropModels } from './helpers/propModels';
+import { createTestShipFurniture } from './helpers/shipFurniture';
+import { createTestSkyAssets } from './helpers/skyAssets';
+
+type Assert<T extends true> = T;
+type PhaseAssetContextIsRequired = Assert<
+  {} extends Pick<import('../src/app/GamePhase').PhaseContext,
+  'shipFurniture' | 'maxTextureAnisotropy'> ? false : true
+>;
+const phaseAssetContextIsRequired: PhaseAssetContextIsRequired = true;
 
 function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   return {
@@ -18,12 +27,20 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
 }
 
 function testOptions(
-  overrides: Omit<GameTestOptions, 'propModels'> = {},
+  overrides: Omit<GameTestOptions, 'propModels' | 'shipFurniture' | 'skyAssets'> = {},
 ): GameTestOptions {
-  return { propModels: createTestPropModels(), ...overrides };
+  return {
+    propModels: createTestPropModels(),
+    shipFurniture: createTestShipFurniture(),
+    skyAssets: createTestSkyAssets(),
+    ...overrides,
+  };
 }
 
 describe('Game director', () => {
+  it('requires ship furniture and anisotropy in every phase context', () => {
+    expect(phaseAssetContextIsRequired).toBe(true);
+  });
   it('starts the shared clock and schedules animation only once', () => {
     const startClock = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
@@ -56,6 +73,32 @@ describe('Game director', () => {
     expect(active.update).toHaveBeenCalledWith(0.05, 0.05);
     expect(active.render).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
+  });
+
+  it.each([
+    [0, 1],
+    [-4, 1],
+    [8, 8],
+  ])('publishes renderer anisotropy %s as clamped context value %s', (reported, expected) => {
+    let contextAnisotropy: number | undefined;
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      capabilities: { getMaxAnisotropy: () => reported },
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as GameTestOptions['renderer'];
+    const game = Game.forTest({
+      createScavenge: (context) => {
+        contextAnisotropy = context.maxTextureAnisotropy;
+        return phase();
+      },
+      createSurvival: () => phase(),
+    }, testOptions({ renderer }));
+
+    expect(contextAnisotropy).toBe(expected);
+    game.dispose();
   });
 
   it('deep-copies and freezes duplicate saved instances at the phase boundary', () => {
@@ -241,12 +284,22 @@ describe('Game director', () => {
         calls.push('dispose-models');
         disposeModels();
       });
+    const shipFurniture = createTestShipFurniture();
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose')
+      .mockImplementation(() => {
+        calls.push('dispose-furniture');
+      });
+    const skyAssets = createTestSkyAssets();
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose')
+      .mockImplementation(() => {
+        calls.push('dispose-sky');
+      });
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame');
     const game = Game.forTest({
       createScavenge: () => active,
       createSurvival: () => phase(),
-    }, { propModels });
+    }, { propModels, shipFurniture, skyAssets });
     const renderer = (game as unknown as {
       renderer: { dispose: () => void; domElement: HTMLCanvasElement };
     }).renderer;
@@ -261,7 +314,14 @@ describe('Game director', () => {
     expect(cancelAnimationFrame).toHaveBeenCalledOnce();
     expect(active.dispose).toHaveBeenCalledOnce();
     expect(disposePropModels).toHaveBeenCalledOnce();
-    expect(calls).toEqual(['dispose-phase', 'dispose-models']);
+    expect(disposeShipFurniture).toHaveBeenCalledOnce();
+    expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(calls).toEqual([
+      'dispose-phase',
+      'dispose-models',
+      'dispose-furniture',
+      'dispose-sky',
+    ]);
     expect(disposeRenderer).toHaveBeenCalledOnce();
     expect(renderer.domElement.parentElement).toBeNull();
     expect(removeEventListener).toHaveBeenCalledTimes(1);
@@ -271,12 +331,13 @@ describe('Game director', () => {
     removeEventListener.mockRestore();
   });
 
-  it('rolls back acquired construction resources without disposing unowned models', () => {
+  it('rolls back acquired construction resources without disposing unowned assets', () => {
     const mount = document.createElement('main');
     const canvas = document.createElement('canvas');
     const resizeError = new Error('initial resize failed');
     const renderer = {
       domElement: canvas,
+      capabilities: { getMaxAnisotropy: () => 1 },
       setPixelRatio: vi.fn(),
       setSize: vi.fn(() => { throw resizeError; }),
       render: vi.fn(),
@@ -285,6 +346,10 @@ describe('Game director', () => {
     const active = phase();
     const propModels = createTestPropModels();
     const disposeModels = vi.spyOn(propModels, 'dispose');
+    const shipFurniture = createTestShipFurniture();
+    const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
+    const skyAssets = createTestSkyAssets();
+    const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
     const addEventListener = vi.spyOn(window, 'addEventListener');
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
 
@@ -293,6 +358,8 @@ describe('Game director', () => {
       createSurvival: () => phase(),
     }, {
       propModels,
+      shipFurniture,
+      skyAssets,
       mount,
       renderer,
     } as unknown as GameTestOptions)).toThrow(resizeError);
@@ -305,6 +372,8 @@ describe('Game director', () => {
     expect(renderer.dispose).toHaveBeenCalledOnce();
     expect(canvas.parentElement).toBeNull();
     expect(disposeModels).not.toHaveBeenCalled();
+    expect(disposeShipFurniture).not.toHaveBeenCalled();
+    expect(disposeSkyAssets).not.toHaveBeenCalled();
 
     addEventListener.mockRestore();
     removeEventListener.mockRestore();

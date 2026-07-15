@@ -5,6 +5,7 @@ import {
   Scene,
   ShaderMaterial,
   SphereGeometry,
+  Texture,
   Vector3,
 } from 'three';
 import {
@@ -40,6 +41,7 @@ const fragmentShader = `
   uniform vec3 uMoonColor;
   uniform vec3 uStarColor;
   uniform vec3 uTintColor;
+  uniform sampler2D uMoonMap;
   uniform float uSunVisibility;
   uniform float uMoonVisibility;
   uniform float uStarVisibility;
@@ -54,34 +56,108 @@ const fragmentShader = `
     return fract((value.x + value.y) * value.z);
   }
 
-  float starField(vec3 direction) {
-    vec3 cell = floor(direction * 260.0);
+  float hash21(vec2 value) {
+    vec3 value3 = fract(vec3(value.xyx) * 0.1031);
+    value3 += dot(value3, value3.yzx + 33.33);
+    return fract((value3.x + value3.y) * value3.z);
+  }
+
+  vec3 starLayer(vec3 direction, float scale, float threshold) {
+    vec3 grid = direction * scale;
+    vec3 cell = floor(grid);
+    vec3 local = fract(grid) - 0.5;
+    vec3 offset = (vec3(
+      hash31(cell + 1.7),
+      hash31(cell + 4.1),
+      hash31(cell + 8.3)
+    ) - 0.5) * 0.52;
     float seed = hash31(cell);
-    float point = smoothstep(0.994, 1.0, seed);
-    float aboveHorizon = smoothstep(0.02, 0.22, direction.y);
-    return point * aboveHorizon;
+    float exists = step(threshold, seed);
+    float radius = mix(0.025, 0.075, hash31(cell + 12.8));
+    float point = 1.0 - smoothstep(radius, radius * 2.4, length(local - offset));
+    float brightness = mix(0.32, 1.0, hash31(cell + 19.4));
+    vec3 warm = vec3(1.04, 0.98, 0.9);
+    vec3 cool = vec3(0.88, 0.96, 1.08);
+    vec3 tint = mix(warm, cool, hash31(cell + 25.6));
+    return tint * point * exists * brightness;
+  }
+
+  vec4 sampleMoon(vec3 direction, vec3 moonDirection, out float radialDistance) {
+    vec3 moonRight = normalize(cross(vec3(0.0, 1.0, 0.0), moonDirection));
+    vec3 moonUp = normalize(cross(moonDirection, moonRight));
+    float facing = dot(direction, moonDirection);
+    vec2 tangent = vec2(
+      dot(direction, moonRight),
+      dot(direction, moonUp)
+    ) / max(facing, 0.0001);
+    const float moonRadius = 0.027;
+    vec2 moonUv = tangent / (moonRadius * 2.0) + 0.5;
+    radialDistance = length(tangent) / moonRadius;
+    float inside = step(0.0, facing)
+      * step(abs(tangent.x), moonRadius)
+      * step(abs(tangent.y), moonRadius);
+    return texture2D(uMoonMap, moonUv) * inside;
   }
 
   void main() {
     vec3 direction = normalize(vSkyDirection);
-    float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
-    float upperMix = smoothstep(0.08, 0.58, height);
-    float zenithMix = smoothstep(0.5, 0.98, height);
-    vec3 color = mix(uHorizonColor, uUpperColor, upperMix);
-    color = mix(color, uZenithColor, zenithMix);
+    float elevation = max(direction.y, 0.0);
+    float opticalPath = 1.0 / max(direction.y + 0.12, 0.12);
+    float upperWeight = smoothstep(-0.025, 0.52, direction.y);
+    float zenithWeight = pow(elevation, 0.58);
+    vec3 color = mix(uHorizonColor, uUpperColor, upperWeight);
+    color = mix(color, uZenithColor, zenithWeight);
+
+    float pathHaze = clamp((opticalPath - 1.0) * 0.09, 0.0, 1.0);
+    float horizonHaze = uHaze * pathHaze;
+    color = mix(color, uHorizonColor, clamp(horizonHaze * 0.42, 0.0, 0.55));
+    float horizonLift = exp(-abs(direction.y) * 28.0) * (0.03 + uHaze * 0.08);
+    color += uHorizonColor * horizonLift;
 
     vec3 sunDirection = normalize(vec3(-0.42, 0.58, -0.7));
+    float sunSeparation = 1.0 - clamp(dot(direction, sunDirection), 0.0, 1.0);
+    float sunDisc = 1.0 - smoothstep(0.00003, 0.00022, sunSeparation);
+    float sunBloom = exp(-sunSeparation * 720.0);
+    float sunHalo = exp(-sunSeparation * 44.0);
+    float sunClarity = 1.0 - uHaze * 0.74;
+    color += uSunColor * uSunVisibility * (
+      sunDisc * sunClarity
+      + sunBloom * mix(0.16, 0.28, sunClarity)
+      + sunHalo * mix(0.035, 0.075, uHaze)
+    );
+
     vec3 moonDirection = normalize(vec3(0.46, 0.52, -0.72));
-    float sun = smoothstep(0.9991, 0.99975, dot(direction, sunDirection));
-    float moon = smoothstep(0.9987, 0.99965, dot(direction, moonDirection));
-    float stars = starField(direction) * (1.0 - uHaze * 0.78);
-    color += uSunColor * sun * uSunVisibility;
-    color += uMoonColor * moon * uMoonVisibility;
-    color += uStarColor * stars * uStarVisibility;
+    float moonRadialDistance;
+    vec4 moonSample = sampleMoon(direction, moonDirection, moonRadialDistance);
+    float moonClarity = 1.0 - uHaze * 0.72;
+    color += uMoonColor
+      * moonSample.rgb
+      * moonSample.a
+      * uMoonVisibility
+      * moonClarity;
+    float moonHalo = exp(
+      -moonRadialDistance * moonRadialDistance * 1.65
+    )
+      * (1.0 - moonSample.a)
+      * uMoonVisibility
+      * mix(0.025, 0.07, moonClarity);
+    color += uMoonColor * moonHalo;
+
+    float starHorizon = smoothstep(0.04, 0.24, direction.y);
+    float starClarity = max(0.0, 1.0 - uHaze * 0.94);
+    vec3 stars = starLayer(direction, 210.0, 0.9972)
+      + starLayer(direction, 390.0, 0.9986) * 0.7;
+    color += uStarColor * stars * uStarVisibility * starHorizon * starClarity;
+
+    float atmosphericVariation = mix(0.992, 1.008,
+      hash31(direction * 173.0));
+    color *= atmosphericVariation;
     color *= uExposure;
     color = mix(color, uTintColor, clamp(uTintAmount, 0.0, 1.0));
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
+    float dither = (hash21(gl_FragCoord.xy) - 0.5) / 255.0;
+    gl_FragColor.rgb += dither;
   }
 `;
 
@@ -97,7 +173,11 @@ export class Skybox {
 
   get palette(): Readonly<SkyPalette> { return this.current; }
 
-  constructor(private readonly scene: Scene, initialState: SkyState) {
+  constructor(
+    private readonly scene: Scene,
+    initialState: SkyState,
+    moonTexture: Texture,
+  ) {
     this.current = skyPaletteFor(initialState);
     this.blendFrom = cloneSkyPalette(this.current);
     this.target = cloneSkyPalette(this.current);
@@ -114,6 +194,7 @@ export class Skybox {
         uHorizonColor: { value: this.current.horizonColor.clone() },
         uSunColor: { value: this.current.sunColor.clone() },
         uMoonColor: { value: this.current.moonColor.clone() },
+        uMoonMap: { value: moonTexture },
         uStarColor: { value: this.current.starColor.clone() },
         uTintColor: { value: new Color() },
         uSunVisibility: { value: this.current.sunVisibility },

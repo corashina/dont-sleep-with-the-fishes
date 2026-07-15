@@ -1,30 +1,180 @@
 import { Box3, Mesh, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveLocalMovement } from '../src/player/collisions';
-import { createShipGeometry, FREIGHTER_DIMENSIONS } from '../src/world/ShipGeometry';
+import { createShipGeometry } from '../src/world/ShipGeometry';
+import {
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  type ShipDoorSpec,
+  type ShipLayoutSpec,
+} from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 
 describe('freighter geometry', () => {
+  interface PointXZ {
+    x: number;
+    z: number;
+  }
+
+  type TriangleXZ = readonly [PointXZ, PointXZ, PointXZ];
+
+  const signedAreaXZ = (polygon: readonly PointXZ[]): number => polygon.reduce(
+    (area, point, index) => {
+      const next = polygon[(index + 1) % polygon.length]!;
+      return area + point.x * next.z - next.x * point.z;
+    },
+    0,
+  ) / 2;
+
+  const edgeSide = (start: PointXZ, end: PointXZ, point: PointXZ): number =>
+    (end.x - start.x) * (point.z - start.z)
+      - (end.z - start.z) * (point.x - start.x);
+
+  const triangleIntersectionAreaXZ = (subject: TriangleXZ, clip: TriangleXZ): number => {
+    let polygon: PointXZ[] = [...subject];
+    const clipOrientation = Math.sign(signedAreaXZ(clip)) || 1;
+    const epsilon = 1e-10;
+
+    for (let edgeIndex = 0; edgeIndex < clip.length && polygon.length > 0; edgeIndex += 1) {
+      const edgeStart = clip[edgeIndex]!;
+      const edgeEnd = clip[(edgeIndex + 1) % clip.length]!;
+      const input = polygon;
+      polygon = [];
+
+      for (let pointIndex = 0; pointIndex < input.length; pointIndex += 1) {
+        const current = input[pointIndex]!;
+        const previous = input[(pointIndex + input.length - 1) % input.length]!;
+        const currentSide = edgeSide(edgeStart, edgeEnd, current);
+        const previousSide = edgeSide(edgeStart, edgeEnd, previous);
+        const currentInside = clipOrientation * currentSide >= -epsilon;
+        const previousInside = clipOrientation * previousSide >= -epsilon;
+
+        if (currentInside !== previousInside) {
+          const denominator = previousSide - currentSide;
+          const amount = Math.abs(denominator) <= epsilon ? 0 : previousSide / denominator;
+          polygon.push({
+            x: previous.x + (current.x - previous.x) * amount,
+            z: previous.z + (current.z - previous.z) * amount,
+          });
+        }
+        if (currentInside) polygon.push(current);
+      }
+    }
+
+    return Math.abs(signedAreaXZ(polygon));
+  };
+
+  const meshTrianglesXZ = (mesh: Mesh): TriangleXZ[] => {
+    mesh.updateMatrixWorld(true);
+    const positions = mesh.geometry.getAttribute('position');
+    const indices = mesh.geometry.getIndex();
+    const indexCount = indices?.count ?? positions.count;
+    const triangles: TriangleXZ[] = [];
+    for (let index = 0; index < indexCount; index += 3) {
+      const vertex = (offset: number): PointXZ => {
+        const positionIndex = indices?.getX(index + offset) ?? index + offset;
+        const world = mesh.localToWorld(new Vector3().fromBufferAttribute(positions, positionIndex));
+        return { x: world.x, z: world.z };
+      };
+      triangles.push([vertex(0), vertex(1), vertex(2)]);
+    }
+    return triangles;
+  };
+
+  const endHalfWidth = (mesh: Mesh, end: 'bow' | 'stern'): number => {
+    mesh.updateMatrixWorld(true);
+    const position = mesh.geometry.getAttribute('position');
+    const points = Array.from({ length: position.count }, (_, index) =>
+      mesh.localToWorld(new Vector3().fromBufferAttribute(position, index)));
+    const extremeZ = end === 'bow'
+      ? Math.max(...points.map(({ z }) => z))
+      : Math.min(...points.map(({ z }) => z));
+    return Math.max(...points
+      .filter(({ z }) => Math.abs(z - extremeZ) < 0.001)
+      .map(({ x }) => Math.abs(x)));
+  };
+
+  const curvedEndDepth = (mesh: Mesh, end: 'bow' | 'stern'): number => {
+    mesh.updateMatrixWorld(true);
+    const position = mesh.geometry.getAttribute('position');
+    const points = Array.from({ length: position.count }, (_, index) =>
+      mesh.localToWorld(new Vector3().fromBufferAttribute(position, index)));
+    const halfWidth = Math.max(...points.map(({ x }) => Math.abs(x)));
+    const fullWidthPoints = points.filter(({ x }) => Math.abs(x) > halfWidth - 0.01);
+    const extremeZ = end === 'bow'
+      ? Math.max(...points.map(({ z }) => z))
+      : Math.min(...points.map(({ z }) => z));
+    const curveStartZ = end === 'bow'
+      ? Math.max(...fullWidthPoints.map(({ z }) => z))
+      : Math.min(...fullWidthPoints.map(({ z }) => z));
+    return Math.abs(extremeZ - curveStartZ);
+  };
+
+  const playerY = FREIGHTER_DIMENSIONS.deckY + 1.5;
+  const pointInCollider = (
+    build: ReturnType<typeof createShipGeometry>,
+    point: Vector3,
+  ): boolean => build.shellColliders.some((box) =>
+    point.x >= box.minX && point.x <= box.maxX
+    && point.y >= box.minY && point.y <= box.maxY
+    && point.z >= box.minZ && point.z <= box.maxZ);
+
+  const wallRenderBlockers = (
+    build: ReturnType<typeof createShipGeometry>,
+    point: Vector3,
+  ): string[] => {
+    const blockers: string[] = [];
+    build.root.updateMatrixWorld(true);
+    build.root.traverse((object) => {
+      if (!(object instanceof Mesh)
+        || !/(wall|sill|header|pillar|window|door-side)/.test(object.name)) return;
+      if (new Box3().setFromObject(object).containsPoint(point)) blockers.push(object.name);
+    });
+    return blockers;
+  };
+
+  const doorAxisSamples = (door: ShipDoorSpec): readonly number[] => {
+    const center = door.orientation === 'side' ? door.center[1] : door.center[0];
+    return [center, center - door.width / 2 + 0.35, center + door.width / 2 - 0.35];
+  };
+
+  const doorPoint = (door: ShipDoorSpec, axis: number): Vector3 => door.orientation === 'side'
+    ? new Vector3(door.center[0], playerY, axis)
+    : new Vector3(axis, playerY, door.center[1]);
+
+  const railColliderAt = (
+    build: ReturnType<typeof createShipGeometry>,
+    x: number,
+    z: number,
+    layout: ShipLayoutSpec = SHIP_LAYOUT,
+  ) => build.shellColliders.find((box) =>
+    x >= box.minX && x <= box.maxX
+    && z >= box.minZ && z <= box.maxZ
+    && Math.abs(box.minY - FREIGHTER_DIMENSIONS.deckY) < 1e-8
+    && Math.abs(box.maxY - (FREIGHTER_DIMENSIONS.deckY + layout.rail.height)) < 1e-8);
+
   it('builds the approved single-level freighter shell and named zones', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const bounds = new Box3().setFromObject(build.root);
-    expect(FREIGHTER_DIMENSIONS).toEqual({ width: 12.5, length: 36, deckY: 2 });
+    expect(FREIGHTER_DIMENSIONS).toEqual({ width: 12.5, length: 36, deckY: 2.22 });
     expect(bounds.max.x - bounds.min.x).toBeGreaterThanOrEqual(12);
     expect(bounds.max.z - bounds.min.z).toBeGreaterThanOrEqual(35);
     expect([...build.zoneCenters.keys()].sort()).toEqual([
-      'cargoDeck', 'crewCabin', 'lifeboatStation', 'storageRoom', 'wheelhouse',
+      'cargoDeck', 'crewCabin', 'lifeboatStation', 'storageWorkroom', 'wheelhouse',
     ]);
-    expect([...build.zoneCenters]).toEqual([
-      ['crewCabin', new Vector3(0, 3.72, 7.5)],
-      ['wheelhouse', new Vector3(0, 3.72, 13.2)],
-      ['cargoDeck', new Vector3(0, 3.72, -1.5)],
-      ['storageRoom', new Vector3(0, 3.72, -9.2)],
-      ['lifeboatStation', new Vector3(5.4, 3.72, -6.5)],
-    ]);
+    expect([...build.zoneCenters]).toEqual(SHIP_LAYOUT.zones.map((zone) => [
+      zone.id,
+      new Vector3(
+        (zone.bounds.minX + zone.bounds.maxX) / 2,
+        FREIGHTER_DIMENSIONS.deckY + 1.5,
+        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
+      ),
+    ]));
+    const machineryZ = (SHIP_LAYOUT.machineryClosure.minZ + SHIP_LAYOUT.machineryClosure.maxZ) / 2;
     expect(build.stackOutlets).toEqual([
-      new Vector3(-1.35, 7.1, -13),
-      new Vector3(1.35, 7.1, -13),
+      new Vector3(-1.35, 7.1, machineryZ),
+      new Vector3(1.35, 7.1, machineryZ),
     ]);
     expect(build.root.getObjectByName('smokestack-port')).toBeInstanceOf(Mesh);
     expect(build.root.getObjectByName('smokestack-starboard')).toBeInstanceOf(Mesh);
@@ -53,9 +203,9 @@ describe('freighter geometry', () => {
   });
 
   it.each([
-    new Vector3(-6.2, 3.72, 0),
-    new Vector3(6.2, 3.72, 4),
-  ])('blocks player-height passage through the outer rail at %s', (point) => {
+    new Vector3(-6, 2.72, 0),
+    new Vector3(6, 2.72, 4),
+  ])('blocks passage through the waist-height outer rail at %s', (point) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     expect(build.shellColliders.some((box) =>
@@ -116,13 +266,244 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
-  it('uses dark material for every interior plank grain strip', () => {
+  it('builds exactly five non-overlapping finished floor surfaces at deck height', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const interiorGrain = build.root.children.filter((object): object is Mesh =>
-      object instanceof Mesh && object.name.includes('-floor-grain-'));
-    expect(interiorGrain.length).toBeGreaterThan(0);
-    interiorGrain.forEach((mesh) => expect(mesh.material).toBe(materials.darkMetal));
+    const expectedNames = [
+      'floor-crewCabin',
+      'floor-wheelhouse',
+      'floor-cargoDeck',
+      'floor-storageWorkroom',
+      'floor-lifeboatStation',
+    ] as const;
+    const descendantMeshes: Mesh[] = [];
+    build.root.traverse((object) => {
+      if (object instanceof Mesh) descendantMeshes.push(object);
+    });
+    const floors = descendantMeshes.filter(({ name }) => name.startsWith('floor-'));
+
+    expect(floors).toHaveLength(expectedNames.length);
+    expect(floors.map(({ name }) => name).sort()).toEqual([...expectedNames].sort());
+    expect(descendantMeshes.filter(({ name }) => /plank|grain/i.test(name))).toEqual([]);
+
+    build.root.updateMatrixWorld(true);
+    floors.forEach((floor) => {
+      const bounds = new Box3().setFromObject(floor);
+      expect(bounds.min.y).toBeCloseTo(2.22);
+      expect(bounds.max.y).toBeCloseTo(2.22);
+    });
+
+    const floorTriangles = floors.map((floor) => meshTrianglesXZ(floor));
+    for (let first = 0; first < floors.length; first += 1) {
+      for (let second = first + 1; second < floors.length; second += 1) {
+        const intersectsInPositiveArea = floorTriangles[first]!.some((firstTriangle) =>
+          floorTriangles[second]!.some((secondTriangle) =>
+            triangleIntersectionAreaXZ(firstTriangle, secondTriangle) > 1e-8));
+        expect(
+          intersectsInPositiveArea,
+          `${floors[first]!.name} intersects ${floors[second]!.name} in positive X/Z area`,
+        ).toBe(false);
+      }
+    }
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it.each(SHIP_LAYOUT.doors)('$id leaves all player-radius doorway samples open and keeps both jambs solid', (door) => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+
+    doorAxisSamples(door).forEach((axis) => {
+      const point = doorPoint(door, axis);
+      expect(pointInCollider(build, point), `${door.id} collider at ${axis}`).toBe(false);
+      expect(wallRenderBlockers(build, point), `${door.id} render at ${axis}`).toEqual([]);
+    });
+
+    const center = door.orientation === 'side' ? door.center[1] : door.center[0];
+    [center - door.width / 2 - 0.02, center + door.width / 2 + 0.02]
+      .forEach((axis) => {
+        const point = doorPoint(door, axis);
+        expect(pointInCollider(build, point), `${door.id} jamb collider at ${axis}`).toBe(true);
+        expect(wallRenderBlockers(build, point).length, `${door.id} jamb render at ${axis}`)
+          .toBeGreaterThan(0);
+      });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('uses the approved zone materials on walls and glass panes', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const meshes: Mesh[] = [];
+    build.root.traverse((object) => {
+      if (object instanceof Mesh) meshes.push(object);
+    });
+
+    const crewWalls = meshes.filter(({ name }) => name.startsWith('crew-cabin-wall-'));
+    const storageWalls = meshes.filter(({ name }) => name.startsWith('storage-workroom-wall-'));
+    const wheelhousePanels = meshes.filter(({ name }) => name.startsWith('wheelhouse-wall-')
+      && !name.includes('-window-') && !name.includes('-pillar-'));
+    const wheelhouseWindows = meshes.filter(({ name }) => name.startsWith('wheelhouse-wall-')
+      && name.includes('-window-'));
+    expect(crewWalls.length).toBeGreaterThan(0);
+    expect(storageWalls.length).toBeGreaterThan(0);
+    expect(wheelhousePanels.length).toBeGreaterThan(0);
+    expect(wheelhouseWindows.length).toBeGreaterThan(0);
+    crewWalls.forEach(({ material }) => expect(material).toBe(materials.paintedPanel));
+    storageWalls.forEach(({ material }) => expect(material).toBe(materials.paintedSteel));
+    wheelhousePanels.forEach(({ material }) => expect(material).toBe(materials.paintedPanel));
+    wheelhouseWindows.forEach(({ material }) => expect(material).toBe(materials.glass));
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('seals every enclosed-room corner visually and physically', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+
+    SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
+      zone.polygon.forEach(([x, z], index) => {
+        const name = `${zone.id}-corner-${index}`;
+        const cap = build.root.getObjectByName(name);
+        expect(cap, name).toBeInstanceOf(Mesh);
+        expect(new Box3().setFromObject(cap!).containsPoint(new Vector3(x, playerY, z)), name)
+          .toBe(true);
+        expect(pointInCollider(build, new Vector3(x, playerY, z)), name).toBe(true);
+      });
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('uses one compact stern island and keeps every end-deck target open', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const closure = SHIP_LAYOUT.machineryClosure;
+    const island = build.root.getObjectByName('machinery-island');
+    expect(island).toBeInstanceOf(Mesh);
+    expect(new Box3().setFromObject(island!).min.x).toBeCloseTo(closure.minX);
+    expect(new Box3().setFromObject(island!).max.x).toBeCloseTo(closure.maxX);
+    expect(build.root.getObjectByName('machinery-closure-port')).toBeUndefined();
+    expect(build.root.getObjectByName('machinery-closure-center')).toBeUndefined();
+    expect(build.root.getObjectByName('machinery-closure-starboard')).toBeUndefined();
+
+    const cargoFloor = build.root.getObjectByName('floor-cargoDeck');
+    expect(cargoFloor).toBeInstanceOf(Mesh);
+    const cargoBounds = new Box3().setFromObject(cargoFloor!);
+    SHIP_LAYOUT.targets.filter(({ kind }) => kind === 'endDeck').forEach((target) => {
+      const deckPoint = new Vector3(target.position[0], FREIGHTER_DIMENSIONS.deckY, target.position[1]);
+      expect(cargoBounds.containsPoint(deckPoint), target.id).toBe(true);
+      expect(pointInCollider(build, new Vector3(deckPoint.x, playerY, deckPoint.z)), target.id)
+        .toBe(false);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('uses a 1.05-high rail from deck Y and leaves only the approved starboard interval open', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const opening = SHIP_LAYOUT.rail.starboardOpening;
+    const openingMin = opening.centerZ - opening.width / 2;
+    const openingMax = opening.centerZ + opening.width / 2;
+    const railX = SHIP_LAYOUT.rail.innerFaceX + 0.125;
+    const railMeshes = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.startsWith('rail-'));
+    const railBounds = railMeshes.reduce(
+      (combined, mesh) => combined.union(new Box3().setFromObject(mesh)),
+      new Box3(),
+    );
+    expect(railBounds.min.y).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY);
+    expect(railBounds.max.y).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height);
+    expect(railBounds.max.y - railBounds.min.y).toBeCloseTo(1.05);
+
+    [openingMin + 0.01, opening.centerZ, openingMax - 0.01].forEach((z) => {
+      expect(railColliderAt(build, railX, z), `starboard rail collider at ${z}`).toBeUndefined();
+      expect(railMeshes.some((mesh) => new Box3().setFromObject(mesh)
+        .containsPoint(new Vector3(railX, FREIGHTER_DIMENSIONS.deckY + 0.5, z)))).toBe(false);
+    });
+    [openingMin - 0.01, openingMax + 0.01, 0].forEach((z) => {
+      expect(railColliderAt(build, railX, z), `starboard rail collider at ${z}`).toBeDefined();
+    });
+    expect(railColliderAt(build, -railX, opening.centerZ), 'full port rail').toBeDefined();
+    expect(railColliderAt(build, 0, 17.4), 'bow rail').toBeDefined();
+    expect(railColliderAt(build, 0, -17.4), 'stern rail').toBeDefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('derives doors, rails, and the compact machinery island from a supplied layout', () => {
+    const movedDoorCenter = 7.4;
+    const modified: ShipLayoutSpec = {
+      ...SHIP_LAYOUT,
+      doors: SHIP_LAYOUT.doors.map((door) => door.id === 'cabin-port-door'
+        ? { ...door, center: [door.center[0], movedDoorCenter] as const }
+        : door),
+      rail: {
+        height: 1.1,
+        innerFaceX: 5.75,
+        starboardOpening: { centerZ: -5.5, width: 3 },
+      },
+      machineryClosure: { minX: -2, maxX: 2, minZ: -15, maxZ: -11 },
+    };
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, modified);
+    const movedDoor = modified.doors.find(({ id }) => id === 'cabin-port-door')!;
+    const oldDoor = SHIP_LAYOUT.doors.find(({ id }) => id === 'cabin-port-door')!;
+
+    expect(pointInCollider(build, doorPoint(movedDoor, movedDoorCenter))).toBe(false);
+    expect(pointInCollider(build, doorPoint(oldDoor, oldDoor.center[1]))).toBe(true);
+    const railX = modified.rail.innerFaceX + 0.125;
+    expect(railColliderAt(build, railX, -5.5, modified)).toBeUndefined();
+    expect(railColliderAt(build, railX, -7.5, modified)).toBeDefined();
+    const railMeshes = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.startsWith('rail-'));
+    const railBounds = railMeshes.reduce(
+      (combined, mesh) => combined.union(new Box3().setFromObject(mesh)),
+      new Box3(),
+    );
+    expect(railBounds.max.y).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + 1.1);
+    const closureCenter = build.root.getObjectByName('machinery-island')!;
+    const closureBounds = new Box3().setFromObject(closureCenter);
+    expect(closureBounds.min.x).toBeCloseTo(-2);
+    expect(closureBounds.max.x).toBeCloseTo(2);
+    expect(closureBounds.min.z).toBeCloseTo(-15);
+    expect(closureBounds.max.z).toBeCloseTo(-11);
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('rounds both ends of the hull and timber deck profiles', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const hull = build.root.getObjectByName('main-hull-body') as Mesh;
+    const deck = build.root.getObjectByName('timber-deck') as Mesh;
+
+    for (const mesh of [hull, deck]) {
+      expect(endHalfWidth(mesh, 'bow')).toBeLessThan(0.25);
+      expect(endHalfWidth(mesh, 'stern')).toBeLessThan(0.25);
+      expect(curvedEndDepth(mesh, 'bow')).toBeGreaterThan(3.5);
+      expect(curvedEndDepth(mesh, 'stern')).toBeGreaterThan(3.5);
+    }
+
+    const hullPosition = hull.geometry.getAttribute('position');
+    const hullMidY = -0.55;
+    const topPoints = Array.from({ length: hullPosition.count }, (_, index) =>
+      new Vector3().fromBufferAttribute(hullPosition, index))
+      .filter(({ y }) => y > hullMidY);
+    const bottomPoints = Array.from({ length: hullPosition.count }, (_, index) =>
+      new Vector3().fromBufferAttribute(hullPosition, index))
+      .filter(({ y }) => y < hullMidY);
+    expect(Math.max(...bottomPoints.map(({ x }) => Math.abs(x))))
+      .toBeLessThan(Math.max(...topPoints.map(({ x }) => Math.abs(x))) - 0.5);
+
     build.disposeGeometry();
     materials.dispose();
   });
@@ -131,13 +512,13 @@ describe('freighter geometry', () => {
     const materials = createShipMaterials();
     const first = createShipGeometry(materials);
     const second = createShipGeometry(materials);
-    const firstPlanks = ['deck-plank-0', 'deck-plank-1', 'deck-plank-2']
+    const firstBoxes = ['wheelhouse-front-pillar-0', 'wheelhouse-front-pillar-1', 'wheelhouse-front-pillar-2']
       .map((name) => first.root.getObjectByName(name) as Mesh);
-    const secondPlank = second.root.getObjectByName('deck-plank-0') as Mesh;
+    const secondBox = second.root.getObjectByName('wheelhouse-front-pillar-0') as Mesh;
 
-    expect(new Set(firstPlanks.map(({ geometry }) => geometry)).size).toBe(1);
-    expect(secondPlank.geometry).not.toBe(firstPlanks[0]!.geometry);
-    const dispose = vi.spyOn(firstPlanks[0]!.geometry, 'dispose');
+    expect(new Set(firstBoxes.map(({ geometry }) => geometry)).size).toBe(1);
+    expect(secondBox.geometry).not.toBe(firstBoxes[0]!.geometry);
+    const dispose = vi.spyOn(firstBoxes[0]!.geometry, 'dispose');
     first.disposeGeometry();
     first.disposeGeometry();
     expect(dispose).toHaveBeenCalledTimes(1);
@@ -147,35 +528,34 @@ describe('freighter geometry', () => {
   });
 
   it.each([
-    ['bow', 15.8],
-    ['stern', -16.7],
-  ] as const)('adds an exact visible and colliding %s transverse railing', (end, z) => {
+    ['bow', 1],
+    ['stern', -1],
+  ] as const)('adds a rounded visible and colliding %s end railing', (end, direction) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const top = build.root.getObjectByName(`rail-${end}-top`) as Mesh;
+    const topSegments = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.startsWith(`rail-${end}-top-`));
 
-    expect(top).toBeInstanceOf(Mesh);
-    const bounds = new Box3().setFromObject(top);
+    expect(topSegments).toHaveLength(12);
+    const bounds = topSegments.reduce(
+      (combined, segment) => combined.union(new Box3().setFromObject(segment)),
+      new Box3(),
+    );
     const size = bounds.getSize(new Vector3());
-    expect(size.x).toBeCloseTo(12);
+    expect(size.x).toBeGreaterThan(12);
+    expect(size.x).toBeLessThan(12.3);
     expect(size.y).toBeCloseTo(0.14);
-    expect(size.z).toBeCloseTo(0.2);
-    expect(bounds.getCenter(new Vector3()).z).toBeCloseTo(z);
-    expect(build.shellColliders).toContainEqual({
-      minX: -6,
-      maxX: 6,
-      minY: 2.14,
-      maxY: 3.94,
-      minZ: z - 0.125,
-      maxZ: z + 0.125,
-    });
+    expect(size.z).toBeGreaterThan(3.9);
+    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(17);
+    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(17.8);
     const blocked = resolveLocalMovement(
-      { x: 0, y: 3.72, z: z - Math.sign(z) * 0.8 },
-      { x: 0, y: 3.72, z: z + Math.sign(z) * 0.8 },
+      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 15.2 },
+      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 18 },
       0.35,
       build.shellColliders,
     );
-    expect(Math.abs(blocked.z - z)).toBeCloseTo(0.475);
+    expect(Math.abs(blocked.z)).toBeGreaterThan(15);
+    expect(Math.abs(blocked.z)).toBeLessThan(17.2);
     const lifeboatGap = resolveLocalMovement(
       { x: 5.4, y: 3.72, z: -6.5 },
       { x: 6.4, y: 3.72, z: -6.5 },

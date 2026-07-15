@@ -3,6 +3,8 @@ import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import type { ItemId, ItemInstance } from '../game/ItemState';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
+import type { SkyAssets } from '../world/SkyAssets';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
 import { SurvivalSession } from './SurvivalSession';
@@ -34,6 +36,9 @@ function testContext(): PhaseContext {
     camera: new PerspectiveCamera(),
     reducedMotion: { matches: false } as MediaQueryList,
     propModels: {} as PropModelLibrary,
+    shipFurniture: {} as ShipFurnitureLibrary,
+    maxTextureAnisotropy: 1,
+    skyAssets: {} as SkyAssets,
   };
 }
 
@@ -82,6 +87,7 @@ export class SurvivalPhase implements GamePhase {
           context.camera,
           context.reducedMotion,
           context.propModels,
+          context.skyAssets.moonTexture,
           savedItems,
         ),
         new SurvivalUI(context.mount),

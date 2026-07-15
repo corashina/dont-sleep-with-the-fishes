@@ -29,6 +29,8 @@ import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import { Skybox } from '../world/Skybox';
+import type { SkyPalette } from '../world/skyPalette';
 import {
   ACTION_FOR_ITEM,
   projectBoatAnchor,
@@ -50,12 +52,6 @@ import type {
   WeatherId,
 } from './survivalTypes';
 
-export interface SurvivalLighting {
-  ambient: number;
-  key: number;
-  fogDensity: number;
-}
-
 export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
 
 export function clampParallax(
@@ -68,19 +64,6 @@ export function clampParallax(
     yaw: Math.min(0.045, Math.max(-0.045, x * 0.045)),
     pitch: Math.min(0.025, Math.max(-0.025, y * 0.025)),
   };
-}
-
-export function survivalLighting(weather: WeatherId, phase: 'day' | 'night'): SurvivalLighting {
-  if (phase === 'night') {
-    return {
-      ambient: weather === 'squall' ? 0.18 : 0.28,
-      key: 0.22,
-      fogDensity: weather === 'squall' ? 0.032 : 0.022,
-    };
-  }
-  if (weather === 'calm') return { ambient: 1.1, key: 2.2, fogDensity: 0.012 };
-  if (weather === 'squall') return { ambient: 0.48, key: 0.7, fogDensity: 0.028 };
-  return { ambient: 0.72, key: 1.15, fogDensity: 0.018 };
 }
 
 const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
@@ -100,6 +83,8 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   death: 1.5,
   sinking: 1.5,
 };
+
+const DIVE_SKY_TINT = new Color(0x0d5063);
 
 interface ActiveSequence {
   cue: PresentationCue;
@@ -182,6 +167,7 @@ export class BoatWorld {
   private readonly camera: PerspectiveCamera;
   private readonly reducedMotion: MediaQueryList;
   private readonly ocean: OceanRenderer;
+  private readonly sky: Skybox;
   private readonly motionRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
@@ -197,6 +183,12 @@ export class BoatWorld {
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
+  private readonly oceanAtmosphere = {
+    fogColor: new Color(),
+    horizonColor: new Color(),
+    skyColor: new Color(),
+    sunColor: new Color(0xfff1cf),
+  };
   private readonly waterExclusion: LifeboatBuild['waterExclusion'];
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
@@ -230,9 +222,15 @@ export class BoatWorld {
     camera: PerspectiveCamera,
     reducedMotion: MediaQueryList,
     propModels: PropModelLibrary,
+    moonTexture: Texture,
     savedItems: readonly ItemInstance[] = [],
   ) {
     this.scene = new Scene();
+    this.sky = new Skybox(
+      this.scene,
+      { weather: 'calm', phase: 'day', severity: 0 },
+      moonTexture,
+    );
     this.camera = camera;
     this.reducedMotion = reducedMotion;
     this.originalCameraParent = camera.parent;
@@ -315,13 +313,11 @@ export class BoatWorld {
   setPhase(phase: 'day' | 'night'): void {
     if (this.disposed) return;
     this.phase = phase;
-    this.applyBaseLighting();
   }
 
   setWeather(weather: WeatherId): void {
     if (this.disposed) return;
     this.weather = weather;
-    this.applyBaseLighting();
   }
 
   syncInventory(snapshot: SurvivalSnapshot): void {
@@ -429,8 +425,14 @@ export class BoatWorld {
       delta,
       this.reducedMotion.matches,
     );
-
     this.applyBasePresentation();
+    this.camera.getWorldPosition(this.worldCameraPosition);
+    this.sky.update(
+      delta,
+      { weather: this.weather, phase: this.phase, severity: 0 },
+      this.worldCameraPosition,
+    );
+    this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
 
     const sequence = this.activeSequence;
@@ -448,7 +450,12 @@ export class BoatWorld {
     this.updateSecondaryMotion(delta);
 
     const fog = this.scene.fog as FogExp2;
-    this.ocean.update(time, amplitudeScale, fog.density);
+    const atmosphere = this.sky.palette;
+    this.oceanAtmosphere.fogColor.copy(fog.color);
+    this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
+    this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
+    this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
+    this.ocean.update(time, amplitudeScale, fog.density, this.oceanAtmosphere);
     this.scene.updateMatrixWorld(true);
     this.ocean.setExclusions([
       createWaterExclusion(
@@ -468,6 +475,7 @@ export class BoatWorld {
     this.cancelActiveSequence();
     this.ocean.dispose();
     this.spray.dispose();
+    this.sky.dispose();
     this.scene.remove(
       this.motionRig,
       this.ocean.mesh,
@@ -527,7 +535,8 @@ export class BoatWorld {
   }
 
   private applyBasePresentation(): void {
-    this.applyBaseLighting();
+    this.sky.resetTransient();
+    this.applyBaseLighting(this.sky.palette);
     const { boat, rider } = this.driftFrame;
     this.motionRig.position.set(0, 0.22 + boat.heave, 0);
     this.motionRig.rotation.set(boat.pitch, boat.yaw, boat.roll);
@@ -546,7 +555,8 @@ export class BoatWorld {
   }
 
   private updateSecondaryMotion(delta: number): void {
-    if (this.reducedMotion.matches) {
+    const reduced = this.reducedMotion.matches;
+    if (reduced) {
       this.spray.reset();
       this.sprayCooldown = 0;
       return;
@@ -569,19 +579,21 @@ export class BoatWorld {
     }
   }
 
-  private applyBaseLighting(): void {
-    const lighting = survivalLighting(this.weather, this.phase);
-    this.ambient.intensity = lighting.ambient;
-    this.key.intensity = lighting.key;
-    const fogColor = this.phase === 'night'
-      ? new Color(0x101922)
-      : new Color(this.weather === 'squall' ? 0x27343b : 0x59777c);
-    this.scene.background = fogColor.clone();
-    if (this.scene.fog instanceof FogExp2) {
-      this.scene.fog.color.copy(fogColor);
-      this.scene.fog.density = lighting.fogDensity;
+  private applyBaseLighting(atmosphere: Readonly<SkyPalette>): void {
+    this.ambient.color.copy(atmosphere.ambientLightColor);
+    this.ambient.intensity = atmosphere.ambientLightIntensity;
+    this.key.color.copy(atmosphere.keyLightColor);
+    this.key.intensity = atmosphere.keyLightIntensity;
+    if (this.scene.background instanceof Color) {
+      this.scene.background.copy(atmosphere.horizonColor);
     } else {
-      this.scene.fog = new FogExp2(fogColor, lighting.fogDensity);
+      this.scene.background = atmosphere.horizonColor.clone();
+    }
+    if (this.scene.fog instanceof FogExp2) {
+      this.scene.fog.color.copy(atmosphere.fogColor);
+      this.scene.fog.density = atmosphere.fogDensity;
+    } else {
+      this.scene.fog = new FogExp2(atmosphere.fogColor, atmosphere.fogDensity);
     }
   }
 
@@ -602,7 +614,10 @@ export class BoatWorld {
       case 'dive':
         if (!reduced) this.cameraRig.position.y -= pulse * 0.72;
         (this.scene.fog as FogExp2).density += pulse * 0.035;
-        (this.scene.background as Color).lerp(new Color(0x0d5063), pulse * 0.8);
+        this.sky.setTint(DIVE_SKY_TINT, pulse * 0.8);
+        if (this.scene.background instanceof Color) {
+          this.scene.background.lerp(DIVE_SKY_TINT, pulse * 0.8);
+        }
         break;
       case 'repair':
         if (!reduced) {

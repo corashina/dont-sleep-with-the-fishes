@@ -329,6 +329,34 @@ describe('CarryController', () => {
     expect(item.getWorldScale(new Vector3()).distanceTo(beforeScale)).toBeLessThan(1e-10);
   });
 
+  it('reaches the moved scavenging lifeboat with the normal throw speed', () => {
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    camera.position.set(5.4, 3.72, -6.5);
+    camera.lookAt(9.0, 1.5, -6.5);
+    scene.add(camera);
+    const object = new Group();
+    scene.add(object);
+    const carry = new CarryController(scene, camera);
+    const outcomes: string[] = [];
+    const lifeboatBox = new Box3(
+      new Vector3(7.65, 0.05, -9.22),
+      new Vector3(10.35, 1.35, -3.78),
+    );
+
+    carry.pickUp({ instanceId: 'waterJug-1', type: 'waterJug' }, object);
+    carry.throw();
+    for (let frame = 0; frame < 120 && carry.flightActive; frame += 1) {
+      carry.update(1 / 60, lifeboatBox, () => -100, {
+        onSaved: (instance) => outcomes.push(`saved:${instance.instanceId}`),
+        onLost: (instance) => outcomes.push(`lost:${instance.instanceId}`),
+        onLanded: (instance) => outcomes.push(`landed:${instance.instanceId}`),
+      });
+    }
+
+    expect(outcomes).toEqual(['saved:waterJug-1']);
+  });
+
   it('detects a lifeboat hit across a large delta and reports it once', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();

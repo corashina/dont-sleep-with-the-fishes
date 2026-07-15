@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BufferAttribute,
+  FogExp2,
   Matrix4,
   Material,
   Mesh,
@@ -19,7 +20,7 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../src/game/ItemState';
-import { BoatWorld, clampParallax, survivalLighting } from '../src/survival/BoatWorld';
+import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
@@ -29,6 +30,7 @@ import {
   testPropModel,
 } from './helpers/propModels';
 import { loadProductionPropModels } from './helpers/productionPropModels';
+import { createTestMoonTexture } from './helpers/skyAssets';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -92,6 +94,7 @@ describe('BoatWorld helpers', () => {
       camera,
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       savedItems,
     );
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
@@ -120,6 +123,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: true } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [savedItem('fishingRod')],
     );
     const line = world.scene.getObjectByName('fishing-line')!;
@@ -158,6 +162,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       savedItems,
     );
 
@@ -181,6 +186,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [savedItem('fishingRod')],
     );
     const line = world.scene.getObjectByName('fishing-line')!;
@@ -201,22 +207,114 @@ describe('BoatWorld helpers', () => {
     expect(clampParallax(0.4, -0.4, true)).toEqual({ yaw: 0, pitch: 0 });
   });
 
-  it('provides distinct bounded day, night, and squall lighting', () => {
-    expect(survivalLighting('calm', 'day')).toMatchObject({ ambient: 1.1, fogDensity: 0.012 });
-    expect(survivalLighting('overcast', 'night').ambient).toBeLessThan(0.5);
-    expect(survivalLighting('squall', 'day').fogDensity).toBeGreaterThan(0.02);
-  });
-
   it('frames the enlarged boat from the higher stern seat without changing FOV', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.1, 100);
     const propModels = createTestPropModels();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, []);
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
     expect(camera.position.toArray()).toEqual([0, 0.88, 2.35]);
     expect(camera.fov).toBe(65);
     expect(world.scene.getObjectByName('lifeboat-hull-geometry')).toBeDefined();
     expect(world.scene.getObjectByName('paddle-port')).toBeDefined();
     expect(world.scene.getObjectByName('paddle-starboard')).toBeDefined();
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('transitions sky, fog, lights, and ocean to squall night together', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
+    world.setWeather('squall');
+    world.setPhase('night');
+    world.update(0.75, 0.75);
+    world.update(1.5, 0.75);
+
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh;
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
+    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
+    const oceanUniforms = (ocean.material as ShaderMaterial).uniforms;
+    expect(skyUniforms.uSunVisibility!.value).toBe(0);
+    expect(skyUniforms.uMoonVisibility!.value).toBeCloseTo(0.07);
+    expect(skyUniforms.uStarVisibility!.value).toBeCloseTo(0.02);
+    expect((world.scene.fog as FogExp2).density).toBeCloseTo(0.034);
+    expect(oceanUniforms.uHorizonColor!.value).toEqual(skyUniforms.uHorizonColor!.value);
+    expect(oceanUniforms.uSkyColor!.value).toEqual(skyUniforms.uZenithColor!.value);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('tints the procedural sky during the dive cue and clears the tint afterward', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
+    const sequence = world.play('dive');
+    world.update(0.7, 0.7);
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh;
+    const uniforms = (sky.material as ShaderMaterial).uniforms;
+    expect(uniforms.uTintAmount!.value).toBeGreaterThan(0);
+    world.update(1.4, 0.7);
+    await sequence;
+    world.update(1.5, 0.1);
+    expect(uniforms.uTintAmount!.value).toBe(0);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('disposes the survival sky once', () => {
+    const propModels = createTestPropModels();
+    const moonTexture = createTestMoonTexture();
+    const moonTextureDispose = vi.spyOn(moonTexture, 'dispose');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      moonTexture,
+    );
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh;
+    const geometryDispose = vi.spyOn(sky.geometry, 'dispose');
+    const materialDispose = vi.spyOn(sky.material as ShaderMaterial, 'dispose');
+    expect((sky.material as ShaderMaterial).uniforms.uMoonMap!.value).toBe(moonTexture);
+    world.dispose();
+    world.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(moonTextureDispose).not.toHaveBeenCalled();
+    propModels.dispose();
+  });
+
+  it('disposes bow-spray geometry and material once across repeated world disposal', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
+    const geometryDispose = vi.spyOn(spray.geometry, 'dispose');
+    const materialDispose = vi.spyOn(spray.material as Material, 'dispose');
+
+    world.dispose();
+    world.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
@@ -230,6 +328,7 @@ describe('BoatWorld helpers', () => {
         camera,
         { matches: false } as MediaQueryList,
         propModels,
+        createTestMoonTexture(),
         createItemInstances(),
       );
       const anchors = world.projectInteractionAnchors(1280, 720)
@@ -257,6 +356,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [],
     );
     const seen = new Set<Texture>();
@@ -286,6 +386,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [],
     );
     const boat = world.scene.getObjectByName('lifeboat')!;
@@ -310,25 +411,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('disposes bow-spray geometry and material once across repeated world disposal', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-    );
-    const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
-    const geometryDispose = vi.spyOn(spray.geometry, 'dispose');
-    const materialDispose = vi.spyOn(spray.material as Material, 'dispose');
-
-    world.dispose();
-    world.dispose();
-
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
-    propModels.dispose();
-  });
-
   it('keeps every visible actionable anchor clear of fixed repair and horizon anchors', async () => {
     const propModels = await loadProductionPropModels();
     let world: BoatWorld | undefined;
@@ -337,6 +419,7 @@ describe('BoatWorld helpers', () => {
         new PerspectiveCamera(65, 16 / 9, 0.08, 220),
         { matches: false } as MediaQueryList,
         propModels,
+        createTestMoonTexture(),
         createItemInstances(),
       );
       const actionable = world.projectInteractionAnchors(1280, 720)
@@ -365,7 +448,7 @@ describe('BoatWorld helpers', () => {
     const camera = new PerspectiveCamera();
     const reducedMotion = { matches: true } as unknown as MediaQueryList;
     const propModels = createTestPropModels();
-    const world = new BoatWorld(camera, reducedMotion, propModels);
+    const world = new BoatWorld(camera, reducedMotion, propModels, createTestMoonTexture());
     const before = camera.getWorldPosition(new Vector3()).y;
 
     world.update(1, 0.1);
@@ -382,6 +465,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
     );
 
     world.update(1.5, 0.1);
@@ -412,6 +496,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       savedItems,
     );
     const storage = world.scene.getObjectByName('lifeboat-storage')!;
@@ -447,6 +532,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       savedItems,
     );
     const inventory = createSurvivalInventory(savedItems);
@@ -503,6 +589,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       savedItems,
     );
     const inventory = createSurvivalInventory(savedItems);
@@ -537,7 +624,13 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
     camera.updateProjectionMatrix();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, savedItems);
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
@@ -572,7 +665,13 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
     camera.updateProjectionMatrix();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, savedItems);
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
     const inventory = createSurvivalInventory(savedItems);
     inventory.ductTape.charges = 1;
     inventory.flareGun.charges = 1;
@@ -598,6 +697,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [savedItem('fishingRod'), savedItem('scubaSet')],
     );
     const rod = rodWorld.scene.getObjectByName('prop:fishingRod-1')!;
@@ -613,6 +713,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [],
     );
     emptyWorld.play('fish');
@@ -626,7 +727,13 @@ describe('BoatWorld helpers', () => {
   it('resets transient cues after they finish', async () => {
     const camera = new PerspectiveCamera();
     const propModels = createTestPropModels();
-    const world = new BoatWorld(camera, { matches: false } as MediaQueryList, propModels, []);
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
     const sequence = world.play('rest');
     world.update(0.8, 0.8);
     await sequence;
@@ -641,6 +748,7 @@ describe('BoatWorld helpers', () => {
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
+      createTestMoonTexture(),
       [savedItem('medicalKit')],
     );
     const prop = world.scene.getObjectByName('prop:medicalKit-1')!;

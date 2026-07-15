@@ -9,7 +9,10 @@ import type { GamePhase, PhaseContext } from './app/GamePhase';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
 import { SurvivalPhase } from './survival/SurvivalPhase';
+import { PerformanceStats } from './ui/PerformanceStats';
 import type { PropModelLibrary } from './world/PropModelLibrary';
+import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
+import type { SkyAssets } from './world/SkyAssets';
 
 export interface GameFactories {
   createScavenge(
@@ -44,6 +47,8 @@ type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
 export interface GameTestOptions {
   propModels: PropModelLibrary;
+  shipFurniture: ShipFurnitureLibrary;
+  skyAssets: SkyAssets;
   clock?: GameClock;
   createSeed?: () => number;
   mount?: HTMLElement;
@@ -67,9 +72,12 @@ export class Game {
   private clock!: GameClock;
   private reducedMotion!: MediaQueryList;
   private propModels!: PropModelLibrary;
+  private shipFurniture!: ShipFurnitureLibrary;
+  private skyAssets!: SkyAssets;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
+  private performanceStats: PerformanceStats | null = null;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -80,7 +88,12 @@ export class Game {
   private onResize!: () => void;
   private animate!: () => void;
 
-  constructor(mount: HTMLElement, propModels: PropModelLibrary) {
+  constructor(
+    mount: HTMLElement,
+    propModels: PropModelLibrary,
+    shipFurniture: ShipFurnitureLibrary,
+    skyAssets: SkyAssets,
+  ) {
     const renderer = new WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
@@ -102,6 +115,8 @@ export class Game {
         clock,
         reducedMotion,
         propModels,
+        shipFurniture,
+        skyAssets,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -125,6 +140,7 @@ export class Game {
       setSize: () => undefined,
       render: () => undefined,
       dispose: () => undefined,
+      capabilities: { getMaxAnisotropy: () => 1 },
     } as unknown as WebGLRenderer;
     mount.prepend(renderer.domElement);
     const clock: GameClock = options.clock ?? {
@@ -140,6 +156,8 @@ export class Game {
       clock,
       reducedMotion,
       options.propModels,
+      options.shipFurniture,
+      options.skyAssets,
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -166,10 +184,56 @@ export class Game {
     window.removeEventListener('resize', this.onResize);
     const outgoing = this.detachActivePhase();
     this.exitPointerLock();
-    outgoing?.dispose();
-    this.propModels.dispose();
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    let firstCleanupError: unknown;
+    let cleanupFailed = false;
+    const preserveFirstCleanupError = (error: unknown): void => {
+      if (cleanupFailed) return;
+      cleanupFailed = true;
+      firstCleanupError = error;
+    };
+    try {
+      outgoing?.dispose();
+    } catch (error) {
+      preserveFirstCleanupError(error);
+    } finally {
+      try {
+        this.performanceStats?.dispose();
+      } catch (error) {
+        preserveFirstCleanupError(error);
+      } finally {
+        this.performanceStats = null;
+        try {
+          this.propModels.dispose();
+        } catch (error) {
+          preserveFirstCleanupError(error);
+        } finally {
+          try {
+            this.shipFurniture.dispose();
+          } catch (error) {
+            preserveFirstCleanupError(error);
+          } finally {
+            try {
+              this.skyAssets.dispose();
+            } catch (error) {
+              preserveFirstCleanupError(error);
+            } finally {
+              try {
+                this.renderer.dispose();
+              } catch (error) {
+                preserveFirstCleanupError(error);
+              } finally {
+                try {
+                  this.renderer.domElement.remove();
+                } catch (error) {
+                  preserveFirstCleanupError(error);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (cleanupFailed) throw firstCleanupError;
   }
 
   private initialize(
@@ -179,6 +243,8 @@ export class Game {
     clock: GameClock,
     reducedMotion: MediaQueryList,
     propModels: PropModelLibrary,
+    shipFurniture: ShipFurnitureLibrary,
+    skyAssets: SkyAssets,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -188,10 +254,26 @@ export class Game {
     this.clock = clock;
     this.reducedMotion = reducedMotion;
     this.propModels = propModels;
+    this.shipFurniture = shipFurniture;
+    this.skyAssets = skyAssets;
     this.factories = factories;
     this.createSeed = createSeed;
-    this.context = { mount, renderer, camera, reducedMotion, propModels };
+    const maxTextureAnisotropy = Math.max(
+      1,
+      renderer.capabilities.getMaxAnisotropy(),
+    );
+    this.context = {
+      mount,
+      renderer,
+      camera,
+      reducedMotion,
+      propModels,
+      shipFurniture,
+      maxTextureAnisotropy,
+      skyAssets,
+    };
     this.activePhase = null;
+    this.performanceStats = null;
     this.animationFrame = 0;
     this.started = false;
     this.disposed = false;
@@ -199,6 +281,7 @@ export class Game {
     this.phaseGeneration = 0;
     let resizeListenerRegistered = false;
     try {
+      this.performanceStats = new PerformanceStats(mount);
       this.seed = this.createSeed();
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
@@ -227,9 +310,14 @@ export class Game {
         activePhase?.dispose();
       } finally {
         try {
-          this.renderer.dispose();
+          this.performanceStats?.dispose();
+          this.performanceStats = null;
         } finally {
-          this.renderer.domElement.remove();
+          try {
+            this.renderer.dispose();
+          } finally {
+            this.renderer.domElement.remove();
+          }
         }
       }
     }
@@ -336,7 +424,9 @@ export class Game {
 
   private handleAnimationFrame(): void {
     if (this.disposed) return;
-    const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    const rawDeltaSeconds = this.clock.getDelta();
+    this.performanceStats?.recordFrame(rawDeltaSeconds);
+    const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
     this.elapsed += deltaSeconds;
     this.activePhase?.update(this.elapsed, deltaSeconds);
     this.activePhase?.render();
