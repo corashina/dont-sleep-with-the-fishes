@@ -2,12 +2,19 @@ import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 
 export const MODEL_LIMIT = 3_000;
-export const LIBRARY_LIMIT = 28_000;
+export const LIBRARY_LIMIT = 40_000;
 export const ITEM_IDS = [
-  'flareGun', 'ductTape', 'fishingRod', 'baitTin', 'medicalKit',
-  'waterJug', 'cannedFood', 'flashlight', 'scubaSet',
+  'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
+  'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
+  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
+  'energyBar', 'fishingRod',
+];
+const PROJECT_ITEM_IDS = [
+  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
+  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ];
 
 const GLB_MAGIC = 0x46546c67;
@@ -15,16 +22,18 @@ const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
 
 const LEDGER_REQUIREMENTS = {
-  flareGun: ['https://kenney.nl/assets/blaster-kit', 'blaster-kit@2.1:Models/GLB format/blaster-n.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  ductTape: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  medicalKit: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/medicalKit', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  waterJug: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bottle.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
   cannedFood: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  ductTape: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  medicalKit: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/medicalKit', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  bucket: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bucket.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  bottledPaper: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:composite/bottledPaper', 'Kenney + project', 'https://creativecommons.org/publicdomain/zero/1.0/'],
   flashlight: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/flashlight', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
   scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
 };
+
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function dataUriByteLength(uri) {
   const separator = uri.indexOf(',');
@@ -249,12 +258,13 @@ function validateModelBounds(filePath, document) {
   if (!hasNonDegenerateTriangle) {
     throw new Error(`${filePath}: contains no non-degenerate world-space triangles`);
   }
+  return { min: modelMin, max: modelMax };
 }
 
-export async function countTriangles(filePath) {
+async function inspectModel(filePath) {
   const bytes = await readFile(filePath);
   validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
-  const document = await new NodeIO().read(filePath);
+  const document = await io.read(filePath);
   let triangles = 0;
   for (const mesh of document.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
@@ -270,13 +280,20 @@ export async function countTriangles(filePath) {
       triangles += count / 3;
     }
   }
-  validateModelBounds(filePath, document);
-  return triangles;
+  const rawBounds = validateModelBounds(filePath, document);
+  return { rawBounds, triangles };
+}
+
+export async function countTriangles(filePath) {
+  return (await inspectModel(filePath)).triangles;
 }
 
 function verifyLedgerRow(ledger, itemId) {
-  const row = ledger.split(/\r?\n/).find((line) => line.startsWith(`| ${itemId} |`));
-  if (!row) throw new Error(`THIRD_PARTY_ASSETS.md: missing ${itemId} row`);
+  const rows = ledger.split(/\r?\n/).filter((line) => line.startsWith(`| ${itemId} |`));
+  if (rows.length !== 1) {
+    throw new Error(`THIRD_PARTY_ASSETS.md: expected one ${itemId} row, received ${rows.length}`);
+  }
+  const row = rows[0];
   for (const value of LEDGER_REQUIREMENTS[itemId]) {
     if (!row.includes(value)) {
       throw new Error(`THIRD_PARTY_ASSETS.md: ${itemId} row is missing ${value}`);
@@ -284,9 +301,24 @@ function verifyLedgerRow(ledger, itemId) {
   }
 }
 
+async function runtimeItemIds() {
+  const source = await readFile(resolve('src', 'game', 'itemCatalog.ts'), 'utf8');
+  const declaration = /export const ITEM_IDS = \[([\s\S]*?)\] as const;/.exec(source)?.[1];
+  if (!declaration) throw new Error('Unable to read runtime ITEM_IDS');
+  return [...declaration.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+}
+
+function sameNumbers(first, second) {
+  return Array.isArray(first)
+    && Array.isArray(second)
+    && first.length === second.length
+    && first.every((value, index) => Number.isFinite(value) && value === second[index]);
+}
+
 function parseArguments(args) {
   let assetsOnly = false;
   let modelsDir = resolve('src', 'assets', 'models', 'items');
+  let ledgerPath = resolve('THIRD_PARTY_ASSETS.md');
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--assets-only') {
@@ -296,11 +328,16 @@ function parseArguments(args) {
       if (!value || value.startsWith('--')) throw new Error('--models-dir requires a path');
       modelsDir = resolve(value);
       index += 1;
+    } else if (argument === '--ledger-path') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) throw new Error('--ledger-path requires a path');
+      ledgerPath = resolve(value);
+      index += 1;
     } else {
       throw new Error(`unknown argument: ${argument}`);
     }
   }
-  return { assetsOnly, modelsDir };
+  return { assetsOnly, ledgerPath, modelsDir };
 }
 
 async function main() {
@@ -313,12 +350,26 @@ async function main() {
     return;
   }
 
-  const { assetsOnly, modelsDir } = options;
+  const { assetsOnly, ledgerPath, modelsDir } = options;
   const errors = [];
   let total = 0;
+  let metadata = null;
+  const measurements = {};
 
   try {
-    const expectedEntries = new Set(ITEM_IDS.map((itemId) => `${itemId}.glb`));
+    const runtimeIds = await runtimeItemIds();
+    if (JSON.stringify(runtimeIds) !== JSON.stringify(ITEM_IDS)) {
+      errors.push(`audit ITEM_IDS do not match runtime ITEM_IDS: ${runtimeIds.join(', ')}`);
+    }
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    const expectedEntries = new Set([
+      ...ITEM_IDS.map((itemId) => `${itemId}.glb`),
+      'item-model-metadata.json',
+    ]);
     const entries = await readdir(modelsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile() || !expectedEntries.has(entry.name)) {
@@ -333,12 +384,24 @@ async function main() {
     errors.push(error instanceof Error ? error.message : String(error));
   }
 
+  try {
+    metadata = JSON.parse(await readFile(resolve(modelsDir, 'item-model-metadata.json'), 'utf8'));
+    const metadataIds = Object.keys(metadata);
+    if (JSON.stringify(metadataIds) !== JSON.stringify(ITEM_IDS)) {
+      errors.push(`item-model-metadata.json keys do not match runtime ITEM_IDS: ${metadataIds.join(', ')}`);
+    }
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+
   for (const itemId of ITEM_IDS) {
     const filePath = resolve(modelsDir, `${itemId}.glb`);
     try {
       await access(filePath);
-      const triangles = await countTriangles(filePath);
-      console.log(`${itemId}: ${triangles} triangles`);
+      const measurement = await inspectModel(filePath);
+      measurements[itemId] = measurement;
+      const { triangles } = measurement;
+      console.log(`${itemId}.glb: ${triangles} / ${MODEL_LIMIT} triangles`);
       if (triangles === 0) throw new Error(`${filePath}: contains zero triangles`);
       total += triangles;
       if (triangles > MODEL_LIMIT) {
@@ -349,13 +412,35 @@ async function main() {
     }
   }
 
+  if (metadata) {
+    for (const itemId of ITEM_IDS) {
+      const expected = metadata[itemId];
+      const measured = measurements[itemId];
+      if (!expected || !measured) continue;
+      if (expected.triangles !== measured.triangles) {
+        errors.push(`${itemId}: metadata triangle count does not match measured value`);
+      }
+      if (
+        !sameNumbers(expected.rawBounds?.min, measured.rawBounds.min)
+        || !sameNumbers(expected.rawBounds?.max, measured.rawBounds.max)
+      ) {
+        errors.push(`${itemId}: metadata raw bounds do not match measured value`);
+      }
+    }
+  }
+
   console.log(`total: ${total} / ${LIBRARY_LIMIT} triangles`);
   if (total > LIBRARY_LIMIT) errors.push(`library: ${total} triangles exceeds ${LIBRARY_LIMIT}`);
 
   if (!assetsOnly) {
     try {
-      const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
-      for (const itemId of ITEM_IDS) verifyLedgerRow(ledger, itemId);
+      const ledger = await readFile(ledgerPath, 'utf8');
+      for (const itemId of Object.keys(LEDGER_REQUIREMENTS)) verifyLedgerRow(ledger, itemId);
+      for (const itemId of PROJECT_ITEM_IDS) {
+        if (ledger.split(/\r?\n/).some((line) => line.startsWith(`| ${itemId} |`))) {
+          throw new Error(`THIRD_PARTY_ASSETS.md: project-authored ${itemId} must not have a ledger row`);
+        }
+      }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }

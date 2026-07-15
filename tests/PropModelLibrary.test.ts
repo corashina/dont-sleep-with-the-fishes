@@ -122,57 +122,103 @@ async function expectLedgerRejectedBeforeLoad(ledger: string, itemId: ItemId): P
   }
 }
 
+async function expectManifestRejectedBeforeLoad(
+  itemId: ItemId,
+  mutate: (spec: typeof ITEM_MODEL_SPECS[ItemId]) => typeof ITEM_MODEL_SPECS[ItemId],
+): Promise<void> {
+  vi.resetModules();
+  vi.doMock('../src/world/itemModelManifest', async () => {
+    const actual = await vi.importActual<typeof import('../src/world/itemModelManifest')>(
+      '../src/world/itemModelManifest',
+    );
+    return {
+      ...actual,
+      ITEM_MODEL_SPECS: { ...actual.ITEM_MODEL_SPECS, [itemId]: mutate(actual.ITEM_MODEL_SPECS[itemId]) },
+    };
+  });
+  const loader: ItemModelLoader = { load: vi.fn(async () => modelRoot()) };
+
+  try {
+    const { PropModelLibrary: IsolatedPropModelLibrary } = await import('../src/world/PropModelLibrary');
+    await expect(IsolatedPropModelLibrary.load(loader)).rejects.toThrow(new RegExp(itemId));
+    expect(loader.load).not.toHaveBeenCalled();
+  } finally {
+    vi.doUnmock('../src/world/itemModelManifest');
+    vi.resetModules();
+  }
+}
+
 describe('PropModelLibrary preload', () => {
   it('rejects a stable GLB filename assigned to the wrong item row before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace('`flareGun.glb`', '`fishingRod.glb`')
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'ductTape', (row) => (
+      row.replace('`ductTape.glb`', '`fishingRod.glb`')
     ));
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
   });
 
   it('rejects source URLs and source asset IDs swapped between item rows before loading', async () => {
     const ledger = swapLedgerRowValues(
       ITEM_MODEL_ASSET_LEDGER,
-      'flareGun',
+      'ductTape',
       'fishingRod',
-      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.sourceAssetId],
-      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.sourceAssetId],
+      [
+        'https://kenney.nl/assets/prototype-kit',
+        'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb',
+      ],
+      [
+        'https://kenney.nl/assets/prototype-kit',
+        'prototype-kit@1.0:composite/fishingRod',
+      ],
     );
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
   });
 
   it('rejects a license URL that does not match the manifest before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace(ITEM_MODEL_SPECS.flareGun.licenseUrl, 'https://example.com/wrong-license')
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'ductTape', (row) => (
+      row.replace('https://creativecommons.org/publicdomain/zero/1.0/', 'https://example.com/wrong-license')
     ));
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
   });
 
   it('rejects a creator substring instead of the exact creator identity before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace('Blaster N / Kenney', 'Blaster N / Kenn')
+    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'ductTape', (row) => (
+      row.replace('Hollow cylinder detailed / Kenney', 'Hollow cylinder detailed / Kenn')
     ));
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
   });
 
   it('rejects a missing item row before loading', async () => {
     const ledger = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
-      .filter((row) => !row.startsWith('| flareGun |'))
+      .filter((row) => !row.startsWith('| ductTape |'))
       .join('\n');
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
   });
 
   it('rejects a duplicate item row before loading', async () => {
     const row = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
-      .find((candidate) => candidate.startsWith('| flareGun |'))!;
+      .find((candidate) => candidate.startsWith('| ductTape |'))!;
     const ledger = ITEM_MODEL_ASSET_LEDGER.replace(row, `${row}\n${row}`);
 
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
+    await expectLedgerRejectedBeforeLoad(ledger, 'ductTape');
+  });
+
+  it('rejects a project recipe whose item suffix does not match before loading', async () => {
+    await expectManifestRejectedBeforeLoad('flareGun', (spec) => ({
+      ...spec,
+      provenance: { kind: 'project', recipeId: 'project-item-models@1:anchor', creator: 'Project team' },
+    }));
+  });
+
+  it('rejects invalid generated metadata before loading', async () => {
+    await expectManifestRejectedBeforeLoad('flareGun', (spec) => ({
+      ...spec,
+      generatedMetadata: { ...spec.generatedMetadata, triangles: 0 },
+    }));
   });
 
   it('requests every manifest URL in parallel before any request resolves', async () => {
@@ -186,6 +232,7 @@ describe('PropModelLibrary preload', () => {
     };
 
     const loading = PropModelLibrary.load(loader);
+    void loading.catch(() => undefined);
 
     expect([...requests.keys()]).toEqual(ITEM_IDS.map((id) => ITEM_MODEL_SPECS[id].url));
     for (const id of ITEM_IDS) requests.get(ITEM_MODEL_SPECS[id].url)?.resolve(modelRoot());
@@ -301,9 +348,12 @@ describe('PropModelLibrary preload', () => {
   });
 
   it('accepts the maximum per-item aggregate within the library triangle budget', async () => {
-    const roots = templates(() => modelRoot(3_000));
+    const triangleCounts = ITEM_IDS.map((_id, index) => index < 13 ? 3_000 : 1);
+    const roots = templates((_id, index) => modelRoot(triangleCounts[index]!));
     const geometryDisposes = [...roots.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
-    expect(ITEM_IDS.length * 3_000).toBeLessThanOrEqual(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
+    expect(Math.max(...triangleCounts)).toBe(3_000);
+    expect(triangleCounts.reduce((sum, count) => sum + count, 0))
+      .toBeLessThanOrEqual(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
     const loader: ItemModelLoader = {
       load: async (url) => roots.get(ITEM_IDS.find((id) => ITEM_MODEL_SPECS[id].url === url)!)!,
     };
@@ -316,12 +366,12 @@ describe('PropModelLibrary preload', () => {
   it('reports the first failing item in manifest order and disposes every fulfilled template', async () => {
     const roots = templates();
     const geometryDisposes = [...roots.entries()]
-      .filter(([id]) => id !== 'ductTape' && id !== 'waterJug')
+      .filter(([id]) => id !== 'ductTape' && id !== 'bucket')
       .map(([, root]) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
     const loader: ItemModelLoader = {
       load: async (url) => {
         const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
-        if (id === 'ductTape' || id === 'waterJug') throw new Error(`failed ${id}`);
+        if (id === 'ductTape' || id === 'bucket') throw new Error(`failed ${id}`);
         return roots.get(id)!;
       },
     };

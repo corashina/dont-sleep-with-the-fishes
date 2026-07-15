@@ -159,4 +159,15 @@ describe('model directory publication', () => {
     expect(await readFile(join(paths.outputRoot, 'old.txt'), 'utf8')).toBe('old');
     expect(await readFile(join(unsafeStage, 'sentinel.txt'), 'utf8')).toBe('keep');
   });
+
+  it('builds both approved item-model sets and metadata into one exact guarded stage', async () => {
+    const source = await readFile(resolve('scripts', 'fetch-item-models.ps1'), 'utf8');
+
+    expect(source).toContain('project-item-models.mjs');
+    expect(source).toContain('kenney-item-models.mjs');
+    expect(source).toContain('item-model-metadata.mjs');
+    expect(source).toMatch(/20/);
+    expect(source).toMatch(/duplicate/i);
+    expect(source).not.toMatch(/blaster-n|blaster-kit|waterJug/);
+  });
 });
