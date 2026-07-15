@@ -10,6 +10,7 @@ import {
   isChoiceSelectable,
   readySelectionSummary,
   reconcileSelections,
+  selectionEvent,
   selectChoice,
   selectionSummary,
   setPreviewState,
@@ -65,7 +66,7 @@ function redrawSummary({ emit = renderingComplete } = {}) {
 
   const readySummary = readySelectionSummary(selections, catalog, previewStates);
   if (emit && readySummary) {
-    window.brainstorm?.choice('selection-summary', { selections: readySummary });
+    window.brainstorm?.send?.(selectionEvent(readySummary));
   }
 }
 

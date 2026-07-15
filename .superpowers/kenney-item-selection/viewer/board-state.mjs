@@ -51,6 +51,12 @@ export function readySelectionSummary(state, catalog, previewStates) {
   return everySelectionReady ? selectionSummary(state, catalog) : null;
 }
 
+export const selectionEvent = (selections) => ({
+  type: 'choice',
+  choice: 'selection-summary',
+  selections,
+});
+
 export function reconcileSelections(state, catalog, previewStates) {
   return Object.fromEntries(Object.entries(state).map(([itemId, candidateId]) => {
     if (isChoiceSelectable(previewStates, itemId, candidateId)) {

@@ -7,6 +7,7 @@ import {
   isChoiceSelectable,
   readySelectionSummary,
   reconcileSelections,
+  selectionEvent,
   selectChoice,
   setPreviewState,
   selectionSummary,
@@ -147,5 +148,21 @@ test('candidateMetadata derives pack versions and direct/composite status from s
       { name: 'space-kit', version: '2.0' },
     ],
     status: 'composite',
+  });
+});
+
+test('selectionEvent uses the companion-persisted choice envelope', () => {
+  const selections = {
+    harpoon: {
+      candidateId: 'a',
+      label: 'Harpoon A',
+      sourceAssetId: 'pack@1.0:a.glb',
+    },
+  };
+
+  assert.deepEqual(selectionEvent(selections), {
+    type: 'choice',
+    choice: 'selection-summary',
+    selections,
   });
 });
