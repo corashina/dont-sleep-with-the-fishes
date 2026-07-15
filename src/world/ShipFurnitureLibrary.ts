@@ -15,6 +15,7 @@ import {
   type ShipFurnitureAssetId,
   type ShipFurnitureModelSpec,
 } from './shipFurnitureManifest';
+import { collectMeshResources } from './SceneResources';
 
 export interface ShipFurnitureModelLoader {
   load(url: string): Promise<Group>;
@@ -138,16 +139,11 @@ function disposeRoots(roots: Iterable<Group>): void {
   const materials = new Set<Material>();
   const textures = new Set<Texture>();
   for (const root of roots) {
-    root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-      meshMaterials.forEach((material) => {
-        materials.add(material);
-        materialTextures(material).forEach((texture) => textures.add(texture));
-      });
-    });
+    collectMeshResources(root, geometries, materials);
   }
+  materials.forEach((material) => {
+    materialTextures(material).forEach((texture) => textures.add(texture));
+  });
   geometries.forEach((geometry) => geometry.dispose());
   textures.forEach((texture) => texture.dispose());
   materials.forEach((material) => material.dispose());

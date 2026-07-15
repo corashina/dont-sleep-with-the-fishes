@@ -29,6 +29,7 @@ import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import { collectMeshResources, disposeMeshResources } from '../world/SceneResources';
 import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
@@ -111,19 +112,6 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
-
-function collectResources(
-  root: Object3D,
-  geometries: Set<BufferGeometry>,
-  materials: Set<Material>,
-): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    geometries.add(object.geometry);
-    const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-    meshMaterials.forEach((material) => materials.add(material));
-  });
-}
 
 function setPropDepleted(root: Object3D, depleted: boolean): void {
   root.traverse((object) => {
@@ -297,8 +285,8 @@ export class BoatWorld {
       this.key.target,
       this.distantVessel,
     );
-    collectResources(this.boat, this.ownedGeometries, this.ownedMaterials);
-    collectResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
+    collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+    collectMeshResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
     this.applyBasePresentation();
   }
 
@@ -487,11 +475,8 @@ export class BoatWorld {
     this.camera.position.copy(this.originalCameraPosition);
     this.camera.quaternion.copy(this.originalCameraQuaternion);
     this.originalCameraParent?.add(this.camera);
-    this.ownedGeometries.forEach((geometry) => geometry.dispose());
-    this.ownedMaterials.forEach((material) => material.dispose());
+    disposeMeshResources(this.ownedGeometries, this.ownedMaterials);
     this.ownedTextures.forEach((texture) => texture.dispose());
-    this.ownedGeometries.clear();
-    this.ownedMaterials.clear();
     this.ownedTextures.clear();
   }
 
