@@ -4,7 +4,7 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import { ACTION_FOR_ITEM } from '../src/survival/BoatInteraction';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { createSurvivalInventory } from '../src/survival/inventory';
-import { formatCountdown } from '../src/ui/GameUI';
+import { formatDuration } from '../src/ui/formatDuration';
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
   instanceId: `${type}-${index + 1}` as ItemInstanceId,
@@ -42,6 +42,6 @@ describe('demo contracts', () => {
     [0.1, '00:01'],
     [0, '00:00'],
   ] as const)('formats %s seconds as %s', (seconds, formatted) => {
-    expect(formatCountdown(seconds)).toBe(formatted);
+    expect(formatDuration(seconds)).toBe(formatted);
   });
 });
