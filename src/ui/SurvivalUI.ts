@@ -6,7 +6,6 @@ import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
-  ResourceDelta,
   SurvivalEventDefinition,
   SurvivalSnapshot,
   SurvivalState,
@@ -98,16 +97,9 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
   squall: 'SQUALL',
 };
 
-const DELTAS: readonly { key: keyof ResourceDelta; label: string }[] = [
-  { key: 'health', label: 'HEALTH' },
-  { key: 'hunger', label: 'HUNGER' },
-  { key: 'energy', label: 'ENERGY' },
-  { key: 'hull', label: 'HULL' },
-  { key: 'food', label: 'FOOD' },
-  { key: 'bait', label: 'BAIT' },
-  { key: 'repairMaterial', label: 'REPAIR MATERIAL' },
-  { key: 'rescueProgress', label: 'RESCUE' },
-];
+const SLEEP_TRANSITION_MS = 650;
+const SLEEP_HOLD_MS = 450;
+const REDUCED_TRANSITION_MS = 1;
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -137,15 +129,12 @@ export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (itemId: ItemId) => void = () => undefined;
   onEndure: () => void = () => undefined;
-  onContinue: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onPointer: (x: number, y: number) => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
-  onSkip: () => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
-  onJournalContinue: () => void = () => undefined;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -156,6 +145,8 @@ export class SurvivalUI {
   private readonly journalUnread: HTMLElement;
   private readonly endDayButton: HTMLButtonElement;
   private readonly announcer: HTMLElement;
+  private readonly feedback: HTMLElement;
+  private readonly sleepCover: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventLayer: HTMLElement;
   private readonly eventTitle: HTMLElement;
@@ -163,10 +154,6 @@ export class SurvivalUI {
   private readonly eventDanger: HTMLElement;
   private readonly eventItems: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
-  private readonly outcomeLayer: HTMLElement;
-  private readonly outcomeTitle: HTMLElement;
-  private readonly outcomeMessage: HTMLElement;
-  private readonly outcomeDeltas: HTMLElement;
   private readonly actionOptionsLayer: HTMLElement;
   private readonly actionOptionsTitle: HTMLElement;
   private readonly fishingOptionButtons: HTMLButtonElement[];
@@ -181,7 +168,6 @@ export class SurvivalUI {
   private readonly journalPrevious: HTMLButtonElement;
   private readonly journalNext: HTMLButtonElement;
   private readonly journalClose: HTMLButtonElement;
-  private readonly journalContinue: HTMLButtonElement;
   private readonly endingLayer: HTMLElement;
   private readonly endingTitle: HTMLElement;
   private readonly endingBody: HTMLElement;
@@ -198,6 +184,7 @@ export class SurvivalUI {
   private paused = false;
   private disposed = false;
   private announcementVersion = 0;
+  private feedbackTimer: number | undefined;
   private restartIssued = false;
   private availableBait = 0;
   private focusReturnTarget: HTMLElement | null = null;
@@ -206,17 +193,21 @@ export class SurvivalUI {
   private currentSnapshot: SurvivalSnapshot | null = null;
   private journalEntries: readonly JournalEntry[] = [];
   private journalIndex = 0;
-  private journalMode: 'manual' | 'automatic' = 'manual';
   private hoveredAnchorId: string | null = null;
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
 
-  constructor(mount: HTMLElement) {
+  constructor(
+    mount: HTMLElement,
+    private readonly reducedMotion: Pick<MediaQueryList, 'matches'> = { matches: false },
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
+      <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
+      <div class="sleep-cover" data-sleep-cover aria-hidden="true"></div>
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
           <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
@@ -256,18 +247,6 @@ export class SurvivalUI {
           <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
         </div>
       </section>
-      <section class="survival-overlay outcome-overlay cinematic-overlay" data-outcome role="dialog" aria-modal="true" aria-hidden="true" aria-label="Action outcome" inert>
-        <div class="cinematic-overlay__content">
-          <p class="eyebrow">AFTERMATH</p>
-          <h2 data-outcome-title tabindex="-1">YOU ENDURED</h2>
-          <p data-outcome-message></p>
-          <ul class="outcome-deltas" data-outcome-deltas></ul>
-          <div class="outcome-actions">
-            <button type="button" class="text-action" data-skip>SKIP PRESENTATION</button>
-            <button type="button" class="primary-action timber-action" data-continue>CONTINUE</button>
-          </div>
-        </div>
-      </section>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <article class="journal-page">
           <p class="journal-page__weather" data-journal-weather></p>
@@ -283,12 +262,11 @@ export class SurvivalUI {
             </section>
           </div>
           <nav class="journal-page__navigation" aria-label="Journal pages">
-            <button type="button" class="secondary-action" data-journal-previous>PREVIOUS</button>
-            <span data-journal-page-count>PAGE 0 OF 0</span>
-            <button type="button" class="secondary-action" data-journal-next>NEXT</button>
+            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
+            <span class="journal-page__folio" data-journal-page-count>PAGE 0 OF 0</span>
+            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next" data-journal-next aria-label="Next journal page">&rsaquo;</button>
           </nav>
-          <button type="button" class="secondary-action" data-journal-close>CLOSE JOURNAL</button>
-          <button type="button" class="primary-action timber-action" data-journal-continue hidden>BEGIN NEXT DAY</button>
+          <button type="button" class="journal-page__bookmark" data-journal-close>CLOSE JOURNAL</button>
         </article>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
@@ -319,6 +297,8 @@ export class SurvivalUI {
     this.journalUnread = requireElement(this.root, '[data-journal-unread]');
     this.endDayButton = requireElement(this.root, '[data-action="endDay"]');
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
+    this.feedback = requireElement(this.root, '[data-survival-feedback]');
+    this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventLayer = requireElement(this.root, '[data-event]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
@@ -326,10 +306,6 @@ export class SurvivalUI {
     this.eventDanger = requireElement(this.root, '[data-event-danger]');
     this.eventItems = requireElement(this.root, '[data-event-items]');
     this.endureButton = requireElement(this.root, '[data-endure]');
-    this.outcomeLayer = requireElement(this.root, '[data-outcome]');
-    this.outcomeTitle = requireElement(this.root, '[data-outcome-title]');
-    this.outcomeMessage = requireElement(this.root, '[data-outcome-message]');
-    this.outcomeDeltas = requireElement(this.root, '[data-outcome-deltas]');
     this.actionOptionsLayer = requireElement(this.root, '[data-action-options]');
     this.actionOptionsTitle = requireElement(this.root, '[data-action-options-title]');
     this.fishingOptionButtons = [...this.actionOptionsLayer.querySelectorAll<HTMLButtonElement>('[data-action-option]')];
@@ -344,7 +320,6 @@ export class SurvivalUI {
     this.journalPrevious = requireElement(this.root, '[data-journal-previous]');
     this.journalNext = requireElement(this.root, '[data-journal-next]');
     this.journalClose = requireElement(this.root, '[data-journal-close]');
-    this.journalContinue = requireElement(this.root, '[data-journal-continue]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.endingBody = requireElement(this.root, '[data-ending-body]');
@@ -356,7 +331,6 @@ export class SurvivalUI {
       this.journalLayer,
       this.actionOptionsLayer,
       this.endingLayer,
-      this.outcomeLayer,
       this.eventLayer,
     ];
 
@@ -451,7 +425,6 @@ export class SurvivalUI {
   ): void {
     if (this.disposed) return;
     this.focusReturnTarget = this.resolveCommandOrigin();
-    this.hideLayer(this.outcomeLayer);
     this.updateText('event:title', this.eventTitle, event.title);
     this.updateText('event:prompt', this.eventPrompt, event.prompt);
     this.updateText('event:danger', this.eventDanger, event.danger.toUpperCase());
@@ -489,55 +462,48 @@ export class SurvivalUI {
     this.eventTitle.focus();
   }
 
-  showOutcome(outcome: ActionOutcome): void {
-    if (this.disposed) return;
-    this.focusReturnTarget ??= this.resolveCommandOrigin();
-    this.hideLayer(this.eventLayer);
-    this.outcomeLayer.dataset.accepted = String(outcome.accepted);
-    this.outcomeLayer.dataset.cue = outcome.cue;
-    this.updateText('outcome:title', this.outcomeTitle, outcome.accepted ? 'YOU ENDURED' : 'ACTION BLOCKED');
-    this.updateText('outcome:message', this.outcomeMessage, outcome.message);
-    this.outcomeDeltas.replaceChildren();
-
-    DELTAS.forEach(({ key, label }) => {
-      const value = outcome.deltas[key];
-      if (value === undefined || value === 0) return;
-      const item = document.createElement('li');
-      item.dataset.delta = key;
-      item.className = value > 0 ? 'is-positive' : 'is-negative';
-      item.textContent = `${label} ${value > 0 ? '+' : ''}${value}`;
-      this.outcomeDeltas.append(item);
-    });
-    if (this.outcomeDeltas.childElementCount === 0) {
-      const item = document.createElement('li');
-      item.className = 'is-neutral';
-      item.textContent = 'NO CHANGE';
-      this.outcomeDeltas.append(item);
-    }
-    this.showLayer(this.outcomeLayer);
-    this.outcomeTitle.focus();
-    this.publishOutcomeAnnouncement(outcome.message);
+  hideEvent(): void {
+    if (!this.disposed) this.hideLayer(this.eventLayer);
   }
 
-  hideOutcome(): void {
+  showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
     if (this.disposed) return;
-    this.hideLayer(this.outcomeLayer);
-    this.restoreFocus();
+    window.clearTimeout(this.feedbackTimer);
+    this.feedback.dataset.accepted = String(outcome.accepted);
+    this.feedback.textContent = outcome.message;
+    this.feedback.classList.remove('is-visible');
+    void this.feedback.offsetWidth;
+    this.feedback.classList.add('is-visible');
+    this.publishAnnouncement(outcome.message);
+    this.feedbackTimer = window.setTimeout(() => {
+      if (!this.disposed) this.feedback.classList.remove('is-visible');
+    }, 2600);
   }
 
-  showJournal(entries: readonly JournalEntry[], mode: 'manual' | 'automatic'): void {
+  setSleepCovered(covered: boolean): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.sleepCover.classList.toggle('is-covered', covered);
+    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_TRANSITION_MS;
+    return new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+
+  holdSleep(): Promise<void> {
+    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_HOLD_MS;
+    return new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+
+  showJournal(entries: readonly JournalEntry[]): void {
     if (this.disposed) return;
-    this.focusReturnTarget = mode === 'manual' ? this.journalMarker : this.resolveCommandOrigin();
+    this.focusReturnTarget = this.journalMarker;
     this.journalEntries = entries.map((entry) => ({
       ...entry,
       daytime: entry.daytime === null ? null : { ...entry.daytime },
-      nighttime: { ...entry.nighttime },
+      nighttime: entry.nighttime.kind === 'quiet'
+        ? { kind: 'quiet' }
+        : { kind: 'event', event: { ...entry.nighttime.event } },
     }));
-    this.journalMode = mode;
     this.journalIndex = Math.max(0, this.journalEntries.length - 1);
     this.renderJournalPage();
-    this.journalClose.hidden = mode !== 'manual';
-    this.journalContinue.hidden = mode !== 'automatic';
     this.showLayer(this.journalLayer);
     this.journalTitle.focus();
   }
@@ -592,7 +558,6 @@ export class SurvivalUI {
         ? { title: 'The sea outlasted you.', body: 'Your empty lifeboat drifts on beneath the weather.' }
         : { title: 'Boat is gone.', body: 'The damaged hull slips under and leaves no refuge behind.' };
     this.hideLayer(this.eventLayer);
-    this.hideLayer(this.outcomeLayer);
     this.setPaused(false);
     this.updateText('ending:title', this.endingTitle, copy.title);
     this.updateText('ending:body', this.endingBody, copy.body);
@@ -613,6 +578,7 @@ export class SurvivalUI {
     this.clearAnchorHighlight();
     this.disposed = true;
     this.announcementVersion += 1;
+    window.clearTimeout(this.feedbackTimer);
     this.root.removeEventListener('click', this.handleClick);
     this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
     this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
@@ -623,15 +589,12 @@ export class SurvivalUI {
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
     this.onEndure = () => undefined;
-    this.onContinue = () => undefined;
     this.onRestart = () => undefined;
     this.onPointer = () => undefined;
     this.onAnchorHighlight = () => undefined;
-    this.onSkip = () => undefined;
     this.onPauseChange = () => undefined;
     this.onJournalOpen = () => undefined;
     this.onJournalClose = () => undefined;
-    this.onJournalContinue = () => undefined;
     this.root.remove();
   }
 
@@ -746,7 +709,7 @@ export class SurvivalUI {
     requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(safe);
   }
 
-  private publishOutcomeAnnouncement(message: string): void {
+  private publishAnnouncement(message: string): void {
     const version = ++this.announcementVersion;
     this.announcer.textContent = '';
     queueMicrotask(() => {
@@ -873,7 +836,6 @@ export class SurvivalUI {
 
   private focusModal(layer: HTMLElement): void {
     if (layer === this.eventLayer) this.eventTitle.focus();
-    else if (layer === this.outcomeLayer) this.outcomeTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.actionOptionsLayer) this.actionOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
@@ -927,7 +889,8 @@ export class SurvivalUI {
     return this.firstUsableAction();
   }
 
-  private restoreCommandFocus(target: HTMLElement | null): void {
+  restoreCommandFocus(target: HTMLElement | null = this.latestCommandOrigin): void {
+    if (this.disposed) return;
     const destination = this.isUsableCommand(target) ? target : this.firstUsableAction();
     this.latestCommandOrigin = null;
     destination?.focus();
@@ -994,11 +957,6 @@ export class SurvivalUI {
       this.onJournalClose();
       return;
     }
-    if (button.hasAttribute('data-journal-continue')) {
-      this.onJournalContinue();
-      return;
-    }
-
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (action !== undefined) {
       if (this.overlayOpen()) return;
@@ -1016,8 +974,6 @@ export class SurvivalUI {
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();
-    else if (button.hasAttribute('data-continue')) this.onContinue();
-    else if (button.hasAttribute('data-skip')) this.onSkip();
     else if (button.hasAttribute('data-resume')) this.onPauseChange(false);
     else if (button.hasAttribute('data-restart') && !this.restartIssued) {
       this.restartIssued = true;
@@ -1037,7 +993,7 @@ export class SurvivalUI {
     if (event.key === 'Escape') {
       if (topmostModal === this.journalLayer) {
         event.preventDefault();
-        if (this.journalMode === 'manual') this.onJournalClose();
+        this.onJournalClose();
       } else if (topmostModal === this.actionOptionsLayer) {
         event.preventDefault();
         this.closeActionOptions();
@@ -1053,7 +1009,7 @@ export class SurvivalUI {
     const unavailableReason = this.actionReasons.get(action.id);
     if (unavailableReason !== null && unavailableReason !== undefined) {
       event.preventDefault();
-      this.publishOutcomeAnnouncement(unavailableReason);
+      this.publishAnnouncement(unavailableReason);
       return;
     }
     event.preventDefault();
