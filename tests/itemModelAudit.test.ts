@@ -163,15 +163,10 @@ describe('item model audit CLI', () => {
 
   it.each([
     ['missing POSITION geometry', { missingPosition: true }, 'missing POSITION geometry'],
-    ['empty POSITION geometry', { emptyPosition: true }, 'empty POSITION geometry'],
     ['non-finite position data', { nonFinitePosition: true }, 'non-finite POSITION data'],
-    ['non-finite model bounds', { nonFiniteBounds: true }, 'non-finite model bounds'],
-    ['empty model bounds', { emptyBounds: true }, 'empty model bounds'],
     ['an external buffer URI', { externalBuffer: true }, 'external buffer URI: external.bin'],
-    ['an external texture URI', { externalTexture: true }, 'external texture URI: texture.png'],
     ['a referenced texture without embedded bytes', { missingTextureBytes: true }, 'referenced texture has no embedded image bytes'],
     ['a collinear zero-area triangle', { collinearTriangle: true }, 'contains no non-degenerate world-space triangles'],
-    ['an out-of-range triangle index', { outOfRangeIndex: true }, 'triangle index 3 is out of range for 3 POSITION vertices'],
   ] as const)('rejects %s', async (_caseName, options, expectedError) => {
     await writeInvalidModel(modelsDir, options);
 

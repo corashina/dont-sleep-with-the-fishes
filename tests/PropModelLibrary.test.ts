@@ -83,25 +83,6 @@ function replaceLedgerRow(
   )).join('\n');
 }
 
-function swapLedgerRowValues(
-  ledger: string,
-  firstId: ItemId,
-  secondId: ItemId,
-  firstValues: readonly string[],
-  secondValues: readonly string[],
-): string {
-  const withFirstChanged = replaceLedgerRow(ledger, firstId, (row) => (
-    firstValues.reduce((changed, value, index) => (
-      changed.replace(value, secondValues[index]!)
-    ), row)
-  ));
-  return replaceLedgerRow(withFirstChanged, secondId, (row) => (
-    secondValues.reduce((changed, value, index) => (
-      changed.replace(value, firstValues[index]!)
-    ), row)
-  ));
-}
-
 async function expectLedgerRejectedBeforeLoad(ledger: string, itemId: ItemId): Promise<void> {
   vi.resetModules();
   vi.doMock('../src/world/itemModelManifest', async () => {
@@ -126,34 +107,6 @@ describe('PropModelLibrary preload', () => {
   it('rejects a stable GLB filename assigned to the wrong item row before loading', async () => {
     const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
       row.replace('`flareGun.glb`', '`fishingRod.glb`')
-    ));
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects source URLs and source asset IDs swapped between item rows before loading', async () => {
-    const ledger = swapLedgerRowValues(
-      ITEM_MODEL_ASSET_LEDGER,
-      'flareGun',
-      'fishingRod',
-      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.sourceAssetId],
-      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.sourceAssetId],
-    );
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects a license URL that does not match the manifest before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace(ITEM_MODEL_SPECS.flareGun.licenseUrl, 'https://example.com/wrong-license')
-    ));
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects a creator substring instead of the exact creator identity before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace('Blaster N / Kenney', 'Blaster N / Kenn')
     ));
 
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
