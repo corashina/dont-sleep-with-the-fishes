@@ -8,17 +8,28 @@ $stagedRoot = Join-Path $modelsRoot ".items-stage-$swapId"
 $backupRoot = Join-Path $modelsRoot ".items-backup-$swapId"
 $osTempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $tempRoot = Join-Path $osTempRoot "dont-sleep-item-models-$([guid]::NewGuid().ToString('N'))"
-$expectedFiles = @(
-  'baitTin.glb'
-  'cannedFood.glb'
-  'ductTape.glb'
-  'fishingRod.glb'
-  'flareGun.glb'
-  'flashlight.glb'
-  'medicalKit.glb'
-  'scubaSet.glb'
-  'waterJug.glb'
+$itemIds = @(
+  'cannedFood'
+  'baitTin'
+  'ductTape'
+  'compass'
+  'map'
+  'medicalKit'
+  'spyglass'
+  'fishingNet'
+  'bucket'
+  'flareGun'
+  'scubaSet'
+  'anchor'
+  'bottledPaper'
+  'umbrella'
+  'swimRing'
+  'flashlight'
+  'harpoonGun'
+  'energyBar'
+  'fishingRod'
 )
+$expectedFiles = @($itemIds | ForEach-Object { "$_.glb" }) + @('item-model-metadata.json')
 
 . (Join-Path $PSScriptRoot 'item-model-publication.ps1')
 . (Join-Path $PSScriptRoot 'kenney-item-sources.ps1')
@@ -32,6 +43,8 @@ try {
   $tempRoot = (Resolve-Path -LiteralPath $tempRoot).Path
   $archivesRoot = Join-Path $tempRoot 'archives'
   $sourceRoot = Join-Path $tempRoot 'sources'
+  $kenneyBuildRoot = Join-Path $tempRoot 'kenney-build'
+  $projectBuildRoot = Join-Path $tempRoot 'project-build'
   New-Item -ItemType Directory -Path $archivesRoot | Out-Null
   New-Item -ItemType Directory -Path $sourceRoot | Out-Null
 
@@ -58,17 +71,37 @@ try {
 
   Push-Location $repositoryRoot
   try {
-    & node scripts/kenney-item-models.mjs $sourceRoot $stagedRoot
+    & node scripts/kenney-item-models.mjs $sourceRoot $kenneyBuildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Kenney item model build failed' }
+    & node scripts/project-item-models.mjs $projectBuildRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Project item model build failed' }
+  } finally {
+    Pop-Location
+  }
+
+  foreach ($buildRoot in @($kenneyBuildRoot, $projectBuildRoot)) {
+    foreach ($generatedFile in @(Get-ChildItem -File -LiteralPath $buildRoot)) {
+      $destination = Join-Path $stagedRoot $generatedFile.Name
+      if (Test-Path -LiteralPath $destination) {
+        throw "Duplicate generated item model output: $($generatedFile.Name)"
+      }
+      Copy-Item -LiteralPath $generatedFile.FullName -Destination $destination
+    }
+  }
+
+  Push-Location $repositoryRoot
+  try {
+    & node scripts/item-model-metadata.mjs $stagedRoot @itemIds
+    if ($LASTEXITCODE -ne 0) { throw 'Item model metadata build failed' }
   } finally {
     Pop-Location
   }
 
   $stagedEntries = @(Get-ChildItem -Force -LiteralPath $stagedRoot)
   $stagedFiles = @($stagedEntries | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
-  $entryDifference = @(Compare-Object -ReferenceObject $expectedFiles -DifferenceObject $stagedFiles)
-  if ($stagedEntries.Count -ne $expectedFiles.Count -or $entryDifference.Count -ne 0) {
-    throw 'Staged item model directory does not contain exactly the nine approved GLBs'
+  $entryDifference = @(Compare-Object -ReferenceObject @($expectedFiles | Sort-Object) -DifferenceObject $stagedFiles)
+  if ($stagedEntries.Count -ne 20 -or $entryDifference.Count -ne 0) {
+    throw 'Staged item model directory does not contain exactly 19 approved GLBs plus item-model-metadata.json'
   }
 
   Push-Location $repositoryRoot

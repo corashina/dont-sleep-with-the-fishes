@@ -96,18 +96,47 @@ function validateLedgerEntry(
   if (inlineCodeValue(row[1]!) !== `${id}.glb`) {
     throw new ItemModelLoadError(id, 'asset ledger filename does not match the manifest');
   }
-  if (row[3] !== spec.sourceUrl) {
+  const provenance = spec.provenance;
+  if (provenance.kind !== 'thirdParty') return;
+  if (row[3] !== provenance.sourceUrl) {
     throw new ItemModelLoadError(id, 'asset ledger source URL does not match the manifest');
   }
-  if (inlineCodeValue(row[4]!) !== spec.sourceAssetId) {
+  if (inlineCodeValue(row[4]!) !== provenance.sourceAssetId) {
     throw new ItemModelLoadError(id, 'asset ledger source asset ID does not match the manifest');
   }
-  if (ledgerCreator(row[2]!) !== spec.creator) {
+  if (ledgerCreator(row[2]!) !== provenance.creator) {
     throw new ItemModelLoadError(id, 'asset ledger creator does not match the manifest');
   }
-  if (markdownLinkUrl(row[5]!) !== spec.licenseUrl) {
+  if (markdownLinkUrl(row[5]!) !== provenance.licenseUrl) {
     throw new ItemModelLoadError(id, 'asset ledger license URL does not match the manifest');
   }
+}
+
+function validateSpec(id: ItemId, spec: ItemModelSpec | undefined): ItemModelSpec {
+  if (!spec) throw new ItemModelLoadError(id, 'manifest entry is missing');
+  const metadata = spec.generatedMetadata;
+  if (
+    !Number.isInteger(metadata?.triangles)
+    || metadata.triangles <= 0
+    || metadata.triangles > spec.maxTriangles
+  ) {
+    throw new ItemModelLoadError(id, 'generated triangle metadata is invalid');
+  }
+  const bounds = [metadata.rawBounds?.min, metadata.rawBounds?.max];
+  if (
+    bounds.some((values) => !Array.isArray(values) || values.length !== 3)
+    || !bounds.flat().every(Number.isFinite)
+    || !metadata.rawBounds.max.some((maximum, axis) => maximum > metadata.rawBounds.min[axis]!)
+  ) {
+    throw new ItemModelLoadError(id, 'generated bounds metadata is invalid');
+  }
+  if (
+    spec.provenance.kind === 'project'
+    && spec.provenance.recipeId !== `project-item-models@1:${id}`
+  ) {
+    throw new ItemModelLoadError(id, 'project recipe ID does not match the item ID');
+  }
+  return spec;
 }
 
 function validateGeometry(id: ItemId, geometry: BufferGeometry): number {
@@ -220,7 +249,10 @@ export class PropModelLibrary {
     const ledgerRows = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
       .map(ledgerCells)
       .filter((row): row is readonly string[] => row !== null);
-    for (const id of ITEM_IDS) validateLedgerEntry(id, ITEM_MODEL_SPECS[id], ledgerRows);
+    for (const id of ITEM_IDS) {
+      const spec = validateSpec(id, ITEM_MODEL_SPECS[id]);
+      if (spec.provenance.kind === 'thirdParty') validateLedgerEntry(id, spec, ledgerRows);
+    }
 
     const results = await Promise.allSettled(ITEM_IDS.map(async (id): Promise<LoadedTemplate> => {
       const root = await loader.load(ITEM_MODEL_SPECS[id].url);

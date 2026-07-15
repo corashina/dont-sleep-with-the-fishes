@@ -9,14 +9,6 @@ const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
 const QX90 = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 
 export const KENNEY_PACKS = Object.freeze({
-  'blaster-kit': {
-    version: '2.1',
-    pageUrl: 'https://kenney.nl/assets/blaster-kit',
-    archiveUrl: 'https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip',
-    sha256: '91E3093E95427D59625E7E2CE2D0399B861600160FD0B4ADA7714796B67CEA8C',
-    licenseUrl: CC0,
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/blaster-n.glb'],
-  },
   'food-kit': {
     version: '2.0',
     pageUrl: 'https://kenney.nl/assets/food-kit',
@@ -31,7 +23,12 @@ export const KENNEY_PACKS = Object.freeze({
     archiveUrl: 'https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip',
     sha256: 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
     licenseUrl: CC0,
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle.glb'],
+    requiredEntries: [
+      'License.txt',
+      'Models/GLB format/Textures/colormap.png',
+      'Models/GLB format/bottle.glb',
+      'Models/GLB format/bucket.glb',
+    ],
   },
   'prototype-kit': {
     version: '1.0',
@@ -55,46 +52,51 @@ export const KENNEY_PACKS = Object.freeze({
 const direct = (pack, entry, expectedTriangles, scale = [1, 1, 1]) => ({
   kind: 'direct', pack, entry, expectedTriangles, scale,
 });
-const part = (name, entry, translation, scale, color, rotation = [0, 0, 0, 1]) => ({
-  name, pack: 'prototype-kit', entry, translation, scale, color, rotation,
+const sourcePart = (name, pack, entry, translation, scale, color, rotation = [0, 0, 0, 1]) => ({
+  name, pack, entry, translation, scale, color, rotation,
 });
 
 export const KENNEY_ITEM_RECIPES = Object.freeze({
-  flareGun: direct('blaster-kit', 'Models/GLB format/blaster-n.glb', 410),
   ductTape: direct('prototype-kit', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', 192, [1, 0.35, 1]),
   fishingRod: {
     kind: 'composite', expectedTriangles: 376, parts: [
-      part('rod', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0, 0], [0.018, 1.6, 0.018], [0.95, 0.25, 0.08, 1]),
-      part('grip', 'Models/GLB format/shape-cylinder-detailed.glb', [0, -0.35, 0], [0.04, 0.35, 0.04], [0.12, 0.12, 0.14, 1]),
-      part('reel', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', [0.05, -0.14, 0], [0.08, 0.05, 0.08], [0.2, 0.24, 0.3, 1], QX90),
+      sourcePart('rod', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0, 0], [0.018, 1.6, 0.018], [0.95, 0.25, 0.08, 1]),
+      sourcePart('grip', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, -0.35, 0], [0.04, 0.35, 0.04], [0.12, 0.12, 0.14, 1]),
+      sourcePart('reel', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', [0.05, -0.14, 0], [0.08, 0.05, 0.08], [0.2, 0.24, 0.3, 1], QX90),
     ],
   },
   baitTin: direct('food-kit', 'Models/GLB format/can-small.glb', 154),
   medicalKit: {
     kind: 'composite', expectedTriangles: 228, parts: [
-      part('case', 'Models/GLB format/shape-cube-rounded.glb', [0, 0, 0], [1, 0.7, 0.3], [0.85, 0.08, 0.06, 1]),
-      part('cross-vertical', 'Models/GLB format/shape-cube-half.glb', [0, 0.15, 0.17], [0.12, 0.8, 0.04], [1, 1, 1, 1]),
-      part('cross-horizontal', 'Models/GLB format/shape-cube-half.glb', [0, 0.29, 0.17], [0.4, 0.24, 0.04], [1, 1, 1, 1]),
+      sourcePart('case', 'prototype-kit', 'Models/GLB format/shape-cube-rounded.glb', [0, 0, 0], [1, 0.7, 0.3], [0.85, 0.08, 0.06, 1]),
+      sourcePart('cross-vertical', 'prototype-kit', 'Models/GLB format/shape-cube-half.glb', [0, 0.15, 0.17], [0.12, 0.8, 0.04], [1, 1, 1, 1]),
+      sourcePart('cross-horizontal', 'prototype-kit', 'Models/GLB format/shape-cube-half.glb', [0, 0.29, 0.17], [0.4, 0.24, 0.04], [1, 1, 1, 1]),
     ],
   },
-  waterJug: direct('survival-kit', 'Models/GLB format/bottle.glb', 96),
   cannedFood: direct('food-kit', 'Models/GLB format/can.glb', 156),
   flashlight: {
     kind: 'composite', expectedTriangles: 340, parts: [
-      part('body', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0, 0], [0.18, 0.9, 0.18], [0.12, 0.16, 0.18, 1]),
-      part('head', 'Models/GLB format/shape-cylinder.glb', [0, 0.9, 0], [0.28, 0.25, 0.28], [0.95, 0.32, 0.08, 1]),
-      part('lens-ring', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', [0, 1.15, 0], [0.3, 0.1, 0.3], [0.9, 0.95, 1, 1]),
-      part('switch', 'Models/GLB format/shape-cube-half.glb', [0, 0.65, 0.17], [0.08, 0.12, 0.06], [0.95, 0.32, 0.08, 1]),
+      sourcePart('body', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0, 0], [0.18, 0.9, 0.18], [0.12, 0.16, 0.18, 1]),
+      sourcePart('head', 'prototype-kit', 'Models/GLB format/shape-cylinder.glb', [0, 0.9, 0], [0.28, 0.25, 0.28], [0.95, 0.32, 0.08, 1]),
+      sourcePart('lens-ring', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', [0, 1.15, 0], [0.3, 0.1, 0.3], [0.9, 0.95, 1, 1]),
+      sourcePart('switch', 'prototype-kit', 'Models/GLB format/shape-cube-half.glb', [0, 0.65, 0.17], [0.08, 0.12, 0.06], [0.95, 0.32, 0.08, 1]),
     ],
   },
   scubaSet: {
     kind: 'composite', expectedTriangles: 688, parts: [
-      part('tank-left', 'Models/GLB format/shape-cylinder-detailed.glb', [-0.18, 0, 0], [0.24, 1, 0.24], [0.95, 0.35, 0.08, 1]),
-      part('tank-right', 'Models/GLB format/shape-cylinder-detailed.glb', [0.18, 0, 0], [0.24, 1, 0.24], [0.95, 0.35, 0.08, 1]),
-      part('harness', 'Models/GLB format/shape-cube-rounded.glb', [0, 0.12, 0.15], [0.5, 0.72, 0.16], [0.08, 0.12, 0.16, 1]),
-      part('loop-left', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [-0.22, 0.58, 0.13], [0.18, 0.52, 0.16], [0.08, 0.12, 0.16, 1]),
-      part('loop-right', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [0.22, 0.58, 0.13], [0.18, 0.52, 0.16], [0.08, 0.12, 0.16, 1]),
-      part('regulator', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [0, 1.05, 0.18], [0.14, 0.12, 0.14], [0.12, 0.18, 0.22, 1]),
+      sourcePart('tank-left', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [-0.18, 0, 0], [0.24, 1, 0.24], [0.95, 0.35, 0.08, 1]),
+      sourcePart('tank-right', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0.18, 0, 0], [0.24, 1, 0.24], [0.95, 0.35, 0.08, 1]),
+      sourcePart('harness', 'prototype-kit', 'Models/GLB format/shape-cube-rounded.glb', [0, 0.12, 0.15], [0.5, 0.72, 0.16], [0.08, 0.12, 0.16, 1]),
+      sourcePart('loop-left', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [-0.22, 0.58, 0.13], [0.18, 0.52, 0.16], [0.08, 0.12, 0.16, 1]),
+      sourcePart('loop-right', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [0.22, 0.58, 0.13], [0.18, 0.52, 0.16], [0.08, 0.12, 0.16, 1]),
+      sourcePart('regulator', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', [0, 1.05, 0.18], [0.14, 0.12, 0.14], [0.12, 0.18, 0.22, 1]),
+    ],
+  },
+  bucket: direct('survival-kit', 'Models/GLB format/bucket.glb', 68),
+  bottledPaper: {
+    kind: 'composite', expectedTriangles: 188, parts: [
+      sourcePart('bottle', 'survival-kit', 'Models/GLB format/bottle.glb', [0, 0, 0], [1, 1, 1], [1, 1, 1, 1]),
+      sourcePart('rolled-note', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0.02, 0], [0.12, 0.52, 0.12], [0.80, 0.73, 0.55, 1]),
     ],
   },
 });

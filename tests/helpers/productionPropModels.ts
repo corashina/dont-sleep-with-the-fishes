@@ -13,44 +13,9 @@ export interface NormalizedPropBoundsFixture {
   readonly max: readonly [number, number, number];
 }
 
-export const PRODUCTION_NORMALIZED_PROP_BOUNDS = {
-  flareGun: {
-    min: [-0.36, -0.115595999, -0.095610057],
-    max: [0.36, 0.255595999, 0.095610057],
-  },
-  ductTape: {
-    min: [-0.275, -0.275, -0.09625],
-    max: [0.275, 0.275, 0.09625],
-  },
-  fishingRod: {
-    min: [-0.05076923076923076, -0.032307692308, -0.9],
-    max: [0.05076923076923076, 0.032307692308, 0.9],
-  },
-  baitTin: {
-    min: [-0.24, -0.008897803, -0.24],
-    max: [0.24, 0.248897803, 0.24],
-  },
-  medicalKit: {
-    min: [-0.36, -0.182, -0.1224],
-    max: [0.36, 0.322, 0.1224],
-  },
-  waterJug: {
-    min: [-0.133547046, -0.17, -0.154206854],
-    max: [0.133547046, 0.61, 0.154206854],
-  },
-  cannedFood: {
-    min: [-0.196875012, -0.17, -0.196875012],
-    max: [0.196875012, 0.25, 0.196875012],
-  },
-  flashlight: {
-    min: [-0.0864, -0.17, -0.1008],
-    max: [0.0864, 0.55, 0.1008],
-  },
-  scubaSet: {
-    min: [-0.225641026, -0.19, -0.139145299],
-    max: [0.225641026, 0.69, 0.139145299],
-  },
-} as const satisfies Readonly<Record<ItemId, NormalizedPropBoundsFixture>>;
+export const PRODUCTION_NORMALIZED_PROP_BOUNDS = Object.freeze(Object.fromEntries(
+  ITEM_IDS.map((id) => [id, ITEM_MODEL_SPECS[id].normalizedBounds]),
+) as Readonly<Record<ItemId, NormalizedPropBoundsFixture>>);
 
 class CheckedInItemModelLoader implements ItemModelLoader {
   async load(url: string) {
