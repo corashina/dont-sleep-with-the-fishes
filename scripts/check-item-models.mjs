@@ -21,16 +21,67 @@ const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
 
+const CC0_LEDGER_CELL = '[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)';
+const FOOD_SHA256 = 'CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7C6F6F';
+const SURVIVAL_SHA256 = 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E';
+const PROTOTYPE_SHA256 = '213B522FB12BCC9B9AC66C4F7581F7C74623293272212E40A70C39936AD3DA95';
+const DOWNLOADED = '2026-07-15';
+
 const LEDGER_REQUIREMENTS = {
-  cannedFood: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  ductTape: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  medicalKit: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/medicalKit', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  bucket: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bucket.glb', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  bottledPaper: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:composite/bottledPaper', 'Kenney + project', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  flashlight: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/flashlight', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
-  scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet', 'Kenney', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+  cannedFood: [
+    'cannedFood', '`cannedFood.glb`', 'Can / Kenney', 'https://kenney.nl/assets/food-kit',
+    '`food-kit@2.0:Models/GLB format/can.glb`', CC0_LEDGER_CELL, '156', '156',
+    `Food Kit 2.0 archive SHA-256 \`${FOOD_SHA256}\`; direct build from \`Models/GLB format/can.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  baitTin: [
+    'baitTin', '`baitTin.glb`', 'Small can / Kenney', 'https://kenney.nl/assets/food-kit',
+    '`food-kit@2.0:Models/GLB format/can-small.glb`', CC0_LEDGER_CELL, '154', '154',
+    `Food Kit 2.0 archive SHA-256 \`${FOOD_SHA256}\`; direct build from \`Models/GLB format/can-small.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  ductTape: [
+    'ductTape', '`ductTape.glb`', 'Hollow cylinder detailed / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    '`prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb`', CC0_LEDGER_CELL, '192', '192',
+    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; direct build from \`Models/GLB format/shape-hollow-cylinder-detailed.glb\`; source node scale multiplied by \`[1, 0.35, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  medicalKit: [
+    'medicalKit', '`medicalKit.glb`', 'Medical kit composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    '`prototype-kit@1.0:composite/medicalKit`', CC0_LEDGER_CELL, '228', '228',
+    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 228. Parts: \`Models/GLB format/shape-cube-rounded.glb\` case T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[1, 0.7, 0.3]\`, RGBA \`[0.85, 0.08, 0.06, 1]\`; \`Models/GLB format/shape-cube-half.glb\` cross-vertical T \`[0, 0.15, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.12, 0.8, 0.04]\`, RGBA \`[1, 1, 1, 1]\`; \`Models/GLB format/shape-cube-half.glb\` cross-horizontal T \`[0, 0.29, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.4, 0.24, 0.04]\`, RGBA \`[1, 1, 1, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  bucket: [
+    'bucket', '`bucket.glb`', 'Bucket / Kenney', 'https://kenney.nl/assets/survival-kit',
+    '`survival-kit@2.0:Models/GLB format/bucket.glb`', CC0_LEDGER_CELL, '68', '68',
+    `Survival Kit 2.0 archive SHA-256 \`${SURVIVAL_SHA256}\`; direct build from \`Models/GLB format/bucket.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  bottledPaper: [
+    'bottledPaper', '`bottledPaper.glb`', 'Bottled paper composite / Kenney + project', 'https://kenney.nl/assets/survival-kit',
+    '`survival-kit@2.0:composite/bottledPaper`', CC0_LEDGER_CELL, '188', '188',
+    `Survival Kit 2.0 archive SHA-256 \`${SURVIVAL_SHA256}\` input \`Models/GLB format/bottle.glb\` (96 triangles), part \`bottle\` T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[1, 1, 1]\`, RGBA \`[1, 1, 1, 1]\`; Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\` input \`Models/GLB format/shape-cylinder-detailed.glb\` (92 triangles), part \`rolled-note\` T \`[0, 0.02, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.12, 0.52, 0.12]\`, RGBA \`[0.80, 0.73, 0.55, 1]\`; project-authored composition, replacement base colors, prune, unpartition, and embedded resources.`,
+    DOWNLOADED,
+  ],
+  flashlight: [
+    'flashlight', '`flashlight.glb`', 'Flashlight composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    '`prototype-kit@1.0:composite/flashlight`', CC0_LEDGER_CELL, '340', '340',
+    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 340. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` body T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.9, 0.18]\`, RGBA \`[0.12, 0.16, 0.18, 1]\`; \`Models/GLB format/shape-cylinder.glb\` head T \`[0, 0.9, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.28, 0.25, 0.28]\`, RGBA \`[0.95, 0.32, 0.08, 1]\`; \`Models/GLB format/shape-hollow-cylinder-detailed.glb\` lens-ring T \`[0, 1.15, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.3, 0.1, 0.3]\`, RGBA \`[0.9, 0.95, 1, 1]\`; \`Models/GLB format/shape-cube-half.glb\` switch T \`[0, 0.65, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.08, 0.12, 0.06]\`, RGBA \`[0.95, 0.32, 0.08, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  fishingRod: [
+    'fishingRod', '`fishingRod.glb`', 'Fishing rod composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    '`prototype-kit@1.0:composite/fishingRod`', CC0_LEDGER_CELL, '376', '376',
+    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 376. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` rod T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.018, 1.6, 0.018]\`, RGBA \`[0.95, 0.25, 0.08, 1]\`; \`Models/GLB format/shape-cylinder-detailed.glb\` grip T \`[0, -0.35, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.04, 0.35, 0.04]\`, RGBA \`[0.12, 0.12, 0.14, 1]\`; \`Models/GLB format/shape-hollow-cylinder-detailed.glb\` reel T \`[0.05, -0.14, 0]\`, R \`[0.7071067811865476, 0, 0, 0.7071067811865476]\`, S \`[0.08, 0.05, 0.08]\`, RGBA \`[0.2, 0.24, 0.3, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
+  scubaSet: [
+    'scubaSet', '`scubaSet.glb`', 'Scuba set composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    '`prototype-kit@1.0:composite/scubaSet`', CC0_LEDGER_CELL, '688', '688',
+    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 688. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` tank-left T \`[-0.18, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.24, 1, 0.24]\`, RGBA \`[0.95, 0.35, 0.08, 1]\`; \`Models/GLB format/shape-cylinder-detailed.glb\` tank-right T \`[0.18, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.24, 1, 0.24]\`, RGBA \`[0.95, 0.35, 0.08, 1]\`; \`Models/GLB format/shape-cube-rounded.glb\` harness T \`[0, 0.12, 0.15]\`, R \`[0, 0, 0, 1]\`, S \`[0.5, 0.72, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` loop-left T \`[-0.22, 0.58, 0.13]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.52, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` loop-right T \`[0.22, 0.58, 0.13]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.52, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` regulator T \`[0, 1.05, 0.18]\`, R \`[0, 0, 0, 1]\`, S \`[0.14, 0.12, 0.14]\`, RGBA \`[0.12, 0.18, 0.22, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
+    DOWNLOADED,
+  ],
 };
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -288,16 +339,19 @@ export async function countTriangles(filePath) {
   return (await inspectModel(filePath)).triangles;
 }
 
+function parseLedgerRow(row) {
+  return row.slice(1, -1).split('|').map((cell) => cell.trim());
+}
+
 function verifyLedgerRow(ledger, itemId) {
   const rows = ledger.split(/\r?\n/).filter((line) => line.startsWith(`| ${itemId} |`));
   if (rows.length !== 1) {
     throw new Error(`THIRD_PARTY_ASSETS.md: expected one ${itemId} row, received ${rows.length}`);
   }
-  const row = rows[0];
-  for (const value of LEDGER_REQUIREMENTS[itemId]) {
-    if (!row.includes(value)) {
-      throw new Error(`THIRD_PARTY_ASSETS.md: ${itemId} row is missing ${value}`);
-    }
+  const actual = parseLedgerRow(rows[0]);
+  const expected = LEDGER_REQUIREMENTS[itemId];
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`THIRD_PARTY_ASSETS.md: ${itemId} row does not match the expected record`);
   }
 }
 

@@ -116,9 +116,11 @@ async function writeInvalidModel(
 
 describe('item model audit CLI', () => {
   let modelsDir: string;
+  let ledgerPath: string;
 
   beforeEach(async () => {
     modelsDir = await mkdtemp(join(tmpdir(), 'item-model-audit-'));
+    ledgerPath = `${modelsDir}-ledger.md`;
     for (const itemId of itemIds) {
       await cp(
         resolve('src', 'assets', 'models', 'items', `${itemId}.glb`),
@@ -133,12 +135,29 @@ describe('item model audit CLI', () => {
 
   afterEach(async () => {
     await rm(modelsDir, { recursive: true, force: true });
+    await rm(ledgerPath, { force: true });
   });
 
   function runAudit(extraArgs: readonly string[] = []) {
     return spawnSync(
       process.execPath,
       ['scripts/check-item-models.mjs', '--assets-only', '--models-dir', modelsDir, ...extraArgs],
+      { encoding: 'utf8' },
+    );
+  }
+
+  async function runLedgerAudit(
+    itemId: string,
+    originalValue: string,
+    replacementValue: string,
+  ) {
+    const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
+    const row = ledger.split(/\r?\n/).find((line) => line.startsWith(`| ${itemId} |`));
+    expect(row).toContain(originalValue);
+    await writeFile(ledgerPath, ledger.replace(row!, row!.replace(originalValue, replacementValue)));
+    return spawnSync(
+      process.execPath,
+      ['scripts/check-item-models.mjs', '--models-dir', modelsDir, '--ledger-path', ledgerPath],
       { encoding: 'utf8' },
     );
   }
@@ -190,7 +209,6 @@ describe('item model audit CLI', () => {
   });
 
   it('rejects a third-party ledger row for a project-authored model', async () => {
-    const ledgerPath = join(modelsDir, 'ledger.md');
     const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
     await writeFile(ledgerPath, `${ledger}\n| compass | \`compass.glb\` | Compass / Project team | project | \`project-item-models@1:compass\` | project | 88 | 88 | none | 2026-07-15 |\n`);
 
@@ -202,6 +220,46 @@ describe('item model audit CLI', () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('project-authored compass must not have a ledger row');
+  });
+
+  it.each([
+    [
+      'a pinned archive hash',
+      'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
+      '03586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
+      'bucket',
+    ],
+    ['source triangles', '| 68 | 68 |', '| 67 | 68 |', 'bucket'],
+    ['output triangles', '| 68 | 68 |', '| 68 | 67 |', 'bucket'],
+    ['the download date', '| 2026-07-15 |', '| 2026-07-16 |', 'bucket'],
+    [
+      'unpartition processing',
+      'prune, deduplicate, unpartition, and embed resources in the committed GLB.',
+      'prune, deduplicate, and embed resources in the committed GLB.',
+      'bucket',
+    ],
+    [
+      'the Bottled Paper Survival input',
+      'input `Models/GLB format/bottle.glb` (96 triangles)',
+      'input `Models/GLB format/bottle-wrong.glb` (96 triangles)',
+      'bottledPaper',
+    ],
+    [
+      'the Bottled Paper Prototype transform',
+      'part `rolled-note` T `[0, 0.02, 0]`',
+      'part `rolled-note` T `[0, 0.03, 0]`',
+      'bottledPaper',
+    ],
+  ])('rejects a third-party ledger row with tampered %s', async (
+    _caseName,
+    originalValue,
+    replacementValue,
+    itemId,
+  ) => {
+    const result = await runLedgerAudit(itemId, originalValue, replacementValue);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`${itemId} row does not match the expected record`);
   });
 
   it('accepts a non-degenerate planar triangle', async () => {
