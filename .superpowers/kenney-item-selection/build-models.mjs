@@ -12,17 +12,24 @@ export function recipesFromCatalog(catalog) {
   ));
 }
 
+export async function copyCurrentModels({ sourceRoot, outputRoot }) {
+  for (const itemId of ITEM_IDS) {
+    await copyFile(
+      resolve(sourceRoot, `${itemId}.glb`),
+      resolve(outputRoot, `${candidateKey(itemId, 'current')}.glb`),
+    );
+  }
+}
+
 export async function buildSelectionModels(root = fileURLToPath(new URL('.', import.meta.url))) {
   const catalog = JSON.parse(await readFile(resolve(root, 'selection-catalog.json'), 'utf8'));
   validateCatalog(catalog);
   const outputRoot = resolve(root, 'models');
   await mkdir(outputRoot, { recursive: true });
-  for (const itemId of ITEM_IDS) {
-    await copyFile(
-      resolve(root, '../../src/assets/models/items', `${itemId}.glb`),
-      resolve(outputRoot, `${candidateKey(itemId, 'current')}.glb`),
-    );
-  }
+  await copyCurrentModels({
+    sourceRoot: resolve(root, '../../src/assets/models/items'),
+    outputRoot,
+  });
   await buildKenneyItemModels({
     sourceRoot: resolve(root, 'sources'),
     outputRoot,
