@@ -1,7 +1,6 @@
 import {
   createItemInstances,
   ITEM_DEFINITIONS,
-  ITEM_IDS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -14,16 +13,13 @@ export interface ScavengeItemState extends ItemInstance {
   status: ItemStatus;
 }
 
-type CompatibleItemStateMap = Readonly<Record<ItemInstanceId, ScavengeItemState>>
-  & Readonly<Record<ItemId, ItemStatus>>;
-
 export interface ScavengeSnapshot {
   status: SessionStatus;
   remainingSeconds: number;
   savedCount: number;
   carriedWeight: number;
   carriedItems: readonly ItemInstance[];
-  items: CompatibleItemStateMap;
+  items: Readonly<Record<ItemInstanceId, ScavengeItemState>>;
   /** @deprecated Transitional type-keyed UI compatibility. */
   carriedItem: ItemId | null;
 }
@@ -130,7 +126,6 @@ export class ScavengeSession {
       item.instanceId,
       Object.freeze({ ...item }),
     ])) as Record<ItemInstanceId, ScavengeItemState>;
-    this.addLegacyItemStatuses(items);
     const carriedItems = this.carriedIds.map((id) => this.cloneInstance(id));
     const carriedItem = carriedItems.at(-1)?.type ?? null;
     return {
@@ -139,7 +134,7 @@ export class ScavengeSession {
       savedCount: this.savedCount,
       carriedWeight: this.carriedWeight,
       carriedItems: Object.freeze(carriedItems),
-      items: Object.freeze(items) as CompatibleItemStateMap,
+      items: Object.freeze(items),
       carriedItem,
     };
   }
@@ -183,21 +178,6 @@ export class ScavengeSession {
         item.type === id && item.status === 'available'
       ))?.instanceId
       ?? null;
-  }
-
-  private addLegacyItemStatuses(items: Record<ItemInstanceId, ScavengeItemState>): void {
-    for (const type of ITEM_IDS) {
-      Object.defineProperty(items, type, {
-        configurable: false,
-        enumerable: false,
-        value: this.legacyStatus(type),
-        writable: false,
-      });
-    }
-  }
-
-  private legacyStatus(type: ItemId): ItemStatus {
-    return Object.values(this.items).find((item) => item.type === type)?.status ?? 'lost';
   }
 
   private finish(status: 'success' | 'failure'): boolean {
