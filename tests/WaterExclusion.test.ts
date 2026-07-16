@@ -57,6 +57,35 @@ describe('water exclusions', () => {
     expect(pointInWaterExclusion(new Vector3(-1.3, 0, -2.4), region)).toBe(false);
   });
 
+  it('preserves trough water below a local height gate while excluding crests above it', () => {
+    const rig = new Group();
+    rig.position.set(-3, 1.5, 6);
+    rig.rotation.set(-0.12, 0.7, 0.18);
+    rig.scale.set(1.8, 0.65, 1.25);
+    const vessel = new Group();
+    vessel.position.set(2, -0.4, -3);
+    vessel.rotation.set(0.08, -0.3, 0.05);
+    rig.add(vessel);
+    const region = createWaterExclusion(vessel, 1.6, 3.04, 1.05, -0.38);
+
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(0, -0.50, 0)),
+      region,
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(0, -0.38, 0)),
+      region,
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(0.6, 0.40, 1.2)),
+      region,
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(1.5, 0.40, 2.4)),
+      region,
+    )).toBe(false);
+  });
+
   it('starts with explicit inactive fixed-size uniform defaults', () => {
     const ocean = new OceanRenderer();
 
@@ -72,6 +101,8 @@ describe('water exclusions', () => {
       new Vector4(),
     ]);
     expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
+    expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
+      .toEqual([-1_000_000, -1_000_000]);
     ocean.dispose();
   });
 
@@ -82,7 +113,7 @@ describe('water exclusions', () => {
     const second = new Group();
     second.position.set(-6, -2, 8);
     second.rotation.x = -0.2;
-    const firstRegion = createWaterExclusion(first, 1, 2);
+    const firstRegion = createWaterExclusion(first, 1, 2, 2, -0.38);
     const secondRegion = createWaterExclusion(second, 3.7, 10.2);
     const ocean = new OceanRenderer();
 
@@ -98,6 +129,8 @@ describe('water exclusions', () => {
       secondRegion.bounds,
     ]);
     expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([2, 10.2]);
+    expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
+      .toEqual([-0.38, -1_000_000]);
     ocean.dispose();
   });
 
@@ -120,6 +153,8 @@ describe('water exclusions', () => {
       new Vector4(),
     ]);
     expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
+    expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
+      .toEqual([-1_000_000, -1_000_000]);
     ocean.dispose();
   });
 
