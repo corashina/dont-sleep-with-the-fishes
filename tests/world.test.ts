@@ -180,7 +180,7 @@ describe('world builders', () => {
             checkpoint: (stage: typeof failureStage) => {
               if (stage !== failureStage) return;
               const resources = new Set<BufferGeometry | Material>();
-              ['lifeboat', 'procedural-ocean', 'procedural-skybox', 'rain', 'sea-spray']
+              ['lifeboat', 'procedural-ocean', 'procedural-skybox', 'sea-spray']
                 .forEach((name) => {
                   const object = scene.getObjectByName(name);
                   if (!object) return;
@@ -410,7 +410,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('uses the same wave time and amplitude for the ocean and four-point lifeboat pose', () => {
+  it('keeps physical sinking effects while rendering calm sunny weather', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const moonTexture = createTestMoonTexture();
@@ -437,6 +437,11 @@ describe('world builders', () => {
       7,
     );
     const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
+    const sky = scene.getObjectByName('procedural-skybox') as Mesh;
+    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
+    expect(scene.getObjectByName('rain')).toBeUndefined();
+    expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
+    expect(skyUniforms.uSunVisibility!.value).toBe(1);
 
     world.update(time, delta, sinking, cameraPosition, false);
 
@@ -453,24 +458,18 @@ describe('world builders', () => {
     expect(world.ship.position.y).toBe(sinking.sinkOffset);
     expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
     expect(world.ship.rotation.z).toBe(sinking.rollRadians);
-
-    const rain = scene.getObjectByName('rain') as Points;
-    expect(rain.position.x).toBe(cameraPosition.x);
-    expect(rain.position.z).toBe(cameraPosition.z);
-    expect((scene.fog as FogExp2).density).toBeGreaterThan(0.028);
+    expect((scene.fog as FogExp2).density).toBeCloseTo(0.012);
     expect(beacon).toBeInstanceOf(Mesh);
     const expectedPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
     expect((beacon.material as MeshStandardMaterial).emissiveIntensity)
       .toBeCloseTo(0.25 + expectedPulse * 1.35);
-    const sky = scene.getObjectByName('procedural-skybox') as Mesh;
     expect(sky).toBeInstanceOf(Mesh);
     expect(sky.position.toArray()).toEqual(cameraPosition.toArray());
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
-    expect(scene.getObjectByName('rain')).toBeInstanceOf(Points);
+    expect(scene.getObjectByName('rain')).toBeUndefined();
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
-    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
     expect(skyUniforms.uMoonMap!.value).toBe(moonTexture);
-    expect(skyUniforms.uSunVisibility!.value).toBeLessThan(0.2);
+    expect(skyUniforms.uSunVisibility!.value).toBe(1);
     expect(oceanMaterial.uniforms.uHorizonColor!.value).toEqual(
       skyUniforms.uHorizonColor!.value,
     );
@@ -479,6 +478,8 @@ describe('world builders', () => {
     const smokeVersion = smokePositions.version;
     world.update(1, 0.1, { ...sinking, progress: 1 }, cameraPosition, false);
     expect(smokePositions.version).toBeGreaterThan(smokeVersion);
+    expect((scene.fog as FogExp2).density).toBeCloseTo(0.012);
+    expect(skyUniforms.uSunVisibility!.value).toBe(1);
     world.dispose();
     propModels.dispose();
   });
@@ -609,7 +610,6 @@ describe('world builders', () => {
     const moonTextureDispose = vi.spyOn(moonTexture, 'dispose');
     const world = createTestWorld(scene, propModels, moonTexture);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
-    const rain = scene.getObjectByName('rain') as Points;
     const spray = scene.getObjectByName('sea-spray') as Points;
     const sky = scene.getObjectByName('procedural-skybox') as Mesh;
     const skyGeometryDispose = vi.spyOn(sky.geometry, 'dispose');
@@ -653,13 +653,11 @@ describe('world builders', () => {
     const geometryDisposals = observeDisposals([
       ...ownedTask6Geometries,
       ocean.geometry,
-      rain.geometry,
       spray.geometry,
     ]);
     const ownedMaterialDisposals = observeDisposals([
       ...ownedTask6Materials,
       ocean.material as Material,
-      rain.material as Material,
       spray.material as Material,
     ]);
     world.saveItem({ instanceId: 'flareGun-1', type: 'flareGun' });
