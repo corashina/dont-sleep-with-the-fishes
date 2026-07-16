@@ -1,7 +1,7 @@
 # Restrained Print Post-Processing Design
 
 **Date:** 2026-07-16
-**Status:** Approved design, awaiting written-spec review
+**Status:** Approved
 
 ## Objective
 
@@ -43,7 +43,7 @@ The renderer interface will accept these inputs:
 - scene and perspective camera;
 - game phase: scavenging or survival;
 - survival time: day or night when applicable;
-- survival weather: calm, rough, or squall when applicable;
+- survival weather: calm, overcast, or squall when applicable;
 - normalized sinking severity for scavenging;
 - reduced-motion preference.
 
@@ -88,9 +88,9 @@ Day survival uses a warmer, softer grade and less halftone than scavenging. The 
 
 Night survival cools the shadows and reduces halftone strength to prevent noise from filling dark areas. The grade raises the darkest usable values enough to retain item silhouettes without turning night into daylight.
 
-### Rough Weather and Squalls
+### Overcast Weather and Squalls
 
-Rough weather adds a small cold bias and grain increase. Squalls add the strongest permitted grain and edge pressure, but neither profile changes the central vignette floor or introduces flashes, blur, camera distortion, or animated chromatic jitter.
+Overcast weather adds a small cold bias and grain increase. Squalls add the strongest permitted grain and edge pressure, but neither profile changes the central vignette floor or introduces flashes, blur, camera distortion, or animated chromatic jitter.
 
 ## Rendering Quality and Performance
 
@@ -120,7 +120,7 @@ No control, shortcut, pointer-lock behavior, focus rule, ARIA label, or announce
 
 Tests will cover:
 
-- profile selection for scavenging, survival day, survival night, rough weather, and squalls;
+- profile selection for scavenging, survival day, survival night, overcast weather, and squalls;
 - clamping of sinking severity and all numeric shader settings;
 - stable grain state under reduced motion;
 - the visual state each phase sends to the scene renderer;
@@ -138,7 +138,7 @@ Browser review will cover 1280x720 and 1920x1080 at 100 percent zoom:
 
 - scavenging start screen and active play near the beginning of the timer;
 - scavenging active play at critical sinking severity;
-- survival day in calm and rough weather;
+- survival day in calm and overcast weather;
 - survival night and squall presentation;
 - a projected item interaction and an open survival dialog;
 - reduced-motion presentation;
