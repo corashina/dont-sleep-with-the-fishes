@@ -104,13 +104,14 @@ export class Game {
       antialias: true,
       powerPreference: 'high-performance',
     });
+    let sceneRenderer: SceneRenderer | null = null;
     let initializationStarted = false;
     try {
       renderer.outputColorSpace = SRGBColorSpace;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
-      const sceneRenderer = createSceneRenderer(renderer);
+      sceneRenderer = createSceneRenderer(renderer);
       const camera = new PerspectiveCamera(65, 1, 0.08, 220);
       const clock = new Clock();
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -131,9 +132,13 @@ export class Game {
     } catch (error) {
       if (!initializationStarted) {
         try {
-          renderer.dispose();
+          runCleanupSteps([
+            () => sceneRenderer?.dispose(),
+            () => renderer.dispose(),
+            () => renderer.domElement.remove(),
+          ]);
         } finally {
-          renderer.domElement.remove();
+          throw error;
         }
       }
       throw error;
