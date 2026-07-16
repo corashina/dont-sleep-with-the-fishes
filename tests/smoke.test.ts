@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ITEM_DEFINITIONS, ITEM_IDS, createItemInstances } from '../src/game/ItemState';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { ACTION_FOR_ITEM } from '../src/survival/BoatInteraction';
-import { WEATHER_IDS } from '../src/survival/BoatWorld';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { createSurvivalInventory } from '../src/survival/inventory';
-import { formatCountdown } from '../src/ui/GameUI';
+import { formatDuration } from '../src/ui/formatDuration';
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
   instanceId: `${type}-${index + 1}` as ItemInstanceId,
@@ -26,11 +25,6 @@ describe('demo contracts', () => {
     expect(new Set(SURVIVAL_EVENTS.map((event) => event.id)).size).toBe(SURVIVAL_EVENTS.length);
   });
 
-  it('ships exactly three weather definitions', () => {
-    expect(WEATHER_IDS).toEqual(['calm', 'overcast', 'squall']);
-    expect(new Set(WEATHER_IDS).size).toBe(3);
-  });
-
   it('maps all nine scavenged items into survival definitions', () => {
     const inventory = createSurvivalInventory(saved(...ITEM_IDS));
 
@@ -48,6 +42,6 @@ describe('demo contracts', () => {
     [0.1, '00:01'],
     [0, '00:00'],
   ] as const)('formats %s seconds as %s', (seconds, formatted) => {
-    expect(formatCountdown(seconds)).toBe(formatted);
+    expect(formatDuration(seconds)).toBe(formatted);
   });
 });

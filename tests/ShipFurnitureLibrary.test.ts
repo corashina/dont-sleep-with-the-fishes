@@ -172,6 +172,30 @@ describe('ShipFurnitureLibrary preload', () => {
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 
+  it('continues failed-load rollback without masking the primary load error', async () => {
+    const roots = new Map(SHIP_FURNITURE_MODEL_IDS.map((id) => [id, modelRoot(id)]));
+    const loadFailure = new Error('desk download failed');
+    const cleanupFailure = new Error('bed cleanup failed');
+    const firstGeometryDispose = vi.spyOn(firstMesh(roots.get('bedBunk')!).geometry, 'dispose')
+      .mockImplementation(() => {
+        throw cleanupFailure;
+      });
+    const laterGeometryDispose = vi.spyOn(firstMesh(roots.get('chairDesk')!).geometry, 'dispose');
+
+    const failure = await ShipFurnitureLibrary.load({
+      load: async (url) => {
+        const id = modelIdForUrl(url);
+        if (id === 'desk') throw loadFailure;
+        return roots.get(id)!;
+      },
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ShipFurnitureLoadError);
+    expect(failure).toMatchObject({ modelId: 'desk', cause: loadFailure });
+    expect(firstGeometryDispose).toHaveBeenCalledOnce();
+    expect(laterGeometryDispose).toHaveBeenCalledOnce();
+  });
+
   it('names and cleans a model that loads with invalid bounds', async () => {
     const badRoot = new Group();
     const loader: ShipFurnitureModelLoader = {
@@ -262,5 +286,64 @@ describe('ShipFurnitureLibrary ownership', () => {
     expect(disposeGeometry).toHaveBeenCalledOnce();
     expect(disposeMaterial).toHaveBeenCalledOnce();
     expect(disposeTexture).toHaveBeenCalledOnce();
+  });
+
+  it('continues geometry, texture, and material disposal and rethrows the first error', () => {
+    const firstGeometry = new BoxGeometry(1, 1, 1);
+    const secondGeometry = new BoxGeometry(2, 2, 2);
+    const firstTexture = new DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
+    const secondTexture = new DataTexture(new Uint8Array([0, 255, 0, 255]), 1, 1);
+    const firstMaterial = new MeshStandardMaterial({ map: firstTexture });
+    const secondMaterial = new MeshStandardMaterial({ map: secondTexture });
+    const templates = new Map(SHIP_FURNITURE_MODEL_IDS.map((id, index) => {
+      const root = new Group();
+      if (index === 0) root.add(new Mesh(firstGeometry, firstMaterial));
+      if (index === 1) root.add(new Mesh(secondGeometry, secondMaterial));
+      return [id, root] as const;
+    }));
+    const firstError = new Error('first furniture geometry cleanup failed');
+    const laterError = new Error('later furniture texture cleanup failed');
+    const calls: string[] = [];
+    const firstGeometryDispose = vi.spyOn(firstGeometry, 'dispose').mockImplementation(() => {
+      calls.push('first geometry');
+      throw firstError;
+    });
+    const secondGeometryDispose = vi.spyOn(secondGeometry, 'dispose').mockImplementation(() => {
+      calls.push('second geometry');
+    });
+    const firstTextureDispose = vi.spyOn(firstTexture, 'dispose').mockImplementation(() => {
+      calls.push('first texture');
+      throw laterError;
+    });
+    const secondTextureDispose = vi.spyOn(secondTexture, 'dispose').mockImplementation(() => {
+      calls.push('second texture');
+    });
+    const firstMaterialDispose = vi.spyOn(firstMaterial, 'dispose').mockImplementation(() => {
+      calls.push('first material');
+    });
+    const secondMaterialDispose = vi.spyOn(secondMaterial, 'dispose').mockImplementation(() => {
+      calls.push('second material');
+    });
+    const library = ShipFurnitureLibrary.fromTemplatesForTest(templates);
+
+    expect(() => library.dispose()).toThrow(firstError);
+
+    expect(calls).toEqual([
+      'first geometry',
+      'second geometry',
+      'first texture',
+      'second texture',
+      'first material',
+      'second material',
+    ]);
+    expect(() => library.dispose()).not.toThrow();
+    [
+      firstGeometryDispose,
+      secondGeometryDispose,
+      firstTextureDispose,
+      secondTextureDispose,
+      firstMaterialDispose,
+      secondMaterialDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 });

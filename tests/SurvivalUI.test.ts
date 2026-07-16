@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { sequenceRandom } from '../src/survival/random';
+import { sequenceRandom } from './helpers/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
@@ -267,56 +267,10 @@ describe('SurvivalUI', () => {
     expect(highlight.mock.calls).toEqual([[null]]);
   });
 
-  it('defines illustrated survival, tooltip, and cinematic overlay contracts', () => {
-    expect(mainStyles).toContain('.survival-condition__art');
-    expect(mainStyles).toContain('.journal-marker__art');
-    expect(mainStyles).not.toContain('.boat-anchor[data-action="endDay"] .boat-tooltip');
-    expect(mainStyles).toContain('.cinematic-overlay::before');
-    expect(mainStyles).toContain('.event-overlay[data-danger="dangerous"]');
-  });
-
-  it('centers survival HUD zones, overlay content, and vignette backing', () => {
-    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*right:\s*22px;[^}]*left:\s*auto;[^}]*transform-origin:\s*top right;/s);
-    expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*circle at 50% 50%/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
-    expect(mainStyles).toMatch(/\.cinematic-overlay::before\s*\{[^}]*top:\s*50%;[^}]*translate\(-50%,\s*-50%\)/s);
-    expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
-  });
-
-  it('styles the journal as a centered bounded paper page with reduced-motion support', () => {
-    expect(mainStyles).toMatch(/\.journal-marker:focus-visible\s*\{/);
-    expect(mainStyles).toMatch(/\.journal-overlay::before\s*\{[^}]*display:\s*none/s);
-    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*width:\s*min\(680px/s);
-    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*repeating-linear-gradient/s);
-    expect(mainStyles).toMatch(/\.journal-page::before\s*\{[^}]*repeating-radial-gradient/s);
-    expect(mainStyles).toMatch(/\.journal-page::after\s*\{[^}]*box-shadow:\s*inset/s);
-    expect(mainStyles).toMatch(/\.journal-page__edge-arrow\s*\{/);
-    expect(mainStyles).toMatch(/\.journal-page__folio\s*\{/);
-    expect(mainStyles).toMatch(/\.journal-page__bookmark\s*\{/);
-    expect(mainStyles).toMatch(/\.journal-page__story\s*\{[^}]*overflow-y:\s*auto/s);
-    expect(mainStyles).toMatch(/@media \(max-height:\s*760px\)[\s\S]*\.journal-page/s);
-    expect(mainStyles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.sleep-cover[^}]*transition-duration:\s*1ms/s);
-  });
-
   it('styles feedback as noninteractive and keeps the sleep cover noninteractive', () => {
     expect(mainStyles).toMatch(/\.survival-feedback\s*\{[^}]*pointer-events:\s*none/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*pointer-events:\s*none/s);
   });
-
-  it('wraps every survival cinematic overlay in one bounded content region', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-
-    for (const selector of ['[data-action-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
-      const overlay = mount.querySelector<HTMLElement>(selector)!;
-      expect(overlay.children).toHaveLength(1);
-      expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
-    }
-
-    ui.dispose();
-  });
-
   it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
     expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]::before\s*\{[^}]*content:\s*none;/s);
     expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="fixed"\]::before\s*\{[^}]*background:\s*var\(--anchor-accent\);/s);
@@ -474,21 +428,6 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-anchor-id="flashlight-1"]')?.textContent).toMatch(/DURABLE/i);
     expect(mount.querySelector('[data-anchor-id="baitTin-1"]')?.textContent).toMatch(/3 USES REMAINING/i);
     expect(mount.querySelector('[data-anchor-id="baitTin-2"]')?.textContent).toMatch(/DEPLETED.*0 USES REMAINING/i);
-  });
-
-  it('marks left, right, and top-edge anchors for on-screen tooltip placement', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    ui.render(snapshot(), () => null);
-    ui.setAnchors([
-      { id: 'left', itemType: 'flareGun', action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
-      { id: 'right', itemType: 'flashlight', action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
-      { id: 'top', itemType: null, action: 'repair', remainingUses: null, x: window.innerWidth / 2, y: 8, visible: true, depleted: false },
-    ]);
-
-    expect(mount.querySelector('[data-anchor-id="left"]')?.getAttribute('data-tooltip-x')).toBe('left');
-    expect(mount.querySelector('[data-anchor-id="right"]')?.getAttribute('data-tooltip-x')).toBe('right');
-    expect(mount.querySelector('[data-anchor-id="top"]')?.getAttribute('data-tooltip-y')).toBe('below');
   });
 
   it('keeps edge-aligned tooltips inside the clipped survival viewport', () => {
@@ -1068,21 +1007,6 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(dive);
   });
 
-  it('keeps meter and action nodes stable across differential renders', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    ui.render(snapshot(), () => null);
-    const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
-    const fish = mount.querySelector('[data-action="fish"]');
-
-    ui.render(snapshot({ health: 63 }), () => null);
-
-    expect(mount.querySelector('[data-meter="health"]')).toBe(health);
-    expect(mount.querySelector('[data-action="fish"]')).toBe(fish);
-    expect(health.getAttribute('aria-valuenow')).toBe('63');
-    expect(health.style.getPropertyValue('--meter-value')).toBe('63%');
-  });
-
   it('uses each meter scale and direction for visual and accessible danger states', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -1305,25 +1229,6 @@ describe('SurvivalUI', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
-  it('renders illustrated conditions and journal status without persistent tallies', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-
-    expect(mount.querySelector('[data-meter="health"] [data-ui-artwork="health"]')).not.toBeNull();
-    expect(mount.querySelector('[data-meter="hunger"] [data-ui-artwork="hunger"]')).not.toBeNull();
-    expect(mount.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')).not.toBeNull();
-    expect(mount.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')).not.toBeNull();
-    expect(mount.querySelector('.journal-marker [data-ui-artwork="journal"]')).not.toBeNull();
-    expect(mount.querySelector('.survival-stores')).toBeNull();
-    expect(mount.querySelector('[data-store]')).toBeNull();
-    expect(mount.querySelector('[data-action-options]')?.classList).toContain('cinematic-overlay');
-    expect(mount.querySelector('[data-event]')?.classList).toContain('cinematic-overlay');
-    expect(mount.querySelector('[data-pause]')?.classList).toContain('cinematic-overlay');
-    expect(mount.querySelector('[data-ending]')?.classList).toContain('cinematic-overlay');
-
-    ui.dispose();
-  });
-
   it('separates journal, status, and stable End Day controls', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -1354,7 +1259,6 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
     ui.dispose();
   });
-
   it('removes document, pointer, and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

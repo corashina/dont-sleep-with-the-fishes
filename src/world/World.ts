@@ -6,7 +6,6 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
-  Object3D,
   Scene,
   Texture,
   Vector3,
@@ -28,44 +27,10 @@ import { Environment } from './Environment';
 import { createLifeboat } from './Lifeboat';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
+import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import { assignShipItems } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
-
-function collectOwnedResources(
-  root: Object3D,
-  geometries: Set<BufferGeometry>,
-  materials?: Set<Material>,
-  rollback?: (() => void)[],
-): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    if (!geometries.has(object.geometry)) {
-      const geometry = object.geometry;
-      geometries.add(geometry);
-      rollback?.push(() => {
-        try {
-          geometry.dispose();
-        } finally {
-          geometries.delete(geometry);
-        }
-      });
-    }
-    if (!materials) return;
-    const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-    meshMaterials.forEach((material) => {
-      if (materials.has(material)) return;
-      materials.add(material);
-      rollback?.push(() => {
-        try {
-          material.dispose();
-        } finally {
-          materials.delete(material);
-        }
-      });
-    });
-  });
-}
 
 export type WorldConstructionStage = 'lifeboat' | 'ocean' | 'environment' | 'buoyancy';
 
@@ -145,7 +110,21 @@ export class World {
       instances.forEach((instance) => {
         const transform = assignments.get(instance.instanceId)!;
         const prop = createProp(this.propModels, instance);
-        collectOwnedResources(prop, this.ownedGeometries, this.ownedMaterials, rollback);
+        collectMeshResources(
+          prop,
+          this.ownedGeometries,
+          this.ownedMaterials,
+          ({ kind, resource }) => {
+            rollback.push(() => {
+              try {
+                resource.dispose();
+              } finally {
+                if (kind === 'geometry') this.ownedGeometries.delete(resource);
+                else this.ownedMaterials.delete(resource);
+              }
+            });
+          },
+        );
         prop.position.copy(transform.position);
         prop.rotation.copy(transform.rotation);
         prop.scale.setScalar(transform.scale);
@@ -175,11 +154,20 @@ export class World {
           }
         });
       });
-      collectOwnedResources(
+      collectMeshResources(
         this.lifeboat,
         this.ownedGeometries,
         this.ownedMaterials,
-        rollback,
+        ({ kind, resource }) => {
+          rollback.push(() => {
+            try {
+              resource.dispose();
+            } finally {
+              if (kind === 'geometry') this.ownedGeometries.delete(resource);
+              else this.ownedMaterials.delete(resource);
+            }
+          });
+        },
       );
       scene.add(this.lifeboat);
       rollback.push(() => scene.remove(this.lifeboat));
@@ -296,15 +284,16 @@ export class World {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.ocean.dispose();
-    this.environment.dispose();
-    this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh);
-    this.shipBuild.dispose();
-    this.ownedGeometries.forEach((geometry) => geometry.dispose());
-    this.ownedMaterials.forEach((material) => material.dispose());
-    this.ownedTextures.forEach((texture) => texture.dispose());
-    this.ownedGeometries.clear();
-    this.ownedMaterials.clear();
-    this.ownedTextures.clear();
+    runCleanupSteps([
+      () => this.ocean.dispose(),
+      () => this.environment.dispose(),
+      () => this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh),
+      () => this.shipBuild.dispose(),
+      () => disposeResourceSets(
+        this.ownedGeometries,
+        this.ownedMaterials,
+        this.ownedTextures,
+      ),
+    ]);
   }
 }

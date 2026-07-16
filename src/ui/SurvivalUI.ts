@@ -11,6 +11,7 @@ import type {
   SurvivalState,
   WeatherId,
 } from '../survival/survivalTypes';
+import { formatDuration } from './formatDuration';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
 
 interface ActionDefinition {
@@ -116,13 +117,6 @@ function meterMarkup(meter: MeterDefinition): string {
       <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
       <span class="survival-meter__value" data-meter-value>0</span>
     </div>`;
-}
-
-function formatElapsed(seconds: number): string {
-  const safe = Math.max(0, Math.ceil(seconds));
-  const minutes = Math.floor(safe / 60).toString().padStart(2, '0');
-  const remainder = (safe % 60).toString().padStart(2, '0');
-  return `${minutes}:${remainder}`;
 }
 
 export class SurvivalUI {
@@ -564,7 +558,7 @@ export class SurvivalUI {
     this.updateText(
       'ending:stats',
       this.endingStats,
-      `${day} ${day === 1 ? 'DAY' : 'DAYS'} SURVIVED · ${formatElapsed(scavengeElapsedSeconds)} SCAVENGING · SEED ${seed}`,
+      `${day} ${day === 1 ? 'DAY' : 'DAYS'} SURVIVED · ${formatDuration(scavengeElapsedSeconds)} SCAVENGING · SEED ${seed}`,
     );
     this.endingLayer.dataset.ending = state;
     this.restartIssued = false;

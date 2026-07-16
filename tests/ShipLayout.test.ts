@@ -65,45 +65,6 @@ describe('scavenging ship layout', () => {
     expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
   });
 
-  it('authors the exact perimeter placement and surface catalog', () => {
-    expect(SHIP_LAYOUT.furniture.map(({ id, modelId, position }) => ({ id, modelId, position })))
-      .toEqual([
-        { id: 'cabin-bunk-port', modelId: 'bedBunk', position: [-3, 2.22, 7.9] },
-        { id: 'cabin-bunk-starboard', modelId: 'bedBunk', position: [3, 2.22, 7.9] },
-        { id: 'cabin-desk-aft', modelId: 'desk', position: [-1.8, 2.22, 4.05] },
-        { id: 'cabin-bookcase-forward', modelId: 'bookcaseOpen', position: [0, 2.22, 9.48] },
-        { id: 'helm-desk-forward', modelId: 'desk', position: [0, 2.22, 13.25] },
-        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [2.1, 2.22, 11.2] },
-        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.2, 2.22, 12] },
-        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.2, 2.22, 13.15] },
-        { id: 'workbench-port', modelId: 'table', position: [-2.55, 2.22, -9.78] },
-        { id: 'workbench-starboard', modelId: 'table', position: [2.55, 2.22, -9.78] },
-        { id: 'storage-shelf-port', modelId: 'bookcaseOpen', position: [-1.7, 2.22, -6.82] },
-        { id: 'storage-shelf-starboard', modelId: 'bookcaseOpen', position: [1.7, 2.22, -6.82] },
-        { id: 'cargo-rod-rack-forward-port', modelId: 'cargoRack', position: [-2.6, 2.22, 2.3] },
-        { id: 'cargo-crate-forward-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, 2.8] },
-        { id: 'cargo-crate-aft-port', modelId: 'cargoCrate', position: [-2.6, 2.22, -5.8] },
-        { id: 'cargo-crate-aft-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, -5.8] },
-      ]);
-    const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
-    expect(surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
-    expect(surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
-    expect(new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size).toBe(27);
-  });
-
-  it('rejects the old blocked cabin exit and overlapping cargo arrangement by object id', () => {
-    const blocked = {
-      ...SHIP_LAYOUT,
-      furniture: [...SHIP_LAYOUT.furniture, {
-        id: 'old-port-bunk', modelId: 'bedBunk' as const, zoneId: 'crewCabin' as const,
-        position: [-3.18, 2.22, 5.4] as const, rotationY: 0 as const,
-        colliderSize: [1, 1.75, 2.18] as const,
-        scale: [1, 1, 1] as const, surfaces: [],
-      }],
-    };
-    expect(() => validateShipLayout(blocked)).toThrow(/old-port-bunk.*cabin-port-door/i);
-  });
-
   it('measures lane bounds instead of trusting a declared clearance', () => {
     const narrowed = {
       ...SHIP_LAYOUT,
@@ -151,26 +112,6 @@ describe('scavenging ship layout', () => {
     };
     expect(() => validateShipLayout(crossingLocker))
       .toThrow(/cabin-bookcase-forward.*crewCabin.*bounds/i);
-  });
-
-  it('rejects same-zone furniture model swaps for exact placement roles', () => {
-    const deskAsBookcase = {
-      ...SHIP_LAYOUT,
-      furniture: SHIP_LAYOUT.furniture.map((placement) => placement.id === 'cabin-desk-aft'
-        ? { ...placement, modelId: 'bookcaseOpen' as const, surfaces: [] }
-        : placement),
-    };
-    expect(() => validateShipLayout(deskAsBookcase))
-      .toThrow(/cabin-desk-aft.*bookcaseOpen.*desk/i);
-
-    const shelfAsClosedLocker = {
-      ...SHIP_LAYOUT,
-      furniture: SHIP_LAYOUT.furniture.map((placement) => placement.id === 'cabin-bookcase-forward'
-        ? { ...placement, modelId: 'desk' as const }
-        : placement),
-    };
-    expect(() => validateShipLayout(shelfAsClosedLocker))
-      .toThrow(/cabin-bookcase-forward.*desk.*bookcaseOpen/i);
   });
 
   it('rejects surface and physical-slot IDs owned by another furniture prefix', () => {

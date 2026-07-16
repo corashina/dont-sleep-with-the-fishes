@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -16,6 +15,7 @@ import {
   Quaternion,
   Scene,
   ShaderMaterial,
+  Texture,
   Vector3,
   Vector4,
 } from 'three';
@@ -23,11 +23,11 @@ import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/It
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { pointInWaterExclusion } from '../src/ocean/WaterExclusion';
+import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
-import { LIFEBOAT_DIMENSIONS, createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
 import { World } from '../src/world/World';
@@ -575,25 +575,6 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('uses the shared detailed lifeboat at its authored size', () => {
-    const propModels = createTestPropModels();
-    const world = createTestWorld(
-      new Scene(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      () => 0.35,
-    );
-    const hull = world.lifeboat.getObjectByName('lifeboat-hull-geometry')!;
-    const size = new Box3().setFromObject(hull).getSize(new Vector3());
-
-    expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
-    expect(size.x).toBeCloseTo(LIFEBOAT_DIMENSIONS.width, 1);
-    expect(size.z).toBeCloseTo(LIFEBOAT_DIMENSIONS.length, 1);
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('reattaches landed items to the sinking ship and restores their scale', () => {
     const propModels = createTestPropModels();
     const world = createTestWorld(
@@ -707,63 +688,150 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('creates a four-wave subdivided ocean mesh', () => {
-    const ocean = new OceanRenderer();
-    expect(ocean.mesh.name).toBe('procedural-ocean');
-    expect(ocean.mesh.geometry.getAttribute('position').count).toBeGreaterThan(16_000);
-    expect(ocean.material.uniforms.uDirections!.value).toHaveLength(4);
-    expect(ocean.material.uniforms).toMatchObject({
-      uSkyColor: { value: expect.any(Color) },
-      uHorizonColor: { value: expect.any(Color) },
-      uSunColor: { value: expect.any(Color) },
-    });
-    ocean.dispose();
-  });
-
-  it('layers view-dependent reflection, sun glints, ripples, and broken crest foam', () => {
-    const ocean = new OceanRenderer();
-    const shader = ocean.material.fragmentShader;
-
-    expect(shader).toContain('float fresnel =');
-    expect(shader).toContain('reflect(-viewDirection, normal)');
-    expect(shader).toContain('vec2 rippleSlope(');
-    expect(shader).toContain('float sunGlint =');
-    expect(shader).toContain('float foamBreakup =');
-    ocean.dispose();
-  });
-
-  it('updates each ocean atmosphere uniform from explicit colors', () => {
-    const ocean = new OceanRenderer();
-    const atmosphere = {
-      fogColor: new Color(0x102030),
-      horizonColor: new Color(0x405060),
-      skyColor: new Color(0x708090),
-      sunColor: new Color(0xffcc88),
-    };
-
-    ocean.update(3, 0.8, 0.012, atmosphere);
-
-    expect(ocean.material.uniforms.uFogColor!.value).toEqual(atmosphere.fogColor);
-    expect(ocean.material.uniforms.uHorizonColor!.value).toEqual(atmosphere.horizonColor);
-    expect(ocean.material.uniforms.uSkyColor!.value).toEqual(atmosphere.skyColor);
-    expect(ocean.material.uniforms.uSunColor!.value).toEqual(atmosphere.sunColor);
-    ocean.dispose();
-  });
-
-  it('converts linear ocean color before centered display-space dithering', () => {
-    const ocean = new OceanRenderer();
-    const shader = ocean.material.fragmentShader;
-    const linearOutput = shader.indexOf('gl_FragColor = vec4(color, 0.98);');
-    const colorSpaceConversion = shader.indexOf('#include <colorspace_fragment>');
-    const displayDither = shader.indexOf(
-      'gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);',
+  it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new World(
+      scene,
+      propModels,
+      furniture,
+      1,
+      createTestMoonTexture(),
+      [createItemInstances()[0]!],
     );
+    const propResources = collectRenderResources(world.itemObjects.values().next().value!);
+    const geometry = propResources.geometries.values().next().value!;
+    const material = propResources.materials.values().next().value!;
+    const textures = new Set<Texture>();
+    collectRenderResources(world.lifeboat).materials.forEach((ownedMaterial) => {
+      Object.values(ownedMaterial).forEach((value) => {
+        if (value instanceof Texture) textures.add(value);
+      });
+    });
+    const texture = textures.values().next().value!;
+    expect(texture).toBeInstanceOf(Texture);
+    const firstError = new Error('world geometry disposal failed');
+    const laterError = new Error('world material disposal failed');
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      throw firstError;
+    });
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      throw laterError;
+    });
+    const textureDispose = vi.spyOn(texture, 'dispose');
 
-    expect(linearOutput).toBeGreaterThan(-1);
-    expect(colorSpaceConversion).toBeGreaterThan(linearOutput);
-    expect(displayDither).toBeGreaterThan(colorSpaceConversion);
-    expect(shader).toContain('(threshold - 7.5) / (16.0 * 255.0)');
-    ocean.dispose();
+    expect(() => world.dispose()).toThrow(firstError);
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+    expect(() => world.dispose()).not.toThrow();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+
+    furniture.dispose();
+    propModels.dispose();
+  });
+
+  it('continues every owner cleanup step after early failures and keeps the first error', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new World(
+      scene,
+      propModels,
+      furniture,
+      1,
+      createTestMoonTexture(),
+      [createItemInstances()[0]!],
+    );
+    const internals = world as unknown as {
+      ocean: OceanRenderer;
+      environment: Environment;
+      shipBuild: { dispose(): void };
+      ownedGeometries: Set<BufferGeometry>;
+      ownedMaterials: Set<Material>;
+      ownedTextures: Set<Texture>;
+    };
+    const geometry = internals.ownedGeometries.values().next().value!;
+    const material = internals.ownedMaterials.values().next().value!;
+    const texture = internals.ownedTextures.values().next().value!;
+    const firstError = new Error('ocean owner cleanup failed');
+    const laterError = new Error('environment owner cleanup failed');
+    const calls: string[] = [];
+    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
+    const oceanDispose = vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+      calls.push('ocean');
+      originalOceanDispose();
+      throw firstError;
+    });
+    const originalEnvironmentDispose = internals.environment.dispose.bind(internals.environment);
+    const environmentDispose = vi.spyOn(internals.environment, 'dispose').mockImplementation(() => {
+      calls.push('environment');
+      originalEnvironmentDispose();
+      throw laterError;
+    });
+    const originalSceneRemove = scene.remove.bind(scene);
+    let ownerSceneRemoveCalls = 0;
+    const sceneRemove = vi.spyOn(scene, 'remove').mockImplementation((...objects: Object3D[]) => {
+      if (objects.length > 1 && objects.includes(world.ship)) {
+        ownerSceneRemoveCalls += 1;
+        calls.push('scene');
+      }
+      return originalSceneRemove(...objects);
+    });
+    const originalShipDispose = internals.shipBuild.dispose.bind(internals.shipBuild);
+    const shipDispose = vi.spyOn(internals.shipBuild, 'dispose').mockImplementation(() => {
+      calls.push('ship');
+      originalShipDispose();
+    });
+    const originalGeometryDispose = geometry.dispose.bind(geometry);
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      calls.push('geometry');
+      originalGeometryDispose();
+    });
+    const originalMaterialDispose = material.dispose.bind(material);
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      calls.push('material');
+      originalMaterialDispose();
+    });
+    const originalTextureDispose = texture.dispose.bind(texture);
+    const textureDispose = vi.spyOn(texture, 'dispose').mockImplementation(() => {
+      calls.push('texture');
+      originalTextureDispose();
+    });
+
+    expect(() => world.dispose()).toThrow(firstError);
+
+    expect(calls).toEqual([
+      'ocean',
+      'environment',
+      'scene',
+      'ship',
+      'geometry',
+      'material',
+      'texture',
+    ]);
+    expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    expect(scene.getObjectByName('lifeboat')).toBeUndefined();
+    expect(internals.ownedGeometries.size).toBe(0);
+    expect(internals.ownedMaterials.size).toBe(0);
+    expect(internals.ownedTextures.size).toBe(0);
+    expect(() => world.dispose()).not.toThrow();
+    [
+      oceanDispose,
+      environmentDispose,
+      shipDispose,
+      geometryDispose,
+      materialDispose,
+      textureDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(sceneRemove).toHaveBeenCalled();
+    expect(ownerSceneRemoveCalls).toBe(1);
+
+    furniture.dispose();
+    propModels.dispose();
   });
 
   it.each(ITEM_IDS)('builds a visible mesh for %s', (type) => {

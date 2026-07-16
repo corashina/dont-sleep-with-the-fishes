@@ -1,14 +1,8 @@
 import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
+import { formatDuration } from './formatDuration';
 import { itemArtwork, uiArtwork } from './uiArtwork';
-
-export function formatCountdown(seconds: number): string {
-  const safe = Math.max(0, Math.ceil(seconds));
-  const minutes = Math.floor(safe / 60).toString().padStart(2, '0');
-  const remainder = (safe % 60).toString().padStart(2, '0');
-  return `${minutes}:${remainder}`;
-}
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -153,7 +147,7 @@ export class GameUI {
   }
 
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
-    this.timer.textContent = formatCountdown(snapshot.remainingSeconds);
+    this.timer.textContent = formatDuration(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
     const severity = sinking.progress >= 0.75
       ? 'critical'
@@ -180,7 +174,7 @@ export class GameUI {
     this.resultItems.textContent = [
       `${snapshot.savedCount} SUPPLIES SAVED`,
       `SAVED — ${savedItems.length > 0 ? savedItems.join(' · ') : 'NONE'}`,
-      `${formatCountdown(elapsedSeconds)} ELAPSED`,
+      `${formatDuration(elapsedSeconds)} ELAPSED`,
     ].join('\n');
     this.pauseLayer.classList.remove('is-visible');
     this.failureLayer.classList.remove('is-visible');

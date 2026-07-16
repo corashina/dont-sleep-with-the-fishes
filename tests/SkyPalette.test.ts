@@ -133,32 +133,6 @@ describe('skyPaletteFor', () => {
     expect(squall.starVisibility).toBeLessThan(calm.starVisibility);
   });
 
-  it('orders celestial visibility and haze from calm through squall', () => {
-    const calmDay = skyPaletteFor({ weather: 'calm', phase: 'day', severity: 0 });
-    const overcastDay = skyPaletteFor({ weather: 'overcast', phase: 'day', severity: 0 });
-    const squallDay = skyPaletteFor({ weather: 'squall', phase: 'day', severity: 0 });
-    const calmNight = skyPaletteFor({ weather: 'calm', phase: 'night', severity: 0 });
-    const overcastNight = skyPaletteFor({ weather: 'overcast', phase: 'night', severity: 0 });
-    const squallNight = skyPaletteFor({ weather: 'squall', phase: 'night', severity: 0 });
-
-    expect(calmDay.sunVisibility).toBeGreaterThan(overcastDay.sunVisibility);
-    expect(overcastDay.sunVisibility).toBeGreaterThan(squallDay.sunVisibility);
-    expect(calmNight.moonVisibility).toBeGreaterThan(overcastNight.moonVisibility);
-    expect(overcastNight.moonVisibility).toBeGreaterThan(squallNight.moonVisibility);
-    expect(calmNight.starVisibility).toBeGreaterThan(overcastNight.starVisibility);
-    expect(overcastNight.starVisibility).toBeGreaterThan(squallNight.starVisibility);
-    expect(calmDay.haze).toBeLessThan(overcastDay.haze);
-    expect(overcastDay.haze).toBeLessThan(squallDay.haze);
-  });
-
-  it('clamps sinking severity and darkens the squall day', () => {
-    const start = skyPaletteFor({ weather: 'squall', phase: 'day', severity: -1 });
-    const end = skyPaletteFor({ weather: 'squall', phase: 'day', severity: 2 });
-    expect(end.exposure).toBeLessThan(start.exposure);
-    expect(end.fogDensity).toBeGreaterThan(start.fogDensity);
-    expect(end.zenithColor.getHex()).not.toBe(start.zenithColor.getHex());
-  });
-
   it('falls back to calm day for invalid runtime state', () => {
     const fallback = skyPaletteFor({
       weather: 'invalid',

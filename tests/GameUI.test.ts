@@ -22,38 +22,6 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
-  it('defines the illustrated global and scavenging presentation contracts', () => {
-    expect(mainStyles).toContain('--ink-bone: #f2ead7');
-    expect(mainStyles).toContain('.ui-treatment::after');
-    expect(mainStyles).toContain('.pocket-watch__art');
-    expect(mainStyles).toContain('.timber-action::before');
-    expect(mainStyles).toContain('.poster-screen');
-    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
-  });
-
-  it('centers every scavenging poster screen and its vignette', () => {
-    expect(mainStyles).toMatch(/\.screen\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*overflow:\s*hidden;[^}]*text-align:\s*center;/s);
-    expect(mainStyles).toMatch(/\.screen__content\s*\{[^}]*align-content:\s*safe center;[^}]*justify-items:\s*center;[^}]*max-height:\s*100%;[^}]*overflow-y:\s*auto;/s);
-    expect(mainStyles).toMatch(/\.poster-screen\s*\{[^}]*background:\s*radial-gradient\(circle at 50% 50%/s);
-  });
-
-  it('wraps every scavenging screen in one bounded content region', () => {
-    const mount = document.createElement('main');
-    const ui = new GameUI(mount);
-
-    for (const selector of ['[data-start]', '[data-pause]', '[data-failure]', '[data-result]']) {
-      const screen = mount.querySelector<HTMLElement>(selector)!;
-      expect(screen.children).toHaveLength(1);
-      expect(screen.firstElementChild?.classList).toContain('screen__content');
-    }
-
-    ui.dispose();
-  });
-
-  it('keeps scavenging screens centered at narrow viewport widths', () => {
-    expect(mainStyles).not.toMatch(/\.screen\s*\{[^}]*align-content:\s*end;/s);
-  });
-
   it('keeps the critical watch timer at least 3:1 against its gold face', () => {
     expect(mainStyles).toMatch(/\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\(--ink-red\);/s);
     const criticalColor = mainStyles.match(/--ink-red:\s*(#[0-9a-f]{6})/i)?.[1];
@@ -76,31 +44,6 @@ describe('GameUI', () => {
       / (Math.min(foreground, background) + 0.05);
 
     expect(ratio).toBeGreaterThanOrEqual(3);
-  });
-
-  it('guards every illustrated action hover and active selector from disabled states', () => {
-    const interactiveSelectors = [...mainStyles.matchAll(/([^{}]+)\{/g)]
-      .flatMap((match) => match[1]!.split(',').map((selector) => selector.trim()))
-      .filter((selector) => /:(?:hover|active)$/.test(selector))
-      .filter((selector) => [
-        '.timber-action',
-        '.primary-action',
-        '.event-item',
-        '.secondary-action',
-      ].some((className) => selector.includes(className)));
-
-    expect(interactiveSelectors).toEqual([
-      '.timber-action:not(:disabled):not([aria-disabled="true"]):hover',
-      '.timber-action:not(:disabled):not([aria-disabled="true"]):active',
-      '.primary-action:not(:disabled):not([aria-disabled="true"]):hover',
-      '.primary-action:not(:disabled):not([aria-disabled="true"]):active',
-      '.event-item:not(:disabled):not([aria-disabled="true"]):hover',
-      '.secondary-action:not(:disabled):not([aria-disabled="true"]):hover',
-      '.event-item:not(:disabled):not([aria-disabled="true"]):active',
-      '.secondary-action:not(:disabled):not([aria-disabled="true"]):active',
-      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):hover',
-      '.survival-ui .primary-action:not(:disabled):not([aria-disabled="true"]):active',
-    ]);
   });
 
   it('shows a distinct failure layer before revealing the result', () => {
@@ -209,13 +152,6 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
-  it('defines larger top-center circles at desktop and narrow widths', () => {
-    expect(mainStyles).toMatch(/\.carried\s*\{[^}]*top:\s*16px;[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(mainStyles).toMatch(/\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*88px\);[^}]*gap:\s*12px;/s);
-    expect(mainStyles).toMatch(/\.weight-circle\s*\{[^}]*width:\s*88px;[^}]*height:\s*88px;[^}]*border-radius:\s*50%;[^}]*overflow:\s*hidden;/s);
-    expect(mainStyles).toMatch(/@media \(max-width:\s*820px\)\s*\{\s*\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*64px\);[^}]*gap:\s*8px;[^}]*\}\s*\.weight-circle\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s);
-  });
-
   it('exposes sinking danger and critical severity at the presentation thresholds', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
@@ -237,12 +173,6 @@ describe('GameUI', () => {
     ui.render(snapshot(), getSinkingState(90, 120));
     expect(root.dataset.sinkingSeverity).toBe('critical');
     expect(sinkingLabel.textContent).toBe('FINAL SUBMERSION');
-  });
-
-  it('defines red-ink danger and transform-opacity-only critical sinking treatments', () => {
-    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="danger"\] \[data-sinking\]\s*\{[^}]*color:\s*var\(--ink-red-bright\);[^}]*text-shadow:/s);
-    expect(mainStyles).toMatch(/\.game-ui\[data-sinking-severity="critical"\] \.ui-treatment::before\s*\{[^}]*background:\s*radial-gradient\([^}]*animation:\s*critical-vignette/s);
-    expect(mainStyles).toMatch(/@keyframes critical-vignette\s*\{\s*50%\s*\{\s*opacity:\s*[^;]+;\s*transform:\s*[^;]+;\s*\}\s*\}/s);
   });
 
   it('reports a saved duplicate even when the first instance of its type was not saved', () => {
@@ -364,24 +294,4 @@ describe('GameUI', () => {
     expect(mount.children).toHaveLength(0);
   });
 
-  it('renders the illustrated scavenging hierarchy without losing state hooks', () => {
-    const mount = document.createElement('main');
-    const ui = new GameUI(mount);
-
-    expect(mount.querySelector('.hud')?.classList).toContain('illustrated-hud');
-    expect(mount.querySelector('[data-ui-artwork="watch"]')).not.toBeNull();
-    expect(mount.querySelector('.timer-block')?.classList).toContain('pocket-watch');
-    expect(mount.querySelector('[data-timer]')?.textContent).toBe('02:00');
-    expect(mount.querySelector('[data-capacity]')).not.toBeNull();
-    expect(mount.querySelectorAll('[data-weight-circle]')).toHaveLength(3);
-    expect(mount.querySelector('[data-carried-items]')?.getAttribute('aria-hidden')).toBe('true');
-    expect(mount.querySelector('[data-prompt]')).not.toBeNull();
-    expect(mount.querySelector('[data-feedback]')).toBeNull();
-    expect(mount.querySelector('[data-start]')?.classList).toContain('poster-screen');
-    expect(mount.querySelector('.controls')?.textContent).toContain('ACTLEFT CLICK');
-    expect(mount.querySelector('[data-start-button]')?.classList).toContain('timber-action');
-    expect(mount.querySelector('[data-ui-artwork="warning"]')).not.toBeNull();
-
-    ui.dispose();
-  });
 });

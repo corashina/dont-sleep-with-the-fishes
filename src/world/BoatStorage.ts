@@ -1,7 +1,5 @@
-import { Box2, Box3, Euler, Object3D, Vector2, Vector3 } from 'three';
+import { Euler, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, type ItemId, type ItemInstance } from '../game/ItemState';
-
-export const BOAT_STORAGE_CLEARANCE = 0.05;
 
 export interface BoatStorageTransform {
   readonly position: Vector3;
@@ -76,21 +74,4 @@ export function boatStorageTransform(
     rotation: new Euler(...spec.rotation),
     scale: spec.scale,
   };
-}
-
-export function measureBoatStorageEnvelope(
-  root: Object3D,
-  clearance = BOAT_STORAGE_CLEARANCE,
-): Box2 {
-  root.updateWorldMatrix(true, true);
-  const bounds = new Box3().setFromObject(root);
-  if (bounds.isEmpty()) throw new Error(`Cannot measure empty boat prop ${root.name}`);
-  return new Box2(
-    new Vector2(bounds.min.x - clearance, bounds.min.z - clearance),
-    new Vector2(bounds.max.x + clearance, bounds.max.z + clearance),
-  );
-}
-
-export function boatStorageEnvelopesOverlap(first: Box2, second: Box2): boolean {
-  return first.intersectsBox(second);
 }

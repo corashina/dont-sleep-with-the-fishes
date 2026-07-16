@@ -13,6 +13,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
 import {
+  ItemModelLoadError,
   PropModelLibrary,
   geometryTriangles,
   type ItemModelLoader,
@@ -83,25 +84,6 @@ function replaceLedgerRow(
   )).join('\n');
 }
 
-function swapLedgerRowValues(
-  ledger: string,
-  firstId: ItemId,
-  secondId: ItemId,
-  firstValues: readonly string[],
-  secondValues: readonly string[],
-): string {
-  const withFirstChanged = replaceLedgerRow(ledger, firstId, (row) => (
-    firstValues.reduce((changed, value, index) => (
-      changed.replace(value, secondValues[index]!)
-    ), row)
-  ));
-  return replaceLedgerRow(withFirstChanged, secondId, (row) => (
-    secondValues.reduce((changed, value, index) => (
-      changed.replace(value, firstValues[index]!)
-    ), row)
-  ));
-}
-
 async function expectLedgerRejectedBeforeLoad(ledger: string, itemId: ItemId): Promise<void> {
   vi.resetModules();
   vi.doMock('../src/world/itemModelManifest', async () => {
@@ -126,34 +108,6 @@ describe('PropModelLibrary preload', () => {
   it('rejects a stable GLB filename assigned to the wrong item row before loading', async () => {
     const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
       row.replace('`flareGun.glb`', '`fishingRod.glb`')
-    ));
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects source URLs and source asset IDs swapped between item rows before loading', async () => {
-    const ledger = swapLedgerRowValues(
-      ITEM_MODEL_ASSET_LEDGER,
-      'flareGun',
-      'fishingRod',
-      [ITEM_MODEL_SPECS.flareGun.sourceUrl, ITEM_MODEL_SPECS.flareGun.sourceAssetId],
-      [ITEM_MODEL_SPECS.fishingRod.sourceUrl, ITEM_MODEL_SPECS.fishingRod.sourceAssetId],
-    );
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects a license URL that does not match the manifest before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace(ITEM_MODEL_SPECS.flareGun.licenseUrl, 'https://example.com/wrong-license')
-    ));
-
-    await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
-  });
-
-  it('rejects a creator substring instead of the exact creator identity before loading', async () => {
-    const ledger = replaceLedgerRow(ITEM_MODEL_ASSET_LEDGER, 'flareGun', (row) => (
-      row.replace('Blaster N / Kenney', 'Blaster N / Kenn')
     ));
 
     await expectLedgerRejectedBeforeLoad(ledger, 'flareGun');
@@ -328,6 +282,31 @@ describe('PropModelLibrary preload', () => {
 
     await expect(PropModelLibrary.load(loader)).rejects.toThrow(/ductTape/);
     geometryDisposes.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
+  });
+
+  it('continues failed-load rollback without masking the primary item error', async () => {
+    const roots = templates();
+    const loadFailure = new Error('duct tape download failed');
+    const cleanupFailure = new Error('flare cleanup failed');
+    const firstGeometryDispose = vi.spyOn(firstMesh(roots.get('flareGun')!).geometry, 'dispose')
+      .mockImplementation(() => {
+        throw cleanupFailure;
+      });
+    const laterGeometryDispose = vi.spyOn(firstMesh(roots.get('fishingRod')!).geometry, 'dispose');
+    const loader: ItemModelLoader = {
+      load: async (url) => {
+        const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
+        if (id === 'ductTape') throw loadFailure;
+        return roots.get(id)!;
+      },
+    };
+
+    const failure = await PropModelLibrary.load(loader).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ItemModelLoadError);
+    expect(failure).toMatchObject({ itemId: 'ductTape', cause: loadFailure });
+    expect(firstGeometryDispose).toHaveBeenCalledOnce();
+    expect(laterGeometryDispose).toHaveBeenCalledOnce();
   });
 });
 

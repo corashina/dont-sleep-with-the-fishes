@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from '../src/survival/events';
-import { sequenceRandom } from '../src/survival/random';
+import { sequenceRandom } from './helpers/random';
 
 describe('survival events', () => {
   it('ships at least eight original events for each phase', () => {

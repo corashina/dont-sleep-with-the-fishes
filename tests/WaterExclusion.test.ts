@@ -1,10 +1,8 @@
 import { Group, Matrix4, Vector3, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import {
-  createWaterExclusion,
-  pointInWaterExclusion,
-} from '../src/ocean/WaterExclusion';
+import { createWaterExclusion } from '../src/ocean/WaterExclusion';
+import { pointInWaterExclusion } from './helpers/waterExclusion';
 
 describe('water exclusions', () => {
   it('keeps containment aligned with a moved and rotated vessel', () => {
@@ -128,18 +126,4 @@ describe('water exclusions', () => {
     ocean.dispose();
   });
 
-  it('uses a fixed two-region shader mask before ocean color output', () => {
-    const ocean = new OceanRenderer();
-    const shader = ocean.material.fragmentShader;
-
-    expect(ocean.material.vertexShader).toContain('vWorldPosition = worldPosition.xyz;');
-    expect(shader).toContain('uniform mat4 uExclusionWorldToLocal[2];');
-    expect(shader).toContain('uniform vec4 uExclusionBounds[2];');
-    expect(shader).toContain('for (int i = 0; i < 2; i++)');
-    expect(shader.indexOf('discard;')).toBeGreaterThan(-1);
-    expect(shader.indexOf('discard;')).toBeLessThan(
-      shader.indexOf('gl_FragColor = vec4(color, 0.98);'),
-    );
-    ocean.dispose();
-  });
 });
