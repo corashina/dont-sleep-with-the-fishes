@@ -46,6 +46,8 @@ type PrintUniforms = {
 };
 type PipelineFactory = (renderer: WebGLRenderer) => SceneRenderer;
 type FallbackReporter = (error: unknown) => void;
+const MAX_PIXEL_RATIO = 2;
+const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
 
 export class PostProcessingPipeline implements SceneRenderer {
   private readonly composer: EffectComposer;
@@ -54,9 +56,14 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly outputPass: OutputPass;
   private readonly uniforms: PrintUniforms;
   private readonly size = new Vector2();
+  private readonly maxTextureSize: number;
   private disposed = false;
 
   constructor(private readonly renderer: WebGLRenderer) {
+    const reportedMaxTextureSize = renderer.capabilities.maxTextureSize;
+    this.maxTextureSize = Number.isFinite(reportedMaxTextureSize) && reportedMaxTextureSize > 0
+      ? reportedMaxTextureSize
+      : FALLBACK_MAX_TEXTURE_SIZE;
     renderer.getSize(this.size);
     const target = new WebGLRenderTarget(
       Math.max(1, this.size.x),
@@ -78,6 +85,13 @@ export class PostProcessingPipeline implements SceneRenderer {
       composer.addPass(renderPass);
       composer.addPass(printPass);
       composer.addPass(outputPass);
+
+      this.composer = composer;
+      this.renderPass = renderPass;
+      this.printPass = printPass;
+      this.outputPass = outputPass;
+      this.uniforms = printPass.uniforms as PrintUniforms;
+      this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
       printPass?.dispose();
       outputPass?.dispose();
@@ -85,13 +99,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       else composer.dispose();
       throw error;
     }
-
-    this.composer = composer;
-    this.renderPass = renderPass;
-    this.printPass = printPass;
-    this.outputPass = outputPass;
-    this.uniforms = printPass.uniforms as PrintUniforms;
-    this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
   }
 
   render(scene: Scene, camera: Camera, state: Readonly<SceneVisualState>): void {
@@ -111,10 +118,19 @@ export class PostProcessingPipeline implements SceneRenderer {
       || width <= 0
       || height <= 0
       || pixelRatio <= 0
+      || pixelRatio > MAX_PIXEL_RATIO
+    ) return;
+    const physicalWidth = width * pixelRatio;
+    const physicalHeight = height * pixelRatio;
+    if (
+      !Number.isFinite(physicalWidth)
+      || !Number.isFinite(physicalHeight)
+      || physicalWidth > this.maxTextureSize
+      || physicalHeight > this.maxTextureSize
     ) return;
     this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(width, height);
-    this.uniforms.uResolution.value.set(width * pixelRatio, height * pixelRatio);
+    this.uniforms.uResolution.value.set(physicalWidth, physicalHeight);
     this.uniforms.uPixelRatio.value = pixelRatio;
   }
 
