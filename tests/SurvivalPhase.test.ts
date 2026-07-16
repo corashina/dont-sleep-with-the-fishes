@@ -1,6 +1,8 @@
+import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import { ITEM_IDS } from '../src/game/ItemState';
+import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
@@ -64,6 +66,35 @@ async function flushPromises(): Promise<void> {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it('renders survival through sceneRenderer with night and squall state', () => {
+    const scene = new Scene();
+    const render = vi.fn();
+    const sceneRenderer: SceneRenderer = { render, resize: vi.fn(), dispose: vi.fn() };
+    const current = snapshot({ state: 'nightEvent', weather: 'squall' });
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { scene, update: vi.fn(), dispose: vi.fn() },
+      ui: { render: vi.fn(), setJournalUnread: vi.fn(), dispose: vi.fn() },
+      sceneRenderer,
+    });
+
+    phase.start();
+    phase.update(7, 0.016);
+    phase.render();
+
+    expect(render).toHaveBeenLastCalledWith(
+      scene,
+      expect.any(PerspectiveCamera),
+      {
+        kind: 'survival',
+        elapsedSeconds: 7,
+        phase: 'night',
+        weather: 'squall',
+        reducedMotion: false,
+      },
+    );
+  });
+
   it('synchronizes inventory and projected anchors after renders, updates, and resize', () => {
     const current = snapshot();
     const syncInventory = vi.fn();
