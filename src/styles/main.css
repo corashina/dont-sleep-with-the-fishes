@@ -25,7 +25,7 @@ button { font: inherit; }
 canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .game-ui, .survival-ui { isolation: isolate; }
 .ui-treatment { position: absolute; inset: 0; z-index: 20; overflow: hidden; pointer-events: none; }
-.ui-treatment::before { content: ''; position: absolute; inset: -8%; background: radial-gradient(circle at 50% 44%, transparent 42%, #0506074d 72%, #020303e8 108%); }
+.ui-treatment::before { content: ''; position: absolute; inset: -8%; background: radial-gradient(circle at 50% 44%, transparent 55%, #02030326 100%); }
 .ui-treatment::after { content: ''; position: absolute; inset: 0; opacity: .16; background-image: repeating-radial-gradient(circle at 20% 30%, #f2ead71f 0 1px, transparent 1px 4px), repeating-linear-gradient(8deg, transparent 0 3px, #05060633 4px); mix-blend-mode: soft-light; }
 .ui-artwork { overflow: visible; fill: currentColor; stroke: var(--ink-outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke fill; filter: drop-shadow(2px 3px 0 #05060699); }
 .ui-artwork__shine { fill: none; stroke: #fff8; stroke-width: 3; paint-order: normal; }
