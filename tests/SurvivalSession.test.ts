@@ -782,6 +782,23 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().pendingEventTargetId).toBeNull();
   });
 
+  it('preserves Bait when submitted to a forced Snatcher event without a target', () => {
+    const session = new SurvivalSession(saved('baitTin'), {
+      seed: 19,
+      random: sequenceRandom([0]),
+      initialEventId: 'snatcher',
+    });
+
+    expect(session.snapshot()).toMatchObject({
+      pendingEventTargetId: null,
+      bait: 1,
+      recoveredBait: 1,
+    });
+    expect(session.resolveEvent('baitTin')).toMatchObject({ accepted: true, deltas: {} });
+    expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 1 });
+    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('usable');
+  });
+
   it('protects Fishing Net when Snatcher has no canonical target', () => {
     const session = new SurvivalSession(saved('fishingNet'), {
       seed: 19,

@@ -436,6 +436,25 @@ export function validateSurvivalEventCatalog(
     if (!Number.isInteger(eventEntry.cooldownDays) || eventEntry.cooldownDays < 0) {
       throw new Error(`${eventEntry.id} has an invalid cooldown`);
     }
+    if (Object.hasOwn(eventEntry, 'targetItemIds')) {
+      const candidateTargetItemIds: unknown = eventEntry.targetItemIds;
+      if (!Array.isArray(candidateTargetItemIds)) {
+        throw new Error(`${eventEntry.id} target item IDs must be an array`);
+      }
+      if (candidateTargetItemIds.length === 0) {
+        throw new Error(`${eventEntry.id} target item IDs are empty`);
+      }
+      const targetItemIds = new Set<ItemId>();
+      for (const candidateItemId of candidateTargetItemIds) {
+        if (!isItemId(candidateItemId)) {
+          throw new Error(`${eventEntry.id} target item IDs contain an unknown item`);
+        }
+        if (targetItemIds.has(candidateItemId)) {
+          throw new Error(`${eventEntry.id} target item ID ${candidateItemId} is duplicated`);
+        }
+        targetItemIds.add(candidateItemId);
+      }
+    }
     if (!Array.isArray(eventEntry.choices) || eventEntry.choices.length === 0) {
       throw new Error(`${eventEntry.id} choices are empty`);
     }
