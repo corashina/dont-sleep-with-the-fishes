@@ -568,9 +568,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   text-shadow: 1px 1px 0 var(--ink-outline);
   transform: translateX(-50%);
 }
-.pocket-watch [data-timer].is-critical { color: var(--ink-red); animation: watch-jolt .65s steps(2, end) infinite; }
-.game-ui[data-sinking-severity="danger"] [data-sinking] { color: var(--ink-red-bright); text-shadow: 2px 2px 0 var(--ink-outline), 0 0 12px #661411; }
-.game-ui[data-sinking-severity="critical"] [data-sinking] { color: #ff8a80; text-shadow: 2px 2px 0 var(--ink-outline), 0 0 14px #661411; }
+.pocket-watch [data-timer].is-critical { color: var(--ink-red-bright); animation: watch-jolt .65s steps(2, end) infinite; }
 .game-ui[data-sinking-severity="critical"] .ui-treatment::before { background: radial-gradient(circle at 50% 44%, transparent 30%, #30050580 64%, #020303f5 100%); animation: critical-vignette .8s steps(2, end) infinite; }
 .crosshair { width: 12px; height: 12px; border-color: #f2ead799; box-shadow: 0 0 12px var(--ink-outline); }
 .prompt { bottom: 82px; max-width: min(520px, calc(100vw - 48px)); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; text-align: center; }
