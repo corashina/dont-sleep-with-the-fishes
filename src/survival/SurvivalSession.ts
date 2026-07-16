@@ -208,8 +208,8 @@ export class SurvivalSession {
     }
 
     const phase = event.phase;
-    const resolved = resolveWeightedOutcome(choice, this.random);
     const before = this.resourceValues();
+    const resolved = resolveWeightedOutcome(choice, this.random);
     const inventoryMutations: JournalInventoryMutation[] = [];
     for (const effect of resolved.effects.resources ?? []) {
       inventoryMutations.push(...this.applyEventResource(effect));
@@ -228,7 +228,7 @@ export class SurvivalSession {
     this.pendingEventTargetId = null;
 
     const after = this.resourceValues();
-    const deltas = this.appliedResourceDelta(before, after, resolved.effects.resources ?? []);
+    const deltas = this.appliedResourceDelta(before, after);
     const cue = this.presentationCue(event.cue);
     const outcome: ActionOutcome = {
       accepted: true,
@@ -772,10 +772,12 @@ export class SurvivalSession {
   private appliedResourceDelta(
     before: Required<ResourceDelta>,
     after: Required<ResourceDelta>,
-    effects: readonly ResourceEffect[],
   ): ResourceDelta {
     const applied: ResourceDelta = {};
-    for (const { resource } of effects) applied[resource] = after[resource] - before[resource];
+    for (const key of Object.keys(before) as Array<keyof ResourceDelta>) {
+      const delta = after[key] - before[key];
+      if (delta !== 0) applied[key] = delta;
+    }
     return applied;
   }
 

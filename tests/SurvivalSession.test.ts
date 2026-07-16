@@ -620,4 +620,59 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('lost');
     expect(record.inventoryMutations).toEqual([{ kind: 'lose', instanceIds: ['bucket-1'] }]);
   });
+
+  it('reports Food lost through a concrete Snatcher target in the net outcome deltas', () => {
+    const session = new SurvivalSession(saved('cannedFood', 'fishingNet'), {
+      seed: 26, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
+    });
+    expect(session.snapshot()).toMatchObject({ food: 1, pendingEventTargetId: 'cannedFood-1' });
+
+    const outcome = session.resolveEvent('fishingNet');
+
+    expect(outcome.deltas).toEqual({ food: -1 });
+    expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
+    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('lost');
+  });
+
+  it('reports Bait lost through a concrete Snatcher target in the net outcome deltas', () => {
+    const session = new SurvivalSession(saved('baitTin', 'fishingNet'), {
+      seed: 27, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
+    });
+    expect(session.snapshot()).toMatchObject({ bait: 1, pendingEventTargetId: 'baitTin-1' });
+
+    const outcome = session.resolveEvent('fishingNet');
+
+    expect(outcome.deltas).toEqual({ bait: -1 });
+    expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
+    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('lost');
+  });
+
+  it('reports one net Food delta when an authored loss and target loss both change the aggregate', () => {
+    const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
+      seed: 28, random: sequenceRandom([0.99, 0]), initialEventId: 'snatcher',
+    });
+    expect(session.snapshot().pendingEventTargetId).toBe('cannedFood-2');
+    const combinedEvent: SurvivalEventDefinition = {
+      id: 'test-combined-food-loss', phase: 'day', title: 'Combined Loss', prompt: 'Choose.',
+      danger: 'dangerous', cue: 'impact', weight: 1, earliestDay: 1, cooldownDays: 0,
+      choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{
+        weight: 1,
+        message: 'Both food stores are gone.',
+        effects: {
+          resources: [{ resource: 'food', operation: 'subtract', value: 1 }],
+          items: [{ kind: 'loseEventTarget', quantity: 1 }],
+        },
+      }] }],
+    };
+    (session as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent = combinedEvent;
+
+    const outcome = session.resolveEvent(null);
+
+    expect(outcome.deltas).toEqual({ food: -2 });
+    expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
+    expect(session.snapshot().inventory).toMatchObject({
+      'cannedFood-1': { condition: 'consumed' },
+      'cannedFood-2': { condition: 'lost' },
+    });
+  });
 });
