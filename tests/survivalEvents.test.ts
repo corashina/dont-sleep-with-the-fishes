@@ -256,4 +256,54 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'flashlight')]; }, /not breakable/i);
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);
   });
+
+  it('rejects forbidden effect categories and non-exact effect object shapes', () => {
+    const rejectsEffects = (effects: unknown, expected: RegExp) => {
+      const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+      catalog[0].choices[0].outcomes[0].effects = effects;
+      expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
+    };
+    const rejectsResource = (effect: unknown, expected: RegExp) => {
+      const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+      catalog[0].choices[0].outcomes[1].effects.resources = [effect];
+      expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
+    };
+
+    rejectsEffects({ route: 'left' }, /unsupported effect key route/i);
+    rejectsEffects({ terminal: 'sunk' }, /unsupported effect key terminal/i);
+    rejectsEffects({ resources: undefined }, /resources.*array/i);
+    rejectsEffects({ items: undefined }, /items.*array/i);
+    rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
+    const hiddenRoute = {};
+    Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
+    rejectsEffects(hiddenRoute, /unsupported effect key route/i);
+    rejectsEffects(Object.create({ route: 'left' }), /effects.*plain object/i);
+    rejectsEffects([], /effects.*plain object/i);
+    const catalogWithOutcomeRoute = structuredClone(SURVIVAL_EVENTS) as any[];
+    catalogWithOutcomeRoute[0].choices[0].outcomes[0].route = 'left';
+    expect(() => validateSurvivalEventCatalog(catalogWithOutcomeRoute)).toThrow(/unsupported outcome key route/i);
+    rejectsResource({ resource: 'hull', operation: 'subtract' }, /resource effect.*missing.*value/i);
+    rejectsResource({ resource: 'hull', operation: 'subtract', value: 1, route: 'left' }, /unsupported resource effect key route/i);
+    rejectsResource({ resource: 'hull', operation: 'subtract', value: { min: 1, max: 2, step: 1 } }, /unsupported range key step/i);
+    rejectsResource(['hull', 'subtract', 1], /resource effect.*plain object/i);
+    rejectsResource(null, /resource effect.*plain object/i);
+  });
+
+  it('rejects hybrid, incomplete, excess, inherited, and non-object inventory mutations', () => {
+    const rejectsMutation = (mutation: unknown, expected: RegExp) => {
+      const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+      catalog[1].choices[0].outcomes[0].effects.items = [mutation];
+      expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
+    };
+
+    rejectsMutation({ kind: 'breakRandom', quantity: 1, itemId: 'bucket' }, /unsupported breakRandom mutation key itemId/i);
+    rejectsMutation({ kind: 'loseRandom', quantity: 1, resource: 'food' }, /unsupported loseRandom mutation key resource/i);
+    rejectsMutation({ kind: 'breakRandom' }, /breakRandom mutation.*missing.*quantity/i);
+    rejectsMutation({ kind: 'consume', quantity: 1 }, /consume mutation.*missing.*itemId/i);
+    rejectsMutation({ kind: 'break', itemId: 'bucket', quantity: 1, target: true }, /unsupported break mutation key target/i);
+    rejectsMutation({ kind: 'loseEventTarget', quantity: 1, itemId: 'map' }, /unsupported loseEventTarget mutation key itemId/i);
+    rejectsMutation(Object.assign(Object.create({ itemId: 'ductTape' }), { kind: 'consume', quantity: 1 }), /mutation.*plain object/i);
+    rejectsMutation(['consume', 'ductTape', 1], /mutation.*plain object/i);
+    rejectsMutation(null, /mutation.*plain object/i);
+  });
 });
