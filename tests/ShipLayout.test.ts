@@ -65,6 +65,63 @@ describe('scavenging ship layout', () => {
     expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
   });
 
+  it('authors the exact perimeter placement and surface catalog', () => {
+    expect(SHIP_LAYOUT.furniture.map(({ id, modelId, position }) => ({ id, modelId, position })))
+      .toEqual([
+        { id: 'cabin-bunk-port', modelId: 'bedBunk', position: [-3, 2.22, 7.9] },
+        { id: 'cabin-bunk-starboard', modelId: 'bedBunk', position: [3, 2.22, 7.9] },
+        { id: 'cabin-desk-aft', modelId: 'desk', position: [-1.8, 2.22, 4.05] },
+        { id: 'cabin-bookcase-forward', modelId: 'bookcaseOpen', position: [0, 2.22, 9.48] },
+        { id: 'helm-desk-forward', modelId: 'desk', position: [0, 2.22, 13.25] },
+        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [2.1, 2.22, 11.2] },
+        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.2, 2.22, 12] },
+        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.2, 2.22, 13.15] },
+        { id: 'workbench-port', modelId: 'table', position: [-2.55, 2.22, -9.78] },
+        { id: 'workbench-starboard', modelId: 'table', position: [2.55, 2.22, -9.78] },
+        { id: 'storage-shelf-port', modelId: 'bookcaseOpen', position: [-1.7, 2.22, -6.82] },
+        { id: 'storage-shelf-starboard', modelId: 'bookcaseOpen', position: [1.7, 2.22, -6.82] },
+        { id: 'cargo-rod-rack-forward-port', modelId: 'cargoRack', position: [-2.6, 2.22, 2.3] },
+        { id: 'cargo-crate-forward-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, 2.8] },
+        { id: 'cargo-crate-aft-port', modelId: 'cargoCrate', position: [-2.6, 2.22, -5.8] },
+        { id: 'cargo-crate-aft-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, -5.8] },
+      ]);
+    const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
+    expect(surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
+    expect(surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
+    expect(new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size).toBe(27);
+    const categoriesByFurniture = Object.fromEntries(SHIP_LAYOUT.furniture.map(({ id, surfaces }) => [
+      id,
+      [...new Set(surfaces.flatMap(({ categories }) => categories))].sort(),
+    ]));
+    expect(categoriesByFurniture['cabin-desk-aft']).toEqual(['provisions']);
+    expect(categoriesByFurniture['cabin-bookcase-forward']).toEqual(['provisions']);
+    expect(categoriesByFurniture['helm-desk-forward']).toEqual(['navigation']);
+    expect(categoriesByFurniture['chart-table-port']).toEqual(['navigation']);
+    expect(categoriesByFurniture['instrument-cabinet-starboard-aft']).toEqual(['navigation']);
+    expect(categoriesByFurniture['instrument-cabinet-starboard-forward']).toEqual(['navigation']);
+    expect(categoriesByFurniture['workbench-port']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['workbench-starboard']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['storage-shelf-port']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['storage-shelf-starboard']).toEqual(['deckGear', 'workshop']);
+    expect(categoriesByFurniture['cargo-rod-rack-forward-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-forward-starboard']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-aft-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-crate-aft-starboard']).toEqual(['deckGear']);
+  });
+
+  it('rejects the old blocked cabin exit and overlapping cargo arrangement by object id', () => {
+    const blocked = {
+      ...SHIP_LAYOUT,
+      furniture: [...SHIP_LAYOUT.furniture, {
+        id: 'old-port-bunk', modelId: 'bedBunk' as const, zoneId: 'crewCabin' as const,
+        position: [-3.18, 2.22, 5.4] as const, rotationY: 0 as const,
+        colliderSize: [1, 1.75, 2.18] as const,
+        scale: [1, 1, 1] as const, surfaces: [],
+      }],
+    };
+    expect(() => validateShipLayout(blocked)).toThrow(/old-port-bunk.*cabin-port-door/i);
+  });
+
   it('measures lane bounds instead of trusting a declared clearance', () => {
     const narrowed = {
       ...SHIP_LAYOUT,
@@ -179,7 +236,7 @@ describe('scavenging ship layout', () => {
         surfaces: [{
           id: surfaceId,
           physicalSlotId: surfaceId,
-          categories: ['foodWater' as const],
+          categories: ['provisions' as const],
           localPosition: [0, 1, 0] as const,
           localRotation: [0, 0, 0] as const,
           footprint: { width: 0.5, depth: 0.5 },

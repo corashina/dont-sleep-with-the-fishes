@@ -70,6 +70,24 @@ describe('model directory publication', () => {
     );
   }
 
+  function publishWithBackupCleanupFailure(
+    config: typeof publishers[number],
+    paths: Awaited<ReturnType<typeof preparePublisher>>,
+  ) {
+    const helperPath = resolve('scripts', 'item-model-publication.ps1');
+    const command = [
+      `. ${quotePowerShell(helperPath)}`,
+      '$script:originalCleanup = (Get-Command Remove-GuardedSwapDirectory -CommandType Function).ScriptBlock',
+      `function Remove-GuardedSwapDirectory { param([string]$ModelsRoot, [string]$Path, [string]$Prefix) if ([System.IO.Path]::GetFullPath($Path) -eq [System.IO.Path]::GetFullPath(${quotePowerShell(paths.backupRoot)})) { throw 'Injected backup cleanup failure' }; & $script:originalCleanup -ModelsRoot $ModelsRoot -Path $Path -Prefix $Prefix }`,
+      `${config.functionName} -ModelsRoot ${quotePowerShell(modelsRoot)} -OutputRoot ${quotePowerShell(paths.outputRoot)} -StagedRoot ${quotePowerShell(paths.stagedRoot)} -BackupRoot ${quotePowerShell(paths.backupRoot)}`,
+    ].join('; ');
+    return spawnSync(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+      { encoding: 'utf8' },
+    );
+  }
+
   async function expectPreviousDirectoryRestored(
     paths: Awaited<ReturnType<typeof preparePublisher>>,
   ) {
@@ -92,6 +110,15 @@ describe('model directory publication', () => {
     const result = publishWithRenameFailure(config, paths, 2);
 
     expect(result.status).toBe(1);
+    await expectPreviousDirectoryRestored(paths);
+  });
+
+  it.each(publishers)('$name wrapper restores the previous directory when backup cleanup fails', async (config) => {
+    const paths = await preparePublisher(config);
+    const result = publishWithBackupCleanupFailure(config, paths);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Injected backup cleanup failure');
     await expectPreviousDirectoryRestored(paths);
   });
 
@@ -158,5 +185,51 @@ describe('model directory publication', () => {
     expect(result.stderr).toContain('Refusing unsafe model swap path');
     expect(await readFile(join(paths.outputRoot, 'old.txt'), 'utf8')).toBe('old');
     expect(await readFile(join(unsafeStage, 'sentinel.txt'), 'utf8')).toBe('keep');
+  });
+
+  it('rejects duplicate filenames emitted by the two model builders', async () => {
+    const kenneyRoot = join(root, 'kenney-build');
+    const projectRoot = join(root, 'project-build');
+    const stagedRoot = join(modelsRoot, '.items-stage-duplicate');
+    await mkdir(kenneyRoot);
+    await mkdir(projectRoot);
+    await mkdir(stagedRoot);
+    await writeFile(join(kenneyRoot, 'shared.glb'), 'kenney');
+    await writeFile(join(projectRoot, 'shared.glb'), 'project');
+    const helperPath = resolve('scripts', 'item-model-publication.ps1');
+    const command = [
+      `. ${quotePowerShell(helperPath)}`,
+      `Copy-UniqueModelBuildOutputs -BuildRoots @(${quotePowerShell(kenneyRoot)}, ${quotePowerShell(projectRoot)}) -DestinationRoot ${quotePowerShell(stagedRoot)}`,
+    ].join('; ');
+
+    const result = spawnSync(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Duplicate generated item model output: shared.glb');
+  });
+
+  it('rejects a staged model directory with the wrong exact inventory', async () => {
+    const stagedRoot = join(modelsRoot, '.items-stage-inventory');
+    await mkdir(stagedRoot);
+    await writeFile(join(stagedRoot, 'approved.glb'), 'approved');
+    await writeFile(join(stagedRoot, 'unexpected.glb'), 'unexpected');
+    const helperPath = resolve('scripts', 'item-model-publication.ps1');
+    const command = [
+      `. ${quotePowerShell(helperPath)}`,
+      `Assert-ExactModelDirectory -Directory ${quotePowerShell(stagedRoot)} -ExpectedFiles @('approved.glb', 'metadata.json') -Description 'test inventory'`,
+    ].join('; ');
+
+    const result = spawnSync(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('test inventory');
   });
 });

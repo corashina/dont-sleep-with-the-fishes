@@ -1,21 +1,17 @@
 import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ItemId } from '../src/game/ItemState';
-import { ITEM_IDS } from '../src/game/ItemState';
+import type { ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
-import type { SurvivalInventory, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalInventorySnapshot, SurvivalItemState, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
-function inventory(overrides: Partial<Record<ItemId, Partial<SurvivalInventory[ItemId]>>> = {}): SurvivalInventory {
-  return Object.fromEntries(ITEM_IDS.map((id) => [id, {
-    owned: false,
-    charges: null,
-    durable: false,
-    ...overrides[id],
-  }])) as SurvivalInventory;
+function inventory(
+  overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
+): SurvivalInventorySnapshot {
+  return overrides;
 }
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
@@ -34,9 +30,11 @@ function completedEntry(
     kind: 'event',
     event: {
       phase: 'night', eventId: `night-${day}`, title: 'Quiet Night',
-      prompt: 'The night passed without incident.', attemptedItemId: null,
+      prompt: 'The night passed without incident.', attemptedChoiceId: null,
+      attemptedItemId: null,
       resolution: 'endure', outcomeCode: 'event-resolved',
       outcomeMessage: 'The night remained quiet.',
+      inventoryMutations: [],
     },
   },
 ): JournalEntry {
@@ -235,6 +233,122 @@ describe('SurvivalPhase orchestration', () => {
     expect(showJournal).not.toHaveBeenCalled();
   });
 
+  it('passes strict discriminated options through and selects the best hull repair resource', () => {
+    let current = snapshot({ bait: 1, repairMaterial: 1 });
+    const perform = vi.fn(() => ({ ...accepted(), accepted: false }));
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current), perform },
+      world: { dispose: vi.fn() },
+      ui: { showFeedback: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleAction('fish', { kind: 'fishing', useBait: true });
+    phase.handleAction('repair');
+    current = snapshot({
+      inventory: inventory({
+        'ductTape-1': { instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable' },
+      }),
+    });
+    phase.handleAction('repair');
+
+    expect(perform).toHaveBeenNthCalledWith(1, 'fish', { kind: 'fishing', useBait: true });
+    expect(perform).toHaveBeenNthCalledWith(2, 'repair', { kind: 'hullRepair', material: 'repairMaterial' });
+    expect(perform).toHaveBeenNthCalledWith(3, 'repair', { kind: 'hullRepair', material: 'ductTape' });
+  });
+
+  it('renders repair availability using the same selected resource as the command', () => {
+    const availableReason = vi.fn((_action: string, option?: unknown) => (
+      typeof option === 'object' && option !== null && 'kind' in option
+        ? null
+        : 'No repair material remains.'
+    ));
+    const render = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          inventory: inventory({
+            'ductTape-1': { instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable' },
+          }),
+        })),
+        availableReason,
+      },
+      world: { dispose: vi.fn() },
+      ui: { render, setJournalUnread: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.start();
+    const unavailable = render.mock.calls[0]![1];
+
+    expect(unavailable('repair')).toBeNull();
+    expect(availableReason).toHaveBeenLastCalledWith(
+      'repair',
+      { kind: 'hullRepair', material: 'ductTape' },
+    );
+  });
+
+  it('routes item and endure event commands through the same presentation lock', async () => {
+    const cue = deferred();
+    const resolveEvent = vi.fn(() => accepted({ code: 'event-resolved', cue: 'impact' }));
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ state: 'dayEvent' })), resolveEvent },
+      world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
+      ui: { hideEvent: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleEventItem('custom-event-choice');
+    phase.handleEndure();
+    expect(resolveEvent).toHaveBeenCalledOnce();
+    expect(resolveEvent).toHaveBeenCalledWith('custom-event-choice');
+
+    cue.resolve();
+    await flushPromises();
+    phase.handleEndure();
+    expect(resolveEvent).toHaveBeenLastCalledWith(null);
+  });
+
+  it('shows an ending once and restarts only through its callback', () => {
+    const restart = vi.fn();
+    const showEnding = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ state: 'sunk', day: 6, seed: 8 })) },
+      world: { update: vi.fn(), dispose: vi.fn() },
+      ui: { render: vi.fn(), showEnding, dispose: vi.fn() },
+      onRestart: restart,
+    });
+
+    phase.update(1, 0.016);
+    phase.update(2, 0.016);
+
+    expect(showEnding).toHaveBeenCalledOnce();
+    expect(showEnding).toHaveBeenCalledWith('sunk', 6, 8, expect.any(Number));
+    phase.requestRestart();
+    phase.requestRestart();
+    expect(restart).toHaveBeenCalledOnce();
+  });
+
+  it('shows a terminal daytime ending only after its cue completes', async () => {
+    let current = snapshot();
+    const cue = deferred();
+    const showEnding = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        perform: vi.fn(() => {
+          current = snapshot({ state: 'sunk', day: 4 });
+          return accepted({ code: 'boat-sunk', cue: 'sinking', deltas: { hull: -100 } });
+        }),
+      },
+      world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
+      ui: { showFeedback: vi.fn(), setBusy: vi.fn(), showEnding, render: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.handleAction('dive');
+    expect(showEnding).not.toHaveBeenCalled();
+    cue.resolve();
+    await flushPromises();
+    expect(showEnding).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['dayEvent', false],
     ['nightEvent', true],
@@ -308,37 +422,6 @@ describe('SurvivalPhase orchestration', () => {
     expect(beginDawn).not.toHaveBeenCalled();
   });
 
-  it('passes bait through and selects the best available repair resource', () => {
-    let current = snapshot({ bait: 1, repairMaterial: 1 });
-    const perform = vi.fn(() => ({ ...accepted(), accepted: false }));
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => current), perform }, world: { dispose: vi.fn() },
-      ui: { showFeedback: vi.fn(), dispose: vi.fn() },
-    });
-    phase.handleAction('fish', 'useBait');
-    phase.handleAction('repair');
-    current = snapshot({ inventory: inventory({ ductTape: { owned: true, charges: 1, durable: false } }) });
-    phase.handleAction('repair');
-    expect(perform).toHaveBeenNthCalledWith(1, 'fish', 'useBait');
-    expect(perform).toHaveBeenNthCalledWith(2, 'repair', 'repairMaterial');
-    expect(perform).toHaveBeenNthCalledWith(3, 'repair', 'ductTape');
-  });
-
-  it('renders repair availability using the same selected resource as the command', () => {
-    const availableReason = vi.fn((_action: string, option?: string) => option === 'ductTape' ? null : 'No material.');
-    const render = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => snapshot({ inventory: inventory({ ductTape: { owned: true, charges: 1 } }) })),
-        availableReason,
-      },
-      world: { dispose: vi.fn() }, ui: { render, setJournalUnread: vi.fn(), dispose: vi.fn() },
-    });
-    phase.start();
-    expect(render.mock.calls[0]![1]('repair')).toBeNull();
-    expect(availableReason).toHaveBeenLastCalledWith('repair', 'ductTape');
-  });
-
   it('pauses while hidden and requires the UI resume action before updates continue', () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
@@ -377,11 +460,14 @@ describe('SurvivalPhase orchestration', () => {
       session: { snapshot: vi.fn(() => snapshot()), perform },
       world: { setPointer, dispose: vi.fn() }, ui, onRestart: restart,
     });
-    (ui.onAction as (action: 'fish', option: 'useBait') => void)('fish', 'useBait');
+    (ui.onAction as (action: 'fish', option: { kind: 'fishing'; useBait: true }) => void)(
+      'fish',
+      { kind: 'fishing', useBait: true },
+    );
     (ui.onPointer as (x: number, y: number) => void)(0.25, -0.5);
     (ui.onPauseChange as (paused: boolean) => void)(true);
     (ui.onRestart as () => void)();
-    expect(perform).toHaveBeenCalledWith('fish', 'useBait');
+    expect(perform).toHaveBeenCalledWith('fish', { kind: 'fishing', useBait: true });
     expect(setPointer).toHaveBeenCalled();
     expect(restart).toHaveBeenCalledOnce();
     expect(ui).not.toHaveProperty('onContinue');

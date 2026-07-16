@@ -145,6 +145,7 @@ describe('SurvivalPhase focus synchronization', () => {
 
       expect(pause.classList).toContain('is-visible');
       expect(event.classList).toContain('is-visible');
+      expect(event.dataset.eventId).toBe('night-calm-fallback');
       expect(event.hasAttribute('inert')).toBe(true);
       expect(document.activeElement).toBe(resume);
 

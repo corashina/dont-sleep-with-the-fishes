@@ -57,6 +57,8 @@ import type {
   WeatherId,
 } from './survivalTypes';
 
+export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
+
 export function clampParallax(
   x: number,
   y: number,
@@ -99,6 +101,13 @@ interface ActiveSequence {
 interface SavedProp {
   instance: ItemInstance;
   prop: Object3D;
+  materials: readonly ConditionMaterialBinding[];
+}
+
+interface ConditionMaterialBinding {
+  readonly mesh: Mesh;
+  readonly usable: Material | Material[];
+  readonly broken: Material | Material[];
 }
 
 interface InteractionHighlightState {
@@ -117,17 +126,14 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
 
-function setPropDepleted(root: Object3D, depleted: boolean): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    const material = object.material;
-    const original = material.userData.originalColor as number | undefined
-      ?? material.color.getHex();
-    material.userData.originalColor = original;
-    material.color.setHex(original);
-    if (depleted) material.color.lerp(new Color(0x4f5756), 0.65);
-  });
-  root.userData.depleted = depleted;
+function brokenMaterial(material: Material): Material {
+  const clone = material.clone();
+  if (clone instanceof MeshStandardMaterial) {
+    clone.color.lerp(new Color(0x384243), 0.68);
+    clone.roughness = Math.max(0.82, clone.roughness);
+    clone.metalness *= 0.45;
+  }
+  return clone;
 }
 
 function setPropHighlighted(root: Object3D, highlighted: boolean): void {
@@ -234,20 +240,42 @@ export class BoatWorld {
     build.textures.forEach((texture) => this.ownedTextures.add(texture));
     savedItems.forEach((instance) => {
       const prop = createProp(propModels, instance);
+      const materials: ConditionMaterialBinding[] = [];
+      prop.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const usable = object.material;
+        const broken = Array.isArray(usable)
+          ? usable.map((material) => brokenMaterial(material))
+          : brokenMaterial(usable);
+        const brokenList = Array.isArray(broken) ? broken : [broken];
+        brokenList.forEach((material) => this.ownedMaterials.add(material));
+        materials.push({ mesh: object, usable, broken });
+      });
       const transform = boatStorageTransform(instance);
       prop.position.copy(transform.position);
       prop.rotation.copy(transform.rotation);
       prop.scale.setScalar(transform.scale);
       build.storageRoot.add(prop);
-      this.savedProps.push({ instance, prop });
+      this.savedProps.push({ instance, prop, materials });
       this.savedPropByInstanceId.set(instance.instanceId, prop);
       prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
+      prop.userData.condition = 'usable';
     });
 
     const repairPatch = this.boat.getObjectByName('damaged-plank-patch');
     if (repairPatch !== undefined) {
       this.fixedAnchors.push({ id: 'repair-patch', action: 'repair', target: repairPatch });
     }
+    const horizon = new Object3D();
+    horizon.name = 'horizon-anchor';
+    horizon.position.set(0, 1.15, -12);
+    this.boat.add(horizon);
+    this.fixedAnchors.push({ id: 'horizon', action: 'endDay', target: horizon });
+    const rest = new Object3D();
+    rest.name = 'rest-anchor';
+    rest.position.set(-0.45, -0.05, 0.85);
+    this.boat.add(rest);
+    this.fixedAnchors.push({ id: 'rest', action: 'rest', target: rest });
 
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
@@ -308,11 +336,18 @@ export class BoatWorld {
 
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
-    const syncedTypes = new Set<ItemId>();
-    this.savedProps.forEach(({ instance }) => {
-      if (syncedTypes.has(instance.type)) return;
-      syncedTypes.add(instance.type);
-      this.syncType(instance.type, snapshot);
+    this.savedProps.forEach(({ instance, prop, materials }) => {
+      const condition = snapshot.inventory[instance.instanceId]?.condition ?? 'lost';
+      const visible = condition === 'usable' || condition === 'broken';
+      prop.visible = visible;
+      prop.userData.condition = condition;
+      prop.userData.depleted = false;
+      prop.userData.remainingUses = condition === 'usable'
+        ? ITEM_DEFINITIONS[instance.type].charges
+        : 0;
+      materials.forEach(({ mesh, usable, broken }) => {
+        mesh.material = condition === 'broken' ? broken : usable;
+      });
     });
     if (this.highlightedItemId !== null) {
       const highlighted = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
@@ -349,10 +384,10 @@ export class BoatWorld {
       return {
         id: instance.instanceId,
         itemType: instance.type,
-        action: ACTION_FOR_ITEM[instance.type] ?? null,
+        action: prop.userData.condition === 'usable' ? ACTION_FOR_ITEM[instance.type] ?? null : null,
         ...point,
         visible: prop.visible && point.visible,
-        depleted: prop.userData.depleted === true,
+        depleted: false,
         remainingUses: prop.userData.remainingUses as number | null,
         hitArea: { width: hitWidth, height: hitHeight, depth },
       } satisfies BoatInteractionAnchor;
@@ -497,31 +532,6 @@ export class BoatWorld {
     mast.position.set(-0.7, 1.75, 0);
     this.distantVessel.add(hull, cabin, mast);
     this.distantVessel.visible = false;
-  }
-
-  private remainingUses(type: ItemId, snapshot: SurvivalSnapshot): number | null {
-    if (type === 'cannedFood') return snapshot.recoveredFood;
-    if (type === 'baitTin') return snapshot.recoveredBait;
-    return snapshot.inventory[type].charges;
-  }
-
-  private syncType(type: ItemId, snapshot: SurvivalSnapshot): void {
-    const instances = this.savedProps.filter((entry) => entry.instance.type === type);
-    const remaining = this.remainingUses(type, snapshot);
-    if (remaining === null) {
-      instances.forEach(({ prop }) => {
-        prop.userData.remainingUses = null;
-        setPropDepleted(prop, false);
-      });
-      return;
-    }
-    const perInstance = ITEM_DEFINITIONS[type].charges ?? 1;
-    instances.forEach(({ prop }, index) => {
-      const instanceUses = clamp(remaining - index * perInstance, 0, perInstance);
-      prop.userData.remainingUses = instanceUses;
-      prop.visible = type !== 'cannedFood' || instanceUses > 0;
-      setPropDepleted(prop, instanceUses <= 0);
-    });
   }
 
   private applyBasePresentation(): void {

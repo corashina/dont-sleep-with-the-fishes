@@ -34,26 +34,18 @@ async function writeFixture(path: string, name: string): Promise<void> {
 }
 
 const expectedTriangles = {
-  flareGun: 410,
   ductTape: 192,
   fishingRod: 376,
   baitTin: 154,
   medicalKit: 228,
-  waterJug: 96,
   cannedFood: 156,
   flashlight: 340,
   scubaSet: 688,
+  bucket: 68,
+  bottledPaper: 188,
 } as const;
 
 const expectedPacks = {
-  'blaster-kit': {
-    version: '2.1',
-    pageUrl: 'https://kenney.nl/assets/blaster-kit',
-    archiveUrl: 'https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip',
-    sha256: '91E3093E95427D59625E7E2CE2D0399B861600160FD0B4ADA7714796B67CEA8C',
-    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/blaster-n.glb'],
-  },
   'food-kit': {
     version: '2.0',
     pageUrl: 'https://kenney.nl/assets/food-kit',
@@ -68,7 +60,12 @@ const expectedPacks = {
     archiveUrl: 'https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip',
     sha256: 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-    requiredEntries: ['License.txt', 'Models/GLB format/Textures/colormap.png', 'Models/GLB format/bottle.glb'],
+    requiredEntries: [
+      'License.txt',
+      'Models/GLB format/Textures/colormap.png',
+      'Models/GLB format/bottle.glb',
+      'Models/GLB format/bucket.glb',
+    ],
   },
   'prototype-kit': {
     version: '1.0',
@@ -90,10 +87,6 @@ const expectedPacks = {
 } as const;
 
 const expectedRecipes = {
-  flareGun: {
-    kind: 'direct', pack: 'blaster-kit', entry: 'Models/GLB format/blaster-n.glb',
-    expectedTriangles: 410, scale: [1, 1, 1],
-  },
   ductTape: {
     kind: 'direct', pack: 'prototype-kit', entry: 'Models/GLB format/shape-hollow-cylinder-detailed.glb',
     expectedTriangles: 192, scale: [1, 0.35, 1],
@@ -115,10 +108,6 @@ const expectedRecipes = {
       { name: 'cross-vertical', pack: 'prototype-kit', entry: 'Models/GLB format/shape-cube-half.glb', translation: [0, 0.15, 0.17], scale: [0.12, 0.8, 0.04], color: [1, 1, 1, 1], rotation: [0, 0, 0, 1] },
       { name: 'cross-horizontal', pack: 'prototype-kit', entry: 'Models/GLB format/shape-cube-half.glb', translation: [0, 0.29, 0.17], scale: [0.4, 0.24, 0.04], color: [1, 1, 1, 1], rotation: [0, 0, 0, 1] },
     ],
-  },
-  waterJug: {
-    kind: 'direct', pack: 'survival-kit', entry: 'Models/GLB format/bottle.glb',
-    expectedTriangles: 96, scale: [1, 1, 1],
   },
   cannedFood: {
     kind: 'direct', pack: 'food-kit', entry: 'Models/GLB format/can.glb',
@@ -142,22 +131,29 @@ const expectedRecipes = {
       { name: 'regulator', pack: 'prototype-kit', entry: 'Models/GLB format/shape-hollow-cylinder-half-detailed.glb', translation: [0, 1.05, 0.18], scale: [0.14, 0.12, 0.14], color: [0.12, 0.18, 0.22, 1], rotation: [0, 0, 0, 1] },
     ],
   },
+  bucket: {
+    kind: 'direct', pack: 'survival-kit', entry: 'Models/GLB format/bucket.glb',
+    expectedTriangles: 68, scale: [1, 1, 1],
+  },
+  bottledPaper: {
+    kind: 'composite', expectedTriangles: 188, parts: [
+      { name: 'bottle', pack: 'survival-kit', entry: 'Models/GLB format/bottle.glb', translation: [0, 0, 0], scale: [1, 1, 1], color: [1, 1, 1, 1], rotation: [0, 0, 0, 1] },
+      { name: 'rolled-note', pack: 'prototype-kit', entry: 'Models/GLB format/shape-cylinder-detailed.glb', translation: [0, 0.02, 0], scale: [0.12, 0.52, 0.12], color: [0.80, 0.73, 0.55, 1], rotation: [0, 0, 0, 1] },
+    ],
+  },
 } as const;
 
 describe('Kenney item model catalog', () => {
-  it('pins four official CC0 packs and nine deterministic recipes', () => {
+  it('pins three official CC0 packs and the exact nine deterministic recipes', () => {
     expect(Object.isFrozen(KENNEY_PACKS)).toBe(true);
     expect(Object.isFrozen(KENNEY_ITEM_RECIPES)).toBe(true);
     expect(KENNEY_PACKS).toEqual(expectedPacks);
     expect(KENNEY_ITEM_RECIPES).toEqual(expectedRecipes);
     expect(Object.keys(KENNEY_PACKS).sort()).toEqual([
-      'blaster-kit', 'food-kit', 'prototype-kit', 'survival-kit',
+      'food-kit', 'prototype-kit', 'survival-kit',
     ]);
     expect(Object.keys(KENNEY_ITEM_RECIPES).sort()).toEqual(
       Object.keys(expectedTriangles).sort(),
-    );
-    expect(KENNEY_PACKS['blaster-kit']!.sha256).toBe(
-      '91E3093E95427D59625E7E2CE2D0399B861600160FD0B4ADA7714796B67CEA8C',
     );
     expect(KENNEY_PACKS['food-kit']!.sha256).toBe(
       'CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7C6F6F',
@@ -173,7 +169,9 @@ describe('Kenney item model catalog', () => {
         expectedTriangles[id as keyof typeof expectedTriangles],
       );
     }
-    expect(Object.values(expectedTriangles).reduce((sum, value) => sum + value, 0)).toBe(2_640);
+    expect(Object.values(expectedTriangles).reduce((sum, value) => sum + value, 0)).toBe(2_390);
+    expect(JSON.stringify({ packs: KENNEY_PACKS, recipes: KENNEY_ITEM_RECIPES }))
+      .not.toMatch(/blaster-n|blaster-kit|waterJug/);
   });
 });
 

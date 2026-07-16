@@ -43,6 +43,17 @@ const HULL_STATIONS = [
   { z: 3.00, halfWidth: 0.34 },
 ] as const;
 
+export function lifeboatHullHalfWidthAt(z: number): number | null {
+  for (let index = 0; index < HULL_STATIONS.length - 1; index += 1) {
+    const first = HULL_STATIONS[index]!;
+    const second = HULL_STATIONS[index + 1]!;
+    if (z < first.z || z > second.z) continue;
+    const progress = (z - first.z) / (second.z - first.z);
+    return first.halfWidth + (second.halfWidth - first.halfWidth) * progress;
+  }
+  return null;
+}
+
 const FLOOR_EDGE_INSET = 0.06;
 const FLOOR_HEIGHT = -0.38;
 

@@ -53,7 +53,7 @@ describe('chooseContextAction', () => {
       carriedItem: item('cannedFood-1', 'cannedFood'),
       remainingCapacity: 2,
       nearEvacuation: false,
-    })).toEqual({ type: 'capacityFull', prompt: 'SCUBA SET WEIGHS 3 — 2 CAPACITY FREE' });
+    })).toEqual({ type: 'capacityFull', prompt: 'SCUBA GEAR WEIGHS 3 — 2 CAPACITY FREE' });
   });
 
   it('offers another pickup when the target fits the remaining capacity', () => {
@@ -99,15 +99,15 @@ describe('chooseContextAction', () => {
   });
 
   it('prioritizes a targeted lifeboat over mixed evacuation and drop inputs', () => {
-    const waterJug = item('waterJug-1', 'waterJug');
+    const umbrella = item('umbrella-1', 'umbrella');
     expect(chooseContextAction({
       target: 'lifeboat',
       targetItem: item('flareGun-1', 'flareGun'),
-      carriedItem: waterJug,
+      carriedItem: umbrella,
       remainingCapacity: 1,
       nearEvacuation: true,
     })).toEqual({
-      type: 'throwToBoat', item: waterJug, prompt: 'LEFT CLICK — THROW WATER BOTTLE TO LIFEBOAT',
+      type: 'throwToBoat', item: umbrella, prompt: 'LEFT CLICK — THROW UMBRELLA TO LIFEBOAT',
     });
   });
 });
@@ -344,7 +344,7 @@ describe('CarryController', () => {
       new Vector3(10.35, 1.35, -3.78),
     );
 
-    carry.pickUp({ instanceId: 'waterJug-1', type: 'waterJug' }, object);
+    carry.pickUp({ instanceId: 'umbrella-1', type: 'umbrella' }, object);
     carry.throw();
     for (let frame = 0; frame < 120 && carry.flightActive; frame += 1) {
       carry.update(1 / 60, lifeboatBox, () => -100, {
@@ -354,7 +354,7 @@ describe('CarryController', () => {
       });
     }
 
-    expect(outcomes).toEqual(['saved:waterJug-1']);
+    expect(outcomes).toEqual(['saved:umbrella-1']);
   });
 
   it('detects a lifeboat hit across a large delta and reports it once', () => {
@@ -397,8 +397,8 @@ describe('CarryController', () => {
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
 
-    carry.pickUp({ instanceId: 'waterJug-1', type: 'waterJug' }, item);
-    expect(carry.drop()).toBe('waterJug-1');
+    carry.pickUp({ instanceId: 'umbrella-1', type: 'umbrella' }, item);
+    expect(carry.drop()).toBe('umbrella-1');
     carry.update(
       1,
       new Box3(new Vector3(20, 20, 20), new Vector3(21, 21, 21)),
@@ -410,7 +410,7 @@ describe('CarryController', () => {
       },
     );
 
-    expect(outcomes).toEqual(['lost:waterJug-1']);
+    expect(outcomes).toEqual(['lost:umbrella-1']);
     expect(carry.busy).toBe(false);
   });
 

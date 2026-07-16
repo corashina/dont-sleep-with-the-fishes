@@ -51,14 +51,17 @@ describe('ScavengeSession', () => {
       .toEqual(['cannedFood-1', 'ductTape-1', 'flashlight-1']);
   });
 
-  it('rejects a heavy item unless the full capacity is free', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.pickUp('cannedFood-1');
-    expect(session.pickUp('scubaSet-1')).toBe(false);
-    expect(session.dropCarried()?.instanceId).toBe('cannedFood-1');
-    expect(session.pickUp('scubaSet-1')).toBe(true);
-  });
+  it.each(['scubaSet-1', 'anchor-1'] as const)(
+    'rejects %s unless the full capacity is free',
+    (instanceId) => {
+      const session = new ScavengeSession();
+      session.start();
+      session.pickUp('cannedFood-1');
+      expect(session.pickUp(instanceId)).toBe(false);
+      expect(session.dropCarried()?.instanceId).toBe('cannedFood-1');
+      expect(session.pickUp(instanceId)).toBe(true);
+    },
+  );
 
   it('saves duplicate instances without a boat limit', () => {
     const session = new ScavengeSession();
@@ -70,14 +73,14 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().savedCount).toBe(3);
   });
 
-  it('keeps a legacy type status pinned to its first world instance', () => {
+  it('keys snapshot items only by physical instance ID', () => {
     const session = new ScavengeSession();
     session.start();
-    session.pickUp('ductTape');
+    session.pickUp('ductTape-1');
     session.saveCarried();
 
-    expect(session.snapshot().items.ductTape).toBe('saved');
-    expect(session.snapshot().items['ductTape-2']!.status).toBe('available');
+    expect(session.snapshot().items['ductTape-1']!.status).toBe('saved');
+    expect(session.snapshot().items).not.toHaveProperty('ductTape');
   });
 
   it('releases carried instances in LIFO order for every transition', () => {
@@ -167,7 +170,7 @@ describe('ScavengeSession', () => {
     session.start();
     session.pickUp('flareGun-1');
     session.saveCarried();
-    session.pickUp('waterJug-1');
+    session.pickUp('bucket-1');
     session.dropCarried();
     session.tick(12);
     session.evacuate();
@@ -181,8 +184,8 @@ describe('ScavengeSession', () => {
     expect(Object.isFrozen(result.savedItems)).toBe(true);
     expect(Object.isFrozen(result.savedItems[0])).toBe(true);
     expect(() => (result.savedItems as ItemInstance[]).push({
-      instanceId: 'waterJug-1',
-      type: 'waterJug',
+      instanceId: 'bucket-1',
+      type: 'bucket',
     })).toThrow();
   });
 
