@@ -5,7 +5,7 @@ import type { ItemInstance } from '../src/game/ItemState';
 import type { BoatInteractionAnchor } from '../src/survival/BoatInteraction';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { sequenceRandom } from '../src/survival/random';
+import { sequenceRandom } from './helpers/random';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 

@@ -15,6 +15,7 @@ import {
   type ShipFurnitureAssetId,
   type ShipFurnitureModelSpec,
 } from './shipFurnitureManifest';
+import { collectMeshResources, disposeResourceSets } from './SceneResources';
 
 export interface ShipFurnitureModelLoader {
   load(url: string): Promise<Group>;
@@ -133,24 +134,25 @@ function materialTextures(material: Material): readonly Texture[] {
   return Object.values(material).filter((value): value is Texture => value instanceof Texture);
 }
 
+function attemptCleanup(action: () => void): void {
+  try {
+    action();
+  } catch {
+    // Load rollback preserves the primary load or validation error.
+  }
+}
+
 function disposeRoots(roots: Iterable<Group>): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   const textures = new Set<Texture>();
   for (const root of roots) {
-    root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-      meshMaterials.forEach((material) => {
-        materials.add(material);
-        materialTextures(material).forEach((texture) => textures.add(texture));
-      });
-    });
+    collectMeshResources(root, geometries, materials);
   }
-  geometries.forEach((geometry) => geometry.dispose());
-  textures.forEach((texture) => texture.dispose());
-  materials.forEach((material) => material.dispose());
+  materials.forEach((material) => {
+    materialTextures(material).forEach((texture) => textures.add(texture));
+  });
+  disposeResourceSets(geometries, textures, materials);
 }
 
 interface LoadedTemplate {
@@ -183,9 +185,11 @@ export class ShipFurnitureLibrary {
 
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
-      disposeRoots(loadedRoots.filter((root): root is Group => root !== undefined));
       const modelId = SHIP_FURNITURE_MODEL_IDS[firstFailureIndex]!;
       const cause = (results[firstFailureIndex] as PromiseRejectedResult).reason;
+      attemptCleanup(() => {
+        disposeRoots(loadedRoots.filter((root): root is Group => root !== undefined));
+      });
       if (cause instanceof ShipFurnitureLoadError && cause.modelId === modelId) throw cause;
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new ShipFurnitureLoadError(modelId, message, { cause });
@@ -198,11 +202,14 @@ export class ShipFurnitureLibrary {
     for (let index = 0; index < loaded.length; index += 1) {
       aggregateTriangles += loaded[index]!.triangles;
       if (aggregateTriangles > SHIP_FURNITURE_MAX_TOTAL_TRIANGLES) {
-        disposeRoots(loadedRoots.filter((root): root is Group => root !== undefined));
-        throw new ShipFurnitureLoadError(
+        const error = new ShipFurnitureLoadError(
           SHIP_FURNITURE_MODEL_IDS[index]!,
           `aggregate triangle count ${aggregateTriangles} exceeds the ${SHIP_FURNITURE_MAX_TOTAL_TRIANGLES} limit`,
         );
+        attemptCleanup(() => {
+          disposeRoots(loadedRoots.filter((root): root is Group => root !== undefined));
+        });
+        throw error;
       }
     }
 

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BufferAttribute,
+  BufferGeometry,
   FogExp2,
+  Group,
   Matrix4,
   Material,
   Mesh,
@@ -22,6 +24,7 @@ import {
 } from '../src/game/ItemState';
 import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
 import { boatStorageTransform } from '../src/world/BoatStorage';
+import { collectMeshResources } from '../src/world/SceneResources';
 import { createSurvivalInventory } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import {
@@ -298,23 +301,204 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('disposes bow-spray geometry and material once across repeated world disposal', () => {
+  it('disposes owned survival resources once', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
+      [savedItem('medicalKit')],
     );
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    collectMeshResources(world.scene, geometries, materials);
     const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
-    const geometryDispose = vi.spyOn(spray.geometry, 'dispose');
-    const materialDispose = vi.spyOn(spray.material as Material, 'dispose');
+    geometries.add(spray.geometry);
+    materials.add(spray.material as Material);
+    const textures = new Set<Texture>();
+    materials.forEach((material) => {
+      Object.values(material).forEach((value) => {
+        if (value instanceof Texture) textures.add(value);
+      });
+    });
+    const spies = [
+      ...[...geometries].map((resource) => vi.spyOn(resource, 'dispose')),
+      ...[...materials].map((resource) => vi.spyOn(resource, 'dispose')),
+      ...[...textures].map((resource) => vi.spyOn(resource, 'dispose')),
+    ];
 
     world.dispose();
     world.dispose();
 
+    spies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('medicalKit')],
+    );
+    const propMesh = firstMesh(world.scene.getObjectByName('prop:medicalKit-1')!);
+    const lifeboatMaterials = new Set<Material>();
+    collectMeshResources(
+      world.scene.getObjectByName('lifeboat')!,
+      new Set<BufferGeometry>(),
+      lifeboatMaterials,
+    );
+    const textures = new Set<Texture>();
+    lifeboatMaterials.forEach((material) => {
+      Object.values(material).forEach((value) => {
+        if (value instanceof Texture) textures.add(value);
+      });
+    });
+    const texture = textures.values().next().value!;
+    expect(texture).toBeInstanceOf(Texture);
+    const firstError = new Error('boat geometry disposal failed');
+    const laterError = new Error('boat material disposal failed');
+    const geometryDispose = vi.spyOn(propMesh.geometry, 'dispose').mockImplementation(() => {
+      throw firstError;
+    });
+    const material = Array.isArray(propMesh.material) ? propMesh.material[0]! : propMesh.material;
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      throw laterError;
+    });
+    const textureDispose = vi.spyOn(texture, 'dispose');
+
+    expect(() => world.dispose()).toThrow(firstError);
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+    expect(() => world.dispose()).not.toThrow();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+
+    propModels.dispose();
+  });
+
+  it('continues every owner and camera cleanup step after early failures', () => {
+    const originalParent = new Group();
+    const camera = new PerspectiveCamera();
+    camera.position.set(4, 5, 6);
+    camera.rotation.set(0.2, -0.3, 0.1);
+    originalParent.add(camera);
+    const originalPosition = camera.position.clone();
+    const originalQuaternion = camera.quaternion.clone();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('medicalKit')],
+    );
+    const internals = world as unknown as {
+      ocean: { dispose(): void };
+      spray: { dispose(): void };
+      sky: { dispose(): void };
+      ownedGeometries: Set<BufferGeometry>;
+      ownedMaterials: Set<Material>;
+      ownedTextures: Set<Texture>;
+    };
+    const geometry = internals.ownedGeometries.values().next().value!;
+    const material = internals.ownedMaterials.values().next().value!;
+    const texture = internals.ownedTextures.values().next().value!;
+    const firstError = new Error('survival ocean cleanup failed');
+    const laterSkyError = new Error('survival sky cleanup failed');
+    const laterCameraError = new Error('camera detach cleanup failed');
+    const calls: string[] = [];
+    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
+    const oceanDispose = vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+      calls.push('ocean');
+      originalOceanDispose();
+      throw firstError;
+    });
+    const originalSprayDispose = internals.spray.dispose.bind(internals.spray);
+    const sprayDispose = vi.spyOn(internals.spray, 'dispose').mockImplementation(() => {
+      calls.push('spray');
+      originalSprayDispose();
+    });
+    const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
+    const skyDispose = vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+      originalSkyDispose();
+      throw laterSkyError;
+    });
+    const originalSceneRemove = world.scene.remove.bind(world.scene);
+    let ownerSceneRemoveCalls = 0;
+    const sceneRemove = vi.spyOn(world.scene, 'remove')
+      .mockImplementation((...objects: Object3D[]) => {
+        if (objects.length > 1 && objects.some(({ name }) => name === 'boat-motion-rig')) {
+          ownerSceneRemoveCalls += 1;
+          calls.push('scene');
+        }
+        return originalSceneRemove(...objects);
+      });
+    const originalCameraRemove = camera.removeFromParent.bind(camera);
+    let injectCameraFailure = true;
+    const cameraRemove = vi.spyOn(camera, 'removeFromParent').mockImplementation(() => {
+      const result = originalCameraRemove();
+      if (injectCameraFailure) {
+        injectCameraFailure = false;
+        calls.push('camera');
+        throw laterCameraError;
+      }
+      return result;
+    });
+    const originalGeometryDispose = geometry.dispose.bind(geometry);
+    const geometryDispose = vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+      calls.push('geometry');
+      originalGeometryDispose();
+    });
+    const originalMaterialDispose = material.dispose.bind(material);
+    const materialDispose = vi.spyOn(material, 'dispose').mockImplementation(() => {
+      calls.push('material');
+      originalMaterialDispose();
+    });
+    const originalTextureDispose = texture.dispose.bind(texture);
+    const textureDispose = vi.spyOn(texture, 'dispose').mockImplementation(() => {
+      calls.push('texture');
+      originalTextureDispose();
+    });
+
+    expect(() => world.dispose()).toThrow(firstError);
+
+    expect(calls).toEqual([
+      'ocean',
+      'spray',
+      'sky',
+      'scene',
+      'camera',
+      'geometry',
+      'material',
+      'texture',
+    ]);
+    expect(world.scene.children).toEqual([]);
+    expect(camera.parent).toBe(originalParent);
+    expect(camera.position.toArray()).toEqual(originalPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(originalQuaternion.toArray());
+    expect(internals.ownedGeometries.size).toBe(0);
+    expect(internals.ownedMaterials.size).toBe(0);
+    expect(internals.ownedTextures.size).toBe(0);
+    expect(() => world.dispose()).not.toThrow();
+    [
+      oceanDispose,
+      sprayDispose,
+      skyDispose,
+      geometryDispose,
+      materialDispose,
+      textureDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(sceneRemove).toHaveBeenCalled();
+    expect(ownerSceneRemoveCalls).toBe(1);
+    expect(cameraRemove).toHaveBeenCalledTimes(2);
+
     propModels.dispose();
   });
 
@@ -348,67 +532,6 @@ describe('BoatWorld helpers', () => {
       world?.dispose();
       propModels.dispose();
     }
-  });
-
-  it('disposes each survival boat texture exactly once', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [],
-    );
-    const seen = new Set<Texture>();
-    world.scene.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      const assigned = Array.isArray(object.material) ? object.material : [object.material];
-      assigned.forEach((material) => {
-        if (!(material instanceof MeshStandardMaterial)) return;
-        for (const texture of [material.map, material.roughnessMap]) {
-          if (texture && !seen.has(texture)) {
-            seen.add(texture);
-          }
-        }
-      });
-    });
-    expect(seen.size).toBe(6);
-    const textureSpies = [...seen].map((texture) => vi.spyOn(texture, 'dispose'));
-    world.dispose();
-    world.dispose();
-    textureSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
-    propModels.dispose();
-  });
-
-  it('disposes every unique survival boat geometry and material exactly once', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [],
-    );
-    const boat = world.scene.getObjectByName('lifeboat')!;
-    const geometries = new Set<Mesh['geometry']>();
-    const materials = new Set<Material>();
-    boat.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      const assigned = Array.isArray(object.material) ? object.material : [object.material];
-      assigned.forEach((material) => materials.add(material));
-    });
-    expect(geometries.size).toBeGreaterThan(0);
-    expect(materials.size).toBeGreaterThan(0);
-    const geometrySpies = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'));
-    const materialSpies = [...materials].map((material) => vi.spyOn(material, 'dispose'));
-
-    world.dispose();
-    world.dispose();
-
-    geometrySpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
-    materialSpies.forEach((spy) => expect(spy).toHaveBeenCalledOnce());
-    propModels.dispose();
   });
 
   it('keeps every visible actionable anchor clear of the fixed repair anchor', async () => {
@@ -742,25 +865,4 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('disposes saved prop geometry and material exactly once', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [savedItem('medicalKit')],
-    );
-    const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
-    const mesh = firstMesh(prop);
-    const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
-    const disposeMaterial = vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose');
-
-    world.dispose();
-    world.dispose();
-
-    expect(disposeGeometry).toHaveBeenCalledOnce();
-    expect(disposeMaterial).toHaveBeenCalledOnce();
-    propModels.dispose();
-  });
 });

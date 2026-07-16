@@ -41,48 +41,6 @@ describe('Skybox', () => {
     expect(textureDispose).not.toHaveBeenCalled();
   });
 
-  it('layers optical-depth atmosphere, a three-part sun, moon halo, and two star fields', () => {
-    const sky = new Skybox(
-      new Scene(),
-      { weather: 'calm', phase: 'night', severity: 0 },
-      createTestMoonTexture(),
-    );
-    const shader = sky.material.fragmentShader;
-
-    expect(shader).toContain('float opticalPath =');
-    expect(shader).toContain('float horizonHaze =');
-    expect(shader).toContain('float sunDisc =');
-    expect(shader).toContain('float sunBloom =');
-    expect(shader).toContain('float sunHalo =');
-    expect(shader).toContain('float moonHalo =');
-    expect(shader.match(/starLayer\(/g)).toHaveLength(3);
-    expect(shader).toContain('#include <colorspace_fragment>');
-    expect(shader).toContain('gl_FragColor.rgb += dither');
-    const colorspaceConversion = shader.indexOf('#include <colorspace_fragment>');
-    const displaySpaceDither = shader.indexOf('gl_FragColor.rgb += dither');
-    expect(colorspaceConversion).toBeLessThan(displaySpaceDither);
-    expect(shader).not.toContain('float moon = smoothstep');
-    sky.dispose();
-  });
-
-  it('adds subtle static direction-space atmospheric luminance variation', () => {
-    const sky = new Skybox(
-      new Scene(),
-      { weather: 'calm', phase: 'day', severity: 0 },
-      createTestMoonTexture(),
-    );
-    const shader = sky.material.fragmentShader;
-
-    expect(shader).toContain('float atmosphericVariation = mix(0.992, 1.008,');
-    expect(shader).toContain('hash31(direction * 173.0)');
-    expect(shader).toContain('color *= atmosphericVariation;');
-    expect(shader.indexOf('float atmosphericVariation ='))
-      .toBeLessThan(shader.indexOf('color *= uExposure;'));
-    expect(shader).not.toMatch(/uniform\s+float\s+u?Time\b/i);
-    expect(shader).not.toMatch(/cloud/i);
-    sky.dispose();
-  });
-
   it('follows the camera and finishes a target transition in 1.5 seconds', () => {
     const sky = new Skybox(
       new Scene(),

@@ -14,6 +14,7 @@ import {
   ITEM_MODEL_SPECS,
   type ItemModelSpec,
 } from './itemModelManifest';
+import { collectMeshResources, disposeMeshResources } from './SceneResources';
 
 export interface ItemModelLoader {
   load(url: string): Promise<Group>;
@@ -47,16 +48,18 @@ function disposeRoots(roots: Iterable<Group>): void {
   const materials = new Set<Material>();
 
   for (const root of roots) {
-    root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-      meshMaterials.forEach((material) => materials.add(material));
-    });
+    collectMeshResources(root, geometries, materials);
   }
 
-  geometries.forEach((geometry) => geometry.dispose());
-  materials.forEach((material) => material.dispose());
+  disposeMeshResources(geometries, materials);
+}
+
+function attemptCleanup(action: () => void): void {
+  try {
+    action();
+  } catch {
+    // Load rollback preserves the primary load or validation error.
+  }
 }
 
 function ledgerCells(line: string): readonly string[] | null {
@@ -230,7 +233,7 @@ export class PropModelLibrary {
         template.add(root);
         return { root: template, triangles };
       } catch (error) {
-        disposeRoots([root]);
+        attemptCleanup(() => disposeRoots([root]));
         throw error;
       }
     }));
@@ -238,10 +241,10 @@ export class PropModelLibrary {
     const fulfilledRoots = results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []);
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
-      disposeRoots(fulfilledRoots);
       const id = ITEM_IDS[firstFailureIndex]!;
       const rejected = results[firstFailureIndex] as PromiseRejectedResult;
       const cause = rejected.reason;
+      attemptCleanup(() => disposeRoots(fulfilledRoots));
       if (cause instanceof ItemModelLoadError && cause.itemId === id) throw cause;
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new ItemModelLoadError(id, message, { cause });
@@ -252,11 +255,12 @@ export class PropModelLibrary {
     for (let index = 0; index < loaded.length; index += 1) {
       aggregateTriangles += loaded[index]!.triangles;
       if (aggregateTriangles > ITEM_MODEL_MAX_TOTAL_TRIANGLES) {
-        disposeRoots(fulfilledRoots);
-        throw new ItemModelLoadError(
+        const error = new ItemModelLoadError(
           ITEM_IDS[index]!,
           `aggregate triangle count ${aggregateTriangles} exceeds the ${ITEM_MODEL_MAX_TOTAL_TRIANGLES} limit`,
         );
+        attemptCleanup(() => disposeRoots(fulfilledRoots));
+        throw error;
       }
     }
 

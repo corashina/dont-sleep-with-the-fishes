@@ -60,39 +60,3 @@ export function advanceTerminalPresentation(
     ? { phase: 'result', remainingSeconds: 0 }
     : { phase: 'failureSequence', remainingSeconds };
 }
-
-export interface GameLifecycleActions {
-  cancelAnimation: () => void;
-  removeGlobalListeners: () => void;
-  exitPointerLock: () => void;
-  resetCarry: () => void;
-  disposeInput: () => void;
-  disposeInteraction: () => void;
-  disposeWorld: () => void;
-  disposeUI: () => void;
-  disposeRenderer: () => void;
-  removeCanvas: () => void;
-}
-
-export class GameLifecycle {
-  private disposed = false;
-
-  get isDisposed(): boolean {
-    return this.disposed;
-  }
-
-  dispose(ownsPointerLock: boolean, actions: GameLifecycleActions): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    actions.cancelAnimation();
-    actions.removeGlobalListeners();
-    if (ownsPointerLock) actions.exitPointerLock();
-    actions.resetCarry();
-    actions.disposeInput();
-    actions.disposeInteraction();
-    actions.disposeWorld();
-    actions.disposeUI();
-    actions.disposeRenderer();
-    actions.removeCanvas();
-  }
-}

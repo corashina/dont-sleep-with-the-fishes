@@ -29,6 +29,11 @@ import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  runCleanupSteps,
+} from '../world/SceneResources';
 import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
@@ -51,8 +56,6 @@ import type {
   SurvivalSnapshot,
   WeatherId,
 } from './survivalTypes';
-
-export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
 
 export function clampParallax(
   x: number,
@@ -113,19 +116,6 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
-
-function collectResources(
-  root: Object3D,
-  geometries: Set<BufferGeometry>,
-  materials: Set<Material>,
-): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    geometries.add(object.geometry);
-    const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
-    meshMaterials.forEach((material) => materials.add(material));
-  });
-}
 
 function setPropDepleted(root: Object3D, depleted: boolean): void {
   root.traverse((object) => {
@@ -294,8 +284,8 @@ export class BoatWorld {
       this.key.target,
       this.distantVessel,
     );
-    collectResources(this.boat, this.ownedGeometries, this.ownedMaterials);
-    collectResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
+    collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+    collectMeshResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
     this.applyBasePresentation();
   }
 
@@ -465,31 +455,32 @@ export class BoatWorld {
 
   dispose(): void {
     if (this.disposed) return;
-    this.setHighlightedItem(null);
-    this.disposed = true;
-    this.cancelActiveSequence();
-    this.ocean.dispose();
-    this.spray.dispose();
-    this.sky.dispose();
-    this.scene.remove(
-      this.motionRig,
-      this.ocean.mesh,
-      this.spray.points,
-      this.ambient,
-      this.key,
-      this.key.target,
-      this.distantVessel,
-    );
-    this.camera.removeFromParent();
-    this.camera.position.copy(this.originalCameraPosition);
-    this.camera.quaternion.copy(this.originalCameraQuaternion);
-    this.originalCameraParent?.add(this.camera);
-    this.ownedGeometries.forEach((geometry) => geometry.dispose());
-    this.ownedMaterials.forEach((material) => material.dispose());
-    this.ownedTextures.forEach((texture) => texture.dispose());
-    this.ownedGeometries.clear();
-    this.ownedMaterials.clear();
-    this.ownedTextures.clear();
+    runCleanupSteps([
+      () => this.setHighlightedItem(null),
+      () => { this.disposed = true; },
+      () => this.cancelActiveSequence(),
+      () => this.ocean.dispose(),
+      () => this.spray.dispose(),
+      () => this.sky.dispose(),
+      () => this.scene.remove(
+        this.motionRig,
+        this.ocean.mesh,
+        this.spray.points,
+        this.ambient,
+        this.key,
+        this.key.target,
+        this.distantVessel,
+      ),
+      () => this.camera.removeFromParent(),
+      () => this.camera.position.copy(this.originalCameraPosition),
+      () => this.camera.quaternion.copy(this.originalCameraQuaternion),
+      () => this.originalCameraParent?.add(this.camera),
+      () => disposeResourceSets(
+        this.ownedGeometries,
+        this.ownedMaterials,
+        this.ownedTextures,
+      ),
+    ]);
   }
 
   private buildDistantVessel(): void {

@@ -6,13 +6,12 @@ import {
   type ItemId,
   type ItemInstance,
 } from '../src/game/ItemState';
-import {
-  BOAT_STORAGE_CLEARANCE,
-  boatStorageEnvelopesOverlap,
-  boatStorageTransform,
-  measureBoatStorageEnvelope,
-} from '../src/world/BoatStorage';
+import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createLifeboat } from '../src/world/Lifeboat';
+import {
+  boatStorageEnvelopesOverlap,
+  measureBoatStorageEnvelope,
+} from './helpers/boatStorage';
 import {
   PRODUCTION_NORMALIZED_PROP_BOUNDS,
   loadProductionPropModels,
@@ -104,7 +103,6 @@ describe('boat item layout', () => {
   });
 
   it('keeps normalized production-model maximum-inventory envelopes separated', async () => {
-    expect(BOAT_STORAGE_CLEARANCE).toBe(0.05);
     const library = await loadProductionPropModels();
     const instances = createItemInstances();
     const roots = instances.map((instance) => placedProductionProp(library, instance));

@@ -37,15 +37,9 @@ export const ITEM_LABELS = Object.fromEntries(
   ITEM_IDS.map((id) => [id, ITEM_DEFINITIONS[id].label]),
 ) as Readonly<Record<ItemId, string>>;
 
-export const itemDefinition = (id: ItemId): ItemDefinition => ITEM_DEFINITIONS[id];
-
 export function createItemInstances(): ItemInstance[] {
   return ITEM_IDS.flatMap((type) => Array.from(
     { length: ITEM_DEFINITIONS[type].spawnCount },
     (_, index) => ({ instanceId: `${type}-${index + 1}` as ItemInstanceId, type }),
   ));
-}
-
-export function createInitialItemState(): Record<ItemId, ItemStatus> {
-  return Object.fromEntries(ITEM_IDS.map((id) => [id, 'available'])) as Record<ItemId, ItemStatus>;
 }

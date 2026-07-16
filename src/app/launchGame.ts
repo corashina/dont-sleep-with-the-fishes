@@ -189,6 +189,17 @@ export function launchGame(
   let cancelled = false;
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
   let unownedAssets: LoadedGameAssets | null = null;
+  const disposeCurrentOwnership = (): void => {
+    if (game !== null) {
+      game.dispose();
+      game = null;
+      return;
+    }
+    if (unownedAssets !== null) {
+      disposeGameAssets(unownedAssets);
+      unownedAssets = null;
+    }
+  };
 
   const loading = renderLoading(mount);
 
@@ -201,8 +212,7 @@ export function launchGame(
     }
 
     if (cancelled || !mount.isConnected) {
-      disposeGameAssets(unownedAssets);
-      unownedAssets = null;
+      disposeCurrentOwnership();
       return null;
     }
 
@@ -218,31 +228,19 @@ export function launchGame(
       unownedAssets = null;
 
       if (cancelled || !mount.isConnected) {
-        if (game !== null) {
-          game.dispose();
-          game = null;
-        }
+        disposeCurrentOwnership();
         return null;
       }
 
       createdGame.start();
       if (cancelled || !mount.isConnected) {
-        if (game !== null) {
-          game.dispose();
-          game = null;
-        }
+        disposeCurrentOwnership();
         return null;
       }
 
       return game as Game;
     } catch (error) {
-      if (game !== null) {
-        game.dispose();
-        game = null;
-      } else if (unownedAssets !== null) {
-        disposeGameAssets(unownedAssets);
-        unownedAssets = null;
-      }
+      disposeCurrentOwnership();
 
       if (!cancelled && mount.isConnected) renderWebGlFailure(mount, error);
       return null;
@@ -254,13 +252,7 @@ export function launchGame(
     cancel(): void {
       if (cancelled) return;
       cancelled = true;
-      if (game !== null) {
-        game.dispose();
-        game = null;
-      } else if (unownedAssets !== null) {
-        disposeGameAssets(unownedAssets);
-        unownedAssets = null;
-      }
+      disposeCurrentOwnership();
     },
   };
 }

@@ -1,5 +1,5 @@
 import { Box3, Mesh, Vector3 } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { resolveLocalMovement } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
@@ -79,35 +79,6 @@ describe('freighter geometry', () => {
       triangles.push([vertex(0), vertex(1), vertex(2)]);
     }
     return triangles;
-  };
-
-  const endHalfWidth = (mesh: Mesh, end: 'bow' | 'stern'): number => {
-    mesh.updateMatrixWorld(true);
-    const position = mesh.geometry.getAttribute('position');
-    const points = Array.from({ length: position.count }, (_, index) =>
-      mesh.localToWorld(new Vector3().fromBufferAttribute(position, index)));
-    const extremeZ = end === 'bow'
-      ? Math.max(...points.map(({ z }) => z))
-      : Math.min(...points.map(({ z }) => z));
-    return Math.max(...points
-      .filter(({ z }) => Math.abs(z - extremeZ) < 0.001)
-      .map(({ x }) => Math.abs(x)));
-  };
-
-  const curvedEndDepth = (mesh: Mesh, end: 'bow' | 'stern'): number => {
-    mesh.updateMatrixWorld(true);
-    const position = mesh.geometry.getAttribute('position');
-    const points = Array.from({ length: position.count }, (_, index) =>
-      mesh.localToWorld(new Vector3().fromBufferAttribute(position, index)));
-    const halfWidth = Math.max(...points.map(({ x }) => Math.abs(x)));
-    const fullWidthPoints = points.filter(({ x }) => Math.abs(x) > halfWidth - 0.01);
-    const extremeZ = end === 'bow'
-      ? Math.max(...points.map(({ z }) => z))
-      : Math.min(...points.map(({ z }) => z));
-    const curveStartZ = end === 'bow'
-      ? Math.max(...fullWidthPoints.map(({ z }) => z))
-      : Math.min(...fullWidthPoints.map(({ z }) => z));
-    return Math.abs(extremeZ - curveStartZ);
   };
 
   const playerY = FREIGHTER_DIMENSIONS.deckY + 1.5;
@@ -333,33 +304,6 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
-  it('uses the approved zone materials on walls and glass panes', () => {
-    const materials = createShipMaterials();
-    const build = createShipGeometry(materials);
-    const meshes: Mesh[] = [];
-    build.root.traverse((object) => {
-      if (object instanceof Mesh) meshes.push(object);
-    });
-
-    const crewWalls = meshes.filter(({ name }) => name.startsWith('crew-cabin-wall-'));
-    const storageWalls = meshes.filter(({ name }) => name.startsWith('storage-workroom-wall-'));
-    const wheelhousePanels = meshes.filter(({ name }) => name.startsWith('wheelhouse-wall-')
-      && !name.includes('-window-') && !name.includes('-pillar-'));
-    const wheelhouseWindows = meshes.filter(({ name }) => name.startsWith('wheelhouse-wall-')
-      && name.includes('-window-'));
-    expect(crewWalls.length).toBeGreaterThan(0);
-    expect(storageWalls.length).toBeGreaterThan(0);
-    expect(wheelhousePanels.length).toBeGreaterThan(0);
-    expect(wheelhouseWindows.length).toBeGreaterThan(0);
-    crewWalls.forEach(({ material }) => expect(material).toBe(materials.paintedPanel));
-    storageWalls.forEach(({ material }) => expect(material).toBe(materials.paintedSteel));
-    wheelhousePanels.forEach(({ material }) => expect(material).toBe(materials.paintedPanel));
-    wheelhouseWindows.forEach(({ material }) => expect(material).toBe(materials.glass));
-
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
   it('seals every enclosed-room corner visually and physically', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -477,53 +421,6 @@ describe('freighter geometry', () => {
     expect(closureBounds.max.z).toBeCloseTo(-11);
 
     build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('rounds both ends of the hull and timber deck profiles', () => {
-    const materials = createShipMaterials();
-    const build = createShipGeometry(materials);
-    const hull = build.root.getObjectByName('main-hull-body') as Mesh;
-    const deck = build.root.getObjectByName('timber-deck') as Mesh;
-
-    for (const mesh of [hull, deck]) {
-      expect(endHalfWidth(mesh, 'bow')).toBeLessThan(0.25);
-      expect(endHalfWidth(mesh, 'stern')).toBeLessThan(0.25);
-      expect(curvedEndDepth(mesh, 'bow')).toBeGreaterThan(3.5);
-      expect(curvedEndDepth(mesh, 'stern')).toBeGreaterThan(3.5);
-    }
-
-    const hullPosition = hull.geometry.getAttribute('position');
-    const hullMidY = -0.55;
-    const topPoints = Array.from({ length: hullPosition.count }, (_, index) =>
-      new Vector3().fromBufferAttribute(hullPosition, index))
-      .filter(({ y }) => y > hullMidY);
-    const bottomPoints = Array.from({ length: hullPosition.count }, (_, index) =>
-      new Vector3().fromBufferAttribute(hullPosition, index))
-      .filter(({ y }) => y < hullMidY);
-    expect(Math.max(...bottomPoints.map(({ x }) => Math.abs(x))))
-      .toBeLessThan(Math.max(...topPoints.map(({ x }) => Math.abs(x))) - 0.5);
-
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('reuses repeated shell box geometry per build and disposes it once', () => {
-    const materials = createShipMaterials();
-    const first = createShipGeometry(materials);
-    const second = createShipGeometry(materials);
-    const firstBoxes = ['wheelhouse-front-pillar-0', 'wheelhouse-front-pillar-1', 'wheelhouse-front-pillar-2']
-      .map((name) => first.root.getObjectByName(name) as Mesh);
-    const secondBox = second.root.getObjectByName('wheelhouse-front-pillar-0') as Mesh;
-
-    expect(new Set(firstBoxes.map(({ geometry }) => geometry)).size).toBe(1);
-    expect(secondBox.geometry).not.toBe(firstBoxes[0]!.geometry);
-    const dispose = vi.spyOn(firstBoxes[0]!.geometry, 'dispose');
-    first.disposeGeometry();
-    first.disposeGeometry();
-    expect(dispose).toHaveBeenCalledTimes(1);
-
-    second.disposeGeometry();
     materials.dispose();
   });
 

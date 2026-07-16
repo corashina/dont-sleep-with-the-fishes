@@ -18,7 +18,7 @@ import type { SkyPalette } from './skyPalette';
 const RAIN_DROP_COUNT = 900;
 const SPRAY_DROP_COUNT = 220;
 
-export const SCAVENGE_SHADOW_CONFIG = Object.freeze({
+const SCAVENGE_SHADOW_CONFIG = Object.freeze({
   mapSize: 2048,
   left: -24,
   right: 24,
