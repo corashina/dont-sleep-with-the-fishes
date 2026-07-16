@@ -24,7 +24,7 @@ import type { CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
-import { createLifeboat } from './Lifeboat';
+import { createLifeboat, type LifeboatBuild } from './Lifeboat';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
@@ -65,7 +65,7 @@ export class World {
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
-  private readonly waterExclusion: { readonly halfWidth: number; readonly halfLength: number };
+  private readonly waterExclusion: LifeboatBuild['waterExclusion'];
   private readonly oceanAtmosphere = {
     fogColor: new Color(),
     horizonColor: new Color(),
@@ -252,6 +252,7 @@ export class World {
         this.lifeboat,
         this.waterExclusion.halfWidth,
         this.waterExclusion.halfLength,
+        this.waterExclusion.taperStart,
       ),
     ]);
     const beacon = this.ship.getObjectByName('alarm-beacon');
