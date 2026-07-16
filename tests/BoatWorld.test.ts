@@ -238,16 +238,23 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       [],
     );
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh;
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
+    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
+    const oceanUniforms = (ocean.material as ShaderMaterial).uniforms;
+    expect(oceanUniforms.uDirectLightStrength?.value).toBe(
+      skyUniforms.uSunVisibility!.value,
+    );
+
     world.setWeather('squall');
     world.setPhase('night');
     world.update(0.75, 0.75);
     world.update(1.5, 0.75);
 
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh;
-    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
-    const skyUniforms = (sky.material as ShaderMaterial).uniforms;
-    const oceanUniforms = (ocean.material as ShaderMaterial).uniforms;
     expect(skyUniforms.uSunVisibility!.value).toBe(0);
+    expect(oceanUniforms.uDirectLightStrength?.value).toBe(
+      skyUniforms.uSunVisibility!.value,
+    );
     expect(skyUniforms.uMoonVisibility!.value).toBeCloseTo(0.07);
     expect(skyUniforms.uStarVisibility!.value).toBeCloseTo(0.02);
     expect((world.scene.fog as FogExp2).density).toBeCloseTo(0.034);

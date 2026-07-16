@@ -71,6 +71,7 @@ export class World {
     horizonColor: new Color(),
     skyColor: new Color(),
     sunColor: new Color(0xfff1cf),
+    sunVisibility: 1,
   };
   private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private disposed = false;
@@ -220,6 +221,7 @@ export class World {
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
     this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
+    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
     this.ocean.update(
       time,
       sinking.waveAmplitudeScale,

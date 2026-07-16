@@ -10,6 +10,7 @@ import {
 } from 'three';
 import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
 import type { WaterExclusionRegion } from './WaterExclusion';
+import { SUN_DIRECTION } from '../world/celestialLight';
 
 const MAX_EXCLUSIONS = 2;
 
@@ -24,6 +25,7 @@ export interface OceanAtmosphere {
   horizonColor: Color;
   skyColor: Color;
   sunColor: Color;
+  sunVisibility: number;
 }
 
 const vertexShader = `
@@ -81,6 +83,7 @@ const fragmentShader = `
   uniform vec3 uSkyColor;
   uniform vec3 uHorizonColor;
   uniform vec3 uSunColor;
+  uniform float uDirectLightStrength;
   uniform float uFogDensity;
   uniform vec3 uLightDirection;
   uniform int uExclusionCount;
@@ -193,7 +196,8 @@ const fragmentShader = `
     vec3 waterBody = mix(uDeepColor, uShallowColor, depthMix);
     waterBody *= 1.0 - trough * 0.16;
     float forwardScatter = pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 4.0);
-    waterBody += uShallowColor * forwardScatter * (0.055 + vWaveSlope * 0.12);
+    waterBody += uShallowColor * forwardScatter * uDirectLightStrength
+      * (0.055 + vWaveSlope * 0.12);
     float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
     vec3 color = mix(waterBody, reflectedColor, reflectionStrength);
 
@@ -208,7 +212,8 @@ const fragmentShader = `
 
     float foam = crestFoam(vHeight, vWaveSlope) * foamBreakup(vWorldPosition.xz);
     foam *= 1.0 - smoothstep(uDetailFade.y * 0.72, uDetailFade.y, vViewDepth);
-    color += uSunColor * (sunCore + sunSheen) * (1.0 - foam * 0.78);
+    color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
+      * (1.0 - foam * 0.78);
     color = mix(color, uFoamColor, foam * 0.74);
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
@@ -249,8 +254,9 @@ export class OceanRenderer {
         uSkyColor: { value: new Color(0x496b75) },
         uHorizonColor: { value: new Color(0x6f8587) },
         uSunColor: { value: new Color(0xfff1cf) },
+        uDirectLightStrength: { value: 1 },
         uFogDensity: { value: 0.018 },
-        uLightDirection: { value: new Vector3(-0.4, 0.85, 0.25) },
+        uLightDirection: { value: new Vector3(...SUN_DIRECTION).normalize() },
         uExclusionCount: { value: 0 },
         uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },
@@ -283,6 +289,9 @@ export class OceanRenderer {
     (this.material.uniforms.uHorizonColor!.value as Color).copy(atmosphere.horizonColor);
     (this.material.uniforms.uSkyColor!.value as Color).copy(atmosphere.skyColor);
     (this.material.uniforms.uSunColor!.value as Color).copy(atmosphere.sunColor);
+    this.material.uniforms.uDirectLightStrength!.value = Number.isFinite(
+      atmosphere.sunVisibility,
+    ) ? Math.min(1, Math.max(0, atmosphere.sunVisibility)) : 0;
   }
 
   setExclusions(regions: readonly WaterExclusionRegion[]): void {
