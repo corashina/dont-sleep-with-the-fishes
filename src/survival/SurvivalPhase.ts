@@ -33,6 +33,11 @@ function testContext(): PhaseContext {
   return {
     mount,
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
+    sceneRenderer: {
+      render: () => undefined,
+      resize: () => undefined,
+      dispose: () => undefined,
+    },
     camera: new PerspectiveCamera(),
     reducedMotion: { matches: false } as MediaQueryList,
     propModels: {} as PropModelLibrary,
