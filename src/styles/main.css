@@ -598,14 +598,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .pause-overlay { z-index: 22; }
 .survival-meters {
   top: 18px;
-  right: 22px;
-  left: auto;
+  left: 22px;
+  right: auto;
   display: flex;
   width: auto;
   gap: 12px;
   padding: 0;
   border: 0;
-  transform-origin: top right;
+  transform-origin: top left;
 }
 .survival-condition { position: relative; display: grid; grid-template: 'art value' 54px 'label label' auto / 60px auto; gap: 0 4px; min-width: 76px; color: var(--meter-accent); transform: rotate(var(--condition-tilt, 0deg)); }
 .survival-condition:nth-child(1) { --condition-tilt: -2deg; }
@@ -625,12 +625,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-top {
   position: absolute;
   top: 16px;
-  left: 50%;
+  left: 0;
+  right: 0;
   z-index: 3;
   display: grid;
+  width: max-content;
+  margin: 0 auto;
   justify-items: center;
   gap: 8px;
-  transform: translateX(-50%);
+  transform: none;
   pointer-events: auto;
 }
 .survival-top__status-row { display: flex; align-items: center; gap: 10px; }
@@ -653,7 +656,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .journal-marker:disabled { cursor: default; opacity: .72; }
 .journal-marker__art { width: 52px; color: #8d5d37; }
 .journal-marker__unread { position: absolute; top: -4px; right: -14px; padding: 2px 6px; color: var(--ink-yellow); background: #32100ee8; transform: rotate(5deg); }
-.end-day-button { min-width: 190px; min-height: 48px; padding: 10px 28px; color: var(--ink-bone); }
+.end-day-button {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  min-width: 190px;
+  min-height: 48px;
+  padding: 10px 28px;
+  color: var(--ink-bone);
+}
 .journal-overlay {
   place-content: center;
   justify-items: center;
@@ -826,7 +837,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   .survival-meters {
     gap: 5px;
     transform: scale(.86);
-    transform-origin: top right;
+    transform-origin: top left;
   }
 
   .performance-stats { right: 16px; }
