@@ -61,6 +61,12 @@ describe('GameUI', () => {
     );
   });
 
+  it('keeps the critical countdown centered throughout its jolt animation', () => {
+    expect(mainStyles).toMatch(
+      /@keyframes watch-jolt\s*\{\s*50%\s*\{\s*transform:\s*translateX\(-50%\)\s+rotate\(-2deg\)\s+scale\(1\.06\);\s*\}\s*\}/s,
+    );
+  });
+
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

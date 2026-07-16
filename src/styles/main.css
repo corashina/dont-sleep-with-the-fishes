@@ -587,7 +587,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .illustrated-warning__art { width: 34px; flex: 0 0 auto; color: var(--ink-red-bright); }
 .illustrated-warning.is-visible { opacity: 1; visibility: visible; }
 .poster-screen.has-compatibility-error .illustrated-warning { opacity: 1; visibility: visible; }
-@keyframes watch-jolt { 50% { transform: rotate(-2deg) scale(1.06); } }
+@keyframes watch-jolt { 50% { transform: translateX(-50%) rotate(-2deg) scale(1.06); } }
 @keyframes critical-vignette { 50% { opacity: .82; transform: scale(1.025); } }
 
 /* Illustrated survival status and projected actions */
