@@ -54,6 +54,38 @@ export interface EventResponse {
   rescue?: boolean;
 }
 
+export type EventResource =
+  | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'rescueProgress';
+export type IntegerValue = number | { readonly min: number; readonly max: number };
+export interface ResourceEffect {
+  readonly resource: EventResource;
+  readonly operation: 'add' | 'subtract' | 'set';
+  readonly value: IntegerValue;
+}
+export type EventInventoryMutation =
+  | {
+    readonly kind: 'consume' | 'break' | 'lose';
+    readonly itemId: ItemId;
+    readonly quantity: number;
+  }
+  | { readonly kind: 'breakRandom' | 'loseRandom'; readonly quantity: number }
+  | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
+export interface WeightedEventOutcome {
+  readonly weight: number;
+  readonly message: string;
+  readonly effects: {
+    readonly resources?: readonly ResourceEffect[];
+    readonly items?: readonly EventInventoryMutation[];
+    readonly rescue?: boolean;
+  };
+}
+export interface EventChoiceDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly itemId?: ItemId;
+  readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
+}
+
 export interface SurvivalEventDefinition {
   id: string;
   phase: 'day' | 'night';
@@ -65,9 +97,7 @@ export interface SurvivalEventDefinition {
   weight: number;
   cooldownDays: number;
   weather?: readonly WeatherId[];
-  responses: readonly EventResponse[];
-  unsuitable: Omit<EventResponse, 'itemId' | 'consume'>;
-  endure: Omit<EventResponse, 'itemId' | 'consume'>;
+  choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
 }
 
