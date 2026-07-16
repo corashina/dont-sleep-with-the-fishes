@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
-import { ITEM_DEFINITIONS, type ItemId, type ItemInstance } from '../game/ItemState';
+import { ITEM_DEFINITIONS, type ItemInstance } from '../game/ItemState';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
@@ -8,7 +8,14 @@ import type { SkyAssets } from '../world/SkyAssets';
 import { BoatWorld } from './BoatWorld';
 import { SURVIVAL_EVENTS } from './events';
 import { SurvivalSession } from './SurvivalSession';
-import type { ActionOutcome, DayActionId, DayActionOption, SurvivalSnapshot, SurvivalState } from './survivalTypes';
+import type {
+  ActionOutcome,
+  DayActionId,
+  DayActionOption,
+  EventResponseId,
+  SurvivalSnapshot,
+  SurvivalState,
+} from './survivalTypes';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -171,9 +178,9 @@ export class SurvivalPhase implements GamePhase {
     this.present(outcome);
   }
 
-  handleEventItem(itemId: ItemId): void {
+  handleEventItem(choiceId: EventResponseId): void {
     if (!this.canAcceptCommand()) return;
-    const outcome = this.session.resolveEvent?.(itemId);
+    const outcome = this.session.resolveEvent?.(choiceId);
     if (outcome !== undefined) this.present(outcome);
   }
 

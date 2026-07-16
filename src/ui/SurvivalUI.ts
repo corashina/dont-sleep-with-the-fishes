@@ -1,4 +1,4 @@
-import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemId, type ItemInstanceId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstanceId } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
@@ -6,6 +6,7 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
+  EventResponseId,
   ResourceDelta,
   SurvivalEventDefinition,
   SurvivalSnapshot,
@@ -53,7 +54,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'rest', label: 'REST', shortcut: '6', cost: 'NO COST', effect: 'ENERGY +2', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', effect: 'Restore one broken item', risk: 'safe' },
-  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +20', risk: 'safe' },
+  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +15', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: 'ENERGY TO 4', risk: 'safe' },
 ];
 
@@ -139,7 +140,7 @@ function formatElapsed(seconds: number): string {
 
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
-  onEventItem: (itemId: ItemId) => void = () => undefined;
+  onEventItem: (choiceId: EventResponseId) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onContinue: () => void = () => undefined;
   onRestart: () => void = () => undefined;
@@ -464,8 +465,29 @@ export class SurvivalUI {
       ? ''
       : `TARGET — ${ITEM_LABELS[pendingTarget.type]}${pendingTarget.condition === 'broken' ? ' — BROKEN' : ''}`;
 
-    event.choices.filter((choice) => choice.itemId !== undefined).forEach((choice) => {
-      const id = choice.itemId!;
+    const authoredChoices = event.choices.filter(
+      (choice): choice is typeof choice & { readonly itemId: ItemId } => choice.itemId !== undefined,
+    );
+    const authoredItemIds = new Set(authoredChoices.map(({ itemId }) => itemId));
+    const recoveredAlternativeIds = ITEM_IDS.filter((itemId) => (
+      !authoredItemIds.has(itemId)
+      && Object.values(snapshot.inventory).some((item) => item?.type === itemId)
+    ));
+    const entries = [
+      ...authoredChoices.map((choice) => ({
+        choiceId: choice.id,
+        id: choice.itemId,
+        label: choice.label,
+        suitability: 'suitable' as const,
+      })),
+      ...recoveredAlternativeIds.map((id) => ({
+        choiceId: id,
+        id,
+        label: `Try ${ITEM_LABELS[id]}`,
+        suitability: 'unsuitable' as const,
+      })),
+    ];
+    entries.forEach(({ choiceId, id, label, suitability }) => {
       const candidates = Object.values(snapshot.inventory).filter((item) => item?.type === id);
       const item = candidates.find((candidate) => candidate?.condition === 'usable')
         ?? candidates.find((candidate) => candidate?.condition === 'broken')
@@ -481,16 +503,20 @@ export class SurvivalUI {
       button.type = 'button';
       button.className = 'event-item';
       button.dataset.item = id;
-      button.dataset.eventChoice = choice.id;
+      button.dataset.eventChoice = choiceId;
+      button.dataset.suitability = suitability;
       button.dataset.usable = usable ? 'true' : 'false';
       button.dataset.condition = condition ?? 'unowned';
-      button.textContent = `${choice.label}${quantity === null ? '' : ` x${quantity}`}${conditionLabel ? ` — ${conditionLabel}` : ''}`;
+      button.textContent = `${label}${suitability === 'unsuitable' ? ' — UNSUITABLE' : ''}${quantity === null ? '' : ` x${quantity}`}${conditionLabel ? ` — ${conditionLabel}` : ''}`;
       button.disabled = this.busy || !usable;
       const reason = condition === 'broken' ? ' This item is broken.'
         : condition === 'consumed' ? ' This item was used.'
           : condition === 'lost' ? ' This item was lost.'
             : condition === null ? ' This item was not recovered.' : '';
-      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${reason}`);
+      const suitabilityDescription = suitability === 'suitable'
+        ? ' Authored response for this event.'
+        : ' Unsuitable response; the event consequence will still occur.';
+      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${suitabilityDescription}${reason}`);
       this.eventItems.append(button);
     });
     if (this.eventItems.childElementCount === 0) {
@@ -1073,7 +1099,7 @@ export class SurvivalUI {
     }
     const choiceId = button.dataset.eventChoice;
     if (choiceId !== undefined && this.eventItems.contains(button)) {
-      this.onEventItem(choiceId as ItemId);
+      this.onEventItem(choiceId);
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();

@@ -252,10 +252,10 @@ describe('SurvivalPhase orchestration', () => {
       ui: { showOutcome: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
     });
 
-    phase.handleEventItem('flareGun');
+    phase.handleEventItem('custom-event-choice');
     phase.handleEndure();
     expect(resolveEvent).toHaveBeenCalledOnce();
-    expect(resolveEvent).toHaveBeenCalledWith('flareGun');
+    expect(resolveEvent).toHaveBeenCalledWith('custom-event-choice');
 
     finishSequence();
     await flushPromises();

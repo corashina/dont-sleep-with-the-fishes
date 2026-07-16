@@ -13,7 +13,7 @@ import {
   boatStorageTransform,
   measureBoatStorageEnvelope,
 } from '../src/world/BoatStorage';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat, lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import {
   PRODUCTION_NORMALIZED_PROP_BOUNDS,
   loadProductionPropModels,
@@ -120,6 +120,30 @@ describe('boat item layout', () => {
           ).toBe(false);
         }
       }
+    } finally {
+      roots.forEach(disposeOwnedMeshes);
+      library.dispose();
+    }
+  });
+
+  it('keeps every production-model maximum-inventory envelope inside the interpolated hull', async () => {
+    const library = await loadProductionPropModels();
+    const instances = createItemInstances();
+    const roots = instances.map((instance) => placedProductionProp(library, instance));
+    try {
+      const violations: string[] = [];
+      roots.forEach((root, index) => {
+        const envelope = measureBoatStorageEnvelope(root);
+        for (const z of [envelope.min.y, envelope.max.y]) {
+          const halfWidth = lifeboatHullHalfWidthAt(z);
+          if (halfWidth === null || envelope.min.x < -halfWidth || envelope.max.x > halfWidth) {
+            violations.push(
+              `${instances[index]!.instanceId}: x=${envelope.min.x.toFixed(3)}..${envelope.max.x.toFixed(3)}, z=${z.toFixed(3)}, halfWidth=${halfWidth?.toFixed(3) ?? 'outside'}`,
+            );
+          }
+        }
+      });
+      expect(violations).toEqual([]);
     } finally {
       roots.forEach(disposeOwnedMeshes);
       library.dispose();

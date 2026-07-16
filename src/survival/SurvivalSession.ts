@@ -19,6 +19,7 @@ import type {
   ActionOutcome,
   DayActionOption,
   DayActionId,
+  EventResponseId,
   EventInventoryMutation,
   ItemCondition,
   PresentationCue,
@@ -192,16 +193,29 @@ export class SurvivalSession {
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
 
-  resolveEvent(choiceId: string | null): ActionOutcome {
+  resolveEvent(choiceId: EventResponseId | null): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
       return this.reject('no-event', 'There is no unresolved event.');
     }
 
     const event = this.pendingEvent;
-    const choice = event.choices.find((candidate) => candidate.id === (choiceId ?? 'sleep'));
+    let choice = event.choices.find((candidate) => candidate.id === (choiceId ?? 'sleep'));
+    let attemptedItemId: ItemId | null = choice?.itemId ?? null;
+    let resolution: JournalResolution = choice?.itemId === undefined ? 'endure' : 'suitableItem';
     if (choice === undefined) {
-      return this.reject('choice-unavailable', 'That response is not available for this event.');
+      if (choiceId === null || !Object.hasOwn(ITEM_DEFINITIONS, choiceId)) {
+        return this.reject('choice-unavailable', 'That response is not available for this event.');
+      }
+      attemptedItemId = choiceId as ItemId;
+      if (!this.canUseEventItem(attemptedItemId)) {
+        return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
+      }
+      choice = event.choices.find((candidate) => candidate.itemId === undefined);
+      if (choice === undefined) {
+        throw new Error(`Event ${event.id} requires exactly one itemless fallback choice.`);
+      }
+      resolution = 'unsuitableItem';
     }
     if (choice.itemId !== undefined && !this.canUseEventItem(choice.itemId)) {
       return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
@@ -233,16 +247,17 @@ export class SurvivalSession {
     const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
-      message: resolved.message,
+      message: resolution === 'unsuitableItem'
+        ? `That item cannot help. ${resolved.message}`
+        : resolved.message,
       deltas,
       cue,
     };
     this.lastOutcome = outcome;
-    const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
     this.recordJournalEvent(
       event,
       choiceId,
-      choice.itemId ?? null,
+      attemptedItemId,
       resolution,
       outcome,
       inventoryMutations,

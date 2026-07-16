@@ -86,6 +86,8 @@ export interface EventChoiceDefinition {
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
+export type EventResponseId = string;
+
 export interface SurvivalEventDefinition {
   id: string;
   phase: 'day' | 'night';

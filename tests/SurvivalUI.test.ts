@@ -102,6 +102,8 @@ describe('SurvivalUI', () => {
     ]);
     expect(mount.querySelector('[data-action="rest"]')).not.toBeNull();
     expect(mount.querySelector('[data-action="sendMessage"]')?.textContent).toContain('BOTTLED PAPER');
+    expect(mount.querySelector('[data-action="sendMessage"] [role="tooltip"]')?.textContent)
+      .toContain('1 ENERGY — RESCUE +15');
     expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY BAR');
     expect(mount.textContent).not.toContain('WATER');
   });
@@ -905,6 +907,56 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-event]')?.hasAttribute('inert')).toBe(false);
     expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')).not.toBeNull();
     expect(document.activeElement).toBe(mount.querySelector('[data-event-title]'));
+  });
+
+  it('routes another usable recovered item through the unsuitable event outcome without mutating it', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const session = new SurvivalSession(saved('anchor', 'bucket'), {
+      seed: 12,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'shower-night',
+    });
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
+    const eventChoice = vi.fn((choiceId: string) => session.resolveEvent(choiceId));
+    ui.onEventItem = eventChoice;
+
+    ui.showEvent(event, session.snapshot());
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="anchor"]')!;
+    expect(anchor).not.toBeNull();
+    expect(anchor.disabled).toBe(false);
+    expect(anchor.dataset.suitability).toBe('unsuitable');
+    anchor.focus();
+    anchor.click();
+
+    expect(eventChoice).toHaveBeenCalledWith('anchor');
+    expect(session.snapshot().inventory['anchor-1']?.condition).toBe('usable');
+    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
+      attemptedChoiceId: 'anchor',
+      attemptedItemId: 'anchor',
+      resolution: 'unsuitableItem',
+      inventoryMutations: [],
+    });
+  });
+
+  it('shows recovered unusable alternatives disabled with suitability and condition semantics', () => {
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    const session = new SurvivalSession(saved('anchor', 'bucket'), {
+      seed: 12,
+      initialConditions: { 'anchor-1': 'broken' },
+      initialEventId: 'shower-night',
+    });
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
+
+    ui.showEvent(event, session.snapshot());
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="anchor"]')!;
+    expect(anchor).not.toBeNull();
+    expect(anchor.disabled).toBe(true);
+    expect(anchor.dataset.suitability).toBe('unsuitable');
+    expect(anchor.dataset.condition).toBe('broken');
+    expect(anchor.getAttribute('aria-description')).toContain('This item is broken.');
   });
 
   it('announces unavailable numeric shortcuts, including repeated reasons', async () => {
