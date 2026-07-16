@@ -94,7 +94,7 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
-  it('uses weather-scaled ribbon thresholds and nearby edge erosion', () => {
+  it('uses weather-scaled ribbon thresholds and zero-capable nearby edge erosion', () => {
     const ocean = new OceanRenderer();
     const shader = ocean.material.fragmentShader;
 
@@ -105,11 +105,12 @@ describe('OceanRenderer', () => {
     expect(shader).toContain('float slopeStart = mix(0.11, 0.055, weather);');
     expect(shader).toContain('float ribbonStart = mix(0.57, 0.42, weather);');
     expect(shader).toContain(
-      'float erodedEdge = smoothstep(0.20, 0.68, edgeNoise);',
+      'float erodedEdge = smoothstep(0.14, 0.44, edgeNoise);',
     );
     expect(shader).toContain(
-      'float edgeMask = mix(1.0, mix(0.72, 1.0, erodedEdge), fineFade);',
+      'float edgeMask = mix(1.0, erodedEdge, fineFade);',
     );
+    expect(shader).not.toContain('mix(0.72, 1.0, erodedEdge)');
     expect(shader).toContain(
       'return clamp(crestEnvelope * ribbon * edgeMask * strength, 0.0, 1.0);',
     );
@@ -127,6 +128,9 @@ describe('OceanRenderer', () => {
 
     expect(shader).toContain('float foamBody(');
     expect(shader).toContain('float foamCap(');
+    expect(shader).toContain('float crestStart = mix(0.48, 0.29, weather);');
+    expect(shader).toContain('float slopeStart = mix(0.22, 0.13, weather);');
+    expect(shader).toContain('float ribbonStart = mix(0.68, 0.55, weather);');
     expect(shader).toContain(
       'return clamp(bodyFoam * crest * breaking * ribbonCore * strength, 0.0, 1.0);',
     );
@@ -142,6 +146,32 @@ describe('OceanRenderer', () => {
     expect(shader).toContain('color = mix(color, uFoamColor, bodyFoam * 0.64);');
     expect(shader).toContain('color = mix(color, capFoamColor, capFoam * 0.90);');
     expect(shader).not.toContain('float crestFoam(');
+
+    ocean.dispose();
+  });
+
+  it('orders fine, cap, and body fade-out distances', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+    const detailFade = ocean.material.uniforms.uDetailFade!.value as Vector2;
+
+    expect(shader).toContain(`float fineDetailFade = 1.0 - smoothstep(
+      uDetailFade.x * 0.72,
+      uDetailFade.x,
+      vViewDepth
+    );`);
+    expect(shader).toContain(`float capDistanceFade = 1.0 - smoothstep(
+      uDetailFade.y * 0.48,
+      uDetailFade.y * 0.74,
+      vViewDepth
+    );`);
+    expect(shader).toContain(`float bodyDistanceFade = 1.0 - smoothstep(
+      uDetailFade.y * 0.62,
+      uDetailFade.y * 0.96,
+      vViewDepth
+    );`);
+    expect(detailFade.x).toBeLessThan(detailFade.y * 0.74);
+    expect(detailFade.y * 0.74).toBeLessThan(detailFade.y * 0.96);
 
     ocean.dispose();
   });
