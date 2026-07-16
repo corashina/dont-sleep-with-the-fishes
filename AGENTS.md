@@ -1,5 +1,16 @@
 # Repository Guidance
 
+## Engineering rules
+
+- Keep gameplay rules deterministic and testable without a renderer. Isolate randomness behind an injectable source.
+- Keep phase lifecycle, game-state rules, input, UI, rendering, and world construction in separate modules with explicit ownership.
+- Give each Three.js geometry, material, texture, render target, control, listener, and phase a clear owner that disposes it exactly once.
+- Use the shared wave field as the source of truth for ocean rendering, buoyancy, and vessel motion.
+- Support keyboard operation and honor `prefers-reduced-motion` for optional visual motion and UI transitions.
+- Add or update tests whenever a gameplay mechanic, input contract, authored layout, item placement rule, or model manifest changes.
+- Avoid allocations and repeated setup in per-frame update and render paths.
+- Keep the current milestone focused on desktop browsers with keyboard and mouse. Do not add saves, touch/mobile controls, crewmates, multiplayer, or persistent progression without explicit approval.
+
 ## Third-party assets
 
 Use [Kenney](https://kenney.nl/assets) as the sole third-party asset store unless the user approves another source.
