@@ -1249,6 +1249,13 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
+  it('places condition meters at top-left and End Day at top-right', () => {
+    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*left:\s*22px;[^}]*right:\s*auto;[^}]*transform-origin:\s*top left;/s);
+    expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*width:\s*max-content;[^}]*margin:\s*0 auto;[^}]*transform:\s*none;/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*position:\s*fixed;[^}]*top:\s*18px;[^}]*right:\s*22px;/s);
+    expect(mainStyles).toMatch(/@media \(max-width:\s*980px\)[\s\S]*?\.survival-meters\s*\{[^}]*transform-origin:\s*top left;/s);
+  });
+
   it('marks journal history unread until the marker opens', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
