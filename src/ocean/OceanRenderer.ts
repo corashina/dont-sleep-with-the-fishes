@@ -13,6 +13,12 @@ import type { WaterExclusionRegion } from './WaterExclusion';
 
 const MAX_EXCLUSIONS = 2;
 
+export const OCEAN_SURFACE_QUALITY = Object.freeze({
+  segments: 192,
+  detailFadeNear: 28,
+  detailFadeFar: 92,
+});
+
 export interface OceanAtmosphere {
   fogColor: Color;
   horizonColor: Color;
@@ -178,6 +184,12 @@ export class OceanRenderer {
         uTime: { value: 0 },
         uAmplitudeScale: { value: 1 },
         uOrigin: { value: new Vector2() },
+        uDetailFade: {
+          value: new Vector2(
+            OCEAN_SURFACE_QUALITY.detailFadeNear,
+            OCEAN_SURFACE_QUALITY.detailFadeFar,
+          ),
+        },
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
@@ -195,7 +207,12 @@ export class OceanRenderer {
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },
       },
     });
-    const geometry = new PlaneGeometry(180, 180, 128, 128);
+    const geometry = new PlaneGeometry(
+      180,
+      180,
+      OCEAN_SURFACE_QUALITY.segments,
+      OCEAN_SURFACE_QUALITY.segments,
+    );
     geometry.rotateX(-Math.PI / 2);
     this.mesh = new Mesh(geometry, this.material);
     this.mesh.name = 'procedural-ocean';
