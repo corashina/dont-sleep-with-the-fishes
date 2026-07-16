@@ -10,10 +10,12 @@ const event = (overrides: Partial<JournalEventRecord> = {}): JournalEventRecord 
   eventId: 'night-hull-impact',
   title: 'Hull Impact',
   prompt: 'Something heavy knocked against the hull in the darkness.',
+  attemptedChoiceId: 'flashlight',
   attemptedItemId: 'flashlight',
   resolution: 'suitableItem',
   outcomeCode: 'event-resolved',
   outcomeMessage: 'The beam let me fend the debris away.',
+  inventoryMutations: [],
   ...overrides,
 });
 
@@ -43,18 +45,20 @@ describe('formatJournalEntry', () => {
         eventId: 'day-sudden-squall',
         title: 'Sudden Squall',
         prompt: 'A black squall line bore down before I could prepare.',
-        attemptedItemId: 'waterJug',
+        attemptedChoiceId: 'bucket',
+        attemptedItemId: 'bucket',
         resolution: 'unsuitableItem',
         outcomeMessage: 'That item cannot help. The squall tore open weak seams in the hull.',
       }),
     }));
-    expect(page.daytime).toBe('During the day, I encountered sudden squall. I tried the water bottle, but it did not help.');
+    expect(page.daytime).toBe('During the day, I encountered sudden squall. I tried the bucket, but it did not help.');
     expect(page.daytime).not.toContain('That item cannot help');
   });
 
   it('describes endurance without naming inventory or resource deltas', () => {
     const page = formatJournalEntry(entry({
       nighttime: event({
+        attemptedChoiceId: null,
         attemptedItemId: null,
         resolution: 'endure',
         outcomeMessage: 'Repeated impacts cracked the hull.',
@@ -74,4 +78,36 @@ describe('formatJournalEntry', () => {
       );
     },
   );
+
+  it('mentions concrete broken, consumed, lost, and repaired catalog items without instance IDs', () => {
+    const page = formatJournalEntry(entry({
+      nighttime: event({
+        inventoryMutations: [
+          { kind: 'break', instanceIds: ['bucket-1'] },
+          { kind: 'consume', instanceIds: ['flareGun-1'] },
+          { kind: 'lose', instanceIds: ['map-1'] },
+          { kind: 'repair', instanceIds: ['anchor-1'] },
+        ],
+      }),
+    }));
+
+    expect(page.nighttime).toMatch(/bucket/i);
+    expect(page.nighttime).toMatch(/flare gun/i);
+    expect(page.nighttime).toMatch(/map/i);
+    expect(page.nighttime).toMatch(/anchor/i);
+    expect(page.nighttime).not.toMatch(/bucket-1|flareGun-1|map-1|anchor-1/);
+  });
+
+  it('keeps attempted choice and item facts distinct from the concrete outcome', () => {
+    const record = event({
+      attemptedChoiceId: 'bucket',
+      attemptedItemId: 'bucket',
+      outcomeMessage: 'The bucket breaks.',
+      inventoryMutations: [{ kind: 'break', instanceIds: ['bucket-1'] }],
+    });
+    expect(record).toMatchObject({
+      attemptedChoiceId: 'bucket', attemptedItemId: 'bucket', outcomeMessage: 'The bucket breaks.',
+    });
+    expect(record.inventoryMutations).toEqual([{ kind: 'break', instanceIds: ['bucket-1'] }]);
+  });
 });
