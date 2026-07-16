@@ -53,7 +53,6 @@ const ROOM_ROOF_THICKNESS = 0.24;
 const ROOM_ROOF_OVERHANG = 0.175;
 const STACK_X = 1.35;
 const STACK_OUTLET_Y = 7.1;
-const STACK_HEIGHT = 2.6;
 const STACK_RADIUS = 0.58;
 const STACK_COLLAR_RADIUS = 0.72;
 const STACK_COLLAR_HEIGHT = 0.22;
@@ -557,19 +556,29 @@ function addMachineryAndStacks(
     [machineryX, FREIGHTER_DIMENSIONS.deckY + MACHINERY_COLLIDER_HEIGHT / 2, machineryZ],
     [machineryWidth, MACHINERY_COLLIDER_HEIGHT, machineryLength],
   ));
-  const stackCenterY = STACK_OUTLET_Y - STACK_HEIGHT / 2;
+  const stackBaseY = FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT;
+  const stackHeight = STACK_OUTLET_Y - stackBaseY;
+  const stackCenterY = stackBaseY + stackHeight / 2;
   const stackOutlets = [
     new Vector3(-STACK_X, STACK_OUTLET_Y, machineryZ),
     new Vector3(STACK_X, STACK_OUTLET_Y, machineryZ),
   ] as const;
   stackOutlets.forEach((outlet, index) => {
     const side = index === 0 ? 'port' : 'starboard';
-    addCylinder(root, geometries, `smokestack-${side}`, STACK_RADIUS, STACK_HEIGHT, [outlet.x, stackCenterY, outlet.z], materials.darkMetal);
-    addCylinder(root, geometries, `smokestack-${side}-collar`, STACK_COLLAR_RADIUS, STACK_COLLAR_HEIGHT, [outlet.x, stackCenterY - STACK_HEIGHT / 2 + STACK_COLLAR_HEIGHT / 2, outlet.z], materials.exposedMetal);
+    addCylinder(root, geometries, `smokestack-${side}`, STACK_RADIUS, stackHeight, [
+      outlet.x,
+      stackCenterY,
+      outlet.z,
+    ], materials.darkMetal);
+    addCylinder(root, geometries, `smokestack-${side}-collar`, STACK_COLLAR_RADIUS, STACK_COLLAR_HEIGHT, [
+      outlet.x,
+      stackBaseY + STACK_COLLAR_HEIGHT / 2,
+      outlet.z,
+    ], materials.exposedMetal);
     addBlock(root, geometries, shellColliders, {
       name: `rust-streak-${side}-stack-collar`,
       size: [0.18, 0.7, 0.035],
-      position: [outlet.x, stackCenterY - STACK_HEIGHT / 2 - 0.2, machineryZ + STACK_RADIUS],
+      position: [outlet.x, stackBaseY - 0.2, machineryZ + STACK_RADIUS],
       material: materials.rust,
     });
   });

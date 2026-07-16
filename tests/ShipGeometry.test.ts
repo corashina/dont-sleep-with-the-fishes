@@ -155,6 +155,30 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
+  it('grounds both smokestacks and collars on the machinery island', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const island = build.root.getObjectByName('machinery-island');
+    expect(island).toBeInstanceOf(Mesh);
+    const islandTop = new Box3().setFromObject(island!).max.y;
+
+    (['port', 'starboard'] as const).forEach((side, index) => {
+      const stack = build.root.getObjectByName(`smokestack-${side}`);
+      const collar = build.root.getObjectByName(`smokestack-${side}-collar`);
+      expect(stack, side).toBeInstanceOf(Mesh);
+      expect(collar, side).toBeInstanceOf(Mesh);
+      const stackBounds = new Box3().setFromObject(stack!);
+      const collarBounds = new Box3().setFromObject(collar!);
+
+      expect(stackBounds.min.y, `${side} stack base`).toBeCloseTo(islandTop);
+      expect(collarBounds.min.y, `${side} collar base`).toBeCloseTo(islandTop);
+      expect(stackBounds.max.y, `${side} outlet`).toBeCloseTo(build.stackOutlets[index]!.y);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('keeps both loop doorways and the lifeboat rail opening clear', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
