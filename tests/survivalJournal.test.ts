@@ -110,4 +110,15 @@ describe('formatJournalEntry', () => {
     });
     expect(record.inventoryMutations).toEqual([{ kind: 'break', instanceIds: ['bucket-1'] }]);
   });
+
+  it('uses plural verbs for multi-item mutation summaries', () => {
+    const page = formatJournalEntry(entry({
+      nighttime: event({
+        inventoryMutations: [{ kind: 'lose', instanceIds: ['anchor-1', 'map-1'] }],
+      }),
+    }));
+
+    expect(page.nighttime).toContain('The anchor and map were lost.');
+    expect(page.nighttime).not.toContain('anchor and map was lost');
+  });
 });

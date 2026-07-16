@@ -81,11 +81,12 @@ function listLabels(instanceIds: readonly ItemInstanceId[]): string {
 function formatMutations(mutations: readonly JournalInventoryMutation[]): string {
   return mutations.map((mutation) => {
     const labels = listLabels(mutation.instanceIds);
+    const be = mutation.instanceIds.length === 1 ? 'was' : 'were';
     switch (mutation.kind) {
       case 'break': return ` The ${labels} broke.`;
-      case 'consume': return ` The ${labels} was used up.`;
-      case 'lose': return ` The ${labels} was lost.`;
-      case 'repair': return ` The ${labels} was repaired.`;
+      case 'consume': return ` The ${labels} ${be} used up.`;
+      case 'lose': return ` The ${labels} ${be} lost.`;
+      case 'repair': return ` The ${labels} ${be} repaired.`;
     }
   }).join('');
 }
