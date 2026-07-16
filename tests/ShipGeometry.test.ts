@@ -323,6 +323,32 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
+  it('covers each enclosed room with a steel roof that meets its wall top', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const roofThickness = 0.24;
+    const roofOverhang = 0.175;
+
+    SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
+      const roof = build.root.getObjectByName(`${zone.id}-roof`);
+      expect(roof, zone.id).toBeInstanceOf(Mesh);
+      const bounds = new Box3().setFromObject(roof!);
+      const wallHeight = zone.id === 'wheelhouse' ? 3.4 : 3.2;
+
+      expect(bounds.min.x, `${zone.id} min x`).toBeCloseTo(zone.bounds.minX - roofOverhang);
+      expect(bounds.max.x, `${zone.id} max x`).toBeCloseTo(zone.bounds.maxX + roofOverhang);
+      expect(bounds.min.z, `${zone.id} min z`).toBeCloseTo(zone.bounds.minZ - roofOverhang);
+      expect(bounds.max.z, `${zone.id} max z`).toBeCloseTo(zone.bounds.maxZ + roofOverhang);
+      expect(bounds.min.y, `${zone.id} roof bottom`)
+        .toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + wallHeight);
+      expect(bounds.max.y - bounds.min.y, `${zone.id} roof thickness`)
+        .toBeCloseTo(roofThickness);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('uses one compact stern island and keeps every end-deck target open', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);

@@ -49,6 +49,8 @@ const WINDOW_GLASS_THICKNESS = 0.035;
 const MACHINERY_VISUAL_HEIGHT = 1.15;
 const MACHINERY_COLLIDER_HEIGHT = 2.4;
 const ROOM_CORNER_SIZE = 0.24;
+const ROOM_ROOF_THICKNESS = 0.24;
+const ROOM_ROOF_OVERHANG = 0.175;
 const STACK_X = 1.35;
 const STACK_OUTLET_Y = 7.1;
 const STACK_HEIGHT = 2.6;
@@ -401,6 +403,10 @@ function segmentTransform(
     : { size: [length, height, thickness], position: [center, centerY, segment.fixed] };
 }
 
+function roomWallHeight(zoneId: ShipZoneId): number {
+  return zoneId === 'wheelhouse' ? WHEELHOUSE_WALL_HEIGHT : WALL_HEIGHT;
+}
+
 function addWallSegments(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -455,12 +461,6 @@ function addWallSegments(
       material: materials.paintedSteel,
     });
   }
-  addBlock(root, geometries, shellColliders, {
-    name: 'wheelhouse-roof',
-    size: [width + 0.35, 0.24, wheelhouse.maxZ - wheelhouse.minZ + 0.35],
-    position: [(wheelhouse.minX + wheelhouse.maxX) / 2, wallBottomY + WHEELHOUSE_WALL_HEIGHT + 0.12, (wheelhouse.minZ + wheelhouse.maxZ) / 2],
-    material: materials.paintedSteel,
-  });
 }
 
 function addRoomCornerCaps(
@@ -471,7 +471,7 @@ function addRoomCornerCaps(
   layout: ShipLayoutSpec,
 ): void {
   layout.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
-    const height = zone.id === 'wheelhouse' ? WHEELHOUSE_WALL_HEIGHT : WALL_HEIGHT;
+    const height = roomWallHeight(zone.id);
     const material = zone.id === 'storageWorkroom'
       ? materials.paintedSteel
       : materials.paintedPanel;
@@ -483,6 +483,34 @@ function addRoomCornerCaps(
         material,
         collider: true,
       });
+    });
+  });
+}
+
+function addRoomRoofs(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  shellColliders: CollisionBox[],
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  layout.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
+    const width = zone.bounds.maxX - zone.bounds.minX;
+    const length = zone.bounds.maxZ - zone.bounds.minZ;
+    const wallTopY = FREIGHTER_DIMENSIONS.deckY + roomWallHeight(zone.id);
+    addBlock(root, geometries, shellColliders, {
+      name: `${zone.id}-roof`,
+      size: [
+        width + ROOM_ROOF_OVERHANG * 2,
+        ROOM_ROOF_THICKNESS,
+        length + ROOM_ROOF_OVERHANG * 2,
+      ],
+      position: [
+        (zone.bounds.minX + zone.bounds.maxX) / 2,
+        wallTopY + ROOM_ROOF_THICKNESS / 2,
+        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
+      ],
+      material: materials.paintedSteel,
     });
   });
 }
@@ -731,6 +759,7 @@ export function createShipGeometry(
 
   addWallSegments(root, geometries, shellColliders, materials, layout);
   addRoomCornerCaps(root, geometries, shellColliders, materials, layout);
+  addRoomRoofs(root, geometries, shellColliders, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
   addRails(root, geometries, shellColliders, materials, layout);
