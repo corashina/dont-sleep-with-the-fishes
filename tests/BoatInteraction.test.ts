@@ -8,15 +8,15 @@ import {
 
 describe('BoatInteraction', () => {
   it('maps recovered tools to approved actions', () => {
-    expect(ACTION_FOR_ITEM).toMatchObject({
+    expect(ACTION_FOR_ITEM).toEqual({
+      cannedFood: 'eat',
+      ductTape: 'repairItem',
+      medicalKit: 'treat',
+      bottledPaper: 'sendMessage',
+      energyBar: 'useEnergyBar',
       fishingRod: 'fish',
       scubaSet: 'dive',
-      cannedFood: 'eat',
-      ductTape: 'repair',
-      medicalKit: 'treat',
-      waterJug: 'rest',
     });
-    expect(ACTION_FOR_ITEM.flareGun).toBeUndefined();
   });
 
   it('projects visible anchors and hides points behind the camera', () => {

@@ -119,6 +119,10 @@ const GRID_MIN_X = -6;
 const GRID_MAX_X = 6;
 const GRID_MIN_Z = -17.6;
 const GRID_MAX_Z = 17.6;
+const CABIN_ITEM_CATEGORIES = ['provisions'] as const;
+const WHEELHOUSE_ITEM_CATEGORIES = ['navigation'] as const;
+const WORKROOM_ITEM_CATEGORIES = ['workshop', 'deckGear'] as const;
+const CARGO_ITEM_CATEGORIES = ['deckGear'] as const;
 
 const EXACT_FURNITURE_MODEL_BY_ID: Readonly<Record<string, ShipFurnitureKind>> = Object.freeze({
   'cabin-bunk-port': 'bedBunk',
@@ -270,6 +274,7 @@ function tableSurfaces(
     { width: 0.8, depth: 0.72 },
     0.82,
     [[x, 0, -1.25], [x, 0, 1.25]],
+    { localRotation: [0, PI_OVER_TWO, 0] },
   ));
 }
 
@@ -285,7 +290,7 @@ function bookcaseSurfaces(
     [0, height, -0.08],
     { width: 0.7, depth: 0.35 },
     levelIndex < 3 ? 0.43 : 0.82,
-    [[0, 0, -0.85]],
+    [[0, 0, levelIndex === 0 ? -1.15 : -0.85]],
   ));
 }
 
@@ -293,6 +298,7 @@ function sideTableSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
   standingZ = -0.9,
+  localRotationY = 0,
 ): readonly ShipItemSurfaceSpec[] {
   return [itemSurface(
     furnitureId,
@@ -302,6 +308,7 @@ function sideTableSurfaces(
     { width: 0.85, depth: 0.32 },
     0.75,
     [[0, 0, standingZ]],
+    { localRotation: [0, localRotationY, 0] },
   )];
 }
 
@@ -320,18 +327,18 @@ function placement(
 const furniture: readonly ShipFurniturePlacementSpec[] = [
   placement('cabin-bunk-port', 'bedBunk', 'crewCabin', [-3, 2.22, 7.9], 0, [1.147, 1.708, 2.2]),
   placement('cabin-bunk-starboard', 'bedBunk', 'crewCabin', [3, 2.22, 7.9], 0, [1.147, 1.708, 2.2]),
-  placement('cabin-desk-aft', 'desk', 'crewCabin', [-1.8, 2.22, 4.05], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', ['foodWater'])),
-  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 9.48], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', ['foodWater'])),
-  placement('helm-desk-forward', 'desk', 'wheelhouse', [0, 2.22, 13.25], 0, [1.7, 0.89, 0.908], deskSurfaces('helm-desk-forward', ['medicalEmergency'])),
-  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [2.1, 2.22, 11.2], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', ['medicalEmergency'], 0.9)),
-  placement('instrument-cabinet-starboard-aft', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 12], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-aft', ['medicalEmergency'])),
-  placement('instrument-cabinet-starboard-forward', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 13.15], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-forward', ['medicalEmergency'])),
-  placement('workbench-port', 'table', 'storageWorkroom', [-2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', ['toolsRepair'])),
-  placement('workbench-starboard', 'table', 'storageWorkroom', [2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', ['toolsRepair'])),
-  placement('storage-shelf-port', 'bookcaseOpen', 'storageWorkroom', [-1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-port', ['toolsRepair'])),
-  placement('storage-shelf-starboard', 'bookcaseOpen', 'storageWorkroom', [1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-starboard', ['toolsRepair'])),
+  placement('cabin-desk-aft', 'desk', 'crewCabin', [-1.8, 2.22, 4.05], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
+  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 9.48], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES)),
+  placement('helm-desk-forward', 'desk', 'wheelhouse', [0, 2.22, 13.25], 0, [1.7, 0.89, 0.908], deskSurfaces('helm-desk-forward', WHEELHOUSE_ITEM_CATEGORIES)),
+  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [2.1, 2.22, 11.2], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 0.9, PI_OVER_TWO)),
+  placement('instrument-cabinet-starboard-aft', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 12], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-aft', WHEELHOUSE_ITEM_CATEGORIES)),
+  placement('instrument-cabinet-starboard-forward', 'sideTableDrawers', 'wheelhouse', [3.2, 2.22, 13.15], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-forward', WHEELHOUSE_ITEM_CATEGORIES)),
+  placement('workbench-port', 'table', 'storageWorkroom', [-2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', WORKROOM_ITEM_CATEGORIES)),
+  placement('workbench-starboard', 'table', 'storageWorkroom', [2.55, 2.22, -9.78], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', WORKROOM_ITEM_CATEGORIES)),
+  placement('storage-shelf-port', 'bookcaseOpen', 'storageWorkroom', [-1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-port', WORKROOM_ITEM_CATEGORIES)),
+  placement('storage-shelf-starboard', 'bookcaseOpen', 'storageWorkroom', [1.7, 2.22, -6.82], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-starboard', WORKROOM_ITEM_CATEGORIES)),
   placement('cargo-rod-rack-forward-port', 'cargoRack', 'cargoDeck', [-2.6, 2.22, 2.3], 0, [2.1, 0.55, 0.75], [itemSurface(
-    'cargo-rod-rack-forward-port', 'rod', ['fishingDiving'], [0, 0.55, 0],
+    'cargo-rod-rack-forward-port', 'rod', CARGO_ITEM_CATEGORIES, [0, 0.55, 0],
     { width: 1.9, depth: 0.5 }, 0.82, [[0, 0, -1.15], [0, 0, 1.15]],
     { localRotation: [0, PI_OVER_TWO, 0] },
   )]),
@@ -341,7 +348,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     ['cargo-crate-aft-starboard', 2.6, -5.8],
   ] as const).map(([id, x, z]) => placement(
     id, 'cargoCrate', 'cargoDeck', [x, 2.22, z], 0, [1.35, 1.05, 1.15],
-    [itemSurface(id, 'top', ['fishingDiving'], [0, 1.05, 0], { width: 1.05, depth: 0.85 }, 0.95, [[0, 0, -1.15], [0, 0, 1.15]])],
+    [itemSurface(id, 'top', CARGO_ITEM_CATEGORIES, [0, 1.05, 0], { width: 1.05, depth: 0.85 }, 0.95, [[0, 0, -1.15], [0, 0, 1.15]])],
   )),
 ];
 

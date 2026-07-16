@@ -1,24 +1,35 @@
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import {
+  ITEM_DEFINITIONS,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
-import { createSurvivalInventory } from './inventory';
+import { resolveWeightedOutcome } from './eventResolver';
+import { SurvivalInventoryState } from './inventory';
 import type {
   JournalEntry,
   JournalEventRecord,
   JournalNightRecord,
+  JournalInventoryMutation,
   JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
+  DayActionOption,
   DayActionId,
+  EventResponseId,
+  EventInventoryMutation,
+  ItemCondition,
   PresentationCue,
   RandomSource,
   ResourceDelta,
   SurvivalEventDefinition,
-  SurvivalInventory,
   SurvivalSnapshot,
   SurvivalState,
+  ResourceEffect,
   WeatherId,
 } from './survivalTypes';
 
@@ -27,10 +38,17 @@ export interface SurvivalSessionOptions {
   random?: RandomSource;
   weather?: WeatherId;
   initial?: Partial<Pick<SurvivalSnapshot, 'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress'>>;
+  initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
 }
 
-export type DayActionOption = 'useBait' | 'repairMaterial' | 'ductTape';
+declare module './survivalTypes' {
+  interface SurvivalSnapshot {
+    readonly pendingEventTargetId?: ItemInstanceId | null;
+  }
+}
+
+export type { DayActionOption } from './survivalTypes';
 
 interface Rejection {
   code: string;
@@ -54,10 +72,11 @@ export class SurvivalSession {
   private restedToday = false;
   private actedToday = false;
   private dayEventOccurred = false;
-  private readonly inventory: SurvivalInventory;
+  private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
+  private pendingEventTargetId: ItemInstanceId | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
@@ -79,7 +98,8 @@ export class SurvivalSession {
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
-    this.inventory = createSurvivalInventory(this.savedItems);
+    this.inventory = new SurvivalInventoryState(this.savedItems);
+    this.applyInitialConditions(options.initialConditions);
 
     if (options.initialEventId !== undefined) {
       const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
@@ -88,21 +108,16 @@ export class SurvivalSession {
       this.dayEventOccurred = initialEvent.phase === 'day';
     }
 
-    this.recoveredBait = this.inventory.baitTin.charges ?? 0;
-    this.recoveredFood = this.inventory.cannedFood.charges ?? 0;
+    this.recoveredFood = this.inventory.count('cannedFood', 'usable');
+    this.recoveredBait = this.inventory.count('baitTin', 'usable');
     this.bait = this.recoveredBait;
     this.food = this.recoveredFood;
-    this.inventory.baitTin.charges = 0;
-    this.inventory.cannedFood.charges = 0;
 
     this.clampMeters();
     this.resolveTerminal();
   }
 
   snapshot(): SurvivalSnapshot {
-    const inventory = Object.fromEntries(
-      Object.entries(this.inventory).map(([id, entry]) => [id, { ...entry }]),
-    ) as SurvivalInventory;
     const lastOutcome = this.lastOutcome === null
       ? null
       : { ...this.lastOutcome, deltas: { ...this.lastOutcome.deltas } };
@@ -124,9 +139,10 @@ export class SurvivalSession {
       restedToday: this.restedToday,
       actedToday: this.actedToday,
       journalEntries: this.journalSnapshot(),
-      inventory,
+      inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
+      pendingEventTargetId: this.pendingEventTargetId,
       lastOutcome,
       seed: this.seed,
     };
@@ -140,15 +156,21 @@ export class SurvivalSession {
     const unavailable = this.unavailable(action, option);
     if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
 
+    let outcome: ActionOutcome;
     switch (action) {
-      case 'fish': return this.fish(option === 'useBait');
-      case 'dive': return this.dive();
-      case 'eat': return this.eat();
-      case 'repair': return this.repair(option);
-      case 'treat': return this.treat();
-      case 'rest': return this.rest();
+      case 'fish': outcome = this.fish(option?.kind === 'fishing' && option.useBait); break;
+      case 'dive': outcome = this.dive(); break;
+      case 'eat': outcome = this.eat(); break;
+      case 'repair': outcome = this.repair(option); break;
+      case 'repairItem': outcome = this.repairItem(option); break;
+      case 'treat': outcome = this.treat(); break;
+      case 'rest': outcome = this.rest(); break;
+      case 'sendMessage': outcome = this.sendMessage(); break;
+      case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'endDay': return this.endDay();
     }
+    this.actedToday = true;
+    return outcome;
   }
 
   requestDayEvent(): ActionOutcome {
@@ -179,39 +201,84 @@ export class SurvivalSession {
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
 
-  resolveEvent(itemId: ItemId | null): ActionOutcome {
+  resolveEvent(choiceId: EventResponseId | null): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
       return this.reject('no-event', 'There is no unresolved event.');
     }
 
     const event = this.pendingEvent;
-    if (itemId !== null && !this.canUseEventItem(itemId)) {
+    let choice = event.choices.find((candidate) => candidate.id === (choiceId ?? 'sleep'));
+    let attemptedItemId: ItemId | null = choice?.itemId ?? null;
+    const mutationExclusions = new Set<ItemInstanceId>();
+    let resolution: JournalResolution = choice?.itemId === undefined ? 'endure' : 'suitableItem';
+    if (choice === undefined) {
+      if (choiceId === null || !Object.hasOwn(ITEM_DEFINITIONS, choiceId)) {
+        return this.reject('choice-unavailable', 'That response is not available for this event.');
+      }
+      attemptedItemId = choiceId as ItemId;
+      const attemptedInstanceId = this.usableEventItemInstanceId(attemptedItemId);
+      if (attemptedInstanceId === null) {
+        return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
+      }
+      mutationExclusions.add(attemptedInstanceId);
+      choice = event.choices.find((candidate) => candidate.itemId === undefined);
+      if (choice === undefined) {
+        throw new Error(`Event ${event.id} requires exactly one itemless fallback choice.`);
+      }
+      resolution = 'unsuitableItem';
+    }
+    if (choice.itemId !== undefined && !this.canUseEventItem(choice.itemId)) {
       return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
     }
-    const phase = event.phase;
-    const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
-    const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
-    const response = itemId === null ? event.endure : usable ? matching! : event.unsuitable;
-    const resolution: JournalResolution = itemId === null
-      ? 'endure'
-      : usable ? 'suitableItem' : 'unsuitableItem';
 
-    if (usable && matching!.consume) this.consumeCharge(matching!.itemId);
+    const phase = event.phase;
+    const before = this.resourceValues();
+    const resolved = resolveWeightedOutcome(choice, this.random);
+    const inventoryMutations: JournalInventoryMutation[] = [];
+    for (const effect of resolved.effects.resources ?? []) {
+      inventoryMutations.push(...this.applyEventResource(effect, mutationExclusions));
+    }
+    for (const mutation of resolved.effects.items ?? []) {
+      const concrete = this.applyEventMutation(mutation, mutationExclusions);
+      if (concrete !== null) inventoryMutations.push(concrete);
+    }
+
+    if (resolved.effects.rescue === true) this.state = 'rescued';
+    else this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.pendingEvent = null;
     this.pendingEventId = null;
+    this.pendingEventTargetId = null;
 
-    if (usable && matching!.rescue === true) this.state = 'rescued';
-    const outcome = this.commit('event-resolved', response.message, { ...response.deltas }, response.cue);
-    this.recordJournalEvent(event, itemId, resolution, outcome);
+    const after = this.resourceValues();
+    const deltas = this.appliedResourceDelta(before, after);
+    const cue = this.presentationCue(event.cue);
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: resolution === 'unsuitableItem'
+        ? `That item cannot help. ${resolved.message}`
+        : resolved.message,
+      deltas,
+      cue,
+    };
+    this.lastOutcome = outcome;
+    this.recordJournalEvent(
+      event,
+      choiceId,
+      attemptedItemId,
+      resolution,
+      outcome,
+      inventoryMutations,
+    );
 
     if (!this.isTerminal()) {
       if (phase === 'day') this.state = 'day';
       else this.state = 'nightEvent';
     }
-    return outcome;
+    return { ...outcome, deltas: { ...outcome.deltas } };
   }
 
   beginDawn(): ActionOutcome {
@@ -226,6 +293,7 @@ export class SurvivalSession {
     this.dayEventOccurred = false;
     this.pendingEvent = null;
     this.pendingEventId = null;
+    this.pendingEventTargetId = null;
     this.state = 'day';
 
     const weatherRoll = this.random.next();
@@ -264,23 +332,25 @@ export class SurvivalSession {
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
+    const invalidOption = this.invalidOption(action, option);
+    if (invalidOption !== null) return invalidOption;
     if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
     if (this.state !== 'day') return { code: 'not-daytime', message: 'That action is only available during the day.' };
 
     switch (action) {
       case 'fish':
-        if (!this.inventory.fishingRod.owned) {
+        if (!this.inventory.hasUsable('fishingRod')) {
           return { code: 'no-fishing-rod', message: 'Fishing requires a recovered fishing rod.' };
         }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
         }
-        if (option === 'useBait' && this.bait < 1) {
+        if (option?.kind === 'fishing' && option.useBait && this.bait < 1) {
           return { code: 'no-bait', message: 'No bait remains.' };
         }
         return null;
       case 'dive':
-        if (!this.inventory.scubaSet.owned) {
+        if (!this.inventory.hasUsable('scubaSet')) {
           return { code: 'no-scuba-set', message: 'Diving requires a recovered scuba set.' };
         }
         if (this.weather === 'squall') {
@@ -301,32 +371,73 @@ export class SurvivalSession {
         if (this.energy < SURVIVAL_BALANCE.actions.repairEnergy) {
           return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
         }
-        if (option === 'ductTape') {
-          if (!this.hasCharge('ductTape')) return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+        if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
+          if (!this.inventory.hasUsable('ductTape')) {
+            return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+          }
           return null;
         }
         if (this.repairMaterial < 1) {
           return { code: 'no-repair-material', message: 'No repair material remains.' };
         }
         return null;
+      case 'repairItem': {
+        if (!this.inventory.hasUsable('ductTape')) {
+          return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+        }
+        if (option?.kind !== 'itemRepair') {
+          return { code: 'no-repair-target', message: 'Choose a broken item to repair.' };
+        }
+        const target = this.inventory.snapshot()[option.target];
+        if (target === undefined || target.condition !== 'broken' || !ITEM_DEFINITIONS[target.type].breakable) {
+          return { code: 'item-not-repairable', message: 'That item cannot be repaired.' };
+        }
+        return null;
+      }
       case 'treat':
         if (this.health >= SURVIVAL_BALANCE.thresholds.maximum) {
           return { code: 'health-full', message: 'No treatment is needed.' };
         }
-        if (!this.hasCharge('medicalKit')) {
+        if (!this.inventory.hasUsable('medicalKit')) {
           return { code: 'no-medical-kit', message: 'No medical-kit charges remain.' };
         }
         return null;
       case 'rest':
         if (this.restedToday) return { code: 'already-rested', message: 'You have already rested today.' };
-        if (this.energy >= SURVIVAL_BALANCE.dawn.normalEnergy) {
+        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
           return { code: 'energy-full', message: 'Your energy is already full.' };
         }
-        if (!this.hasCharge('waterJug')) return { code: 'no-water', message: 'No water remains.' };
+        return null;
+      case 'sendMessage':
+        if (!this.inventory.hasUsable('bottledPaper')) {
+          return { code: 'no-bottled-paper', message: 'No bottled paper remains.' };
+        }
+        if (this.energy < SURVIVAL_BALANCE.actions.bottledPaperEnergy) {
+          return { code: 'not-enough-energy', message: 'Sending the message requires one energy.' };
+        }
+        return null;
+      case 'useEnergyBar':
+        if (!this.inventory.hasUsable('energyBar')) {
+          return { code: 'no-energy-bar', message: 'No energy bar remains.' };
+        }
+        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
+          return { code: 'energy-full', message: 'Your energy is already full.' };
+        }
         return null;
       case 'endDay':
         return null;
     }
+  }
+
+  private invalidOption(action: DayActionId, option?: DayActionOption): Rejection | null {
+    const valid = action === 'fish'
+      ? option === undefined || option?.kind === 'fishing'
+      : action === 'repair'
+        ? option?.kind === 'hullRepair'
+        : action === 'repairItem'
+          ? option?.kind === 'itemRepair'
+          : option === undefined;
+    return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
   }
 
   private fish(useBait: boolean): ActionOutcome {
@@ -345,7 +456,6 @@ export class SurvivalSession {
 
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.fishEnergy, food };
     if (useBait) deltas.bait = -1;
-    this.actedToday = true;
     return this.commit(
       caught ? 'fish-caught' : 'fish-missed',
       caught ? `You caught ${food === 2 ? 'two fish' : 'a fish'}.` : 'The line came back empty.',
@@ -355,7 +465,7 @@ export class SurvivalSession {
   }
 
   private dive(): ActionOutcome {
-    const hasFlashlight = this.inventory.flashlight.owned;
+    const hasFlashlight = this.inventory.hasUsable('flashlight');
     const weatherSuccessDelta = this.weather === 'overcast' ? SURVIVAL_BALANCE.diving.overcastSuccessDelta : 0;
     const weatherInjuryDelta = this.weather === 'overcast' ? SURVIVAL_BALANCE.diving.overcastInjuryDelta : 0;
     const successChance = (hasFlashlight ? SURVIVAL_BALANCE.diving.flashlightSuccess : SURVIVAL_BALANCE.diving.success)
@@ -375,7 +485,6 @@ export class SurvivalSession {
       else deltas.rescueProgress = 10;
     }
 
-    this.actedToday = true;
     return this.commit(
       recovered ? 'dive-recovered' : 'dive-empty',
       recovered ? 'You surfaced with useful salvage.' : 'You found nothing beneath the boat.',
@@ -394,9 +503,8 @@ export class SurvivalSession {
   }
 
   private repair(option?: DayActionOption): ActionOutcome {
-    this.actedToday = true;
-    if (option === 'ductTape') {
-      this.consumeCharge('ductTape');
+    if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
+      this.inventory.consume('ductTape', 1);
       return this.commit(
         'repaired-with-duct-tape',
         'The emergency patch holds for now.',
@@ -417,8 +525,17 @@ export class SurvivalSession {
     );
   }
 
+  private repairItem(option?: DayActionOption): ActionOutcome {
+    if (option?.kind !== 'itemRepair') {
+      return this.reject('no-repair-target', 'Choose a broken item to repair.');
+    }
+    this.inventory.repair(option.target);
+    this.inventory.consume('ductTape', 1);
+    return this.commit('item-repaired', 'The duct tape makes the item usable again.', {}, 'repair');
+  }
+
   private treat(): ActionOutcome {
-    this.consumeCharge('medicalKit');
+    this.inventory.consume('medicalKit', 1);
     return this.commit(
       'treated',
       'You clean and dress your wounds.',
@@ -428,13 +545,27 @@ export class SurvivalSession {
   }
 
   private rest(): ActionOutcome {
-    this.consumeCharge('waterJug');
     this.restedToday = true;
     const restoredEnergy = Math.min(
       SURVIVAL_BALANCE.actions.restEnergy,
-      SURVIVAL_BALANCE.dawn.normalEnergy - this.energy,
+      SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
     );
-    return this.commit('rested', 'Water and a brief rest restore your strength.', { energy: restoredEnergy }, 'rest');
+    return this.commit('rested', 'A brief rest restores your strength.', { energy: restoredEnergy }, 'rest');
+  }
+
+  private sendMessage(): ActionOutcome {
+    this.inventory.consume('bottledPaper', 1);
+    return this.commit('message-sent', 'You cast the message into the current.', {
+      energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
+      rescueProgress: SURVIVAL_BALANCE.actions.bottledPaperRescueProgress,
+    }, 'sighting');
+  }
+
+  private useEnergyBar(): ActionOutcome {
+    this.inventory.consume('energyBar', 1);
+    return this.commit('energy-bar-used', 'The ration restores your strength.', {
+      energy: SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
+    }, 'none');
   }
 
   private drawEvent(phase: 'day' | 'night'): SurvivalEventDefinition {
@@ -444,25 +575,30 @@ export class SurvivalSession {
       weather: this.weather,
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
+      targetableItemIds: this.targetableItemIds(),
     });
     return drawWeightedEvent(pool, this.random, phase);
   }
 
   private recordJournalEvent(
     event: SurvivalEventDefinition,
+    attemptedChoiceId: string | null,
     attemptedItemId: ItemId | null,
     resolution: JournalResolution,
     outcome: ActionOutcome,
+    inventoryMutations: readonly JournalInventoryMutation[],
   ): void {
     const record: JournalEventRecord = {
       phase: event.phase,
       eventId: event.id,
       title: event.title,
       prompt: event.prompt,
+      attemptedChoiceId,
       attemptedItemId,
       resolution,
       outcomeCode: outcome.code,
       outcomeMessage: outcome.message,
+      inventoryMutations: this.cloneInventoryMutations(inventoryMutations),
     };
     if (event.phase === 'day') {
       this.pendingJournalDaytime = record;
@@ -486,26 +622,70 @@ export class SurvivalSession {
   private cloneJournalNight(record: JournalNightRecord): JournalNightRecord {
     return record.kind === 'quiet'
       ? { kind: 'quiet' }
-      : { kind: 'event', event: { ...record.event } };
+      : { kind: 'event', event: this.cloneJournalRecord(record.event) };
   }
 
   private journalSnapshot(): readonly JournalEntry[] {
     return this.journalEntries.map((entry) => ({
       ...entry,
-      daytime: entry.daytime === null ? null : { ...entry.daytime },
+      daytime: entry.daytime === null ? null : this.cloneJournalRecord(entry.daytime),
       nighttime: this.cloneJournalNight(entry.nighttime),
     }));
+  }
+
+  private cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
+    return Object.freeze({
+      ...record,
+      inventoryMutations: this.cloneInventoryMutations(record.inventoryMutations),
+    });
+  }
+
+  private cloneInventoryMutations(
+    mutations: readonly JournalInventoryMutation[],
+  ): readonly JournalInventoryMutation[] {
+    return Object.freeze(mutations.map((mutation) => Object.freeze({
+      kind: mutation.kind,
+      instanceIds: Object.freeze([...mutation.instanceIds]),
+    })));
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
     this.pendingEvent = event;
     this.pendingEventId = event.id;
+    this.pendingEventTargetId = event.targetItemIds === undefined ? null : this.drawEventTarget(event);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
   }
 
+  private targetableItemIds(): ReadonlySet<ItemId> {
+    return new Set(Object.values(this.inventory.snapshot())
+      .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
+      .map((item) => item!.type));
+  }
+
+  private drawEventTarget(event: SurvivalEventDefinition): ItemInstanceId | null {
+    const targetItemIds = new Set(event.targetItemIds ?? []);
+    const candidates = Object.values(this.inventory.snapshot())
+      .filter((item) => (item?.condition === 'usable' || item?.condition === 'broken')
+        && targetItemIds.has(item.type))
+      .map((item) => item!.instanceId)
+      .sort();
+    if (candidates.length === 0) return null;
+    const roll = this.random.next();
+    const index = Number.isFinite(roll)
+      ? Math.min(candidates.length - 1, Math.max(0, Math.floor(roll * candidates.length)))
+      : 0;
+    return candidates[index] ?? null;
+  }
+
   private canUseEventItem(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    return entry.owned && (entry.durable || (entry.charges !== null && entry.charges > 0));
+    return this.usableEventItemInstanceId(id) !== null;
+  }
+
+  private usableEventItemInstanceId(id: ItemId): ItemInstanceId | null {
+    return Object.values(this.inventory.snapshot())
+      .filter((item) => item?.type === id && item.condition === 'usable')
+      .map((item) => item!.instanceId)
+      .sort()[0] ?? null;
   }
 
   private reject(code: string, message: string): ActionOutcome {
@@ -535,44 +715,181 @@ export class SurvivalSession {
     };
   }
 
-  private applyDeltas(deltas: ResourceDelta): void {
-    this.recoveredFood = this.remainingRecoveredUses(
-      this.recoveredFood,
-      this.food,
-      deltas.food,
-    );
-    this.recoveredBait = this.remainingRecoveredUses(
-      this.recoveredBait,
-      this.bait,
-      deltas.bait,
-    );
-    this.health += deltas.health ?? 0;
-    this.hunger += deltas.hunger ?? 0;
-    this.energy += deltas.energy ?? 0;
-    this.hull += deltas.hull ?? 0;
-    this.food += deltas.food ?? 0;
-    this.bait += deltas.bait ?? 0;
-    this.repairMaterial += deltas.repairMaterial ?? 0;
-    this.rescueProgress += deltas.rescueProgress ?? 0;
-    this.clampMeters();
+  private presentationCue(cue: PresentationCue): PresentationCue {
+    if (this.state === 'dead') return 'death';
+    if (this.state === 'sunk') return 'sinking';
+    if (this.state === 'rescued') return 'rescue';
+    return cue;
   }
 
-  private remainingRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
-    if (delta === undefined || delta >= 0) return recovered;
-    const consumed = Math.min(aggregate, -delta);
-    return Math.max(0, recovered - consumed);
+  private applyEventResource(
+    effect: ResourceEffect,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
+  ): JournalInventoryMutation[] {
+    if (typeof effect.value !== 'number') {
+      throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
+    }
+    const current = this.resourceValues()[effect.resource];
+    const delta = effect.operation === 'set'
+      ? effect.value - current
+      : effect.operation === 'add' ? effect.value : -effect.value;
+    return this.applyDeltas({ [effect.resource]: delta }, excludedInstanceIds);
+  }
+
+  private applyEventMutation(
+    mutation: EventInventoryMutation,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
+  ): JournalInventoryMutation | null {
+    let kind: JournalInventoryMutation['kind'];
+    let instanceIds: ItemInstanceId[];
+    switch (mutation.kind) {
+      case 'consume':
+        kind = 'consume';
+        instanceIds = this.inventory.consume(mutation.itemId, mutation.quantity, excludedInstanceIds);
+        break;
+      case 'break':
+        kind = 'break';
+        instanceIds = this.mutateMatchingInstances(
+          mutation.itemId,
+          mutation.quantity,
+          excludedInstanceIds,
+          (instanceId) => this.inventory.break(instanceId),
+        );
+        break;
+      case 'lose':
+        kind = 'lose';
+        instanceIds = this.mutateMatchingInstances(
+          mutation.itemId,
+          mutation.quantity,
+          excludedInstanceIds,
+          (instanceId) => this.inventory.lose(instanceId),
+        );
+        break;
+      case 'breakRandom':
+        kind = 'break';
+        instanceIds = this.inventory.breakRandom(mutation.quantity, this.random, excludedInstanceIds);
+        break;
+      case 'loseRandom':
+        kind = 'lose';
+        instanceIds = this.inventory.loseRandom(mutation.quantity, this.random, excludedInstanceIds);
+        break;
+      case 'loseEventTarget':
+        kind = 'lose';
+        instanceIds = this.pendingEventTargetId !== null
+          && !excludedInstanceIds.has(this.pendingEventTargetId)
+          && this.inventory.lose(this.pendingEventTargetId)
+          ? [this.pendingEventTargetId]
+          : [];
+        break;
+    }
+    if (instanceIds.length === 0) return null;
+    this.synchronizeRemovedResources(kind, instanceIds);
+    return { kind, instanceIds };
+  }
+
+  private mutateMatchingInstances(
+    itemId: ItemId,
+    quantity: number,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
+    mutate: (instanceId: ItemInstanceId) => boolean,
+  ): ItemInstanceId[] {
+    const candidates = Object.values(this.inventory.snapshot())
+      .filter((item) => item?.type === itemId)
+      .map((item) => item!.instanceId)
+      .filter((instanceId) => !excludedInstanceIds.has(instanceId))
+      .sort();
+    const mutated: ItemInstanceId[] = [];
+    for (const instanceId of candidates) {
+      if (mutated.length >= quantity) break;
+      if (mutate(instanceId)) mutated.push(instanceId);
+    }
+    return mutated;
+  }
+
+  private synchronizeRemovedResources(
+    kind: JournalInventoryMutation['kind'],
+    instanceIds: readonly ItemInstanceId[],
+  ): void {
+    if (kind !== 'consume' && kind !== 'lose') return;
+    const snapshot = this.inventory.snapshot();
+    const food = instanceIds.filter((id) => snapshot[id]?.type === 'cannedFood').length;
+    const bait = instanceIds.filter((id) => snapshot[id]?.type === 'baitTin').length;
+    if (food > 0) {
+      this.recoveredFood = Math.max(0, this.recoveredFood - food);
+      this.food = Math.max(0, this.food - food);
+    }
+    if (bait > 0) {
+      this.recoveredBait = Math.max(0, this.recoveredBait - bait);
+      this.bait = Math.max(0, this.bait - bait);
+    }
+  }
+
+  private appliedResourceDelta(
+    before: Required<ResourceDelta>,
+    after: Required<ResourceDelta>,
+  ): ResourceDelta {
+    const applied: ResourceDelta = {};
+    for (const key of Object.keys(before) as Array<keyof ResourceDelta>) {
+      const delta = after[key] - before[key];
+      if (delta !== 0) applied[key] = delta;
+    }
+    return applied;
+  }
+
+  private applyDeltas(
+    deltas: ResourceDelta,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): JournalInventoryMutation[] {
+    const adjustedDeltas = { ...deltas };
+    if (adjustedDeltas.food !== undefined && adjustedDeltas.food < 0) {
+      const protectedFood = this.protectedUsableCount('cannedFood', excludedInstanceIds);
+      adjustedDeltas.food = Math.max(adjustedDeltas.food, protectedFood - this.food);
+    }
+    if (adjustedDeltas.bait !== undefined && adjustedDeltas.bait < 0) {
+      const protectedBait = this.protectedUsableCount('baitTin', excludedInstanceIds);
+      adjustedDeltas.bait = Math.max(adjustedDeltas.bait, protectedBait - this.bait);
+    }
+    const spentRecoveredFood = this.spentRecoveredUses(this.recoveredFood, this.food, adjustedDeltas.food);
+    const spentRecoveredBait = this.spentRecoveredUses(this.recoveredBait, this.bait, adjustedDeltas.bait);
+    this.health += adjustedDeltas.health ?? 0;
+    this.hunger += adjustedDeltas.hunger ?? 0;
+    this.energy += adjustedDeltas.energy ?? 0;
+    this.hull += adjustedDeltas.hull ?? 0;
+    this.food += adjustedDeltas.food ?? 0;
+    this.bait += adjustedDeltas.bait ?? 0;
+    this.repairMaterial += adjustedDeltas.repairMaterial ?? 0;
+    this.rescueProgress += adjustedDeltas.rescueProgress ?? 0;
+    this.clampMeters();
+    const consumedFood = spentRecoveredFood > 0
+      ? this.inventory.consume('cannedFood', spentRecoveredFood, excludedInstanceIds)
+      : [];
+    const consumedBait = spentRecoveredBait > 0
+      ? this.inventory.consume('baitTin', spentRecoveredBait, excludedInstanceIds)
+      : [];
+    this.recoveredFood -= consumedFood.length;
+    this.recoveredBait -= consumedBait.length;
+    const consumed = [...consumedFood, ...consumedBait];
+    return consumed.length === 0 ? [] : [{ kind: 'consume', instanceIds: consumed }];
+  }
+
+  private spentRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
+    if (delta === undefined || delta >= 0) return 0;
+    return Math.min(recovered, aggregate, -delta);
   }
 
   private consumeCharge(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    if (!entry.owned || entry.charges === null || entry.charges <= 0) return false;
-    entry.charges -= 1;
-    return true;
+    return this.inventory.consume(id).length > 0;
   }
 
-  private hasCharge(id: ItemId): boolean {
-    const entry = this.inventory[id];
-    return entry.owned && entry.charges !== null && entry.charges > 0;
+  private protectedUsableCount(
+    type: ItemId,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
+  ): number {
+    return Object.values(this.inventory.snapshot()).filter((item) => (
+      item?.type === type
+      && item.condition === 'usable'
+      && excludedInstanceIds.has(item.instanceId)
+    )).length;
   }
 
   private resolveTerminal(): void {
@@ -588,11 +905,28 @@ export class SurvivalSession {
   private clampMeters(): void {
     this.health = Math.min(100, Math.max(0, this.health));
     this.hunger = Math.min(100, Math.max(0, this.hunger));
-    this.energy = Math.min(100, Math.max(0, this.energy));
+    this.energy = Math.min(SURVIVAL_BALANCE.actions.maximumEnergy, Math.max(0, this.energy));
     this.hull = Math.min(100, Math.max(0, this.hull));
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
     this.rescueProgress = Math.max(0, this.rescueProgress);
+  }
+
+  private applyInitialConditions(
+    initialConditions: Partial<Record<ItemInstanceId, ItemCondition>> | undefined,
+  ): void {
+    if (initialConditions === undefined) return;
+    for (const [rawInstanceId, condition] of Object.entries(initialConditions)) {
+      if (condition === undefined) continue;
+      const instanceId = rawInstanceId as ItemInstanceId;
+      const item = this.inventory.snapshot()[instanceId];
+      if (item === undefined) throw new Error(`Unknown instance: ${instanceId}`);
+      const applied = condition === 'usable'
+        || (condition === 'broken' && this.inventory.break(instanceId))
+        || (condition === 'lost' && this.inventory.lose(instanceId))
+        || (condition === 'consumed' && this.inventory.consumeInstance(instanceId));
+      if (!applied) throw new Error(`Illegal condition for ${instanceId}: ${condition}`);
+    }
   }
 }

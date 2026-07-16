@@ -240,7 +240,7 @@ describe('GameUI', () => {
 
     ui.showFailureResult(session.snapshot());
 
-    expect(mount.querySelector('[data-result-items]')?.textContent).toContain('SAVED — CANNED FOOD');
+    expect(mount.querySelector('[data-result-items]')?.textContent).toContain('SAVED — FOOD');
   });
 
   it('reports saved supplies without a five-slot limit', () => {
@@ -251,6 +251,26 @@ describe('GameUI', () => {
 
     expect(mount.querySelector('[data-result-items]')?.textContent).toContain('6 SUPPLIES SAVED');
     expect(mount.querySelector('[data-result-items]')?.textContent).not.toContain('/ 5');
+  });
+
+  it('groups saved Food and Bait quantities in catalog order', () => {
+    const mount = document.createElement('main');
+    const session = new ScavengeSession([
+      { instanceId: 'baitTin-1', type: 'baitTin' },
+      { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      { instanceId: 'cannedFood-2', type: 'cannedFood' },
+      { instanceId: 'baitTin-2', type: 'baitTin' },
+    ]);
+    session.start();
+    for (const id of ['baitTin-1', 'cannedFood-1', 'cannedFood-2', 'baitTin-2'] as const) {
+      session.pickUp(id);
+      session.saveCarried();
+    }
+    const ui = new GameUI(mount);
+
+    ui.showFailureResult(session.snapshot());
+
+    expect(mount.querySelector('[data-result-items]')?.textContent).toContain('FOOD x2 · BAIT x2');
   });
 
   it('does not rewrite an unchanged live-region prompt', () => {

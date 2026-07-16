@@ -22,6 +22,25 @@ import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
+vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/world/ShipItemPlacement')>();
+  const { Euler, Vector3 } = await import('three');
+  return {
+    ...actual,
+    assignShipItems: (instances: readonly ItemInstance[]) => new Map(instances.map(
+      (instance, index) => [instance.instanceId, {
+        surfaceId: `lifecycle-surface-${index}`,
+        physicalSlotId: `lifecycle-slot-${index}`,
+        furnitureId: 'lifecycle-fixture',
+        position: new Vector3(index, 1, 0),
+        rotation: new Euler(),
+        scale: 1,
+        usedFallbackSurface: false,
+      }],
+    )),
+  };
+});
+
 function gamePhase(): GamePhase {
   return {
     start: vi.fn(),
@@ -378,10 +397,10 @@ describe('ScavengePhase lifecycle integration', () => {
     const firstItems = updateInteraction.mock.calls[0]![0];
     const firstInstances = updateInteraction.mock.calls[0]![2];
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
-    expect(internals.world.itemObjects.size).toBe(14);
-    expect(firstItems).toHaveLength(14);
+    expect(internals.world.itemObjects.size).toBe(22);
+    expect(firstItems).toHaveLength(22);
     expect(firstItems).toContain(cannedFood);
-    expect(firstInstances.size).toBe(14);
+    expect(firstInstances.size).toBe(22);
     expect(firstInstances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1',
       type: 'cannedFood',
@@ -392,7 +411,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
     const nextItems = updateInteraction.mock.calls[1]![0];
     const nextInstances = updateInteraction.mock.calls[1]![2];
-    expect(nextItems).toHaveLength(13);
+    expect(nextItems).toHaveLength(21);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();

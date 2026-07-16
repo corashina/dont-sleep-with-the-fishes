@@ -2,12 +2,13 @@ import { Box3, Mesh, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,
+  ITEM_IDS,
   createItemInstances,
   type ItemId,
   type ItemInstance,
 } from '../src/game/ItemState';
 import { boatStorageTransform } from '../src/world/BoatStorage';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat, lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import {
   boatStorageEnvelopesOverlap,
   measureBoatStorageEnvelope,
@@ -61,7 +62,8 @@ describe('boat item layout', () => {
 
   it('defines exactly one stable transform per possible item instance', () => {
     const instances = createItemInstances();
-    expect(instances).toHaveLength(14);
+    expect(instances).toHaveLength(22);
+    expect([...new Set(instances.map(({ type }) => type))]).toEqual(ITEM_IDS);
     for (const instance of instances) {
       const first = boatStorageTransform(instance);
       const second = boatStorageTransform(instance);
@@ -116,6 +118,30 @@ describe('boat item layout', () => {
           ).toBe(false);
         }
       }
+    } finally {
+      roots.forEach(disposeOwnedMeshes);
+      library.dispose();
+    }
+  });
+
+  it('keeps every production-model maximum-inventory envelope inside the interpolated hull', async () => {
+    const library = await loadProductionPropModels();
+    const instances = createItemInstances();
+    const roots = instances.map((instance) => placedProductionProp(library, instance));
+    try {
+      const violations: string[] = [];
+      roots.forEach((root, index) => {
+        const envelope = measureBoatStorageEnvelope(root);
+        for (const z of [envelope.min.y, envelope.max.y]) {
+          const halfWidth = lifeboatHullHalfWidthAt(z);
+          if (halfWidth === null || envelope.min.x < -halfWidth || envelope.max.x > halfWidth) {
+            violations.push(
+              `${instances[index]!.instanceId}: x=${envelope.min.x.toFixed(3)}..${envelope.max.x.toFixed(3)}, z=${z.toFixed(3)}, halfWidth=${halfWidth?.toFixed(3) ?? 'outside'}`,
+            );
+          }
+        }
+      });
+      expect(violations).toEqual([]);
     } finally {
       roots.forEach(disposeOwnedMeshes);
       library.dispose();

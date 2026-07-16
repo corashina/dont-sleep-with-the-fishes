@@ -26,7 +26,7 @@ import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { collectMeshResources } from '../src/world/SceneResources';
-import { createSurvivalInventory } from '../src/survival/inventory';
+import { SurvivalInventoryState } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import {
   createTestPropModels,
@@ -80,7 +80,7 @@ function snapshot(
     restedToday: false,
     actedToday: false,
     journalEntries: [],
-    inventory: createSurvivalInventory(savedItems),
+    inventory: new SurvivalInventoryState(savedItems).snapshot(),
     savedItems,
     pendingEventId: null,
     lastOutcome: null,
@@ -525,17 +525,26 @@ describe('BoatWorld helpers', () => {
       );
       const anchors = world.projectInteractionAnchors(1280, 720)
         .filter((anchor) => anchor.itemType !== null && anchor.visible);
-      expect(anchors).toHaveLength(14);
+      expect(anchors).toHaveLength(22);
+      const tooClose: string[] = [];
+      let minimumSpacing = Number.POSITIVE_INFINITY;
       for (let first = 0; first < anchors.length; first += 1) {
         for (let second = first + 1; second < anchors.length; second += 1) {
           const distance = Math.hypot(
             anchors[first]!.x - anchors[second]!.x,
             anchors[first]!.y - anchors[second]!.y,
           );
-          expect(distance, `${anchors[first]!.id} is too close to ${anchors[second]!.id}`)
-            .toBeGreaterThanOrEqual(40);
+          minimumSpacing = Math.min(minimumSpacing, distance);
+          if (distance < 40) {
+            tooClose.push(
+              `${anchors[first]!.id}(${anchors[first]!.x.toFixed(1)},${anchors[first]!.y.toFixed(1)})/`
+              + `${anchors[second]!.id}(${anchors[second]!.x.toFixed(1)},${anchors[second]!.y.toFixed(1)}): ${distance.toFixed(2)}px`,
+            );
+          }
         }
       }
+      expect(tooClose).toEqual([]);
+      expect(minimumSpacing).toBeGreaterThanOrEqual(40);
     } finally {
       world?.dispose();
       propModels.dispose();
@@ -622,7 +631,7 @@ describe('BoatWorld helpers', () => {
     const savedItems = [
       savedItem('cannedFood', 3),
       savedItem('fishingRod'),
-      savedItem('ductTape', 2),
+      savedItem('ductTape'),
       savedItem('scubaSet'),
     ];
     const propModels = createTestPropModels();
@@ -638,7 +647,7 @@ describe('BoatWorld helpers', () => {
     expect(storage.children.map(({ name }) => name)).toEqual([
       'prop:cannedFood-3',
       'prop:fishingRod-1',
-      'prop:ductTape-2',
+      'prop:ductTape-1',
       'prop:scubaSet-1',
     ]);
     storage.children.forEach((prop, index) => {
@@ -652,14 +661,13 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('synchronizes recovered food, bait, and inventory charges without loose gains refilling props', () => {
+  it('synchronizes exact per-instance conditions without loose gains refilling props', () => {
     const savedItems = [
       savedItem('cannedFood'),
       savedItem('cannedFood', 2),
       savedItem('baitTin'),
       savedItem('baitTin', 2),
-      savedItem('ductTape'),
-      savedItem('ductTape', 2),
+      savedItem('bucket'),
     ];
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -669,55 +677,46 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
-    const inventory = createSurvivalInventory(savedItems);
-    inventory.ductTape.charges = 1;
+    const inventory = new SurvivalInventoryState(savedItems);
+    inventory.consumeInstance('cannedFood-2');
+    inventory.consumeInstance('baitTin-2');
+    inventory.break('bucket-1');
 
     world.syncInventory(snapshot(savedItems, {
       food: 1,
       bait: 1,
       recoveredFood: 1,
       recoveredBait: 1,
-      inventory,
+      inventory: inventory.snapshot(),
     }));
 
     const foodOne = world.scene.getObjectByName('prop:cannedFood-1')!;
     const foodTwo = world.scene.getObjectByName('prop:cannedFood-2')!;
     const baitOne = world.scene.getObjectByName('prop:baitTin-1')!;
     const baitTwo = world.scene.getObjectByName('prop:baitTin-2')!;
-    const tapeOne = world.scene.getObjectByName('prop:ductTape-1')!;
-    const tapeTwo = world.scene.getObjectByName('prop:ductTape-2')!;
-    const tapeOneMaterial = firstMesh(tapeOne).material as MeshStandardMaterial;
-    const tapeTwoMaterial = firstMesh(tapeTwo).material as MeshStandardMaterial;
-    const tapeOriginalColor = tapeOneMaterial.color.getHex();
+    const bucket = world.scene.getObjectByName('prop:bucket-1')!;
+    const brokenMaterial = firstMesh(bucket).material as MeshStandardMaterial;
     expect([foodOne.visible, foodTwo.visible]).toEqual([true, false]);
-    expect([foodOne.userData.depleted, foodTwo.userData.depleted]).toEqual([false, true]);
-    expect([baitOne.visible, baitTwo.visible]).toEqual([true, true]);
-    expect([baitOne.userData.depleted, baitTwo.userData.depleted]).toEqual([false, true]);
-    expect([tapeOne.userData.depleted, tapeTwo.userData.depleted]).toEqual([false, true]);
-    expect(tapeOneMaterial).not.toBe(tapeTwoMaterial);
-    expect(tapeOneMaterial.color.getHex()).toBe(tapeOriginalColor);
-    expect(tapeTwoMaterial.color.getHex()).not.toBe(tapeOriginalColor);
-
-    inventory.ductTape.charges = 4;
+    expect([foodOne.userData.depleted, foodTwo.userData.depleted]).toEqual([false, false]);
+    expect([baitOne.visible, baitTwo.visible]).toEqual([true, false]);
+    expect(bucket.visible).toBe(true);
+    inventory.repair('bucket-1');
     world.syncInventory(snapshot(savedItems, {
       food: 2,
       bait: 6,
       recoveredFood: 1,
       recoveredBait: 1,
-      inventory,
+      inventory: inventory.snapshot(),
     }));
     expect(foodTwo.visible).toBe(false);
-    expect(foodTwo.userData.depleted).toBe(true);
-    expect(baitTwo.userData.depleted).toBe(true);
-    expect(tapeTwo.userData.depleted).toBe(false);
-    expect(tapeOneMaterial.color.getHex()).toBe(tapeOriginalColor);
-    expect(tapeTwoMaterial.color.getHex()).toBe(tapeOriginalColor);
+    expect(baitTwo.visible).toBe(false);
+    expect(firstMesh(bucket).material).not.toBe(brokenMaterial);
     world.dispose();
     propModels.dispose();
   });
 
-  it('highlights only the selected instance and restores depleted presentation', () => {
-    const savedItems = [savedItem('ductTape'), savedItem('ductTape', 2)];
+  it('highlights only the selected visible instance and restores broken presentation', () => {
+    const savedItems = [savedItem('bucket'), savedItem('map')];
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -726,19 +725,19 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
-    const inventory = createSurvivalInventory(savedItems);
-    inventory.ductTape.charges = 1;
-    world.syncInventory(snapshot(savedItems, { inventory }));
+    const inventory = new SurvivalInventoryState(savedItems);
+    inventory.break('bucket-1');
+    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
 
-    const first = world.scene.getObjectByName('prop:ductTape-1')!;
-    const second = world.scene.getObjectByName('prop:ductTape-2')!;
+    const first = world.scene.getObjectByName('prop:map-1')!;
+    const second = world.scene.getObjectByName('prop:bucket-1')!;
     const firstMaterial = firstMesh(first).material as MeshStandardMaterial;
     const secondMaterial = firstMesh(second).material as MeshStandardMaterial;
     const firstEmissive = firstMaterial.emissive.getHex();
     const secondEmissive = secondMaterial.emissive.getHex();
     const depletedColor = secondMaterial.color.getHex();
 
-    world.setHighlightedItem('ductTape-2');
+    world.setHighlightedItem('bucket-1');
     expect(secondMaterial.emissive.getHex()).not.toBe(secondEmissive);
     expect(firstMaterial.emissive.getHex()).toBe(firstEmissive);
 
@@ -753,7 +752,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects saved props plus the fixed repair anchor', () => {
+  it('projects saved props plus fixed action anchors', () => {
     const savedItems = [savedItem('fishingRod'), savedItem('flareGun')];
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
@@ -768,17 +767,17 @@ describe('BoatWorld helpers', () => {
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
-    expect(anchors).toHaveLength(savedItems.length + 1);
+    expect(anchors).toHaveLength(savedItems.length + 3);
     expect(anchors).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish' }),
       expect.objectContaining({ id: 'flareGun-1', itemType: 'flareGun', action: null }),
       expect.objectContaining({ id: 'repair-patch', itemType: null, action: 'repair' }),
+      expect.objectContaining({ id: 'horizon', itemType: null, action: 'endDay', visible: true }),
+      expect.objectContaining({ id: 'rest', itemType: null, action: 'rest', visible: true }),
     ]));
-    expect(anchors.some(({ id }) => id === 'horizon')).toBe(false);
-    expect(anchors.some(({ action }) => action === 'endDay')).toBe(false);
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
     const itemAnchor = anchors.find(({ id }) => id === 'fishingRod-1')!;
-    const fixedAnchor = anchors.find(({ id }) => id === 'repair-patch')!;
+    const fixedAnchor = anchors.find(({ id }) => id === 'horizon')!;
     expect(itemAnchor.hitArea).toEqual({
       width: expect.any(Number),
       height: expect.any(Number),
@@ -791,9 +790,36 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects per-instance remaining uses for duplicate and contextual supplies', () => {
+  it('keeps broken props inspectable, hides used and lost props, and restores repaired state', () => {
+    const savedItems = [savedItem('bucket'), savedItem('energyBar'), savedItem('map')];
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    const inventory = new SurvivalInventoryState(savedItems);
+    inventory.break('bucket-1');
+    inventory.consumeInstance('energyBar-1');
+    inventory.lose('map-1');
+    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
+    expect(world.scene.getObjectByName('prop:bucket-1')?.visible).toBe(true);
+    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === 'bucket-1'))
+      .toMatchObject({ action: null, depleted: false });
+    expect(world.scene.getObjectByName('prop:energyBar-1')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('prop:map-1')?.visible).toBe(false);
+    inventory.repair('bucket-1');
+    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
+    expect(world.scene.getObjectByName('prop:bucket-1')?.visible).toBe(true);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('projects usable actions and hides consumed instances', () => {
     const savedItems = [
-      savedItem('ductTape'), savedItem('ductTape', 2),
+      savedItem('ductTape'),
       savedItem('baitTin'), savedItem('baitTin', 2),
       savedItem('flareGun'), savedItem('flashlight'),
     ];
@@ -807,18 +833,16 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
-    const inventory = createSurvivalInventory(savedItems);
-    inventory.ductTape.charges = 1;
-    inventory.flareGun.charges = 1;
+    const inventory = new SurvivalInventoryState(savedItems);
+    inventory.consumeInstance('baitTin-2');
 
-    world.syncInventory(snapshot(savedItems, { bait: 3, recoveredBait: 3, inventory }));
+    world.syncInventory(snapshot(savedItems, { bait: 3, recoveredBait: 1, inventory: inventory.snapshot() }));
     const anchors = world.projectInteractionAnchors(800, 600);
 
     expect(anchors).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'ductTape-1', remainingUses: 1, depleted: false }),
-      expect.objectContaining({ id: 'ductTape-2', remainingUses: 0, depleted: true }),
-      expect.objectContaining({ id: 'baitTin-1', remainingUses: 3, depleted: false }),
-      expect.objectContaining({ id: 'baitTin-2', remainingUses: 0, depleted: true }),
+      expect.objectContaining({ id: 'baitTin-1', remainingUses: 1, depleted: false }),
+      expect.objectContaining({ id: 'baitTin-2', visible: false, depleted: false }),
       expect.objectContaining({ id: 'flareGun-1', remainingUses: 1, depleted: false }),
       expect.objectContaining({ id: 'flashlight-1', remainingUses: null, depleted: false }),
     ]));

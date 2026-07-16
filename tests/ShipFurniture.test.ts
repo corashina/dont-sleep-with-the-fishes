@@ -53,7 +53,7 @@ describe('ship furniture', () => {
       surfaces: [{
         id: 'scaled-table:top',
         physicalSlotId: 'scaled-table:top',
-        categories: ['toolsRepair' as const],
+        categories: ['workshop' as const],
         localPosition: [0, 1, 0] as const,
         localRotation: [0, 0, 0] as const,
         footprint: { width: 0.5, depth: 0.25 },
@@ -108,16 +108,20 @@ describe('ship furniture', () => {
     library.dispose();
   });
 
-  it('rejects a shelf slot whose camera-height ray enters its owner above the opening', () => {
+  it('keeps the restored lowest cabin shelf within its owner aperture sightline', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 1);
+    const lowestShelf = ship.itemSurfaces.find(({ id }) =>
+      id === 'cabin-bookcase-forward:level-1')!;
 
-    expect(ship.itemSurfaces.map(({ id }) => id)).not.toContain(
-      'cabin-bookcase-forward:level-1',
-    );
-    expect(ship.itemSurfaces.map(({ id }) => id)).toContain(
-      'cabin-bookcase-forward:level-2',
-    );
+    expect(lowestShelf).toBeDefined();
+    expect(lowestShelf.standingPoints).toHaveLength(1);
+    expect(lowestShelf.standingPoints[0]!.z).toBeCloseTo(8.33);
+    expect(isShipSurfaceStandingPointVisible(
+      lowestShelf,
+      lowestShelf.standingPoints[0]!,
+      ship.colliders,
+    )).toBe(true);
     ship.itemSurfaces.forEach((surface) => surface.standingPoints.forEach((point) =>
       expect(isShipSurfaceStandingPointVisible(surface, point, ship.colliders), surface.id)
         .toBe(true)));
@@ -132,7 +136,7 @@ describe('ship furniture', () => {
       physicalSlotId: 'solid-table:inside',
       furnitureId: 'solid-table',
       furnitureModelId: 'table' as const,
-      categories: ['toolsRepair' as const],
+      categories: ['workshop' as const],
       position: new Vector3(0, 2.5, 0),
       rotation: new Euler(),
       footprint: { width: 0.5, depth: 0.5 },

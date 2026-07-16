@@ -1,16 +1,22 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import { ITEM_DEFINITIONS, type ItemInstance } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import { BoatWorld } from './BoatWorld';
-import { SURVIVAL_EVENTS } from './events';
+import { survivalEventById } from './events';
 import { SurvivalSession } from './SurvivalSession';
-import type { DayActionOption } from './SurvivalSession';
-import type { ActionOutcome, DayActionId, SurvivalSnapshot, SurvivalState } from './survivalTypes';
+import type {
+  ActionOutcome,
+  DayActionId,
+  DayActionOption,
+  EventResponseId,
+  SurvivalSnapshot,
+  SurvivalState,
+} from './survivalTypes';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -180,7 +186,7 @@ export class SurvivalPhase implements GamePhase {
 
   handleAction(action: DayActionId, option?: DayActionOption): void {
     if (!this.canAcceptCommand()) return;
-    const selectedOption = action === 'repair' ? this.repairOption() : option;
+    const selectedOption = action === 'repair' ? this.repairOption(this.session.snapshot()) : option;
     const outcome = this.session.perform?.(action, selectedOption);
     if (outcome === undefined) return;
     if (!outcome.accepted) {
@@ -198,8 +204,8 @@ export class SurvivalPhase implements GamePhase {
     void this.runDayAction(outcome);
   }
 
-  handleEventItem(itemId: ItemId): void {
-    this.resolveEvent(itemId);
+  handleEventItem(choiceId: EventResponseId): void {
+    this.resolveEvent(choiceId);
   }
 
   handleEndure(): void {
@@ -284,12 +290,26 @@ export class SurvivalPhase implements GamePhase {
     this.world.setPointer?.(normalizedX, normalizedY);
   }
 
-  private repairOption(): DayActionOption | undefined {
-    const snapshot = this.session.snapshot();
-    if (snapshot.repairMaterial > 0) return 'repairMaterial';
-    const ductTape = snapshot.inventory.ductTape;
-    if (ductTape.owned && (ductTape.charges ?? 0) > 0) return 'ductTape';
+  private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
+    if (snapshot.repairMaterial > 0) {
+      return { kind: 'hullRepair', material: 'repairMaterial' };
+    }
+    const hasDuctTape = Object.values(snapshot.inventory).some(
+      (item) => item?.type === 'ductTape' && item.condition === 'usable',
+    );
+    if (hasDuctTape) return { kind: 'hullRepair', material: 'ductTape' };
     return undefined;
+  }
+
+  private repairItemReason(snapshot: SurvivalSnapshot): string | null {
+    const target = Object.values(snapshot.inventory).find(
+      (item) => item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable,
+    );
+    if (target === undefined) return 'No broken repairable item remains.';
+    return this.session.availableReason?.('repairItem', {
+      kind: 'itemRepair',
+      target: target.instanceId,
+    }) ?? null;
   }
 
   private canAcceptCommand(): boolean {
@@ -374,10 +394,10 @@ export class SurvivalPhase implements GamePhase {
     this.openPendingEvent(snapshot);
   }
 
-  private resolveEvent(itemId: ItemId | null): void {
+  private resolveEvent(choiceId: EventResponseId | null): void {
     if (!this.canAcceptCommand()) return;
     const eventState = this.session.snapshot().state;
-    const outcome = this.session.resolveEvent?.(itemId);
+    const outcome = this.session.resolveEvent?.(choiceId);
     if (outcome === undefined) return;
     if (!outcome.accepted) {
       this.ui.showFeedback?.(outcome);
@@ -428,13 +448,13 @@ export class SurvivalPhase implements GamePhase {
     this.syncVisualState(snapshot);
     this.world.setWeather?.(snapshot.weather);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
-    this.ui.render?.(
-      snapshot,
-      (action) => this.session.availableReason?.(
+    this.ui.render?.(snapshot, (action) => {
+      if (action === 'repairItem') return this.repairItemReason(snapshot);
+      return this.session.availableReason?.(
         action,
-        action === 'repair' ? this.repairOption() : undefined,
-      ) ?? null,
-    );
+        action === 'repair' ? this.repairOption(snapshot) : undefined,
+      ) ?? null;
+    });
     this.syncJournalUnread(snapshot);
     this.syncPresentation(snapshot);
     if (presentTerminal) this.presentTerminalOnce(snapshot);
@@ -458,7 +478,7 @@ export class SurvivalPhase implements GamePhase {
 
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
-    const event = SURVIVAL_EVENTS.find((candidate) => candidate.id === snapshot.pendingEventId);
+    const event = survivalEventById(snapshot.pendingEventId);
     if (event !== undefined) this.ui.showEvent?.(event, snapshot);
   }
 
