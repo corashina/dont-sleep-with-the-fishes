@@ -47,6 +47,16 @@ describe('water exclusions', () => {
     )).toBe(false);
   });
 
+  it('narrows a rounded exclusion toward the bow and stern', () => {
+    const vessel = new Group();
+    const region = createWaterExclusion(vessel, 1.6, 3.04, 1.05);
+
+    expect(pointInWaterExclusion(new Vector3(1.5, 0, 0), region)).toBe(true);
+    expect(pointInWaterExclusion(new Vector3(0.4, 0, 2.95), region)).toBe(true);
+    expect(pointInWaterExclusion(new Vector3(1.3, 0, 2.4), region)).toBe(false);
+    expect(pointInWaterExclusion(new Vector3(-1.3, 0, -2.4), region)).toBe(false);
+  });
+
   it('starts with explicit inactive fixed-size uniform defaults', () => {
     const ocean = new OceanRenderer();
 
@@ -61,6 +71,7 @@ describe('water exclusions', () => {
       new Vector4(),
       new Vector4(),
     ]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
     ocean.dispose();
   });
 
@@ -86,6 +97,7 @@ describe('water exclusions', () => {
       firstRegion.bounds,
       secondRegion.bounds,
     ]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([2, 10.2]);
     ocean.dispose();
   });
 
@@ -107,6 +119,7 @@ describe('water exclusions', () => {
       new Vector4(),
       new Vector4(),
     ]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
     ocean.dispose();
   });
 
