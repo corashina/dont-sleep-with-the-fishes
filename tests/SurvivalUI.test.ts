@@ -5,8 +5,9 @@ import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { sequenceRandom } from '../src/survival/random';
-import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalEventDefinition, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
 const activeUIs: SurvivalUI[] = [];
@@ -27,9 +28,11 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
     title: 'Quiet Night',
     prompt: `Night ${day} settled over the boat.`,
     attemptedItemId: null,
+    attemptedChoiceId: null,
     resolution: 'endure',
     outcomeCode: 'event-resolved',
     outcomeMessage: 'I made it through until morning.',
+    inventoryMutations: [],
   },
 }));
 
@@ -46,7 +49,7 @@ function createUI(mount: HTMLElement): SurvivalUI {
     { id: 'cannedFood-test', itemType: 'cannedFood', action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
     { id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 440, y: 280, visible: true, depleted: false },
     { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
-    { id: 'waterJug-test', itemType: 'waterJug', action: 'rest', remainingUses: 3, x: 640, y: 220, visible: true, depleted: false },
+    { id: 'rest', itemType: null, action: 'rest', remainingUses: null, x: 640, y: 220, visible: true, depleted: false },
     { id: 'horizon', itemType: null, action: 'endDay', remainingUses: null, x: 400, y: 80, visible: true, depleted: false },
   ]);
   activeUIs.push(ui);
@@ -55,7 +58,7 @@ function createUI(mount: HTMLElement): SurvivalUI {
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    ...new SurvivalSession(saved('fishingRod', 'waterJug'), {
+    ...new SurvivalSession(saved('fishingRod'), {
       seed: 7,
       random: sequenceRandom([0.5]),
     }).snapshot(),
@@ -63,7 +66,82 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   };
 }
 
+function testEvent(itemIds: readonly ItemId[] = ['fishingRod']): SurvivalEventDefinition {
+  const selected = itemIds.length > 0 ? itemIds : ['fishingRod'] as const;
+  const eventChoice = (itemId: ItemId) => ({
+    id: itemId,
+    label: `Use ${itemId}`,
+    itemId,
+    outcomes: [{ weight: 1, message: 'Nothing happens.', effects: {} }] as const,
+  });
+  const [first, ...rest] = selected;
+  return {
+    id: 'test',
+    phase: 'day',
+    title: 'A shadow',
+    prompt: 'Something moves below.',
+    danger: 'dangerous',
+    earliestDay: 1,
+    weight: 1,
+    cooldownDays: 0,
+    cue: 'impact',
+    choices: [eventChoice(first!), ...rest.map(eventChoice)],
+  };
+}
+
 describe('SurvivalUI', () => {
+  it('keeps Rest available without Water and exposes catalog-backed one-use actions', () => {
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    const state = new SurvivalSession(saved('bottledPaper', 'energyBar'), { seed: 1, initial: { energy: 2 } }).snapshot();
+    ui.render(state, () => null);
+    ui.setAnchors([
+      { id: 'bottledPaper-1', itemType: 'bottledPaper', action: 'sendMessage', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
+      { id: 'energyBar-2', itemType: 'energyBar', action: 'useEnergyBar', remainingUses: 1, x: 200, y: 100, visible: true, depleted: false },
+      { id: 'rest', itemType: null, action: 'rest', remainingUses: null, x: 300, y: 100, visible: true, depleted: false },
+    ]);
+    expect(mount.querySelector('[data-action="rest"]')).not.toBeNull();
+    expect(mount.querySelector('[data-action="sendMessage"]')?.textContent).toContain('BOTTLED PAPER');
+    expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY BAR');
+    expect(mount.textContent).not.toContain('WATER');
+  });
+
+  it('chooses only broken repairable instance targets with a discriminated option', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    const state = new SurvivalSession(saved('ductTape', 'bucket', 'flashlight', 'compass'), {
+      seed: 2,
+      initialConditions: { 'bucket-2': 'broken', 'compass-4': 'broken' },
+    }).snapshot();
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(state, () => null);
+    ui.setAnchors([{ id: 'ductTape-1', itemType: 'ductTape', action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false }]);
+    mount.querySelector<HTMLButtonElement>('[data-action="repairItem"]')!.click();
+    const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
+    expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
+    targets[0]!.click();
+    expect(action).toHaveBeenCalledWith('repairItem', { kind: 'itemRepair', target: 'bucket-2' });
+  });
+
+  it('renders authored event choices with concrete target and condition reasons', () => {
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher')!;
+    const state = new SurvivalSession(saved('spyglass', 'swimRing', 'fishingNet'), {
+      seed: 3,
+      initialEventId: 'snatcher',
+      initialConditions: { 'spyglass-1': 'broken', 'swimRing-2': 'lost' },
+    }).snapshot();
+    ui.showEvent(event, state);
+    expect(mount.querySelector('[data-event-target]')?.textContent).toContain('SPYGLASS');
+    expect(mount.querySelector('[data-event-choice="spyglass"]')?.textContent).toContain('BROKEN');
+    expect(mount.querySelector('[data-event-choice="spyglass"]')?.getAttribute('aria-description')).toContain('broken');
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="spyglass"]')?.disabled).toBe(true);
+    expect(mount.querySelector('[data-event-choice="swimRing"]')?.textContent).toContain('LOST');
+    expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="fishingNet"]')?.disabled).toBe(false);
+  });
   it('opens the marker through a callback and browses completed pages newest first', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -174,7 +252,7 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith(null);
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
     expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
@@ -424,52 +502,47 @@ describe('SurvivalUI', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
-  it('keeps a depleted duplicate action anchor focusable but blocks its delegated action', () => {
+  it('keeps a broken item anchor inspectable without exposing a usable action', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const onAction = vi.fn();
-    ui.onAction = onAction;
-    ui.render(snapshot({ repairMaterial: 1 }), () => null);
-    ui.setAnchors([
-      {
-        id: 'ductTape-1', itemType: 'ductTape', action: 'repair', remainingUses: 1,
-        x: 320, y: 240, visible: true, depleted: false,
-      },
-      {
-        id: 'ductTape-2', itemType: 'ductTape', action: 'repair', remainingUses: 0,
-        x: 360, y: 240, visible: true, depleted: true,
-      },
-    ]);
+    const state = new SurvivalSession(saved('bucket'), {
+      seed: 1,
+      initialConditions: { 'bucket-1': 'broken' },
+    }).snapshot();
+    ui.render(state, () => null);
+    ui.setAnchors([{
+      id: 'bucket-1', itemType: 'bucket', action: null, remainingUses: 0,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
 
-    const available = mount.querySelector<HTMLButtonElement>('[data-anchor-id="ductTape-1"]')!;
-    const depleted = mount.querySelector<HTMLButtonElement>('[data-anchor-id="ductTape-2"]')!;
-    expect(depleted.disabled).toBe(false);
-    expect(depleted.getAttribute('aria-disabled')).toBe('true');
-    expect(depleted.textContent).toMatch(/DEPLETED.*0 USES REMAINING/i);
-    depleted.focus();
-    expect(document.activeElement).toBe(depleted);
-    depleted.click();
-    expect(onAction).not.toHaveBeenCalled();
-    available.click();
-    expect(onAction).toHaveBeenCalledWith('repair', undefined);
+    const broken = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
+    expect(broken.disabled).toBe(false);
+    expect(broken.textContent).toContain('BROKEN');
+    expect(broken.dataset.condition).toBe('broken');
+    broken.focus();
+    expect(document.activeElement).toBe(broken);
   });
 
-  it('shows remaining uses and durable state on contextual item tooltips', () => {
+  it('shows quantities and condition state on contextual item tooltips', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    ui.render(snapshot(), () => null);
+    const state = new SurvivalSession(saved('flareGun', 'flashlight', 'baitTin', 'bucket'), {
+      seed: 1,
+      initialConditions: { 'bucket-4': 'broken' },
+    }).snapshot();
+    ui.render(state, () => null);
     ui.setAnchors([
       { id: 'flareGun-1', itemType: 'flareGun', action: null, remainingUses: 1, x: 1, y: 1, visible: true, depleted: false },
-      { id: 'flashlight-1', itemType: 'flashlight', action: null, remainingUses: null, x: 2, y: 2, visible: true, depleted: false },
-      { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 3, x: 3, y: 3, visible: true, depleted: false },
-      { id: 'baitTin-2', itemType: 'baitTin', action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: true },
+      { id: 'flashlight-2', itemType: 'flashlight', action: null, remainingUses: null, x: 2, y: 2, visible: true, depleted: false },
+      { id: 'baitTin-3', itemType: 'baitTin', action: null, remainingUses: 1, x: 3, y: 3, visible: true, depleted: false },
+      { id: 'bucket-4', itemType: 'bucket', action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: false },
     ]);
 
-    expect(mount.querySelector('[data-anchor-id="flareGun-1"]')?.textContent).toMatch(/1 USE REMAINING/i);
-    expect(mount.querySelector('[data-anchor-id="flashlight-1"]')?.textContent).toMatch(/DURABLE/i);
-    expect(mount.querySelector('[data-anchor-id="baitTin-1"]')?.textContent).toMatch(/3 USES REMAINING/i);
-    expect(mount.querySelector('[data-anchor-id="baitTin-2"]')?.textContent).toMatch(/DEPLETED.*0 USES REMAINING/i);
+    expect(mount.querySelector('[data-anchor-id="flareGun-1"]')?.textContent).toContain('signal flare');
+    expect(mount.querySelector('[data-anchor-id="flashlight-2"]')?.textContent).toContain('visibility');
+    expect(mount.querySelector('[data-anchor-id="baitTin-3"]')?.textContent).toContain('BAIT x1');
+    expect(mount.querySelector('[data-anchor-id="bucket-4"]')?.textContent).toContain('BROKEN');
   });
 
   it('marks left, right, and top-edge anchors for on-screen tooltip placement', () => {
@@ -556,16 +629,15 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('HULL +8');
   });
 
-  it('marks transferred store items clearly and unavailable in event choices', () => {
+  it('shows aggregate Food and Bait quantities as usable event choices', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const state = new SurvivalSession(saved('cannedFood', 'baitTin'), { seed: 1 }).snapshot();
-    ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
+    ui.showEvent(testEvent(['cannedFood', 'baitTin']), state);
     for (const id of ['cannedFood', 'baitTin']) {
       const choice = mount.querySelector<HTMLButtonElement>(`[data-event-items] [data-item="${id}"]`)!;
-      expect(choice.textContent).toContain('TRANSFERRED TO STORES');
-      expect(choice.getAttribute('aria-description')).toContain('Use through day actions');
-      expect(choice.disabled).toBe(true);
+      expect(choice.textContent).toContain('x1');
+      expect(choice.disabled).toBe(false);
     }
   });
 
@@ -585,7 +657,7 @@ describe('SurvivalUI', () => {
     ]);
     expect(mount.querySelector('[data-item="baitTin"]')?.textContent).toMatch(/bait|fishing/i);
     expect(mount.querySelector('[data-item="fishingRod"]')?.textContent).toMatch(/food|fish/i);
-    ui.showEvent({ id: 'x', title: 'X', prompt: 'X', danger: 'safe' }, state);
+    ui.showEvent(testEvent(['fishingRod']), state);
     expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')?.getAttribute('aria-description')).toMatch(/food|fish/i);
   });
 
@@ -739,11 +811,11 @@ describe('SurvivalUI', () => {
     fish.click();
     expect(action).not.toHaveBeenCalled();
     mount.querySelector<HTMLButtonElement>('[data-action-option="fish"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', undefined);
+    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: false });
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
     mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', 'useBait');
+    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: true });
     expect(action).toHaveBeenCalledTimes(2);
   });
 
@@ -792,7 +864,7 @@ describe('SurvivalUI', () => {
     expect(options.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
     mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenCalledWith('fish', 'useBait');
+    expect(action).toHaveBeenCalledWith('fish', { kind: 'fishing', useBait: true });
   });
 
   it('keeps unavailable projected actions focusable while suppressing commands', () => {
@@ -827,12 +899,7 @@ describe('SurvivalUI', () => {
     expect(repair.getAttribute('aria-description')).toContain('No repair material');
     expect(mount.querySelector('[data-event]')?.hasAttribute('inert')).toBe(true);
 
-    ui.showEvent({
-      id: 'test',
-      title: 'A shadow',
-      prompt: 'Something moves below.',
-      danger: 'dangerous',
-    }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
 
     expect(mount.querySelector('[data-event]')?.classList).toContain('is-visible');
     expect(mount.querySelector('[data-event]')?.hasAttribute('inert')).toBe(false);
@@ -887,10 +954,10 @@ describe('SurvivalUI', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     fish.focus();
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
-    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="waterJug"]')!.click();
+    ui.showEvent(testEvent(), snapshot());
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="fishingRod"]')!.click();
     mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
-    expect(eventItem).toHaveBeenCalledWith('waterJug');
+    expect(eventItem).toHaveBeenCalledWith('fishingRod');
     expect(endure).toHaveBeenCalledOnce();
 
     ui.showOutcome({
@@ -1040,7 +1107,7 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', repeat: true }));
     expect(action).toHaveBeenCalledOnce();
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
     expect(action).toHaveBeenCalledOnce();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -1088,7 +1155,7 @@ describe('SurvivalUI', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const anchorLayer = mount.querySelector<HTMLElement>('[data-boat-anchors]')!;
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
     expect(anchorLayer.hasAttribute('inert')).toBe(true);
     fish.click();
     expect(action).not.toHaveBeenCalled();
@@ -1130,14 +1197,14 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
     const eventLayer = mount.querySelector<HTMLElement>('[data-event]')!;
     const eventTitle = mount.querySelector<HTMLElement>('[data-event-title]')!;
     ui.setPaused(true);
     expect(pause.hasAttribute('inert')).toBe(false);
     expect(eventLayer.hasAttribute('inert')).toBe(true);
     expect(eventLayer.getAttribute('aria-hidden')).toBe('true');
-    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="waterJug"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="fishingRod"]')!.click();
     mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
     expect(eventItem).not.toHaveBeenCalled();
     expect(endure).not.toHaveBeenCalled();
@@ -1177,7 +1244,7 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
 
-    ui.showEvent({ id: 'test', title: 'A shadow', prompt: 'Something moves below.', danger: 'dangerous' }, snapshot());
+    ui.showEvent(testEvent(), snapshot());
     const firstEventItem = mount.querySelector<HTMLButtonElement>('[data-event-items] button')!;
     const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));

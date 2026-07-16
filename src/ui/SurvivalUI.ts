@@ -1,11 +1,11 @@
-import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
-import type { DayActionOption } from '../survival/SurvivalSession';
+import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemId, type ItemInstanceId } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
+  DayActionOption,
   ResourceDelta,
   SurvivalEventDefinition,
   SurvivalSnapshot,
@@ -50,8 +50,11 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', effect: 'HUNGER -35', risk: 'safe' },
   { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', effect: 'HULL +25 (tape +15)', risk: 'safe' },
   { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'rest', label: 'REST', shortcut: '6', cost: '1 WATER', effect: 'ENERGY +2', risk: 'safe' },
+  { id: 'rest', label: 'REST', shortcut: '6', cost: 'NO COST', effect: 'ENERGY +2', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
+  { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', effect: 'Restore one broken item', risk: 'safe' },
+  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +20', risk: 'safe' },
+  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: 'ENERGY TO 4', risk: 'safe' },
 ];
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
@@ -62,8 +65,9 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
     case 'rest': return { ...definition, effect: `ENERGY +${Math.min(2, Math.max(0, 4 - snapshot.energy))}` };
     case 'repair': {
       const useTape = snapshot.repairMaterial < 1
-        && snapshot.inventory.ductTape.owned
-        && (snapshot.inventory.ductTape.charges ?? 0) > 0;
+        && Object.values(snapshot.inventory).some(
+          (item) => item?.type === 'ductTape' && item.condition === 'usable',
+        );
       return {
         ...definition,
         cost: useTape ? '2 ENERGY + TAPE' : '2 ENERGY + MATERIAL',
@@ -158,6 +162,7 @@ export class SurvivalUI {
   private readonly eventTitle: HTMLElement;
   private readonly eventPrompt: HTMLElement;
   private readonly eventDanger: HTMLElement;
+  private readonly eventTarget: HTMLElement;
   private readonly eventItems: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly outcomeLayer: HTMLElement;
@@ -167,6 +172,9 @@ export class SurvivalUI {
   private readonly actionOptionsLayer: HTMLElement;
   private readonly actionOptionsTitle: HTMLElement;
   private readonly fishingOptionButtons: HTMLButtonElement[];
+  private readonly repairOptionsLayer: HTMLElement;
+  private readonly repairOptionsTitle: HTMLElement;
+  private readonly repairTargets: HTMLElement;
   private readonly pauseLayer: HTMLElement;
   private readonly resumeButton: HTMLButtonElement;
   private readonly journalLayer: HTMLElement;
@@ -234,11 +242,21 @@ export class SurvivalUI {
           </div>
         </div>
       </section>
+      <section class="survival-overlay repair-options-overlay cinematic-overlay" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
+        <div class="cinematic-overlay__content">
+          <p class="eyebrow">DUCT TAPE</p>
+          <h2 data-repair-options-title tabindex="-1">Choose an item to repair</h2>
+          <p>One emergency repair restores one broken item.</p>
+          <div class="repair-targets" data-repair-targets></div>
+          <button type="button" class="secondary-action timber-action" data-repair-cancel>CANCEL</button>
+        </div>
+      </section>
       <section class="survival-overlay event-overlay cinematic-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
         <div class="cinematic-overlay__content">
           <p class="event-danger" data-event-danger></p>
           <h2 data-event-title tabindex="-1"></h2>
           <p data-event-prompt></p>
+          <p class="event-target" data-event-target hidden></p>
           <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
           <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
         </div>
@@ -308,6 +326,7 @@ export class SurvivalUI {
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.eventPrompt = requireElement(this.root, '[data-event-prompt]');
     this.eventDanger = requireElement(this.root, '[data-event-danger]');
+    this.eventTarget = requireElement(this.root, '[data-event-target]');
     this.eventItems = requireElement(this.root, '[data-event-items]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.outcomeLayer = requireElement(this.root, '[data-outcome]');
@@ -317,6 +336,9 @@ export class SurvivalUI {
     this.actionOptionsLayer = requireElement(this.root, '[data-action-options]');
     this.actionOptionsTitle = requireElement(this.root, '[data-action-options-title]');
     this.fishingOptionButtons = [...this.actionOptionsLayer.querySelectorAll<HTMLButtonElement>('[data-action-option]')];
+    this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
+    this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
+    this.repairTargets = requireElement(this.root, '[data-repair-targets]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.resumeButton = requireElement(this.root, '[data-resume]');
     this.journalLayer = requireElement(this.root, '[data-journal]');
@@ -339,6 +361,7 @@ export class SurvivalUI {
       this.pauseLayer,
       this.journalLayer,
       this.actionOptionsLayer,
+      this.repairOptionsLayer,
       this.endingLayer,
       this.outcomeLayer,
       this.eventLayer,
@@ -420,7 +443,7 @@ export class SurvivalUI {
   }
 
   showEvent(
-    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'prompt' | 'danger'>,
+    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'prompt' | 'danger' | 'choices'>,
     snapshot: SurvivalSnapshot,
   ): void {
     if (this.disposed) return;
@@ -432,24 +455,42 @@ export class SurvivalUI {
     this.eventLayer.dataset.eventId = event.id;
     this.eventLayer.dataset.danger = event.danger;
     this.eventItems.replaceChildren();
+    const pendingTargetId = (snapshot as SurvivalSnapshot & {
+      pendingEventTargetId?: ItemInstanceId | null;
+    }).pendingEventTargetId ?? null;
+    const pendingTarget = pendingTargetId === null ? undefined : snapshot.inventory[pendingTargetId];
+    this.eventTarget.hidden = pendingTarget === undefined;
+    this.eventTarget.textContent = pendingTarget === undefined
+      ? ''
+      : `TARGET — ${ITEM_LABELS[pendingTarget.type]}${pendingTarget.condition === 'broken' ? ' — BROKEN' : ''}`;
 
-    ITEM_IDS.forEach((id) => {
-      const item = snapshot.inventory[id];
-      if (!item.owned) return;
-      const usable = item.durable || (item.charges !== null && item.charges > 0);
-      const transferred = (id === 'cannedFood' || id === 'baitTin') && (item.charges ?? 0) === 0;
+    event.choices.filter((choice) => choice.itemId !== undefined).forEach((choice) => {
+      const id = choice.itemId!;
+      const candidates = Object.values(snapshot.inventory).filter((item) => item?.type === id);
+      const item = candidates.find((candidate) => candidate?.condition === 'usable')
+        ?? candidates.find((candidate) => candidate?.condition === 'broken')
+        ?? candidates.find((candidate) => candidate?.condition === 'consumed')
+        ?? candidates.find((candidate) => candidate?.condition === 'lost');
+      const condition = item?.condition ?? null;
+      const usable = condition === 'usable';
+      const conditionLabel = condition === 'broken' ? 'BROKEN'
+        : condition === 'consumed' ? 'USED'
+          : condition === 'lost' ? 'LOST' : condition === null ? 'NOT RECOVERED' : '';
+      const quantity = id === 'cannedFood' ? snapshot.food : id === 'baitTin' ? snapshot.bait : null;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'event-item';
       button.dataset.item = id;
+      button.dataset.eventChoice = choice.id;
       button.dataset.usable = usable ? 'true' : 'false';
-      button.textContent = transferred
-        ? `${ITEM_LABELS[id]} — TRANSFERRED TO STORES`
-        : item.durable
-        ? `${ITEM_LABELS[id]} — DURABLE`
-        : `${ITEM_LABELS[id]} — ${item.charges ?? 0} CHARGES`;
+      button.dataset.condition = condition ?? 'unowned';
+      button.textContent = `${choice.label}${quantity === null ? '' : ` x${quantity}`}${conditionLabel ? ` — ${conditionLabel}` : ''}`;
       button.disabled = this.busy || !usable;
-      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${transferred ? ' Use through day actions.' : usable ? '' : ' No charges remain.'}`);
+      const reason = condition === 'broken' ? ' This item is broken.'
+        : condition === 'consumed' ? ' This item was used.'
+          : condition === 'lost' ? ' This item was lost.'
+            : condition === null ? ' This item was not recovered.' : '';
+      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${reason}`);
       this.eventItems.append(button);
     });
     if (this.eventItems.childElementCount === 0) {
@@ -654,15 +695,24 @@ export class SurvivalUI {
   }
 
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+    const item = anchor.itemType === null ? undefined : this.currentSnapshot?.inventory[
+      anchor.id as ItemInstanceId
+    ];
+    const quantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
+      : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
     const itemLabel = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'HORIZON' : 'HULL PATCH'
-      : ITEM_LABELS[anchor.itemType];
+      ? anchor.id === 'horizon' ? 'HORIZON' : anchor.id === 'rest' ? 'REST' : 'HULL PATCH'
+      : `${ITEM_LABELS[anchor.itemType]}${quantity === undefined ? '' : ` x${quantity}`}`;
     const itemDescription = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.' : 'Inspect the lifeboat repair patch.'
+      ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.'
+        : anchor.id === 'rest' ? 'Take one rest during the day without spending supplies.'
+          : 'Inspect the lifeboat repair patch.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
     const reason = this.anchorUnavailableReason(anchor);
-    const state = this.anchorItemState(anchor);
+    const state = item?.condition === 'broken' ? 'BROKEN'
+      : item?.condition === 'consumed' ? 'USED'
+        : item?.condition === 'lost' ? 'LOST' : null;
     const preview = action !== null && this.currentSnapshot !== null
       ? actionPreview(action, this.currentSnapshot)
       : action;
@@ -674,6 +724,8 @@ export class SurvivalUI {
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
+    if (item === undefined) delete button.dataset.condition;
+    else button.dataset.condition = item.condition;
     button.setAttribute('aria-label', text);
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
@@ -684,14 +736,6 @@ export class SurvivalUI {
   private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
     if (anchor.depleted) return 'This recovered item is depleted.';
     return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
-  }
-
-  private anchorItemState(anchor: BoatInteractionAnchor): string | null {
-    if (anchor.itemType === null) return null;
-    if (ITEM_DEFINITIONS[anchor.itemType].durable) return 'DURABLE';
-    const remaining = anchor.remainingUses ?? 0;
-    if (anchor.depleted || remaining <= 0) return 'DEPLETED — 0 USES REMAINING';
-    return `${remaining} ${remaining === 1 ? 'USE' : 'USES'} REMAINING`;
   }
 
   private placeAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
@@ -749,6 +793,9 @@ export class SurvivalUI {
       button.disabled = this.busy || button.dataset.usable !== 'true';
     });
     this.fishingOptionButtons.forEach((button) => { button.disabled = this.busy; });
+    this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+      button.disabled = this.busy;
+    });
     this.endureButton.disabled = this.busy;
   }
 
@@ -844,6 +891,7 @@ export class SurvivalUI {
     else if (layer === this.outcomeLayer) this.outcomeTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.actionOptionsLayer) this.actionOptionsTitle.focus();
+    else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
   }
@@ -853,6 +901,10 @@ export class SurvivalUI {
     if (action === 'fish' && this.availableBait > 0) {
       this.showLayer(this.actionOptionsLayer);
       this.actionOptionsTitle.focus();
+      return;
+    }
+    if (action === 'repairItem') {
+      this.openRepairOptions();
       return;
     }
     this.onAction(action, undefined);
@@ -866,6 +918,36 @@ export class SurvivalUI {
 
   private closeActionOptions(): void {
     this.hideLayer(this.actionOptionsLayer);
+    this.restoreCommandFocus(this.latestCommandOrigin);
+  }
+
+  private openRepairOptions(): void {
+    const snapshot = this.currentSnapshot;
+    if (snapshot === null) return;
+    const targets = Object.values(snapshot.inventory).filter((item) => (
+      item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable
+    ));
+    this.repairTargets.replaceChildren(...targets.map((item) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'event-item repair-target';
+      button.dataset.repairTarget = item!.instanceId;
+      button.textContent = `${ITEM_LABELS[item!.type]} — BROKEN`;
+      button.setAttribute('aria-description', `Repair ${ITEM_LABELS[item!.type]} with Duct Tape.`);
+      return button;
+    }));
+    this.showLayer(this.repairOptionsLayer);
+    this.repairOptionsTitle.focus();
+  }
+
+  private chooseRepairTarget(target: ItemInstanceId): void {
+    this.hideLayer(this.repairOptionsLayer);
+    this.onAction('repairItem', { kind: 'itemRepair', target });
+    if (this.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
+  }
+
+  private closeRepairOptions(): void {
+    this.hideLayer(this.repairOptionsLayer);
     this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
@@ -977,12 +1059,21 @@ export class SurvivalUI {
     }
     const actionOption = button.dataset.actionOption;
     if (actionOption === 'fish' || actionOption === 'useBait') {
-      this.chooseFishingOption(actionOption === 'useBait' ? 'useBait' : undefined);
+      this.chooseFishingOption({ kind: 'fishing', useBait: actionOption === 'useBait' });
       return;
     }
-    const itemId = button.dataset.item as ItemId | undefined;
-    if (itemId !== undefined && this.eventItems.contains(button)) {
-      this.onEventItem(itemId);
+    const repairTarget = button.dataset.repairTarget as ItemInstanceId | undefined;
+    if (repairTarget !== undefined && this.repairTargets.contains(button)) {
+      this.chooseRepairTarget(repairTarget);
+      return;
+    }
+    if (button.hasAttribute('data-repair-cancel')) {
+      this.closeRepairOptions();
+      return;
+    }
+    const choiceId = button.dataset.eventChoice;
+    if (choiceId !== undefined && this.eventItems.contains(button)) {
+      this.onEventItem(choiceId as ItemId);
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();
@@ -1011,6 +1102,9 @@ export class SurvivalUI {
       } else if (topmostModal === this.actionOptionsLayer) {
         event.preventDefault();
         this.closeActionOptions();
+      } else if (topmostModal === this.repairOptionsLayer) {
+        event.preventDefault();
+        this.closeRepairOptions();
       } else {
         event.preventDefault();
         this.onPauseChange(!this.paused);

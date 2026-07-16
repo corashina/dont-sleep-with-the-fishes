@@ -1,4 +1,4 @@
-import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
 import { itemArtwork, uiArtwork } from './uiArtwork';
@@ -173,9 +173,16 @@ export class GameUI {
   showFailureResult(snapshot: ScavengeSnapshot): void {
     this.resultTitle.textContent = 'Taken by the Sea';
     this.resultBody.textContent = 'The deck disappeared before you reached the lifeboat.';
-    const savedItems = Object.values(snapshot.items).flatMap((item) => (
-      typeof item !== 'string' && item.status === 'saved' ? [ITEM_LABELS[item.type]] : []
-    ));
+    const savedCounts = Object.values(snapshot.items).reduce<Partial<Record<ItemId, number>>>((counts, item) => {
+      if (typeof item !== 'string' && item.status === 'saved') {
+        counts[item.type] = (counts[item.type] ?? 0) + 1;
+      }
+      return counts;
+    }, {});
+    const savedItems = ITEM_IDS.flatMap((id) => {
+      const count = savedCounts[id] ?? 0;
+      return count === 0 ? [] : [`${ITEM_LABELS[id]}${count > 1 ? ` x${count}` : ''}`];
+    });
     const elapsedSeconds = 120 - snapshot.remainingSeconds;
     this.resultItems.textContent = [
       `${snapshot.savedCount} SUPPLIES SAVED`,
