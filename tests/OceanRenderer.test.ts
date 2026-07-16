@@ -51,7 +51,7 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
-  it('gates vessel-local footprint exclusions by displaced fragment height', () => {
+  it('gates each tapered footprint by the displaced fragment local height', () => {
     const ocean = new OceanRenderer();
     const shader = ocean.material.fragmentShader;
 

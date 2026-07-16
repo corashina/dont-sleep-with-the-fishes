@@ -60,10 +60,15 @@ describe('water exclusions', () => {
     expect(pointInWaterExclusion(new Vector3(-1.3, 0, -2.4), region)).toBe(false);
   });
 
-  it('preserves water below a local height gate while excluding crests above it', () => {
+  it('preserves trough water below a local height gate while excluding crests above it', () => {
+    const rig = new Group();
+    rig.position.set(-3, 1.5, 6);
+    rig.rotation.set(-0.12, 0.7, 0.18);
+    rig.scale.set(1.8, 0.65, 1.25);
     const vessel = new Group();
-    vessel.position.set(4, 1.2, -3);
-    vessel.rotation.set(0.12, 0.35, -0.09);
+    vessel.position.set(2, -0.4, -3);
+    vessel.rotation.set(0.08, -0.3, 0.05);
+    rig.add(vessel);
     const region = createWaterExclusion(vessel, 1.6, 3.04, 1.05, -0.38);
 
     expect(pointInWaterExclusion(
@@ -78,6 +83,10 @@ describe('water exclusions', () => {
       vessel.localToWorld(new Vector3(0.6, 0.4, 1.2)),
       region,
     )).toBe(true);
+    expect(pointInWaterExclusion(
+      vessel.localToWorld(new Vector3(1.5, 0.4, 2.4)),
+      region,
+    )).toBe(false);
   });
 
   it('starts with explicit inactive fixed-size uniform defaults', () => {

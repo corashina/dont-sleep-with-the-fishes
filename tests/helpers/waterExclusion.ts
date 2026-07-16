@@ -11,11 +11,10 @@ export function pointInWaterExclusion(
   const halfLength = Math.max(Math.abs(region.bounds.z), Math.abs(region.bounds.w));
   const localAbsZ = Math.abs(local.z);
   if (localAbsZ > halfLength) return false;
-
-  const taperSpan = Math.max(halfLength - region.taperStart, 0);
-  const taperProgress = taperSpan > 0
-    ? Math.min(Math.max((localAbsZ - region.taperStart) / taperSpan, 0), 1)
-    : 0;
+  const taperSpan = Math.max(0, halfLength - region.taperStart);
+  const taperProgress = taperSpan === 0
+    ? 0
+    : Math.min(1, Math.max(0, (localAbsZ - region.taperStart) / taperSpan));
   const localHalfWidth = halfWidth * Math.sqrt(Math.max(0, 1 - taperProgress ** 2));
   return Math.abs(local.x) <= localHalfWidth;
 }
