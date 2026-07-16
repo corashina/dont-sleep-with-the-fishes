@@ -178,6 +178,7 @@ export class BoatWorld {
     horizonColor: new Color(),
     skyColor: new Color(),
     sunColor: new Color(0xfff1cf),
+    sunVisibility: 1,
   };
   private readonly waterExclusion: LifeboatBuild['waterExclusion'];
   private readonly originalCameraParent: Object3D | null;
@@ -440,6 +441,7 @@ export class BoatWorld {
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
     this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
+    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
     this.ocean.update(time, amplitudeScale, fog.density, this.oceanAtmosphere);
     this.scene.updateMatrixWorld(true);
     this.ocean.setExclusions([

@@ -15,6 +15,7 @@ import {
   type SkyPalette,
   type SkyState,
 } from './skyPalette';
+import { SUN_DIRECTION } from './celestialLight';
 
 const TRANSITION_SECONDS = 1.5;
 const clamp01 = (value: number): number => Number.isFinite(value)
@@ -114,7 +115,7 @@ const fragmentShader = `
     float horizonLift = exp(-abs(direction.y) * 28.0) * (0.03 + uHaze * 0.08);
     color += uHorizonColor * horizonLift;
 
-    vec3 sunDirection = normalize(vec3(-0.42, 0.58, -0.7));
+    vec3 sunDirection = normalize(vec3(${SUN_DIRECTION.join(', ')}));
     float sunSeparation = 1.0 - clamp(dot(direction, sunDirection), 0.0, 1.0);
     float sunDisc = 1.0 - smoothstep(0.00003, 0.00022, sunSeparation);
     float sunBloom = exp(-sunSeparation * 720.0);

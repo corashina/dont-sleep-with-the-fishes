@@ -470,6 +470,9 @@ describe('world builders', () => {
     expect(scene.getObjectByName('sea-spray')).toBeInstanceOf(Points);
     expect(skyUniforms.uMoonMap!.value).toBe(moonTexture);
     expect(skyUniforms.uSunVisibility!.value).toBe(1);
+    expect(oceanMaterial.uniforms.uDirectLightStrength?.value).toBe(
+      skyUniforms.uSunVisibility!.value,
+    );
     expect(oceanMaterial.uniforms.uHorizonColor!.value).toEqual(
       skyUniforms.uHorizonColor!.value,
     );
