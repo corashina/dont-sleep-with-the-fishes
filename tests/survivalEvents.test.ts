@@ -288,6 +288,17 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);
   });
 
+  it.each([
+    ['a non-array', 'anchor', /target item IDs.*array/i],
+    ['an empty array', [], /target item IDs.*empty/i],
+    ['duplicate IDs', ['anchor', 'anchor'], /target item ID anchor.*duplicated/i],
+    ['an unknown item ID', ['waterJug'], /target item IDs.*unknown item/i],
+  ] as const)('rejects target item catalogs containing %s', (_case, targetItemIds, expected) => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    catalog[3].targetItemIds = targetItemIds;
+    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
+  });
+
   it('rejects forbidden effect categories and non-exact effect object shapes', () => {
     const rejectsEffects = (effects: unknown, expected: RegExp) => {
       const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
