@@ -30,7 +30,8 @@ describe('SurvivalSession daytime actions', () => {
     expect(treating.perform('treat').deltas).toEqual({ health: 10 });
     const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 4 } });
     (repairing as unknown as { repairMaterial: number }).repairMaterial = 1;
-    expect(repairing.perform('repair', 'repairMaterial').deltas).toEqual({ energy: -2, hull: 10, repairMaterial: -1 });
+    expect(repairing.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).deltas)
+      .toEqual({ energy: -2, hull: 10, repairMaterial: -1 });
   });
 
   it('rejects unowned or exhausted event items without changing the event', () => {
@@ -80,8 +81,12 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       random: sequenceRandom([0.1, 0.1]),
     });
-    expect(session.perform('fish', 'useBait')).toMatchObject({ accepted: true, deltas: { energy: -2, food: 2, bait: -1 } });
+    expect(session.perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
+      accepted: true,
+      deltas: { energy: -2, food: 2, bait: -1 },
+    });
     expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 0, actedToday: true });
+    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
   });
 
   it('does not restore a consumed recovered can when diving finds loose food', () => {
@@ -105,8 +110,9 @@ describe('SurvivalSession daytime actions', () => {
       initial: { energy: 10 },
     });
 
-    session.perform('fish', 'useBait');
+    session.perform('fish', { kind: 'fishing', useBait: true });
     expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
+    session.perform('rest');
     session.perform('dive');
 
     expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
@@ -129,16 +135,101 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('eats, repairs, treats, and rests using the documented resources', () => {
-    const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit', 'waterJug'), {
+    const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit'), {
       seed: 1,
       random: sequenceRandom([0]),
       initial: { hunger: 80, health: 60, hull: 40, energy: 2 },
     });
     expect(session.perform('eat')).toMatchObject({ deltas: { hunger: -35, food: -1 } });
-    expect(session.perform('repair', 'ductTape')).toMatchObject({ deltas: { energy: -2, hull: 15 } });
+    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+      .toMatchObject({ deltas: { energy: -2, hull: 15 } });
     expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
     expect(session.perform('rest')).toMatchObject({ deltas: { energy: 2 } });
     expect(session.perform('rest').code).toBe('already-rested');
+  });
+
+  it('rests once per day without owning or consuming water', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, initial: { energy: 1 } });
+    expect(session.perform('rest')).toMatchObject({
+      accepted: true,
+      deltas: { energy: 2 },
+    });
+    expect(session.perform('rest')).toMatchObject({ accepted: false, code: 'already-rested' });
+  });
+
+  it('uses the one Medkit charge and marks its instance consumed', () => {
+    const session = new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 50 } });
+    expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
+    expect(session.snapshot().inventory['medicalKit-1']?.condition).toBe('consumed');
+    expect(session.perform('treat').code).toBe('no-medical-kit');
+  });
+
+  it('uses Bottled Paper for one energy and fifteen rescue progress', () => {
+    const session = new SurvivalSession(saved('bottledPaper'), { seed: 1, initial: { energy: 3 } });
+    expect(session.perform('sendMessage')).toMatchObject({
+      accepted: true,
+      deltas: { energy: -1, rescueProgress: 15 },
+    });
+    expect(session.snapshot().inventory['bottledPaper-1']?.condition).toBe('consumed');
+  });
+
+  it('uses the Energy Bar to restore the four-energy maximum', () => {
+    const session = new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } });
+    expect(session.perform('useEnergyBar')).toMatchObject({ deltas: { energy: 3 } });
+    expect(session.snapshot().energy).toBe(4);
+    expect(session.snapshot().inventory['energyBar-1']?.condition).toBe('consumed');
+  });
+
+  it('spends the only Duct Tape to repair one broken item', () => {
+    const session = new SurvivalSession(saved('ductTape', 'compass'), {
+      seed: 1,
+      initialConditions: { 'compass-1': 'broken' },
+    });
+    expect(session.perform('repairItem', {
+      kind: 'itemRepair', target: 'compass-1',
+    })).toMatchObject({ accepted: true, code: 'item-repaired' });
+    expect(session.snapshot().inventory['compass-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('consumed');
+  });
+
+  it('synchronizes recovered food instances in stable order without consuming loose food', () => {
+    const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
+      seed: 1,
+      initial: { hunger: 100 },
+    });
+
+    session.perform('eat');
+    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('consumed');
+    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('usable');
+    session.perform('eat');
+    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('consumed');
+  });
+
+  it('marks every accepted non-end-day action as acted today', () => {
+    const cases = [
+      new SurvivalSession(saved('cannedFood'), { seed: 1, initial: { hunger: 50 } }),
+      new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 50 } }),
+      new SurvivalSession(saved(), { seed: 1, initial: { energy: 1 } }),
+      new SurvivalSession(saved('bottledPaper'), { seed: 1, initial: { energy: 4 } }),
+      new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } }),
+    ] as const;
+    const actions = ['eat', 'treat', 'rest', 'sendMessage', 'useEnergyBar'] as const;
+
+    actions.forEach((action, index) => {
+      expect(cases[index]!.perform(action).accepted).toBe(true);
+      expect(cases[index]!.snapshot().actedToday).toBe(true);
+    });
+  });
+
+  it('rejects unknown or illegal initial instance conditions', () => {
+    expect(() => new SurvivalSession(saved('compass'), {
+      seed: 1,
+      initialConditions: { 'compass-2': 'broken' },
+    })).toThrow(/unknown instance/i);
+    expect(() => new SurvivalSession(saved('energyBar'), {
+      seed: 1,
+      initialConditions: { 'energyBar-1': 'broken' },
+    })).toThrow(/illegal condition/i);
   });
 
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {

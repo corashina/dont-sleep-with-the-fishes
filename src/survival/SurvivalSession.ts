@@ -1,4 +1,9 @@
-import type { ItemId, ItemInstance } from '../game/ItemState';
+import {
+  ITEM_DEFINITIONS,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
 import { SurvivalInventoryState } from './inventory';
 import type {
@@ -10,7 +15,9 @@ import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
+  DayActionOption,
   DayActionId,
+  ItemCondition,
   PresentationCue,
   RandomSource,
   ResourceDelta,
@@ -25,10 +32,11 @@ export interface SurvivalSessionOptions {
   random?: RandomSource;
   weather?: WeatherId;
   initial?: Partial<Pick<SurvivalSnapshot, 'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress'>>;
+  initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
 }
 
-export type DayActionOption = 'useBait' | 'repairMaterial' | 'ductTape';
+export type { DayActionOption } from './survivalTypes';
 
 interface Rejection {
   code: string;
@@ -78,6 +86,7 @@ export class SurvivalSession {
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
     this.inventory = new SurvivalInventoryState(this.savedItems);
+    this.applyInitialConditions(options.initialConditions);
 
     if (options.initialEventId !== undefined) {
       const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
@@ -133,15 +142,21 @@ export class SurvivalSession {
     const unavailable = this.unavailable(action, option);
     if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
 
+    let outcome: ActionOutcome;
     switch (action) {
-      case 'fish': return this.fish(option === 'useBait');
-      case 'dive': return this.dive();
-      case 'eat': return this.eat();
-      case 'repair': return this.repair(option);
-      case 'treat': return this.treat();
-      case 'rest': return this.rest();
+      case 'fish': outcome = this.fish(option?.kind === 'fishing' && option.useBait); break;
+      case 'dive': outcome = this.dive(); break;
+      case 'eat': outcome = this.eat(); break;
+      case 'repair': outcome = this.repair(option); break;
+      case 'repairItem': outcome = this.repairItem(option); break;
+      case 'treat': outcome = this.treat(); break;
+      case 'rest': outcome = this.rest(); break;
+      case 'sendMessage': outcome = this.sendMessage(); break;
+      case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'endDay': return this.endDay();
     }
+    this.actedToday = true;
+    return outcome;
   }
 
   requestDayEvent(): ActionOutcome {
@@ -261,7 +276,10 @@ export class SurvivalSession {
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
         }
-        if (option === 'useBait' && this.bait < 1) {
+        if (option !== undefined && option.kind !== 'fishing') {
+          return { code: 'invalid-option', message: 'That option cannot be used for fishing.' };
+        }
+        if (option?.kind === 'fishing' && option.useBait && this.bait < 1) {
           return { code: 'no-bait', message: 'No bait remains.' };
         }
         return null;
@@ -281,34 +299,67 @@ export class SurvivalSession {
         if (this.hunger <= 0) return { code: 'not-hungry', message: 'You are not hungry.' };
         return null;
       case 'repair':
+        if (option !== undefined && option.kind !== 'hullRepair') {
+          return { code: 'invalid-option', message: 'That option cannot repair the hull.' };
+        }
         if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
           return { code: 'hull-full', message: 'The hull needs no repair.' };
         }
         if (this.energy < SURVIVAL_BALANCE.actions.repairEnergy) {
           return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
         }
-        if (option === 'ductTape') {
-          if (!this.hasCharge('ductTape')) return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+        if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
+          if (!this.inventory.hasUsable('ductTape')) {
+            return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+          }
           return null;
         }
         if (this.repairMaterial < 1) {
           return { code: 'no-repair-material', message: 'No repair material remains.' };
         }
         return null;
+      case 'repairItem': {
+        if (!this.inventory.hasUsable('ductTape')) {
+          return { code: 'no-duct-tape', message: 'No duct tape remains.' };
+        }
+        if (option?.kind !== 'itemRepair') {
+          return { code: 'no-repair-target', message: 'Choose a broken item to repair.' };
+        }
+        const target = this.inventory.snapshot()[option.target];
+        if (target === undefined || target.condition !== 'broken' || !ITEM_DEFINITIONS[target.type].breakable) {
+          return { code: 'item-not-repairable', message: 'That item cannot be repaired.' };
+        }
+        return null;
+      }
       case 'treat':
         if (this.health >= SURVIVAL_BALANCE.thresholds.maximum) {
           return { code: 'health-full', message: 'No treatment is needed.' };
         }
-        if (!this.hasCharge('medicalKit')) {
+        if (!this.inventory.hasUsable('medicalKit')) {
           return { code: 'no-medical-kit', message: 'No medical-kit charges remain.' };
         }
         return null;
       case 'rest':
         if (this.restedToday) return { code: 'already-rested', message: 'You have already rested today.' };
-        if (this.energy >= SURVIVAL_BALANCE.dawn.normalEnergy) {
+        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
           return { code: 'energy-full', message: 'Your energy is already full.' };
         }
-        if (!this.hasCharge('waterJug')) return { code: 'no-water', message: 'No water remains.' };
+        return null;
+      case 'sendMessage':
+        if (!this.inventory.hasUsable('bottledPaper')) {
+          return { code: 'no-bottled-paper', message: 'No bottled paper remains.' };
+        }
+        if (this.energy < SURVIVAL_BALANCE.actions.bottledPaperEnergy) {
+          return { code: 'not-enough-energy', message: 'Sending the message requires one energy.' };
+        }
+        return null;
+      case 'useEnergyBar':
+        if (!this.inventory.hasUsable('energyBar')) {
+          return { code: 'no-energy-bar', message: 'No energy bar remains.' };
+        }
+        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
+          return { code: 'energy-full', message: 'Your energy is already full.' };
+        }
         return null;
       case 'endDay':
         return null;
@@ -331,7 +382,6 @@ export class SurvivalSession {
 
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.fishEnergy, food };
     if (useBait) deltas.bait = -1;
-    this.actedToday = true;
     return this.commit(
       caught ? 'fish-caught' : 'fish-missed',
       caught ? `You caught ${food === 2 ? 'two fish' : 'a fish'}.` : 'The line came back empty.',
@@ -361,7 +411,6 @@ export class SurvivalSession {
       else deltas.rescueProgress = 10;
     }
 
-    this.actedToday = true;
     return this.commit(
       recovered ? 'dive-recovered' : 'dive-empty',
       recovered ? 'You surfaced with useful salvage.' : 'You found nothing beneath the boat.',
@@ -380,9 +429,8 @@ export class SurvivalSession {
   }
 
   private repair(option?: DayActionOption): ActionOutcome {
-    this.actedToday = true;
-    if (option === 'ductTape') {
-      this.consumeCharge('ductTape');
+    if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
+      this.inventory.consume('ductTape', 1);
       return this.commit(
         'repaired-with-duct-tape',
         'The emergency patch holds for now.',
@@ -403,8 +451,17 @@ export class SurvivalSession {
     );
   }
 
+  private repairItem(option?: DayActionOption): ActionOutcome {
+    if (option?.kind !== 'itemRepair') {
+      return this.reject('no-repair-target', 'Choose a broken item to repair.');
+    }
+    this.inventory.repair(option.target);
+    this.inventory.consume('ductTape', 1);
+    return this.commit('item-repaired', 'The duct tape makes the item usable again.', {}, 'repair');
+  }
+
   private treat(): ActionOutcome {
-    this.consumeCharge('medicalKit');
+    this.inventory.consume('medicalKit', 1);
     return this.commit(
       'treated',
       'You clean and dress your wounds.',
@@ -414,13 +471,27 @@ export class SurvivalSession {
   }
 
   private rest(): ActionOutcome {
-    this.consumeCharge('waterJug');
     this.restedToday = true;
     const restoredEnergy = Math.min(
       SURVIVAL_BALANCE.actions.restEnergy,
-      SURVIVAL_BALANCE.dawn.normalEnergy - this.energy,
+      SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
     );
-    return this.commit('rested', 'Water and a brief rest restore your strength.', { energy: restoredEnergy }, 'rest');
+    return this.commit('rested', 'A brief rest restores your strength.', { energy: restoredEnergy }, 'rest');
+  }
+
+  private sendMessage(): ActionOutcome {
+    this.inventory.consume('bottledPaper', 1);
+    return this.commit('message-sent', 'You cast the message into the current.', {
+      energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
+      rescueProgress: SURVIVAL_BALANCE.actions.bottledPaperRescueProgress,
+    }, 'sighting');
+  }
+
+  private useEnergyBar(): ActionOutcome {
+    this.inventory.consume('energyBar', 1);
+    return this.commit('energy-bar-used', 'The ration restores your strength.', {
+      energy: SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
+    }, 'none');
   }
 
   private drawEvent(phase: 'day' | 'night'): SurvivalEventDefinition {
@@ -515,16 +586,8 @@ export class SurvivalSession {
   }
 
   private applyDeltas(deltas: ResourceDelta): void {
-    this.recoveredFood = this.remainingRecoveredUses(
-      this.recoveredFood,
-      this.food,
-      deltas.food,
-    );
-    this.recoveredBait = this.remainingRecoveredUses(
-      this.recoveredBait,
-      this.bait,
-      deltas.bait,
-    );
+    const spentRecoveredFood = this.spentRecoveredUses(this.recoveredFood, this.food, deltas.food);
+    const spentRecoveredBait = this.spentRecoveredUses(this.recoveredBait, this.bait, deltas.bait);
     this.health += deltas.health ?? 0;
     this.hunger += deltas.hunger ?? 0;
     this.energy += deltas.energy ?? 0;
@@ -534,20 +597,19 @@ export class SurvivalSession {
     this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueProgress += deltas.rescueProgress ?? 0;
     this.clampMeters();
+    if (spentRecoveredFood > 0) this.inventory.consume('cannedFood', spentRecoveredFood);
+    if (spentRecoveredBait > 0) this.inventory.consume('baitTin', spentRecoveredBait);
+    this.recoveredFood -= spentRecoveredFood;
+    this.recoveredBait -= spentRecoveredBait;
   }
 
-  private remainingRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
-    if (delta === undefined || delta >= 0) return recovered;
-    const consumed = Math.min(aggregate, -delta);
-    return Math.max(0, recovered - consumed);
+  private spentRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
+    if (delta === undefined || delta >= 0) return 0;
+    return Math.min(recovered, aggregate, -delta);
   }
 
   private consumeCharge(id: ItemId): boolean {
     return this.inventory.consume(id).length > 0;
-  }
-
-  private hasCharge(id: ItemId): boolean {
-    return this.inventory.count(id, 'usable') > 0;
   }
 
   private resolveTerminal(): void {
@@ -563,11 +625,28 @@ export class SurvivalSession {
   private clampMeters(): void {
     this.health = Math.min(100, Math.max(0, this.health));
     this.hunger = Math.min(100, Math.max(0, this.hunger));
-    this.energy = Math.min(100, Math.max(0, this.energy));
+    this.energy = Math.min(SURVIVAL_BALANCE.actions.maximumEnergy, Math.max(0, this.energy));
     this.hull = Math.min(100, Math.max(0, this.hull));
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
     this.rescueProgress = Math.max(0, this.rescueProgress);
+  }
+
+  private applyInitialConditions(
+    initialConditions: Partial<Record<ItemInstanceId, ItemCondition>> | undefined,
+  ): void {
+    if (initialConditions === undefined) return;
+    for (const [rawInstanceId, condition] of Object.entries(initialConditions)) {
+      if (condition === undefined) continue;
+      const instanceId = rawInstanceId as ItemInstanceId;
+      const item = this.inventory.snapshot()[instanceId];
+      if (item === undefined) throw new Error(`Unknown instance: ${instanceId}`);
+      const applied = condition === 'usable'
+        || (condition === 'broken' && this.inventory.break(instanceId))
+        || (condition === 'lost' && this.inventory.lose(instanceId))
+        || (condition === 'consumed' && this.inventory.consume(item.type, 1).includes(instanceId));
+      if (!applied) throw new Error(`Illegal condition for ${instanceId}: ${condition}`);
+    }
   }
 }
