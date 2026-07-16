@@ -208,8 +208,8 @@ const fragmentShader = `
     float crestEnvelope = crest * mix(0.62, 1.0, breaking);
     float ribbonStart = mix(0.57, 0.42, weather);
     float ribbon = smoothstep(ribbonStart, ribbonStart + 0.18, ribbonNoise);
-    float erodedEdge = smoothstep(0.20, 0.68, edgeNoise);
-    float edgeMask = mix(1.0, mix(0.72, 1.0, erodedEdge), fineFade);
+    float erodedEdge = smoothstep(0.14, 0.44, edgeNoise);
+    float edgeMask = mix(1.0, erodedEdge, fineFade);
     float strength = mix(0.92, 1.12, weather);
     return clamp(crestEnvelope * ribbon * edgeMask * strength, 0.0, 1.0);
   }
