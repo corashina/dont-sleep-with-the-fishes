@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from '../src/survival/random';
+import type { DayActionId, DayActionOption } from '../src/survival/survivalTypes';
 
 const saved = (...types: ItemId[]): ItemInstance[] => {
   const counts = new Map<ItemId, number>();
@@ -230,6 +231,50 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       initialConditions: { 'energyBar-1': 'broken' },
     })).toThrow(/illegal condition/i);
+  });
+
+  it('applies a consumed initial condition to the exact duplicate instance', () => {
+    const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
+      seed: 1,
+      initialConditions: { 'cannedFood-2': 'consumed' },
+    });
+
+    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('consumed');
+    expect(session.snapshot()).toMatchObject({ food: 1, recoveredFood: 1 });
+  });
+
+  it('rejects every invalid action option before gates without mutating state', () => {
+    const fishing = { kind: 'fishing', useBait: false } as const;
+    const hullRepair = { kind: 'hullRepair', material: 'repairMaterial' } as const;
+    const itemRepair = { kind: 'itemRepair', target: 'compass-1' } as const;
+    const cases: Array<{
+      action: DayActionId;
+      option: DayActionOption | null | undefined;
+    }> = [
+      { action: 'fish', option: hullRepair },
+      { action: 'dive', option: fishing },
+      { action: 'eat', option: fishing },
+      { action: 'repair', option: undefined },
+      { action: 'repair', option: itemRepair },
+      { action: 'repairItem', option: undefined },
+      { action: 'repairItem', option: fishing },
+      { action: 'treat', option: fishing },
+      { action: 'rest', option: null },
+      { action: 'sendMessage', option: fishing },
+      { action: 'useEnergyBar', option: fishing },
+      { action: 'endDay', option: fishing },
+    ];
+
+    for (const { action, option } of cases) {
+      const session = new SurvivalSession(saved(), { seed: 1, initial: { energy: 1 } });
+      const before = session.snapshot();
+      expect(session.perform(action, option as DayActionOption | undefined)).toMatchObject({
+        accepted: false,
+        code: 'invalid-option',
+      });
+      expect(session.snapshot()).toEqual(before);
+    }
   });
 
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
