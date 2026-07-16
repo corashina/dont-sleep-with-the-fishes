@@ -208,4 +208,10 @@ describe('post-processing pipeline construction', () => {
     expect(PrintShader.fragmentShader).toContain('uChromaticAberrationCssPixels * uPixelRatio');
     expect(PrintShader.fragmentShader).not.toMatch(/https?:\/\//);
   });
+
+  it('avoids Three injected shader helper name collisions', () => {
+    expect(PrintShader.fragmentShader).not.toMatch(/\bfloat\s+luminance\s*\(/);
+    expect(PrintShader.fragmentShader).toMatch(/\bfloat\s+printLuminance\s*\(/);
+    expect(PrintShader.fragmentShader.match(/\bprintLuminance\s*\(/g)).toHaveLength(3);
+  });
 });
