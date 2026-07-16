@@ -265,6 +265,8 @@ export class SurvivalSession {
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
+    const invalidOption = this.invalidOption(action, option);
+    if (invalidOption !== null) return invalidOption;
     if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
     if (this.state !== 'day') return { code: 'not-daytime', message: 'That action is only available during the day.' };
 
@@ -275,9 +277,6 @@ export class SurvivalSession {
         }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
-        }
-        if (option !== undefined && option.kind !== 'fishing') {
-          return { code: 'invalid-option', message: 'That option cannot be used for fishing.' };
         }
         if (option?.kind === 'fishing' && option.useBait && this.bait < 1) {
           return { code: 'no-bait', message: 'No bait remains.' };
@@ -299,9 +298,6 @@ export class SurvivalSession {
         if (this.hunger <= 0) return { code: 'not-hungry', message: 'You are not hungry.' };
         return null;
       case 'repair':
-        if (option !== undefined && option.kind !== 'hullRepair') {
-          return { code: 'invalid-option', message: 'That option cannot repair the hull.' };
-        }
         if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
           return { code: 'hull-full', message: 'The hull needs no repair.' };
         }
@@ -364,6 +360,17 @@ export class SurvivalSession {
       case 'endDay':
         return null;
     }
+  }
+
+  private invalidOption(action: DayActionId, option?: DayActionOption): Rejection | null {
+    const valid = action === 'fish'
+      ? option === undefined || option?.kind === 'fishing'
+      : action === 'repair'
+        ? option?.kind === 'hullRepair'
+        : action === 'repairItem'
+          ? option?.kind === 'itemRepair'
+          : option === undefined;
+    return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
   }
 
   private fish(useBait: boolean): ActionOutcome {
@@ -645,7 +652,7 @@ export class SurvivalSession {
       const applied = condition === 'usable'
         || (condition === 'broken' && this.inventory.break(instanceId))
         || (condition === 'lost' && this.inventory.lose(instanceId))
-        || (condition === 'consumed' && this.inventory.consume(item.type, 1).includes(instanceId));
+        || (condition === 'consumed' && this.inventory.consumeInstance(instanceId));
       if (!applied) throw new Error(`Illegal condition for ${instanceId}: ${condition}`);
     }
   }

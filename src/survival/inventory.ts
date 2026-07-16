@@ -40,6 +40,15 @@ export class SurvivalInventoryState {
     return consumed;
   }
 
+  consumeInstance(instanceId: ItemInstanceId): boolean {
+    const item = this.items.get(instanceId);
+    if (item === undefined || item.condition !== 'usable' || ITEM_DEFINITIONS[item.type].charges === null) {
+      return false;
+    }
+    this.setCondition(instanceId, 'consumed');
+    return true;
+  }
+
   break(instanceId: ItemInstanceId): boolean {
     const item = this.items.get(instanceId);
     if (item === undefined || item.condition !== 'usable' || !ITEM_DEFINITIONS[item.type]?.breakable) {

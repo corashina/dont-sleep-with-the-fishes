@@ -33,6 +33,17 @@ describe('survival foundations', () => {
     expect(inventory.snapshot()['cannedFood-3']?.condition).toBe('usable');
   });
 
+  it('consumes only an exact eligible charged instance', () => {
+    const inventory = new SurvivalInventoryState(saved('cannedFood', 'cannedFood', 'compass'));
+
+    expect(inventory.consumeInstance('cannedFood-2')).toBe(true);
+    expect(inventory.snapshot()['cannedFood-1']?.condition).toBe('usable');
+    expect(inventory.snapshot()['cannedFood-2']?.condition).toBe('consumed');
+    expect(inventory.consumeInstance('cannedFood-2')).toBe(false);
+    expect(inventory.consumeInstance('cannedFood-3')).toBe(false);
+    expect(inventory.consumeInstance('compass-1')).toBe(false);
+  });
+
   it('allows only catalog-approved break and repair transitions', () => {
     const inventory = new SurvivalInventoryState(saved('compass', 'flashlight', 'ductTape'));
     expect(inventory.break('compass-1')).toBe(true);
