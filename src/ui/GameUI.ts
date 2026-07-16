@@ -10,11 +10,14 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
   return element;
 }
 
+export type ScavengePresentation = 'title' | 'playing';
+
 export class GameUI {
   onStart: () => void = () => undefined;
   onResume: () => void = () => undefined;
   onReplay: () => void = () => undefined;
   private readonly root: HTMLDivElement;
+  private readonly hud: HTMLElement;
   private readonly startLayer: HTMLElement;
   private readonly pauseLayer: HTMLElement;
   private readonly failureLayer: HTMLElement;
@@ -92,6 +95,7 @@ export class GameUI {
       </section>
     `;
     mount.append(this.root);
+    this.hud = requireElement(this.root, '.hud');
     this.startLayer = requireElement(this.root, '[data-start]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.failureLayer = requireElement(this.root, '[data-failure]');
@@ -109,10 +113,16 @@ export class GameUI {
     this.startButton.addEventListener('click', this.handleStart);
     this.resumeButton.addEventListener('click', this.handleResume);
     this.replayButton.addEventListener('click', this.handleReplay);
+    this.setPresentation('title');
   }
 
   hideStart(): void {
     this.startLayer.classList.remove('is-visible');
+  }
+
+  setPresentation(presentation: ScavengePresentation): void {
+    this.root.dataset.presentation = presentation;
+    this.hud.hidden = presentation === 'title';
   }
 
   setPaused(paused: boolean): void {
