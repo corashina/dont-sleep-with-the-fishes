@@ -270,6 +270,26 @@ describe('PlayerController', () => {
     shipBuild.dispose();
   });
 
+  it('places the shared camera from the player pose without a movement tick', () => {
+    const ship = new Object3D();
+    ship.position.set(4, 1, -3);
+    ship.rotation.y = Math.PI / 6;
+    ship.updateMatrixWorld(true);
+    const camera = new PerspectiveCamera();
+    const start = new Vector3(1, 3.7, 2);
+    const controller = new PlayerController(
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    const expectedPosition = ship.localToWorld(start.clone());
+    const expectedForward = new Vector3(0, 0, 1).applyQuaternion(ship.quaternion);
+
+    controller.placeCamera();
+
+    expectVector(camera.position, expectedPosition);
+    expectVector(camera.getWorldDirection(new Vector3()), expectedForward);
+    expectVector(controller.localPosition, start);
+  });
+
   it('reset restores the supplied local start and default view', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();

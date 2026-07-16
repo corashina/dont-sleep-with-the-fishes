@@ -115,11 +115,16 @@ export class PlayerController {
       this.onFall();
     }
 
+    this.placeCamera(reducedMotionShake);
+  }
+
+  placeCamera(reducedMotionShake = 0): void {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
     this.camera.position.copy(this.worldPosition);
     this.localView.setFromEuler(new Euler(this.pitch + reducedMotionShake, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(this.ship.quaternion).multiply(this.localView);
+    this.camera.updateMatrixWorld(true);
   }
 
   reset(start: Vector3): void {
