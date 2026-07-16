@@ -5,10 +5,12 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
+import { resolveWeightedOutcome } from './eventResolver';
 import { SurvivalInventoryState } from './inventory';
 import type {
   JournalEntry,
   JournalEventRecord,
+  JournalInventoryMutation,
   JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
@@ -17,6 +19,7 @@ import type {
   ActionOutcome,
   DayActionOption,
   DayActionId,
+  EventInventoryMutation,
   ItemCondition,
   PresentationCue,
   RandomSource,
@@ -24,6 +27,7 @@ import type {
   SurvivalEventDefinition,
   SurvivalSnapshot,
   SurvivalState,
+  ResourceEffect,
   WeatherId,
 } from './survivalTypes';
 
@@ -34,6 +38,12 @@ export interface SurvivalSessionOptions {
   initial?: Partial<Pick<SurvivalSnapshot, 'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress'>>;
   initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
+}
+
+declare module './survivalTypes' {
+  interface SurvivalSnapshot {
+    readonly pendingEventTargetId?: ItemInstanceId | null;
+  }
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -64,6 +74,7 @@ export class SurvivalSession {
   private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
+  private pendingEventTargetId: ItemInstanceId | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
@@ -129,6 +140,7 @@ export class SurvivalSession {
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
+      pendingEventTargetId: this.pendingEventTargetId,
       lastOutcome,
       seed: this.seed,
     };
@@ -180,39 +192,67 @@ export class SurvivalSession {
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
 
-  resolveEvent(itemId: ItemId | null): ActionOutcome {
+  resolveEvent(choiceId: string | null): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
       return this.reject('no-event', 'There is no unresolved event.');
     }
 
     const event = this.pendingEvent;
-    if (itemId !== null && !this.canUseEventItem(itemId)) {
+    const choice = event.choices.find((candidate) => candidate.id === (choiceId ?? 'sleep'));
+    if (choice === undefined) {
+      return this.reject('choice-unavailable', 'That response is not available for this event.');
+    }
+    if (choice.itemId !== undefined && !this.canUseEventItem(choice.itemId)) {
       return this.reject('item-unavailable', 'That item was not recovered or has no uses remaining.');
     }
-    const phase = event.phase;
-    const matching = itemId === null ? undefined : event.responses.find((candidate) => candidate.itemId === itemId);
-    const usable = matching !== undefined && this.canUseEventItem(matching.itemId);
-    const response = itemId === null ? event.endure : usable ? matching! : event.unsuitable;
-    const resolution: JournalResolution = itemId === null
-      ? 'endure'
-      : usable ? 'suitableItem' : 'unsuitableItem';
 
-    if (usable && matching!.consume) this.consumeCharge(matching!.itemId);
+    const phase = event.phase;
+    const resolved = resolveWeightedOutcome(choice, this.random);
+    const before = this.resourceValues();
+    const inventoryMutations: JournalInventoryMutation[] = [];
+    for (const effect of resolved.effects.resources ?? []) {
+      inventoryMutations.push(...this.applyEventResource(effect));
+    }
+    for (const mutation of resolved.effects.items ?? []) {
+      const concrete = this.applyEventMutation(mutation);
+      if (concrete !== null) inventoryMutations.push(concrete);
+    }
+
+    if (resolved.effects.rescue === true) this.state = 'rescued';
+    else this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.pendingEvent = null;
     this.pendingEventId = null;
+    this.pendingEventTargetId = null;
 
-    if (usable && matching!.rescue === true) this.state = 'rescued';
-    const outcome = this.commit('event-resolved', response.message, { ...response.deltas }, response.cue);
-    this.recordJournalEvent(event, itemId, resolution, outcome);
+    const after = this.resourceValues();
+    const deltas = this.appliedResourceDelta(before, after, resolved.effects.resources ?? []);
+    const cue = this.presentationCue(event.cue);
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: resolved.message,
+      deltas,
+      cue,
+    };
+    this.lastOutcome = outcome;
+    const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
+    this.recordJournalEvent(
+      event,
+      choiceId,
+      choice.itemId ?? null,
+      resolution,
+      outcome,
+      inventoryMutations,
+    );
 
     if (!this.isTerminal()) {
       if (phase === 'day') this.state = 'day';
       else this.state = 'nightEvent';
     }
-    return outcome;
+    return { ...outcome, deltas: { ...outcome.deltas } };
   }
 
   beginDawn(): ActionOutcome {
@@ -227,6 +267,7 @@ export class SurvivalSession {
     this.dayEventOccurred = false;
     this.pendingEvent = null;
     this.pendingEventId = null;
+    this.pendingEventTargetId = null;
     this.state = 'day';
 
     const weatherRoll = this.random.next();
@@ -514,19 +555,23 @@ export class SurvivalSession {
 
   private recordJournalEvent(
     event: SurvivalEventDefinition,
+    attemptedChoiceId: string | null,
     attemptedItemId: ItemId | null,
     resolution: JournalResolution,
     outcome: ActionOutcome,
+    inventoryMutations: readonly JournalInventoryMutation[],
   ): void {
     const record: JournalEventRecord = {
       phase: event.phase,
       eventId: event.id,
       title: event.title,
       prompt: event.prompt,
+      attemptedChoiceId,
       attemptedItemId,
       resolution,
       outcomeCode: outcome.code,
       outcomeMessage: outcome.message,
+      inventoryMutations: this.cloneInventoryMutations(inventoryMutations),
     };
     if (event.phase === 'day') {
       this.pendingJournalDaytime = record;
@@ -550,15 +595,50 @@ export class SurvivalSession {
   private journalSnapshot(): readonly JournalEntry[] {
     return this.journalEntries.map((entry) => ({
       ...entry,
-      daytime: entry.daytime === null ? null : { ...entry.daytime },
-      nighttime: { ...entry.nighttime },
+      daytime: entry.daytime === null ? null : this.cloneJournalRecord(entry.daytime),
+      nighttime: this.cloneJournalRecord(entry.nighttime),
     }));
+  }
+
+  private cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
+    return Object.freeze({
+      ...record,
+      inventoryMutations: this.cloneInventoryMutations(record.inventoryMutations),
+    });
+  }
+
+  private cloneInventoryMutations(
+    mutations: readonly JournalInventoryMutation[],
+  ): readonly JournalInventoryMutation[] {
+    return Object.freeze(mutations.map((mutation) => Object.freeze({
+      kind: mutation.kind,
+      instanceIds: Object.freeze([...mutation.instanceIds]),
+    })));
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
     this.pendingEvent = event;
     this.pendingEventId = event.id;
+    this.pendingEventTargetId = event.id === 'snatcher' ? this.drawSnatcherTarget() : null;
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
+  }
+
+  private drawSnatcherTarget(): ItemInstanceId | null {
+    let candidates = Object.values(this.inventory.snapshot())
+      .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
+      .map((item) => item!.instanceId)
+      .sort();
+    if (candidates.some((instanceId) => this.inventory.snapshot()[instanceId]?.type !== 'fishingNet')) {
+      candidates = candidates.filter(
+        (instanceId) => this.inventory.snapshot()[instanceId]?.type !== 'fishingNet',
+      );
+    }
+    if (candidates.length === 0) return null;
+    const roll = this.random.next();
+    const index = Number.isFinite(roll)
+      ? Math.min(candidates.length - 1, Math.max(0, Math.floor(roll * candidates.length)))
+      : 0;
+    return candidates[index] ?? null;
   }
 
   private canUseEventItem(id: ItemId): boolean {
@@ -592,7 +672,114 @@ export class SurvivalSession {
     };
   }
 
-  private applyDeltas(deltas: ResourceDelta): void {
+  private presentationCue(cue: PresentationCue): PresentationCue {
+    if (this.state === 'dead') return 'death';
+    if (this.state === 'sunk') return 'sinking';
+    if (this.state === 'rescued') return 'rescue';
+    return cue;
+  }
+
+  private applyEventResource(effect: ResourceEffect): JournalInventoryMutation[] {
+    if (typeof effect.value !== 'number') {
+      throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
+    }
+    const current = this.resourceValues()[effect.resource];
+    const delta = effect.operation === 'set'
+      ? effect.value - current
+      : effect.operation === 'add' ? effect.value : -effect.value;
+    return this.applyDeltas({ [effect.resource]: delta });
+  }
+
+  private applyEventMutation(mutation: EventInventoryMutation): JournalInventoryMutation | null {
+    let kind: JournalInventoryMutation['kind'];
+    let instanceIds: ItemInstanceId[];
+    switch (mutation.kind) {
+      case 'consume':
+        kind = 'consume';
+        instanceIds = this.inventory.consume(mutation.itemId, mutation.quantity);
+        break;
+      case 'break':
+        kind = 'break';
+        instanceIds = this.mutateMatchingInstances(
+          mutation.itemId,
+          mutation.quantity,
+          (instanceId) => this.inventory.break(instanceId),
+        );
+        break;
+      case 'lose':
+        kind = 'lose';
+        instanceIds = this.mutateMatchingInstances(
+          mutation.itemId,
+          mutation.quantity,
+          (instanceId) => this.inventory.lose(instanceId),
+        );
+        break;
+      case 'breakRandom':
+        kind = 'break';
+        instanceIds = this.inventory.breakRandom(mutation.quantity, this.random);
+        break;
+      case 'loseRandom':
+        kind = 'lose';
+        instanceIds = this.inventory.loseRandom(mutation.quantity, this.random);
+        break;
+      case 'loseEventTarget':
+        kind = 'lose';
+        instanceIds = this.pendingEventTargetId !== null && this.inventory.lose(this.pendingEventTargetId)
+          ? [this.pendingEventTargetId]
+          : [];
+        break;
+    }
+    if (instanceIds.length === 0) return null;
+    this.synchronizeRemovedResources(kind, instanceIds);
+    return { kind, instanceIds };
+  }
+
+  private mutateMatchingInstances(
+    itemId: ItemId,
+    quantity: number,
+    mutate: (instanceId: ItemInstanceId) => boolean,
+  ): ItemInstanceId[] {
+    const candidates = Object.values(this.inventory.snapshot())
+      .filter((item) => item?.type === itemId)
+      .map((item) => item!.instanceId)
+      .sort();
+    const mutated: ItemInstanceId[] = [];
+    for (const instanceId of candidates) {
+      if (mutated.length >= quantity) break;
+      if (mutate(instanceId)) mutated.push(instanceId);
+    }
+    return mutated;
+  }
+
+  private synchronizeRemovedResources(
+    kind: JournalInventoryMutation['kind'],
+    instanceIds: readonly ItemInstanceId[],
+  ): void {
+    if (kind !== 'consume' && kind !== 'lose') return;
+    const snapshot = this.inventory.snapshot();
+    const food = instanceIds.filter((id) => snapshot[id]?.type === 'cannedFood').length;
+    const bait = instanceIds.filter((id) => snapshot[id]?.type === 'baitTin').length;
+    if (food > 0) {
+      this.recoveredFood = Math.max(0, this.recoveredFood - food);
+      this.food = Math.max(0, this.food - food);
+    }
+    if (bait > 0) {
+      this.recoveredBait = Math.max(0, this.recoveredBait - bait);
+      this.bait = Math.max(0, this.bait - bait);
+    }
+  }
+
+  private appliedResourceDelta(
+    before: Required<ResourceDelta>,
+    after: Required<ResourceDelta>,
+    effects: readonly ResourceEffect[],
+  ): ResourceDelta {
+    const applied: ResourceDelta = {};
+    for (const { resource } of effects) applied[resource] = after[resource] - before[resource];
+    return applied;
+  }
+
+  private applyDeltas(deltas: ResourceDelta): JournalInventoryMutation[] {
     const spentRecoveredFood = this.spentRecoveredUses(this.recoveredFood, this.food, deltas.food);
     const spentRecoveredBait = this.spentRecoveredUses(this.recoveredBait, this.bait, deltas.bait);
     this.health += deltas.health ?? 0;
@@ -604,10 +791,16 @@ export class SurvivalSession {
     this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueProgress += deltas.rescueProgress ?? 0;
     this.clampMeters();
-    if (spentRecoveredFood > 0) this.inventory.consume('cannedFood', spentRecoveredFood);
-    if (spentRecoveredBait > 0) this.inventory.consume('baitTin', spentRecoveredBait);
+    const consumedFood = spentRecoveredFood > 0
+      ? this.inventory.consume('cannedFood', spentRecoveredFood)
+      : [];
+    const consumedBait = spentRecoveredBait > 0
+      ? this.inventory.consume('baitTin', spentRecoveredBait)
+      : [];
     this.recoveredFood -= spentRecoveredFood;
     this.recoveredBait -= spentRecoveredBait;
+    const consumed = [...consumedFood, ...consumedBait];
+    return consumed.length === 0 ? [] : [{ kind: 'consume', instanceIds: consumed }];
   }
 
   private spentRecoveredUses(recovered: number, aggregate: number, delta?: number): number {
