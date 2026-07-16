@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ItemId } from '../src/game/ItemState';
 import {
   INCLUDED_EVENT_PHASES,
   SURVIVAL_EVENTS,
@@ -193,6 +194,22 @@ describe('survival events', () => {
     }
   });
 
+  it('defines the exact canonical Snatcher target types in event data', () => {
+    const snatcher = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher')!;
+    expect(snatcher.targetItemIds).toEqual([
+      'anchor',
+      'bucket',
+      'medicalKit',
+      'flareGun',
+      'flashlight',
+      'map',
+      'scubaSet',
+      'umbrella',
+      'cannedFood',
+    ]);
+    expect(Object.isFrozen(snatcher.targetItemIds)).toBe(true);
+  });
+
   it('uses spyglass exclusively and contains no excluded state or item references', () => {
     const serialized = JSON.stringify(SURVIVAL_EVENTS);
     expect(serialized).not.toMatch(/telescope|waterJug|chest|trade|route/i);
@@ -214,6 +231,7 @@ describe('survival events', () => {
     const events = eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
+      targetableItemIds: new Set(['anchor']),
     });
     expect(events.every((event) => event.phase === 'day' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
@@ -221,7 +239,19 @@ describe('survival events', () => {
     expect(events.map((event) => event.id)).toContain('leak');
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      targetableItemIds: new Set(['anchor']),
     }).map((event) => event.id)).not.toContain('dangerous-waters');
+  });
+
+  it('excludes Snatcher from the draw pool without a canonical target', () => {
+    const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
+      phase: 'day', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      targetableItemIds,
+    });
+
+    expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');
+    expect(eligible(new Set(['baitTin', 'fishingNet'])).map(({ id }) => id)).not.toContain('snatcher');
+    expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('snatcher');
   });
 
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {

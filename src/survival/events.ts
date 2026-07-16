@@ -139,13 +139,19 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', effects([add('food', 1)]))),
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
   ]),
-  event('snatcher', 'Snatcher', 'impact', 28, 8, 45, [
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The spyglass breaks.', effects(undefined, [breakItem('spyglass')]))),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('harpoonGun')]))),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
-  ]),
+  {
+    ...event('snatcher', 'Snatcher', 'impact', 28, 8, 45, [
+      choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The spyglass breaks.', effects(undefined, [breakItem('spyglass')]))),
+      choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
+      choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
+      choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('harpoonGun')]))),
+      choice('sleep', 'Sleep', undefined, outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
+    ]),
+    targetItemIds: [
+      'anchor', 'bucket', 'medicalKit', 'flareGun', 'flashlight',
+      'map', 'scubaSet', 'umbrella', 'cannedFood',
+    ],
+  },
   event('death-stare', 'Death Stare', 'impact', 160, 9, 32, [
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(80, 'Nothing happens.'), outcome(35, 'The flashlight is lost.', effects([set('energy', 1)], [lose('flashlight')]))),
@@ -455,6 +461,7 @@ export interface EventEligibility {
   weather: WeatherId;
   lastEventId: string | null;
   lastSeenDay: ReadonlyMap<string, number>;
+  targetableItemIds: ReadonlySet<ItemId>;
 }
 
 export function eligibleEvents(
@@ -466,6 +473,8 @@ export function eligibleEvents(
     if (criteria.day < eventEntry.earliestDay
       || (eventEntry.latestDay !== undefined && criteria.day > eventEntry.latestDay)) return false;
     if (eventEntry.weather !== undefined && !eventEntry.weather.includes(criteria.weather)) return false;
+    if (eventEntry.targetItemIds !== undefined
+      && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;
     const lastSeen = criteria.lastSeenDay.get(eventEntry.id);
     return lastSeen === undefined || criteria.day - lastSeen >= eventEntry.cooldownDays;
   });

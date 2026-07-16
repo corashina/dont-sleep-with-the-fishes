@@ -99,6 +99,7 @@ export interface SurvivalEventDefinition {
   weight: number;
   cooldownDays: number;
   weather?: readonly WeatherId[];
+  targetItemIds?: readonly ItemId[];
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
 }

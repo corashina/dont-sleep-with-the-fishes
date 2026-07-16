@@ -131,15 +131,14 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher')!;
-    const state = new SurvivalSession(saved('spyglass', 'swimRing', 'fishingNet'), {
+    const state = new SurvivalSession(saved('map', 'swimRing', 'fishingNet'), {
       seed: 3,
       initialEventId: 'snatcher',
-      initialConditions: { 'spyglass-1': 'broken', 'swimRing-2': 'lost' },
+      initialConditions: { 'map-1': 'broken', 'swimRing-2': 'lost' },
     }).snapshot();
     ui.showEvent(event, state);
-    expect(mount.querySelector('[data-event-target]')?.textContent).toContain('SPYGLASS');
-    expect(mount.querySelector('[data-event-choice="spyglass"]')?.textContent).toContain('BROKEN');
-    expect(mount.querySelector('[data-event-choice="spyglass"]')?.getAttribute('aria-description')).toContain('broken');
+    expect(mount.querySelector('[data-event-target]')?.textContent).toContain('MAP');
+    expect(mount.querySelector('[data-event-choice="spyglass"]')?.textContent).toContain('NOT RECOVERED');
     expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="spyglass"]')?.disabled).toBe(true);
     expect(mount.querySelector('[data-event-choice="swimRing"]')?.textContent).toContain('LOST');
     expect(mount.querySelector<HTMLButtonElement>('[data-event-choice="fishingNet"]')?.disabled).toBe(false);
