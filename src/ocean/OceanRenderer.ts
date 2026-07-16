@@ -89,6 +89,7 @@ const fragmentShader = `
   uniform int uExclusionCount;
   uniform mat4 uExclusionWorldToLocal[2];
   uniform vec4 uExclusionBounds[2];
+  uniform float uExclusionTaperStarts[2];
   varying float vHeight;
   varying float vWaveSlope;
   varying float vViewDepth;
@@ -167,12 +168,21 @@ const fragmentShader = `
       if (i < uExclusionCount) {
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
         vec4 exclusionBounds = uExclusionBounds[i];
-        if (
-          exclusionLocal.x >= exclusionBounds.x &&
-          exclusionLocal.x <= exclusionBounds.y &&
-          exclusionLocal.z >= exclusionBounds.z &&
-          exclusionLocal.z <= exclusionBounds.w
-        ) {
+        float exclusionHalfWidth = max(abs(exclusionBounds.x), abs(exclusionBounds.y));
+        float exclusionHalfLength = max(abs(exclusionBounds.z), abs(exclusionBounds.w));
+        float exclusionAbsZ = abs(exclusionLocal.z);
+        float taperSpan = max(exclusionHalfLength - uExclusionTaperStarts[i], 0.0);
+        float taperProgress = 0.0;
+        if (taperSpan > 0.0) {
+          taperProgress = clamp(
+            (exclusionAbsZ - uExclusionTaperStarts[i]) / taperSpan,
+            0.0,
+            1.0
+          );
+        }
+        float localHalfWidth = exclusionHalfWidth
+          * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
+        if (exclusionAbsZ <= exclusionHalfLength && abs(exclusionLocal.x) <= localHalfWidth) {
           discard;
         }
       }
@@ -260,6 +270,7 @@ export class OceanRenderer {
         uExclusionCount: { value: 0 },
         uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },
+        uExclusionTaperStarts: { value: [0, 0] },
       },
     });
     const geometry = new PlaneGeometry(
@@ -297,15 +308,18 @@ export class OceanRenderer {
   setExclusions(regions: readonly WaterExclusionRegion[]): void {
     const worldToLocal = this.material.uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = this.material.uniforms.uExclusionBounds!.value as Vector4[];
+    const taperStarts = this.material.uniforms.uExclusionTaperStarts!.value as number[];
     const activeCount = Math.min(regions.length, MAX_EXCLUSIONS);
 
     for (let index = 0; index < MAX_EXCLUSIONS; index += 1) {
       worldToLocal[index]!.identity();
       bounds[index]!.set(0, 0, 0, 1);
+      taperStarts[index] = 0;
     }
     for (let index = 0; index < activeCount; index += 1) {
       worldToLocal[index]!.copy(regions[index]!.worldToLocal);
       bounds[index]!.copy(regions[index]!.bounds);
+      taperStarts[index] = regions[index]!.taperStart;
     }
     this.material.uniforms.uExclusionCount!.value = activeCount;
   }
