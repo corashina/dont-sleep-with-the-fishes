@@ -94,21 +94,53 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
-  it('layers bright crest caps inside broader weather-scaled foam patches', () => {
+  it('uses weather-scaled ribbon thresholds and nearby edge erosion', () => {
     const ocean = new OceanRenderer();
     const shader = ocean.material.fragmentShader;
 
+    expect(shader).toContain(
+      'float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);',
+    );
+    expect(shader).toContain('float crestStart = mix(0.31, 0.13, weather);');
+    expect(shader).toContain('float slopeStart = mix(0.11, 0.055, weather);');
+    expect(shader).toContain('float ribbonStart = mix(0.57, 0.42, weather);');
+    expect(shader).toContain(
+      'float erodedEdge = smoothstep(0.20, 0.68, edgeNoise);',
+    );
+    expect(shader).toContain(
+      'float edgeMask = mix(1.0, mix(0.72, 1.0, erodedEdge), fineFade);',
+    );
+    expect(shader).toContain(
+      'return clamp(crestEnvelope * ribbon * edgeMask * strength, 0.0, 1.0);',
+    );
+
+    ocean.dispose();
+  });
+
+  it('nests cream crest caps inside distance-faded foam bodies', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+    const bodyFadeIndex = shader.indexOf('bodyFoam *= bodyDistanceFade;');
+    const capIndex = shader.indexOf(
+      'float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam, ribbonNoise);',
+    );
+
     expect(shader).toContain('float foamBody(');
     expect(shader).toContain('float foamCap(');
-    expect(shader).toContain('return bodyFoam * crest * breaking * coverage;');
-    expect(shader).toContain('float bodyFoam = foamBody(vHeight, vWaveSlope)');
-    expect(shader).toContain('float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam)');
+    expect(shader).toContain(
+      'return clamp(bodyFoam * crest * breaking * ribbonCore * strength, 0.0, 1.0);',
+    );
+    expect(shader).toContain('float fineDetailFade =');
     expect(shader).toContain('float bodyDistanceFade =');
     expect(shader).toContain('float capDistanceFade =');
+    expect(bodyFadeIndex).toBeGreaterThan(-1);
+    expect(capIndex).toBeGreaterThan(bodyFadeIndex);
     expect(shader).toContain('float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);');
-    expect(shader).toContain('foam * 0.72 + capFoam * 0.22');
-    expect(shader).toContain('color = mix(color, uFoamColor, bodyFoam * 0.60);');
-    expect(shader).toContain('color = mix(color, uFoamColor, capFoam * 0.88);');
+    expect(shader).toContain(
+      'vec3 capFoamColor = mix(uFoamColor, uSunColor, 0.08 * uDirectLightStrength);',
+    );
+    expect(shader).toContain('color = mix(color, uFoamColor, bodyFoam * 0.64);');
+    expect(shader).toContain('color = mix(color, capFoamColor, capFoam * 0.90);');
     expect(shader).not.toContain('float crestFoam(');
 
     ocean.dispose();
