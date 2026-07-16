@@ -37,6 +37,7 @@ describe('survival lifeboat builder', () => {
       halfWidth: 1.60,
       halfLength: 3.04,
       taperStart: 1.05,
+      minimumLocalY: -0.38,
     });
     disposeBuild(build.root, build.textures);
   });
@@ -153,6 +154,7 @@ describe('survival lifeboat builder', () => {
       halfWidth: 1.60,
       halfLength: 3.04,
       taperStart: 1.05,
+      minimumLocalY: -0.38,
     });
     disposeBuild(build.root, build.textures);
   });
