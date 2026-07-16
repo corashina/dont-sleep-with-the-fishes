@@ -77,12 +77,30 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
+  it('keeps only the carry circles and watch in the top scavenging HUD', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const hud = mount.querySelector<HTMLElement>('.hud')!;
+    const carried = hud.querySelector<HTMLElement>('[data-carried]')!;
+
+    expect(hud.querySelector('.objective')).toBeNull();
+    expect(hud.querySelector('[data-capacity]')).toBeNull();
+    expect(hud.querySelector('[data-sinking]')).toBeNull();
+    expect([...carried.children].map((element) => element.className)).toEqual([
+      'weight-circles__row',
+      'timer-block pocket-watch',
+    ]);
+    expect(carried.querySelector('[data-ui-artwork="watch"]')).not.toBeNull();
+    expect(carried.querySelector('[data-timer]')?.textContent).toBe('02:00');
+    ui.dispose();
+  });
+
   it('omits scavenging feedback text beneath the carried-item circles', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
 
     expect(mount.querySelector('[data-feedback]')).toBeNull();
-    expect(mount.querySelector('[data-carried]')?.textContent).toBe('');
+    expect(mount.querySelector('[data-carried-items]')?.textContent).toBe('');
     ui.dispose();
   });
 
@@ -156,23 +174,19 @@ describe('GameUI', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
     const root = mount.querySelector<HTMLElement>('.game-ui')!;
-    const sinkingLabel = mount.querySelector<HTMLElement>('[data-sinking]')!;
 
     ui.render(snapshot(), getSinkingState(0, 120));
     expect(root.dataset.sinkingSeverity).toBe('stable');
-    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
 
     ui.render(snapshot(), getSinkingState(47.99, 120));
     expect(root.dataset.sinkingSeverity).toBe('stable');
-    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
 
     ui.render(snapshot(), getSinkingState(48, 120));
     expect(root.dataset.sinkingSeverity).toBe('danger');
-    expect(sinkingLabel.textContent).toBe('DECK TAKING WATER');
 
     ui.render(snapshot(), getSinkingState(90, 120));
     expect(root.dataset.sinkingSeverity).toBe('critical');
-    expect(sinkingLabel.textContent).toBe('FINAL SUBMERSION');
+    ui.dispose();
   });
 
   it('reports a saved duplicate even when the first instance of its type was not saved', () => {
