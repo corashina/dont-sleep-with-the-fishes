@@ -1,19 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ItemId } from '../src/game/ItemState';
-import { ITEM_IDS } from '../src/game/ItemState';
+import type { ItemInstanceId } from '../src/game/ItemState';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
-import type { SurvivalInventory, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalInventorySnapshot, SurvivalItemState, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
-function inventory(overrides: Partial<Record<ItemId, Partial<SurvivalInventory[ItemId]>>> = {}): SurvivalInventory {
-  return Object.fromEntries(ITEM_IDS.map((id) => [id, {
-    owned: false,
-    charges: null,
-    durable: false,
-    ...overrides[id],
-  }])) as SurvivalInventory;
+function inventory(
+  overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
+): SurvivalInventorySnapshot {
+  return overrides;
 }
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
@@ -53,10 +49,12 @@ function completedEntry(day: number): JournalEntry {
       eventId: `night-${day}`,
       title: 'Quiet Night',
       prompt: 'The night passed without incident.',
+      attemptedChoiceId: null,
       attemptedItemId: null,
       resolution: 'endure',
       outcomeCode: 'event-resolved',
       outcomeMessage: 'The night remained quiet.',
+      inventoryMutations: [],
     },
   };
 }
@@ -198,7 +196,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(showEvent).toHaveBeenCalledWith(event, current);
   });
 
-  it('passes the bait option through and selects the best available repair resource', () => {
+  it('passes strict discriminated options through and selects the best hull repair resource', () => {
     let current = snapshot({ bait: 1, repairMaterial: 1 });
     const perform = vi.fn(() => ({ ...accepted(), accepted: false }));
     const phase = SurvivalPhase.forTest({
@@ -207,27 +205,29 @@ describe('SurvivalPhase orchestration', () => {
       ui: { showOutcome: vi.fn(), dispose: vi.fn() },
     });
 
-    phase.handleAction('fish', 'useBait');
+    phase.handleAction('fish', { kind: 'fishing', useBait: true });
     phase.handleContinue();
     phase.handleAction('repair');
     phase.handleContinue();
     current = snapshot({
-      inventory: inventory({ ductTape: { owned: true, charges: 1, durable: false } }),
+      inventory: inventory({ 'ductTape-1': { instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable' } }),
     });
     phase.handleAction('repair');
 
-    expect(perform).toHaveBeenNthCalledWith(1, 'fish', 'useBait');
-    expect(perform).toHaveBeenNthCalledWith(2, 'repair', 'repairMaterial');
-    expect(perform).toHaveBeenNthCalledWith(3, 'repair', 'ductTape');
+    expect(perform).toHaveBeenNthCalledWith(1, 'fish', { kind: 'fishing', useBait: true });
+    expect(perform).toHaveBeenNthCalledWith(2, 'repair', { kind: 'hullRepair', material: 'repairMaterial' });
+    expect(perform).toHaveBeenNthCalledWith(3, 'repair', { kind: 'hullRepair', material: 'ductTape' });
   });
 
   it('renders repair availability using the same selected resource as the command', () => {
-    const availableReason = vi.fn((_action: string, option?: string) => option === 'ductTape' ? null : 'No repair material remains.');
+    const availableReason = vi.fn((_action: string, option?: unknown) => (
+      typeof option === 'object' && option !== null && 'kind' in option ? null : 'No repair material remains.'
+    ));
     const render = vi.fn();
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: vi.fn(() => snapshot({
-          inventory: inventory({ ductTape: { owned: true, charges: 1, durable: false } }),
+          inventory: inventory({ 'ductTape-1': { instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable' } }),
         })),
         availableReason,
       },
@@ -239,7 +239,7 @@ describe('SurvivalPhase orchestration', () => {
     const unavailable = render.mock.calls[0]![1];
 
     expect(unavailable('repair')).toBeNull();
-    expect(availableReason).toHaveBeenLastCalledWith('repair', 'ductTape');
+    expect(availableReason).toHaveBeenLastCalledWith('repair', { kind: 'hullRepair', material: 'ductTape' });
   });
 
   it('routes item and endure event commands through the same presentation lock', async () => {

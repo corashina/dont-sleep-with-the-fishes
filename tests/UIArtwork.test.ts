@@ -25,6 +25,11 @@ describe('itemArtwork', () => {
     expect(markup).toContain('class="item-artwork item-artwork--cannedFood safe-token"');
     expect(markup).not.toContain('onload');
   });
+
+  it('draws the flare as a compact signal pistol and omits the removed water jug', () => {
+    expect(itemArtwork('flareGun')).toContain('data-flare-silhouette="signal-pistol"');
+    expect(ITEM_ARTWORK_IDS).not.toContain('waterJug');
+  });
 });
 
 describe('uiArtwork', () => {

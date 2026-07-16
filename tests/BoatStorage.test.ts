@@ -2,6 +2,7 @@ import { Box3, Mesh, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,
+  ITEM_IDS,
   createItemInstances,
   type ItemId,
   type ItemInstance,
@@ -62,7 +63,8 @@ describe('boat item layout', () => {
 
   it('defines exactly one stable transform per possible item instance', () => {
     const instances = createItemInstances();
-    expect(instances).toHaveLength(14);
+    expect(instances).toHaveLength(22);
+    expect([...new Set(instances.map(({ type }) => type))]).toEqual(ITEM_IDS);
     for (const instance of instances) {
       const first = boatStorageTransform(instance);
       const second = boatStorageTransform(instance);

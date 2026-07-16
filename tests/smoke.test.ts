@@ -4,7 +4,7 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import { ACTION_FOR_ITEM } from '../src/survival/BoatInteraction';
 import { WEATHER_IDS } from '../src/survival/BoatWorld';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
-import { createSurvivalInventory } from '../src/survival/inventory';
+import { SurvivalInventoryState } from '../src/survival/inventory';
 import { formatCountdown } from '../src/ui/GameUI';
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
@@ -14,15 +14,15 @@ const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) =>
 
 describe('demo contracts', () => {
   it('exposes the complete physical-inventory milestone', () => {
-    expect(ITEM_IDS).toHaveLength(9);
-    expect(createItemInstances()).toHaveLength(14);
+    expect(ITEM_IDS).toHaveLength(19);
+    expect(createItemInstances()).toHaveLength(22);
     expect(ITEM_DEFINITIONS.scubaSet.weight).toBe(3);
     expect(ACTION_FOR_ITEM.scubaSet).toBe('dive');
     expect(ACTION_FOR_ITEM.fishingRod).toBe('fish');
   });
 
-  it('ships exactly sixteen authored survival events', () => {
-    expect(SURVIVAL_EVENTS).toHaveLength(16);
+  it('ships exactly seventeen authored survival events', () => {
+    expect(SURVIVAL_EVENTS).toHaveLength(17);
     expect(new Set(SURVIVAL_EVENTS.map((event) => event.id)).size).toBe(SURVIVAL_EVENTS.length);
   });
 
@@ -31,14 +31,15 @@ describe('demo contracts', () => {
     expect(new Set(WEATHER_IDS).size).toBe(3);
   });
 
-  it('maps all nine scavenged items into survival definitions', () => {
-    const inventory = createSurvivalInventory(saved(...ITEM_IDS));
+  it('maps all nineteen scavenged item types into per-instance survival state', () => {
+    const inventory = new SurvivalInventoryState(saved(...ITEM_IDS)).snapshot();
 
-    expect(Object.keys(inventory).sort()).toEqual([...ITEM_IDS].sort());
+    expect(Object.keys(inventory)).toHaveLength(ITEM_IDS.length);
     ITEM_IDS.forEach((id) => {
-      expect(inventory[id].owned).toBe(true);
-      expect(typeof inventory[id].durable).toBe('boolean');
-      expect(inventory[id].charges === null || Number.isInteger(inventory[id].charges)).toBe(true);
+      const item = Object.values(inventory).find((candidate) => candidate?.type === id);
+      expect(item?.condition).toBe('usable');
+      expect(typeof ITEM_DEFINITIONS[id].durable).toBe('boolean');
+      expect(ITEM_DEFINITIONS[id].charges === null || Number.isInteger(ITEM_DEFINITIONS[id].charges)).toBe(true);
     });
   });
 
