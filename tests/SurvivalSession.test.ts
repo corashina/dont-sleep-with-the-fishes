@@ -313,17 +313,59 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory).toEqual(inventory);
   });
 
-  it('rejects a choice not authored for the event without drawing or clearing it', () => {
+  it('routes a usable recovered item not authored for the event through its itemless outcome', () => {
     const session = new SurvivalSession(saved('anchor', 'bucket'), {
       seed: 2,
       random: sequenceRandom([0.99]),
       initialEventId: 'shower-night',
     });
-    const before = session.snapshot();
-    expect(session.resolveEvent('anchor')).toMatchObject({ accepted: false, code: 'choice-unavailable' });
-    expect(session.snapshot()).toEqual(before);
-    expect(session.resolveEvent('bucket').accepted).toBe(true);
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('broken');
+    expect(session.resolveEvent('anchor')).toMatchObject({
+      accepted: true,
+      code: 'event-resolved',
+      message: 'That item cannot help. You wake with two energy.',
+      deltas: { energy: -2 },
+    });
+    expect(session.snapshot().inventory).toMatchObject({
+      'anchor-1': { condition: 'usable' },
+      'bucket-1': { condition: 'usable' },
+    });
+    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
+      attemptedChoiceId: 'anchor',
+      attemptedItemId: 'anchor',
+      resolution: 'unsuitableItem',
+      inventoryMutations: [],
+    });
+  });
+
+  it('still rejects arbitrary response strings and recovered but unusable items', () => {
+    const invalid = new SurvivalSession(saved('anchor', 'bucket'), {
+      seed: 2,
+      initialEventId: 'shower-night',
+    });
+    const before = invalid.snapshot();
+    expect(invalid.resolveEvent('not-an-event-response')).toMatchObject({
+      accepted: false,
+      code: 'choice-unavailable',
+    });
+    expect(invalid.snapshot()).toEqual(before);
+
+    const broken = new SurvivalSession(saved('anchor', 'bucket'), {
+      seed: 2,
+      initialConditions: { 'anchor-1': 'broken' },
+      initialEventId: 'shower-night',
+    });
+    expect(broken.resolveEvent('anchor')).toMatchObject({
+      accepted: false,
+      code: 'item-unavailable',
+    });
+
+    const suitable = new SurvivalSession(saved('bucket'), {
+      seed: 2,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'shower-night',
+    });
+    expect(suitable.resolveEvent('bucket')).toMatchObject({ accepted: true, code: 'event-resolved' });
+    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
   });
 
   it('draws a night event, advances dawn, and applies increasing rescue chance', () => {

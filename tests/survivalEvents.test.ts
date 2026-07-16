@@ -189,6 +189,7 @@ describe('survival events', () => {
       expect(event).toMatchObject({ title, prompt: 'Choose a response.', cue, weight, earliestDay, cooldownDays });
       expect(event.latestDay).toBe(latestDay);
       expect(event.choices).toEqual(EXPECTED_CHOICES[event.id as keyof typeof EXPECTED_CHOICES]);
+      expect(event.choices.filter(({ itemId }) => itemId === undefined), event.id).toHaveLength(1);
     }
   });
 
