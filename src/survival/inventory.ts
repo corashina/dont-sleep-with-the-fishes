@@ -32,9 +32,17 @@ export class SurvivalInventoryState {
     return count;
   }
 
-  consume(type: ItemId, quantity = 1): ItemInstanceId[] {
+  consume(
+    type: ItemId,
+    quantity = 1,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): ItemInstanceId[] {
     if (ITEM_DEFINITIONS[type]?.charges == null) return [];
-    const candidates = this.candidates((item) => item.type === type && item.condition === 'usable');
+    const candidates = this.candidates((item) => (
+      item.type === type
+      && item.condition === 'usable'
+      && !excludedInstanceIds.has(item.instanceId)
+    ));
     const consumed = candidates.slice(0, this.quantity(quantity, candidates.length));
     for (const instanceId of consumed) this.setCondition(instanceId, 'consumed');
     return consumed;
@@ -72,20 +80,35 @@ export class SurvivalInventoryState {
     return true;
   }
 
-  breakRandom(quantity: number, random: RandomSource): ItemInstanceId[] {
+  breakRandom(
+    quantity: number,
+    random: RandomSource,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): ItemInstanceId[] {
     return this.mutateRandom(
       quantity,
       random,
-      (item) => item.condition === 'usable' && ITEM_DEFINITIONS[item.type]?.breakable === true,
+      (item) => (
+        item.condition === 'usable'
+        && ITEM_DEFINITIONS[item.type]?.breakable === true
+        && !excludedInstanceIds.has(item.instanceId)
+      ),
       (instanceId) => this.break(instanceId),
     );
   }
 
-  loseRandom(quantity: number, random: RandomSource): ItemInstanceId[] {
+  loseRandom(
+    quantity: number,
+    random: RandomSource,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): ItemInstanceId[] {
     return this.mutateRandom(
       quantity,
       random,
-      (item) => item.condition === 'usable' || item.condition === 'broken',
+      (item) => (
+        (item.condition === 'usable' || item.condition === 'broken')
+        && !excludedInstanceIds.has(item.instanceId)
+      ),
       (instanceId) => this.lose(instanceId),
     );
   }
