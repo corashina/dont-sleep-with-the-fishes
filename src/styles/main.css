@@ -66,9 +66,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .timber-action:focus-visible, .survival-ui button:focus-visible { outline: 3px solid var(--ink-bone); outline-offset: 4px; }
 .game-ui { position: fixed; inset: 0; pointer-events: none; }
 .hud { position: absolute; inset: 0; padding: 24px 28px; font-family: ui-monospace, "Cascadia Mono", monospace; text-shadow: 0 2px 8px #10191dbf; }
-.objective, .capacity, .timer-block { position: absolute; top: 24px; display: grid; gap: 6px; }
-.objective { left: 28px; }
-.capacity { right: 28px; justify-items: end; }
+.timer-block { position: absolute; top: 24px; display: grid; gap: 6px; }
 .timer-block { left: 50%; transform: translateX(-50%); justify-items: center; }
 .eyebrow, .kicker { color: #a8a797; font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; }
 .timer-block strong { font-size: clamp(1.8rem, 4vw, 3.1rem); letter-spacing: -0.05em; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -82,7 +80,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .crosshair::after { width: 22px; height: 1px; top: 6px; left: -5px; }
 .prompt { position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%) translateY(8px); padding: 10px 14px; border: 1px solid #d0c9b55c; background: #172227d9; color: #eee7d4; opacity: 0; transition: opacity 160ms ease, transform 160ms ease; }
 .prompt.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
-.carried { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); }
+.carried {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+}
 .weight-circles__row { display: grid; grid-template-columns: repeat(3, 88px); gap: 12px; }
 .weight-circle {
   position: relative;
@@ -534,16 +540,35 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* Illustrated scavenging presentation */
 .illustrated-hud { padding: 24px 30px; font-family: 'Segoe Print', 'Bradley Hand', 'Trebuchet MS', sans-serif; }
-.objective { top: 24px; left: 28px; transform: rotate(-1deg); }
-.capacity { top: 24px; right: 28px; transform: rotate(1deg); }
-.objective strong, .capacity strong { font-size: 1rem; letter-spacing: .04em; }
-.pocket-watch { top: 12px; right: 120px; left: auto; width: 116px; height: 118px; transform: rotate(2deg); }
+.pocket-watch {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  flex: none;
+  width: 116px;
+  height: 88px;
+  margin-top: 6px;
+  transform: rotate(2deg);
+}
 .pocket-watch__art { position: absolute; inset: -5px auto auto 14px; width: 88px; color: #d2a24f; }
-.pocket-watch .eyebrow { position: absolute; top: 91px; width: 100%; text-align: center; color: var(--ink-faded); }
-.pocket-watch [data-timer] { position: absolute; top: 39px; width: 100%; z-index: 1; color: var(--ink-black); font: 800 1.28rem/1 ui-monospace, monospace; text-align: center; text-shadow: none; }
-.pocket-watch [data-timer].is-critical { color: var(--ink-red); animation: watch-jolt .65s steps(2, end) infinite; }
-.game-ui[data-sinking-severity="danger"] [data-sinking] { color: var(--ink-red-bright); text-shadow: 2px 2px 0 var(--ink-outline), 0 0 12px #661411; }
-.game-ui[data-sinking-severity="critical"] [data-sinking] { color: #ff8a80; text-shadow: 2px 2px 0 var(--ink-outline), 0 0 14px #661411; }
+.pocket-watch [data-timer] {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  z-index: 1;
+  min-width: 68px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: #090b0ce6;
+  color: var(--ink-bone);
+  font: 800 1.28rem/1 ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-shadow: 1px 1px 0 var(--ink-outline);
+  transform: translateX(-50%);
+}
+.pocket-watch [data-timer].is-critical { color: var(--ink-red-bright); animation: watch-jolt .65s steps(2, end) infinite; }
 .game-ui[data-sinking-severity="critical"] .ui-treatment::before { background: radial-gradient(circle at 50% 44%, transparent 30%, #30050580 64%, #020303f5 100%); animation: critical-vignette .8s steps(2, end) infinite; }
 .crosshair { width: 12px; height: 12px; border-color: #f2ead799; box-shadow: 0 0 12px var(--ink-outline); }
 .prompt { bottom: 82px; max-width: min(520px, calc(100vw - 48px)); font-family: 'Segoe Print', 'Trebuchet MS', sans-serif; text-align: center; }
@@ -560,7 +585,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .illustrated-warning__art { width: 34px; flex: 0 0 auto; color: var(--ink-red-bright); }
 .illustrated-warning.is-visible { opacity: 1; visibility: visible; }
 .poster-screen.has-compatibility-error .illustrated-warning { opacity: 1; visibility: visible; }
-@keyframes watch-jolt { 50% { transform: rotate(-2deg) scale(1.06); } }
+@keyframes watch-jolt { 50% { transform: translateX(-50%) rotate(-2deg) scale(1.06); } }
 @keyframes critical-vignette { 50% { opacity: .82; transform: scale(1.025); } }
 
 /* Illustrated survival status and projected actions */
@@ -841,7 +866,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   }
 
   .performance-stats { right: 16px; }
-  .pocket-watch { right: 82px; }
 }
 @media (max-height: 760px) and (min-width: 761px) {
   .cinematic-overlay__content { gap: 8px; }
