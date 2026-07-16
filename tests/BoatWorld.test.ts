@@ -597,8 +597,10 @@ describe('BoatWorld helpers', () => {
     const uniforms = (ocean.material as ShaderMaterial).uniforms;
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
+    const taperStarts = uniforms.uExclusionTaperStarts!.value as number[];
     expect(uniforms.uExclusionCount!.value).toBe(1);
     expect(bounds[0]!.toArray()).toEqual([-1.6, 1.6, -3.04, 3.04]);
+    expect(taperStarts).toEqual([1.05, 0]);
     expect(matrices[0]!.elements).toEqual(boat.matrixWorld.clone().invert().elements);
     expect(matrices[1]).toEqual(new Matrix4());
     expect(bounds[1]).toEqual(new Vector4());

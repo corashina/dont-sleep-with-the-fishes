@@ -495,21 +495,39 @@ describe('world builders', () => {
     const uniforms = (ocean.material as ShaderMaterial).uniforms;
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
+    const taperStarts = uniforms.uExclusionTaperStarts!.value as number[];
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
       [-6.05, 6.05, -17.6, 17.6],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
+    expect(taperStarts).toEqual([17.6, 1.05]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
-      { worldToLocal: matrices[1]!, bounds: bounds[1]! },
+      {
+        worldToLocal: matrices[1]!,
+        bounds: bounds[1]!,
+        taperStart: taperStarts[1]!,
+      },
     )).toBe(true);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(1.12, 0, 2.4)),
-      { worldToLocal: matrices[1]!, bounds: bounds[1]! },
+      {
+        worldToLocal: matrices[1]!,
+        bounds: bounds[1]!,
+        taperStart: taperStarts[1]!,
+      },
     )).toBe(true);
+    expect(pointInWaterExclusion(
+      world.lifeboat.localToWorld(new Vector3(1.4, 0, 2.4)),
+      {
+        worldToLocal: matrices[1]!,
+        bounds: bounds[1]!,
+        taperStart: taperStarts[1]!,
+      },
+    )).toBe(false);
     world.dispose();
     propModels.dispose();
   });

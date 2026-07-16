@@ -33,7 +33,11 @@ describe('survival lifeboat builder', () => {
       .toBeGreaterThanOrEqual(16);
     expect(build.acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);
     expect(build.acceptanceBox.containsPoint(new Vector3(1.6, 0, 0))).toBe(false);
-    expect(build.waterExclusion).toEqual({ halfWidth: 1.60, halfLength: 3.04 });
+    expect(build.waterExclusion).toEqual({
+      halfWidth: 1.60,
+      halfLength: 3.04,
+      taperStart: 1.05,
+    });
     disposeBuild(build.root, build.textures);
   });
 
@@ -145,7 +149,11 @@ describe('survival lifeboat builder', () => {
     expect(maps).toEqual(new Set(build.textures));
     expect(build.interiorBounds.min.toArray()).toEqual([-1.45, -0.50, -2.96]);
     expect(build.interiorBounds.max.toArray()).toEqual([1.45, 1.00, 2.96]);
-    expect(build.waterExclusion).toEqual({ halfWidth: 1.60, halfLength: 3.04 });
+    expect(build.waterExclusion).toEqual({
+      halfWidth: 1.60,
+      halfLength: 3.04,
+      taperStart: 1.05,
+    });
     disposeBuild(build.root, build.textures);
   });
 });

@@ -22,7 +22,11 @@ export interface LifeboatBuild {
   readonly storageRoot: Group;
   readonly acceptanceBox: Box3;
   readonly interiorBounds: Box3;
-  readonly waterExclusion: { readonly halfWidth: number; readonly halfLength: number };
+  readonly waterExclusion: {
+    readonly halfWidth: number;
+    readonly halfLength: number;
+    readonly taperStart: number;
+  };
   readonly textures: readonly Texture[];
 }
 
@@ -284,7 +288,11 @@ export function createLifeboat(): LifeboatBuild {
       new Vector3(-1.45, -0.50, -2.96),
       new Vector3(1.45, 1.00, 2.96),
     ),
-    waterExclusion: { halfWidth: 1.60, halfLength: 3.04 },
+    waterExclusion: {
+      halfWidth: 1.60,
+      halfLength: 3.04,
+      taperStart: 1.05,
+    },
     textures: textures.all,
   };
 }
