@@ -6,6 +6,7 @@ export function pointInWaterExclusion(
   region: WaterExclusionRegion,
 ): boolean {
   const local = point.clone().applyMatrix4(region.worldToLocal);
+  if (region.minimumLocalY !== undefined && local.y < region.minimumLocalY) return false;
   const halfWidth = Math.max(Math.abs(region.bounds.x), Math.abs(region.bounds.y));
   const halfLength = Math.max(Math.abs(region.bounds.z), Math.abs(region.bounds.w));
   const localAbsZ = Math.abs(local.z);

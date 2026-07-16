@@ -42,6 +42,16 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
+  it('gates vessel-local footprint exclusions by displaced fragment height', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+
+    expect(shader).toContain('uniform float uExclusionMinimumLocalYs[2];');
+    expect(shader).toContain('exclusionLocal.y >= uExclusionMinimumLocalYs[i]');
+
+    ocean.dispose();
+  });
+
   it('aims direct light along the normalized shared sun direction', () => {
     const ocean = new OceanRenderer();
     const expected = new Vector3(...SUN_DIRECTION).normalize();
