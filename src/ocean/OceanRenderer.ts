@@ -153,14 +153,24 @@ const fragmentShader = `
     return smoothstep(0.34, 0.72, broad * 0.68 + fine * 0.32);
   }
 
-  float crestFoam(float waveHeight, float waveSlope) {
+  float foamBody(float waveHeight, float waveSlope) {
     float roughness = clamp((uAmplitudeScale - 0.85) / 0.65, 0.0, 1.0);
-    float crestStart = mix(0.53, 0.37, roughness);
-    float slopeStart = mix(0.24, 0.16, roughness);
-    float crest = smoothstep(crestStart, crestStart + 0.28, waveHeight);
-    float breaking = smoothstep(slopeStart, slopeStart + 0.24, waveSlope);
-    float coverage = mix(0.66, 0.92, roughness);
+    float crestStart = mix(0.45, 0.30, roughness);
+    float slopeStart = mix(0.19, 0.12, roughness);
+    float crest = smoothstep(crestStart, crestStart + 0.30, waveHeight);
+    float breaking = smoothstep(slopeStart, slopeStart + 0.25, waveSlope);
+    float coverage = mix(0.78, 0.98, roughness);
     return crest * breaking * coverage;
+  }
+
+  float foamCap(float waveHeight, float waveSlope, float bodyFoam) {
+    float roughness = clamp((uAmplitudeScale - 0.85) / 0.65, 0.0, 1.0);
+    float crestStart = mix(0.61, 0.43, roughness);
+    float slopeStart = mix(0.29, 0.19, roughness);
+    float crest = smoothstep(crestStart, crestStart + 0.18, waveHeight);
+    float breaking = smoothstep(slopeStart, slopeStart + 0.18, waveSlope);
+    float coverage = mix(0.68, 0.90, roughness);
+    return bodyFoam * crest * breaking * coverage;
   }
 
   void main() {
@@ -220,11 +230,30 @@ const fragmentShader = `
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
-    float foam = crestFoam(vHeight, vWaveSlope) * foamBreakup(vWorldPosition.xz);
-    foam *= 1.0 - smoothstep(uDetailFade.y * 0.72, uDetailFade.y, vViewDepth);
+    float bodyBreakup = foamBreakup(vWorldPosition.xz);
+    float bodyFoam = foamBody(vHeight, vWaveSlope) * bodyBreakup;
+    float capBreakup = foamBreakup(
+      vWorldPosition.xz * 1.17 + vec2(uTime * 0.08, -uTime * 0.05)
+    );
+    float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam)
+      * smoothstep(0.48, 0.80, capBreakup);
+    float bodyDistanceFade = 1.0 - smoothstep(
+      uDetailFade.y * 0.62,
+      uDetailFade.y * 0.94,
+      vViewDepth
+    );
+    float capDistanceFade = 1.0 - smoothstep(
+      uDetailFade.y * 0.48,
+      uDetailFade.y * 0.78,
+      vViewDepth
+    );
+    bodyFoam *= bodyDistanceFade;
+    capFoam *= capDistanceFade;
+    float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
-      * (1.0 - foam * 0.78);
-    color = mix(color, uFoamColor, foam * 0.74);
+      * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
+    color = mix(color, uFoamColor, bodyFoam * 0.60);
+    color = mix(color, uFoamColor, capFoam * 0.88);
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
