@@ -25,6 +25,7 @@ import {
 } from '../interaction/InteractionSystem';
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { PlayerController } from '../player/PlayerController';
+import type { ScavengeVisualState } from '../rendering/SceneRenderer';
 import { GameUI } from '../ui/GameUI';
 import { World } from '../world/World';
 
@@ -44,6 +45,12 @@ export class ScavengePhase implements GamePhase {
   private disposed = false;
   private completionReported = false;
   private elapsed = 0;
+  private readonly visualState: ScavengeVisualState = {
+    kind: 'scavenge',
+    elapsedSeconds: 0,
+    sinkingProgress: 0,
+    reducedMotion: false,
+  };
   private terminalPresentation: TerminalPresentation = {
     phase: 'playing',
     remainingSeconds: 0,
@@ -104,6 +111,7 @@ export class ScavengePhase implements GamePhase {
     const before = this.session.snapshot();
     const active = before.status === 'running' && this.input.pointerLocked && !document.hidden;
     let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
+    this.syncVisualState(sinking);
     const updateWorld = (worldDelta: number): void => {
       this.world.update(
         this.elapsed,
@@ -118,6 +126,7 @@ export class ScavengePhase implements GamePhase {
       if (nextElapsed === this.elapsed) return false;
       this.elapsed = nextElapsed;
       sinking = getSinkingState(this.elapsed, RUN_SECONDS);
+      this.syncVisualState(sinking);
       return true;
     };
 
@@ -180,7 +189,13 @@ export class ScavengePhase implements GamePhase {
 
   render(): void {
     if (this.disposed) return;
-    this.context.renderer.render(this.scene, this.context.camera);
+    this.context.sceneRenderer.render(this.scene, this.context.camera, this.visualState);
+  }
+
+  private syncVisualState(sinking: Readonly<ReturnType<typeof getSinkingState>>): void {
+    this.visualState.elapsedSeconds = this.elapsed;
+    this.visualState.sinkingProgress = sinking.progress;
+    this.visualState.reducedMotion = this.context.reducedMotion.matches;
   }
 
   dispose(): void {

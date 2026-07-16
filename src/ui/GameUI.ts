@@ -20,8 +20,6 @@ export class GameUI {
   private readonly failureLayer: HTMLElement;
   private readonly resultLayer: HTMLElement;
   private readonly timer: HTMLElement;
-  private readonly sinking: HTMLElement;
-  private readonly capacity: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly carriedItems: HTMLElement;
   private readonly resultTitle: HTMLElement;
@@ -31,7 +29,6 @@ export class GameUI {
   private readonly resumeButton: HTMLButtonElement;
   private readonly replayButton: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
-  private lastSavedCount = -1;
   private disposed = false;
 
   constructor(mount: HTMLElement) {
@@ -40,16 +37,15 @@ export class GameUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="hud illustrated-hud">
-        <div class="objective ink-label"><span class="eyebrow">CAPTAIN'S ORDER</span><strong>LOAD THE LIFEBOAT</strong></div>
-        <div class="timer-block pocket-watch">
-          ${uiArtwork('watch', 'pocket-watch__art')}
-          <span class="eyebrow" data-sinking>SHIP LISTING</span>
-          <strong data-timer>02:00</strong>
-        </div>
-        <div class="capacity ink-label"><span class="eyebrow">IN THE BOAT</span><strong data-capacity aria-label="0 supplies saved">0 SAVED</strong></div>
         <div class="crosshair" aria-hidden="true"></div>
         <div class="prompt brush-label" data-prompt aria-live="polite"></div>
-        <div class="carried" data-carried><div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div></div>
+        <div class="carried" data-carried>
+          <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
+          <div class="timer-block pocket-watch">
+            ${uiArtwork('watch', 'pocket-watch__art')}
+            <strong data-timer>02:00</strong>
+          </div>
+        </div>
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
@@ -101,8 +97,6 @@ export class GameUI {
     this.failureLayer = requireElement(this.root, '[data-failure]');
     this.resultLayer = requireElement(this.root, '[data-result]');
     this.timer = requireElement(this.root, '[data-timer]');
-    this.sinking = requireElement(this.root, '[data-sinking]');
-    this.capacity = requireElement(this.root, '[data-capacity]');
     this.prompt = requireElement(this.root, '[data-prompt]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
@@ -115,7 +109,6 @@ export class GameUI {
     this.startButton.addEventListener('click', this.handleStart);
     this.resumeButton.addEventListener('click', this.handleResume);
     this.replayButton.addEventListener('click', this.handleReplay);
-    this.renderSavedCount(0);
   }
 
   hideStart(): void {
@@ -155,13 +148,7 @@ export class GameUI {
         ? 'danger'
         : 'stable';
     this.root.dataset.sinkingSeverity = severity;
-    this.sinking.textContent = {
-      stable: 'SHIP LISTING',
-      danger: 'DECK TAKING WATER',
-      critical: 'FINAL SUBMERSION',
-    }[severity];
     this.renderCarry(snapshot);
-    this.renderSavedCount(snapshot.savedCount);
   }
 
   showFailureResult(snapshot: ScavengeSnapshot): void {
@@ -222,13 +209,6 @@ export class GameUI {
       }
       return circle;
     }));
-  }
-
-  private renderSavedCount(savedCount: number): void {
-    if (savedCount === this.lastSavedCount) return;
-    this.lastSavedCount = savedCount;
-    this.capacity.textContent = `${savedCount} SAVED`;
-    this.capacity.setAttribute('aria-label', `${savedCount} supplies saved`);
   }
 
   private readonly handleStart = (): void => this.onStart();
