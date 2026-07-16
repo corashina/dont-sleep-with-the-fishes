@@ -8,9 +8,15 @@ import {
 import type { GamePhase, PhaseContext } from './app/GamePhase';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
+import { createSceneRenderer } from './rendering/PostProcessingPipeline';
+import {
+  DirectSceneRenderer,
+  type SceneRenderer,
+} from './rendering/SceneRenderer';
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import type { PropModelLibrary } from './world/PropModelLibrary';
+import { runCleanupSteps } from './world/SceneResources';
 import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
 import type { SkyAssets } from './world/SkyAssets';
 
@@ -53,6 +59,7 @@ export interface GameTestOptions {
   createSeed?: () => number;
   mount?: HTMLElement;
   renderer?: WebGLRenderer;
+  sceneRenderer?: SceneRenderer;
 }
 
 function createRandomSeed(): number {
@@ -67,6 +74,7 @@ function createRandomSeed(): number {
 
 export class Game {
   private renderer!: WebGLRenderer;
+  private sceneRenderer!: SceneRenderer;
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private propModels!: PropModelLibrary;
@@ -96,12 +104,14 @@ export class Game {
       antialias: true,
       powerPreference: 'high-performance',
     });
+    let sceneRenderer: SceneRenderer | null = null;
     let initializationStarted = false;
     try {
       renderer.outputColorSpace = SRGBColorSpace;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
+      sceneRenderer = createSceneRenderer(renderer);
       const camera = new PerspectiveCamera(65, 1, 0.08, 220);
       const clock = new Clock();
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -109,6 +119,7 @@ export class Game {
       this.initialize(
         mount,
         renderer,
+        sceneRenderer,
         camera,
         clock,
         reducedMotion,
@@ -121,9 +132,13 @@ export class Game {
     } catch (error) {
       if (!initializationStarted) {
         try {
-          renderer.dispose();
+          runCleanupSteps([
+            () => sceneRenderer?.dispose(),
+            () => renderer.dispose(),
+            () => renderer.domElement.remove(),
+          ]);
         } finally {
-          renderer.domElement.remove();
+          throw error;
         }
       }
       throw error;
@@ -146,10 +161,12 @@ export class Game {
       getDelta: () => 0.016,
     };
     const reducedMotion = { matches: false } as MediaQueryList;
+    const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
     const game = Object.create(Game.prototype) as Game;
     game.initialize(
       mount,
       renderer,
+      sceneRenderer,
       new PerspectiveCamera(65, 1, 0.08, 220),
       clock,
       reducedMotion,
@@ -182,61 +199,24 @@ export class Game {
     window.removeEventListener('resize', this.onResize);
     const outgoing = this.detachActivePhase();
     this.exitPointerLock();
-    let firstCleanupError: unknown;
-    let cleanupFailed = false;
-    const preserveFirstCleanupError = (error: unknown): void => {
-      if (cleanupFailed) return;
-      cleanupFailed = true;
-      firstCleanupError = error;
-    };
-    try {
-      outgoing?.dispose();
-    } catch (error) {
-      preserveFirstCleanupError(error);
-    } finally {
-      try {
-        this.performanceStats?.dispose();
-      } catch (error) {
-        preserveFirstCleanupError(error);
-      } finally {
-        this.performanceStats = null;
-        try {
-          this.propModels.dispose();
-        } catch (error) {
-          preserveFirstCleanupError(error);
-        } finally {
-          try {
-            this.shipFurniture.dispose();
-          } catch (error) {
-            preserveFirstCleanupError(error);
-          } finally {
-            try {
-              this.skyAssets.dispose();
-            } catch (error) {
-              preserveFirstCleanupError(error);
-            } finally {
-              try {
-                this.renderer.dispose();
-              } catch (error) {
-                preserveFirstCleanupError(error);
-              } finally {
-                try {
-                  this.renderer.domElement.remove();
-                } catch (error) {
-                  preserveFirstCleanupError(error);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    if (cleanupFailed) throw firstCleanupError;
+    const performanceStats = this.performanceStats;
+    this.performanceStats = null;
+    runCleanupSteps([
+      () => outgoing?.dispose(),
+      () => performanceStats?.dispose(),
+      () => this.propModels.dispose(),
+      () => this.shipFurniture.dispose(),
+      () => this.skyAssets.dispose(),
+      () => this.sceneRenderer.dispose(),
+      () => this.renderer.dispose(),
+      () => this.renderer.domElement.remove(),
+    ]);
   }
 
   private initialize(
     mount: HTMLElement,
     renderer: WebGLRenderer,
+    sceneRenderer: SceneRenderer,
     camera: PerspectiveCamera,
     clock: GameClock,
     reducedMotion: MediaQueryList,
@@ -247,6 +227,7 @@ export class Game {
     createSeed: () => number,
   ): void {
     this.renderer = renderer;
+    this.sceneRenderer = sceneRenderer;
     this.camera = camera;
     this.clock = clock;
     this.propModels = propModels;
@@ -261,6 +242,7 @@ export class Game {
     this.context = {
       mount,
       renderer,
+      sceneRenderer,
       camera,
       reducedMotion,
       propModels,
@@ -297,26 +279,18 @@ export class Game {
   private rollbackConstruction(resizeListenerRegistered: boolean): void {
     this.disposed = true;
     const activePhase = this.detachActivePhase();
-    try {
-      if (resizeListenerRegistered) {
-        window.removeEventListener('resize', this.onResize);
-      }
-    } finally {
-      try {
-        activePhase?.dispose();
-      } finally {
-        try {
-          this.performanceStats?.dispose();
-          this.performanceStats = null;
-        } finally {
-          try {
-            this.renderer.dispose();
-          } finally {
-            this.renderer.domElement.remove();
-          }
-        }
-      }
-    }
+    const performanceStats = this.performanceStats;
+    this.performanceStats = null;
+    runCleanupSteps([
+      () => {
+        if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
+      },
+      () => activePhase?.dispose(),
+      () => performanceStats?.dispose(),
+      () => this.sceneRenderer.dispose(),
+      () => this.renderer.dispose(),
+      () => this.renderer.domElement.remove(),
+    ]);
   }
 
   private activateScavenge(start: boolean): void {
@@ -413,8 +387,10 @@ export class Game {
     if (this.disposed) return;
     const width = window.innerWidth;
     const height = window.innerHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const pixelRatio = Math.min(window.devicePixelRatio, 2);
+    this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height, false);
+    this.sceneRenderer.resize(width, height, pixelRatio);
     this.activePhase?.resize(width, height);
   }
 

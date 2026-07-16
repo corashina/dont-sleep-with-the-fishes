@@ -22,28 +22,65 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
-  it('keeps the critical watch timer at least 3:1 against its gold face', () => {
-    expect(mainStyles).toMatch(/\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\(--ink-red\);/s);
-    const criticalColor = mainStyles.match(/--ink-red:\s*(#[0-9a-f]{6})/i)?.[1];
+  it('keeps the critical watch timer at least 3:1 against its composited backing', () => {
+    const criticalToken = mainStyles.match(
+      /\.pocket-watch \[data-timer\]\.is-critical\s*\{[^}]*color:\s*var\((--[\w-]+)\);/s,
+    )?.[1];
+    const timerBacking = mainStyles.match(
+      /\.pocket-watch \[data-timer\]\s*\{[^}]*background:\s*(#[0-9a-f]{8});/is,
+    )?.[1];
     const watchGold = mainStyles.match(/\.pocket-watch__art\s*\{[^}]*color:\s*(#[0-9a-f]{6})/is)?.[1];
+    expect(criticalToken).toBeDefined();
+    const criticalColor = criticalToken
+      ? mainStyles.match(new RegExp(`${criticalToken}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1]
+      : undefined;
     expect(criticalColor).toBeDefined();
+    expect(timerBacking).toBeDefined();
     expect(watchGold).toBeDefined();
-    if (!criticalColor || !watchGold) return;
+    if (!criticalColor || !timerBacking || !watchGold) return;
 
-    const luminance = (hex: string): number => {
-      const channels = hex.slice(1).match(/.{2}/g)!
-        .map((channel) => Number.parseInt(channel, 16) / 255)
+    const channels = (hex: string): number[] => hex.slice(1).match(/.{2}/g)!
+      .map((channel) => Number.parseInt(channel, 16) / 255);
+    const luminance = (rgb: number[]): number => {
+      const linearChannels = rgb
         .map((channel) => channel <= 0.04045
           ? channel / 12.92
           : ((channel + 0.055) / 1.055) ** 2.4);
-      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+      return 0.2126 * linearChannels[0]! + 0.7152 * linearChannels[1]! + 0.0722 * linearChannels[2]!;
     };
-    const foreground = luminance(criticalColor);
-    const background = luminance(watchGold);
+    const foreground = luminance(channels(criticalColor));
+    const backing = channels(timerBacking);
+    const gold = channels(watchGold);
+    const backingAlpha = backing[3]!;
+    const compositedBacking = backing.slice(0, 3).map(
+      (channel, index) => channel * backingAlpha + gold[index]! * (1 - backingAlpha),
+    );
+    const background = luminance(compositedBacking);
     const ratio = (Math.max(foreground, background) + 0.05)
       / (Math.min(foreground, background) + 0.05);
 
     expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+
+  it('stacks the watch below the carry circles and backs the countdown', () => {
+    expect(mainStyles).toMatch(
+      /\.carried\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*center;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.pocket-watch\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[^}]*right:\s*auto;[^}]*left:\s*auto;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.pocket-watch \[data-timer\]\s*\{[^}]*background:\s*#090b0ce6;[^}]*color:\s*var\(--ink-bone\);/s,
+    );
+    expect(mainStyles).not.toMatch(
+      /@media \(max-width:\s*980px\)[\s\S]*?\.pocket-watch\s*\{\s*right:\s*82px;/,
+    );
+  });
+
+  it('keeps the critical countdown centered throughout its jolt animation', () => {
+    expect(mainStyles).toMatch(
+      /@keyframes watch-jolt\s*\{\s*50%\s*\{\s*transform:\s*translateX\(-50%\)\s+rotate\(-2deg\)\s+scale\(1\.06\);\s*\}\s*\}/s,
+    );
   });
 
   it('shows a distinct failure layer before revealing the result', () => {
@@ -77,12 +114,30 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
+  it('keeps only the carry circles and watch in the top scavenging HUD', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const hud = mount.querySelector<HTMLElement>('.hud')!;
+    const carried = hud.querySelector<HTMLElement>('[data-carried]')!;
+
+    expect(hud.querySelector('.objective')).toBeNull();
+    expect(hud.querySelector('[data-capacity]')).toBeNull();
+    expect(hud.querySelector('[data-sinking]')).toBeNull();
+    expect([...carried.children].map((element) => element.className)).toEqual([
+      'weight-circles__row',
+      'timer-block pocket-watch',
+    ]);
+    expect(carried.querySelector('[data-ui-artwork="watch"]')).not.toBeNull();
+    expect(carried.querySelector('[data-timer]')?.textContent).toBe('02:00');
+    ui.dispose();
+  });
+
   it('omits scavenging feedback text beneath the carried-item circles', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
 
     expect(mount.querySelector('[data-feedback]')).toBeNull();
-    expect(mount.querySelector('[data-carried]')?.textContent).toBe('');
+    expect(mount.querySelector('[data-carried-items]')?.textContent).toBe('');
     ui.dispose();
   });
 
@@ -156,23 +211,19 @@ describe('GameUI', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
     const root = mount.querySelector<HTMLElement>('.game-ui')!;
-    const sinkingLabel = mount.querySelector<HTMLElement>('[data-sinking]')!;
 
     ui.render(snapshot(), getSinkingState(0, 120));
     expect(root.dataset.sinkingSeverity).toBe('stable');
-    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
 
     ui.render(snapshot(), getSinkingState(47.99, 120));
     expect(root.dataset.sinkingSeverity).toBe('stable');
-    expect(sinkingLabel.textContent).toBe('SHIP LISTING');
 
     ui.render(snapshot(), getSinkingState(48, 120));
     expect(root.dataset.sinkingSeverity).toBe('danger');
-    expect(sinkingLabel.textContent).toBe('DECK TAKING WATER');
 
     ui.render(snapshot(), getSinkingState(90, 120));
     expect(root.dataset.sinkingSeverity).toBe('critical');
-    expect(sinkingLabel.textContent).toBe('FINAL SUBMERSION');
+    ui.dispose();
   });
 
   it('reports a saved duplicate even when the first instance of its type was not saved', () => {

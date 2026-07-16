@@ -89,6 +89,19 @@ const PROFILES = {
   }),
 } as const;
 
+const SURVIVAL_PROFILES = {
+  day: {
+    calm: PROFILES['survival-day-calm'],
+    overcast: PROFILES['survival-day-overcast'],
+    squall: PROFILES['survival-day-squall'],
+  },
+  night: {
+    calm: PROFILES['survival-night-calm'],
+    overcast: PROFILES['survival-night-overcast'],
+    squall: PROFILES['survival-night-squall'],
+  },
+} as const;
+
 function finiteOrZero(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
@@ -111,7 +124,7 @@ export function selectPostProcessingProfile(
   state: Readonly<SceneVisualState>,
 ): Readonly<PostProcessingProfile> {
   if (state.kind === 'scavenge') return PROFILES.scavenge;
-  return PROFILES[`survival-${state.phase}-${state.weather}`];
+  return SURVIVAL_PROFILES[state.phase][state.weather];
 }
 
 export function resolveVignetteStrength(
