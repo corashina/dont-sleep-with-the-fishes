@@ -371,6 +371,17 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.performance-stats\s*\{[^}]*top:\s*112px;[^}]*right:\s*24px;/s);
   });
 
+  it('prevents short-height cinematic content from overflowing horizontally', () => {
+    const shortHeightStart = mainStyles.indexOf('@media (max-height: 760px) and (min-width: 761px)');
+    const shortHeightEnd = mainStyles.indexOf('@media ', shortHeightStart + 1);
+    const shortHeightStyles = mainStyles.slice(shortHeightStart, shortHeightEnd);
+
+    expect(shortHeightStart).toBeGreaterThanOrEqual(0);
+    expect(shortHeightStyles).toMatch(
+      /\.cinematic-overlay__content\s*\{[^}]*max-height:\s*calc\(100dvh - 28px\);[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*hidden;/s,
+    );
+  });
+
   it('styles the journal as a centered bounded paper page with reduced-motion support', () => {
     expect(mainStyles).toMatch(/\.journal-marker:focus-visible\s*\{/);
     expect(mainStyles).toMatch(/\.journal-overlay::before\s*\{[^}]*display:\s*none/s);
