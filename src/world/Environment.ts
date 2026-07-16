@@ -13,10 +13,14 @@ import {
 } from 'three';
 import type { SinkingState } from '../game/sinking';
 import { Skybox } from './Skybox';
-import type { SkyPalette } from './skyPalette';
+import type { SkyPalette, SkyState } from './skyPalette';
 
-const RAIN_DROP_COUNT = 900;
 const SPRAY_DROP_COUNT = 220;
+const SCAVENGE_SKY_STATE: Readonly<SkyState> = Object.freeze({
+  weather: 'calm',
+  phase: 'day',
+  severity: 0,
+});
 
 const SCAVENGE_SHADOW_CONFIG = Object.freeze({
   mapSize: 2048,
@@ -47,15 +51,13 @@ function particleField(
 }
 
 export class Environment {
-  private readonly rain: Points<BufferGeometry, PointsMaterial>;
-  private readonly rainPositions: Float32Array;
   private readonly spray: Points<BufferGeometry, PointsMaterial>;
   private readonly sprayPositions: Float32Array;
   private readonly sky: Skybox;
   private readonly keyLight: DirectionalLight;
   private readonly fillLight: HemisphereLight;
-  private readonly fallbackBackground = new Color(0x27343b);
-  private readonly stormFog = new FogExp2(0x27343b, 0.018);
+  private readonly fallbackBackground = new Color();
+  private readonly atmosphereFog: FogExp2;
   private readonly previousBackground: Scene['background'];
   private readonly previousFog: Scene['fog'];
   private disposed = false;
@@ -65,16 +67,22 @@ export class Environment {
   constructor(private readonly scene: Scene, moonTexture: Texture) {
     this.previousBackground = scene.background;
     this.previousFog = scene.fog;
+    this.sky = new Skybox(scene, SCAVENGE_SKY_STATE, moonTexture);
+    const atmosphere = this.sky.palette;
+    this.fallbackBackground.copy(atmosphere.horizonColor);
+    this.atmosphereFog = new FogExp2(atmosphere.fogColor, atmosphere.fogDensity);
     scene.background = this.fallbackBackground;
-    scene.fog = this.stormFog;
-    this.sky = new Skybox(
-      scene,
-      { weather: 'squall', phase: 'day', severity: 0 },
-      moonTexture,
-    );
+    scene.fog = this.atmosphereFog;
 
-    this.fillLight = new HemisphereLight(0x8fa0a1, 0x182226, 1.2);
-    this.keyLight = new DirectionalLight(0xc7c0aa, 2.1);
+    this.fillLight = new HemisphereLight(
+      atmosphere.ambientLightColor,
+      0x182226,
+      atmosphere.ambientLightIntensity,
+    );
+    this.keyLight = new DirectionalLight(
+      atmosphere.keyLightColor,
+      atmosphere.keyLightIntensity,
+    );
     this.keyLight.position.set(-12, 18, 8);
     this.keyLight.castShadow = true;
     const shadow = this.keyLight.shadow;
@@ -93,18 +101,6 @@ export class Environment {
     shadow.normalBias = SCAVENGE_SHADOW_CONFIG.normalBias;
     shadowCamera.updateProjectionMatrix();
     scene.add(this.fillLight, this.keyLight);
-
-    const rainField = particleField(RAIN_DROP_COUNT, 60, 30);
-    this.rain = rainField.points;
-    this.rainPositions = rainField.positions;
-    this.rain.material.setValues({
-      color: 0xa7b3b2,
-      size: 0.045,
-      transparent: true,
-      opacity: 0.42,
-    });
-    this.rain.name = 'rain';
-    scene.add(this.rain);
 
     const sprayField = particleField(SPRAY_DROP_COUNT, 18, 2.2);
     this.spray = sprayField.points;
@@ -127,14 +123,6 @@ export class Environment {
     reducedMotion: boolean,
   ): void {
     if (this.disposed) return;
-    const rainSpeed = reducedMotion ? 8 : 15 + sinking.progress * 8;
-    for (let index = 0; index < RAIN_DROP_COUNT; index += 1) {
-      const offset = index * 3 + 1;
-      this.rainPositions[offset] = (this.rainPositions[offset]! - delta * rainSpeed + 30) % 30;
-    }
-    (this.rain.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
-    this.rain.position.set(cameraPosition.x, 0, cameraPosition.z);
-
     const spraySpeed = reducedMotion ? 0.5 : 1.3 + sinking.progress;
     for (let index = 0; index < SPRAY_DROP_COUNT; index += 1) {
       const offset = index * 3 + 1;
@@ -146,12 +134,12 @@ export class Environment {
     this.sky.resetTransient();
     const atmosphere = this.sky.update(
       delta,
-      { weather: 'squall', phase: 'day', severity: sinking.progress },
+      SCAVENGE_SKY_STATE,
       cameraPosition,
     );
     this.fallbackBackground.copy(atmosphere.horizonColor);
-    this.stormFog.color.copy(atmosphere.fogColor);
-    this.stormFog.density = atmosphere.fogDensity;
+    this.atmosphereFog.color.copy(atmosphere.fogColor);
+    this.atmosphereFog.density = atmosphere.fogDensity;
     this.fillLight.color.copy(atmosphere.ambientLightColor);
     this.fillLight.intensity = atmosphere.ambientLightIntensity;
     this.keyLight.color.copy(atmosphere.keyLightColor);
@@ -161,13 +149,15 @@ export class Environment {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.rain.geometry.dispose();
-    this.rain.material.dispose();
     this.spray.geometry.dispose();
     this.spray.material.dispose();
     this.sky.dispose();
-    this.scene.remove(this.rain, this.spray, this.keyLight, this.fillLight);
-    if (this.scene.background === this.fallbackBackground) this.scene.background = this.previousBackground;
-    if (this.scene.fog === this.stormFog) this.scene.fog = this.previousFog;
+    this.scene.remove(this.spray, this.keyLight, this.fillLight);
+    if (this.scene.background === this.fallbackBackground) {
+      this.scene.background = this.previousBackground;
+    }
+    if (this.scene.fog === this.atmosphereFog) {
+      this.scene.fog = this.previousFog;
+    }
   }
 }
