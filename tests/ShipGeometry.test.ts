@@ -399,6 +399,27 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
+  it('omits the paired deck artifacts and keeps the remaining weathering', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const meshNames: string[] = [];
+    build.root.traverse((object) => {
+      if (object instanceof Mesh) meshNames.push(object.name);
+    });
+
+    expect(meshNames.filter((name) => name.startsWith('deck-drain-'))).toEqual([]);
+    expect(meshNames.filter((name) => name.startsWith('rust-streak-deck-drain-')))
+      .toEqual([]);
+    expect(build.root.getObjectByName('rust-streak-lifeboat-rail-opening'))
+      .toBeInstanceOf(Mesh);
+    expect(build.root.getObjectByName('rust-streak-port-stack-collar')).toBeInstanceOf(Mesh);
+    expect(build.root.getObjectByName('rust-streak-starboard-stack-collar'))
+      .toBeInstanceOf(Mesh);
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('uses a 1.05-high rail from deck Y and leaves only the approved starboard interval open', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);

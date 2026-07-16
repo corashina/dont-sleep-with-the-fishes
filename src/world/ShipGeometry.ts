@@ -704,21 +704,6 @@ function addWeathering(
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
-  const drainZ = -2.5;
-  [-4.8, 4.8].forEach((x, index) => {
-    addBlock(root, geometries, shellColliders, {
-      name: `deck-drain-${index}`,
-      size: [0.34, 0.025, 0.48],
-      position: [x, FINISHED_FLOOR_Y + 0.0125, drainZ],
-      material: materials.darkMetal,
-    });
-    addBlock(root, geometries, shellColliders, {
-      name: `rust-streak-deck-drain-${index}`,
-      size: [0.09, 0.015, 0.8],
-      position: [x, FINISHED_FLOOR_Y + 0.0325, drainZ + 0.5],
-      material: materials.rust,
-    });
-  });
   addBlock(root, geometries, shellColliders, {
     name: 'rust-streak-lifeboat-rail-opening',
     size: [0.025, 0.68, 0.12],
