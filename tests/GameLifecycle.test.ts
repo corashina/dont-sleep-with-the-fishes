@@ -14,6 +14,7 @@ import { ScavengeSession } from '../src/game/ScavengeSession';
 import type { ItemInstance } from '../src/game/ItemState';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
+import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -30,6 +31,65 @@ function gamePhase(): GamePhase {
 }
 
 describe('ScavengePhase lifecycle integration', () => {
+  it('shares one scene renderer across phases and resizes it with the capped pixel ratio', () => {
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
+    };
+    const contexts: PhaseContext[] = [];
+    let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
+    const game = Game.forTest({
+      createScavenge: (context, onComplete) => {
+        contexts.push(context);
+        complete = onComplete;
+        return gamePhase();
+      },
+      createSurvival: (context) => {
+        contexts.push(context);
+        return gamePhase();
+      },
+    }, { propModels, shipFurniture, skyAssets, sceneRenderer });
+
+    complete({ savedItems: [], elapsedSeconds: 2 });
+
+    expect(contexts.map(({ sceneRenderer: value }) => value))
+      .toEqual([sceneRenderer, sceneRenderer]);
+    expect(sceneRenderer.resize).toHaveBeenCalledWith(
+      window.innerWidth,
+      window.innerHeight,
+      Math.min(window.devicePixelRatio, 2),
+    );
+    game.dispose();
+    expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('continues renderer cleanup when scene-renderer disposal fails', () => {
+    const calls: string[] = [];
+    const failure = new Error('scene renderer disposal failed');
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      capabilities: { getMaxAnisotropy: () => 1 },
+      setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(),
+      dispose: vi.fn(() => calls.push('renderer')),
+    } as unknown as WebGLRenderer;
+    vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => calls.push('canvas'));
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(), resize: vi.fn(),
+      dispose: vi.fn(() => { calls.push('sceneRenderer'); throw failure; }),
+    };
+    const game = Game.forTest({
+      createScavenge: () => gamePhase(), createSurvival: () => gamePhase(),
+    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+
+    expect(() => game.dispose()).toThrow(failure);
+    expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
+  });
+
   it('shares one asset context across phase completion and restart', () => {
     const propModels = createTestPropModels();
     const shipFurniture = createTestShipFurniture();
@@ -135,13 +195,17 @@ describe('ScavengePhase lifecycle integration', () => {
       render: vi.fn(),
       dispose: vi.fn(() => calls.push('renderer')),
     } as unknown as WebGLRenderer;
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(), resize: vi.fn(),
+      dispose: vi.fn(() => calls.push('sceneRenderer')),
+    };
     const removeCanvas = vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => {
       calls.push('canvas');
     });
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer });
+    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -162,6 +226,7 @@ describe('ScavengePhase lifecycle integration', () => {
       'models',
       'furniture',
       'sky',
+      'sceneRenderer',
       'renderer',
       'canvas',
     ]);
@@ -202,13 +267,17 @@ describe('ScavengePhase lifecycle integration', () => {
       render: vi.fn(),
       dispose: vi.fn(() => calls.push('renderer')),
     } as unknown as WebGLRenderer;
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(), resize: vi.fn(),
+      dispose: vi.fn(() => calls.push('sceneRenderer')),
+    };
     const removeCanvas = vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => {
       calls.push('canvas');
     });
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer });
+    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -229,6 +298,7 @@ describe('ScavengePhase lifecycle integration', () => {
       'models',
       'furniture',
       'sky',
+      'sceneRenderer',
       'renderer',
       'canvas',
     ]);
