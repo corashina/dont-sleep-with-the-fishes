@@ -26,6 +26,7 @@ export interface LifeboatBuild {
     readonly halfWidth: number;
     readonly halfLength: number;
     readonly taperStart: number;
+    readonly minimumLocalY: number;
   };
   readonly textures: readonly Texture[];
 }
@@ -292,6 +293,7 @@ export function createLifeboat(): LifeboatBuild {
       halfWidth: 1.60,
       halfLength: 3.04,
       taperStart: 1.05,
+      minimumLocalY: FLOOR_HEIGHT,
     },
     textures: textures.all,
   };

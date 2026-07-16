@@ -450,6 +450,7 @@ export class BoatWorld {
         this.waterExclusion.halfWidth,
         this.waterExclusion.halfLength,
         this.waterExclusion.taperStart,
+        this.waterExclusion.minimumLocalY,
       ),
     ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
