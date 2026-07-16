@@ -270,6 +270,41 @@ const EVENT_RESOURCES: readonly EventResource[] = [
 ];
 const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
+type PlainRecord = Record<PropertyKey, unknown>;
+
+function assertPlainObject(value: unknown, path: string): asserts value is PlainRecord {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${path} must be a plain object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(`${path} must be a plain object`);
+  }
+}
+
+function printableKey(key: PropertyKey): string {
+  return typeof key === 'symbol' ? key.toString() : String(key);
+}
+
+function assertExactKeys(
+  record: PlainRecord,
+  path: string,
+  subject: string,
+  allowed: readonly string[],
+  required: readonly string[] = [],
+): void {
+  for (const key of Reflect.ownKeys(record)) {
+    if (typeof key !== 'string' || !allowed.includes(key)) {
+      throw new Error(`${path} contains unsupported ${subject} key ${printableKey(key)}`);
+    }
+  }
+  for (const key of required) {
+    if (!Object.hasOwn(record, key)) {
+      throw new Error(`${path} ${subject} is missing required key ${key}`);
+    }
+  }
+}
+
 function validateIntegerValue(effect: ResourceEffect, path: string): void {
   const value = effect.value;
   if (typeof value === 'number') {
@@ -278,6 +313,8 @@ function validateIntegerValue(effect: ResourceEffect, path: string): void {
     }
     return;
   }
+  assertPlainObject(value, `${path}.value range`);
+  assertExactKeys(value, `${path}.value`, 'range', ['min', 'max'], ['min', 'max']);
   if (!Number.isInteger(value.min) || !Number.isInteger(value.max)
     || value.min < 0 || value.max < value.min
     || (effect.operation !== 'set' && value.min === 0)) {
@@ -289,44 +326,89 @@ function isItemId(value: unknown): value is ItemId {
   return typeof value === 'string' && (ITEM_IDS as readonly string[]).includes(value);
 }
 
-function validateOutcome(entry: WeightedEventOutcome, path: string): void {
-  if (!Number.isFinite(entry.weight) || entry.weight <= 0) throw new Error(`${path} outcome weight is invalid`);
-  if (typeof entry.message !== 'string' || entry.message.trim().length === 0) throw new Error(`${path} message is blank`);
-  const candidateEffects = (entry as { effects?: unknown }).effects;
-  if (candidateEffects === null || typeof candidateEffects !== 'object' || Array.isArray(candidateEffects)) {
-    throw new Error(`${path} effects are invalid`);
+function validateMutation(candidate: unknown, path: string): void {
+  assertPlainObject(candidate, `${path} mutation`);
+  if (!Object.hasOwn(candidate, 'kind')) {
+    throw new Error(`${path} mutation is missing required key kind`);
   }
-  const outcomeEffects = candidateEffects as WeightedEventOutcome['effects'];
-  if (outcomeEffects.resources !== undefined && !Array.isArray(outcomeEffects.resources)) {
+  const kind = candidate.kind;
+  if (typeof kind !== 'string' || !ITEM_MUTATIONS.includes(kind)) {
+    throw new Error(`${path} has an unknown mutation kind`);
+  }
+  const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose';
+  const allowed = itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
+  assertExactKeys(candidate, path, `${kind} mutation`, allowed, allowed);
+  const quantity = candidate.quantity;
+  if (!Number.isInteger(quantity) || (quantity as number) < 1) {
+    throw new Error(`${path} has an invalid quantity`);
+  }
+  if (kind === 'loseEventTarget') {
+    if (quantity !== 1) throw new Error(`${path} has an invalid quantity`);
+    return;
+  }
+  if (!itemSpecific) return;
+  const itemId = candidate.itemId;
+  if (!isItemId(itemId)) throw new Error(`${path} contains unknown item`);
+  if (kind === 'break' && !ITEM_DEFINITIONS[itemId].breakable) {
+    throw new Error(`${path} cannot break ${itemId} because it is not breakable`);
+  }
+}
+
+function validateOutcome(entry: WeightedEventOutcome, path: string): void {
+  const candidateOutcome: unknown = entry;
+  assertPlainObject(candidateOutcome, `${path} outcome`);
+  assertExactKeys(
+    candidateOutcome,
+    path,
+    'outcome',
+    ['weight', 'message', 'effects'],
+    ['weight', 'message', 'effects'],
+  );
+  const outcomeEntry = candidateOutcome as unknown as WeightedEventOutcome;
+  if (!Number.isFinite(outcomeEntry.weight) || outcomeEntry.weight <= 0) throw new Error(`${path} outcome weight is invalid`);
+  if (typeof outcomeEntry.message !== 'string' || outcomeEntry.message.trim().length === 0) throw new Error(`${path} message is blank`);
+  const candidateEffects: unknown = outcomeEntry.effects;
+  assertPlainObject(candidateEffects, `${path}.effects`);
+  assertExactKeys(candidateEffects, `${path}.effects`, 'effect', ['resources', 'items', 'rescue']);
+  const hasResources = Object.hasOwn(candidateEffects, 'resources');
+  const hasItems = Object.hasOwn(candidateEffects, 'items');
+  const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
+  const resourceEntries = hasResources
+    ? candidateEffects.resources
+    : undefined;
+  const itemEntries = hasItems
+    ? candidateEffects.items
+    : undefined;
+  const rescue = hasRescue
+    ? candidateEffects.rescue
+    : undefined;
+  if (hasResources && !Array.isArray(resourceEntries)) {
     throw new Error(`${path}.resources must be an array`);
   }
-  if (outcomeEffects.items !== undefined && !Array.isArray(outcomeEffects.items)) {
+  if (hasItems && !Array.isArray(itemEntries)) {
     throw new Error(`${path}.items must be an array`);
   }
-  const resourceEffects = outcomeEffects.resources as readonly ResourceEffect[] | undefined;
-  const itemEffects = outcomeEffects.items as readonly EventInventoryMutation[] | undefined;
-  for (const [index, effect] of (resourceEffects ?? []).entries()) {
+  const resources = Array.isArray(resourceEntries) ? resourceEntries : [];
+  const items = Array.isArray(itemEntries) ? itemEntries : [];
+  for (const [index, candidateEffect] of resources.entries()) {
     const effectPath = `${path}.resources[${index}]`;
+    assertPlainObject(candidateEffect, `${effectPath} resource effect`);
+    assertExactKeys(
+      candidateEffect,
+      effectPath,
+      'resource effect',
+      ['resource', 'operation', 'value'],
+      ['resource', 'operation', 'value'],
+    );
+    const effect = candidateEffect as unknown as ResourceEffect;
     if (!EVENT_RESOURCES.includes(effect.resource)) throw new Error(`${effectPath} contains unknown resource`);
     if (!['add', 'subtract', 'set'].includes(effect.operation)) throw new Error(`${effectPath} has an invalid operation`);
     validateIntegerValue(effect, effectPath);
   }
-  for (const [index, itemEffect] of (itemEffects ?? []).entries()) {
-    const itemPath = `${path}.items[${index}]`;
-    if (!ITEM_MUTATIONS.includes(itemEffect.kind)) throw new Error(`${itemPath} has an unknown mutation kind`);
-    if (!Number.isInteger(itemEffect.quantity) || itemEffect.quantity < 1) throw new Error(`${itemPath} has an invalid quantity`);
-    if (itemEffect.kind === 'loseEventTarget') {
-      if (itemEffect.quantity !== 1) throw new Error(`${itemPath} has an invalid quantity`);
-      continue;
-    }
-    if (itemEffect.kind === 'breakRandom' || itemEffect.kind === 'loseRandom') continue;
-    if (!('itemId' in itemEffect) || !isItemId(itemEffect.itemId)) throw new Error(`${itemPath} contains unknown item`);
-    const itemId = itemEffect.itemId;
-    if (itemEffect.kind === 'break' && !ITEM_DEFINITIONS[itemId].breakable) {
-      throw new Error(`${itemPath} cannot break ${itemId} because it is not breakable`);
-    }
+  for (const [index, itemEffect] of items.entries()) {
+    validateMutation(itemEffect, `${path}.items[${index}]`);
   }
-  if (outcomeEffects.rescue !== undefined && typeof outcomeEffects.rescue !== 'boolean') {
+  if (hasRescue && typeof rescue !== 'boolean') {
     throw new Error(`${path}.rescue must be boolean`);
   }
 }
