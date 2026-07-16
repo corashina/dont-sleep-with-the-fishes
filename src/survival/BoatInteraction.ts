@@ -1,15 +1,13 @@
 import { Box3, type PerspectiveCamera, Vector3 } from 'three';
-import type { ItemId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
 import type { DayActionId } from './survivalTypes';
 
-export const ACTION_FOR_ITEM: Readonly<Partial<Record<ItemId, DayActionId>>> = {
-  fishingRod: 'fish',
-  scubaSet: 'dive',
-  cannedFood: 'eat',
-  ductTape: 'repair',
-  medicalKit: 'treat',
-  waterJug: 'rest',
-};
+export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
+  ITEM_IDS.flatMap((id) => {
+    const action = ITEM_DEFINITIONS[id].dayAction;
+    return action === null ? [] : [[id, action]];
+  }),
+) as Readonly<Partial<Record<ItemId, DayActionId>>>);
 
 export interface BoatInteractionHitArea {
   width: number;

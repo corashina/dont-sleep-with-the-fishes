@@ -3,7 +3,13 @@ import type { JournalEntry } from './journal';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 export type WeatherId = 'calm' | 'overcast' | 'squall';
-export type DayActionId = 'fish' | 'dive' | 'eat' | 'repair' | 'treat' | 'rest' | 'endDay';
+export type DayActionId =
+  | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
+  | 'treat' | 'rest' | 'sendMessage' | 'useEnergyBar' | 'endDay';
+export type DayActionOption =
+  | { readonly kind: 'fishing'; readonly useBait: boolean }
+  | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
+  | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
 export type PresentationCue =
   | 'none' | 'fish' | 'dive' | 'repair' | 'treat' | 'rest'
