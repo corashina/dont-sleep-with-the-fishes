@@ -23,6 +23,7 @@ import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/It
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -500,12 +501,14 @@ describe('world builders', () => {
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
     const taperStarts = uniforms.uExclusionTaperStarts!.value as number[];
+    const minimumLocalYs = uniforms.uExclusionMinimumLocalYs!.value as number[];
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
       [-6.05, 6.05, -17.6, 17.6],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
     expect(taperStarts).toEqual([17.6, 1.05]);
+    expect(minimumLocalYs).toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, -0.38]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
@@ -514,6 +517,7 @@ describe('world builders', () => {
         worldToLocal: matrices[1]!,
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
+        minimumLocalY: minimumLocalYs[1]!,
       },
     )).toBe(true);
     expect(pointInWaterExclusion(
@@ -522,6 +526,7 @@ describe('world builders', () => {
         worldToLocal: matrices[1]!,
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
+        minimumLocalY: minimumLocalYs[1]!,
       },
     )).toBe(true);
     expect(pointInWaterExclusion(
@@ -530,6 +535,16 @@ describe('world builders', () => {
         worldToLocal: matrices[1]!,
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
+        minimumLocalY: minimumLocalYs[1]!,
+      },
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      world.lifeboat.localToWorld(new Vector3(0, -0.5, 0)),
+      {
+        worldToLocal: matrices[1]!,
+        bounds: bounds[1]!,
+        taperStart: taperStarts[1]!,
+        minimumLocalY: minimumLocalYs[1]!,
       },
     )).toBe(false);
     world.dispose();

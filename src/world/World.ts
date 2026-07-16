@@ -253,6 +253,7 @@ export class World {
         this.waterExclusion.halfWidth,
         this.waterExclusion.halfLength,
         this.waterExclusion.taperStart,
+        this.waterExclusion.minimumLocalY,
       ),
     ]);
     const beacon = this.ship.getObjectByName('alarm-beacon');
