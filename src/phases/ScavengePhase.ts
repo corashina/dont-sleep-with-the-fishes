@@ -1,4 +1,4 @@
-import { Scene } from 'three';
+import { Scene, Vector3 } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
 import {
   advanceTerminalPresentation,
@@ -26,10 +26,13 @@ import {
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { PlayerController } from '../player/PlayerController';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
-import { GameUI } from '../ui/GameUI';
+import { GameUI, type ScavengePresentation } from '../ui/GameUI';
 import { World } from '../world/World';
 
 const RUN_SECONDS = 120;
+export const TITLE_CAMERA_POSITION = [-26, 8, -4] as const;
+export const TITLE_CAMERA_TARGET = [0, 3.5, -4] as const;
+const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
 
 export class ScavengePhase implements GamePhase {
   private readonly scene = new Scene();
@@ -45,6 +48,8 @@ export class ScavengePhase implements GamePhase {
   private disposed = false;
   private completionReported = false;
   private elapsed = 0;
+  private presentation: ScavengePresentation = 'title';
+  private worldTime = 0;
   private readonly visualState: ScavengeVisualState = {
     kind: 'scavenge',
     elapsedSeconds: 0,
@@ -97,6 +102,8 @@ export class ScavengePhase implements GamePhase {
       void this.requestPointerLock();
     };
     this.ui.onReplay = this.onRestart;
+    this.ui.setPresentation('title');
+    this.applyTitleCamera();
   }
 
   start(): void {
@@ -110,11 +117,12 @@ export class ScavengePhase implements GamePhase {
     if (this.disposed) return;
     const before = this.session.snapshot();
     const active = before.status === 'running' && this.input.pointerLocked && !document.hidden;
+    if (this.presentation === 'title' || active) this.worldTime += deltaSeconds;
     let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
     this.syncVisualState(sinking);
     const updateWorld = (worldDelta: number): void => {
       this.world.update(
-        this.elapsed,
+        this.worldTime,
         worldDelta,
         sinking,
         this.context.camera.position,
@@ -265,7 +273,7 @@ export class ScavengePhase implements GamePhase {
     this.carry.update(
       deltaSeconds,
       boatBox,
-      (x, z) => sampleWaveField(DEFAULT_WAVES, this.elapsed, x, z, amplitudeScale).height,
+      (x, z) => sampleWaveField(DEFAULT_WAVES, this.worldTime, x, z, amplitudeScale).height,
       {
         onSaved: (instance) => {
           if (!this.session.saveCarried()) return;
@@ -283,14 +291,16 @@ export class ScavengePhase implements GamePhase {
     );
   }
 
-  private readonly onPointerLockChange = (): void => {
-    const locked = this.input.pointerLocked;
+  private handlePointerLockChange(locked: boolean): void {
     const status = this.session.snapshot().status;
     const transition = pointerLockTransition(status, locked);
     if (transition === 'start') {
-      this.session.start();
+      this.player.placeCamera();
+      this.presentation = 'playing';
+      this.ui.setPresentation('playing');
       this.ui.clearPointerLockError();
       this.ui.hideStart();
+      this.session.start();
     } else if (transition === 'resume') {
       this.session.resume();
       this.ui.clearPointerLockError();
@@ -299,6 +309,16 @@ export class ScavengePhase implements GamePhase {
       this.session.pause();
       this.ui.setPaused(true);
     }
+  }
+
+  private applyTitleCamera(): void {
+    this.context.camera.position.set(...TITLE_CAMERA_POSITION);
+    this.context.camera.lookAt(titleCameraTarget);
+    this.context.camera.updateMatrixWorld(true);
+  }
+
+  private readonly onPointerLockChange = (): void => {
+    this.handlePointerLockChange(this.input.pointerLocked);
   };
 
   private readonly onVisibilityChange = (): void => {

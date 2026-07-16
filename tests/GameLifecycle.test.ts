@@ -15,7 +15,12 @@ import { ScavengeSession } from '../src/game/ScavengeSession';
 import type { ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
-import { ScavengePhase } from '../src/phases/ScavengePhase';
+import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import {
+  ScavengePhase,
+  TITLE_CAMERA_POSITION,
+  TITLE_CAMERA_TARGET,
+} from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
@@ -52,6 +57,136 @@ function gamePhase(): GamePhase {
 }
 
 describe('ScavengePhase lifecycle integration', () => {
+  it('keeps an animated title world while the session and sinking clock stay idle', () => {
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const context = {
+      mount: document.createElement('main'),
+      camera,
+      renderer: { domElement: document.createElement('canvas') },
+      reducedMotion: { matches: false },
+      propModels,
+      shipFurniture,
+      skyAssets,
+      maxTextureAnisotropy: 1,
+    } as unknown as PhaseContext;
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const internals = phase as unknown as {
+      session: ScavengeSession;
+      world: World;
+    };
+    const updateWorld = vi.spyOn(internals.world, 'update');
+    const expectedDirection = new Vector3(...TITLE_CAMERA_TARGET)
+      .sub(new Vector3(...TITLE_CAMERA_POSITION))
+      .normalize();
+
+    expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
+    expect(camera.getWorldDirection(new Vector3()).distanceTo(expectedDirection)).toBeLessThan(1e-10);
+
+    phase.update(0.25, 0.25);
+
+    expect(internals.session.snapshot()).toMatchObject({
+      status: 'idle',
+      remainingSeconds: 120,
+    });
+    expect(updateWorld).toHaveBeenCalledWith(
+      0.25,
+      0.25,
+      expect.objectContaining({ progress: 0 }),
+      camera.position,
+      false,
+    );
+    expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
+    phase.dispose();
+    propModels.dispose();
+    shipFurniture.dispose();
+    skyAssets.dispose();
+  });
+
+  it('places the player camera before revealing play and starting the session', () => {
+    const order: string[] = [];
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      presentation: 'title',
+      player: { placeCamera: () => order.push('camera') },
+      session: {
+        snapshot: () => ({ status: 'idle' }),
+        start: () => order.push('session'),
+      },
+      ui: {
+        setPresentation: (presentation: string) => order.push(`ui:${presentation}`),
+        clearPointerLockError: () => order.push('clear-error'),
+        hideStart: () => order.push('hide-title'),
+      },
+    });
+
+    (phase as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(true);
+
+    expect(order).toEqual([
+      'camera',
+      'ui:playing',
+      'clear-error',
+      'hide-title',
+      'session',
+    ]);
+  });
+
+  it('advances the visual clock during active play and freezes it while inactive', () => {
+    const updateWorld = vi.fn();
+    const input = { pointerLocked: true, consumeLook: vi.fn() };
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      elapsed: 0,
+      worldTime: 1,
+      presentation: 'playing',
+      session: {
+        snapshot: () => ({ status: 'running', remainingSeconds: 120 }),
+        tick: vi.fn(),
+      },
+      input,
+      world: { update: updateWorld },
+      player: { update: vi.fn() },
+      ui: { render: vi.fn(), setPrompt: vi.fn() },
+      visualState: {
+        kind: 'scavenge',
+        elapsedSeconds: 0,
+        sinkingProgress: 0,
+        reducedMotion: false,
+      },
+      context: {
+        camera: new PerspectiveCamera(),
+        reducedMotion: { matches: false },
+      },
+      contextAction: { type: 'none', prompt: '' },
+      terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
+      updateInteraction: vi.fn(),
+      updateFlight: vi.fn(),
+    });
+
+    phase.update(0.25, 0.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.25,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+
+    input.pointerLocked = false;
+    phase.update(0.5, 0.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.25,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+  });
+
   it('renders scavenging through sceneRenderer with current sinking progress', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
@@ -489,6 +624,36 @@ describe('ScavengePhase lifecycle integration', () => {
       { instanceId: 'flareGun-1', type: 'flareGun' },
     ]);
     expect(loseItem).not.toHaveBeenCalled();
+  });
+
+  it('samples thrown items against the visual world time', () => {
+    let sampledHeight = Number.NaN;
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      elapsed: 0,
+      worldTime: 4.5,
+      session: {},
+      carry: {
+        update: (
+          _delta: number,
+          _acceptance: Box3,
+          waterHeight: (x: number, z: number) => number,
+        ) => {
+          sampledHeight = waterHeight(2, -3);
+        },
+      },
+      world: {
+        lifeboat: new Group(),
+        lifeboatAcceptance: new Box3(),
+      },
+    });
+
+    (phase as unknown as { updateFlight(delta: number, scale: number): void })
+      .updateFlight(0.016, 0.75);
+
+    expect(sampledHeight).toBeCloseTo(
+      sampleWaveField(DEFAULT_WAVES, 4.5, 2, -3, 0.75).height,
+    );
   });
 
   it('passes the accepted item identity to world save', () => {
