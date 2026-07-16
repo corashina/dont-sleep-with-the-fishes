@@ -49,7 +49,7 @@ export const PrintShader = {
     uniform float uGrainTime;
     varying vec2 vUv;
 
-    float luminance(vec3 color) {
+    float printLuminance(vec3 color) {
       return dot(color, vec3(0.2126, 0.7152, 0.0722));
     }
 
@@ -75,10 +75,10 @@ export const PrintShader = {
 
       color = color / (vec3(1.0) + color * uHighlightCompression);
       color = max((color - vec3(0.18)) * uContrast + vec3(0.18), vec3(0.0));
-      float liftWeight = 1.0 - smoothstep(0.02, 0.38, luminance(color));
+      float liftWeight = 1.0 - smoothstep(0.02, 0.38, printLuminance(color));
       color += vec3(uShadowLift * liftWeight);
 
-      float gray = luminance(color);
+      float gray = printLuminance(color);
       color = mix(vec3(gray), color, uSaturation);
       float shadowWeight = 1.0 - smoothstep(0.12, 0.52, gray);
       float highlightWeight = smoothstep(0.38, 0.9, gray);
