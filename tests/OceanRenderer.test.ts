@@ -24,4 +24,19 @@ describe('OceanRenderer', () => {
 
     ocean.dispose();
   });
+
+  it('includes layered chop, broken foam, and two-scale sun light', () => {
+    const ocean = new OceanRenderer();
+    const shader = ocean.material.fragmentShader;
+
+    expect(shader).toContain('vec2 windWarp(');
+    expect(shader).toContain('vec2 warpedDetailSlope(');
+    expect(shader).toContain('float foamBreakup(');
+    expect(shader).toContain('float crestFoam(');
+    expect(shader).toContain('float sunCore =');
+    expect(shader).toContain('float sunSheen =');
+    expect(shader).not.toContain('vec2 rippleSlope(');
+
+    ocean.dispose();
+  });
 });
