@@ -1,6 +1,7 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import type { ItemId, ItemInstance } from '../game/ItemState';
+import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
@@ -16,6 +17,7 @@ export interface SurvivalPhaseTestDependencies {
   world: Partial<BoatWorld>;
   ui: Partial<SurvivalUI>;
   onRestart?: () => void;
+  sceneRenderer?: SceneRenderer;
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
@@ -24,7 +26,11 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
   return TERMINAL_STATES.includes(state);
 }
 
-function testContext(): PhaseContext {
+function testContext(sceneRenderer: SceneRenderer = {
+  render: () => undefined,
+  resize: () => undefined,
+  dispose: () => undefined,
+}): PhaseContext {
   const mount = {
     clientWidth: 1,
     clientHeight: 1,
@@ -33,11 +39,7 @@ function testContext(): PhaseContext {
   return {
     mount,
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
-    sceneRenderer: {
-      render: () => undefined,
-      resize: () => undefined,
-      dispose: () => undefined,
-    },
+    sceneRenderer,
     camera: new PerspectiveCamera(),
     reducedMotion: { matches: false } as MediaQueryList,
     propModels: {} as PropModelLibrary,
@@ -54,6 +56,14 @@ export class SurvivalPhase implements GamePhase {
   private ui!: Partial<SurvivalUI>;
   private onRestart!: () => void;
   private scavengeElapsedSeconds = 0;
+  private elapsedSeconds = 0;
+  private readonly visualState: SurvivalVisualState = {
+    kind: 'survival',
+    elapsedSeconds: 0,
+    phase: 'day',
+    weather: 'calm',
+    reducedMotion: false,
+  };
   private busy = false;
   private paused = false;
   private disposed = false;
@@ -119,7 +129,7 @@ export class SurvivalPhase implements GamePhase {
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
-      testContext(),
+      testContext(dependencies.sceneRenderer),
       [],
       0,
       0,
@@ -142,8 +152,10 @@ export class SurvivalPhase implements GamePhase {
 
   update(time: number, deltaSeconds: number): void {
     if (this.disposed || this.paused || this.documentIsHidden()) return;
+    this.elapsedSeconds = time;
     this.world.update?.(time, deltaSeconds);
     const snapshot = this.session.snapshot();
+    this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
     this.presentTerminalOnce(snapshot);
   }
@@ -159,7 +171,11 @@ export class SurvivalPhase implements GamePhase {
 
   render(): void {
     if (this.disposed || this.world.scene === undefined) return;
-    this.context.renderer.render(this.world.scene, this.context.camera);
+    this.context.sceneRenderer.render(
+      this.world.scene,
+      this.context.camera,
+      this.visualState,
+    );
   }
 
   handleAction(action: DayActionId, option?: DayActionOption): void {
@@ -409,6 +425,7 @@ export class SurvivalPhase implements GamePhase {
 
   private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
     const snapshot = this.session.snapshot();
+    this.syncVisualState(snapshot);
     this.world.setWeather?.(snapshot.weather);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     this.ui.render?.(
@@ -423,6 +440,13 @@ export class SurvivalPhase implements GamePhase {
     if (presentTerminal) this.presentTerminalOnce(snapshot);
     if (openPendingEvent && !isTerminal(snapshot.state)) this.openPendingEvent(snapshot);
     return snapshot;
+  }
+
+  private syncVisualState(snapshot: Readonly<SurvivalSnapshot>): void {
+    this.visualState.elapsedSeconds = this.elapsedSeconds;
+    this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
+    this.visualState.weather = snapshot.weather;
+    this.visualState.reducedMotion = this.context.reducedMotion.matches;
   }
 
   private syncPresentation(snapshot: SurvivalSnapshot): void {

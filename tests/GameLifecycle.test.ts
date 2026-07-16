@@ -5,6 +5,7 @@ import {
   Box3,
   Group,
   PerspectiveCamera,
+  Scene,
   Vector3,
   type WebGLRenderer,
 } from 'three';
@@ -12,9 +13,10 @@ import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 import type { ItemInstance } from '../src/game/ItemState';
+import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
-import type { SceneRenderer } from '../src/rendering/SceneRenderer';
+import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -31,6 +33,38 @@ function gamePhase(): GamePhase {
 }
 
 describe('ScavengePhase lifecycle integration', () => {
+  it('renders scavenging through sceneRenderer with current sinking progress', () => {
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    const render = vi.fn();
+    const visualState: ScavengeVisualState = {
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+    };
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      scene,
+      elapsed: 90,
+      visualState,
+      context: {
+        camera,
+        reducedMotion: { matches: true },
+        sceneRenderer: { render, resize: vi.fn(), dispose: vi.fn() },
+      },
+    });
+
+    (phase as unknown as { syncVisualState(state: ReturnType<typeof getSinkingState>): void })
+      .syncVisualState(getSinkingState(90, 120));
+    phase.render();
+
+    expect(render).toHaveBeenCalledWith(scene, camera, {
+      kind: 'scavenge',
+      elapsedSeconds: 90,
+      sinkingProgress: 0.75,
+      reducedMotion: true,
+    });
+  });
+
   it('shares one scene renderer across phases and resizes it with the capped pixel ratio', () => {
     const propModels = createTestPropModels();
     const shipFurniture = createTestShipFurniture();
