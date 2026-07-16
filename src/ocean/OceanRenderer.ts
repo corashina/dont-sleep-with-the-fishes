@@ -137,20 +137,58 @@ const fragmentShader = `
     return slope * distanceFade * weatherStrength;
   }
 
-  float foamBreakup(vec2 worldPosition) {
+  float hash21(vec2 position) {
+    vec2 seed = fract(position * vec2(123.34, 456.21));
+    seed += dot(seed, seed + 45.32);
+    return fract(seed.x * seed.y);
+  }
+
+  float valueNoise(vec2 position) {
+    vec2 cell = floor(position);
+    vec2 fractional = fract(position);
+    vec2 blend = fractional * fractional * (3.0 - 2.0 * fractional);
+    float lower = mix(
+      hash21(cell),
+      hash21(cell + vec2(1.0, 0.0)),
+      blend.x
+    );
+    float upper = mix(
+      hash21(cell + vec2(0.0, 1.0)),
+      hash21(cell + vec2(1.0, 1.0)),
+      blend.x
+    );
+    return mix(lower, upper, blend.y);
+  }
+
+  float foamRibbonNoise(vec2 worldPosition) {
     vec2 wind = normalize(vec2(0.83, 0.56));
     vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 warped = worldPosition + windWarp(worldPosition) * 0.65;
-    float broad = 0.5 + 0.5 * sin(
-      dot(warped, wind) * 1.38
-      + sin(dot(warped, crossWind) * 0.74 - uTime * 0.31)
-      + uTime * 0.18
+    vec2 drifted = worldPosition + wind * uTime * 0.24;
+    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
+    float warpAlong = valueNoise(
+      windSpace * vec2(0.075, 0.21) + vec2(8.7, -3.2)
     );
-    float fine = 0.5 + 0.5 * sin(
-      dot(warped, normalize(vec2(-0.41, 0.91))) * 4.85
-      - uTime * 0.76
+    float warpAcross = valueNoise(
+      windSpace * vec2(0.11, 0.16) + vec2(-4.1, 6.8)
     );
-    return smoothstep(0.34, 0.72, broad * 0.68 + fine * 0.32);
+    vec2 warpedSpace = windSpace + vec2(
+      (warpAlong - 0.5) * 3.4,
+      (warpAcross - 0.5) * 1.8
+    );
+    float coarse = valueNoise(warpedSpace * vec2(0.11, 0.34));
+    float medium = valueNoise(
+      warpedSpace * vec2(0.26, 0.78) + vec2(13.6, -9.4)
+    );
+    return clamp(coarse * 0.62 + medium * 0.38, 0.0, 1.0);
+  }
+
+  float foamEdgeNoise(vec2 worldPosition) {
+    vec2 wind = normalize(vec2(0.83, 0.56));
+    vec2 crossWind = vec2(-wind.y, wind.x);
+    vec2 drifted = worldPosition + wind * uTime * 0.31;
+    vec2 edgeSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
+    float edge = valueNoise(edgeSpace * vec2(0.72, 1.46) + vec2(2.9, 17.3));
+    return edge;
   }
 
   float foamBody(float waveHeight, float waveSlope) {
@@ -230,9 +268,9 @@ const fragmentShader = `
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
-    float bodyBreakup = foamBreakup(vWorldPosition.xz);
+    float bodyBreakup = foamRibbonNoise(vWorldPosition.xz);
     float bodyFoam = foamBody(vHeight, vWaveSlope) * bodyBreakup;
-    float capBreakup = foamBreakup(
+    float capBreakup = foamRibbonNoise(
       vWorldPosition.xz * 1.17 + vec2(uTime * 0.08, -uTime * 0.05)
     );
     float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam)

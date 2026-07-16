@@ -26,15 +26,24 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
-  it('includes layered chop, broken foam, and two-scale sun light', () => {
+  it('builds domain-warped foam ribbons in world-space wind coordinates', () => {
     const ocean = new OceanRenderer();
     const shader = ocean.material.fragmentShader;
 
     expect(shader).toContain('vec2 windWarp(');
     expect(shader).toContain('vec2 warpedDetailSlope(');
-    expect(shader).toContain('float foamBreakup(');
-    expect(shader).toContain('float foamBody(');
-    expect(shader).toContain('float foamCap(');
+    expect(shader).toContain('float hash21(vec2 position)');
+    expect(shader).toContain('float valueNoise(vec2 position)');
+    expect(shader).toContain('float foamRibbonNoise(vec2 worldPosition)');
+    expect(shader).toContain('float foamEdgeNoise(vec2 worldPosition)');
+    expect(shader).toContain(
+      'vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));',
+    );
+    expect(shader).toContain('vec2 warpedSpace = windSpace + vec2(');
+    expect(shader).toContain('float coarse = valueNoise(');
+    expect(shader).toContain('float medium = valueNoise(');
+    expect(shader).toContain('float edge = valueNoise(');
+    expect(shader).not.toContain('float foamBreakup(');
     expect(shader).toContain('float sunCore =');
     expect(shader).toContain('float sunSheen =');
     expect(shader).not.toContain('vec2 rippleSlope(');
