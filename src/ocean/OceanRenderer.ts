@@ -9,7 +9,10 @@ import {
   Vector4,
 } from 'three';
 import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
-import type { WaterExclusionRegion } from './WaterExclusion';
+import {
+  UNBOUNDED_MINIMUM_LOCAL_Y,
+  type WaterExclusionRegion,
+} from './WaterExclusion';
 import { SUN_DIRECTION } from '../world/celestialLight';
 
 const MAX_EXCLUSIONS = 2;
@@ -90,6 +93,7 @@ const fragmentShader = `
   uniform mat4 uExclusionWorldToLocal[2];
   uniform vec4 uExclusionBounds[2];
   uniform float uExclusionTaperStarts[2];
+  uniform float uExclusionMinimumLocalYs[2];
   varying float vHeight;
   varying float vWaveSlope;
   varying float vViewDepth;
@@ -182,7 +186,11 @@ const fragmentShader = `
         }
         float localHalfWidth = exclusionHalfWidth
           * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
-        if (exclusionAbsZ <= exclusionHalfLength && abs(exclusionLocal.x) <= localHalfWidth) {
+        if (
+          exclusionLocal.y >= uExclusionMinimumLocalYs[i]
+          && exclusionAbsZ <= exclusionHalfLength
+          && abs(exclusionLocal.x) <= localHalfWidth
+        ) {
           discard;
         }
       }
@@ -271,6 +279,9 @@ export class OceanRenderer {
         uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },
         uExclusionTaperStarts: { value: [0, 0] },
+        uExclusionMinimumLocalYs: {
+          value: [UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y],
+        },
       },
     });
     const geometry = new PlaneGeometry(
@@ -309,17 +320,20 @@ export class OceanRenderer {
     const worldToLocal = this.material.uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = this.material.uniforms.uExclusionBounds!.value as Vector4[];
     const taperStarts = this.material.uniforms.uExclusionTaperStarts!.value as number[];
+    const minimumLocalYs = this.material.uniforms.uExclusionMinimumLocalYs!.value as number[];
     const activeCount = Math.min(regions.length, MAX_EXCLUSIONS);
 
     for (let index = 0; index < MAX_EXCLUSIONS; index += 1) {
       worldToLocal[index]!.identity();
       bounds[index]!.set(0, 0, 0, 1);
       taperStarts[index] = 0;
+      minimumLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
     }
     for (let index = 0; index < activeCount; index += 1) {
       worldToLocal[index]!.copy(regions[index]!.worldToLocal);
       bounds[index]!.copy(regions[index]!.bounds);
       taperStarts[index] = regions[index]!.taperStart;
+      minimumLocalYs[index] = regions[index]!.minimumLocalY ?? UNBOUNDED_MINIMUM_LOCAL_Y;
     }
     this.material.uniforms.uExclusionCount!.value = activeCount;
   }
