@@ -290,6 +290,7 @@ describe('survival events', () => {
 
   it.each([
     ['a non-array', 'anchor', /target item IDs.*array/i],
+    ['an explicit undefined value', undefined, /target item IDs.*array/i],
     ['an empty array', [], /target item IDs.*empty/i],
     ['duplicate IDs', ['anchor', 'anchor'], /target item ID anchor.*duplicated/i],
     ['an unknown item ID', ['waterJug'], /target item IDs.*unknown item/i],
@@ -297,6 +298,15 @@ describe('survival events', () => {
     const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
     catalog[3].targetItemIds = targetItemIds;
     expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
+  });
+
+  it('rejects malformed inherited target item catalogs before event eligibility reads them', () => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    const snatcher = catalog[3];
+    delete snatcher.targetItemIds;
+    catalog[3] = Object.assign(Object.create({ targetItemIds: 'anchor' }), snatcher);
+
+    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/target item IDs.*array/i);
   });
 
   it('rejects forbidden effect categories and non-exact effect object shapes', () => {

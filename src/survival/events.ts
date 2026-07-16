@@ -436,8 +436,8 @@ export function validateSurvivalEventCatalog(
     if (!Number.isInteger(eventEntry.cooldownDays) || eventEntry.cooldownDays < 0) {
       throw new Error(`${eventEntry.id} has an invalid cooldown`);
     }
-    if (Object.hasOwn(eventEntry, 'targetItemIds')) {
-      const candidateTargetItemIds: unknown = eventEntry.targetItemIds;
+    const candidateTargetItemIds: unknown = eventEntry.targetItemIds;
+    if (candidateTargetItemIds !== undefined || Object.hasOwn(eventEntry, 'targetItemIds')) {
       if (!Array.isArray(candidateTargetItemIds)) {
         throw new Error(`${eventEntry.id} target item IDs must be an array`);
       }
