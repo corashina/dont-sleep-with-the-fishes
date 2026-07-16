@@ -567,6 +567,7 @@ export class SurvivalSession {
       weather: this.weather,
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
+      targetableItemIds: this.targetableItemIds(),
     });
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -637,20 +638,23 @@ export class SurvivalSession {
   private openEvent(event: SurvivalEventDefinition): void {
     this.pendingEvent = event;
     this.pendingEventId = event.id;
-    this.pendingEventTargetId = event.id === 'snatcher' ? this.drawSnatcherTarget() : null;
+    this.pendingEventTargetId = event.targetItemIds === undefined ? null : this.drawEventTarget(event);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
   }
 
-  private drawSnatcherTarget(): ItemInstanceId | null {
-    let candidates = Object.values(this.inventory.snapshot())
+  private targetableItemIds(): ReadonlySet<ItemId> {
+    return new Set(Object.values(this.inventory.snapshot())
       .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
+      .map((item) => item!.type));
+  }
+
+  private drawEventTarget(event: SurvivalEventDefinition): ItemInstanceId | null {
+    const targetItemIds = new Set(event.targetItemIds ?? []);
+    const candidates = Object.values(this.inventory.snapshot())
+      .filter((item) => (item?.condition === 'usable' || item?.condition === 'broken')
+        && targetItemIds.has(item.type))
       .map((item) => item!.instanceId)
       .sort();
-    if (candidates.some((instanceId) => this.inventory.snapshot()[instanceId]?.type !== 'fishingNet')) {
-      candidates = candidates.filter(
-        (instanceId) => this.inventory.snapshot()[instanceId]?.type !== 'fishingNet',
-      );
-    }
     if (candidates.length === 0) return null;
     const roll = this.random.next();
     const index = Number.isFinite(roll)

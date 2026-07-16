@@ -772,6 +772,28 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().pendingEventTargetId).toBe('anchor-1');
   });
 
+  it('never targets unsupported Bait or Fishing Net instances', () => {
+    const session = new SurvivalSession(saved('baitTin', 'fishingNet'), {
+      seed: 19,
+      random: sequenceRandom([0]),
+      initialEventId: 'snatcher',
+    });
+
+    expect(session.snapshot().pendingEventTargetId).toBeNull();
+  });
+
+  it('protects Fishing Net when Snatcher has no canonical target', () => {
+    const session = new SurvivalSession(saved('fishingNet'), {
+      seed: 19,
+      random: sequenceRandom([0, 0]),
+      initialEventId: 'snatcher',
+    });
+
+    expect(session.snapshot().pendingEventTargetId).toBeNull();
+    expect(session.resolveEvent('fishingNet')).toMatchObject({ accepted: true, deltas: {} });
+    expect(session.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
+  });
+
   it('keeps the Snatcher target pending after rejected choices and clears it after endurance', () => {
     const session = new SurvivalSession(saved('anchor'), {
       seed: 20, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
@@ -855,19 +877,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(outcome.deltas).toEqual({ food: -1 });
     expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
     expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('lost');
-  });
-
-  it('reports Bait lost through a concrete Snatcher target in the net outcome deltas', () => {
-    const session = new SurvivalSession(saved('baitTin', 'fishingNet'), {
-      seed: 27, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
-    });
-    expect(session.snapshot()).toMatchObject({ bait: 1, pendingEventTargetId: 'baitTin-1' });
-
-    const outcome = session.resolveEvent('fishingNet');
-
-    expect(outcome.deltas).toEqual({ bait: -1 });
-    expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
-    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('lost');
   });
 
   it('reports one net Food delta when an authored loss and target loss both change the aggregate', () => {
