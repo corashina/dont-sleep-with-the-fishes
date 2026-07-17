@@ -16,10 +16,15 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
-import { BoatBuoyancy, smoothBoatPose, type BoatPose } from '../ocean/BoatBuoyancy';
+import { BoatBuoyancy, smoothBoatPoseInto, type BoatPose } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
-import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
+import {
+  DEFAULT_WAVES,
+  sampleWaveField,
+  sampleWaveFieldInto,
+  type WaveSample,
+} from '../ocean/WaveField';
 import type { CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
@@ -44,6 +49,25 @@ function attemptCleanup(action: () => void): void {
   } catch {
     // Constructor rollback preserves the original construction error.
   }
+}
+
+function sampleDefaultWaveInto(
+  output: WaveSample,
+  time: number,
+  x: number,
+  z: number,
+  amplitudeScale: number,
+): void {
+  sampleWaveFieldInto(output, DEFAULT_WAVES, time, x, z, amplitudeScale);
+}
+
+function sampleDefaultWave(
+  time: number,
+  x: number,
+  z: number,
+  amplitudeScale: number,
+): WaveSample {
+  return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
 }
 
 export class World {
@@ -73,7 +97,8 @@ export class World {
     sunColor: new Color(0xfff1cf),
     sunVisibility: 1,
   };
-  private boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+  private readonly boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+  private readonly boatTargetPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private disposed = false;
 
   constructor(
@@ -182,8 +207,7 @@ export class World {
       this.environment = new Environment(scene, moonTexture);
       rollback.push(() => this.environment.dispose());
       construction.checkpoint?.('environment');
-      this.buoyancy = new BoatBuoyancy((time, x, z, scale) =>
-        sampleWaveField(DEFAULT_WAVES, time, x, z, scale));
+      this.buoyancy = new BoatBuoyancy(sampleDefaultWave, undefined, sampleDefaultWaveInto);
       construction.checkpoint?.('buoyancy');
     } catch (error) {
       for (let index = rollback.length - 1; index >= 0; index -= 1) {
@@ -229,13 +253,14 @@ export class World {
       this.oceanAtmosphere,
     );
     this.ocean.follow(cameraPosition.x, cameraPosition.z);
-    const target = this.buoyancy.sampleTarget(
+    this.buoyancy.sampleTargetInto(
+      this.boatTargetPose,
       time,
       this.boatAnchor.x,
       this.boatAnchor.z,
       sinking.waveAmplitudeScale,
     );
-    this.boatPose = smoothBoatPose(this.boatPose, target, delta, 7);
+    smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     this.lifeboat.position.set(
       this.boatAnchor.x + this.boatPose.driftX,
       this.boatAnchor.y + this.boatPose.y,
