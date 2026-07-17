@@ -33,7 +33,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(eating.perform('eat').deltas).toEqual({ hunger: -20, food: -1 });
     const treating = new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 90 } });
     expect(treating.perform('treat').deltas).toEqual({ health: 10 });
-    const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 4 } });
+    const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 3 } });
     (repairing as unknown as { repairMaterial: number }).repairMaterial = 1;
     expect(repairing.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).deltas)
       .toEqual({ energy: -2, hull: 10, repairMaterial: -1 });
@@ -100,7 +100,7 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(saved('cannedFood', 'scubaSet'), {
       seed: 1,
       random: sequenceRandom([0, 0.99, 0]),
-      initial: { hunger: 80, energy: 5 },
+      initial: { hunger: 80, energy: 3 },
     });
 
     session.perform('eat');
@@ -111,15 +111,15 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
-    const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet'), {
+    const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
       random: sequenceRandom([0.99, 0, 0.99, 0.3]),
-      initial: { energy: 10 },
+      initial: { energy: 3 },
     });
 
     session.perform('fish', { kind: 'fishing', useBait: true });
     expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
-    session.perform('rest');
+    session.perform('useEnergyBar');
     session.perform('dive');
 
     expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
@@ -141,7 +141,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(storm.perform('dive')).toMatchObject({ accepted: false, code: 'weather-blocked' });
   });
 
-  it('eats, repairs, treats, and rests using the documented resources', () => {
+  it('eats, repairs, and treats using the documented resources', () => {
     const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit'), {
       seed: 1,
       random: sequenceRandom([0]),
@@ -151,17 +151,24 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
       .toMatchObject({ deltas: { energy: -2, hull: 15 } });
     expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
-    expect(session.perform('rest')).toMatchObject({ deltas: { energy: 2 } });
-    expect(session.perform('rest').code).toBe('already-rested');
   });
 
-  it('rests once per day without owning or consuming water', () => {
-    const session = new SurvivalSession(saved(), { seed: 1, initial: { energy: 1 } });
-    expect(session.perform('rest')).toMatchObject({
-      accepted: true,
-      deltas: { energy: 2 },
-    });
-    expect(session.perform('rest')).toMatchObject({ accepted: false, code: 'already-rested' });
+  it('starts at three energy and restores energy through End Day dawn tiers', () => {
+    const recover = (hunger: number) => {
+      const session = new SurvivalSession(saved(), {
+        seed: 1,
+        random: sequenceRandom([0, 0.5]),
+        initial: { energy: 0, hunger },
+      });
+      expect(session.perform('endDay')).toMatchObject({ accepted: true, code: 'quiet-night' });
+      expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'dawn' });
+      return session.snapshot().energy;
+    };
+
+    expect(new SurvivalSession(saved(), { seed: 1 }).snapshot().energy).toBe(3);
+    expect(recover(20)).toBe(3);
+    expect(recover(53)).toBe(2);
+    expect(recover(73)).toBe(1);
   });
 
   it('uses the one Medkit charge and marks its instance consumed', () => {
@@ -180,11 +187,10 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['bottledPaper-1']?.condition).toBe('consumed');
   });
 
-  it('uses the Energy Bar to restore the three-energy maximum', () => {
+  it('caps Energy Bar recovery at three energy', () => {
     const session = new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } });
     expect(session.perform('useEnergyBar')).toMatchObject({ deltas: { energy: 2 } });
     expect(session.snapshot().energy).toBe(3);
-    expect(session.snapshot().inventory['energyBar-1']?.condition).toBe('consumed');
   });
 
   it('spends the only Duct Tape to repair one broken item', () => {
@@ -216,11 +222,10 @@ describe('SurvivalSession daytime actions', () => {
     const cases = [
       new SurvivalSession(saved('cannedFood'), { seed: 1, initial: { hunger: 50 } }),
       new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 50 } }),
-      new SurvivalSession(saved(), { seed: 1, initial: { energy: 1 } }),
-      new SurvivalSession(saved('bottledPaper'), { seed: 1, initial: { energy: 4 } }),
+      new SurvivalSession(saved('bottledPaper'), { seed: 1, initial: { energy: 3 } }),
       new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } }),
     ] as const;
-    const actions = ['eat', 'treat', 'rest', 'sendMessage', 'useEnergyBar'] as const;
+    const actions = ['eat', 'treat', 'sendMessage', 'useEnergyBar'] as const;
 
     actions.forEach((action, index) => {
       expect(cases[index]!.perform(action).accepted).toBe(true);
@@ -266,7 +271,6 @@ describe('SurvivalSession daytime actions', () => {
       { action: 'repairItem', option: undefined },
       { action: 'repairItem', option: fishing },
       { action: 'treat', option: fishing },
-      { action: 'rest', option: null },
       { action: 'sendMessage', option: fishing },
       { action: 'useEnergyBar', option: fishing },
       { action: 'endDay', option: fishing },
@@ -290,7 +294,7 @@ describe('SurvivalSession daytime actions', () => {
       initial: { hunger: 95, health: 20, hull: 5, energy: 0 },
     });
     session.beginDawn();
-    expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 2, health: 5 });
+    expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 5 });
     session.beginDawn();
     expect(session.snapshot().state).toBe('dead');
     const terminal = session.snapshot();

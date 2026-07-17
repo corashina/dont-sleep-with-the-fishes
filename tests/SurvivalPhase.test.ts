@@ -16,9 +16,9 @@ function inventory(
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    state: 'day', day: 1, health: 100, hunger: 20, energy: 80, hull: 100,
+    state: 'day', day: 1, health: 100, hunger: 20, energy: 3, hull: 100,
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
-    rescueProgress: 0, weather: 'calm', restedToday: false, actedToday: false,
+    rescueProgress: 0, weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
     lastOutcome: null, seed: 8, ...overrides,
   };
@@ -154,7 +154,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play, dispose: vi.fn() },
       ui: { showFeedback, setBusy, dispose: vi.fn() },
     });
-    phase.handleAction('rest');
+    phase.handleAction('fish');
     expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(play).not.toHaveBeenCalled();
     expect(setBusy).not.toHaveBeenCalled();
