@@ -186,6 +186,22 @@ describe('player movement helpers', () => {
     expect(result).toEqual({ x: 0, y: 6, z: 20 });
   });
 
+  it.each([
+    ['bow then stern', ['bow', 'stern']],
+    ['stern then bow', ['stern', 'bow']],
+  ] as const)('leaves midship side movement unchanged with %s arcs', (_label, ends) => {
+    const desired = { x: 5.526, y: 3.7, z: 0 };
+    const result = resolveLocalMovement(
+      { x: 5.4, y: 3.7, z: -0.2 },
+      desired,
+      0.35,
+      [],
+      ends.map((end) => arc(end)),
+    );
+
+    expect(result).toEqual(desired);
+  });
+
   it('selects the highest collider top within the 0.6-unit support limit', () => {
     const deckEyeHeight = 3.72;
     const deckFeetY = deckEyeHeight - PLAYER_BODY_HEIGHT;

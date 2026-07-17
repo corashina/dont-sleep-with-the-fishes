@@ -139,18 +139,19 @@ function closestHalfEllipsePointParameter(
   return pointX < 0 ? Math.PI - parameter : parameter;
 }
 
-export function resolveArcMovement(
-  _current: LocalPlayerPosition,
-  desired: LocalPlayerPosition,
+function resolveArcMovementInPlace(
+  result: LocalPlayerPosition,
   radius: number,
   arc: CollisionArc,
-): LocalPlayerPosition {
-  const playerFeetY = desired.y - PLAYER_BODY_HEIGHT;
-  if (playerFeetY >= arc.maxY || desired.y <= arc.minY) return desired;
+): void {
+  const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
+  if (playerFeetY >= arc.maxY || result.y <= arc.minY) return;
 
   const outwardDirection = arc.end === 'bow' ? 1 : -1;
-  const localX = desired.x - arc.centerX;
-  const localZ = outwardDirection * (desired.z - arc.centerZ);
+  const localX = result.x - arc.centerX;
+  const localZ = outwardDirection * (result.z - arc.centerZ);
+  if (localZ <= 0) return;
+
   const parameter = closestHalfEllipsePointParameter(
     localX,
     localZ,
@@ -166,57 +167,70 @@ export function resolveArcMovement(
   normalZ /= normalLength;
   const signedDistance = (localX - ellipseX) * normalX + (localZ - ellipseZ) * normalZ;
   const clearance = radius + arc.thickness / 2;
-  if (signedDistance < -clearance) return desired;
+  if (signedDistance < -clearance) return;
 
-  return {
-    x: arc.centerX + ellipseX - normalX * clearance,
-    y: desired.y,
-    z: arc.centerZ + outwardDirection * (ellipseZ - normalZ * clearance),
-  };
+  result.x = arc.centerX + ellipseX - normalX * clearance;
+  result.z = arc.centerZ + outwardDirection * (ellipseZ - normalZ * clearance);
 }
 
-function resolveBoxMovement(
-  current: LocalPlayerPosition,
+export function resolveArcMovement(
+  _current: LocalPlayerPosition,
   desired: LocalPlayerPosition,
   radius: number,
-  boxes: readonly CollisionBox[],
+  arc: CollisionArc,
 ): LocalPlayerPosition {
   const result = { ...desired };
-  const resolveAxis = (axis: 'x' | 'z'): void => {
-    const perpendicularAxis = axis === 'x' ? 'z' : 'x';
-    for (const box of boxes) {
-      const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
-      const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
-      if (!verticallyOverlaps) continue;
-      const perpendicular = result[perpendicularAxis];
-      const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
-      const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
-      const perpendicularDistance = perpendicular < perpendicularMin
-        ? perpendicularMin - perpendicular
-        : Math.max(0, perpendicular - perpendicularMax);
-      if (perpendicularDistance >= radius) continue;
-
-      const axisMin = axis === 'x' ? box.minX : box.minZ;
-      const axisMax = axis === 'x' ? box.maxX : box.maxZ;
-      const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
-      const lowerBoundary = axisMin - radiusAtAxis;
-      const upperBoundary = axisMax + radiusAtAxis;
-      const start = current[axis];
-      const target = result[axis];
-
-      if (start <= axisMin && target >= start && target > lowerBoundary) {
-        result[axis] = lowerBoundary;
-      } else if (start >= axisMax && target <= start && target < upperBoundary) {
-        result[axis] = upperBoundary;
-      }
-    }
-  };
-
-  result.z = current.z;
-  resolveAxis('x');
-  result.z = desired.z;
-  resolveAxis('z');
+  resolveArcMovementInPlace(result, radius, arc);
   return result;
+}
+
+function resolveBoxAxisInPlace(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  boxes: readonly CollisionBox[],
+  axis: 'x' | 'z',
+): void {
+  const perpendicularAxis = axis === 'x' ? 'z' : 'x';
+  for (const box of boxes) {
+    const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
+    const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
+    if (!verticallyOverlaps) continue;
+    const perpendicular = result[perpendicularAxis];
+    const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
+    const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
+    const perpendicularDistance = perpendicular < perpendicularMin
+      ? perpendicularMin - perpendicular
+      : Math.max(0, perpendicular - perpendicularMax);
+    if (perpendicularDistance >= radius) continue;
+
+    const axisMin = axis === 'x' ? box.minX : box.minZ;
+    const axisMax = axis === 'x' ? box.maxX : box.maxZ;
+    const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
+    const lowerBoundary = axisMin - radiusAtAxis;
+    const upperBoundary = axisMax + radiusAtAxis;
+    const start = current[axis];
+    const target = result[axis];
+
+    if (start <= axisMin && target >= start && target > lowerBoundary) {
+      result[axis] = lowerBoundary;
+    } else if (start >= axisMax && target <= start && target < upperBoundary) {
+      result[axis] = upperBoundary;
+    }
+  }
+}
+
+function resolveBoxMovementInPlace(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  boxes: readonly CollisionBox[],
+): void {
+  const desiredZ = result.z;
+  result.z = current.z;
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'x');
+  result.z = desiredZ;
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'z');
 }
 
 export function resolveLocalMovement(
@@ -224,14 +238,15 @@ export function resolveLocalMovement(
   desired: LocalPlayerPosition,
   radius: number,
   boxes: readonly CollisionBox[],
-  arcs: readonly CollisionArc[] = [],
+  arcs?: readonly CollisionArc[],
 ): LocalPlayerPosition {
-  const boxResolved = resolveBoxMovement(current, desired, radius, boxes);
-  if (arcs.length === 0) return boxResolved;
+  const result = { ...desired };
+  resolveBoxMovementInPlace(current, result, radius, boxes);
+  if (!arcs?.length) return result;
 
-  let arcResolved = boxResolved;
   for (const arc of arcs) {
-    arcResolved = resolveArcMovement(current, arcResolved, radius, arc);
+    resolveArcMovementInPlace(result, radius, arc);
   }
-  return resolveBoxMovement(current, arcResolved, radius, boxes);
+  resolveBoxMovementInPlace(current, result, radius, boxes);
+  return result;
 }
