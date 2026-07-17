@@ -206,6 +206,33 @@ describe('PlayerController', () => {
     expect(displacement.dot(visibleDirection)).toBeCloseTo(1, 8);
   });
 
+  it('stops forward movement at the bow arc barrier', () => {
+    const input = new TestInput();
+    input.movement = { x: 0, z: -1 };
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.72, 17),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [{
+        centerX: 0,
+        centerZ: 14,
+        radiusX: 6,
+        radiusZ: 4,
+        end: 'bow',
+        thickness: 0.25,
+        minY: 2.22,
+        maxY: 3.27,
+      }],
+    );
+
+    controller.update(0.5, input.asControllerInput());
+
+    expect(controller.localPosition.z).toBeCloseTo(17.525);
+  });
+
   it('preserves the approved cabin start without trapping movement', () => {
     const shipBuild = createTestShip();
     const input = new TestInput();
