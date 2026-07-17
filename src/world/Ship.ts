@@ -1,5 +1,5 @@
 import { Group, Vector3 } from 'three';
-import type { CollisionBox } from '../player/collisions';
+import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -12,6 +12,7 @@ import { ShipSmoke } from './ShipSmoke';
 export interface ShipBuild {
   root: Group;
   colliders: CollisionBox[];
+  arcColliders: CollisionArc[];
   itemSurfaces: ShipItemSurface[];
   furnitureColliderById: ReadonlyMap<string, CollisionBox>;
   playerStart: Vector3;
@@ -191,6 +192,7 @@ export function createShip(
   return {
     root,
     colliders,
+    arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
     playerStart: new Vector3(0, 3.72, 7.2),

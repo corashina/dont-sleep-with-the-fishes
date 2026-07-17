@@ -7,6 +7,17 @@ export interface CollisionBox {
   maxZ: number;
 }
 
+export interface CollisionArc {
+  centerX: number;
+  centerZ: number;
+  radiusX: number;
+  radiusZ: number;
+  end: 'bow' | 'stern';
+  thickness: number;
+  minY: number;
+  maxY: number;
+}
+
 export interface LocalPlayerPosition {
   x: number;
   y: number;
@@ -77,46 +88,165 @@ export function movementAxes(pressed: ReadonlySet<string>): MovementAxes {
   return length > 1 ? { x: x / length, z: z / length } : { x, z };
 }
 
+function closestHalfEllipsePointParameter(
+  pointX: number,
+  pointZ: number,
+  radiusX: number,
+  radiusZ: number,
+): number {
+  const quadrantX = Math.abs(pointX);
+  let parameter = Math.atan2(
+    Math.max(0, pointZ) * radiusX,
+    quadrantX * radiusZ,
+  );
+  parameter = Math.max(0, Math.min(Math.PI / 2, parameter));
+
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const cosine = Math.cos(parameter);
+    const sine = Math.sin(parameter);
+    const ellipseX = radiusX * cosine;
+    const ellipseZ = radiusZ * sine;
+    const tangentX = -radiusX * sine;
+    const tangentZ = radiusZ * cosine;
+    const differenceX = ellipseX - quadrantX;
+    const differenceZ = ellipseZ - pointZ;
+    const derivative = differenceX * tangentX + differenceZ * tangentZ;
+    const secondDerivative = tangentX * tangentX
+      - differenceX * ellipseX
+      + tangentZ * tangentZ
+      - differenceZ * ellipseZ;
+    if (Math.abs(secondDerivative) <= Number.EPSILON) break;
+    parameter = Math.max(
+      0,
+      Math.min(Math.PI / 2, parameter - derivative / secondDerivative),
+    );
+  }
+
+  const cosine = Math.cos(parameter);
+  const sine = Math.sin(parameter);
+  const differenceX = radiusX * cosine - quadrantX;
+  const differenceZ = radiusZ * sine - pointZ;
+  let closestDistanceSquared = differenceX * differenceX + differenceZ * differenceZ;
+
+  const shoulderDistanceSquared = (radiusX - quadrantX) ** 2 + pointZ ** 2;
+  if (shoulderDistanceSquared < closestDistanceSquared) {
+    parameter = 0;
+    closestDistanceSquared = shoulderDistanceSquared;
+  }
+
+  const centerDistanceSquared = quadrantX ** 2 + (radiusZ - pointZ) ** 2;
+  if (centerDistanceSquared < closestDistanceSquared) parameter = Math.PI / 2;
+  return pointX < 0 ? Math.PI - parameter : parameter;
+}
+
+function resolveArcMovementInPlace(
+  result: LocalPlayerPosition,
+  radius: number,
+  arc: CollisionArc,
+): void {
+  const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
+  if (playerFeetY >= arc.maxY || result.y <= arc.minY) return;
+
+  const outwardDirection = arc.end === 'bow' ? 1 : -1;
+  const localX = result.x - arc.centerX;
+  const localZ = outwardDirection * (result.z - arc.centerZ);
+  if (localZ <= 0) return;
+
+  const parameter = closestHalfEllipsePointParameter(
+    localX,
+    localZ,
+    arc.radiusX,
+    arc.radiusZ,
+  );
+  const ellipseX = arc.radiusX * Math.cos(parameter);
+  const ellipseZ = arc.radiusZ * Math.sin(parameter);
+  let normalX = Math.cos(parameter) / arc.radiusX;
+  let normalZ = Math.sin(parameter) / arc.radiusZ;
+  const normalLength = Math.hypot(normalX, normalZ);
+  normalX /= normalLength;
+  normalZ /= normalLength;
+  const signedDistance = (localX - ellipseX) * normalX + (localZ - ellipseZ) * normalZ;
+  const clearance = radius + arc.thickness / 2;
+  if (signedDistance < -clearance) return;
+
+  result.x = arc.centerX + ellipseX - normalX * clearance;
+  result.z = arc.centerZ + outwardDirection * (ellipseZ - normalZ * clearance);
+}
+
+export function resolveArcMovement(
+  _current: LocalPlayerPosition,
+  desired: LocalPlayerPosition,
+  radius: number,
+  arc: CollisionArc,
+): LocalPlayerPosition {
+  const result = { ...desired };
+  resolveArcMovementInPlace(result, radius, arc);
+  return result;
+}
+
+function resolveBoxAxisInPlace(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  boxes: readonly CollisionBox[],
+  axis: 'x' | 'z',
+): void {
+  const perpendicularAxis = axis === 'x' ? 'z' : 'x';
+  for (const box of boxes) {
+    const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
+    const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
+    if (!verticallyOverlaps) continue;
+    const perpendicular = result[perpendicularAxis];
+    const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
+    const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
+    const perpendicularDistance = perpendicular < perpendicularMin
+      ? perpendicularMin - perpendicular
+      : Math.max(0, perpendicular - perpendicularMax);
+    if (perpendicularDistance >= radius) continue;
+
+    const axisMin = axis === 'x' ? box.minX : box.minZ;
+    const axisMax = axis === 'x' ? box.maxX : box.maxZ;
+    const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
+    const lowerBoundary = axisMin - radiusAtAxis;
+    const upperBoundary = axisMax + radiusAtAxis;
+    const start = current[axis];
+    const target = result[axis];
+
+    if (start <= axisMin && target >= start && target > lowerBoundary) {
+      result[axis] = lowerBoundary;
+    } else if (start >= axisMax && target <= start && target < upperBoundary) {
+      result[axis] = upperBoundary;
+    }
+  }
+}
+
+function resolveBoxMovementInPlace(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  boxes: readonly CollisionBox[],
+): void {
+  const desiredZ = result.z;
+  result.z = current.z;
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'x');
+  result.z = desiredZ;
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'z');
+}
+
 export function resolveLocalMovement(
   current: LocalPlayerPosition,
   desired: LocalPlayerPosition,
   radius: number,
   boxes: readonly CollisionBox[],
+  arcs?: readonly CollisionArc[],
 ): LocalPlayerPosition {
   const result = { ...desired };
-  const resolveAxis = (axis: 'x' | 'z'): void => {
-    const perpendicularAxis = axis === 'x' ? 'z' : 'x';
-    for (const box of boxes) {
-      const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
-      const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
-      if (!verticallyOverlaps) continue;
-      const perpendicular = result[perpendicularAxis];
-      const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
-      const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
-      const perpendicularDistance = perpendicular < perpendicularMin
-        ? perpendicularMin - perpendicular
-        : Math.max(0, perpendicular - perpendicularMax);
-      if (perpendicularDistance >= radius) continue;
+  resolveBoxMovementInPlace(current, result, radius, boxes);
+  if (!arcs?.length) return result;
 
-      const axisMin = axis === 'x' ? box.minX : box.minZ;
-      const axisMax = axis === 'x' ? box.maxX : box.maxZ;
-      const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
-      const lowerBoundary = axisMin - radiusAtAxis;
-      const upperBoundary = axisMax + radiusAtAxis;
-      const start = current[axis];
-      const target = result[axis];
-
-      if (start <= axisMin && target >= start && target > lowerBoundary) {
-        result[axis] = lowerBoundary;
-      } else if (start >= axisMax && target <= start && target < upperBoundary) {
-        result[axis] = upperBoundary;
-      }
-    }
-  };
-
-  result.z = current.z;
-  resolveAxis('x');
-  result.z = desired.z;
-  resolveAxis('z');
+  for (const arc of arcs) {
+    resolveArcMovementInPlace(result, radius, arc);
+  }
+  resolveBoxMovementInPlace(current, result, radius, boxes);
   return result;
 }

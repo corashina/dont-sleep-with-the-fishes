@@ -25,7 +25,7 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import type { CollisionBox } from '../player/collisions';
+import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
 import { Environment } from './Environment';
@@ -75,6 +75,7 @@ export class World {
   readonly lifeboat: Group;
   readonly itemObjects = new Map<ItemInstanceId, Group>();
   readonly colliders: CollisionBox[];
+  readonly arcColliders: CollisionArc[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
   readonly playerNavigationBounds: PlayerNavigationBounds;
@@ -116,6 +117,7 @@ export class World {
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
     this.colliders = this.shipBuild.colliders;
+    this.arcColliders = this.shipBuild.arcColliders;
     this.playerStart = this.shipBuild.playerStart.clone();
     this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
     this.playerNavigationBounds = this.shipBuild.playerNavigationBounds;
