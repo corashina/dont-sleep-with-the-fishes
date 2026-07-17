@@ -68,7 +68,9 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(savedItems, { seed: 9, random: sequenceRandom([0]) });
     savedItems.length = 0;
     const state = session.snapshot();
-    expect(state).toMatchObject({ state: 'day', day: 1, health: 100, hunger: 20, energy: 4, hull: 75, food: 1 });
+    expect(state).toMatchObject({
+      state: 'day', day: 1, health: 100, hunger: 20, energy: 3, hull: 75, food: 1,
+    });
     expect(state.inventory['cannedFood-1']).toEqual({
       instanceId: 'cannedFood-1', type: 'cannedFood', condition: 'usable',
     });
@@ -90,7 +92,7 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       deltas: { energy: -2, food: 2, bait: -1 },
     });
-    expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 0, actedToday: true });
+    expect(session.snapshot()).toMatchObject({ energy: 1, food: 2, bait: 0, actedToday: true });
     expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
   });
 
@@ -178,10 +180,10 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['bottledPaper-1']?.condition).toBe('consumed');
   });
 
-  it('uses the Energy Bar to restore the four-energy maximum', () => {
+  it('uses the Energy Bar to restore the three-energy maximum', () => {
     const session = new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } });
-    expect(session.perform('useEnergyBar')).toMatchObject({ deltas: { energy: 3 } });
-    expect(session.snapshot().energy).toBe(4);
+    expect(session.perform('useEnergyBar')).toMatchObject({ deltas: { energy: 2 } });
+    expect(session.snapshot().energy).toBe(3);
     expect(session.snapshot().inventory['energyBar-1']?.condition).toBe('consumed');
   });
 
@@ -323,7 +325,7 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       code: 'event-resolved',
       message: 'That item cannot help. You wake with two energy.',
-      deltas: { energy: -2 },
+      deltas: { energy: -1 },
     });
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'usable' },

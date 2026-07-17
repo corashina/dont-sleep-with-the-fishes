@@ -1,6 +1,7 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstanceId } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
+import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
@@ -56,7 +57,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', effect: 'Restore one broken item', risk: 'safe' },
   { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +15', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: 'ENERGY TO 4', risk: 'safe' },
+  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: `ENERGY TO ${SURVIVAL_BALANCE.actions.maximumEnergy}`, risk: 'safe' },
 ];
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
@@ -64,7 +65,13 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
   switch (definition.id) {
     case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
     case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
-    case 'rest': return { ...definition, effect: `ENERGY +${Math.min(2, Math.max(0, 4 - snapshot.energy))}` };
+    case 'rest': return {
+      ...definition,
+      effect: `ENERGY +${Math.min(
+        SURVIVAL_BALANCE.actions.restEnergy,
+        Math.max(0, SURVIVAL_BALANCE.actions.maximumEnergy - snapshot.energy),
+      )}`,
+    };
     case 'repair': {
       const useTape = snapshot.repairMaterial < 1
         && Object.values(snapshot.inventory).some(
@@ -85,7 +92,7 @@ const identity = (value: number): number => value;
 const METERS: readonly MeterDefinition[] = [
   { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
   { id: 'hunger', label: 'FOOD', min: 0, max: 100, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
-  { id: 'energy', label: 'ENERGY', min: 0, max: 4, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
+  { id: 'energy', label: 'ENERGY', min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
   { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
 ];
 
