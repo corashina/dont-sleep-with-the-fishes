@@ -1,6 +1,6 @@
 import { Box3, CylinderGeometry, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { resolveLocalMovement } from '../src/player/collisions';
+import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
@@ -477,8 +477,43 @@ describe('freighter geometry', () => {
       expect(railColliderAt(build, railX, z), `starboard rail collider at ${z}`).toBeDefined();
     });
     expect(railColliderAt(build, -railX, opening.centerZ), 'full port rail').toBeDefined();
-    expect(railColliderAt(build, 0, 17.4), 'bow rail').toBeDefined();
-    expect(railColliderAt(build, 0, -17.4), 'stern rail').toBeDefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('exports bow and stern rail arcs separately from shell box colliders', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const cargo = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
+    const centerY = FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height / 2;
+
+    expect(build.arcColliders).toEqual([
+      {
+        centerX: 0,
+        centerZ: cargo.maxZ - 4,
+        radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
+        radiusZ: 4,
+        end: 'bow',
+        thickness: 0.25,
+        minY: FREIGHTER_DIMENSIONS.deckY,
+        maxY: FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height,
+      },
+      {
+        centerX: 0,
+        centerZ: cargo.minZ + 4,
+        radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
+        radiusZ: 4,
+        end: 'stern',
+        thickness: 0.25,
+        minY: FREIGHTER_DIMENSIONS.deckY,
+        maxY: FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height,
+      },
+    ]);
+    [cargo.maxZ, cargo.minZ].forEach((z) => {
+      expect(railColliderAt(build, 0, z), `box collider at center point ${z}`).toBeUndefined();
+      expect(pointInCollider(build, new Vector3(0, centerY, z)), `shell box at ${z}`).toBe(false);
+    });
 
     build.disposeGeometry();
     materials.dispose();
@@ -534,8 +569,11 @@ describe('freighter geometry', () => {
     const build = createShipGeometry(materials);
     const topSegments = build.root.children.filter((object): object is Mesh =>
       object instanceof Mesh && object.name.startsWith(`rail-${end}-top-`));
+    const posts = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.startsWith(`rail-${end}-post-`));
 
     expect(topSegments).toHaveLength(12);
+    expect(posts).toHaveLength(13);
     const bounds = topSegments.reduce(
       (combined, segment) => combined.union(new Box3().setFromObject(segment)),
       new Box3(),
@@ -547,11 +585,13 @@ describe('freighter geometry', () => {
     expect(size.z).toBeGreaterThan(3.9);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(17);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(17.8);
-    const blocked = resolveLocalMovement(
+    const arc = build.arcColliders.find((candidate) => candidate.end === end);
+    expect(arc).toBeDefined();
+    const blocked = resolveArcMovement(
       { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 15.2 },
       { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 18 },
       0.35,
-      build.shellColliders,
+      arc!,
     );
     expect(Math.abs(blocked.z)).toBeGreaterThan(15);
     expect(Math.abs(blocked.z)).toBeLessThan(17.2);

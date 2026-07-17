@@ -11,7 +11,7 @@ import {
   ShapeGeometry,
   Vector3,
 } from 'three';
-import type { CollisionBox } from '../player/collisions';
+import type { CollisionArc, CollisionBox } from '../player/collisions';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
 import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
@@ -22,6 +22,7 @@ export type { ShipZoneId } from './ShipLayout';
 export interface ShipGeometryBuild {
   root: Group;
   shellColliders: CollisionBox[];
+  arcColliders: CollisionArc[];
   zoneCenters: ReadonlyMap<ShipZoneId, Vector3>;
   waterExclusion: { halfWidth: number; halfLength: number };
   stackOutlets: readonly [Vector3, Vector3];
@@ -115,25 +116,6 @@ function addBlock(
   return mesh;
 }
 
-function rotatedYCollisionBox(
-  position: readonly [number, number, number],
-  size: readonly [number, number, number],
-  rotationY: number,
-): CollisionBox {
-  const cosine = Math.abs(Math.cos(rotationY));
-  const sine = Math.abs(Math.sin(rotationY));
-  const halfX = (cosine * size[0] + sine * size[2]) / 2;
-  const halfZ = (sine * size[0] + cosine * size[2]) / 2;
-  return {
-    minX: position[0] - halfX,
-    maxX: position[0] + halfX,
-    minY: position[1] - size[1] / 2,
-    maxY: position[1] + size[1] / 2,
-    minZ: position[2] - halfZ,
-    maxZ: position[2] + halfZ,
-  };
-}
-
 function addRotatedBlock(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -146,9 +128,6 @@ function addRotatedBlock(
     collider: false,
   });
   mesh.rotation.y = rotationY;
-  if (options.collider) {
-    shellColliders.push(rotatedYCollisionBox(options.position, options.size, rotationY));
-  }
   return mesh;
 }
 
@@ -627,6 +606,7 @@ function addCurvedEndRail(
   root: Group,
   geometries: Set<BufferGeometry>,
   shellColliders: CollisionBox[],
+  arcColliders: CollisionArc[],
   materials: ShipMaterials,
   end: 'bow' | 'stern',
   z: number,
@@ -660,11 +640,6 @@ function addCurvedEndRail(
       position,
       material: materials.darkMetal,
     }, rotationY);
-    shellColliders.push(rotatedYCollisionBox(
-      [position[0], FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, position[2]],
-      [RAIL_COLLIDER_THICKNESS, layout.rail.height, chordLength],
-      rotationY,
-    ));
   }
   for (let index = 0; index <= RAIL_END_SEGMENTS; index += 1) {
     const point = pointAt(index);
@@ -675,12 +650,23 @@ function addCurvedEndRail(
       material: materials.darkMetal,
     });
   }
+  arcColliders.push({
+    centerX: 0,
+    centerZ: z,
+    radiusX: railX,
+    radiusZ: RAIL_END_DEPTH,
+    end,
+    thickness: RAIL_COLLIDER_THICKNESS,
+    minY: FREIGHTER_DIMENSIONS.deckY,
+    maxY: railTopY,
+  });
 }
 
 function addRails(
   root: Group,
   geometries: Set<BufferGeometry>,
   shellColliders: CollisionBox[],
+  arcColliders: CollisionArc[],
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
@@ -693,8 +679,8 @@ function addRails(
   addRailSegment(root, geometries, shellColliders, materials, 'port', minZ, maxZ, layout);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', minZ, gapMinZ, layout);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', gapMaxZ, maxZ, layout);
-  addCurvedEndRail(root, geometries, shellColliders, materials, 'bow', maxZ, layout);
-  addCurvedEndRail(root, geometries, shellColliders, materials, 'stern', minZ, layout);
+  addCurvedEndRail(root, geometries, shellColliders, arcColliders, materials, 'bow', maxZ, layout);
+  addCurvedEndRail(root, geometries, shellColliders, arcColliders, materials, 'stern', minZ, layout);
 }
 
 function addWeathering(
@@ -724,6 +710,7 @@ export function createShipGeometry(
   root.name = 'coastal-freighter';
   const geometries = new Set<BufferGeometry>();
   const shellColliders: CollisionBox[] = [];
+  const arcColliders: CollisionArc[] = [];
 
   addRoundedPrism(
     root,
@@ -756,7 +743,7 @@ export function createShipGeometry(
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
-  addRails(root, geometries, shellColliders, materials, layout);
+  addRails(root, geometries, shellColliders, arcColliders, materials, layout);
   addWeathering(root, geometries, shellColliders, materials, layout);
 
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
@@ -780,6 +767,7 @@ export function createShipGeometry(
   return {
     root,
     shellColliders,
+    arcColliders,
     zoneCenters,
     waterExclusion: {
       halfWidth: HALF_WIDTH - 0.2,
