@@ -3,6 +3,7 @@ import {
   DEFAULT_WAVES,
   createWaveUniformPayload,
   sampleWaveField,
+  sampleWaveFieldInto,
   type WaveComponent,
 } from '../src/ocean/WaveField';
 
@@ -14,6 +15,26 @@ describe('WaveField', () => {
     expect(Number.isFinite(a.height)).toBe(true);
     const length = Math.hypot(a.normal.x, a.normal.y, a.normal.z);
     expect(length).toBeCloseTo(1, 6);
+  });
+
+  it('writes a wave sample into a caller-owned reusable record', () => {
+    const output = {
+      height: 0,
+      displacementX: 0,
+      displacementZ: 0,
+      normal: { x: 0, y: 0, z: 0 },
+    };
+    const firstReference = output;
+
+    sampleWaveFieldInto(output, DEFAULT_WAVES, 3.25, 4, -7, 1.2);
+
+    expect(output).toBe(firstReference);
+    expect(output).toEqual(sampleWaveField(DEFAULT_WAVES, 3.25, 4, -7, 1.2));
+
+    sampleWaveFieldInto(output, DEFAULT_WAVES, 1.5, -2, 6, 0.78);
+
+    expect(output).toBe(firstReference);
+    expect(output).toEqual(sampleWaveField(DEFAULT_WAVES, 1.5, -2, 6, 0.78));
   });
 
   it('matches an analytic single-wave sample with a non-unit direction', () => {
