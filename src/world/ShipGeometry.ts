@@ -30,7 +30,7 @@ export interface ShipGeometryBuild {
 
 const HALF_WIDTH = FREIGHTER_DIMENSIONS.width / 2;
 const HALF_LENGTH = FREIGHTER_DIMENSIONS.length / 2;
-const WALL_HEIGHT = 3.2;
+const ROOM_WALL_HEIGHT = 3.4;
 
 const HULL_HEIGHT = 1.1;
 const HULL_TOP_Y = 1.86;
@@ -41,7 +41,6 @@ const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const END_CAP_DEPTH = 4;
 const WALL_THICKNESS = 0.22;
-const WHEELHOUSE_WALL_HEIGHT = 3.4;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_PILLAR_WIDTH = 0.28;
@@ -402,8 +401,8 @@ function segmentTransform(
     : { size: [length, height, thickness], position: [center, centerY, segment.fixed] };
 }
 
-function roomWallHeight(zoneId: ShipZoneId): number {
-  return zoneId === 'wheelhouse' ? WHEELHOUSE_WALL_HEIGHT : WALL_HEIGHT;
+function roomWallHeight(_zoneId: ShipZoneId): number {
+  return ROOM_WALL_HEIGHT;
 }
 
 function addWallSegments(
@@ -419,17 +418,18 @@ function addWallSegments(
       : segment.zoneId === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
     const name = `${prefix}-wall-${segment.edge}-${index}`;
     if (segment.zoneId !== 'wheelhouse') {
+      const height = roomWallHeight(segment.zoneId);
       addBlock(root, geometries, shellColliders, {
         name,
-        ...segmentTransform(segment, WALL_HEIGHT, wallBottomY + WALL_HEIGHT / 2),
+        ...segmentTransform(segment, height, wallBottomY + height / 2),
         material: segment.zoneId === 'crewCabin' ? materials.paintedPanel : materials.paintedSteel,
         collider: true,
       });
       return;
     }
-    const full = segmentTransform(segment, WHEELHOUSE_WALL_HEIGHT, wallBottomY + WHEELHOUSE_WALL_HEIGHT / 2);
+    const full = segmentTransform(segment, ROOM_WALL_HEIGHT, wallBottomY + ROOM_WALL_HEIGHT / 2);
     shellColliders.push(toCollisionBox(full.position, full.size));
-    const windowHeight = WHEELHOUSE_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
+    const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
     addBlock(root, geometries, shellColliders, {
       name: `${name}-sill`,
       ...segmentTransform(segment, WINDOW_SILL_HEIGHT, wallBottomY + WINDOW_SILL_HEIGHT / 2),
@@ -437,7 +437,7 @@ function addWallSegments(
     });
     addBlock(root, geometries, shellColliders, {
       name: `${name}-header`,
-      ...segmentTransform(segment, WINDOW_HEADER_HEIGHT, wallBottomY + WHEELHOUSE_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2),
+      ...segmentTransform(segment, WINDOW_HEADER_HEIGHT, wallBottomY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2),
       material: materials.paintedPanel,
     });
     addBlock(root, geometries, shellColliders, {
@@ -450,7 +450,7 @@ function addWallSegments(
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
   const width = wheelhouse.maxX - wheelhouse.minX;
   const windowWidth = (width - WINDOW_PILLAR_WIDTH * 4) / 3;
-  const windowHeight = WHEELHOUSE_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
+  const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
   for (let pillar = 0; pillar < 4; pillar += 1) {
     const x = wheelhouse.minX + WINDOW_PILLAR_WIDTH / 2 + pillar * (windowWidth + WINDOW_PILLAR_WIDTH);
     addBlock(root, geometries, shellColliders, {
@@ -760,7 +760,7 @@ export function createShipGeometry(
   addWeathering(root, geometries, shellColliders, materials, layout);
 
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const beaconRoofY = FREIGHTER_DIMENSIONS.deckY + WHEELHOUSE_WALL_HEIGHT + 0.24;
+  const beaconRoofY = FREIGHTER_DIMENSIONS.deckY + ROOM_WALL_HEIGHT + ROOM_ROOF_THICKNESS;
   addCylinder(root, geometries, 'alarm-beacon', 0.22, 0.5, [
     (wheelhouse.minX + wheelhouse.maxX) / 2,
     beaconRoofY + 0.25,
