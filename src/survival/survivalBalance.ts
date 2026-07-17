@@ -1,11 +1,11 @@
 export const SURVIVAL_BALANCE = {
-  start: { health: 100, hunger: 20, energy: 4, hull: 75 },
-  dawn: { hungerIncrease: 18, starvationDamage: 15, normalEnergy: 4, hungryEnergy: 3, starvingEnergy: 2 },
+  start: { health: 100, hunger: 20, energy: 3, hull: 75 },
+  dawn: { hungerIncrease: 18, starvationDamage: 15, normalEnergy: 3, hungryEnergy: 3, starvingEnergy: 2 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
     fishEnergy: 2, diveEnergy: 3, repairEnergy: 2,
     foodHunger: -35, repairHull: 25, tapeHull: 15, treatmentHealth: 30, restEnergy: 2,
-    bottledPaperEnergy: 1, bottledPaperRescueProgress: 15, maximumEnergy: 4,
+    bottledPaperEnergy: 1, bottledPaperRescueProgress: 15, maximumEnergy: 3,
   },
   fishing: {
     rodSuccess: 0.70, rodDouble: 0.20, rodBaitSuccess: 0.90,

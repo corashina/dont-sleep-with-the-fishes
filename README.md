@@ -16,7 +16,7 @@ The carry limit is three weight points, not three objects. Weight-one supplies a
 
 Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, Harpoon Gun, and Energy Bar are one-use supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Spyglass, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, Flashlight, and Fishing Rod are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The Repair Kit is fixed to the lifeboat rather than collected on Dorothy. It uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of four and is consumed.
+The Repair Kit is fixed to the lifeboat rather than collected on Dorothy. It uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
 The event catalog adapts the original game's ordinary item responses to this single-survivor rescue loop. Recovered usable items can unlock suitable responses; unavailable, broken, consumed, and lost supplies cannot. Unsupported companion, trade, later-loot, story-branch, and alternate-ending outcomes remain outside this milestone. The wiki informed the committed event data but is not a runtime dependency.
 
@@ -64,7 +64,7 @@ Accepted daytime actions play through the lifeboat scene, update the condition d
 
 The ship sinks in two minutes. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
 
-In the lifeboat, each day gives four energy for daytime actions:
+In the lifeboat, each day gives three energy for daytime actions:
 
 - **Fish** requires a rescued fishing rod and attempts to add food. When bait remains, each cast offers a choice to spend one bait for better odds or fish without it.
 - **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
@@ -74,7 +74,7 @@ In the lifeboat, each day gives four energy for daytime actions:
 - **Rest** requires no item, restores two energy, and is available once per day.
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
 - **Send message** consumes Bottled Paper and one energy to add 15 rescue progress.
-- **Eat Energy Bar** consumes the bar and restores energy to four.
+- **Eat Energy Bar** consumes the bar and restores energy to three.
 - **End day** advances into the day and night event sequence.
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.

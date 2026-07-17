@@ -108,6 +108,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="sendMessage"] [role="tooltip"]')?.textContent)
       .toContain('1 ENERGY — RESCUE +15');
     expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY BAR');
+    expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY TO 3');
     expect(mount.textContent).not.toContain('WATER');
   });
 
@@ -598,7 +599,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="treat"]')?.textContent).toContain('HEALTH +10');
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('2 ENERGY + MATERIAL');
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('HULL +10');
-    expect(mount.querySelector('[data-action="rest"]')?.textContent).toContain('ENERGY +1');
+    expect(mount.querySelector('[data-action="rest"]')?.textContent).toContain('ENERGY +0');
 
     const tape = new SurvivalSession(saved('ductTape'), { seed: 1, initial: { hull: 92 } }).snapshot();
     ui.render(tape, () => null);
@@ -804,7 +805,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-phase]')?.textContent).toContain('DAYLIGHT');
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
-    expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('4');
+    expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('3');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
     expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
     expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
@@ -1165,7 +1166,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    ui.render(snapshot({ health: 21, hunger: 20, energy: 4, hull: 21 }), () => null);
+    ui.render(snapshot({ health: 21, hunger: 20, energy: 3, hull: 21 }), () => null);
 
     const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
     const food = mount.querySelector<HTMLElement>('[data-meter="hunger"]')!;
@@ -1178,7 +1179,7 @@ describe('SurvivalUI', () => {
     expect(food.querySelector('.survival-meter__label')?.textContent).toContain('FOOD');
     expect(food.classList).not.toContain('is-danger');
     expect(food.getAttribute('aria-valuetext')).toBeNull();
-    expect(energy.getAttribute('aria-valuemax')).toBe('4');
+    expect(energy.getAttribute('aria-valuemax')).toBe('3');
     expect(energy.style.getPropertyValue('--meter-value')).toBe('100%');
     expect(energy.querySelector('.survival-meter__fill')?.tagName).toBe('DIV');
     expect(energy.classList).not.toContain('is-danger');
