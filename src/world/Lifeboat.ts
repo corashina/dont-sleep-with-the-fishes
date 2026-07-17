@@ -187,6 +187,29 @@ function outlinePoints(height: number): Vector3[] {
   return [...starboard, ...port];
 }
 
+function createRepairTools(wood: MeshStandardMaterial, metal: MeshStandardMaterial): Group {
+  const tools = new Group();
+  tools.name = 'hull-repair-tools';
+  tools.position.set(-0.72, -0.31, 0.82);
+
+  const plank = new Mesh(new BoxGeometry(0.68, 0.055, 0.18), wood);
+  plank.name = 'repair-tool-plank';
+  plank.rotation.set(0.06, -0.22, -0.18);
+  tools.add(plank);
+
+  const hammer = new Group();
+  hammer.name = 'repair-tool-hammer';
+  const handle = new Mesh(new CylinderGeometry(0.028, 0.035, 0.44, 8), wood);
+  handle.rotation.z = Math.PI / 2;
+  const head = new Mesh(new BoxGeometry(0.18, 0.08, 0.09), metal);
+  head.position.x = 0.22;
+  hammer.add(handle, head);
+  hammer.position.set(0.03, 0.07, -0.10);
+  hammer.rotation.set(0.10, 0.28, 0.20);
+  tools.add(hammer);
+  return tools;
+}
+
 export function createLifeboat(): LifeboatBuild {
   const textures = createLifeboatTextures();
   const materials = materialSet(textures);
@@ -252,6 +275,7 @@ export function createLifeboat(): LifeboatBuild {
   patch.position.set(-1.18, -0.28, 0.62);
   patch.rotation.set(0.04, -0.16, 0.20);
   root.add(patch);
+  root.add(createRepairTools(materials.wood, materials.metal));
 
   for (const sign of [-1, 1] as const) {
     const mount = new Mesh(new TorusGeometry(0.13, 0.035, 6, 12, Math.PI), materials.metal);
