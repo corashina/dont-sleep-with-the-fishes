@@ -75,7 +75,6 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   dive: 1.4,
   repair: 0.9,
   treat: 0.8,
-  rest: 0.8,
   storm: 1.2,
   impact: 0.8,
   darkness: 1,
@@ -614,9 +613,6 @@ export class BoatWorld {
         break;
       case 'treat':
         this.ambient.intensity *= 1 + pulse * 0.12;
-        break;
-      case 'rest':
-        this.ambient.intensity *= 1 - eased * 0.2;
         break;
       case 'storm':
         if (!reduced) {

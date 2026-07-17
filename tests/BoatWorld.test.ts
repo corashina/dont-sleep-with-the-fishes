@@ -77,7 +77,6 @@ function snapshot(
     repairMaterial: 0,
     rescueProgress: 0,
     weather: 'calm',
-    restedToday: false,
     actedToday: false,
     journalEntries: [],
     inventory: new SurvivalInventoryState(savedItems).snapshot(),
@@ -898,7 +897,7 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       [],
     );
-    const sequence = world.play('rest');
+    const sequence = world.play('treat');
     world.update(0.8, 0.8);
     await sequence;
     expect(world.presentationCueForTest()).toBeNull();
