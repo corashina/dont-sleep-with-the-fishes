@@ -20,9 +20,10 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number) {
   const session = new SurvivalSession(saved(), {
     seed: 1,
-    random: sequenceRandom([0, rescueRoll]),
+    random: sequenceRandom([0, 0, rescueRoll]),
     initial: { day, rescueProgress },
   });
+  session.perform('endDay');
   session.beginDawn();
   return session.snapshot().state;
 }
@@ -55,6 +56,14 @@ describe('SurvivalSession daytime actions', () => {
     session.resolveEvent(null);
     expect(session.snapshot().state).toBe('nightEvent');
     expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'dawn' });
+  });
+
+  it('requires a completed night before beginning dawn', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, initial: { energy: 0 } });
+    const before = session.snapshot();
+
+    expect(session.beginDawn()).toMatchObject({ accepted: false, code: 'not-nighttime' });
+    expect(session.snapshot()).toEqual(before);
   });
 
   it('selects terminal cues from the resulting real state', () => {
@@ -290,11 +299,13 @@ describe('SurvivalSession daytime actions', () => {
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0.99]),
+      random: sequenceRandom([0, 0.99, 0, 0.99]),
       initial: { hunger: 95, health: 20, hull: 5, energy: 0 },
     });
+    session.perform('endDay');
     session.beginDawn();
     expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 5 });
+    session.perform('endDay');
     session.beginDawn();
     expect(session.snapshot().state).toBe('dead');
     const terminal = session.snapshot();
