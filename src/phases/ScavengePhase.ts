@@ -91,6 +91,7 @@ export class ScavengePhase implements GamePhase {
       this.world.colliders,
       this.world.playerNavigationBounds,
       () => this.session.penalize(5),
+      this.world.arcColliders,
     );
     this.interaction = new InteractionSystem(context.camera);
     this.carry = new CarryController(this.scene, context.camera);
