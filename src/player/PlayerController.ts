@@ -1,6 +1,6 @@
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../input/InputController';
-import type { CollisionBox, LocalPlayerPosition } from './collisions';
+import type { CollisionArc, CollisionBox, LocalPlayerPosition } from './collisions';
 import {
   findSupportEyeHeight,
   resolveLocalMovement,
@@ -43,6 +43,7 @@ export class PlayerController {
     private readonly colliders: readonly CollisionBox[],
     private readonly navigationBounds: PlayerNavigationBounds,
     private readonly onFall: () => void,
+    private readonly arcColliders: readonly CollisionArc[] = [],
   ) {
     this.localPosition = start.clone();
     this.safePosition = start.clone();
@@ -89,7 +90,13 @@ export class PlayerController {
       y: Math.max(this.deckEyeHeight, nextY),
       z: current.z + this.movement.z,
     };
-    const resolved = resolveLocalMovement(current, desired, 0.35, this.colliders);
+    const resolved = resolveLocalMovement(
+      current,
+      desired,
+      0.35,
+      this.colliders,
+      this.arcColliders,
+    );
     const support = findSupportEyeHeight(
       resolved,
       0.35,
@@ -115,11 +122,16 @@ export class PlayerController {
       this.onFall();
     }
 
+    this.placeCamera(reducedMotionShake);
+  }
+
+  placeCamera(reducedMotionShake = 0): void {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
     this.camera.position.copy(this.worldPosition);
     this.localView.setFromEuler(new Euler(this.pitch + reducedMotionShake, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(this.ship.quaternion).multiply(this.localView);
+    this.camera.updateMatrixWorld(true);
   }
 
   reset(start: Vector3): void {

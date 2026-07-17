@@ -206,6 +206,33 @@ describe('PlayerController', () => {
     expect(displacement.dot(visibleDirection)).toBeCloseTo(1, 8);
   });
 
+  it('stops forward movement at the bow arc barrier', () => {
+    const input = new TestInput();
+    input.movement = { x: 0, z: -1 };
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.72, 17),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [{
+        centerX: 0,
+        centerZ: 14,
+        radiusX: 6,
+        radiusZ: 4,
+        end: 'bow',
+        thickness: 0.25,
+        minY: 2.22,
+        maxY: 3.27,
+      }],
+    );
+
+    controller.update(0.5, input.asControllerInput());
+
+    expect(controller.localPosition.z).toBeCloseTo(17.525);
+  });
+
   it('preserves the approved cabin start without trapping movement', () => {
     const shipBuild = createTestShip();
     const input = new TestInput();
@@ -268,6 +295,26 @@ describe('PlayerController', () => {
     expectVector(controller.localPosition, position);
     expect(onFall).not.toHaveBeenCalled();
     shipBuild.dispose();
+  });
+
+  it('places the shared camera from the player pose without a movement tick', () => {
+    const ship = new Object3D();
+    ship.position.set(4, 1, -3);
+    ship.rotation.y = Math.PI / 6;
+    ship.updateMatrixWorld(true);
+    const camera = new PerspectiveCamera();
+    const start = new Vector3(1, 3.7, 2);
+    const controller = new PlayerController(
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    const expectedPosition = ship.localToWorld(start.clone());
+    const expectedForward = new Vector3(0, 0, 1).applyQuaternion(ship.quaternion);
+
+    controller.placeCamera();
+
+    expectVector(camera.position, expectedPosition);
+    expectVector(camera.getWorldDirection(new Vector3()), expectedForward);
+    expectVector(controller.localPosition, start);
   });
 
   it('reset restores the supplied local start and default view', () => {

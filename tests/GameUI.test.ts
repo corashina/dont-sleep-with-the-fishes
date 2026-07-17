@@ -114,6 +114,31 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
+  it('starts in the title presentation and can reveal the playing HUD', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const root = mount.querySelector<HTMLElement>('.game-ui')!;
+    const hud = mount.querySelector<HTMLElement>('.hud')!;
+
+    expect(root.dataset.presentation).toBe('title');
+    expect(hud.hidden).toBe(true);
+
+    ui.setPresentation('playing');
+
+    expect(root.dataset.presentation).toBe('playing');
+    expect(hud.hidden).toBe(false);
+    ui.dispose();
+  });
+
+  it('lays out the start screen as a left title column', () => {
+    expect(mainStyles).toMatch(
+      /\.poster-screen\.start-screen\s*\{[^}]*justify-items:\s*start;[^}]*background:\s*linear-gradient\(90deg,[^;]*\);[^}]*text-align:\s*left;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.start-screen \.screen__content\s*\{[^}]*width:\s*min\(520px,\s*46vw\);[^}]*justify-items:\s*start;[^}]*text-align:\s*left;/s,
+    );
+  });
+
   it('keeps only the carry circles and watch in the top scavenging HUD', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);

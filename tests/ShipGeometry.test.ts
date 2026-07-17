@@ -1,6 +1,6 @@
-import { Box3, Mesh, Vector3 } from 'three';
+import { Box3, CylinderGeometry, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { resolveLocalMovement } from '../src/player/collisions';
+import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
@@ -160,19 +160,36 @@ describe('freighter geometry', () => {
     const build = createShipGeometry(materials);
     const island = build.root.getObjectByName('machinery-island');
     expect(island).toBeInstanceOf(Mesh);
-    const islandTop = new Box3().setFromObject(island!).max.y;
+    const islandBounds = new Box3().setFromObject(island!);
+    const islandTop = islandBounds.max.y;
+    expect(islandBounds.min.x).toBeCloseTo(-2.6);
+    expect(islandBounds.max.x).toBeCloseTo(2.6);
+    expect(islandBounds.max.x - islandBounds.min.x).toBeCloseTo(5.2);
+    const machineryCollider = build.shellColliders.find((box) =>
+      Math.abs(box.minX - -2.6) < 1e-8
+      && Math.abs(box.maxX - 2.6) < 1e-8
+      && Math.abs(box.minZ - SHIP_LAYOUT.machineryClosure.minZ) < 1e-8
+      && Math.abs(box.maxZ - SHIP_LAYOUT.machineryClosure.maxZ) < 1e-8);
+    expect(machineryCollider).toBeDefined();
 
     (['port', 'starboard'] as const).forEach((side, index) => {
       const stack = build.root.getObjectByName(`smokestack-${side}`);
       const collar = build.root.getObjectByName(`smokestack-${side}-collar`);
       expect(stack, side).toBeInstanceOf(Mesh);
       expect(collar, side).toBeInstanceOf(Mesh);
+      if (!(collar instanceof Mesh)) throw new Error(`Missing ${side} smokestack collar mesh`);
       const stackBounds = new Box3().setFromObject(stack!);
-      const collarBounds = new Box3().setFromObject(collar!);
+      const collarBounds = new Box3().setFromObject(collar);
+      expect(collar.geometry).toBeInstanceOf(CylinderGeometry);
+      const collarRadius = (collar.geometry as CylinderGeometry).parameters.radiusTop;
 
       expect(stackBounds.min.y, `${side} stack base`).toBeCloseTo(islandTop);
       expect(collarBounds.min.y, `${side} collar base`).toBeCloseTo(islandTop);
       expect(stackBounds.max.y, `${side} outlet`).toBeCloseTo(build.stackOutlets[index]!.y);
+      const outerEdgeClearance = side === 'port'
+        ? collar.position.x - collarRadius - islandBounds.min.x
+        : islandBounds.max.x - collar.position.x - collarRadius;
+      expect(outerEdgeClearance, `${side} collar outer-edge clearance`).toBeCloseTo(0.53);
     });
 
     build.disposeGeometry();
@@ -347,26 +364,40 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
-  it('covers each enclosed room with a steel roof that meets its wall top', () => {
+  it('aligns every enclosed wall, corner, and roof at the wheelhouse height', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const roofThickness = 0.24;
     const roofOverhang = 0.175;
 
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
       const roof = build.root.getObjectByName(`${zone.id}-roof`);
       expect(roof, zone.id).toBeInstanceOf(Mesh);
       const bounds = new Box3().setFromObject(roof!);
-      const wallHeight = zone.id === 'wheelhouse' ? 3.4 : 3.2;
 
       expect(bounds.min.x, `${zone.id} min x`).toBeCloseTo(zone.bounds.minX - roofOverhang);
       expect(bounds.max.x, `${zone.id} max x`).toBeCloseTo(zone.bounds.maxX + roofOverhang);
       expect(bounds.min.z, `${zone.id} min z`).toBeCloseTo(zone.bounds.minZ - roofOverhang);
       expect(bounds.max.z, `${zone.id} max z`).toBeCloseTo(zone.bounds.maxZ + roofOverhang);
-      expect(bounds.min.y, `${zone.id} roof bottom`)
-        .toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + wallHeight);
-      expect(bounds.max.y - bounds.min.y, `${zone.id} roof thickness`)
-        .toBeCloseTo(roofThickness);
+      expect.soft(bounds.min.y, `${zone.id} roof bottom`).toBeCloseTo(5.62);
+      expect.soft(bounds.max.y, `${zone.id} roof top`).toBeCloseTo(5.86);
+
+      zone.polygon.forEach((_, index) => {
+        const cornerName = `${zone.id}-corner-${index}`;
+        const corner = build.root.getObjectByName(cornerName);
+        expect(corner, cornerName).toBeInstanceOf(Mesh);
+        expect.soft(new Box3().setFromObject(corner!).max.y, `${cornerName} top`).toBeCloseTo(5.62);
+      });
+    });
+
+    ['crew-cabin-wall-', 'storage-workroom-wall-'].forEach((prefix) => {
+      const solidWalls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (object instanceof Mesh && object.name.startsWith(prefix)) solidWalls.push(object);
+      });
+      expect(solidWalls.length, prefix).toBeGreaterThan(0);
+      solidWalls.forEach((wall) => {
+        expect.soft(new Box3().setFromObject(wall).max.y, `${wall.name} top`).toBeCloseTo(5.62);
+      });
     });
 
     build.disposeGeometry();
@@ -446,8 +477,43 @@ describe('freighter geometry', () => {
       expect(railColliderAt(build, railX, z), `starboard rail collider at ${z}`).toBeDefined();
     });
     expect(railColliderAt(build, -railX, opening.centerZ), 'full port rail').toBeDefined();
-    expect(railColliderAt(build, 0, 17.4), 'bow rail').toBeDefined();
-    expect(railColliderAt(build, 0, -17.4), 'stern rail').toBeDefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('exports bow and stern rail arcs separately from shell box colliders', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const cargo = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
+    const centerY = FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height / 2;
+
+    expect(build.arcColliders).toEqual([
+      {
+        centerX: 0,
+        centerZ: cargo.maxZ - 4,
+        radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
+        radiusZ: 4,
+        end: 'bow',
+        thickness: 0.25,
+        minY: FREIGHTER_DIMENSIONS.deckY,
+        maxY: FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height,
+      },
+      {
+        centerX: 0,
+        centerZ: cargo.minZ + 4,
+        radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
+        radiusZ: 4,
+        end: 'stern',
+        thickness: 0.25,
+        minY: FREIGHTER_DIMENSIONS.deckY,
+        maxY: FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height,
+      },
+    ]);
+    [cargo.maxZ, cargo.minZ].forEach((z) => {
+      expect(railColliderAt(build, 0, z), `box collider at center point ${z}`).toBeUndefined();
+      expect(pointInCollider(build, new Vector3(0, centerY, z)), `shell box at ${z}`).toBe(false);
+    });
 
     build.disposeGeometry();
     materials.dispose();
@@ -503,8 +569,11 @@ describe('freighter geometry', () => {
     const build = createShipGeometry(materials);
     const topSegments = build.root.children.filter((object): object is Mesh =>
       object instanceof Mesh && object.name.startsWith(`rail-${end}-top-`));
+    const posts = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh && object.name.startsWith(`rail-${end}-post-`));
 
     expect(topSegments).toHaveLength(12);
+    expect(posts).toHaveLength(13);
     const bounds = topSegments.reduce(
       (combined, segment) => combined.union(new Box3().setFromObject(segment)),
       new Box3(),
@@ -516,11 +585,13 @@ describe('freighter geometry', () => {
     expect(size.z).toBeGreaterThan(3.9);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(17);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(17.8);
-    const blocked = resolveLocalMovement(
+    const arc = build.arcColliders.find((candidate) => candidate.end === end);
+    expect(arc).toBeDefined();
+    const blocked = resolveArcMovement(
       { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 15.2 },
       { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 18 },
       0.35,
-      build.shellColliders,
+      arc!,
     );
     expect(Math.abs(blocked.z)).toBeGreaterThan(15);
     expect(Math.abs(blocked.z)).toBeLessThan(17.2);
