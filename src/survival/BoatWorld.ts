@@ -186,6 +186,7 @@ export class BoatWorld {
   private readonly savedProps: SavedProp[] = [];
   private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
   private readonly repairTools: Object3D;
+  private readonly repairToolsBounds = new Box3();
   private readonly rod: Object3D | undefined;
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
@@ -374,7 +375,7 @@ export class BoatWorld {
       } satisfies BoatInteractionAnchor;
     });
     const repairProjection = projectBoatBounds(
-      new Box3().setFromObject(this.repairTools, true),
+      this.repairToolsBounds.setFromObject(this.repairTools, true),
       this.camera,
       width,
       height,
