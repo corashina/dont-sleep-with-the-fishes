@@ -89,7 +89,7 @@ Rescue is variable rather than tied to a fixed day. Progress and elapsed days in
 
 ## Asset policy
 
-Kenney is the project's sole store for third-party game assets. Downloaded assets must come from an individual free CC0 pack, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. Project-authored item models, including the compact signal-pistol Flare Gun, are also committed locally. Production never fetches models, textures, artwork, event data, or wiki content. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
+Kenney remains the project's default third-party asset store. Quaternius is the user-approved exception solely for the committed `compass`, `flareGun`, and `anchor` source inputs. Those local, provenance-recorded inputs do not become runtime GLBs until the later builder/publication tasks. Downloaded assets must come from an individual free CC0 pack, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. Project-authored item models, including the compact signal-pistol Flare Gun, are also committed locally. Production never fetches models, textures, artwork, event data, or wiki content. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
 
 ## Commands
 
