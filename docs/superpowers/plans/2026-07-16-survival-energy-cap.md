@@ -99,6 +99,8 @@ bun run test -- tests/SurvivalUI.test.ts
 
 Expected: PASS with all UI meter and preview values matching the three-energy survival cap.
 
+**Final-review accessibility follow-up:** The event-choice `aria-description` is built from `SURVIVAL_ITEM_DESCRIPTIONS`, where the Energy Bar still said it restored energy to four. Add a focused real-UI assertion that an Energy Bar event choice describes recovery to `3`, then derive that item description from `SURVIVAL_BALANCE.actions.maximumEnergy`. This keeps screen-reader copy consistent with the capped action preview and meter.
+
 - [ ] **Step 5: Update player-facing survival copy**
 
 In `README.md`, replace the two affected sentences with:
