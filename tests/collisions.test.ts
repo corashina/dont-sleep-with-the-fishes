@@ -5,9 +5,10 @@ import {
   MAX_JUMPABLE_SUPPORT_HEIGHT,
   PLAYER_BODY_HEIGHT,
   movementAxes,
+  resolveArcMovement,
   resolveLocalMovement,
 } from '../src/player/collisions';
-import type { CollisionBox } from '../src/player/collisions';
+import type { CollisionArc, CollisionBox } from '../src/player/collisions';
 import { createTestShip } from './helpers/shipFurniture';
 import {
   FREIGHTER_DIMENSIONS,
@@ -18,6 +19,17 @@ import {
 const PLAYER_Y = FREIGHTER_DIMENSIONS.deckY + 1.5;
 const RAIL_SAMPLE_Y = FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height / 2;
 const EXTERIOR_ROUTE_X = SHIP_LAYOUT.rail.innerFaceX - PLAYER_LAYOUT_RADIUS - 0.025;
+
+const arc = (end: CollisionArc['end']): CollisionArc => ({
+  centerX: 0,
+  centerZ: end === 'bow' ? 14 : -14,
+  radiusX: 6,
+  radiusZ: 4,
+  end,
+  thickness: 0.25,
+  minY: 2,
+  maxY: 4,
+});
 
 const layoutDoor = (id: string) => {
   const door = SHIP_LAYOUT.doors.find((candidate) => candidate.id === id);
@@ -100,6 +112,78 @@ describe('player movement helpers', () => {
     );
 
     expect(result.x).toBeCloseTo(1.2);
+  });
+
+  it.each([
+    ['bow', 17, 20, 17.525],
+    ['stern', -17, -20, -17.525],
+  ] as const)('stops an outward center approach at the %s rail', (end, startZ, targetZ, expectedZ) => {
+    const result = resolveArcMovement(
+      { x: 0, y: 3.7, z: startZ },
+      { x: 0, y: 3.7, z: targetZ },
+      0.35,
+      arc(end),
+    );
+
+    expect(result.x).toBeCloseTo(0);
+    expect(result.z).toBeCloseTo(expectedZ);
+  });
+
+  it.each([
+    ['bow port', 'bow', -2, -3, 17, 18.5, -1],
+    ['bow starboard', 'bow', 2, 3, 17, 18.5, 1],
+    ['stern port', 'stern', -2, -3, -17, -18.5, -1],
+    ['stern starboard', 'stern', 2, 3, -17, -18.5, 1],
+  ] as const)(
+    'retains tangential progress around the %s shoulder',
+    (_label, end, startX, targetX, startZ, targetZ, direction) => {
+      const result = resolveLocalMovement(
+        { x: startX, y: 3.7, z: startZ },
+        { x: targetX, y: 3.7, z: targetZ },
+        0.35,
+        [],
+        [arc(end)],
+      );
+
+      expect(direction * result.x).toBeGreaterThan(direction * startX);
+      expect(Math.abs(result.z)).toBeLessThan(Math.abs(targetZ));
+    },
+  );
+
+  it('does not tunnel through a bow arc during a sprint-sized step', () => {
+    const result = resolveLocalMovement(
+      { x: 0, y: 3.7, z: 14 },
+      { x: 0, y: 3.7, z: 24 },
+      0.35,
+      [],
+      [arc('bow')],
+    );
+
+    expect(result.z).toBeCloseTo(17.525);
+  });
+
+  it('rechecks boxes after arc projection at a side-rail junction', () => {
+    const result = resolveLocalMovement(
+      { x: 2, y: 3.7, z: 16.5 },
+      { x: 3, y: 3.7, z: 18.5 },
+      0.35,
+      [{ minX: 2.5, maxX: 2.6, minY: 2, maxY: 4, minZ: 17.05, maxZ: 17.2 }],
+      [arc('bow')],
+    );
+
+    expect(result.z).toBeCloseTo(16.7);
+  });
+
+  it('ignores an arc above the player body', () => {
+    const result = resolveLocalMovement(
+      { x: 0, y: 6, z: 17 },
+      { x: 0, y: 6, z: 20 },
+      0.35,
+      [],
+      [arc('bow')],
+    );
+
+    expect(result).toEqual({ x: 0, y: 6, z: 20 });
   });
 
   it('selects the highest collider top within the 0.6-unit support limit', () => {

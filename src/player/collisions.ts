@@ -7,6 +7,17 @@ export interface CollisionBox {
   maxZ: number;
 }
 
+export interface CollisionArc {
+  centerX: number;
+  centerZ: number;
+  radiusX: number;
+  radiusZ: number;
+  end: 'bow' | 'stern';
+  thickness: number;
+  minY: number;
+  maxY: number;
+}
+
 export interface LocalPlayerPosition {
   x: number;
   y: number;
@@ -77,7 +88,94 @@ export function movementAxes(pressed: ReadonlySet<string>): MovementAxes {
   return length > 1 ? { x: x / length, z: z / length } : { x, z };
 }
 
-export function resolveLocalMovement(
+function closestHalfEllipsePointParameter(
+  pointX: number,
+  pointZ: number,
+  radiusX: number,
+  radiusZ: number,
+): number {
+  const quadrantX = Math.abs(pointX);
+  let parameter = Math.atan2(
+    Math.max(0, pointZ) * radiusX,
+    quadrantX * radiusZ,
+  );
+  parameter = Math.max(0, Math.min(Math.PI / 2, parameter));
+
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const cosine = Math.cos(parameter);
+    const sine = Math.sin(parameter);
+    const ellipseX = radiusX * cosine;
+    const ellipseZ = radiusZ * sine;
+    const tangentX = -radiusX * sine;
+    const tangentZ = radiusZ * cosine;
+    const differenceX = ellipseX - quadrantX;
+    const differenceZ = ellipseZ - pointZ;
+    const derivative = differenceX * tangentX + differenceZ * tangentZ;
+    const secondDerivative = tangentX * tangentX
+      - differenceX * ellipseX
+      + tangentZ * tangentZ
+      - differenceZ * ellipseZ;
+    if (Math.abs(secondDerivative) <= Number.EPSILON) break;
+    parameter = Math.max(
+      0,
+      Math.min(Math.PI / 2, parameter - derivative / secondDerivative),
+    );
+  }
+
+  const cosine = Math.cos(parameter);
+  const sine = Math.sin(parameter);
+  const differenceX = radiusX * cosine - quadrantX;
+  const differenceZ = radiusZ * sine - pointZ;
+  let closestDistanceSquared = differenceX * differenceX + differenceZ * differenceZ;
+
+  const shoulderDistanceSquared = (radiusX - quadrantX) ** 2 + pointZ ** 2;
+  if (shoulderDistanceSquared < closestDistanceSquared) {
+    parameter = 0;
+    closestDistanceSquared = shoulderDistanceSquared;
+  }
+
+  const centerDistanceSquared = quadrantX ** 2 + (radiusZ - pointZ) ** 2;
+  if (centerDistanceSquared < closestDistanceSquared) parameter = Math.PI / 2;
+  return pointX < 0 ? Math.PI - parameter : parameter;
+}
+
+export function resolveArcMovement(
+  _current: LocalPlayerPosition,
+  desired: LocalPlayerPosition,
+  radius: number,
+  arc: CollisionArc,
+): LocalPlayerPosition {
+  const playerFeetY = desired.y - PLAYER_BODY_HEIGHT;
+  if (playerFeetY >= arc.maxY || desired.y <= arc.minY) return desired;
+
+  const outwardDirection = arc.end === 'bow' ? 1 : -1;
+  const localX = desired.x - arc.centerX;
+  const localZ = outwardDirection * (desired.z - arc.centerZ);
+  const parameter = closestHalfEllipsePointParameter(
+    localX,
+    localZ,
+    arc.radiusX,
+    arc.radiusZ,
+  );
+  const ellipseX = arc.radiusX * Math.cos(parameter);
+  const ellipseZ = arc.radiusZ * Math.sin(parameter);
+  let normalX = Math.cos(parameter) / arc.radiusX;
+  let normalZ = Math.sin(parameter) / arc.radiusZ;
+  const normalLength = Math.hypot(normalX, normalZ);
+  normalX /= normalLength;
+  normalZ /= normalLength;
+  const signedDistance = (localX - ellipseX) * normalX + (localZ - ellipseZ) * normalZ;
+  const clearance = radius + arc.thickness / 2;
+  if (signedDistance < -clearance) return desired;
+
+  return {
+    x: arc.centerX + ellipseX - normalX * clearance,
+    y: desired.y,
+    z: arc.centerZ + outwardDirection * (ellipseZ - normalZ * clearance),
+  };
+}
+
+function resolveBoxMovement(
   current: LocalPlayerPosition,
   desired: LocalPlayerPosition,
   radius: number,
@@ -119,4 +217,21 @@ export function resolveLocalMovement(
   result.z = desired.z;
   resolveAxis('z');
   return result;
+}
+
+export function resolveLocalMovement(
+  current: LocalPlayerPosition,
+  desired: LocalPlayerPosition,
+  radius: number,
+  boxes: readonly CollisionBox[],
+  arcs: readonly CollisionArc[] = [],
+): LocalPlayerPosition {
+  const boxResolved = resolveBoxMovement(current, desired, radius, boxes);
+  if (arcs.length === 0) return boxResolved;
+
+  let arcResolved = boxResolved;
+  for (const arc of arcs) {
+    arcResolved = resolveArcMovement(current, arcResolved, radius, arc);
+  }
+  return resolveBoxMovement(current, arcResolved, radius, boxes);
 }
