@@ -22,6 +22,8 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../src/game/ItemState';
+import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
+import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -90,38 +92,55 @@ function snapshot(
 }
 
 describe('BoatWorld helpers', () => {
-  it('moves the hull and rider rigs while preserving saved-item local transforms', () => {
+  it('matches scavenging buoyancy for the boat, player viewpoint, and saved items', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
-    const savedItems = [savedItem('medicalKit')];
     const world = new BoatWorld(
       camera,
       { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
-      savedItems,
+      [savedItem('medicalKit')],
     );
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
     const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
     const localPosition = prop.position.clone();
     const localQuaternion = prop.quaternion.clone();
+    const initialPropWorldPosition = prop.getWorldPosition(new Vector3());
+    const time = 1.5;
+    const delta = 0.1;
+    const buoyancy = new BoatBuoyancy((sampleTime, x, z, amplitudeScale) =>
+      sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, amplitudeScale));
+    const target = buoyancy.sampleTarget(time, 0, 0, 0.78);
+    const expected = smoothBoatPose(
+      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
+      target,
+      delta,
+      7,
+    );
 
-    for (let index = 1; index <= 40; index += 1) world.update(index * 0.1, 0.1);
+    world.update(time, delta);
 
-    expect(Math.abs(motionRig.rotation.x) + Math.abs(motionRig.rotation.y) + Math.abs(motionRig.rotation.z))
-      .toBeGreaterThan(0);
-    expect(Math.abs(cameraRig.rotation.x) + Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.rotation.z))
-      .toBeGreaterThan(0);
-    expect(Math.abs(cameraRig.rotation.x)).toBeLessThanOrEqual(Math.PI / 180);
-    expect(Math.abs(cameraRig.rotation.z)).toBeLessThanOrEqual(Math.PI / 180);
+    expect(motionRig.position.x).toBeCloseTo(expected.driftX);
+    expect(motionRig.position.y).toBeCloseTo(0.22 + expected.y);
+    expect(motionRig.position.z).toBeCloseTo(expected.driftZ);
+    expect(motionRig.rotation.x).toBeCloseTo(expected.pitch);
+    expect(motionRig.rotation.y).toBe(0);
+    expect(motionRig.rotation.z).toBeCloseTo(-expected.roll);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(camera.getWorldPosition(new Vector3()).toArray()).toEqual(
+      motionRig.localToWorld(camera.position.clone()).toArray(),
+    );
     expect(prop.position.toArray()).toEqual(localPosition.toArray());
     expect(prop.quaternion.toArray()).toEqual(localQuaternion.toArray());
+    expect(prop.getWorldPosition(new Vector3()).toArray()).not.toEqual(initialPropWorldPosition.toArray());
     world.dispose();
     propModels.dispose();
   });
 
-  it('keeps reduced-motion rigs and secondary cues neutral', () => {
+  it('keeps reduced-motion secondary cues neutral while the hull floats', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -135,14 +154,29 @@ describe('BoatWorld helpers', () => {
     const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh;
     const oceanUniforms = (ocean.material as ShaderMaterial).uniforms;
     const initialOceanTime = oceanUniforms.uTime!.value as number;
+    const time = 4;
+    const delta = 0.2;
+    const buoyancy = new BoatBuoyancy((sampleTime, x, z, amplitudeScale) =>
+      sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, amplitudeScale));
+    const target = buoyancy.sampleTarget(time, 0, 0, 0.78);
+    const expected = smoothBoatPose(
+      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
+      target,
+      delta,
+      7,
+    );
     world.play('fish');
-    world.update(4, 0.2);
+    world.update(time, delta);
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
     const spray = world.scene.getObjectByName('survival-bow-spray') as Points;
 
-    expect(motionRig.position.y).toBeCloseTo(0.22);
-    expect(motionRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(motionRig.position.x).toBeCloseTo(expected.driftX);
+    expect(motionRig.position.y).toBeCloseTo(0.22 + expected.y);
+    expect(motionRig.position.z).toBeCloseTo(expected.driftZ);
+    expect(motionRig.rotation.x).toBeCloseTo(expected.pitch);
+    expect(motionRig.rotation.y).toBe(0);
+    expect(motionRig.rotation.z).toBeCloseTo(-expected.roll);
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     expect(line.visible).toBe(true);
@@ -583,19 +617,22 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('keeps the shared camera at a fixed height for reduced motion', () => {
+  it('moves the shared camera with buoyant reduced motion', () => {
     const camera = new PerspectiveCamera();
     const reducedMotion = { matches: true } as unknown as MediaQueryList;
     const propModels = createTestPropModels();
     const world = new BoatWorld(camera, reducedMotion, propModels, createTestMoonTexture());
-    const before = camera.getWorldPosition(new Vector3()).y;
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const initialWorldPosition = camera.getWorldPosition(new Vector3());
 
     world.update(1, 0.1);
-    const after = camera.getWorldPosition(new Vector3()).y;
+
+    expect(camera.getWorldPosition(new Vector3()).toArray()).toEqual(
+      motionRig.localToWorld(camera.position.clone()).toArray(),
+    );
+    expect(camera.getWorldPosition(new Vector3()).toArray()).not.toEqual(initialWorldPosition.toArray());
     world.dispose();
     propModels.dispose();
-
-    expect(after).toBe(before);
   });
 
   it('uploads one exclusion from the motion-rig lifeboat world transform', () => {
