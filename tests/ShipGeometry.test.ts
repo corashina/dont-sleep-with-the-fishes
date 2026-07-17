@@ -347,26 +347,40 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
-  it('covers each enclosed room with a steel roof that meets its wall top', () => {
+  it('aligns every enclosed wall, corner, and roof at the wheelhouse height', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const roofThickness = 0.24;
     const roofOverhang = 0.175;
 
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
       const roof = build.root.getObjectByName(`${zone.id}-roof`);
       expect(roof, zone.id).toBeInstanceOf(Mesh);
       const bounds = new Box3().setFromObject(roof!);
-      const wallHeight = zone.id === 'wheelhouse' ? 3.4 : 3.2;
 
       expect(bounds.min.x, `${zone.id} min x`).toBeCloseTo(zone.bounds.minX - roofOverhang);
       expect(bounds.max.x, `${zone.id} max x`).toBeCloseTo(zone.bounds.maxX + roofOverhang);
       expect(bounds.min.z, `${zone.id} min z`).toBeCloseTo(zone.bounds.minZ - roofOverhang);
       expect(bounds.max.z, `${zone.id} max z`).toBeCloseTo(zone.bounds.maxZ + roofOverhang);
-      expect(bounds.min.y, `${zone.id} roof bottom`)
-        .toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + wallHeight);
-      expect(bounds.max.y - bounds.min.y, `${zone.id} roof thickness`)
-        .toBeCloseTo(roofThickness);
+      expect.soft(bounds.min.y, `${zone.id} roof bottom`).toBeCloseTo(5.62);
+      expect.soft(bounds.max.y, `${zone.id} roof top`).toBeCloseTo(5.86);
+
+      zone.polygon.forEach((_, index) => {
+        const cornerName = `${zone.id}-corner-${index}`;
+        const corner = build.root.getObjectByName(cornerName);
+        expect(corner, cornerName).toBeInstanceOf(Mesh);
+        expect.soft(new Box3().setFromObject(corner!).max.y, `${cornerName} top`).toBeCloseTo(5.62);
+      });
+    });
+
+    ['crew-cabin-wall-', 'storage-workroom-wall-'].forEach((prefix) => {
+      const solidWalls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (object instanceof Mesh && object.name.startsWith(prefix)) solidWalls.push(object);
+      });
+      expect(solidWalls.length, prefix).toBeGreaterThan(0);
+      solidWalls.forEach((wall) => {
+        expect.soft(new Box3().setFromObject(wall).max.y, `${wall.name} top`).toBeCloseTo(5.62);
+      });
     });
 
     build.disposeGeometry();
