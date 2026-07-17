@@ -281,6 +281,7 @@ export class SurvivalSession {
   beginDawn(): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
+    if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
 
     this.day += 1;
     this.pendingJournalDaytime = null;
