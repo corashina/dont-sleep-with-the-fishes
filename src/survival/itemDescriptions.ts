@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import { SURVIVAL_BALANCE } from './survivalBalance';
 
 export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   cannedFood: 'One meal that relieves hunger.',
@@ -18,6 +19,6 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   swimRing: 'Provides emergency flotation.',
   flashlight: 'Improves visibility in darkness and while diving.',
   harpoonGun: 'Provides one defensive harpoon shot.',
-  energyBar: 'Restores energy to four once.',
+  energyBar: `Restores energy to ${SURVIVAL_BALANCE.actions.maximumEnergy} once.`,
   fishingRod: 'Enables fishing, with optional Bait.',
 };

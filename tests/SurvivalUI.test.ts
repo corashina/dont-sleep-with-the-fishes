@@ -639,6 +639,17 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')?.getAttribute('aria-description')).toMatch(/food|fish/i);
   });
 
+  it('describes Energy Bar event choices with the three-energy cap', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const state = new SurvivalSession(saved('energyBar'), { seed: 1 }).snapshot();
+
+    ui.showEvent(testEvent(['energyBar']), state);
+
+    expect(mount.querySelector('[data-event-items] [data-item="energyBar"]')?.getAttribute('aria-description'))
+      .toContain('Restores energy to 3 once.');
+  });
+
   it('does not render stale hand-line fishing copy without a projected rod', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
