@@ -47,6 +47,9 @@ describe('survival lifeboat builder', () => {
     expect(build.root.name).toBe('lifeboat');
     expect(build.storageRoot.name).toBe('lifeboat-storage');
     expect(build.root.getObjectByName('damaged-plank-patch')).toBeDefined();
+    expect(build.root.getObjectByName('hull-repair-tools')).toBeDefined();
+    expect(build.root.getObjectByName('repair-tool-plank')).toBeDefined();
+    expect(build.root.getObjectByName('repair-tool-hammer')).toBeDefined();
     expect(build.root.getObjectByName('fishing-line')?.visible).toBe(false);
     expect(build.root.getObjectByName('fishing-catch')?.visible).toBe(false);
     expect(build.root.getObjectByName('paddle-port')).toBeDefined();
