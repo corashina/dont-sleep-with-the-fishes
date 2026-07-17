@@ -5,14 +5,14 @@ export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dea
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
-  | 'treat' | 'rest' | 'sendMessage' | 'useEnergyBar' | 'endDay';
+  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'endDay';
 export type DayActionOption =
   | { readonly kind: 'fishing'; readonly useBait: boolean }
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
 export type PresentationCue =
-  | 'none' | 'fish' | 'dive' | 'repair' | 'treat' | 'rest'
+  | 'none' | 'fish' | 'dive' | 'repair' | 'treat'
   | 'storm' | 'impact' | 'darkness' | 'sighting' | 'nightfall' | 'dawn'
   | 'rescue' | 'death' | 'sinking';
 
@@ -118,7 +118,6 @@ export interface SurvivalSnapshot {
   repairMaterial: number;
   rescueProgress: number;
   weather: WeatherId;
-  restedToday: boolean;
   actedToday: boolean;
   readonly journalEntries: readonly JournalEntry[];
   inventory: SurvivalInventorySnapshot;

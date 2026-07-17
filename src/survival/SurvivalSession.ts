@@ -69,7 +69,6 @@ export class SurvivalSession {
   private repairMaterial = 0;
   private rescueProgress: number;
   private weather: WeatherId;
-  private restedToday = false;
   private actedToday = false;
   private dayEventOccurred = false;
   private readonly inventory: SurvivalInventoryState;
@@ -136,7 +135,6 @@ export class SurvivalSession {
       repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
       weather: this.weather,
-      restedToday: this.restedToday,
       actedToday: this.actedToday,
       journalEntries: this.journalSnapshot(),
       inventory: this.inventory.snapshot(),
@@ -164,7 +162,6 @@ export class SurvivalSession {
       case 'repair': outcome = this.repair(option); break;
       case 'repairItem': outcome = this.repairItem(option); break;
       case 'treat': outcome = this.treat(); break;
-      case 'rest': outcome = this.rest(); break;
       case 'sendMessage': outcome = this.sendMessage(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'endDay': return this.endDay();
@@ -284,11 +281,11 @@ export class SurvivalSession {
   beginDawn(): ActionOutcome {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
+    if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
 
     this.day += 1;
     this.pendingJournalDaytime = null;
     this.pendingJournalNighttime = null;
-    this.restedToday = false;
     this.actedToday = false;
     this.dayEventOccurred = false;
     this.pendingEvent = null;
@@ -400,12 +397,6 @@ export class SurvivalSession {
         }
         if (!this.inventory.hasUsable('medicalKit')) {
           return { code: 'no-medical-kit', message: 'No medical-kit charges remain.' };
-        }
-        return null;
-      case 'rest':
-        if (this.restedToday) return { code: 'already-rested', message: 'You have already rested today.' };
-        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
-          return { code: 'energy-full', message: 'Your energy is already full.' };
         }
         return null;
       case 'sendMessage':
@@ -542,15 +533,6 @@ export class SurvivalSession {
       { health: SURVIVAL_BALANCE.actions.treatmentHealth },
       'treat',
     );
-  }
-
-  private rest(): ActionOutcome {
-    this.restedToday = true;
-    const restoredEnergy = Math.min(
-      SURVIVAL_BALANCE.actions.restEnergy,
-      SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
-    );
-    return this.commit('rested', 'A brief rest restores your strength.', { energy: restoredEnergy }, 'rest');
   }
 
   private sendMessage(): ActionOutcome {

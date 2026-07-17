@@ -53,11 +53,10 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', effect: 'HUNGER -35', risk: 'safe' },
   { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', effect: 'HULL +25 (tape +15)', risk: 'safe' },
   { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'rest', label: 'REST', shortcut: '6', cost: 'NO COST', effect: 'ENERGY +2', risk: 'safe' },
-  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'NO COST', effect: 'Advance to night', risk: 'safe' },
+  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'REST', effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', effect: 'Restore one broken item', risk: 'safe' },
   { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +15', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: `ENERGY TO ${SURVIVAL_BALANCE.actions.maximumEnergy}`, risk: 'safe' },
+  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: 'ENERGY TO 3', risk: 'safe' },
 ];
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
@@ -65,13 +64,6 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
   switch (definition.id) {
     case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
     case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
-    case 'rest': return {
-      ...definition,
-      effect: `ENERGY +${Math.min(
-        SURVIVAL_BALANCE.actions.restEnergy,
-        Math.max(0, SURVIVAL_BALANCE.actions.maximumEnergy - snapshot.energy),
-      )}`,
-    };
     case 'repair': {
       const useTape = snapshot.repairMaterial < 1
         && Object.values(snapshot.inventory).some(
@@ -403,23 +395,15 @@ export class SurvivalUI {
       button.hidden = !anchor.visible;
       button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
       const itemTarget = anchor.itemType !== null;
-      button.dataset.targetKind = itemTarget ? 'item' : 'fixed';
-      if (itemTarget) {
-        const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
-        const targetWidth = Math.round(hitArea.width);
-        const targetHeight = Math.round(hitArea.height);
-        button.style.width = `${targetWidth}px`;
-        button.style.height = `${targetHeight}px`;
-        button.style.marginLeft = `${-targetWidth / 2}px`;
-        button.style.marginTop = `${-targetHeight / 2}px`;
-        button.style.zIndex = String(Math.max(1, 100000 - Math.round(hitArea.depth * 100)));
-      } else {
-        button.style.removeProperty('width');
-        button.style.removeProperty('height');
-        button.style.removeProperty('margin-left');
-        button.style.removeProperty('margin-top');
-        button.style.removeProperty('z-index');
-      }
+      button.dataset.targetKind = itemTarget ? 'item' : 'tool';
+      const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
+      const targetWidth = Math.round(hitArea.width);
+      const targetHeight = Math.round(hitArea.height);
+      button.style.width = `${targetWidth}px`;
+      button.style.height = `${targetHeight}px`;
+      button.style.marginLeft = `${-targetWidth / 2}px`;
+      button.style.marginTop = `${-targetHeight / 2}px`;
+      button.style.zIndex = String(Math.max(1, 100000 - Math.round(hitArea.depth * 100)));
       this.placeAnchorTooltip(button, anchor);
       button.classList.toggle('is-depleted', anchor.depleted);
       this.refreshAnchorTooltip(button, anchor);
@@ -718,12 +702,10 @@ export class SurvivalUI {
     const quantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
       : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
     const itemLabel = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'HORIZON' : anchor.id === 'rest' ? 'REST' : 'HULL PATCH'
+      ? 'PLANK & HAMMER'
       : `${ITEM_LABELS[anchor.itemType]}${quantity === undefined ? '' : ` x${quantity}`}`;
     const itemDescription = anchor.itemType === null
-      ? anchor.id === 'horizon' ? 'Watch the horizon and choose when to end the day.'
-        : anchor.id === 'rest' ? 'Take one rest during the day without spending supplies.'
-          : 'Inspect the lifeboat repair patch.'
+      ? 'Use the hull-repair tools to repair the lifeboat.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
     const reason = this.anchorUnavailableReason(anchor);
@@ -812,7 +794,7 @@ export class SurvivalUI {
     this.endDayButton.setAttribute('aria-disabled', endDayReason === null ? 'false' : 'true');
     this.endDayButton.setAttribute(
       'aria-description',
-      endDayReason ?? 'End the current day and go to sleep.',
+      endDayReason ?? 'Rest and end the current day. Energy is restored at dawn.',
     );
     this.endDayButton.title = endDayReason ?? 'End the current day';
     this.anchorButtons.forEach((button, id) => {

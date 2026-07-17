@@ -337,7 +337,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 
 .boat-anchor {
-  --anchor-accent: #c96d3d;
   position: absolute;
   top: 0;
   left: 0;
@@ -346,54 +345,23 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   margin: -27px 0 0 -27px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 50%;
   background: transparent;
   color: #f3eee2;
   cursor: pointer;
   pointer-events: auto;
 }
 
-.boat-anchor[data-target-kind="item"] {
+.boat-anchor[data-target-kind="item"],
+.boat-anchor[data-target-kind="tool"] {
   border-color: transparent;
   border-radius: 0;
   background: transparent;
 }
 
-.boat-anchor[aria-disabled="true"] { border-style: dashed; border-color: #c96d3d80; }
-.boat-anchor[data-target-kind="item"]::before {
-  content: none;
-}
-
-.boat-anchor[data-target-kind="item"][aria-disabled="true"] {
-  border-color: transparent;
-}
-
-.boat-anchor[data-target-kind="fixed"]::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  border: 3px solid #090b0c;
-  border-radius: 50%;
-  background: var(--anchor-accent);
-  box-shadow: 0 0 0 2px #f2ead799;
-  transform: translate(-50%, -50%);
-}
-
-.boat-anchor[data-target-kind="fixed"]:not(:disabled):not([aria-disabled="true"]):active::before {
-  transform: translate(-50%, -50%) scale(.78);
-}
-
-.boat-anchor[data-target-kind="fixed"][aria-disabled="true"]::before,
-.boat-anchor[data-target-kind="fixed"].is-depleted::before {
-  opacity: .46;
-}
+.boat-anchor[aria-disabled="true"] { border-style: dashed; border-color: transparent; }
 
 .boat-anchor.is-depleted { filter: saturate(0.25); }
 .boat-anchor[data-condition="broken"] {
-  --anchor-accent: #a88968;
   filter: saturate(0.3) brightness(0.76);
 }
 .boat-anchor[data-condition="broken"] .boat-tooltip { border-left-style: dashed; }
@@ -406,7 +374,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   width: max-content;
   max-width: min(260px, calc(100vw - 32px));
   padding: 7px 9px;
-  border-left: 2px solid var(--anchor-accent);
+  border-left: 2px solid #c96d3d;
   background: #172227f5;
   color: #f3eee2;
   font: 700 0.58rem/1.45 'Arial Narrow', 'Roboto Condensed', sans-serif;
