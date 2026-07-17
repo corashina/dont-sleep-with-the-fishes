@@ -27,10 +27,15 @@ import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import {
   BoatBuoyancy,
-  smoothBoatPose,
+  smoothBoatPoseInto,
   type BoatPose,
 } from '../ocean/BoatBuoyancy';
-import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
+import {
+  DEFAULT_WAVES,
+  sampleWaveField,
+  sampleWaveFieldInto,
+  type WaveSample,
+} from '../ocean/WaveField';
 import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
@@ -102,6 +107,25 @@ function weatherAmplitudeScale(weather: WeatherId): number {
   if (weather === 'squall') return 1.35;
   if (weather === 'overcast') return 1;
   return 0.78;
+}
+
+function sampleDefaultWaveInto(
+  output: WaveSample,
+  time: number,
+  x: number,
+  z: number,
+  amplitudeScale: number,
+): void {
+  sampleWaveFieldInto(output, DEFAULT_WAVES, time, x, z, amplitudeScale);
+}
+
+function sampleDefaultWave(
+  time: number,
+  x: number,
+  z: number,
+  amplitudeScale: number,
+): WaveSample {
+  return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
 }
 
 interface ActiveSequence {
@@ -211,9 +235,13 @@ export class BoatWorld {
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
   private readonly baseRodRotationZ: number;
-  private readonly buoyancy = new BoatBuoyancy((time, x, z, amplitudeScale) =>
-    sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale));
-  private boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
+  private readonly buoyancy = new BoatBuoyancy(
+    sampleDefaultWave,
+    undefined,
+    sampleDefaultWaveInto,
+  );
+  private readonly boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
+  private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private previousBoatPitch = 0;
   private previousBoatRoll = 0;
   private previousBowWorldY = 0;
@@ -457,13 +485,14 @@ export class BoatWorld {
     if (typeof document !== 'undefined' && document.hidden) return;
 
     const amplitudeScale = weatherAmplitudeScale(this.weather);
-    const target = this.buoyancy.sampleTarget(
+    this.buoyancy.sampleTargetInto(
+      this.boatTargetPose,
       time,
       SURVIVAL_BOAT_ANCHOR.x,
       SURVIVAL_BOAT_ANCHOR.z,
       amplitudeScale,
     );
-    this.boatPose = smoothBoatPose(this.boatPose, target, delta, 7);
+    smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     this.applyBasePresentation();
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(

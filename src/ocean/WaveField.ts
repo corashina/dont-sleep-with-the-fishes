@@ -27,13 +27,14 @@ export const DEFAULT_WAVES: readonly WaveComponent[] = [
   { direction: [-0.81, -0.59], amplitude: 0.08, wavelength: 2.6, speed: 1.88, steepness: 0.18, phase: 4.6 },
 ] as const;
 
-export function sampleWaveField(
+export function sampleWaveFieldInto(
+  output: WaveSample,
   waves: readonly WaveComponent[],
   timeSeconds: number,
   x: number,
   z: number,
   amplitudeScale = 1,
-): WaveSample {
+): void {
   let height = 0;
   let displacementX = 0;
   let displacementZ = 0;
@@ -62,12 +63,29 @@ export function sampleWaveField(
   const nz = -derivativeZ;
   const normalLength = Math.hypot(nx, ny, nz) || 1;
 
-  return {
-    height,
-    displacementX,
-    displacementZ,
-    normal: { x: nx / normalLength, y: ny / normalLength, z: nz / normalLength },
+  output.height = height;
+  output.displacementX = displacementX;
+  output.displacementZ = displacementZ;
+  output.normal.x = nx / normalLength;
+  output.normal.y = ny / normalLength;
+  output.normal.z = nz / normalLength;
+}
+
+export function sampleWaveField(
+  waves: readonly WaveComponent[],
+  timeSeconds: number,
+  x: number,
+  z: number,
+  amplitudeScale = 1,
+): WaveSample {
+  const output: WaveSample = {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normal: { x: 0, y: 1, z: 0 },
   };
+  sampleWaveFieldInto(output, waves, timeSeconds, x, z, amplitudeScale);
+  return output;
 }
 
 export function createWaveUniformPayload(waves: readonly WaveComponent[]): WaveUniformPayload {
