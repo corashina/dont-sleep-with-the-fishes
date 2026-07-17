@@ -33,8 +33,12 @@ const TARGET_LONGEST_DIMENSIONS = {
   flashlight: 0.72, harpoonGun: 1.00, energyBar: 0.48, fishingRod: 1.80,
 } as const satisfies Readonly<Record<ItemId, number>>;
 
-function ledgerRows(): readonly (readonly string[])[] {
-  return ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
+function runtimeLedgerRows(): readonly (readonly string[])[] {
+  const heading = '## Kenney asset ledger';
+  const start = ITEM_MODEL_ASSET_LEDGER.indexOf(heading);
+  const nextHeading = ITEM_MODEL_ASSET_LEDGER.indexOf('\n## ', start + heading.length);
+  const runtimeLedger = ITEM_MODEL_ASSET_LEDGER.slice(start, nextHeading === -1 ? undefined : nextHeading);
+  return runtimeLedger.split(/\r?\n/)
     .filter((line) => line.trim().startsWith('|') && line.trim().endsWith('|'))
     .map((line) => line.trim().slice(1, -1).split('|').map((cell) => cell.trim()));
 }
@@ -82,7 +86,7 @@ describe('item model manifest', () => {
   });
 
   it('embeds exactly one matching ledger row for each third-party model and none for project models', () => {
-    const rows = ledgerRows();
+    const rows = runtimeLedgerRows();
     for (const [id, [sourceUrl, sourceAssetId, creator]] of Object.entries(THIRD_PARTY_SOURCES)) {
       const matches = rows.filter((row) => row[0] === id);
       expect(matches).toHaveLength(1);

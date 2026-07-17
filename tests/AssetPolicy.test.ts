@@ -13,12 +13,17 @@ const activeAssetFiles = [
 ];
 
 describe('third-party asset policy', () => {
-  it('documents Kenney as the required store and removes active Poly Pizza dependencies', async () => {
+  it('keeps Kenney as the default store, pins the approved Quaternius source-input exception, and removes active Poly Pizza dependencies', async () => {
     const contents = await Promise.all(activeAssetFiles.map((path) => readFile(path, 'utf8')));
-    expect(contents[0]).toMatch(/Kenney/i);
-    expect(contents[1]).toMatch(/sole third-party asset store/i);
-    expect(contents[1]).toMatch(/user approves/i);
+    expect(contents[0]).toMatch(/Kenney remains the project's default third-party asset store/i);
+    expect(contents[0]).toMatch(/Quaternius is the user-approved exception solely for the committed `compass`, `flareGun`, and `anchor` source inputs/i);
+    expect(contents[0]).toMatch(/Production never fetches models, textures, artwork, event data, or wiki content/i);
+    expect(contents[1]).toMatch(/\[Kenney\]\(https:\/\/kenney\.nl\/assets\) as the default third-party asset store/i);
+    expect(contents[1]).toMatch(/Quaternius is a user-approved exception solely for the committed source inputs for `compass`, `flareGun`, and `anchor`/i);
+    expect(contents[1]).toMatch(/Production code must not fetch models, textures, audio, UI art, or effects from a store/i);
     expect(contents[2]).toContain('https://kenney.nl/assets/');
+    expect(contents[2]).toMatch(/Quaternius pinned source inputs/i);
+    expect(contents[2]).toMatch(/approved and committed now, but do not become runtime GLBs until the later builder\/publication tasks/i);
     for (const content of contents) expect(content).not.toMatch(/poly\.pizza/i);
   });
 
