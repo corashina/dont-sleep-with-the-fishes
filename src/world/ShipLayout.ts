@@ -495,7 +495,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
     innerFaceX: 5.875,
     starboardOpening: { centerZ: -6.5, width: 3.2 },
   },
-  machineryClosure: rect(-2, 2, -14.4, -11.4),
+  machineryClosure: rect(-2.6, 2.6, -14.4, -11.4),
   evacuationRect: rect(5.05, 5.75, -6.85, -6.15),
 };
 

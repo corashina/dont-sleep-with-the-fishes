@@ -1,4 +1,4 @@
-import { Box3, Mesh, Vector3 } from 'three';
+import { Box3, CylinderGeometry, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { resolveLocalMovement } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
@@ -160,7 +160,17 @@ describe('freighter geometry', () => {
     const build = createShipGeometry(materials);
     const island = build.root.getObjectByName('machinery-island');
     expect(island).toBeInstanceOf(Mesh);
-    const islandTop = new Box3().setFromObject(island!).max.y;
+    const islandBounds = new Box3().setFromObject(island!);
+    const islandTop = islandBounds.max.y;
+    expect(islandBounds.min.x).toBeCloseTo(-2.6);
+    expect(islandBounds.max.x).toBeCloseTo(2.6);
+    expect(islandBounds.max.x - islandBounds.min.x).toBeCloseTo(5.2);
+    const machineryCollider = build.shellColliders.find((box) =>
+      Math.abs(box.minX - -2.6) < 1e-8
+      && Math.abs(box.maxX - 2.6) < 1e-8
+      && Math.abs(box.minZ - SHIP_LAYOUT.machineryClosure.minZ) < 1e-8
+      && Math.abs(box.maxZ - SHIP_LAYOUT.machineryClosure.maxZ) < 1e-8);
+    expect(machineryCollider).toBeDefined();
 
     (['port', 'starboard'] as const).forEach((side, index) => {
       const stack = build.root.getObjectByName(`smokestack-${side}`);
@@ -169,10 +179,16 @@ describe('freighter geometry', () => {
       expect(collar, side).toBeInstanceOf(Mesh);
       const stackBounds = new Box3().setFromObject(stack!);
       const collarBounds = new Box3().setFromObject(collar!);
+      expect(collar!.geometry).toBeInstanceOf(CylinderGeometry);
+      const collarRadius = (collar!.geometry as CylinderGeometry).parameters.radiusTop;
 
       expect(stackBounds.min.y, `${side} stack base`).toBeCloseTo(islandTop);
       expect(collarBounds.min.y, `${side} collar base`).toBeCloseTo(islandTop);
       expect(stackBounds.max.y, `${side} outlet`).toBeCloseTo(build.stackOutlets[index]!.y);
+      const outerEdgeClearance = side === 'port'
+        ? collar!.position.x - collarRadius - islandBounds.min.x
+        : islandBounds.max.x - collar!.position.x - collarRadius;
+      expect(outerEdgeClearance, `${side} collar outer-edge clearance`).toBeCloseTo(0.53);
     });
 
     build.disposeGeometry();
