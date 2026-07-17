@@ -177,17 +177,18 @@ describe('freighter geometry', () => {
       const collar = build.root.getObjectByName(`smokestack-${side}-collar`);
       expect(stack, side).toBeInstanceOf(Mesh);
       expect(collar, side).toBeInstanceOf(Mesh);
+      if (!(collar instanceof Mesh)) throw new Error(`Missing ${side} smokestack collar mesh`);
       const stackBounds = new Box3().setFromObject(stack!);
-      const collarBounds = new Box3().setFromObject(collar!);
-      expect(collar!.geometry).toBeInstanceOf(CylinderGeometry);
-      const collarRadius = (collar!.geometry as CylinderGeometry).parameters.radiusTop;
+      const collarBounds = new Box3().setFromObject(collar);
+      expect(collar.geometry).toBeInstanceOf(CylinderGeometry);
+      const collarRadius = (collar.geometry as CylinderGeometry).parameters.radiusTop;
 
       expect(stackBounds.min.y, `${side} stack base`).toBeCloseTo(islandTop);
       expect(collarBounds.min.y, `${side} collar base`).toBeCloseTo(islandTop);
       expect(stackBounds.max.y, `${side} outlet`).toBeCloseTo(build.stackOutlets[index]!.y);
       const outerEdgeClearance = side === 'port'
-        ? collar!.position.x - collarRadius - islandBounds.min.x
-        : islandBounds.max.x - collar!.position.x - collarRadius;
+        ? collar.position.x - collarRadius - islandBounds.min.x
+        : islandBounds.max.x - collar.position.x - collarRadius;
       expect(outerEdgeClearance, `${side} collar outer-edge clearance`).toBeCloseTo(0.53);
     });
 
