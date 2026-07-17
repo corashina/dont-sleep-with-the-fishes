@@ -49,13 +49,11 @@ import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
   ACTION_FOR_ITEM,
-  projectBoatAnchor,
   projectBoatBounds,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
 import { BoatSpray } from './BoatSpray';
 import type {
-  DayActionId,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -81,7 +79,6 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   dive: 1.4,
   repair: 0.9,
   treat: 0.8,
-  rest: 0.8,
   storm: 1.2,
   impact: 0.8,
   darkness: 1,
@@ -150,12 +147,6 @@ interface ConditionMaterialBinding {
 interface InteractionHighlightState {
   emissive: number;
   emissiveIntensity: number;
-}
-
-interface FixedAnchor {
-  id: string;
-  action: DayActionId;
-  target: Object3D;
 }
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -230,7 +221,8 @@ export class BoatWorld {
   private readonly baseCameraQuaternion: Quaternion;
   private readonly savedProps: SavedProp[] = [];
   private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
-  private readonly fixedAnchors: FixedAnchor[] = [];
+  private readonly repairTools: Object3D;
+  private readonly repairToolsBounds = new Box3();
   private readonly rod: Object3D | undefined;
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
@@ -308,20 +300,9 @@ export class BoatWorld {
       prop.userData.condition = 'usable';
     });
 
-    const repairPatch = this.boat.getObjectByName('damaged-plank-patch');
-    if (repairPatch !== undefined) {
-      this.fixedAnchors.push({ id: 'repair-patch', action: 'repair', target: repairPatch });
-    }
-    const horizon = new Object3D();
-    horizon.name = 'horizon-anchor';
-    horizon.position.set(0, 1.15, -12);
-    this.boat.add(horizon);
-    this.fixedAnchors.push({ id: 'horizon', action: 'endDay', target: horizon });
-    const rest = new Object3D();
-    rest.name = 'rest-anchor';
-    rest.position.set(-0.45, -0.05, 0.85);
-    this.boat.add(rest);
-    this.fixedAnchors.push({ id: 'rest', action: 'rest', target: rest });
+    const repairTools = this.boat.getObjectByName('hull-repair-tools');
+    if (repairTools === undefined) throw new Error('Lifeboat requires hull repair tools');
+    this.repairTools = repairTools;
 
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
@@ -438,20 +419,24 @@ export class BoatWorld {
         hitArea: { width: hitWidth, height: hitHeight, depth },
       } satisfies BoatInteractionAnchor;
     });
-    const fixedAnchors = this.fixedAnchors.map(({ id, action, target }) => ({
-      id,
+    const repairProjection = projectBoatBounds(
+      this.repairToolsBounds.setFromObject(this.repairTools, true),
+      this.camera,
+      width,
+      height,
+    );
+    const { width: hitWidth, height: hitHeight, depth, ...point } = repairProjection;
+    const repairAnchor = {
+      id: 'repair-tools',
       itemType: null,
-      action,
-      ...projectBoatAnchor(
-        target.getWorldPosition(new Vector3()),
-        this.camera,
-        width,
-        height,
-      ),
+      action: 'repair',
+      ...point,
+      visible: this.repairTools.visible && point.visible,
       depleted: false,
       remainingUses: null,
-    } satisfies BoatInteractionAnchor));
-    return [...itemAnchors, ...fixedAnchors];
+      hitArea: { width: hitWidth, height: hitHeight, depth },
+    } satisfies BoatInteractionAnchor;
+    return [...itemAnchors, repairAnchor];
   }
 
   play(cue: PresentationCue): Promise<void> {
@@ -691,9 +676,6 @@ export class BoatWorld {
         break;
       case 'treat':
         this.ambient.intensity *= 1 + pulse * 0.12;
-        break;
-      case 'rest':
-        this.ambient.intensity *= 1 - eased * 0.2;
         break;
       case 'storm':
         if (!reduced) {

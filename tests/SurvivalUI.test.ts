@@ -51,9 +51,12 @@ function createUI(mount: HTMLElement): SurvivalUI {
     { id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
     { id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null, x: 240, y: 250, visible: true, depleted: false },
     { id: 'cannedFood-test', itemType: 'cannedFood', action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
-    { id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 440, y: 280, visible: true, depleted: false },
+    {
+      id: 'repair-tools', itemType: null, action: 'repair', remainingUses: null,
+      x: 440, y: 280, visible: true, depleted: false,
+      hitArea: { width: 96, height: 52, depth: 2.4 },
+    },
     { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
-    { id: 'rest', itemType: null, action: 'rest', remainingUses: null, x: 640, y: 220, visible: true, depleted: false },
   ]);
   activeUIs.push(ui);
   return ui;
@@ -93,7 +96,7 @@ function testEvent(itemIds: readonly ItemId[] = ['fishingRod']): SurvivalEventDe
 }
 
 describe('SurvivalUI', () => {
-  it('keeps Rest available without Water and exposes catalog-backed one-use actions', () => {
+  it('removes Rest while retaining catalog-backed one-use actions and dawn recovery', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
     const state = new SurvivalSession(saved('bottledPaper', 'energyBar'), { seed: 1, initial: { energy: 2 } }).snapshot();
@@ -101,9 +104,12 @@ describe('SurvivalUI', () => {
     ui.setAnchors([
       { id: 'bottledPaper-1', itemType: 'bottledPaper', action: 'sendMessage', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
       { id: 'energyBar-2', itemType: 'energyBar', action: 'useEnergyBar', remainingUses: 1, x: 200, y: 100, visible: true, depleted: false },
-      { id: 'rest', itemType: null, action: 'rest', remainingUses: null, x: 300, y: 100, visible: true, depleted: false },
     ]);
-    expect(mount.querySelector('[data-action="rest"]')).not.toBeNull();
+    const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
+    expect(mount.querySelector('[data-action="rest"]')).toBeNull();
+    expect(endDay.closest('[data-survival-top]')).not.toBeNull();
+    expect(endDay.getAttribute('aria-keyshortcuts')).toBe('7');
+    expect(endDay.getAttribute('aria-description')).toBe('Rest and end the current day. Energy is restored at dawn.');
     expect(mount.querySelector('[data-action="sendMessage"]')?.textContent).toContain('BOTTLED PAPER');
     expect(mount.querySelector('[data-action="sendMessage"] [role="tooltip"]')?.textContent)
       .toContain('1 ENERGY — RESCUE +15');
@@ -225,7 +231,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
   });
 
-  it('publishes item hover and focus while ignoring fixed anchors and clearing for modals', () => {
+  it('publishes item hover and focus while ignoring repair tools and clearing for modals', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -233,17 +239,17 @@ describe('SurvivalUI', () => {
     ui.onAnchorHighlight = highlight;
     ui.render(snapshot(), () => null);
     const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
-    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
+    const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
 
+    repair.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    repair.focus();
+    expect(highlight).not.toHaveBeenCalled();
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
     item.focus();
     item.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
     expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
     item.blur();
-    expect(highlight).toHaveBeenLastCalledWith(null);
-
-    fixed.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     expect(highlight).toHaveBeenLastCalledWith(null);
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
@@ -288,7 +294,7 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
-  it('clears item highlighting when the same anchor becomes a fixed target', () => {
+  it('clears item highlighting when the same anchor becomes a tool target', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const highlight = vi.fn();
@@ -314,7 +320,7 @@ describe('SurvivalUI', () => {
       },
     },
     {
-      state: 'fixed',
+      state: 'tool',
       anchor: {
         id: 'fishingRod-test', itemType: null, action: 'repair' as const, remainingUses: null,
         x: 140, y: 180, visible: true, depleted: false,
@@ -384,21 +390,26 @@ describe('SurvivalUI', () => {
 
     ui.dispose();
   });
-  it('guards unavailable anchor press feedback while retaining informational tooltips', () => {
-    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]::before\s*\{[^}]*content:\s*none;/s);
-    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="fixed"\]::before\s*\{[^}]*background:\s*var\(--anchor-accent\);/s);
-    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="item"\]\[aria-disabled="true"\]\s*\{[^}]*border-color:\s*transparent;/s);
+  it('keeps projected targets transparent without fixed marker dots', () => {
+    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="tool"\]\s*\{[^}]*border-color:\s*transparent;[^}]*border-radius:\s*0;/s);
+    expect(mainStyles).not.toMatch(/data-target-kind="fixed".*::before/s);
+    expect(mainStyles).not.toMatch(/width:\s*12px[\s\S]*background:\s*var\(--anchor-accent\)/s);
+    expect(mainStyles).toMatch(/\.boat-anchor\[aria-disabled="true"\]\s*\{[^}]*border-color:\s*transparent;/s);
     expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
-  it('renders projected item tooltips without action dock or inventory tray', () => {
+  it('renders repair tools as a projected transparent action target without marker dots', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    ui.render(snapshot(), () => null);
-    const fixed = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-patch"]')!;
-    expect(fixed.dataset.targetKind).toBe('fixed');
-    expect(fixed.style.width).toBe('');
-    expect(fixed.style.height).toBe('');
+    ui.render(snapshot({ hull: 40 }), () => null);
+    const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
+    expect(repair.dataset.targetKind).toBe('tool');
+    expect(repair.style.width).toBe('96px');
+    expect(repair.style.height).toBe('52px');
+    expect(repair.style.marginLeft).toBe('-48px');
+    expect(repair.style.marginTop).toBe('-26px');
+    expect(Number(repair.style.zIndex)).toBeGreaterThan(0);
+    expect(repair.querySelector('[role="tooltip"]')?.textContent).toMatch(/PLANK.*HAMMER.*REPAIR.*2 ENERGY/is);
 
     ui.setAnchors([{
       id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
@@ -435,7 +446,7 @@ describe('SurvivalUI', () => {
     expect(anchor.style.marginTop).toBe('-27px');
   });
 
-  it('clears item geometry and stacking when an anchor ID becomes fixed', () => {
+  it('keeps projected fallback geometry when an anchor ID becomes a tool target', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.setAnchors([{
@@ -449,12 +460,12 @@ describe('SurvivalUI', () => {
     }]);
 
     const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="shared"]')!;
-    expect(anchor.dataset.targetKind).toBe('fixed');
-    expect(anchor.style.width).toBe('');
-    expect(anchor.style.height).toBe('');
-    expect(anchor.style.marginLeft).toBe('');
-    expect(anchor.style.marginTop).toBe('');
-    expect(anchor.style.zIndex).toBe('');
+    expect(anchor.dataset.targetKind).toBe('tool');
+    expect(anchor.style.width).toBe('54px');
+    expect(anchor.style.height).toBe('54px');
+    expect(anchor.style.marginLeft).toBe('-27px');
+    expect(anchor.style.marginTop).toBe('-27px');
+    expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
   });
 
   it('stacks a nearer positive-depth item target above a farther one', () => {
@@ -599,7 +610,6 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="treat"]')?.textContent).toContain('HEALTH +10');
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('2 ENERGY + MATERIAL');
     expect(mount.querySelector('[data-action="repair"]')?.textContent).toContain('HULL +10');
-    expect(mount.querySelector('[data-action="rest"]')?.textContent).toContain('ENERGY +0');
 
     const tape = new SurvivalSession(saved('ductTape'), { seed: 1, initial: { hull: 92 } }).snapshot();
     ui.render(tape, () => null);
@@ -654,7 +664,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot({ inventory: new SurvivalSession(saved(), { seed: 1 }).snapshot().inventory }), () => null);
-    ui.setAnchors([{ id: 'repair-patch', itemType: null, action: 'repair', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
+    ui.setAnchors([{ id: 'repair-tools', itemType: null, action: 'repair', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
     expect(mount.textContent).not.toMatch(/hand-line/i);
     expect(mount.querySelector('[data-action="fish"]')).toBeNull();
   });
@@ -818,8 +828,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('3');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
-    expect(mount.querySelectorAll('[data-action]')).toHaveLength(7);
-    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
+    expect(mount.querySelectorAll('[data-action]')).toHaveLength(6);
+    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(5);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
   });
 
