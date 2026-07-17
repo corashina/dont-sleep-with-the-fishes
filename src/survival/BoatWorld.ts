@@ -25,6 +25,12 @@ import {
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
+import {
+  BoatBuoyancy,
+  smoothBoatPose,
+  type BoatPose,
+} from '../ocean/BoatBuoyancy';
+import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
@@ -42,13 +48,6 @@ import {
   projectBoatBounds,
   type BoatInteractionAnchor,
 } from './BoatInteraction';
-import {
-  BoatDriftMotion,
-  NEUTRAL_BOAT_DRIFT_FRAME,
-  sampleBoatWaveHeights,
-  weatherAmplitudeScale,
-  type BoatDriftFrame,
-} from './BoatDriftMotion';
 import { BoatSpray } from './BoatSpray';
 import type {
   DayActionId,
@@ -90,6 +89,20 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
 };
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
+const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
+const INITIAL_BOAT_POSE: BoatPose = {
+  y: 0,
+  pitch: 0,
+  roll: 0,
+  driftX: 0,
+  driftZ: 0,
+};
+
+function weatherAmplitudeScale(weather: WeatherId): number {
+  if (weather === 'squall') return 1.35;
+  if (weather === 'overcast') return 1;
+  return 0.78;
+}
 
 interface ActiveSequence {
   cue: PresentationCue;
@@ -198,7 +211,13 @@ export class BoatWorld {
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
   private readonly baseRodRotationZ: number;
-  private readonly drift = new BoatDriftMotion();
+  private readonly buoyancy = new BoatBuoyancy((time, x, z, amplitudeScale) =>
+    sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale));
+  private boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
+  private previousBoatPitch = 0;
+  private previousBoatRoll = 0;
+  private previousBowWorldY = 0;
+  private secondaryMotionInitialized = false;
   private readonly spray = new BoatSpray();
   private readonly bowAnchor = new Object3D();
   private readonly bowWorldPosition = new Vector3();
@@ -208,7 +227,6 @@ export class BoatWorld {
   private phase: 'day' | 'night' = 'day';
   private pointerX = 0;
   private pointerY = 0;
-  private driftFrame: BoatDriftFrame = NEUTRAL_BOAT_DRIFT_FRAME;
   private sprayCooldown = 0;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
@@ -439,13 +457,13 @@ export class BoatWorld {
     if (typeof document !== 'undefined' && document.hidden) return;
 
     const amplitudeScale = weatherAmplitudeScale(this.weather);
-    const waveHeights = sampleBoatWaveHeights(time, amplitudeScale);
-    this.driftFrame = this.drift.update(
-      waveHeights,
+    const target = this.buoyancy.sampleTarget(
       time,
-      delta,
-      this.reducedMotion.matches,
+      SURVIVAL_BOAT_ANCHOR.x,
+      SURVIVAL_BOAT_ANCHOR.z,
+      amplitudeScale,
     );
+    this.boatPose = smoothBoatPose(this.boatPose, target, delta, 7);
     this.applyBasePresentation();
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(
@@ -537,11 +555,14 @@ export class BoatWorld {
   private applyBasePresentation(): void {
     this.sky.resetTransient();
     this.applyBaseLighting(this.sky.palette);
-    const { boat, rider } = this.driftFrame;
-    this.motionRig.position.set(0, 0.22 + boat.heave, 0);
-    this.motionRig.rotation.set(boat.pitch, boat.yaw, boat.roll);
-    this.cameraRig.position.set(0, rider.y, 0);
-    this.cameraRig.rotation.set(rider.pitch, rider.yaw, rider.roll);
+    this.motionRig.position.set(
+      SURVIVAL_BOAT_ANCHOR.x + this.boatPose.driftX,
+      SURVIVAL_BOAT_ANCHOR.y + this.boatPose.y,
+      SURVIVAL_BOAT_ANCHOR.z + this.boatPose.driftZ,
+    );
+    this.motionRig.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
+    this.cameraRig.position.set(0, 0, 0);
+    this.cameraRig.rotation.set(0, 0, 0);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
     const parallax = clampParallax(this.pointerX, this.pointerY, this.reducedMotion.matches);
     this.camera.rotateY(parallax.yaw);
@@ -559,21 +580,34 @@ export class BoatWorld {
     if (reduced) {
       this.spray.reset();
       this.sprayCooldown = 0;
+      this.secondaryMotionInitialized = false;
       return;
     }
 
     this.spray.update(delta);
+    this.scene.updateMatrixWorld(true);
+    this.bowAnchor.getWorldPosition(this.bowWorldPosition);
+    const dt = Math.min(delta, 0.1);
+    const pitchVelocity = this.secondaryMotionInitialized && dt > 0
+      ? (this.boatPose.pitch - this.previousBoatPitch) / dt : 0;
+    const rollVelocity = this.secondaryMotionInitialized && dt > 0
+      ? (this.boatPose.roll - this.previousBoatRoll) / dt : 0;
+    const bowVelocity = this.secondaryMotionInitialized && dt > 0
+      ? (this.bowWorldPosition.y - this.previousBowWorldY) / dt : 0;
+    const bowImpact = clamp((bowVelocity - 0.2) / 0.8, 0, 1);
+    this.previousBoatPitch = this.boatPose.pitch;
+    this.previousBoatRoll = this.boatPose.roll;
+    this.previousBowWorldY = this.bowWorldPosition.y;
+    this.secondaryMotionInitialized = true;
     this.sprayCooldown = Math.max(0, this.sprayCooldown - Math.min(delta, 0.1));
-    if (this.driftFrame.bowImpact >= 0.25 && this.sprayCooldown === 0) {
-      this.scene.updateMatrixWorld(true);
-      this.bowAnchor.getWorldPosition(this.bowWorldPosition);
-      this.spray.emit(this.bowWorldPosition, this.driftFrame.bowImpact);
+    if (bowImpact >= 0.25 && this.sprayCooldown === 0) {
+      this.spray.emit(this.bowWorldPosition, bowImpact);
       this.sprayCooldown = this.weather === 'squall' ? 0.18 : 0.35;
     }
 
     if (this.line?.visible && this.baseLineRotation) {
-      const pitchLag = clamp(this.driftFrame.angularVelocity.pitch * 0.06, -0.08, 0.08);
-      const rollLag = clamp(this.driftFrame.angularVelocity.roll * 0.06, -0.08, 0.08);
+      const pitchLag = clamp(pitchVelocity * 0.06, -0.08, 0.08);
+      const rollLag = clamp(rollVelocity * 0.06, -0.08, 0.08);
       this.line.rotation.x = this.baseLineRotation.x - rollLag;
       this.line.rotation.z = this.baseLineRotation.z + pitchLag;
     }
