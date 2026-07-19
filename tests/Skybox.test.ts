@@ -4,7 +4,7 @@ import { Skybox } from '../src/world/Skybox';
 import { createTestMoonTexture } from './helpers/skyAssets';
 
 describe('Skybox', () => {
-  it('creates one cloudless inward-facing sky mesh', () => {
+  it('creates one inward-facing procedural cloudy sky mesh', () => {
     const scene = new Scene();
     const sky = new Skybox(
       scene,
@@ -17,8 +17,30 @@ describe('Skybox', () => {
     expect(sky.material.side).toBe(BackSide);
     expect(sky.material.depthWrite).toBe(false);
     expect(sky.material.depthTest).toBe(false);
-    expect(sky.material.fragmentShader).toContain('vec3 starLayer(');
-    expect(sky.material.fragmentShader).not.toMatch(/cloud/i);
+    expect(sky.material.fragmentShader).toContain('float cloudValueNoise(');
+    expect(sky.material.fragmentShader).toContain('uniform float uCloudCoverage;');
+    expect(sky.material.fragmentShader).toContain('uniform float uHorizonBandStrength;');
+    expect(sky.material.fragmentShader).toContain('float horizonBand =');
+    sky.dispose();
+  });
+
+  it('uploads day weather cloud and horizon values', () => {
+    const sky = new Skybox(
+      new Scene(),
+      { weather: 'calm', phase: 'day', severity: 0 },
+      createTestMoonTexture(),
+    );
+
+    expect(sky.material.uniforms.uCloudCoverage!.value).toBeCloseTo(0.48);
+    expect(sky.material.uniforms.uCloudContrast!.value).toBeCloseTo(0.14);
+    expect(sky.material.uniforms.uHorizonBandStrength!.value).toBeCloseTo(0.86);
+    expect(sky.material.uniforms.uHorizonBandWidth!.value).toBeCloseTo(34);
+
+    sky.update(1.5, { weather: 'squall', phase: 'day', severity: 0 }, new Vector3());
+
+    expect(sky.material.uniforms.uCloudCoverage!.value).toBeCloseTo(0.88);
+    expect(sky.material.uniforms.uHorizonBandStrength!.value).toBeCloseTo(0.50);
+    expect(sky.material.uniforms.uHorizonBandWidth!.value).toBeCloseTo(26);
     sky.dispose();
   });
 
