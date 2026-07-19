@@ -199,7 +199,7 @@ describe('item model audit CLI', () => {
 
   it('rejects a third-party ledger row for a project-authored model', async () => {
     const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
-    await writeFile(ledgerPath, `${ledger}\n| compass | \`compass.glb\` | Compass / Project team | project | \`project-item-models@1:compass\` | project | 88 | 88 | none | 2026-07-15 |\n`);
+    await writeFile(ledgerPath, `${ledger}\n| map | \`map.glb\` | Map / Project team | project | \`project-item-models@1:map\` | project | 80 | 80 | none | 2026-07-15 |\n`);
 
     const result = spawnSync(
       process.execPath,
@@ -208,7 +208,7 @@ describe('item model audit CLI', () => {
     );
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('project-authored compass must not have a ledger row');
+    expect(result.stderr).toContain('project-authored map must not have a ledger row');
   });
 
   it.each([
@@ -217,6 +217,46 @@ describe('item model audit CLI', () => {
       'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
       '03586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E',
       'bucket',
+    ],
+    [
+      'the Quaternius Survival archive hash',
+      'DB7E41CE2B2F872480E3C24236FDB5CE64AD05071C436B6C47BC455CD3540EB5',
+      '0B7E41CE2B2F872480E3C24236FDB5CE64AD05071C436B6C47BC455CD3540EB5',
+      'compass',
+    ],
+    [
+      'the Quaternius Pirate archive hash',
+      'ED201326D2F80CFAC4E3CDC7DB34152078AE35F98D77AA14ED7416A931276D36',
+      '0D201326D2F80CFAC4E3CDC7DB34152078AE35F98D77AA14ED7416A931276D36',
+      'anchor',
+    ],
+    [
+      'the Compass source entry',
+      '`quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj`',
+      '`quaternius-survival-pack@2020-09:OBJ/Compass_Closed.obj`',
+      'compass',
+    ],
+    [
+      'the Flare Gun source entry',
+      '`quaternius-survival-pack@2020-09:OBJ/FlareGun.obj`',
+      '`quaternius-survival-pack@2020-09:OBJ/FlareGun_Alt.obj`',
+      'flareGun',
+    ],
+    [
+      'the Anchor source entry',
+      '`quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj`',
+      '`quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor_Alt.obj`',
+      'anchor',
+    ],
+    ['the Compass source triangles', '| 656 | 656 |', '| 655 | 656 |', 'compass'],
+    ['the Flare Gun source triangles', '| 540 | 540 |', '| 539 | 540 |', 'flareGun'],
+    ['the Anchor source triangles', '| 544 | 544 |', '| 543 | 544 |', 'anchor'],
+    ['the Quaternius download date', '| 2026-07-17 |', '| 2026-07-18 |', 'compass'],
+    [
+      'Quaternius fan triangulation processing',
+      'restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.',
+      'restricted OBJ parsing; MTL base-color transfer; prune, dedup, unpartition, and embedded resources.',
+      'compass',
     ],
     ['source triangles', '| 68 | 68 |', '| 67 | 68 |', 'bucket'],
     ['output triangles', '| 68 | 68 |', '| 68 | 67 |', 'bucket'],
