@@ -47,6 +47,10 @@ const fragmentShader = `
   uniform float uMoonVisibility;
   uniform float uStarVisibility;
   uniform float uHaze;
+  uniform float uCloudCoverage;
+  uniform float uCloudContrast;
+  uniform float uHorizonBandStrength;
+  uniform float uHorizonBandWidth;
   uniform float uExposure;
   uniform float uTintAmount;
   varying vec3 vSkyDirection;
@@ -61,6 +65,31 @@ const fragmentShader = `
     vec3 value3 = fract(vec3(value.xyx) * 0.1031);
     value3 += dot(value3, value3.yzx + 33.33);
     return fract((value3.x + value3.y) * value3.z);
+  }
+
+  float cloudValueNoise(vec2 position) {
+    vec2 cell = floor(position);
+    vec2 fractional = fract(position);
+    vec2 blend = fractional * fractional * (3.0 - 2.0 * fractional);
+    float lower = mix(hash21(cell), hash21(cell + vec2(1.0, 0.0)), blend.x);
+    float upper = mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), blend.x);
+    return mix(lower, upper, blend.y);
+  }
+
+  float cloudMask(vec3 direction) {
+    if (uCloudCoverage <= 0.0) return 0.0;
+    float visibleSky = smoothstep(-0.01, 0.10, direction.y);
+    vec2 mapped = direction.xz / max(0.32, direction.y + 0.32);
+    float broad = cloudValueNoise(mapped * 0.74 + vec2(4.7, -2.8));
+    float detail = cloudValueNoise(mapped * 1.73 + vec2(-8.1, 6.4));
+    float field = mix(broad, detail, 0.34);
+    float threshold = 1.0 - uCloudCoverage;
+    float coverage = smoothstep(
+      threshold - uCloudContrast,
+      threshold + uCloudContrast,
+      field
+    );
+    return coverage * visibleSky;
   }
 
   vec3 starLayer(vec3 direction, float scale, float threshold) {
@@ -114,6 +143,16 @@ const fragmentShader = `
     color = mix(color, uHorizonColor, clamp(horizonHaze * 0.42, 0.0, 0.55));
     float horizonLift = exp(-abs(direction.y) * 28.0) * (0.03 + uHaze * 0.08);
     color += uHorizonColor * horizonLift;
+
+    float clouds = cloudMask(direction);
+    vec3 cloudColor = mix(uUpperColor, vec3(0.88, 0.91, 0.90), 0.46);
+    cloudColor = mix(cloudColor, uHorizonColor, uHaze * 0.42);
+    color = mix(color, cloudColor, clouds);
+
+    float horizonBand = smoothstep(-0.005, 0.012, direction.y)
+      * exp(-max(direction.y, 0.0) * uHorizonBandWidth)
+      * uHorizonBandStrength;
+    color = mix(color, vec3(1.0), clamp(horizonBand, 0.0, 1.0));
 
     vec3 sunDirection = normalize(vec3(${SUN_DIRECTION.join(', ')}));
     float sunSeparation = 1.0 - clamp(dot(direction, sunDirection), 0.0, 1.0);
@@ -202,6 +241,10 @@ export class Skybox {
         uMoonVisibility: { value: this.current.moonVisibility },
         uStarVisibility: { value: this.current.starVisibility },
         uHaze: { value: this.current.haze },
+        uCloudCoverage: { value: this.current.cloudCoverage },
+        uCloudContrast: { value: this.current.cloudContrast },
+        uHorizonBandStrength: { value: this.current.horizonBandStrength },
+        uHorizonBandWidth: { value: this.current.horizonBandWidth },
         uExposure: { value: this.current.exposure },
         uTintAmount: { value: 0 },
       },
@@ -263,6 +306,10 @@ export class Skybox {
     uniforms.uMoonVisibility!.value = this.current.moonVisibility;
     uniforms.uStarVisibility!.value = this.current.starVisibility;
     uniforms.uHaze!.value = this.current.haze;
+    uniforms.uCloudCoverage!.value = this.current.cloudCoverage;
+    uniforms.uCloudContrast!.value = this.current.cloudContrast;
+    uniforms.uHorizonBandStrength!.value = this.current.horizonBandStrength;
+    uniforms.uHorizonBandWidth!.value = this.current.horizonBandWidth;
     uniforms.uExposure!.value = this.current.exposure;
   }
 }

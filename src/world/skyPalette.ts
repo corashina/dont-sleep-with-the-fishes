@@ -23,6 +23,10 @@ export interface SkyPalette {
   moonVisibility: number;
   starVisibility: number;
   haze: number;
+  cloudCoverage: number;
+  cloudContrast: number;
+  horizonBandStrength: number;
+  horizonBandWidth: number;
   exposure: number;
   ambientLightIntensity: number;
   keyLightIntensity: number;
@@ -51,6 +55,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x829b9e, sunColor: 0xffdda0, moonColor: 0xdce5e8,
       starColor: 0xe9f0f2, ambientLightColor: 0xb9ced0, keyLightColor: 0xffd8aa,
       sunVisibility: 1, moonVisibility: 0, starVisibility: 0, haze: 0.12,
+      cloudCoverage: 0.48, cloudContrast: 0.14, horizonBandStrength: 0.86, horizonBandWidth: 34,
       exposure: 0.94, ambientLightIntensity: 1.05, keyLightIntensity: 2.05,
       fogDensity: 0.012,
     },
@@ -59,6 +64,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x0e1822, sunColor: 0xffdda0, moonColor: 0xd8e2e5,
       starColor: 0xe8eef0, ambientLightColor: 0x788f9e, keyLightColor: 0xa8c0ce,
       sunVisibility: 0, moonVisibility: 0.82, starVisibility: 0.72, haze: 0.18,
+      cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.5, ambientLightIntensity: 0.26, keyLightIntensity: 0.2,
       fogDensity: 0.021,
     },
@@ -69,6 +75,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x657d80, sunColor: 0xd4cdb9, moonColor: 0xc6d0d4,
       starColor: 0xd8e0e2, ambientLightColor: 0xa8b8b7, keyLightColor: 0xcac2af,
       sunVisibility: 0.22, moonVisibility: 0, starVisibility: 0, haze: 0.68,
+      cloudCoverage: 0.74, cloudContrast: 0.13, horizonBandStrength: 0.72, horizonBandWidth: 30,
       exposure: 0.72, ambientLightIntensity: 0.68, keyLightIntensity: 1.0,
       fogDensity: 0.019,
     },
@@ -77,6 +84,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x111c25, sunColor: 0xffdda0, moonColor: 0xc3ced2,
       starColor: 0xd4dcdf, ambientLightColor: 0x6e828e, keyLightColor: 0x96acb8,
       sunVisibility: 0, moonVisibility: 0.28, starVisibility: 0.12, haze: 0.72,
+      cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.38, ambientLightIntensity: 0.24, keyLightIntensity: 0.18,
       fogDensity: 0.024,
     },
@@ -87,6 +95,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x2b383e, sunColor: 0xbdb6a3, moonColor: 0xb5c0c5,
       starColor: 0xc5ced1, ambientLightColor: 0x89999b, keyLightColor: 0xbcb5a3,
       sunVisibility: 0.08, moonVisibility: 0, starVisibility: 0, haze: 0.92,
+      cloudCoverage: 0.88, cloudContrast: 0.12, horizonBandStrength: 0.50, horizonBandWidth: 26,
       exposure: 0.62, ambientLightIntensity: 0.44, keyLightIntensity: 0.58,
       fogDensity: 0.03,
     },
@@ -95,6 +104,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       fogColor: 0x0c1720, sunColor: 0xffdda0, moonColor: 0xa9b5bb,
       starColor: 0xb9c3c7, ambientLightColor: 0x596b76, keyLightColor: 0x849aa7,
       sunVisibility: 0, moonVisibility: 0.07, starVisibility: 0.02, haze: 0.95,
+      cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.26, ambientLightIntensity: 0.16, keyLightIntensity: 0.18,
       fogDensity: 0.034,
     },
@@ -108,6 +118,7 @@ const COLOR_KEYS = [
 
 const SCALAR_KEYS = [
   'sunVisibility', 'moonVisibility', 'starVisibility', 'haze', 'exposure',
+  'cloudCoverage', 'cloudContrast', 'horizonBandStrength', 'horizonBandWidth',
   'ambientLightIntensity', 'keyLightIntensity', 'fogDensity',
 ] as const;
 
