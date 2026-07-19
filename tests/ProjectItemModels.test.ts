@@ -13,12 +13,8 @@ import {
 } from '../scripts/project-item-models.mjs';
 
 const PROJECT_IDS = [
-  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
-  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ] as const;
-
-const RED_ORANGE = [0.78, 0.18, 0.08, 1];
-const DARK = [0.10, 0.12, 0.14, 1];
 
 function nodeBounds(node: Node): { min: number[]; max: number[] } {
   const mesh = node.getMesh();
@@ -54,9 +50,6 @@ describe('project-authored item model catalog', () => {
   it('defines the exact project-authored model set', () => {
     expect(PROJECT_ITEM_IDS).toEqual(PROJECT_IDS);
     expect(Object.keys(PROJECT_ITEM_RECIPES)).toEqual(PROJECT_IDS);
-    expect(PROJECT_ITEM_RECIPES.flareGun.parts.map(({ name }) => name)).toEqual([
-      'barrel', 'muzzle', 'hinge', 'grip', 'trigger-guard', 'trigger',
-    ]);
   });
 });
 
@@ -81,33 +74,6 @@ describe('project-authored item model builder', () => {
       expect(await countTriangles(file), id).toBeGreaterThan(0);
       expect(await countTriangles(file), id).toBeLessThanOrEqual(3_000);
     }
-  });
-
-  it('builds a compact signal pistol with the approved parts and colors', async () => {
-    await buildProjectItemModels({
-      outputRoot,
-      recipes: { flareGun: PROJECT_ITEM_RECIPES.flareGun },
-    });
-    const document = await new NodeIO().read(join(outputRoot, 'flareGun.glb'));
-    const nodes = document.getRoot().listScenes()[0]!.listChildren();
-    expect(nodes.map((node) => node.getName())).toEqual([
-      'barrel', 'muzzle', 'hinge', 'grip', 'trigger-guard', 'trigger',
-    ]);
-    const materials = Object.fromEntries(document.getRoot().listMaterials().map((material) => [
-      material.getName(), material.getBaseColorFactor(),
-    ]));
-    expect(materials['barrel-material']).toEqual(RED_ORANGE);
-    expect(materials['muzzle-material']).toEqual(RED_ORANGE);
-    expect(materials['grip-material']).toEqual(DARK);
-
-    const bounds = nodes.map(nodeBounds);
-    const modelMin = [0, 1, 2].map((axis) => Math.min(...bounds.map(({ min }) => min[axis]!)));
-    const modelMax = [0, 1, 2].map((axis) => Math.max(...bounds.map(({ max }) => max[axis]!)));
-    const longestAxis = Math.max(...modelMax.map((maximum, axis) => maximum - modelMin[axis]!));
-    const grip = bounds[nodes.findIndex((node) => node.getName() === 'grip')]!;
-    const gripHeight = grip.max[1]! - grip.min[1]!;
-    expect(gripHeight).toBeGreaterThan(0);
-    expect(longestAxis).toBeLessThanOrEqual(gripHeight * 4);
   });
 
   it('hides the unused umbrella handle half inside its grip to leave an open crook', async () => {

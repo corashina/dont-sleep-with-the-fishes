@@ -88,6 +88,14 @@ describe('boat item layout', () => {
     }).position.toArray()).toEqual(third.position.toArray());
   });
 
+  it('keeps the compass slot clear of the map after model normalization', () => {
+    const compass = boatStorageTransform({ instanceId: 'compass-1', type: 'compass' });
+
+    expect(compass.position.toArray()).toEqual([-0.71, -0.24, -0.95]);
+    expect(compass.rotation.y).toBe(-0.12);
+    expect(compass.scale).toBe(0.50);
+  });
+
   it('rejects malformed or out-of-range instance IDs', () => {
     const invalidInstances: readonly ItemInstance[] = [
       { instanceId: 'ductTape-3', type: 'ductTape' },
