@@ -95,6 +95,30 @@ describe('PlayerController', () => {
     );
   });
 
+  it.each([
+    ['right', Math.PI / (2 * 0.0018), Math.PI / 2],
+    ['left', -Math.PI / (2 * 0.0018), Math.PI * 1.5],
+  ])('allows %s yaw beyond the former scavenging look cone', (
+    _direction,
+    movementX,
+    expectedYaw,
+  ) => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const input = new TestInput();
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    input.queueLook(movementX, 0);
+
+    controller.update(0, input.asControllerInput());
+
+    expectRotation(
+      camera.quaternion,
+      new Quaternion().setFromEuler(new Euler(0, expectedYaw, 0, 'YXZ')),
+    );
+  });
+
   it('uses walk and sprint speeds in the current local heading', () => {
     const input = new TestInput();
     input.movement = { x: 0, z: -1 };

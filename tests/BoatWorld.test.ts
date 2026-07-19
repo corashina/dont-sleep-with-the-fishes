@@ -318,12 +318,13 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps the survival cursor view centered under reduced motion', () => {
+  it('immediately centers survival cursor view when reduced motion becomes active', () => {
+    const reducedMotion = { matches: false };
     const camera = new PerspectiveCamera();
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       camera,
-      { matches: true } as MediaQueryList,
+      reducedMotion as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -331,6 +332,11 @@ describe('BoatWorld helpers', () => {
 
     world.setPointer(1, 1);
     world.update(0.1, 0.1);
+
+    expect(camera.quaternion.angleTo(base)).toBeGreaterThan(0);
+
+    reducedMotion.matches = true;
+    world.update(0.2, 0.1);
 
     expect(Math.abs(camera.quaternion.dot(base))).toBeCloseTo(1, 8);
     world.dispose();
