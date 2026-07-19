@@ -24,6 +24,7 @@ import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
+import { resolveLocalMovement } from '../src/player/collisions';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -438,6 +439,40 @@ describe('world builders', () => {
       delta,
       7,
     );
+    const freighterBuoyancy = new BoatBuoyancy(
+      (sampleTime, x, z, scale) => sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale),
+      { length: 30, width: 10 },
+    );
+    const freighterTarget = freighterBuoyancy.sampleTarget(
+      time,
+      0,
+      0,
+      sinking.waveAmplitudeScale,
+    );
+    const expectedFreighterPose = smoothBoatPose(
+      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
+      freighterTarget,
+      delta,
+      2.4,
+    );
+    const collidersBefore = world.colliders.map((box) => ({ ...box }));
+    const movementStart = {
+      x: world.playerStart.x,
+      y: world.playerStart.y,
+      z: world.playerStart.z,
+    };
+    const movementDesired = {
+      x: movementStart.x + 3,
+      y: movementStart.y,
+      z: movementStart.z - 2,
+    };
+    const resolvedBefore = resolveLocalMovement(
+      movementStart,
+      movementDesired,
+      0.35,
+      world.colliders,
+      world.arcColliders,
+    );
     const beacon = scene.getObjectByName('alarm-beacon') as Mesh;
     const sky = scene.getObjectByName('procedural-skybox') as Mesh;
     const skyUniforms = (sky.material as ShaderMaterial).uniforms;
@@ -457,9 +492,26 @@ describe('world builders', () => {
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
     expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
-    expect(world.ship.position.y).toBe(sinking.sinkOffset);
-    expect(world.ship.rotation.x).toBe(sinking.pitchRadians);
-    expect(world.ship.rotation.z).toBe(sinking.rollRadians);
+    expect(world.ship.position.x).toBe(0);
+    expect(world.ship.position.y).toBeCloseTo(
+      sinking.sinkOffset + expectedFreighterPose.y,
+    );
+    expect(world.ship.position.z).toBe(0);
+    expect(world.ship.rotation.x).toBeCloseTo(
+      sinking.pitchRadians + expectedFreighterPose.pitch,
+    );
+    expect(world.ship.rotation.y).toBe(0);
+    expect(world.ship.rotation.z).toBeCloseTo(
+      sinking.rollRadians - expectedFreighterPose.roll,
+    );
+    expect(world.colliders).toEqual(collidersBefore);
+    expect(resolveLocalMovement(
+      movementStart,
+      movementDesired,
+      0.35,
+      world.colliders,
+      world.arcColliders,
+    )).toEqual(resolvedBefore);
     expect((scene.fog as FogExp2).density).toBeCloseTo(0.012);
     expect(beacon).toBeInstanceOf(Mesh);
     const expectedPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
@@ -511,6 +563,8 @@ describe('world builders', () => {
     expect(taperStarts).toEqual([17.6, 1.05]);
     expect(minimumLocalYs).toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, -0.38]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
+    expect(world.ship.position.y).not.toBe(0);
+    expect(world.ship.rotation.x).not.toBe(0);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
