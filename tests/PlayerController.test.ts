@@ -72,9 +72,9 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['downward', 10_000, -Math.PI / 8],
-    ['upward', -10_000, Math.PI / 8],
-  ])('clamps %s mouse pitch to the vertical look cone', (
+    ['downward', 10_000, -1.35],
+    ['upward', -10_000, 1.35],
+  ])('clamps %s mouse pitch', (
     _direction,
     movementY,
     expectedPitch,
@@ -96,9 +96,9 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['right', 10_000, Math.PI - Math.PI / 4],
-    ['left', -10_000, Math.PI + Math.PI / 4],
-  ])('clamps %s mouse yaw to the horizontal look cone', (
+    ['right', Math.PI / (2 * 0.0018), Math.PI / 2],
+    ['left', -Math.PI / (2 * 0.0018), Math.PI * 1.5],
+  ])('allows %s yaw beyond the former scavenging look cone', (
     _direction,
     movementX,
     expectedYaw,
@@ -209,7 +209,7 @@ describe('PlayerController', () => {
   it.each([
     ['KeyW', { x: 0, z: -1 }, new Vector3(0, 0, -1)],
     ['KeyD', { x: 1, z: 0 }, new Vector3(1, 0, 0)],
-  ])('moves %s along its visible camera-space direction at the constrained yaw limit', (
+  ])('moves %s along its visible camera-space direction at yaw pi/2', (
     _key,
     movement,
     cameraDirection,
