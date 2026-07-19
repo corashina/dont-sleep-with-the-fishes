@@ -44,7 +44,9 @@ try {
   $archivesRoot = Join-Path $tempRoot 'archives'
   $sourceRoot = Join-Path $tempRoot 'sources'
   $kenneyBuildRoot = Join-Path $tempRoot 'kenney-build'
+  $quaterniusBuildRoot = Join-Path $tempRoot 'quaternius-build'
   $projectBuildRoot = Join-Path $tempRoot 'project-build'
+  $quaterniusSourceRoot = Join-Path $repositoryRoot 'third_party\quaternius-items'
   New-Item -ItemType Directory -Path $archivesRoot | Out-Null
   New-Item -ItemType Directory -Path $sourceRoot | Out-Null
 
@@ -75,12 +77,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Kenney item model build failed' }
     & node scripts/project-item-models.mjs $projectBuildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Project item model build failed' }
+    & node scripts/quaternius-item-models.mjs $quaterniusSourceRoot $quaterniusBuildRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Quaternius item model build failed' }
   } finally {
     Pop-Location
   }
 
   Copy-UniqueModelBuildOutputs `
-    -BuildRoots @($kenneyBuildRoot, $projectBuildRoot) `
+    -BuildRoots @($kenneyBuildRoot, $quaterniusBuildRoot, $projectBuildRoot) `
     -DestinationRoot $stagedRoot
 
   Push-Location $repositoryRoot

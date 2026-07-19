@@ -13,8 +13,7 @@ export const ITEM_IDS = [
   'energyBar', 'fishingRod',
 ];
 const PROJECT_ITEM_IDS = [
-  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
-  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ];
 
 const GLB_MAGIC = 0x46546c67;
@@ -26,6 +25,9 @@ const FOOD_SHA256 = 'CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7
 const SURVIVAL_SHA256 = 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E';
 const PROTOTYPE_SHA256 = '213B522FB12BCC9B9AC66C4F7581F7C74623293272212E40A70C39936AD3DA95';
 const DOWNLOADED = '2026-07-15';
+const QUATERNIUS_SURVIVAL_SHA256 = 'DB7E41CE2B2F872480E3C24236FDB5CE64AD05071C436B6C47BC455CD3540EB5';
+const QUATERNIUS_PIRATE_KIT_SHA256 = 'ED201326D2F80CFAC4E3CDC7DB34152078AE35F98D77AA14ED7416A931276D36';
+const QUATERNIUS_DOWNLOADED = '2026-07-17';
 
 const LEDGER_REQUIREMENTS = {
   cannedFood: [
@@ -45,6 +47,24 @@ const LEDGER_REQUIREMENTS = {
     '`prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb`', CC0_LEDGER_CELL, '192', '192',
     `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; direct build from \`Models/GLB format/shape-hollow-cylinder-detailed.glb\`; source node scale multiplied by \`[1, 0.35, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
     DOWNLOADED,
+  ],
+  compass: [
+    'compass', '`compass.glb`', 'Open compass / Quaternius', 'https://quaternius.com/packs/survival.html',
+    '`quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj`', CC0_LEDGER_CELL, '656', '656',
+    `Survival Pack September 2020 archive SHA-256 \`${QUATERNIUS_SURVIVAL_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
+    QUATERNIUS_DOWNLOADED,
+  ],
+  flareGun: [
+    'flareGun', '`flareGun.glb`', 'Flare gun / Quaternius', 'https://quaternius.com/packs/survival.html',
+    '`quaternius-survival-pack@2020-09:OBJ/FlareGun.obj`', CC0_LEDGER_CELL, '540', '540',
+    `Survival Pack September 2020 archive SHA-256 \`${QUATERNIUS_SURVIVAL_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
+    QUATERNIUS_DOWNLOADED,
+  ],
+  anchor: [
+    'anchor', '`anchor.glb`', 'Anchor / Quaternius', 'https://quaternius.com/packs/piratekit.html',
+    '`quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj`', CC0_LEDGER_CELL, '544', '544',
+    `Pirate Kit November 2023 archive SHA-256 \`${QUATERNIUS_PIRATE_KIT_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
+    QUATERNIUS_DOWNLOADED,
   ],
   medicalKit: [
     'medicalKit', '`medicalKit.glb`', 'Medical kit composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
