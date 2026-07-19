@@ -19,7 +19,12 @@ export interface ShipBuild {
   evacuationPoint: Vector3;
   lifeboatAnchor: Vector3;
   playerNavigationBounds: PlayerNavigationBounds;
-  waterExclusion: { halfWidth: number; halfLength: number };
+  waterExclusion: {
+    halfWidth: number;
+    halfLength: number;
+    taperStart: number;
+    minimumLocalY: number;
+  };
   updateEffects(delta: number, sinkingProgress: number, reducedMotion: boolean): void;
   dispose(): void;
 }

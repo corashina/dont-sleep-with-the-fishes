@@ -23,7 +23,6 @@ import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/It
 import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { resolveLocalMovement } from '../src/player/collisions';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
@@ -560,11 +559,29 @@ describe('world builders', () => {
       [-6.05, 6.05, -17.6, 17.6],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
-    expect(taperStarts).toEqual([17.6, 1.05]);
-    expect(minimumLocalYs).toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, -0.38]);
+    expect(taperStarts).toEqual([13.6, 1.05]);
+    expect(minimumLocalYs).toEqual([0.76, -0.38]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(world.ship.position.y).not.toBe(0);
     expect(world.ship.rotation.x).not.toBe(0);
+    const freighterRegion = {
+      worldToLocal: matrices[0]!,
+      bounds: bounds[0]!,
+      taperStart: taperStarts[0]!,
+      minimumLocalY: minimumLocalYs[0]!,
+    };
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(0, 0.5, 0)),
+      freighterRegion,
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(0, 0.9, 0)),
+      freighterRegion,
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(5.5, 1.2, 16.5)),
+      freighterRegion,
+    )).toBe(false);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
@@ -949,7 +966,12 @@ describe('world builders', () => {
     expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
     expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, -6.5]);
     expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, -6.5]);
-    expect(ship.waterExclusion).toEqual({ halfWidth: 6.05, halfLength: 17.6 });
+    expect(ship.waterExclusion).toEqual({
+      halfWidth: 6.05,
+      halfLength: 17.6,
+      taperStart: 13.6,
+      minimumLocalY: 0.76,
+    });
     expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
     expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();
     ship.dispose();

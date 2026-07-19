@@ -24,7 +24,12 @@ export interface ShipGeometryBuild {
   shellColliders: CollisionBox[];
   arcColliders: CollisionArc[];
   zoneCenters: ReadonlyMap<ShipZoneId, Vector3>;
-  waterExclusion: { halfWidth: number; halfLength: number };
+  waterExclusion: {
+    halfWidth: number;
+    halfLength: number;
+    taperStart: number;
+    minimumLocalY: number;
+  };
   stackOutlets: readonly [Vector3, Vector3];
   disposeGeometry(): void;
 }
@@ -762,6 +767,10 @@ export function createShipGeometry(
       (zone.bounds.minZ + zone.bounds.maxZ) / 2,
     ),
   ]));
+  const waterExclusionHalfLength = (
+    requiredZone(layout, 'cargoDeck').bounds.maxZ
+    - requiredZone(layout, 'cargoDeck').bounds.minZ
+  ) / 2;
   let disposed = false;
 
   return {
@@ -771,8 +780,9 @@ export function createShipGeometry(
     zoneCenters,
     waterExclusion: {
       halfWidth: HALF_WIDTH - 0.2,
-      halfLength: (requiredZone(layout, 'cargoDeck').bounds.maxZ
-        - requiredZone(layout, 'cargoDeck').bounds.minZ) / 2,
+      halfLength: waterExclusionHalfLength,
+      taperStart: Number((waterExclusionHalfLength - END_CAP_DEPTH).toFixed(1)),
+      minimumLocalY: HULL_TOP_Y - HULL_HEIGHT,
     },
     stackOutlets,
     disposeGeometry: () => {
