@@ -133,6 +133,36 @@ describe('skyPaletteFor', () => {
     expect(squall.starVisibility).toBeLessThan(calm.starVisibility);
   });
 
+  it('authors progressively denser daytime clouds and a bright horizon band', () => {
+    const calm = skyPaletteFor({ weather: 'calm', phase: 'day', severity: 0 });
+    const overcast = skyPaletteFor({ weather: 'overcast', phase: 'day', severity: 0 });
+    const squall = skyPaletteFor({ weather: 'squall', phase: 'day', severity: 0 });
+
+    expect(calm.cloudCoverage).toBeCloseTo(0.48);
+    expect(overcast.cloudCoverage).toBeCloseTo(0.74);
+    expect(squall.cloudCoverage).toBeCloseTo(0.88);
+    expect(calm.cloudContrast).toBeCloseTo(0.14);
+    expect(overcast.cloudContrast).toBeCloseTo(0.13);
+    expect(squall.cloudContrast).toBeCloseTo(0.12);
+    expect(calm.horizonBandStrength).toBeCloseTo(0.86);
+    expect(overcast.horizonBandStrength).toBeCloseTo(0.72);
+    expect(squall.horizonBandStrength).toBeCloseTo(0.50);
+    expect(calm.horizonBandWidth).toBeCloseTo(34);
+    expect(overcast.horizonBandWidth).toBeCloseTo(30);
+    expect(squall.horizonBandWidth).toBeCloseTo(26);
+  });
+
+  it.each(['calm', 'overcast', 'squall'] as const)(
+    'disables daytime cloud and horizon treatment for %s night',
+    (weather) => {
+      const palette = skyPaletteFor({ weather, phase: 'night', severity: 0 });
+      expect(palette.cloudCoverage).toBe(0);
+      expect(palette.cloudContrast).toBe(0);
+      expect(palette.horizonBandStrength).toBe(0);
+      expect(palette.horizonBandWidth).toBe(0);
+    },
+  );
+
   it('falls back to calm day for invalid runtime state', () => {
     const fallback = skyPaletteFor({
       weather: 'invalid',
@@ -153,6 +183,12 @@ describe('skyPaletteFor', () => {
     expect(out.zenithColor.getHex()).not.toBe(fromHex);
     expect(out.zenithColor.getHex()).not.toBe(toHex);
     expect(out.fogDensity).toBeCloseTo((from.fogDensity + to.fogDensity) / 2);
+    expect(out.cloudCoverage).toBeCloseTo(
+      (from.cloudCoverage + to.cloudCoverage) / 2,
+    );
+    expect(out.horizonBandStrength).toBeCloseTo(
+      (from.horizonBandStrength + to.horizonBandStrength) / 2,
+    );
     expect(from.zenithColor.getHex()).toBe(fromHex);
     expect(to.zenithColor.getHex()).toBe(toHex);
   });
