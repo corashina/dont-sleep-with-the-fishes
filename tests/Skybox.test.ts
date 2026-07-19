@@ -21,6 +21,9 @@ describe('Skybox', () => {
     expect(sky.material.fragmentShader).toContain('uniform float uCloudCoverage;');
     expect(sky.material.fragmentShader).toContain('uniform float uHorizonBandStrength;');
     expect(sky.material.fragmentShader).toContain('float horizonBand =');
+    expect(sky.material.fragmentShader).toContain(
+      'if (uCloudCoverage <= 0.0) return 0.0;',
+    );
     sky.dispose();
   });
 
@@ -41,6 +44,13 @@ describe('Skybox', () => {
     expect(sky.material.uniforms.uCloudCoverage!.value).toBeCloseTo(0.88);
     expect(sky.material.uniforms.uHorizonBandStrength!.value).toBeCloseTo(0.50);
     expect(sky.material.uniforms.uHorizonBandWidth!.value).toBeCloseTo(26);
+
+    sky.update(1.5, { weather: 'squall', phase: 'night', severity: 0 }, new Vector3());
+
+    expect(sky.material.uniforms.uCloudCoverage!.value).toBe(0);
+    expect(sky.material.uniforms.uCloudContrast!.value).toBe(0);
+    expect(sky.material.uniforms.uHorizonBandStrength!.value).toBe(0);
+    expect(sky.material.uniforms.uHorizonBandWidth!.value).toBe(0);
     sky.dispose();
   });
 
