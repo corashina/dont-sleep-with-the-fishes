@@ -26,6 +26,7 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
+import { applySurvivalBuoyancyComfortInto } from '../src/survival/survivalBuoyancyComfort';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -90,8 +91,26 @@ function snapshot(
   };
 }
 
+function expectedSurvivalPose(
+  time: number,
+  delta: number,
+  amplitudeScale: number,
+) {
+  const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
+    sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
+  const rawTarget = buoyancy.sampleTarget(time, 0, 0, amplitudeScale);
+  const target = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+  applySurvivalBuoyancyComfortInto(target, rawTarget);
+  return smoothBoatPose(
+    { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
+    target,
+    delta,
+    7,
+  );
+}
+
 describe('BoatWorld helpers', () => {
-  it('matches scavenging buoyancy for the boat, player viewpoint, and saved items', () => {
+  it('attenuates shared buoyancy for the boat, player viewpoint, and saved items', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -109,15 +128,7 @@ describe('BoatWorld helpers', () => {
     const initialPropWorldPosition = prop.getWorldPosition(new Vector3());
     const time = 1.5;
     const delta = 0.1;
-    const buoyancy = new BoatBuoyancy((sampleTime, x, z, amplitudeScale) =>
-      sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, amplitudeScale));
-    const target = buoyancy.sampleTarget(time, 0, 0, 0.78);
-    const expected = smoothBoatPose(
-      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
-      target,
-      delta,
-      7,
-    );
+    const expected = expectedSurvivalPose(time, delta, 0.78);
 
     world.update(time, delta);
 
@@ -155,15 +166,7 @@ describe('BoatWorld helpers', () => {
     const initialOceanTime = oceanUniforms.uTime!.value as number;
     const time = 4;
     const delta = 0.2;
-    const buoyancy = new BoatBuoyancy((sampleTime, x, z, amplitudeScale) =>
-      sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, amplitudeScale));
-    const target = buoyancy.sampleTarget(time, 0, 0, 0.78);
-    const expected = smoothBoatPose(
-      { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
-      target,
-      delta,
-      7,
-    );
+    const expected = expectedSurvivalPose(time, delta, 0.78);
     world.play('fish');
     world.update(time, delta);
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
@@ -189,6 +192,41 @@ describe('BoatWorld helpers', () => {
       expect(sprayPositions[index]).toBe(-1000);
     }
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('preserves stronger squall heave inside the comfort profile', () => {
+    const propModels = createTestPropModels();
+    const calm = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
+    const squall = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
+    squall.setWeather('squall');
+
+    calm.update(1.5, 0.1);
+    squall.update(1.5, 0.1);
+
+    const calmRig = calm.scene.getObjectByName('boat-motion-rig')!;
+    const squallRig = squall.scene.getObjectByName('boat-motion-rig')!;
+    const calmExpected = expectedSurvivalPose(1.5, 0.1, 0.78);
+    const squallExpected = expectedSurvivalPose(1.5, 0.1, 1.35);
+    expect(calmRig.position.y).toBeCloseTo(0.22 + calmExpected.y);
+    expect(squallRig.position.y).toBeCloseTo(0.22 + squallExpected.y);
+    expect(Math.abs(squallRig.position.y - 0.22))
+      .toBeGreaterThan(Math.abs(calmRig.position.y - 0.22));
+
+    calm.dispose();
+    squall.dispose();
     propModels.dispose();
   });
 
