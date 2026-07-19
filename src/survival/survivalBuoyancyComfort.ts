@@ -1,7 +1,7 @@
 import type { BoatPose } from '../ocean/BoatBuoyancy';
 
-export const SURVIVAL_TRANSLATION_SCALE = 0.08;
-export const SURVIVAL_ROTATION_SCALE = 0.03;
+export const SURVIVAL_TRANSLATION_SCALE = 0.03;
+export const SURVIVAL_ROTATION_SCALE = 0.01;
 
 export function applySurvivalBuoyancyComfortInto(
   output: BoatPose,
