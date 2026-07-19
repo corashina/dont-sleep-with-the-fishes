@@ -11,8 +11,7 @@ const GRAVITY = 14;
 const GROUND_EPSILON = 1e-6;
 const DEFAULT_YAW = Math.PI;
 const LOOK_SENSITIVITY = 0.0018;
-const HORIZONTAL_LOOK_LIMIT = Math.PI / 4;
-const VERTICAL_LOOK_LIMIT = Math.PI / 8;
+const PITCH_LIMIT = 1.35;
 
 export interface PlayerNavigationBounds {
   safe: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -56,13 +55,10 @@ export class PlayerController {
 
   update(delta: number, input: InputController, reducedMotionShake = 0): void {
     const look = input.consumeLook();
-    this.yaw = Math.max(
-      DEFAULT_YAW - HORIZONTAL_LOOK_LIMIT,
-      Math.min(DEFAULT_YAW + HORIZONTAL_LOOK_LIMIT, this.yaw - look.x * LOOK_SENSITIVITY),
-    );
+    this.yaw -= look.x * LOOK_SENSITIVITY;
     this.pitch = Math.max(
-      -VERTICAL_LOOK_LIMIT,
-      Math.min(VERTICAL_LOOK_LIMIT, this.pitch - look.y * LOOK_SENSITIVITY),
+      -PITCH_LIMIT,
+      Math.min(PITCH_LIMIT, this.pitch - look.y * LOOK_SENSITIVITY),
     );
 
     const axes = input.movement;
