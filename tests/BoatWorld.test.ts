@@ -276,12 +276,15 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('clamps survival cursor targets and disables them for reduced motion', () => {
-    expect(clampParallax(2, -2, false)).toEqual({
+  it('clamps survival cursor targets without disabling reduced-motion input', () => {
+    expect(clampParallax(2, -2)).toEqual({
       yaw: Math.PI / 4,
       pitch: -Math.PI / 8,
     });
-    expect(clampParallax(0.4, -0.4, true)).toEqual({ yaw: 0, pitch: 0 });
+    expect(clampParallax(0.4, -0.4)).toEqual({
+      yaw: Math.PI / 10,
+      pitch: -Math.PI / 20,
+    });
   });
 
   it('eases the survival camera toward the cursor target without overshooting', () => {
@@ -318,7 +321,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('immediately centers survival cursor view when reduced motion becomes active', () => {
+  it('immediately reaches the survival cursor target when reduced motion becomes active', () => {
     const reducedMotion = { matches: false };
     const camera = new PerspectiveCamera();
     const propModels = createTestPropModels();
@@ -329,6 +332,9 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const base = camera.quaternion.clone();
+    const target = base.clone().multiply(
+      new Quaternion().setFromEuler(new Euler(Math.PI / 8, Math.PI / 4, 0, 'YXZ')),
+    );
 
     world.setPointer(1, 1);
     world.update(0.1, 0.1);
@@ -338,7 +344,7 @@ describe('BoatWorld helpers', () => {
     reducedMotion.matches = true;
     world.update(0.2, 0.1);
 
-    expect(Math.abs(camera.quaternion.dot(base))).toBeCloseTo(1, 8);
+    expect(Math.abs(camera.quaternion.dot(target))).toBeCloseTo(1, 8);
     world.dispose();
     propModels.dispose();
   });

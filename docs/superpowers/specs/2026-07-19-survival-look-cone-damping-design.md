@@ -31,16 +31,16 @@ The offset therefore approaches the target without overshooting and reaches
 about 95% of a new target in 0.3 seconds. The base lifeboat camera rotation is
 then composed with the current damped offsets when presentation is applied.
 
-When `prefers-reduced-motion` matches, both the target and current offsets
-are set to zero immediately. Buoyancy and required presentation cues are not
-changed.
+When `prefers-reduced-motion` matches, cursor look remains available within
+the same limits but reaches its target immediately, without damped movement.
+Buoyancy and required presentation cues are not changed.
 
 ## Testing
 
 - Restore the existing scavenging pitch boundary tests and free-yaw movement
   coverage; remove the accidental scavenging look-cone assertions.
-- Verify survival cursor targets clamp at the 90-by-45-degree limits and are
-  neutral under reduced motion.
+- Verify survival cursor targets clamp at the 90-by-45-degree limits, and
+  that reduced motion applies the same target immediately.
 - Verify a survival update moves the camera toward, but not beyond, a target;
   successive updates converge on the target.
 - Retain existing survival pointer wiring and camera/buoyancy ownership tests.

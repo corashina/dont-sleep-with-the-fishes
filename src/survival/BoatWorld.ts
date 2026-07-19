@@ -68,9 +68,7 @@ const SURVIVAL_LOOK_DAMPING = 10;
 export function clampParallax(
   x: number,
   y: number,
-  reducedMotion: boolean,
 ): { yaw: number; pitch: number } {
-  if (reducedMotion) return { yaw: 0, pitch: 0 };
   return {
     yaw: Math.min(SURVIVAL_LOOK_YAW_LIMIT, Math.max(
       -SURVIVAL_LOOK_YAW_LIMIT,
@@ -580,19 +578,12 @@ export class BoatWorld {
   }
 
   private updateParallax(delta: number): void {
+    const { yaw: targetYaw, pitch: targetPitch } = clampParallax(this.pointerX, this.pointerY);
     if (this.reducedMotion.matches) {
-      this.currentParallaxYaw = 0;
-      this.currentParallaxPitch = 0;
+      this.currentParallaxYaw = targetYaw;
+      this.currentParallaxPitch = targetPitch;
       return;
     }
-    const targetYaw = Math.min(SURVIVAL_LOOK_YAW_LIMIT, Math.max(
-      -SURVIVAL_LOOK_YAW_LIMIT,
-      this.pointerX * SURVIVAL_LOOK_YAW_LIMIT,
-    ));
-    const targetPitch = Math.min(SURVIVAL_LOOK_PITCH_LIMIT, Math.max(
-      -SURVIVAL_LOOK_PITCH_LIMIT,
-      this.pointerY * SURVIVAL_LOOK_PITCH_LIMIT,
-    ));
     const response = 1 - Math.exp(-SURVIVAL_LOOK_DAMPING * delta);
     this.currentParallaxYaw += (targetYaw - this.currentParallaxYaw) * response;
     this.currentParallaxPitch += (targetPitch - this.currentParallaxPitch) * response;
@@ -609,10 +600,6 @@ export class BoatWorld {
     this.motionRig.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
-    if (this.reducedMotion.matches) {
-      this.currentParallaxYaw = 0;
-      this.currentParallaxPitch = 0;
-    }
     this.camera.quaternion.copy(this.baseCameraQuaternion);
     this.camera.rotateY(this.currentParallaxYaw);
     this.camera.rotateX(this.currentParallaxPitch);
