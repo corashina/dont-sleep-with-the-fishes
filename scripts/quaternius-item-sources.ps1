@@ -6,8 +6,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$repositoryRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot)).TrimEnd(
+  [System.IO.Path]::DirectorySeparatorChar,
+  [System.IO.Path]::AltDirectorySeparatorChar
+)
+$defaultDestinationRoot = Join-Path $repositoryRoot 'third_party\quaternius-items'
 if (-not $PSBoundParameters.ContainsKey('DestinationRoot')) {
-  $DestinationRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'third_party\quaternius-items'
+  $DestinationRoot = $defaultDestinationRoot
 }
 . (Join-Path $PSScriptRoot 'kenney-item-sources.ps1')
 
@@ -37,6 +42,79 @@ function Assert-ExactModelDirectory {
     throw "Unexpected prepared source files: $($actualPaths -join ', ')"
   }
 }
+
+function Get-NormalizedDirectoryPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  $filesystemRoot = [System.IO.Path]::GetPathRoot($fullPath)
+  if ($fullPath.Length -gt $filesystemRoot.Length) {
+    return $fullPath.TrimEnd(
+      [System.IO.Path]::DirectorySeparatorChar,
+      [System.IO.Path]::AltDirectorySeparatorChar
+    )
+  }
+  return $fullPath
+}
+
+function Test-IsSameOrDescendantPath {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Root
+  )
+
+  return $Path.Equals($Root, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $Path.StartsWith($Root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-SafeDestinationRoot {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+    [Parameter(Mandatory = $true)][string]$DefaultRoot
+  )
+
+  $destination = Get-NormalizedDirectoryPath -Path $Path
+  $filesystemRoot = [System.IO.Path]::GetPathRoot($destination)
+  if ($destination.Equals($filesystemRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing unsafe destination root: filesystem roots are not allowed: $destination"
+  }
+
+  if ($destination.Equals($DefaultRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $destination
+  }
+
+  if ((Test-IsSameOrDescendantPath -Path $destination -Root $RepositoryRoot) -or
+      (Test-IsSameOrDescendantPath -Path $RepositoryRoot -Root $destination)) {
+    throw "Refusing unsafe destination root: only $DefaultRoot may be used inside or around the repository"
+  }
+
+  $temporaryRoot = Get-NormalizedDirectoryPath -Path ([System.IO.Path]::GetTempPath())
+  if (-not (Test-IsSameOrDescendantPath -Path $destination -Root $temporaryRoot) -or
+      $destination.Equals($temporaryRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing unsafe destination root: test destinations must be empty children of $temporaryRoot"
+  }
+
+  if (Test-Path -LiteralPath $destination -PathType Leaf) {
+    throw "Refusing unsafe destination root: destination must be a directory: $destination"
+  }
+  if (Test-Path -LiteralPath $destination) {
+    $destinationItem = Get-Item -LiteralPath $destination -Force
+    if (($destinationItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw "Refusing unsafe destination root: reparse-point destinations are not allowed: $destination"
+    }
+    if (@(Get-ChildItem -LiteralPath $destination -Force).Count -ne 0) {
+      throw "Refusing unsafe destination root: arbitrary populated destinations are not allowed: $destination"
+    }
+  }
+
+  return $destination
+}
+
+$DestinationRoot = Assert-SafeDestinationRoot `
+  -Path $DestinationRoot `
+  -RepositoryRoot $repositoryRoot `
+  -DefaultRoot $defaultDestinationRoot
 
 $destinationParent = Split-Path -Parent $DestinationRoot
 $destinationLeaf = Split-Path -Leaf $DestinationRoot
