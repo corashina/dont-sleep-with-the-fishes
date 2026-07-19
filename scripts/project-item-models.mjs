@@ -34,19 +34,10 @@ function part(name, shape, size, translation, color, rotation = IDENTITY, segmen
 }
 
 export const PROJECT_ITEM_IDS = Object.freeze([
-  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
-  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ]);
 
 export const PROJECT_ITEM_RECIPES = Object.freeze({
-  compass: {
-    parts: [
-      part('case', 'cylinder', [0.56, 0.10, 0.56], [0, 0, 0], BRASS),
-      part('face', 'cylinder', [0.43, 0.02, 0.43], [0, 0.06, 0], PAPER),
-      part('needle-north', 'box', [0.04, 0.02, 0.30], [0, 0.08, 0.10], RED_ORANGE),
-      part('needle-south', 'box', [0.04, 0.02, 0.30], [0, 0.08, -0.10], PAPER),
-    ],
-  },
   map: {
     parts: [
       part('sheet', 'box', [0.78, 0.025, 0.52], [0, 0, 0], PAPER),
@@ -75,27 +66,6 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
       part('net-line-4', 'cylinder', [0.010, 0.36, 0.010], [0, 0.22, 0], PAPER, quaternion('z', Math.PI / 3)),
       part('net-line-5', 'cylinder', [0.010, 0.36, 0.010], [0, 0.22, 0], PAPER, quaternion('z', -Math.PI / 3)),
       part('net-line-6', 'cylinder', [0.010, 0.34, 0.010], [0, 0.22, 0], PAPER, QZ_NEG_90),
-    ],
-  },
-  flareGun: {
-    parts: [
-      part('barrel', 'box', [0.18, 0.18, 0.62], [0, 0.15, 0.10], RED_ORANGE),
-      part('muzzle', 'cylinder', [0.27, 0.08, 0.27], [0, 0.15, 0.45], RED_ORANGE, QX90),
-      part('hinge', 'cylinder', [0.10, 0.24, 0.10], [0, 0.07, -0.17], DARK, QZ_NEG_90),
-      part('grip', 'box', [0.17, 0.42, 0.20], [0, -0.15, -0.10], DARK, quaternion('x', Math.PI / 15)),
-      part('trigger-guard', 'torus', [0.20, 0.025, 0.18], [0, -0.015, 0.11], DARK, QZ_NEG_90),
-      part('trigger', 'box', [0.025, 0.10, 0.03], [0, 0.005, 0.105], BRASS, quaternion('x', -0.24)),
-    ],
-  },
-  anchor: {
-    parts: [
-      part('shank', 'cylinder', [0.08, 0.82, 0.08], [0, 0, 0], DARK),
-      part('crossbar', 'cylinder', [0.06, 0.62, 0.06], [0, 0.25, 0], STEEL, QZ_NEG_90),
-      part('ring', 'torus', [0.22, 0.035, 0.22], [0, 0.48, 0], DARK, QX90),
-      part('arm-left', 'box', [0.10, 0.38, 0.10], [-0.14, -0.31, 0], DARK, quaternion('z', -0.78)),
-      part('arm-right', 'box', [0.10, 0.38, 0.10], [0.14, -0.31, 0], DARK, quaternion('z', 0.78)),
-      part('fluke-left', 'cone', [0.20, 0.25, 0.16], [-0.32, -0.40, 0], STEEL, quaternion('z', -0.75), 3),
-      part('fluke-right', 'cone', [0.20, 0.25, 0.16], [0.32, -0.40, 0], STEEL, quaternion('z', 0.75), 3),
     ],
   },
   umbrella: {

@@ -20,8 +20,7 @@ export interface BuildProjectItemModelsOptions {
 }
 
 export const PROJECT_ITEM_IDS: readonly [
-  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
-  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ];
 export const PROJECT_ITEM_RECIPES: Readonly<Record<typeof PROJECT_ITEM_IDS[number], AuthoredRecipe>>;
 export function buildProjectItemModels(options: BuildProjectItemModelsOptions): Promise<void>;
