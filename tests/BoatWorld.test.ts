@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   BufferAttribute,
   BufferGeometry,
+  Euler,
   FogExp2,
   Group,
   Matrix4,
@@ -11,6 +12,7 @@ import {
   Object3D,
   PerspectiveCamera,
   Points,
+  Quaternion,
   ShaderMaterial,
   Texture,
   Vector3,
@@ -274,9 +276,71 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('clamps mouse parallax and disables it for reduced motion', () => {
-    expect(clampParallax(2, -2, false)).toEqual({ yaw: 0.045, pitch: -0.025 });
+  it('clamps survival cursor targets and disables them for reduced motion', () => {
+    expect(clampParallax(2, -2, false)).toEqual({
+      yaw: Math.PI / 4,
+      pitch: -Math.PI / 8,
+    });
     expect(clampParallax(0.4, -0.4, true)).toEqual({ yaw: 0, pitch: 0 });
+  });
+
+  it('eases the survival camera toward the cursor target without overshooting', () => {
+    const camera = new PerspectiveCamera();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const base = camera.quaternion.clone();
+    const target = base.clone().multiply(
+      new Quaternion().setFromEuler(new Euler(-Math.PI / 8, Math.PI / 4, 0, 'YXZ')),
+    );
+    const response = 1 - Math.exp(-1);
+    const firstStep = base.clone().multiply(
+      new Quaternion().setFromEuler(new Euler(
+        -Math.PI / 8 * response,
+        Math.PI / 4 * response,
+        0,
+        'YXZ',
+      )),
+    );
+
+    world.setPointer(2, -2);
+    world.update(0.1, 0.1);
+    expect(Math.abs(camera.quaternion.dot(firstStep))).toBeCloseTo(1, 8);
+    expect(camera.quaternion.angleTo(target)).toBeGreaterThan(0);
+
+    for (let index = 2; index <= 12; index += 1) world.update(index * 0.1, 0.1);
+    expect(camera.quaternion.angleTo(target)).toBeLessThan(1e-5);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('immediately centers survival cursor view when reduced motion becomes active', () => {
+    const reducedMotion = { matches: false };
+    const camera = new PerspectiveCamera();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      reducedMotion as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const base = camera.quaternion.clone();
+
+    world.setPointer(1, 1);
+    world.update(0.1, 0.1);
+
+    expect(camera.quaternion.angleTo(base)).toBeGreaterThan(0);
+
+    reducedMotion.matches = true;
+    world.update(0.2, 0.1);
+
+    expect(Math.abs(camera.quaternion.dot(base))).toBeCloseTo(1, 8);
+    world.dispose();
+    propModels.dispose();
   });
 
   it('frames the enlarged boat from the higher stern seat without changing FOV', () => {
