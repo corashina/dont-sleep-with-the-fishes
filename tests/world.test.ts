@@ -417,6 +417,7 @@ describe('world builders', () => {
     const propModels = createTestPropModels();
     const moonTexture = createTestMoonTexture();
     const world = createTestWorld(scene, propModels, moonTexture);
+    expect(world.ship.position.toArray()).toEqual([0, -0.76, 0]);
     const sinking: SinkingState = {
       progress: 0.4,
       rollRadians: -0.12,
@@ -493,7 +494,7 @@ describe('world builders', () => {
     expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
     expect(world.ship.position.x).toBe(0);
     expect(world.ship.position.y).toBeCloseTo(
-      sinking.sinkOffset + expectedFreighterPose.y,
+      sinking.sinkOffset + expectedFreighterPose.y - 0.76,
     );
     expect(world.ship.position.z).toBe(0);
     expect(world.ship.rotation.x).toBeCloseTo(
