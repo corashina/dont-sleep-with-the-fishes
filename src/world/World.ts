@@ -77,6 +77,7 @@ function sampleDefaultWave(
 
 const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 30, width: 10 };
 const FREIGHTER_BUOYANCY_DAMPING = 2.4;
+const FREIGHTER_DRAFT = 0.76;
 
 export class World {
   readonly ship: Group;
@@ -143,6 +144,7 @@ export class World {
     this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
+    this.ship.position.y = -FREIGHTER_DRAFT;
     this.colliders = this.shipBuild.colliders;
     this.arcColliders = this.shipBuild.arcColliders;
     this.playerStart = this.shipBuild.playerStart.clone();
@@ -278,7 +280,11 @@ export class World {
       delta,
       FREIGHTER_BUOYANCY_DAMPING,
     );
-    this.ship.position.set(0, sinking.sinkOffset + this.freighterPose.y, 0);
+    this.ship.position.set(
+      0,
+      sinking.sinkOffset + this.freighterPose.y - FREIGHTER_DRAFT,
+      0,
+    );
     this.ship.rotation.set(
       sinking.pitchRadians + this.freighterPose.pitch,
       0,
