@@ -77,6 +77,7 @@ const fragmentShader = `
   }
 
   float cloudMask(vec3 direction) {
+    if (uCloudCoverage <= 0.0) return 0.0;
     float visibleSky = smoothstep(-0.01, 0.10, direction.y);
     vec2 mapped = direction.xz / max(0.32, direction.y + 0.32);
     float broad = cloudValueNoise(mapped * 0.74 + vec2(4.7, -2.8));
