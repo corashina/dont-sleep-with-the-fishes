@@ -187,19 +187,22 @@ describe('model directory publication', () => {
     expect(await readFile(join(unsafeStage, 'sentinel.txt'), 'utf8')).toBe('keep');
   });
 
-  it('rejects duplicate filenames emitted by the two model builders', async () => {
+  it('rejects duplicate compass.glb emitted by two of the three model builders before publication', async () => {
     const kenneyRoot = join(root, 'kenney-build');
+    const quaterniusRoot = join(root, 'quaternius-build');
     const projectRoot = join(root, 'project-build');
     const stagedRoot = join(modelsRoot, '.items-stage-duplicate');
     await mkdir(kenneyRoot);
+    await mkdir(quaterniusRoot);
     await mkdir(projectRoot);
     await mkdir(stagedRoot);
-    await writeFile(join(kenneyRoot, 'shared.glb'), 'kenney');
-    await writeFile(join(projectRoot, 'shared.glb'), 'project');
+    await writeFile(join(kenneyRoot, 'compass.glb'), 'kenney');
+    await writeFile(join(quaterniusRoot, 'compass.glb'), 'quaternius');
+    await writeFile(join(projectRoot, 'energyBar.glb'), 'project');
     const helperPath = resolve('scripts', 'item-model-publication.ps1');
     const command = [
       `. ${quotePowerShell(helperPath)}`,
-      `Copy-UniqueModelBuildOutputs -BuildRoots @(${quotePowerShell(kenneyRoot)}, ${quotePowerShell(projectRoot)}) -DestinationRoot ${quotePowerShell(stagedRoot)}`,
+      `Copy-UniqueModelBuildOutputs -BuildRoots @(${quotePowerShell(kenneyRoot)}, ${quotePowerShell(quaterniusRoot)}, ${quotePowerShell(projectRoot)}) -DestinationRoot ${quotePowerShell(stagedRoot)}`,
     ].join('; ');
 
     const result = spawnSync(
@@ -209,7 +212,7 @@ describe('model directory publication', () => {
     );
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('Duplicate generated item model output: shared.glb');
+    expect(result.stderr).toContain('Duplicate generated item model output: compass.glb');
   });
 
   it('rejects a staged model directory with the wrong exact inventory', async () => {

@@ -13,7 +13,7 @@
 
 ## Third-party assets
 
-Use [Kenney](https://kenney.nl/assets) as the sole third-party asset store unless the user approves another source.
+Use Kenney as the default third-party asset store ([Kenney](https://kenney.nl/assets)). The Quaternius exception is approved only for the committed runtime models `compass`, `flareGun`, and `anchor`.
 
 - Download individual free CC0 packs. Do not make the project depend on the optional All-in-1 bundle.
 - Commit processed runtime assets locally. Production code must not fetch models, textures, audio, UI art, or effects from a store.
