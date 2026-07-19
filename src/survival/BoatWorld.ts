@@ -36,6 +36,7 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
+import { applySurvivalBuoyancyComfortInto } from './survivalBuoyancyComfort';
 import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { createProp } from '../world/PropFactory';
@@ -233,6 +234,7 @@ export class BoatWorld {
     sampleDefaultWaveInto,
   );
   private readonly boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
+  private readonly rawBoatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private previousBoatPitch = 0;
   private previousBoatRoll = 0;
@@ -471,11 +473,15 @@ export class BoatWorld {
 
     const amplitudeScale = weatherAmplitudeScale(this.weather);
     this.buoyancy.sampleTargetInto(
-      this.boatTargetPose,
+      this.rawBoatTargetPose,
       time,
       SURVIVAL_BOAT_ANCHOR.x,
       SURVIVAL_BOAT_ANCHOR.z,
       amplitudeScale,
+    );
+    applySurvivalBuoyancyComfortInto(
+      this.boatTargetPose,
+      this.rawBoatTargetPose,
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     this.applyBasePresentation();
