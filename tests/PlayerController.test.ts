@@ -72,9 +72,13 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['downward', 10_000, -1.35],
-    ['upward', -10_000, 1.35],
-  ])('clamps %s mouse pitch', (_direction, movementY, expectedPitch) => {
+    ['downward', 10_000, -Math.PI / 8],
+    ['upward', -10_000, Math.PI / 8],
+  ])('clamps %s mouse pitch to the vertical look cone', (
+    _direction,
+    movementY,
+    expectedPitch,
+  ) => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();
     const input = new TestInput();
@@ -85,10 +89,34 @@ describe('PlayerController', () => {
 
     controller.update(0, input.asControllerInput());
 
-    const expectedRotation = new Quaternion().setFromEuler(
-      new Euler(expectedPitch, Math.PI, 0, 'YXZ'),
+    expectRotation(
+      camera.quaternion,
+      new Quaternion().setFromEuler(new Euler(expectedPitch, Math.PI, 0, 'YXZ')),
     );
-    expectRotation(camera.quaternion, expectedRotation);
+  });
+
+  it.each([
+    ['right', 10_000, Math.PI - Math.PI / 4],
+    ['left', -10_000, Math.PI + Math.PI / 4],
+  ])('clamps %s mouse yaw to the horizontal look cone', (
+    _direction,
+    movementX,
+    expectedYaw,
+  ) => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const input = new TestInput();
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    input.queueLook(movementX, 0);
+
+    controller.update(0, input.asControllerInput());
+
+    expectRotation(
+      camera.quaternion,
+      new Quaternion().setFromEuler(new Euler(0, expectedYaw, 0, 'YXZ')),
+    );
   });
 
   it('uses walk and sprint speeds in the current local heading', () => {
@@ -181,7 +209,7 @@ describe('PlayerController', () => {
   it.each([
     ['KeyW', { x: 0, z: -1 }, new Vector3(0, 0, -1)],
     ['KeyD', { x: 1, z: 0 }, new Vector3(1, 0, 0)],
-  ])('moves %s along its visible camera-space direction at yaw pi/2', (
+  ])('moves %s along its visible camera-space direction at the constrained yaw limit', (
     _key,
     movement,
     cameraDirection,

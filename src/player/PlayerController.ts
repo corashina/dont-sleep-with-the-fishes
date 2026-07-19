@@ -9,6 +9,10 @@ import {
 const JUMP_SPEED = 5.2;
 const GRAVITY = 14;
 const GROUND_EPSILON = 1e-6;
+const DEFAULT_YAW = Math.PI;
+const LOOK_SENSITIVITY = 0.0018;
+const HORIZONTAL_LOOK_LIMIT = Math.PI / 4;
+const VERTICAL_LOOK_LIMIT = Math.PI / 8;
 
 export interface PlayerNavigationBounds {
   safe: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -28,7 +32,7 @@ function containsLocalPosition(
 export class PlayerController {
   readonly localPosition: Vector3;
   private readonly safePosition: Vector3;
-  private yaw = Math.PI;
+  private yaw = DEFAULT_YAW;
   private pitch = 0;
   private readonly localView = new Quaternion();
   private readonly worldPosition = new Vector3();
@@ -52,8 +56,14 @@ export class PlayerController {
 
   update(delta: number, input: InputController, reducedMotionShake = 0): void {
     const look = input.consumeLook();
-    this.yaw -= look.x * 0.0018;
-    this.pitch = Math.max(-1.35, Math.min(1.35, this.pitch - look.y * 0.0018));
+    this.yaw = Math.max(
+      DEFAULT_YAW - HORIZONTAL_LOOK_LIMIT,
+      Math.min(DEFAULT_YAW + HORIZONTAL_LOOK_LIMIT, this.yaw - look.x * LOOK_SENSITIVITY),
+    );
+    this.pitch = Math.max(
+      -VERTICAL_LOOK_LIMIT,
+      Math.min(VERTICAL_LOOK_LIMIT, this.pitch - look.y * LOOK_SENSITIVITY),
+    );
 
     const axes = input.movement;
     const speed = input.sprinting ? 6.2 : 3.8;
@@ -139,7 +149,7 @@ export class PlayerController {
     this.safePosition.copy(start);
     this.deckEyeHeight = start.y;
     this.verticalVelocity = 0;
-    this.yaw = Math.PI;
+    this.yaw = DEFAULT_YAW;
     this.pitch = 0;
   }
 }
