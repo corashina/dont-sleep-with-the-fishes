@@ -15,16 +15,18 @@ const THIRD_PARTY_SOURCES = {
   cannedFood: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can.glb', 'Kenney'],
   baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb', 'Kenney'],
   ductTape: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', 'Kenney'],
+  compass: ['https://quaternius.com/packs/survival.html', 'quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj', 'Quaternius'],
   medicalKit: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/medicalKit', 'Kenney'],
   bucket: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:Models/GLB format/bucket.glb', 'Kenney'],
+  flareGun: ['https://quaternius.com/packs/survival.html', 'quaternius-survival-pack@2020-09:OBJ/FlareGun.obj', 'Quaternius'],
   bottledPaper: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:composite/bottledPaper', 'Kenney + project'],
+  anchor: ['https://quaternius.com/packs/piratekit.html', 'quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj', 'Quaternius'],
   flashlight: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/flashlight', 'Kenney'],
   fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod', 'Kenney'],
   scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet', 'Kenney'],
 } as const;
 const PROJECT_IDS = [
-  'compass', 'map', 'spyglass', 'fishingNet', 'flareGun',
-  'anchor', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ] as const;
 const TARGET_LONGEST_DIMENSIONS = {
   cannedFood: 0.42, baitTin: 0.48, ductTape: 0.55, compass: 0.48, map: 0.72,
@@ -34,7 +36,7 @@ const TARGET_LONGEST_DIMENSIONS = {
 } as const satisfies Readonly<Record<ItemId, number>>;
 
 function runtimeLedgerRows(): readonly (readonly string[])[] {
-  const heading = '## Kenney asset ledger';
+  const heading = '## Runtime item asset ledger';
   const start = ITEM_MODEL_ASSET_LEDGER.indexOf(heading);
   const nextHeading = ITEM_MODEL_ASSET_LEDGER.indexOf('\n## ', start + heading.length);
   const runtimeLedger = ITEM_MODEL_ASSET_LEDGER.slice(start, nextHeading === -1 ? undefined : nextHeading);
@@ -61,7 +63,7 @@ describe('item model manifest', () => {
     }
   });
 
-  it('distinguishes the exact Kenney-derived and project-authored provenance sets', () => {
+  it('distinguishes the exact third-party and project-authored provenance sets', () => {
     for (const [id, [sourceUrl, sourceAssetId, creator]] of Object.entries(THIRD_PARTY_SOURCES)) {
       expect(ITEM_MODEL_SPECS[id as ItemId].provenance).toEqual({
         kind: 'thirdParty', sourceUrl, sourceAssetId, creator, licenseUrl: CC0_URL,
@@ -72,8 +74,11 @@ describe('item model manifest', () => {
         kind: 'project', recipeId: `project-item-models@1:${id}`, creator: 'Project team',
       });
     }
-    expect(ITEM_MODEL_SPECS.flareGun.provenance).toEqual({
-      kind: 'project', recipeId: 'project-item-models@1:flareGun', creator: 'Project team',
+    expect(ITEM_MODEL_SPECS.flareGun.provenance).toMatchObject({
+      kind: 'thirdParty',
+      sourceUrl: 'https://quaternius.com/packs/survival.html',
+      sourceAssetId: 'quaternius-survival-pack@2020-09:OBJ/FlareGun.obj',
+      creator: 'Quaternius',
     });
     expect(ITEM_MODEL_SPECS.bucket.provenance).toMatchObject({
       kind: 'thirdParty',

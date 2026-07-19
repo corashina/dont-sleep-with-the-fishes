@@ -18,7 +18,7 @@ export type ItemModelProvenance =
       readonly kind: 'thirdParty';
       readonly sourceUrl: string;
       readonly sourceAssetId: string;
-      readonly creator: 'Kenney' | 'Kenney + project';
+      readonly creator: 'Kenney' | 'Kenney + project' | 'Quaternius';
       readonly licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/';
     }
   | {
@@ -73,15 +73,15 @@ const provenance = {
   cannedFood: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/food-kit', sourceAssetId: 'food-kit@2.0:Models/GLB format/can.glb', creator: 'Kenney', licenseUrl: CC0 },
   baitTin: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/food-kit', sourceAssetId: 'food-kit@2.0:Models/GLB format/can-small.glb', creator: 'Kenney', licenseUrl: CC0 },
   ductTape: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', creator: 'Kenney', licenseUrl: CC0 },
-  compass: { kind: 'project', recipeId: 'project-item-models@1:compass', creator: 'Project team' },
+  compass: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/survival.html', sourceAssetId: 'quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj', creator: 'Quaternius', licenseUrl: CC0 },
   map: { kind: 'project', recipeId: 'project-item-models@1:map', creator: 'Project team' },
   medicalKit: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/medicalKit', creator: 'Kenney', licenseUrl: CC0 },
   spyglass: { kind: 'project', recipeId: 'project-item-models@1:spyglass', creator: 'Project team' },
   fishingNet: { kind: 'project', recipeId: 'project-item-models@1:fishingNet', creator: 'Project team' },
   bucket: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/survival-kit', sourceAssetId: 'survival-kit@2.0:Models/GLB format/bucket.glb', creator: 'Kenney', licenseUrl: CC0 },
-  flareGun: { kind: 'project', recipeId: 'project-item-models@1:flareGun', creator: 'Project team' },
+  flareGun: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/survival.html', sourceAssetId: 'quaternius-survival-pack@2020-09:OBJ/FlareGun.obj', creator: 'Quaternius', licenseUrl: CC0 },
   scubaSet: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/scubaSet', creator: 'Kenney', licenseUrl: CC0 },
-  anchor: { kind: 'project', recipeId: 'project-item-models@1:anchor', creator: 'Project team' },
+  anchor: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/piratekit.html', sourceAssetId: 'quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj', creator: 'Quaternius', licenseUrl: CC0 },
   bottledPaper: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/survival-kit', sourceAssetId: 'survival-kit@2.0:composite/bottledPaper', creator: 'Kenney + project', licenseUrl: CC0 },
   umbrella: { kind: 'project', recipeId: 'project-item-models@1:umbrella', creator: 'Project team' },
   swimRing: { kind: 'project', recipeId: 'project-item-models@1:swimRing', creator: 'Project team' },
