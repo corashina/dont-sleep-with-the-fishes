@@ -16,7 +16,12 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
-import { BoatBuoyancy, smoothBoatPoseInto, type BoatPose } from '../ocean/BoatBuoyancy';
+import {
+  BoatBuoyancy,
+  smoothBoatPoseInto,
+  type BoatFootprint,
+  type BoatPose,
+} from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import {
@@ -70,6 +75,9 @@ function sampleDefaultWave(
   return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
 }
 
+const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 30, width: 10 };
+const FREIGHTER_BUOYANCY_DAMPING = 2.4;
+
 export class World {
   readonly ship: Group;
   readonly lifeboat: Group;
@@ -84,6 +92,11 @@ export class World {
   private readonly environment: Environment;
   private readonly boatStorage: Group;
   private readonly buoyancy: BoatBuoyancy;
+  private readonly freighterBuoyancy = new BoatBuoyancy(
+    sampleDefaultWave,
+    FREIGHTER_BUOYANCY_FOOTPRINT,
+    sampleDefaultWaveInto,
+  );
   private readonly shipBuild: ShipBuild;
   private readonly boatAnchor: Vector3;
   private readonly shipItemScales = new Map<ItemInstanceId, number>();
@@ -100,6 +113,20 @@ export class World {
   };
   private readonly boatPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
   private readonly boatTargetPose: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+  private readonly freighterPose: BoatPose = {
+    y: 0,
+    pitch: 0,
+    roll: 0,
+    driftX: 0,
+    driftZ: 0,
+  };
+  private readonly freighterTargetPose: BoatPose = {
+    y: 0,
+    pitch: 0,
+    roll: 0,
+    driftX: 0,
+    driftZ: 0,
+  };
   private disposed = false;
 
   constructor(
@@ -237,8 +264,26 @@ export class World {
     reducedMotion: boolean,
   ): void {
     if (this.disposed) return;
-    this.ship.position.y = sinking.sinkOffset;
-    this.ship.rotation.set(sinking.pitchRadians, 0, sinking.rollRadians);
+    this.freighterBuoyancy.sampleTargetInto(
+      this.freighterTargetPose,
+      time,
+      0,
+      0,
+      sinking.waveAmplitudeScale,
+    );
+    smoothBoatPoseInto(
+      this.freighterPose,
+      this.freighterPose,
+      this.freighterTargetPose,
+      delta,
+      FREIGHTER_BUOYANCY_DAMPING,
+    );
+    this.ship.position.set(0, sinking.sinkOffset + this.freighterPose.y, 0);
+    this.ship.rotation.set(
+      sinking.pitchRadians + this.freighterPose.pitch,
+      0,
+      sinking.rollRadians - this.freighterPose.roll,
+    );
     this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
 
     this.environment.update(delta, sinking, cameraPosition, reducedMotion);
