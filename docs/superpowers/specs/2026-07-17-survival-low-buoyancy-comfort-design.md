@@ -6,7 +6,7 @@ Reduce survival-phase vessel and camera motion enough to prevent sea-sickness wh
 
 ## Motion Profile
 
-The survival lifeboat will retain 8 percent of the sampled heave and lateral drift. It will retain 3 percent of the sampled pitch and roll. The fixed `SURVIVAL_BOAT_ANCHOR` height remains unchanged, so the hull keeps its authored waterline.
+The survival lifeboat will retain 10 percent of the sampled heave and lateral drift. It will retain 4 percent of the sampled pitch and roll. The fixed `SURVIVAL_BOAT_ANCHOR` height remains unchanged, so the hull keeps its authored waterline.
 
 Weather will continue to select the existing wave-amplitude scale. Calm, overcast, and squall conditions will therefore keep distinct motion, but the comfort profile will attenuate the final survival target before damping.
 
@@ -16,7 +16,7 @@ The ocean renderer will continue to use the full weather amplitude. Scavenging b
 
 Add a small survival-owned motion module with these responsibilities:
 
-- Export the translation scale of `0.08` and rotation scale of `0.03`.
+- Export the translation scale of `0.1` and rotation scale of `0.04`.
 - Write an attenuated `BoatPose` into a caller-owned output record.
 - Scale `y`, `driftX`, and `driftZ` by the translation scale.
 - Scale `pitch` and `roll` by the rotation scale.
@@ -40,7 +40,7 @@ The comfort transform will use caller-owned pose records and perform no per-fram
 
 ## Testing
 
-Unit tests will verify the exact 8 percent translation and 3 percent rotation values, including writes into the caller-owned output record.
+Unit tests will verify the exact 10 percent translation and 4 percent rotation values, including writes into the caller-owned output record.
 
 `BoatWorld` tests will calculate the shared-wave target, apply the comfort profile, apply the existing smoothing step, and compare the motion rig with that expected pose. A weather test will confirm that squall motion remains stronger than calm motion after attenuation.
 
