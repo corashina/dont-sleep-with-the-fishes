@@ -7,7 +7,7 @@ import {
 } from '../src/survival/survivalBuoyancyComfort';
 
 describe('survival buoyancy comfort', () => {
-  it('retains eight percent translation and three percent rotation in caller-owned storage', () => {
+  it('retains ten percent translation and four percent rotation in caller-owned storage', () => {
     const source: BoatPose = {
       y: 2,
       pitch: 0.5,
@@ -26,14 +26,14 @@ describe('survival buoyancy comfort', () => {
 
     applySurvivalBuoyancyComfortInto(output, source);
 
-    expect(SURVIVAL_TRANSLATION_SCALE).toBe(0.08);
-    expect(SURVIVAL_ROTATION_SCALE).toBe(0.03);
+    expect(SURVIVAL_TRANSLATION_SCALE).toBe(0.1);
+    expect(SURVIVAL_ROTATION_SCALE).toBe(0.04);
     expect(output).toBe(outputReference);
-    expect(output.y).toBeCloseTo(0.16);
-    expect(output.pitch).toBeCloseTo(0.015);
-    expect(output.roll).toBeCloseTo(-0.0075);
-    expect(output.driftX).toBeCloseTo(0.032);
-    expect(output.driftZ).toBeCloseTo(-0.048);
+    expect(output.y).toBeCloseTo(0.2);
+    expect(output.pitch).toBeCloseTo(0.02);
+    expect(output.roll).toBeCloseTo(-0.01);
+    expect(output.driftX).toBeCloseTo(0.04);
+    expect(output.driftZ).toBeCloseTo(-0.06);
     expect(source).toEqual({
       y: 2,
       pitch: 0.5,
