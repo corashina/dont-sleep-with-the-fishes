@@ -26,7 +26,6 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
-import { applySurvivalBuoyancyComfortInto } from '../src/survival/survivalBuoyancyComfort';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -98,9 +97,7 @@ function expectedSurvivalPose(
 ) {
   const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
     sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-  const rawTarget = buoyancy.sampleTarget(time, 0, 0, amplitudeScale);
-  const target = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-  applySurvivalBuoyancyComfortInto(target, rawTarget);
+  const target = buoyancy.sampleTarget(time, 0, 0, amplitudeScale);
   return smoothBoatPose(
     { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
     target,
@@ -110,7 +107,7 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
-  it('attenuates shared buoyancy for the boat, player viewpoint, and saved items', () => {
+  it('matches scavenging buoyancy for the boat, player viewpoint, and saved items', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -195,7 +192,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('preserves stronger squall heave inside the comfort profile', () => {
+  it('preserves stronger squall heave with scavenging buoyancy', () => {
     const propModels = createTestPropModels();
     const calm = new BoatWorld(
       new PerspectiveCamera(),
