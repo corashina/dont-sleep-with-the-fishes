@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Retain 3 percent of survival heave and lateral drift.
-- Retain 1 percent of survival pitch and roll.
+- Retain 8 percent of survival heave and lateral drift.
+- Retain 3 percent of survival pitch and roll.
 - Keep the fixed `SURVIVAL_BOAT_ANCHOR` height and authored waterline unchanged.
 - Keep calm, overcast, and squall weather amplitude scales at `0.78`, `1`, and `1.35`.
 - Keep ocean rendering and scavenging buoyancy unchanged.
@@ -39,7 +39,7 @@
 **Interfaces:**
 
 - Consumes: `BoatPose` from `src/ocean/BoatBuoyancy.ts`.
-- Produces: `SURVIVAL_TRANSLATION_SCALE: 0.03`, `SURVIVAL_ROTATION_SCALE: 0.01`, and `applySurvivalBuoyancyComfortInto(output: BoatPose, source: Readonly<BoatPose>): void`.
+- Produces: `SURVIVAL_TRANSLATION_SCALE: 0.08`, `SURVIVAL_ROTATION_SCALE: 0.03`, and `applySurvivalBuoyancyComfortInto(output: BoatPose, source: Readonly<BoatPose>): void`.
 
 - [ ] **Step 1: Write the failing unit test**
 
@@ -55,7 +55,7 @@ import {
 } from '../src/survival/survivalBuoyancyComfort';
 
 describe('survival buoyancy comfort', () => {
-  it('retains three percent translation and one percent rotation in caller-owned storage', () => {
+  it('retains eight percent translation and three percent rotation in caller-owned storage', () => {
     const source: BoatPose = {
       y: 2,
       pitch: 0.5,
@@ -74,14 +74,14 @@ describe('survival buoyancy comfort', () => {
 
     applySurvivalBuoyancyComfortInto(output, source);
 
-    expect(SURVIVAL_TRANSLATION_SCALE).toBe(0.03);
-    expect(SURVIVAL_ROTATION_SCALE).toBe(0.01);
+    expect(SURVIVAL_TRANSLATION_SCALE).toBe(0.08);
+    expect(SURVIVAL_ROTATION_SCALE).toBe(0.03);
     expect(output).toBe(outputReference);
-    expect(output.y).toBeCloseTo(0.06);
-    expect(output.pitch).toBeCloseTo(0.005);
-    expect(output.roll).toBeCloseTo(-0.0025);
-    expect(output.driftX).toBeCloseTo(0.012);
-    expect(output.driftZ).toBeCloseTo(-0.018);
+    expect(output.y).toBeCloseTo(0.16);
+    expect(output.pitch).toBeCloseTo(0.015);
+    expect(output.roll).toBeCloseTo(-0.0075);
+    expect(output.driftX).toBeCloseTo(0.032);
+    expect(output.driftZ).toBeCloseTo(-0.048);
     expect(source).toEqual({
       y: 2,
       pitch: 0.5,
@@ -110,8 +110,8 @@ Create `src/survival/survivalBuoyancyComfort.ts`:
 ```ts
 import type { BoatPose } from '../ocean/BoatBuoyancy';
 
-export const SURVIVAL_TRANSLATION_SCALE = 0.03;
-export const SURVIVAL_ROTATION_SCALE = 0.01;
+export const SURVIVAL_TRANSLATION_SCALE = 0.08;
+export const SURVIVAL_ROTATION_SCALE = 0.03;
 
 export function applySurvivalBuoyancyComfortInto(
   output: BoatPose,
@@ -304,7 +304,7 @@ Run:
 bun run test -- tests/SurvivalBuoyancyComfort.test.ts tests/BoatWorld.test.ts
 ```
 
-Expected: PASS. The survival motion rig matches the 3 percent translation and 1 percent rotation profile, squall heave exceeds calm heave, and reduced-motion secondary cues remain neutral.
+Expected: PASS. The survival motion rig matches the 8 percent translation and 3 percent rotation profile, squall heave exceeds calm heave, and reduced-motion secondary cues remain neutral.
 
 - [ ] **Step 7: Commit the BoatWorld integration**
 
@@ -368,6 +368,6 @@ Expected: `git diff --check` exits `0`. `git status --short` contains no files f
 
 ## Plan Self-Review
 
-- **Spec coverage:** Task 1 defines the exact 3 percent translation and 1 percent rotation profile. Task 2 applies it between shared-wave sampling and damping while preserving the motion-rig hierarchy, weather scales, ocean amplitude, and reduced-motion secondary effects. Task 3 covers automated checks and comfort-focused browser inspection.
+- **Spec coverage:** Task 1 defines the exact 8 percent translation and 3 percent rotation profile. Task 2 applies it between shared-wave sampling and damping while preserving the motion-rig hierarchy, weather scales, ocean amplitude, and reduced-motion secondary effects. Task 3 covers automated checks and comfort-focused browser inspection.
 - **Placeholder scan:** The plan contains no placeholders or undefined implementation steps.
 - **Type consistency:** Both tasks use `applySurvivalBuoyancyComfortInto(output: BoatPose, source: Readonly<BoatPose>): void`. `BoatWorld` owns separate raw and attenuated `BoatPose` records and passes the attenuated record to `smoothBoatPoseInto`.
