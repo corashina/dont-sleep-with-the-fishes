@@ -22,21 +22,24 @@ edge therefore receives identical Gerstner displacement, so no visible crack
 or overlapping depth surface is introduced. The ring decreases tessellation
 away from the player, where fog and perspective hide fine wave detail.
 
-The horizon surface will extend beyond the gameplay camera far plane. This
-keeps the water shader present for every visible ray below the horizon, while
-the camera clipping plane remains unchanged for the rest of the game.
+The shared gameplay camera far plane will increase from 220 to 1,000 units.
+The horizon surface will extend slightly beyond that distance. This keeps the
+water shader present until the remaining sub-pixel gap is covered by the
+existing bright horizon blend, without changing the near clip distance.
 
 ## Scope
 
 The single shared `OceanRenderer` serves the title, scavenging, and survival
 worlds, so the correction applies consistently to each phase. The skybox
-palette, cloud treatment, wave field, fog values, and gameplay camera
-configuration are otherwise unchanged.
+palette, cloud treatment, wave field, fog values, and gameplay camera near
+clip configuration are otherwise unchanged.
 
 ## Verification
 
 - Add geometry tests that prove the dense center remains unchanged and that
-  the continuation reaches past the camera's 220-unit clip distance.
+  the continuation reaches past the camera's 1,000-unit clip distance.
+- Add a camera construction test that locks the shared far plane at 1,000
+  units without changing its existing field of view or near clip distance.
 - Run the targeted ocean test red before implementation, then green after the
   geometry change.
 - Run typecheck, the full test suite, and the production build.
