@@ -327,6 +327,7 @@ export class World {
         this.shipBuild.waterExclusion.halfLength,
         this.shipBuild.waterExclusion.taperStart,
         this.shipBuild.waterExclusion.minimumLocalY,
+        this.shipBuild.waterExclusion.heightProfile,
       ),
       createWaterExclusion(
         this.lifeboat,

@@ -12,6 +12,7 @@ import {
   Vector3,
 } from 'three';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
+import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
 import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
@@ -29,6 +30,7 @@ export interface ShipGeometryBuild {
     halfLength: number;
     taperStart: number;
     minimumLocalY: number;
+    heightProfile: WaterExclusionHeightProfile;
   };
   stackOutlets: readonly [Vector3, Vector3];
   disposeGeometry(): void;
@@ -40,6 +42,7 @@ const ROOM_WALL_HEIGHT = 3.4;
 
 const HULL_HEIGHT = 1.1;
 const HULL_TOP_Y = 1.86;
+const HULL_BOTTOM_TAPER = { widthScale: 0.86, lengthScale: 0.96 } as const;
 const DECK_WIDTH = 12;
 const DECK_THICKNESS = 0.28;
 const DECK_LENGTH = 34;
@@ -728,7 +731,7 @@ export function createShipGeometry(
     HULL_TOP_Y,
     materials.darkHull,
     true,
-    { widthScale: 0.86, lengthScale: 0.96 },
+    HULL_BOTTOM_TAPER,
   );
   addRoundedPrism(
     root,
@@ -767,10 +770,6 @@ export function createShipGeometry(
       (zone.bounds.minZ + zone.bounds.maxZ) / 2,
     ),
   ]));
-  const waterExclusionHalfLength = (
-    requiredZone(layout, 'cargoDeck').bounds.maxZ
-    - requiredZone(layout, 'cargoDeck').bounds.minZ
-  ) / 2;
   let disposed = false;
 
   return {
@@ -779,10 +778,16 @@ export function createShipGeometry(
     arcColliders,
     zoneCenters,
     waterExclusion: {
-      halfWidth: HALF_WIDTH - 0.2,
-      halfLength: waterExclusionHalfLength,
-      taperStart: Number((waterExclusionHalfLength - END_CAP_DEPTH).toFixed(1)),
+      halfWidth: HALF_WIDTH,
+      halfLength: HALF_LENGTH,
+      taperStart: HALF_LENGTH - END_CAP_DEPTH,
       minimumLocalY: HULL_TOP_Y - HULL_HEIGHT,
+      heightProfile: {
+        lowerHalfWidth: HALF_WIDTH * HULL_BOTTOM_TAPER.widthScale,
+        lowerHalfLength: HALF_LENGTH * HULL_BOTTOM_TAPER.lengthScale,
+        lowerTaperStart: (HALF_LENGTH - END_CAP_DEPTH) * HULL_BOTTOM_TAPER.lengthScale,
+        upperLocalY: HULL_TOP_Y,
+      },
     },
     stackOutlets,
     disposeGeometry: () => {
