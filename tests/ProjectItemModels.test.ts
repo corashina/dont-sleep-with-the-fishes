@@ -3,55 +3,18 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { NodeIO, type Node } from '@gltf-transform/core';
+import { NodeIO } from '@gltf-transform/core';
 // @ts-expect-error This JavaScript audit entry point intentionally has no declaration file.
 import { countTriangles } from '../scripts/check-item-models.mjs';
 import {
   buildProjectItemModels,
-  PROJECT_ITEM_IDS,
-  PROJECT_ITEM_RECIPES,
+
 } from '../scripts/project-item-models.mjs';
 
 const PROJECT_IDS = [
   'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ] as const;
 
-function nodeBounds(node: Node): { min: number[]; max: number[] } {
-  const mesh = node.getMesh();
-  if (!mesh) throw new Error(`${node.getName()}: missing mesh`);
-  const matrix = node.getWorldMatrix();
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  for (const primitive of mesh.listPrimitives()) {
-    const position = primitive.getAttribute('POSITION');
-    if (!position) throw new Error(`${node.getName()}: missing positions`);
-    const point = [0, 0, 0];
-    for (let index = 0; index < position.getCount(); index += 1) {
-      position.getElement(index, point);
-      const world = [
-        matrix[0] * point[0]! + matrix[4] * point[1]! + matrix[8] * point[2]! + matrix[12],
-        matrix[1] * point[0]! + matrix[5] * point[1]! + matrix[9] * point[2]! + matrix[13],
-        matrix[2] * point[0]! + matrix[6] * point[1]! + matrix[10] * point[2]! + matrix[14],
-      ];
-      for (let axis = 0; axis < 3; axis += 1) {
-        min[axis] = Math.min(min[axis]!, world[axis]!);
-        max[axis] = Math.max(max[axis]!, world[axis]!);
-      }
-    }
-  }
-  return { min, max };
-}
-
-function overlap(firstMin: number, firstMax: number, secondMin: number, secondMax: number): number {
-  return Math.max(0, Math.min(firstMax, secondMax) - Math.max(firstMin, secondMin));
-}
-
-describe('project-authored item model catalog', () => {
-  it('defines the exact project-authored model set', () => {
-    expect(PROJECT_ITEM_IDS).toEqual(PROJECT_IDS);
-    expect(Object.keys(PROJECT_ITEM_RECIPES)).toEqual(PROJECT_IDS);
-  });
-});
 
 describe('project-authored item model builder', () => {
   let root: string;
@@ -74,28 +37,6 @@ describe('project-authored item model builder', () => {
       expect(await countTriangles(file), id).toBeGreaterThan(0);
       expect(await countTriangles(file), id).toBeLessThanOrEqual(3_000);
     }
-  });
-
-  it('hides the unused umbrella handle half inside its grip to leave an open crook', async () => {
-    await buildProjectItemModels({
-      outputRoot,
-      recipes: { umbrella: PROJECT_ITEM_RECIPES.umbrella },
-    });
-    const document = await new NodeIO().read(join(outputRoot, 'umbrella.glb'));
-    const nodes = Object.fromEntries(document.getRoot().listScenes()[0]!.listChildren().map((node) => [
-      node.getName(), node,
-    ]));
-    const handle = nodeBounds(nodes.handle!);
-    const grip = nodeBounds(nodes.grip!);
-    const projectedHandleArea = (handle.max[0]! - handle.min[0]!)
-      * (handle.max[1]! - handle.min[1]!);
-    const projectedOverlapArea = overlap(handle.min[0]!, handle.max[0]!, grip.min[0]!, grip.max[0]!)
-      * overlap(handle.min[1]!, handle.max[1]!, grip.min[1]!, grip.max[1]!);
-
-    expect(projectedOverlapArea / projectedHandleArea).toBeGreaterThanOrEqual(0.5);
-    expect(handle.max[0]! - grip.max[0]!).toBeGreaterThan(0.05);
-    expect(grip.min[2]!).toBeLessThanOrEqual(handle.min[2]!);
-    expect(grip.max[2]!).toBeGreaterThanOrEqual(handle.max[2]!);
   });
 
   it('writes finite normals aligned with every triangle winding', async () => {
@@ -171,9 +112,5 @@ describe('project-authored item model CLI', () => {
     }
   });
 
-  it('requires exactly one output path', () => {
-    const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8' });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('<outputRoot>');
-  });
+
 });

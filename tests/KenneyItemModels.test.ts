@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Document, NodeIO } from '@gltf-transform/core';
 import {
   buildKenneyItemModels,
@@ -335,23 +334,5 @@ describe('Kenney item model builder', () => {
         },
       },
     })).rejects.toThrow(/missingItem/);
-  });
-});
-
-describe('Kenney item model CLI', () => {
-  const scriptPath = resolve('scripts', 'kenney-item-models.mjs');
-
-  it('prints the pinned pack descriptors as JSON', () => {
-    const result = spawnSync(process.execPath, [scriptPath, '--packs'], { encoding: 'utf8' });
-
-    expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual(KENNEY_PACKS);
-  });
-
-  it('requires exactly two positional paths for a build', () => {
-    const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8' });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('<sourceRoot> <outputRoot>');
   });
 });

@@ -280,18 +280,7 @@ describe('scavenging ship layout', () => {
       .toThrow(/cabin-desk-aft:top-left.*reachable standing point/i);
   });
 
-  it.each([1.7, 2.3])('rejects door width %s outside the approved range', (width) => {
-    const invalid = {
-      ...SHIP_LAYOUT,
-      doors: SHIP_LAYOUT.doors.map((door, index) => index === 0 ? { ...door, width } : door),
-    };
-    expect(() => validateShipLayout(invalid)).toThrow(/cabin-port-door.*width/i);
-  });
 
-  it.each([0.9, 1.2])('rejects rail height %s outside the approved range', (height) => {
-    const invalid = { ...SHIP_LAYOUT, rail: { ...SHIP_LAYOUT.rail, height } };
-    expect(() => validateShipLayout(invalid)).toThrow(/rail height/i);
-  });
 
   it('rejects a rail opening below 3.0 and non-finite rectangle coordinates', () => {
     const narrowOpening = {

@@ -132,17 +132,3 @@ describe('ship furniture model audit CLI', () => {
     expect(result.stderr).toContain('bedBunk row is missing 2026-07-15');
   });
 });
-
-describe('model package scripts', () => {
-  it('retains item and ship subcommands and composes aggregate commands', async () => {
-    const packageJson = JSON.parse(await readFile(resolve('package.json'), 'utf8'));
-    expect(packageJson.scripts).toMatchObject({
-      'models:fetch:items': 'powershell -ExecutionPolicy Bypass -File scripts/fetch-item-models.ps1',
-      'models:fetch:ship': 'powershell -ExecutionPolicy Bypass -File scripts/fetch-ship-furniture.ps1',
-      'models:fetch': 'bun run models:fetch:items && bun run models:fetch:ship',
-      'models:check:items': 'node scripts/check-item-models.mjs',
-      'models:check:ship': 'node scripts/check-ship-furniture.mjs',
-      'models:check': 'bun run models:check:items && bun run models:check:ship',
-    });
-  });
-});

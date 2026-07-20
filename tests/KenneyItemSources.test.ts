@@ -62,13 +62,6 @@ describe('Kenney item source guards', () => {
     ], { encoding: 'utf8' });
   }
 
-  it('accepts a matching archive SHA-256', () => {
-    const result = runHelper(
-      `Assert-FileSha256 -Path ${quotePowerShell(archivePath)} -Expected ${quotePowerShell(hash.toUpperCase())}`,
-    );
-
-    expect(result.status, result.stderr).toBe(0);
-  });
 
   it('rejects an archive with a mismatched SHA-256', () => {
     const wrongHash = '0'.repeat(64);

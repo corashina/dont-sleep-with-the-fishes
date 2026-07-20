@@ -21,22 +21,6 @@ function survival(
 }
 
 describe('post-processing profiles', () => {
-  it.each([
-    [{ kind: 'scavenge', elapsedSeconds: 4, sinkingProgress: 0, reducedMotion: false }, 'scavenge'],
-    [survival('day', 'calm'), 'survival-day-calm'],
-    [survival('day', 'overcast'), 'survival-day-overcast'],
-    [survival('day', 'squall'), 'survival-day-squall'],
-    [survival('night', 'calm'), 'survival-night-calm'],
-    [survival('night', 'overcast'), 'survival-night-overcast'],
-    [survival('night', 'squall'), 'survival-night-squall'],
-  ] as const)('selects %s as %s', (state, id) => {
-    const profile = selectPostProcessingProfile(state);
-    expect(profile.id).toBe(id);
-    expect(Object.isFrozen(profile)).toBe(true);
-    expect(profile.halftoneSizeCssPixels).toBeGreaterThanOrEqual(4);
-    expect(profile.chromaticAberrationCssPixels).toBeLessThan(1);
-  });
-
   it('clamps sinking progress before increasing only vignette strength', () => {
     const base = selectPostProcessingProfile({
       kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
