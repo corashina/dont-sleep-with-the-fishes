@@ -247,12 +247,27 @@ describe('player movement helpers', () => {
     )).toBe(deckEyeHeight);
   });
 
-  it('blocks a standing player body from crossing the production waist rail', () => {
+  it('allows a standing player through the production midship rail opening', () => {
     const ship = createTestShip();
     try {
       const result = resolveLocalMovement(
         { x: 5.4, y: PLAYER_Y, z: 0 },
         { x: 6.4, y: PLAYER_Y, z: 0 },
+        PLAYER_LAYOUT_RADIUS,
+        ship.colliders,
+      );
+      expect(result.x).toBeCloseTo(6.4);
+    } finally {
+      ship.dispose();
+    }
+  });
+
+  it('blocks a standing player at the adjacent production waist rail', () => {
+    const ship = createTestShip();
+    try {
+      const result = resolveLocalMovement(
+        { x: 5.4, y: PLAYER_Y, z: 4 },
+        { x: 6.4, y: PLAYER_Y, z: 4 },
         PLAYER_LAYOUT_RADIUS,
         ship.colliders,
       );

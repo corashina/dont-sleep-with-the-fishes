@@ -21,6 +21,17 @@ describe('scavenging ship layout', () => {
     expect(SHIP_LAYOUT.rail.starboardOpening.width).toBe(3.2);
     expect(SHIP_LAYOUT.lanes.filter(({ id }) => /exterior-main/.test(id))
       .map(({ clearWidth }) => clearWidth)).toEqual([2.05, 2.05]);
+    const lifeboatStation = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
+    const evacuation = SHIP_LAYOUT.targets.find(({ kind }) => kind === 'evacuation')!;
+    expect(lifeboatStation.bounds).toEqual({ minX: 3.8, maxX: 6, minZ: -1.6, maxZ: 1.6 });
+    expect(lifeboatStation.furniturePolicy.clearCenter).toEqual({
+      minX: 5.05, maxX: 5.75, minZ: -0.35, maxZ: 0.35,
+    });
+    expect(evacuation.position).toEqual([5.4, 0]);
+    expect(SHIP_LAYOUT.evacuationRect).toEqual({
+      minX: 5.05, maxX: 5.75, minZ: -0.35, maxZ: 0.35,
+    });
+    expect(SHIP_LAYOUT.rail.starboardOpening).toEqual({ centerZ: 0, width: 3.2 });
   });
 
   it('limits every furnished zone to four role-specific perimeter groups', () => {
