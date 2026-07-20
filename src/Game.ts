@@ -51,6 +51,12 @@ const PRODUCTION_FACTORIES: GameFactories = {
 
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
+export const GAME_CAMERA = Object.freeze({
+  fov: 65,
+  near: 0.08,
+  far: 1000,
+});
+
 export interface GameTestOptions {
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
@@ -112,7 +118,12 @@ export class Game {
       renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
       sceneRenderer = createSceneRenderer(renderer);
-      const camera = new PerspectiveCamera(65, 1, 0.08, 220);
+      const camera = new PerspectiveCamera(
+        GAME_CAMERA.fov,
+        1,
+        GAME_CAMERA.near,
+        GAME_CAMERA.far,
+      );
       const clock = new Clock();
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       initializationStarted = true;
@@ -167,7 +178,12 @@ export class Game {
       mount,
       renderer,
       sceneRenderer,
-      new PerspectiveCamera(65, 1, 0.08, 220),
+      new PerspectiveCamera(
+        GAME_CAMERA.fov,
+        1,
+        GAME_CAMERA.near,
+        GAME_CAMERA.far,
+      ),
       clock,
       reducedMotion,
       options.propModels,
