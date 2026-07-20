@@ -47,12 +47,16 @@ describe('OceanRenderer', () => {
 
   it('disposes each ocean geometry once', () => {
     const ocean = new OceanRenderer();
+    const disposeOceanGeometry = vi.spyOn(ocean.mesh.geometry, 'dispose');
     const disposeHorizonGeometry = vi.spyOn(ocean.horizonMesh.geometry, 'dispose');
+    const disposeMaterial = vi.spyOn(ocean.material, 'dispose');
 
     ocean.dispose();
     ocean.dispose();
 
+    expect(disposeOceanGeometry).toHaveBeenCalledOnce();
     expect(disposeHorizonGeometry).toHaveBeenCalledOnce();
+    expect(disposeMaterial).toHaveBeenCalledOnce();
   });
 
   it('builds domain-warped foam ribbons in world-space wind coordinates', () => {
