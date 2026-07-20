@@ -62,18 +62,18 @@ describe('GameUI', () => {
     expect(ratio).toBeGreaterThanOrEqual(3);
   });
 
-  it('stacks the watch below the carry circles and backs the countdown', () => {
+  it('places the watch to the right of the carry circles and backs the countdown', () => {
     expect(mainStyles).toMatch(
-      /\.carried\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*center;/s,
+      /\.carried\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*row;[^}]*align-items:\s*center;[^}]*gap:\s*12px;/s,
     );
     expect(mainStyles).toMatch(
-      /\.pocket-watch\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[^}]*right:\s*auto;[^}]*left:\s*auto;/s,
+      /\.pocket-watch\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[^}]*right:\s*auto;[^}]*left:\s*auto;[^}]*margin-top:\s*0;/s,
+    );
+    expect(mainStyles).toMatch(
+      /@media \(max-width:\s*820px\)[\s\S]*?\.carried\s*\{[^}]*gap:\s*8px;[^}]*\}[\s\S]*?\.pocket-watch\s*\{[^}]*width:\s*96px;[^}]*height:\s*72px;/s,
     );
     expect(mainStyles).toMatch(
       /\.pocket-watch \[data-timer\]\s*\{[^}]*background:\s*#090b0ce6;[^}]*color:\s*var\(--ink-bone\);/s,
-    );
-    expect(mainStyles).not.toMatch(
-      /@media \(max-width:\s*980px\)[\s\S]*?\.pocket-watch\s*\{\s*right:\s*82px;/,
     );
   });
 
