@@ -215,7 +215,7 @@ describe('freighter geometry', () => {
       new Vector3(3.8, 3.72, 5.2),
       new Vector3(-4.7, 3.72, -8.2),
       new Vector3(4.7, 3.72, -8.2),
-      new Vector3(5.9, 3.72, -6.5),
+      new Vector3(5.9, 3.72, 0),
     ];
     clearPoints.forEach((point) => expect(build.shellColliders.some((box) =>
       point.x >= box.minX && point.x <= box.maxX &&
@@ -484,7 +484,7 @@ describe('freighter geometry', () => {
       expect(railMeshes.some((mesh) => new Box3().setFromObject(mesh)
         .containsPoint(new Vector3(railX, FREIGHTER_DIMENSIONS.deckY + 0.5, z)))).toBe(false);
     });
-    [openingMin - 0.01, openingMax + 0.01, 0].forEach((z) => {
+    [openingMin - 0.01, openingMax + 0.01, 6.5].forEach((z) => {
       expect(railColliderAt(build, railX, z), `starboard rail collider at ${z}`).toBeDefined();
     });
     expect(railColliderAt(build, -railX, opening.centerZ), 'full port rail').toBeDefined();
@@ -607,8 +607,8 @@ describe('freighter geometry', () => {
     expect(Math.abs(blocked.z)).toBeGreaterThan(15);
     expect(Math.abs(blocked.z)).toBeLessThan(17.2);
     const lifeboatGap = resolveLocalMovement(
-      { x: 5.4, y: 3.72, z: -6.5 },
-      { x: 6.4, y: 3.72, z: -6.5 },
+      { x: 5.4, y: 3.72, z: 0 },
+      { x: 6.4, y: 3.72, z: 0 },
       0.35,
       build.shellColliders,
     );

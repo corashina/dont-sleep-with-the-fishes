@@ -205,7 +205,7 @@ function aftDoor(
 const crewBounds = rect(-3.7, 3.7, 3.5, 9.8);
 const wheelhouseBounds = rect(-3.7, 3.7, 10.8, 13.8);
 const storageBounds = rect(-3.8, 3.8, -10.4, -6.5);
-const lifeboatBounds = rect(3.8, 6, -8.1, -4.9);
+const lifeboatBounds = rect(3.8, 6, -1.6, 1.6);
 const cargoBounds = rect(-6, 6, -17.6, 17.6);
 
 const doors: readonly ShipDoorSpec[] = [
@@ -421,7 +421,7 @@ function navigationTargets(
   ];
   result.push(...doorNavigationTargets(doorSpecs));
   result.push(...surfaceNavigationTargets(furnitureSpecs));
-  result.push({ id: 'evacuation', position: [5.4, -6.5], kind: 'evacuation' });
+  result.push({ id: 'evacuation', position: [5.4, 0], kind: 'evacuation' });
   return result;
 }
 
@@ -471,7 +471,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       furniturePolicy: {
         maxFixtures: 0,
         allowedModelIds: [],
-        clearCenter: rect(5.05, 5.75, -6.85, -6.15),
+        clearCenter: rect(5.05, 5.75, -0.35, 0.35),
       },
     },
   ],
@@ -493,10 +493,10 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   rail: {
     height: 1.05,
     innerFaceX: 5.875,
-    starboardOpening: { centerZ: -6.5, width: 3.2 },
+    starboardOpening: { centerZ: 0, width: 3.2 },
   },
   machineryClosure: rect(-2.6, 2.6, -14.4, -11.4),
-  evacuationRect: rect(5.05, 5.75, -6.85, -6.15),
+  evacuationRect: rect(5.05, 5.75, -0.35, 0.35),
 };
 
 function positive(value: number): boolean {
@@ -954,7 +954,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   const openingMinZ = opening.centerZ - opening.width / 2;
   const openingMaxZ = opening.centerZ + opening.width / 2;
   const evacuation = layout.targets.find(({ kind }) => kind === 'evacuation');
-  if (openingMinZ > -8.1 || openingMaxZ < -4.9 || !evacuation
+  if (openingMinZ > lifeboatBounds.minZ || openingMaxZ < lifeboatBounds.maxZ || !evacuation
     || evacuation.position[1] < openingMinZ || evacuation.position[1] > openingMaxZ) {
     throw new Error('Starboard rail opening must cover the lifeboat station and evacuation target');
   }
