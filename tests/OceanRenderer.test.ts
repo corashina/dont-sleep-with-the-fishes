@@ -89,6 +89,10 @@ describe('OceanRenderer', () => {
     const shader = ocean.material.fragmentShader;
 
     expect(shader).toContain('uniform float uExclusionMinimumLocalYs[2];');
+    expect(shader).toContain('uniform vec4 uExclusionLowerBounds[2];');
+    expect(shader).toContain('uniform float uExclusionUpperLocalYs[2];');
+    expect(shader).toContain('float profileProgress = clamp(');
+    expect(shader).toContain('mix(lowerHalfWidth, exclusionHalfWidth, profileProgress)');
     expect(shader).toContain('exclusionLocal.y >= uExclusionMinimumLocalYs[i]');
 
     ocean.dispose();

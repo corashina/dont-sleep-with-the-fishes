@@ -97,8 +97,11 @@ const fragmentShader = `
   uniform int uExclusionCount;
   uniform mat4 uExclusionWorldToLocal[2];
   uniform vec4 uExclusionBounds[2];
+  uniform vec4 uExclusionLowerBounds[2];
   uniform float uExclusionTaperStarts[2];
+  uniform float uExclusionLowerTaperStarts[2];
   uniform float uExclusionMinimumLocalYs[2];
+  uniform float uExclusionUpperLocalYs[2];
   varying float vHeight;
   varying float vWaveSlope;
   varying float vViewDepth;
@@ -245,23 +248,40 @@ const fragmentShader = `
       if (i < uExclusionCount) {
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
         vec4 exclusionBounds = uExclusionBounds[i];
+        float minimumLocalY = uExclusionMinimumLocalYs[i];
+        float heightSpan = max(uExclusionUpperLocalYs[i] - minimumLocalY, 0.0001);
+        float profileProgress = clamp(
+          (exclusionLocal.y - minimumLocalY) / heightSpan,
+          0.0,
+          1.0
+        );
+        vec4 lowerBounds = uExclusionLowerBounds[i];
+        float lowerHalfWidth = max(abs(lowerBounds.x), abs(lowerBounds.y));
+        float lowerHalfLength = max(abs(lowerBounds.z), abs(lowerBounds.w));
         float exclusionHalfWidth = max(abs(exclusionBounds.x), abs(exclusionBounds.y));
         float exclusionHalfLength = max(abs(exclusionBounds.z), abs(exclusionBounds.w));
+        float localHalfWidth = mix(lowerHalfWidth, exclusionHalfWidth, profileProgress);
+        float localHalfLength = mix(lowerHalfLength, exclusionHalfLength, profileProgress);
+        float localTaperStart = mix(
+          uExclusionLowerTaperStarts[i],
+          uExclusionTaperStarts[i],
+          profileProgress
+        );
         float exclusionAbsZ = abs(exclusionLocal.z);
-        float taperSpan = max(exclusionHalfLength - uExclusionTaperStarts[i], 0.0);
+        float taperSpan = max(localHalfLength - localTaperStart, 0.0);
         float taperProgress = 0.0;
         if (taperSpan > 0.0) {
           taperProgress = clamp(
-            (exclusionAbsZ - uExclusionTaperStarts[i]) / taperSpan,
+            (exclusionAbsZ - localTaperStart) / taperSpan,
             0.0,
             1.0
           );
         }
-        float localHalfWidth = exclusionHalfWidth
+        localHalfWidth = localHalfWidth
           * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
         if (
           exclusionLocal.y >= uExclusionMinimumLocalYs[i]
-          && exclusionAbsZ <= exclusionHalfLength
+          && exclusionAbsZ <= localHalfLength
           && abs(exclusionLocal.x) <= localHalfWidth
         ) {
           discard;
@@ -418,8 +438,13 @@ export class OceanRenderer {
         uExclusionCount: { value: 0 },
         uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },
+        uExclusionLowerBounds: { value: [new Vector4(), new Vector4()] },
         uExclusionTaperStarts: { value: [0, 0] },
+        uExclusionLowerTaperStarts: { value: [0, 0] },
         uExclusionMinimumLocalYs: {
+          value: [UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y],
+        },
+        uExclusionUpperLocalYs: {
           value: [UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y],
         },
       },
@@ -463,21 +488,35 @@ export class OceanRenderer {
   setExclusions(regions: readonly WaterExclusionRegion[]): void {
     const worldToLocal = this.material.uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = this.material.uniforms.uExclusionBounds!.value as Vector4[];
+    const lowerBounds = this.material.uniforms.uExclusionLowerBounds!.value as Vector4[];
     const taperStarts = this.material.uniforms.uExclusionTaperStarts!.value as number[];
+    const lowerTaperStarts = this.material.uniforms.uExclusionLowerTaperStarts!.value as number[];
     const minimumLocalYs = this.material.uniforms.uExclusionMinimumLocalYs!.value as number[];
+    const upperLocalYs = this.material.uniforms.uExclusionUpperLocalYs!.value as number[];
     const activeCount = Math.min(regions.length, MAX_EXCLUSIONS);
 
     for (let index = 0; index < MAX_EXCLUSIONS; index += 1) {
       worldToLocal[index]!.identity();
       bounds[index]!.set(0, 0, 0, 1);
+      lowerBounds[index]!.set(0, 0, 0, 1);
       taperStarts[index] = 0;
+      lowerTaperStarts[index] = 0;
       minimumLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
+      upperLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
     }
     for (let index = 0; index < activeCount; index += 1) {
       worldToLocal[index]!.copy(regions[index]!.worldToLocal);
       bounds[index]!.copy(regions[index]!.bounds);
+      lowerBounds[index]!.set(
+        -regions[index]!.lowerHalfWidth,
+        regions[index]!.lowerHalfWidth,
+        -regions[index]!.lowerHalfLength,
+        regions[index]!.lowerHalfLength,
+      );
       taperStarts[index] = regions[index]!.taperStart;
+      lowerTaperStarts[index] = regions[index]!.lowerTaperStart;
       minimumLocalYs[index] = regions[index]!.minimumLocalY ?? UNBOUNDED_MINIMUM_LOCAL_Y;
+      upperLocalYs[index] = regions[index]!.upperLocalY;
     }
     this.material.uniforms.uExclusionCount!.value = activeCount;
   }
