@@ -67,29 +67,51 @@ const fragmentShader = `
     return fract((value3.x + value3.y) * value3.z);
   }
 
-  float cloudValueNoise(vec2 position) {
-    vec2 cell = floor(position);
-    vec2 fractional = fract(position);
-    vec2 blend = fractional * fractional * (3.0 - 2.0 * fractional);
-    float lower = mix(hash21(cell), hash21(cell + vec2(1.0, 0.0)), blend.x);
-    float upper = mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), blend.x);
-    return mix(lower, upper, blend.y);
+  float cloudValueNoise3D(vec3 position) {
+    vec3 cell = floor(position);
+    vec3 fractional = fract(position);
+    vec3 blend = fractional * fractional * (3.0 - 2.0 * fractional);
+    float c000 = hash31(cell);
+    float c100 = hash31(cell + vec3(1.0, 0.0, 0.0));
+    float c010 = hash31(cell + vec3(0.0, 1.0, 0.0));
+    float c110 = hash31(cell + vec3(1.0, 1.0, 0.0));
+    float c001 = hash31(cell + vec3(0.0, 0.0, 1.0));
+    float c101 = hash31(cell + vec3(1.0, 0.0, 1.0));
+    float c011 = hash31(cell + vec3(0.0, 1.0, 1.0));
+    float c111 = hash31(cell + vec3(1.0));
+    float lower = mix(mix(c000, c100, blend.x), mix(c010, c110, blend.x), blend.y);
+    float upper = mix(mix(c001, c101, blend.x), mix(c011, c111, blend.x), blend.y);
+    return mix(lower, upper, blend.z);
   }
 
-  float cloudMask(vec3 direction) {
-    if (uCloudCoverage <= 0.0) return 0.0;
-    float visibleSky = smoothstep(-0.01, 0.10, direction.y);
-    vec2 mapped = direction.xz / max(0.32, direction.y + 0.32);
-    float broad = cloudValueNoise(mapped * 0.74 + vec2(4.7, -2.8));
-    float detail = cloudValueNoise(mapped * 1.73 + vec2(-8.1, 6.4));
-    float field = mix(broad, detail, 0.34);
+  float cloudFbm(vec3 position) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int octave = 0; octave < 4; octave++) {
+      sum += cloudValueNoise3D(position) * amplitude;
+      position = position * 2.03 + vec3(11.3, -8.2, 5.4);
+      amplitude *= 0.5;
+    }
+    return sum / 0.9375;
+  }
+
+  vec2 cloudLayer(vec3 direction) {
+    if (uCloudCoverage <= 0.0) return vec2(0.0);
+    float visibleSky = smoothstep(-0.02, 0.14, direction.y);
+    vec3 domain = direction * 3.1;
+    vec3 warp = vec3(
+      cloudValueNoise3D(domain * 0.62 + vec3(3.7, -2.1, 4.8)),
+      cloudValueNoise3D(domain * 0.62 + vec3(-5.4, 6.2, -1.7)),
+      cloudValueNoise3D(domain * 0.62 + vec3(8.1, 1.4, -6.6))
+    ) - 0.5;
+    float field = cloudFbm(domain + warp * 0.72);
     float threshold = 1.0 - uCloudCoverage;
-    float coverage = smoothstep(
+    float mask = smoothstep(
       threshold - uCloudContrast,
       threshold + uCloudContrast,
       field
-    );
-    return coverage * visibleSky;
+    ) * visibleSky;
+    return vec2(mask, field);
   }
 
   vec3 starLayer(vec3 direction, float scale, float threshold) {
@@ -144,9 +166,13 @@ const fragmentShader = `
     float horizonLift = exp(-abs(direction.y) * 28.0) * (0.03 + uHaze * 0.08);
     color += uHorizonColor * horizonLift;
 
-    float clouds = cloudMask(direction);
-    vec3 cloudColor = mix(uUpperColor, vec3(0.88, 0.91, 0.90), 0.46);
-    cloudColor = mix(cloudColor, uHorizonColor, uHaze * 0.42);
+    vec2 cloud = cloudLayer(direction);
+    float clouds = cloud.x;
+    float cloudLight = 1.0 - smoothstep(0.42, 0.86, cloud.y);
+    vec3 cloudUnderside = mix(uUpperColor * 0.58, vec3(0.34, 0.40, 0.42), uHaze * 0.56);
+    vec3 cloudTop = mix(vec3(0.86, 0.89, 0.88), vec3(0.66, 0.71, 0.71), uHaze);
+    vec3 cloudColor = mix(cloudUnderside, cloudTop, cloudLight);
+    cloudColor = mix(cloudColor, uHorizonColor, uHaze * 0.48);
     color = mix(color, cloudColor, clouds);
 
     float horizonBand = smoothstep(-0.005, 0.012, direction.y)
