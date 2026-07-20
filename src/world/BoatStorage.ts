@@ -1,5 +1,6 @@
 import { Euler, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, type ItemId, type ItemInstance } from '../game/ItemState';
+import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export interface BoatStorageTransform {
   readonly position: Vector3;
@@ -19,6 +20,19 @@ const slot = (
   scale: number,
 ): SlotSpec => ({ position, rotation: [0, yaw, 0], scale });
 
+const floorSlot = (
+  id: ItemId,
+  x: number,
+  z: number,
+  yaw: number,
+  scale: number,
+  bottomY: number,
+): SlotSpec => slot([
+  x,
+  bottomY - ITEM_MODEL_SPECS[id].normalizedBounds.min[1] * scale,
+  z,
+], yaw, scale);
+
 const BOAT_STORAGE_SLOTS = {
   cannedFood: [
     slot([-1.35, -0.24, 1.15], -0.18, 0.50),
@@ -29,20 +43,20 @@ const BOAT_STORAGE_SLOTS = {
     slot([-0.70, -0.24, 1.15], -0.18, 0.50),
     slot([-0.70, -0.24, 0.45], 0.20, 0.50),
   ],
-  ductTape: [slot([-0.70, -0.24, -0.25], 0.28, 0.50)],
+  ductTape: [floorSlot('ductTape', -0.70, -0.25, 0.28, 0.50, -0.3775)],
   compass: [slot([-0.71, -0.24, -0.95], -0.12, 0.50)],
   map: [slot([-0.70, -0.24, -1.76], 0.12, 0.50)],
   medicalKit: [slot([-0.50, -0.23, -2.65], 0.18, 0.50)],
   spyglass: [slot([0.70, -0.10, 1.15], -0.12, 0.50)],
-  fishingNet: [slot([0.70, -0.16, 0.45], 0.10, 0.50)],
+  fishingNet: [floorSlot('fishingNet', 0.70, 0.45, 0.10, 0.50, -0.365)],
   bucket: [slot([0.70, -0.22, -0.25], -0.12, 0.50)],
   flareGun: [slot([0.58, -0.10, -0.95], -0.20, 0.50)],
-  scubaSet: [slot([1.00, -0.22, -1.45], -0.16, 0.50)],
+  scubaSet: [floorSlot('scubaSet', 1.00, -1.45, -0.16, 0.50, -0.315)],
   anchor: [slot([0, -0.18, -2.35], 0.12, 0.50)],
-  bottledPaper: [slot([1.35, -0.18, 1.15], -0.08, 0.50)],
-  umbrella: [slot([1.35, -0.10, 0.45], 0.10, 0.50)],
+  bottledPaper: [floorSlot('bottledPaper', 1.35, 1.15, -0.08, 0.50, -0.335)],
+  umbrella: [floorSlot('umbrella', 1.33, 0.45, 0.10, 0.50, -0.325)],
   swimRing: [slot([1.35, -0.16, -0.25], -0.10, 0.50)],
-  flashlight: [slot([1.25, -0.10, -0.95], 0.10, 0.50)],
+  flashlight: [floorSlot('flashlight', 1.35, -0.95, 0.10, 0.50, -0.185)],
   harpoonGun: [slot([0.90, -0.10, -2.28], Math.PI / 2, 0.50)],
   energyBar: [slot([0.50, -0.18, -2.75], -0.08, 0.50)],
   fishingRod: [slot([-1.35, 0.12, -1.55], -0.08, 0.50)],

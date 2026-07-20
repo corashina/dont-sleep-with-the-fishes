@@ -309,7 +309,7 @@ describe('PlayerController', () => {
     ['forward starboard exterior', new Vector3(4.5, 3.72, 14.5)],
     ['aft port exterior', new Vector3(-3.4, 3.72, -15.9)],
     ['storage room', new Vector3(0, 3.72, -9.2)],
-    ['lifeboat approach', new Vector3(5.9, 3.72, -6.5)],
+    ['lifeboat approach', new Vector3(5.9, 3.72, 0)],
   ])('keeps the freighter %s inside the playable bounds', (_label, position) => {
     const shipBuild = createTestShip();
     const onFall = vi.fn();

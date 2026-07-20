@@ -332,16 +332,16 @@ describe('CarryController', () => {
   it('reaches the moved scavenging lifeboat with the normal throw speed', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
-    camera.position.set(5.4, 3.72, -6.5);
-    camera.lookAt(9.0, 1.5, -6.5);
+    camera.position.set(5.4, 3.72, 0);
+    camera.lookAt(9.0, 1.5, 0);
     scene.add(camera);
     const object = new Group();
     scene.add(object);
     const carry = new CarryController(scene, camera);
     const outcomes: string[] = [];
     const lifeboatBox = new Box3(
-      new Vector3(7.65, 0.05, -9.22),
-      new Vector3(10.35, 1.35, -3.78),
+      new Vector3(7.65, 0.05, -2.72),
+      new Vector3(10.35, 1.35, 2.72),
     );
 
     carry.pickUp({ instanceId: 'umbrella-1', type: 'umbrella' }, object);

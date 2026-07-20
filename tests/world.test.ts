@@ -432,7 +432,7 @@ describe('world builders', () => {
     const cameraPosition = new Vector3(14, 7, -11);
     const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
       sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-    const target = buoyancy.sampleTarget(time, 9.0, -6.5, sinking.waveAmplitudeScale);
+    const target = buoyancy.sampleTarget(time, 9.0, 0, sinking.waveAmplitudeScale);
     const expectedPose = smoothBoatPose(
       { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
       target,
@@ -488,7 +488,7 @@ describe('world builders', () => {
     expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
     expect(world.lifeboat.position.x).toBeCloseTo(9.0 + expectedPose.driftX);
     expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
-    expect(world.lifeboat.position.z).toBeCloseTo(-6.5 + expectedPose.driftZ);
+    expect(world.lifeboat.position.z).toBeCloseTo(expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
     expect(world.lifeboat.rotation.z).toBeCloseTo(-expectedPose.roll);
     expect(world.lifeboat.scale.toArray()).toEqual([1, 1, 1]);
@@ -1010,8 +1010,8 @@ describe('world builders', () => {
     expect(ship.itemSurfaces.length).toBeGreaterThan(createItemInstances().length);
     expect(ship.colliders.length).toBeGreaterThanOrEqual(24);
     expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
-    expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, -6.5]);
-    expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, -6.5]);
+    expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, 0]);
+    expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, 0]);
     expect(ship.waterExclusion).toEqual({
       halfWidth: 6.25,
       halfLength: 18,
