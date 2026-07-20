@@ -17,12 +17,14 @@ describe('Skybox', () => {
     expect(sky.material.side).toBe(BackSide);
     expect(sky.material.depthWrite).toBe(false);
     expect(sky.material.depthTest).toBe(false);
-    expect(sky.material.fragmentShader).toContain('float cloudValueNoise(');
+    expect(sky.material.fragmentShader).toContain('float cloudValueNoise3D(');
+    expect(sky.material.fragmentShader).toContain('float cloudFbm(');
+    expect(sky.material.fragmentShader).toContain('vec2 cloudLayer(');
     expect(sky.material.fragmentShader).toContain('uniform float uCloudCoverage;');
     expect(sky.material.fragmentShader).toContain('uniform float uHorizonBandStrength;');
     expect(sky.material.fragmentShader).toContain('float horizonBand =');
     expect(sky.material.fragmentShader).toContain(
-      'if (uCloudCoverage <= 0.0) return 0.0;',
+      'if (uCloudCoverage <= 0.0) return vec2(0.0);',
     );
     sky.dispose();
   });
