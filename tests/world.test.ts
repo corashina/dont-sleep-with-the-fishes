@@ -553,15 +553,24 @@ describe('world builders', () => {
     const uniforms = (ocean.material as ShaderMaterial).uniforms;
     const matrices = uniforms.uExclusionWorldToLocal!.value as Matrix4[];
     const bounds = uniforms.uExclusionBounds!.value as Vector4[];
+    const lowerBounds = uniforms.uExclusionLowerBounds!.value as Vector4[];
     const taperStarts = uniforms.uExclusionTaperStarts!.value as number[];
+    const lowerTaperStarts = uniforms.uExclusionLowerTaperStarts!.value as number[];
     const minimumLocalYs = uniforms.uExclusionMinimumLocalYs!.value as number[];
+    const upperLocalYs = uniforms.uExclusionUpperLocalYs!.value as number[];
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
-      [-6.05, 6.05, -17.6, 17.6],
+      [-6.25, 6.25, -18, 18],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
-    expect(taperStarts).toEqual([13.6, 1.05]);
+    expect(taperStarts).toEqual([14, 1.05]);
     expect(minimumLocalYs).toEqual([0.76, -0.38]);
+    expect(lowerBounds.map((value) => value.toArray())).toEqual([
+      [-5.375, 5.375, -17.28, 17.28],
+      [-1.6, 1.6, -3.04, 3.04],
+    ]);
+    expect(lowerTaperStarts).toEqual([13.44, 1.05]);
+    expect(upperLocalYs).toEqual([1.86, -0.38]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(world.ship.position.y).not.toBe(0);
     expect(world.ship.rotation.x).not.toBe(0);
@@ -570,6 +579,10 @@ describe('world builders', () => {
       bounds: bounds[0]!,
       taperStart: taperStarts[0]!,
       minimumLocalY: minimumLocalYs[0]!,
+      lowerHalfWidth: Math.abs(lowerBounds[0]!.x),
+      lowerHalfLength: Math.abs(lowerBounds[0]!.z),
+      lowerTaperStart: lowerTaperStarts[0]!,
+      upperLocalY: upperLocalYs[0]!,
     };
     expect(pointInWaterExclusion(
       world.ship.localToWorld(new Vector3(0, 0.5, 0)),
@@ -583,6 +596,22 @@ describe('world builders', () => {
       world.ship.localToWorld(new Vector3(5.5, 1.2, 16.5)),
       freighterRegion,
     )).toBe(false);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(5.7, 0.76, 0)),
+      freighterRegion,
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(5.7, 1.86, 0)),
+      freighterRegion,
+    )).toBe(true);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(0, 0.76, 17.5)),
+      freighterRegion,
+    )).toBe(false);
+    expect(pointInWaterExclusion(
+      world.ship.localToWorld(new Vector3(0, 1.86, 17.5)),
+      freighterRegion,
+    )).toBe(true);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
     expect(pointInWaterExclusion(
       world.lifeboat.localToWorld(new Vector3(0.8, 0, 1.5)),
@@ -591,6 +620,10 @@ describe('world builders', () => {
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
         minimumLocalY: minimumLocalYs[1]!,
+        lowerHalfWidth: Math.abs(lowerBounds[1]!.x),
+        lowerHalfLength: Math.abs(lowerBounds[1]!.z),
+        lowerTaperStart: lowerTaperStarts[1]!,
+        upperLocalY: upperLocalYs[1]!,
       },
     )).toBe(true);
     expect(pointInWaterExclusion(
@@ -600,6 +633,10 @@ describe('world builders', () => {
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
         minimumLocalY: minimumLocalYs[1]!,
+        lowerHalfWidth: Math.abs(lowerBounds[1]!.x),
+        lowerHalfLength: Math.abs(lowerBounds[1]!.z),
+        lowerTaperStart: lowerTaperStarts[1]!,
+        upperLocalY: upperLocalYs[1]!,
       },
     )).toBe(true);
     expect(pointInWaterExclusion(
@@ -609,6 +646,10 @@ describe('world builders', () => {
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
         minimumLocalY: minimumLocalYs[1]!,
+        lowerHalfWidth: Math.abs(lowerBounds[1]!.x),
+        lowerHalfLength: Math.abs(lowerBounds[1]!.z),
+        lowerTaperStart: lowerTaperStarts[1]!,
+        upperLocalY: upperLocalYs[1]!,
       },
     )).toBe(false);
     expect(pointInWaterExclusion(
@@ -618,6 +659,10 @@ describe('world builders', () => {
         bounds: bounds[1]!,
         taperStart: taperStarts[1]!,
         minimumLocalY: minimumLocalYs[1]!,
+        lowerHalfWidth: Math.abs(lowerBounds[1]!.x),
+        lowerHalfLength: Math.abs(lowerBounds[1]!.z),
+        lowerTaperStart: lowerTaperStarts[1]!,
+        upperLocalY: upperLocalYs[1]!,
       },
     )).toBe(false);
     world.dispose();
@@ -968,10 +1013,16 @@ describe('world builders', () => {
     expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, -6.5]);
     expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, -6.5]);
     expect(ship.waterExclusion).toEqual({
-      halfWidth: 6.05,
-      halfLength: 17.6,
-      taperStart: 13.6,
+      halfWidth: 6.25,
+      halfLength: 18,
+      taperStart: 14,
       minimumLocalY: 0.76,
+      heightProfile: {
+        lowerHalfWidth: 5.375,
+        lowerHalfLength: 17.28,
+        lowerTaperStart: 13.44,
+        upperLocalY: 1.86,
+      },
     });
     expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
     expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();

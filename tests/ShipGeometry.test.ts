@@ -151,10 +151,16 @@ describe('freighter geometry', () => {
     expect(build.root.getObjectByName('smokestack-starboard')).toBeInstanceOf(Mesh);
     expect(build.root.getObjectByName('alarm-beacon')).toBeInstanceOf(Mesh);
     expect(build.waterExclusion).toEqual({
-      halfWidth: 6.05,
-      halfLength: 17.6,
-      taperStart: 13.6,
+      halfWidth: 6.25,
+      halfLength: 18,
+      taperStart: 14,
       minimumLocalY: 0.76,
+      heightProfile: {
+        lowerHalfWidth: 5.375,
+        lowerHalfLength: 17.28,
+        lowerTaperStart: 13.44,
+        upperLocalY: 1.86,
+      },
     });
     build.disposeGeometry();
     materials.dispose();

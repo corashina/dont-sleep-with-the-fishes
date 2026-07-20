@@ -1,4 +1,5 @@
 import { Group, Vector3 } from 'three';
+import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { createShipFurniture } from './ShipFurniture';
@@ -24,6 +25,7 @@ export interface ShipBuild {
     halfLength: number;
     taperStart: number;
     minimumLocalY: number;
+    heightProfile: WaterExclusionHeightProfile;
   };
   updateEffects(delta: number, sinkingProgress: number, reducedMotion: boolean): void;
   dispose(): void;
