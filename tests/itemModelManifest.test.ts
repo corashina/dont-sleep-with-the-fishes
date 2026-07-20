@@ -34,6 +34,16 @@ const TARGET_LONGEST_DIMENSIONS = {
   scubaSet: 0.88, anchor: 0.88, bottledPaper: 0.62, umbrella: 0.90, swimRing: 0.70,
   flashlight: 0.72, harpoonGun: 1.00, energyBar: 0.48, fishingRod: 1.80,
 } as const satisfies Readonly<Record<ItemId, number>>;
+const EXPECTED_ROTATIONS = {
+  cannedFood: [0, 0, 0], baitTin: [0, 0, 0], ductTape: [0, 0, 0],
+  compass: [0, 0, 0], map: [0, 0, 0], medicalKit: [0, 0, 0],
+  spyglass: [0, 0, 0], fishingNet: [0, 0, Math.PI / 2], bucket: [0, 0, 0],
+  flareGun: [0, Math.PI / 2, 0], scubaSet: [0, 0, Math.PI / 2],
+  anchor: [0, 0, 0], bottledPaper: [0, 0, Math.PI / 2],
+  umbrella: [0, 0, Math.PI / 2], swimRing: [0, 0, 0],
+  flashlight: [0, 0, Math.PI / 2], harpoonGun: [0, 0, 0],
+  energyBar: [0, 0, 0], fishingRod: [Math.PI / 2, 0, 0],
+} as const satisfies Readonly<Record<ItemId, readonly [number, number, number]>>;
 
 function runtimeLedgerRows(): readonly (readonly string[])[] {
   const heading = '## Runtime item asset ledger';
@@ -46,6 +56,12 @@ function runtimeLedgerRows(): readonly (readonly string[])[] {
 }
 
 describe('item model manifest', () => {
+  it('authors a natural resting rotation for every runtime item', () => {
+    for (const id of ITEM_IDS) {
+      expect(ITEM_MODEL_SPECS[id].rotation, id).toEqual(EXPECTED_ROTATIONS[id]);
+    }
+  });
+
   it('publishes exactly one local GLB per runtime item plus generated metadata', async () => {
     expect((await readdir(MODELS_DIR)).sort()).toEqual(EXPECTED_MODEL_FILES);
     expect(Object.keys(ITEM_MODEL_SPECS).sort()).toEqual([...ITEM_IDS].sort());
