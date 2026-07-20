@@ -61,26 +61,6 @@ import type {
 
 export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
 
-const SURVIVAL_LOOK_YAW_LIMIT = Math.PI / 4;
-const SURVIVAL_LOOK_PITCH_LIMIT = Math.PI / 8;
-const SURVIVAL_LOOK_DAMPING = 10;
-
-export function clampParallax(
-  x: number,
-  y: number,
-): { yaw: number; pitch: number } {
-  return {
-    yaw: Math.min(SURVIVAL_LOOK_YAW_LIMIT, Math.max(
-      -SURVIVAL_LOOK_YAW_LIMIT,
-      x * SURVIVAL_LOOK_YAW_LIMIT,
-    )),
-    pitch: Math.min(SURVIVAL_LOOK_PITCH_LIMIT, Math.max(
-      -SURVIVAL_LOOK_PITCH_LIMIT,
-      y * SURVIVAL_LOOK_PITCH_LIMIT,
-    )),
-  };
-}
-
 const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   none: 0,
   fish: 1.2,
@@ -253,10 +233,6 @@ export class BoatWorld {
   private readonly worldCameraPosition = new Vector3();
   private weather: WeatherId = 'calm';
   private phase: 'day' | 'night' = 'day';
-  private pointerX = 0;
-  private pointerY = 0;
-  private currentParallaxYaw = 0;
-  private currentParallaxPitch = 0;
   private sprayCooldown = 0;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
@@ -353,12 +329,6 @@ export class BoatWorld {
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
     this.applyBasePresentation();
-  }
-
-  setPointer(normalizedX: number, normalizedY: number): void {
-    if (this.disposed) return;
-    this.pointerX = clamp(normalizedX, -1, 1);
-    this.pointerY = clamp(normalizedY, -1, 1);
   }
 
   setPhase(phase: 'day' | 'night'): void {
@@ -488,7 +458,6 @@ export class BoatWorld {
       amplitudeScale,
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
-    this.updateParallax(delta);
     this.applyBasePresentation();
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(
@@ -577,18 +546,6 @@ export class BoatWorld {
     this.distantVessel.visible = false;
   }
 
-  private updateParallax(delta: number): void {
-    const { yaw: targetYaw, pitch: targetPitch } = clampParallax(this.pointerX, this.pointerY);
-    if (this.reducedMotion.matches) {
-      this.currentParallaxYaw = targetYaw;
-      this.currentParallaxPitch = targetPitch;
-      return;
-    }
-    const response = 1 - Math.exp(-SURVIVAL_LOOK_DAMPING * delta);
-    this.currentParallaxYaw += (targetYaw - this.currentParallaxYaw) * response;
-    this.currentParallaxPitch += (targetPitch - this.currentParallaxPitch) * response;
-  }
-
   private applyBasePresentation(): void {
     this.sky.resetTransient();
     this.applyBaseLighting(this.sky.palette);
@@ -601,8 +558,6 @@ export class BoatWorld {
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
-    this.camera.rotateY(this.currentParallaxYaw);
-    this.camera.rotateX(this.currentParallaxPitch);
     if (this.rod) this.rod.rotation.z = this.baseRodRotationZ;
     if (this.line && this.baseLineRotation) this.line.rotation.copy(this.baseLineRotation);
     if (this.line) this.line.visible = false;

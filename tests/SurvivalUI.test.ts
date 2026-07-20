@@ -1374,19 +1374,16 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(endure);
   });
 
-  it('routes projected actions and pointer coordinates', () => {
+  it('routes projected actions without pointer coordinates', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const action = vi.fn();
-    const pointer = vi.fn();
+    expect(ui).not.toHaveProperty('onPointer');
     ui.onAction = action;
-    ui.onPointer = pointer;
     ui.render(snapshot({ hull: 40 }), () => null);
 
     mount.querySelector<HTMLButtonElement>('[data-action="repair"]')!.click();
     expect(action).toHaveBeenCalledWith('repair', undefined);
-    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 27, clientY: 39 }));
-    expect(pointer).toHaveBeenCalledWith(27, 39);
   });
 
   it('shows distinct terminal copy and emits full restart once', () => {
@@ -1442,15 +1439,13 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
     ui.dispose();
   });
-  it('removes document, pointer, and button listeners exactly once on dispose', () => {
+  it('removes document and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
-    const pointer = vi.fn();
     const pause = vi.fn();
     ui.onAction = action;
-    ui.onPointer = pointer;
     ui.onPauseChange = pause;
     ui.render(snapshot(), () => null);
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
@@ -1458,12 +1453,10 @@ describe('SurvivalUI', () => {
     ui.dispose();
     ui.dispose();
     fish.click();
-    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 1, clientY: 2 }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
     expect(action).not.toHaveBeenCalled();
-    expect(pointer).not.toHaveBeenCalled();
     expect(pause).not.toHaveBeenCalled();
     expect(mount.children).toHaveLength(0);
   });

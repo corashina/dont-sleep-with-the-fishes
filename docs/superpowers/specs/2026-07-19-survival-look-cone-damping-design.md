@@ -1,5 +1,7 @@
 # Survival Look Cone and Damping Design
 
+> Superseded by [Survival Fixed Camera Design](./2026-07-19-survival-fixed-camera-design.md).
+
 ## Goal
 
 Restore unrestricted first-person camera control to scavenging and give the
