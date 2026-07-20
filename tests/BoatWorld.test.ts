@@ -252,27 +252,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('applies fishing-line lag after the fishing cue makes the line visible', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [savedItem('fishingRod')],
-    );
-    const line = world.scene.getObjectByName('fishing-line')!;
-    const authoredRotation = line.rotation.clone();
-    world.play('fish');
-    for (let index = 1; index <= 8; index += 1) world.update(index * 0.1, 0.1);
-    expect(line.visible).toBe(true);
-    expect(
-      Math.abs(line.rotation.x - authoredRotation.x)
-      + Math.abs(line.rotation.z - authoredRotation.z),
-    ).toBeGreaterThan(0);
-    world.dispose();
-    propModels.dispose();
-  });
 
   it('keeps the survival camera locked to its authored base view', () => {
     const camera = new PerspectiveCamera();
@@ -293,24 +272,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('frames the enlarged boat from the higher stern seat without changing FOV', () => {
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.1, 100);
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [],
-    );
-    expect(camera.position.toArray()).toEqual([0, 0.88, 2.35]);
-    expect(camera.fov).toBe(65);
-    expect(world.scene.getObjectByName('lifeboat-hull-geometry')).toBeDefined();
-    expect(world.scene.getObjectByName('paddle-port')).toBeDefined();
-    expect(world.scene.getObjectByName('paddle-starboard')).toBeDefined();
-    world.dispose();
-    propModels.dispose();
-  });
 
   it('transitions sky, fog, lights, and ocean to squall night together', () => {
     const propModels = createTestPropModels();

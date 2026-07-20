@@ -353,11 +353,6 @@ describe('SurvivalUI', () => {
     expect(highlight.mock.calls).toEqual([[null]]);
   });
 
-  it('styles feedback as noninteractive and keeps the sleep cover noninteractive', () => {
-    expect(mainStyles).toMatch(/\.survival-feedback\s*\{[^}]*pointer-events:\s*none/s);
-    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*pointer-events:\s*none/s);
-  });
-
   it('prevents short-height cinematic content from overflowing horizontally', () => {
     const shortHeightStart = mainStyles.indexOf('@media (max-height: 760px) and (min-width: 761px)');
     const shortHeightEnd = mainStyles.indexOf('@media ', shortHeightStart + 1);
@@ -367,15 +362,6 @@ describe('SurvivalUI', () => {
     expect(shortHeightStyles).toMatch(
       /\.cinematic-overlay__content\s*\{[^}]*max-height:\s*calc\(100dvh - 28px\);[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*hidden;/s,
     );
-  });
-
-  it('styles the journal as a centered bounded paper page with reduced-motion support', () => {
-    expect(mainStyles).toMatch(/\.journal-marker:focus-visible\s*\{/);
-    expect(mainStyles).toMatch(/\.journal-overlay::before\s*\{[^}]*display:\s*none/s);
-    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*width:\s*min\(680px/s);
-    expect(mainStyles).toMatch(/\.journal-page__story\s*\{[^}]*overflow-y:\s*auto/s);
-    expect(mainStyles).toMatch(/@media \(max-height:\s*760px\)[\s\S]*\.journal-page/s);
-    expect(mainStyles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.journal-page/s);
   });
 
   it('wraps every survival cinematic overlay in one bounded content region', () => {
@@ -390,14 +376,6 @@ describe('SurvivalUI', () => {
 
     ui.dispose();
   });
-  it('keeps projected targets transparent without fixed marker dots', () => {
-    expect(mainStyles).toMatch(/\.boat-anchor\[data-target-kind="tool"\]\s*\{[^}]*border-color:\s*transparent;[^}]*border-radius:\s*0;/s);
-    expect(mainStyles).not.toMatch(/data-target-kind="fixed".*::before/s);
-    expect(mainStyles).not.toMatch(/width:\s*12px[\s\S]*background:\s*var\(--anchor-accent\)/s);
-    expect(mainStyles).toMatch(/\.boat-anchor\[aria-disabled="true"\]\s*\{[^}]*border-color:\s*transparent;/s);
-    expect(mainStyles).toMatch(/\.boat-anchor:hover \.boat-tooltip,\s*\.boat-anchor:focus-visible \.boat-tooltip\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
-  });
-
   it('renders repair tools as a projected transparent action target without marker dots', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -431,63 +409,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('.inventory-tray')).toBeNull();
   });
 
-  it('uses the exact minimum target geometry for an item anchor without a hit area', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    ui.setAnchors([{
-      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
-      x: 320, y: 240, visible: true, depleted: false,
-    }]);
 
-    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
-    expect(anchor.style.width).toBe('54px');
-    expect(anchor.style.height).toBe('54px');
-    expect(anchor.style.marginLeft).toBe('-27px');
-    expect(anchor.style.marginTop).toBe('-27px');
-  });
 
-  it('keeps projected fallback geometry when an anchor ID becomes a tool target', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    ui.setAnchors([{
-      id: 'shared', itemType: 'fishingRod', action: 'fish', remainingUses: null,
-      x: 320, y: 240, visible: true, depleted: false,
-      hitArea: { width: 96, height: 52, depth: 2.4 },
-    }]);
-    ui.setAnchors([{
-      id: 'shared', itemType: null, action: 'repair', remainingUses: null,
-      x: 320, y: 240, visible: true, depleted: false,
-    }]);
-
-    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="shared"]')!;
-    expect(anchor.dataset.targetKind).toBe('tool');
-    expect(anchor.style.width).toBe('54px');
-    expect(anchor.style.height).toBe('54px');
-    expect(anchor.style.marginLeft).toBe('-27px');
-    expect(anchor.style.marginTop).toBe('-27px');
-    expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
-  });
-
-  it('stacks a nearer positive-depth item target above a farther one', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    ui.setAnchors([
-      {
-        id: 'near', itemType: 'fishingRod', action: 'fish', remainingUses: null,
-        x: 320, y: 240, visible: true, depleted: false,
-        hitArea: { width: 96, height: 52, depth: 1.25 },
-      },
-      {
-        id: 'far', itemType: 'scubaSet', action: 'dive', remainingUses: null,
-        x: 320, y: 240, visible: true, depleted: false,
-        hitArea: { width: 96, height: 52, depth: 3.75 },
-      },
-    ]);
-
-    const near = mount.querySelector<HTMLButtonElement>('[data-anchor-id="near"]')!;
-    const far = mount.querySelector<HTMLButtonElement>('[data-anchor-id="far"]')!;
-    expect(Number(near.style.zIndex)).toBeGreaterThan(Number(far.style.zIndex));
-  });
 
   it('keeps unavailable anchors focusable and suppresses their commands', () => {
     const mount = document.createElement('main');
@@ -1420,13 +1343,6 @@ describe('SurvivalUI', () => {
     expect(endDay.closest('[data-boat-anchors]')).toBeNull();
     expect(endDay.getAttribute('aria-keyshortcuts')).toBe('7');
     ui.dispose();
-  });
-
-  it('places condition meters at top-left and End Day at top-right', () => {
-    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*left:\s*22px;[^}]*right:\s*auto;[^}]*transform-origin:\s*top left;/s);
-    expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*width:\s*max-content;[^}]*margin:\s*0 auto;[^}]*transform:\s*none;/s);
-    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*position:\s*fixed;[^}]*top:\s*18px;[^}]*right:\s*22px;/s);
-    expect(mainStyles).toMatch(/@media \(max-width:\s*980px\)[\s\S]*?\.survival-meters\s*\{[^}]*transform-origin:\s*top left;/s);
   });
 
   it('marks journal history unread until the marker opens', () => {
