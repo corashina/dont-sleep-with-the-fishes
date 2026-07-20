@@ -243,20 +243,20 @@ describe('ship item placement', () => {
   });
 
   it('measures top-shelf reach from camera height while preserving authored foot points', () => {
-    const umbrella = createItemInstances().filter(({ type }) => type === 'umbrella').slice(0, 1);
+    const bucket = createItemInstances().filter(({ type }) => type === 'bucket').slice(0, 1);
     const topShelf = surface('top-shelf', ['deckGear'], 0, {
       position: new Vector3(0, 4.007, 0),
-      footprint: { width: 0.3, depth: 0.35 },
+      footprint: { width: 0.6, depth: 0.6 },
       clearanceHeight: 1,
       standingPoints: [new Vector3(0, 2.22, -0.82)],
     });
     const itemCenterAtFullScale = topShelf.position.clone().add(
-      new Vector3(0, SHIP_ITEM_PROFILES.umbrella.height / 2, 0),
+      new Vector3(0, SHIP_ITEM_PROFILES.bucket.height / 2, 0),
     );
     expect(topShelf.standingPoints[0]!.distanceTo(itemCenterAtFullScale)).toBeGreaterThan(2.2);
     const eye = topShelf.standingPoints[0]!.clone().add(new Vector3(0, 1.5, 0));
     expect(eye.distanceTo(itemCenterAtFullScale)).toBeLessThan(2.2);
-    expect(assignShipItems(umbrella, [topShelf]).get(umbrella[0]!.instanceId)!.scale).toBe(1);
+    expect(assignShipItems(bucket, [topShelf]).get(bucket[0]!.instanceId)!.scale).toBe(1);
   });
 
   it('searches regular surfaces first and appends fallback only after regular failure', () => {

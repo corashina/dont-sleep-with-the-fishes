@@ -96,6 +96,30 @@ describe('boat item layout', () => {
     expect(compass.scale).toBe(0.50);
   });
 
+  it.each([
+    ['ductTape', -0.3775],
+    ['fishingNet', -0.365],
+    ['scubaSet', -0.315],
+    ['bottledPaper', -0.335],
+    ['umbrella', -0.325],
+    ['flashlight', -0.185],
+  ] as const)('preserves the %s lowest point after laying it down', async (type, bottomY) => {
+    const library = await loadProductionPropModels();
+    const root = placedProductionProp(library, { instanceId: `${type}-1`, type });
+    try {
+      expect(new Box3().setFromObject(root).min.y).toBeCloseTo(bottomY, 5);
+    } finally {
+      disposeOwnedMeshes(root);
+      library.dispose();
+    }
+  });
+
+  it('moves the horizontal flashlight clear of the scuba set', () => {
+    expect(boatStorageTransform({
+      instanceId: 'flashlight-1', type: 'flashlight',
+    }).position.x).toBe(1.35);
+  });
+
   it('rejects malformed or out-of-range instance IDs', () => {
     const invalidInstances: readonly ItemInstance[] = [
       { instanceId: 'ductTape-3', type: 'ductTape' },

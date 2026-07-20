@@ -304,17 +304,11 @@ export function assignShipItems(
     shellColliders,
     blockers.length > 0 ? furnitureColliderById : undefined,
   );
-  const sortedInstances = [...instances].sort((left, right) => {
-    const leftProfile = SHIP_ITEM_PROFILES[left.type];
-    const rightProfile = SHIP_ITEM_PROFILES[right.type];
-    return rightProfile.width * rightProfile.depth - leftProfile.width * leftProfile.depth
-      || rightProfile.height - leftProfile.height;
-  });
-  let deepestFailureIndex = 0;
+  let deepestFailure: { readonly index: number; readonly instance: ItemInstance } | undefined;
 
   const attempt = (includeFallback: boolean): Map<ItemInstanceId, ShipItemTransform> | undefined => {
     const eligible = new Map<ItemInstanceId, ShipItemSurface[]>();
-    for (const instance of sortedInstances) {
+    for (const instance of instances) {
       const regular = shuffled(surfaces.filter((candidate) => {
         const fit = !candidate.fallback && surfaceFit(candidate, instance.type);
         return fit && surfaceFitAvoidsBlockers(candidate, instance.type, fit, blockers);
@@ -327,6 +321,20 @@ export function assignShipItems(
         : [];
       eligible.set(instance.instanceId, [...regular, ...fallback]);
     }
+
+    const sortedInstances = [...instances].sort((left, right) => {
+      const leftSlots = new Set(
+        eligible.get(left.instanceId)!.map(({ physicalSlotId }) => physicalSlotId),
+      ).size;
+      const rightSlots = new Set(
+        eligible.get(right.instanceId)!.map(({ physicalSlotId }) => physicalSlotId),
+      ).size;
+      const leftProfile = SHIP_ITEM_PROFILES[left.type];
+      const rightProfile = SHIP_ITEM_PROFILES[right.type];
+      return leftSlots - rightSlots
+        || rightProfile.width * rightProfile.depth - leftProfile.width * leftProfile.depth
+        || rightProfile.height - leftProfile.height;
+    });
 
     const assignments = new Map<ItemInstanceId, ShipItemTransform>();
     const usedSurfaceIds = new Set<string>();
@@ -353,7 +361,9 @@ export function assignShipItems(
         usedSurfaceIds.delete(candidate.id);
         usedPhysicalSlots.delete(candidate.physicalSlotId);
       }
-      deepestFailureIndex = Math.max(deepestFailureIndex, index);
+      if (!deepestFailure || index >= deepestFailure.index) {
+        deepestFailure = { index, instance };
+      }
       return false;
     };
     return place(0) ? assignments : undefined;
@@ -363,7 +373,8 @@ export function assignShipItems(
   if (regular) return regular;
   const fallback = attempt(true);
   if (fallback) return fallback;
-  const unplaced = sortedInstances[deepestFailureIndex];
-  if (unplaced) throw new Error(`Unable to place ship item: ${unplaced.instanceId}`);
+  if (deepestFailure) {
+    throw new Error(`Unable to place ship item: ${deepestFailure.instance.instanceId}`);
+  }
   return new Map();
 }
