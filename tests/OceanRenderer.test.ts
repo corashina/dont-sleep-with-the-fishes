@@ -1,5 +1,5 @@
 import { Color, Vector2, Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   OCEAN_SURFACE_QUALITY,
   OceanRenderer,
@@ -15,6 +15,9 @@ describe('OceanRenderer', () => {
       segments: 192,
       detailFadeNear: 28,
       detailFadeFar: 92,
+      surfaceExtent: 180,
+      horizonHalfExtent: 1100,
+      horizonRadialSegments: 48,
     });
     expect(ocean.mesh.geometry.parameters.widthSegments).toBe(192);
     expect(ocean.mesh.geometry.parameters.heightSegments).toBe(192);
@@ -24,6 +27,32 @@ describe('OceanRenderer', () => {
       .toBeLessThan(OCEAN_SURFACE_QUALITY.detailFadeFar);
 
     ocean.dispose();
+  });
+
+  it('attaches a low-density continuation past the shared camera range', () => {
+    const ocean = new OceanRenderer();
+    ocean.horizonMesh.geometry.computeBoundingBox();
+
+    expect(ocean.mesh.children).toContain(ocean.horizonMesh);
+    expect(ocean.horizonMesh.material).toBe(ocean.material);
+    expect(ocean.horizonMesh.geometry.boundingBox?.min.x).toBe(-1100);
+    expect(ocean.horizonMesh.geometry.boundingBox?.min.z).toBe(-1100);
+    expect(ocean.horizonMesh.geometry.boundingBox?.max.x).toBe(1100);
+    expect(ocean.horizonMesh.geometry.boundingBox?.max.z).toBe(1100);
+    expect(ocean.horizonMesh.geometry.getAttribute('position').count)
+      .toBeLessThan(ocean.mesh.geometry.getAttribute('position').count * 2);
+
+    ocean.dispose();
+  });
+
+  it('disposes each ocean geometry once', () => {
+    const ocean = new OceanRenderer();
+    const disposeHorizonGeometry = vi.spyOn(ocean.horizonMesh.geometry, 'dispose');
+
+    ocean.dispose();
+    ocean.dispose();
+
+    expect(disposeHorizonGeometry).toHaveBeenCalledOnce();
   });
 
   it('builds domain-warped foam ribbons in world-space wind coordinates', () => {

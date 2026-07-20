@@ -1,4 +1,5 @@
 import {
+  BufferGeometry,
   Color,
   Matrix4,
   Mesh,
@@ -8,6 +9,7 @@ import {
   Vector3,
   Vector4,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
 import {
   UNBOUNDED_MINIMUM_LOCAL_Y,
@@ -21,6 +23,9 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
   segments: 192,
   detailFadeNear: 28,
   detailFadeFar: 92,
+  surfaceExtent: 180,
+  horizonHalfExtent: 1100,
+  horizonRadialSegments: 48,
 });
 
 export interface OceanAtmosphere {
@@ -338,9 +343,48 @@ const fragmentShader = `
   }
 `;
 
+function createOceanPanel(
+  width: number,
+  depth: number,
+  widthSegments: number,
+  depthSegments: number,
+  centerX: number,
+  centerZ: number,
+): PlaneGeometry {
+  const panel = new PlaneGeometry(width, depth, widthSegments, depthSegments);
+  panel.rotateX(-Math.PI / 2);
+  panel.translate(centerX, 0, centerZ);
+  return panel;
+}
+
+function createHorizonGeometry(): BufferGeometry {
+  const innerHalfExtent = OCEAN_SURFACE_QUALITY.surfaceExtent / 2;
+  const outerHalfExtent = OCEAN_SURFACE_QUALITY.horizonHalfExtent;
+  const ringSpan = outerHalfExtent - innerHalfExtent;
+  const ringCenter = innerHalfExtent + ringSpan / 2;
+  const edgeSegments = OCEAN_SURFACE_QUALITY.segments;
+  const radialSegments = OCEAN_SURFACE_QUALITY.horizonRadialSegments;
+  const panels = [
+    createOceanPanel(OCEAN_SURFACE_QUALITY.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, ringCenter),
+    createOceanPanel(OCEAN_SURFACE_QUALITY.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, -ringCenter),
+    createOceanPanel(ringSpan, OCEAN_SURFACE_QUALITY.surfaceExtent, radialSegments, edgeSegments, ringCenter, 0),
+    createOceanPanel(ringSpan, OCEAN_SURFACE_QUALITY.surfaceExtent, radialSegments, edgeSegments, -ringCenter, 0),
+    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, ringCenter),
+    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, -ringCenter),
+    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, -ringCenter, ringCenter),
+    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, -ringCenter, -ringCenter),
+  ];
+  const geometry = mergeGeometries(panels);
+  panels.forEach((panel) => panel.dispose());
+  if (!geometry) throw new Error('Unable to build ocean horizon geometry.');
+  return geometry;
+}
+
 export class OceanRenderer {
   readonly material: ShaderMaterial;
   readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
+  readonly horizonMesh: Mesh<BufferGeometry, ShaderMaterial>;
+  private disposed = false;
 
   constructor() {
     const payload = createWaveUniformPayload(DEFAULT_WAVES);
@@ -381,8 +425,8 @@ export class OceanRenderer {
       },
     });
     const geometry = new PlaneGeometry(
-      180,
-      180,
+      OCEAN_SURFACE_QUALITY.surfaceExtent,
+      OCEAN_SURFACE_QUALITY.surfaceExtent,
       OCEAN_SURFACE_QUALITY.segments,
       OCEAN_SURFACE_QUALITY.segments,
     );
@@ -391,6 +435,10 @@ export class OceanRenderer {
     this.mesh.name = 'procedural-ocean';
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;
+    this.horizonMesh = new Mesh(createHorizonGeometry(), this.material);
+    this.horizonMesh.name = 'procedural-ocean-horizon';
+    this.horizonMesh.frustumCulled = false;
+    this.mesh.add(this.horizonMesh);
   }
 
   update(
@@ -442,7 +490,10 @@ export class OceanRenderer {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.mesh.geometry.dispose();
+    this.horizonMesh.geometry.dispose();
     this.material.dispose();
   }
 }
