@@ -253,6 +253,28 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
   });
 
+  it('uses one long-range camera without changing its near view', () => {
+    const received: PhaseContext[] = [];
+    const game = Game.forTest({
+      createScavenge: (context) => {
+        received.push(context);
+        return gamePhase();
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+    });
+
+    expect(received[0]!.camera).toMatchObject({
+      fov: 65,
+      near: 0.08,
+      far: 1000,
+    });
+    game.dispose();
+  });
+
   it('continues renderer cleanup when scene-renderer disposal fails', () => {
     const calls: string[] = [];
     const failure = new Error('scene renderer disposal failed');
