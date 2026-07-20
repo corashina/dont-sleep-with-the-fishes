@@ -129,7 +129,6 @@ export class SurvivalUI {
   onEventItem: (choiceId: EventResponseId) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onRestart: () => void = () => undefined;
-  onPointer: (x: number, y: number) => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
@@ -360,7 +359,6 @@ export class SurvivalUI {
     this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.addEventListener('focusin', this.handleAnchorFocusIn);
     this.root.addEventListener('focusout', this.handleAnchorFocusOut);
-    window.addEventListener('pointermove', this.handlePointer);
     document.addEventListener('keydown', this.handleKeyDown);
   }
 
@@ -637,13 +635,11 @@ export class SurvivalUI {
     this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
     this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
-    window.removeEventListener('pointermove', this.handlePointer);
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
     this.onEndure = () => undefined;
     this.onRestart = () => undefined;
-    this.onPointer = () => undefined;
     this.onAnchorHighlight = () => undefined;
     this.onPauseChange = () => undefined;
     this.onJournalOpen = () => undefined;
@@ -1096,10 +1092,6 @@ export class SurvivalUI {
       button.disabled = true;
       this.onRestart();
     }
-  };
-
-  private readonly handlePointer = (event: PointerEvent): void => {
-    this.onPointer(event.clientX, event.clientY);
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

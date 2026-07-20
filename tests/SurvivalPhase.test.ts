@@ -451,25 +451,30 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
-  it('wires pointer, command, pause, journal, and restart callbacks without continuation hooks', () => {
+  it('wires command, pause, journal, and restart callbacks without camera input', () => {
     const perform = vi.fn(() => ({ ...accepted(), accepted: false }));
-    const setPointer = vi.fn();
     const restart = vi.fn();
-    const ui: Record<string, unknown> = { showFeedback: vi.fn(), showJournal: vi.fn(), setJournalUnread: vi.fn(), dispose: vi.fn() };
+    const ui: Record<string, unknown> = {
+      showFeedback: vi.fn(),
+      showJournal: vi.fn(),
+      setJournalUnread: vi.fn(),
+      dispose: vi.fn(),
+    };
     SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => snapshot()), perform },
-      world: { setPointer, dispose: vi.fn() }, ui, onRestart: restart,
+      world: { dispose: vi.fn() },
+      ui,
+      onRestart: restart,
     });
     (ui.onAction as (action: 'fish', option: { kind: 'fishing'; useBait: true }) => void)(
       'fish',
       { kind: 'fishing', useBait: true },
     );
-    (ui.onPointer as (x: number, y: number) => void)(0.25, -0.5);
     (ui.onPauseChange as (paused: boolean) => void)(true);
     (ui.onRestart as () => void)();
     expect(perform).toHaveBeenCalledWith('fish', { kind: 'fishing', useBait: true });
-    expect(setPointer).toHaveBeenCalled();
     expect(restart).toHaveBeenCalledOnce();
+    expect(ui).not.toHaveProperty('onPointer');
     expect(ui).not.toHaveProperty('onContinue');
     expect(ui).not.toHaveProperty('onJournalContinue');
     expect(ui).not.toHaveProperty('onSkip');

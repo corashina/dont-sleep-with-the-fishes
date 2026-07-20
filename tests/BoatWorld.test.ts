@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   BufferAttribute,
   BufferGeometry,
-  Euler,
   FogExp2,
   Group,
   Matrix4,
@@ -12,7 +11,6 @@ import {
   Object3D,
   PerspectiveCamera,
   Points,
-  Quaternion,
   ShaderMaterial,
   Texture,
   Vector3,
@@ -27,7 +25,7 @@ import {
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
-import { BoatWorld, clampParallax } from '../src/survival/BoatWorld';
+import { BoatWorld } from '../src/survival/BoatWorld';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -276,18 +274,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('clamps survival cursor targets without disabling reduced-motion input', () => {
-    expect(clampParallax(2, -2)).toEqual({
-      yaw: Math.PI / 4,
-      pitch: -Math.PI / 8,
-    });
-    expect(clampParallax(0.4, -0.4)).toEqual({
-      yaw: Math.PI / 10,
-      pitch: -Math.PI / 20,
-    });
-  });
-
-  it('eases the survival camera toward the cursor target without overshooting', () => {
+  it('keeps the survival camera locked to its authored base view', () => {
     const camera = new PerspectiveCamera();
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -297,54 +284,11 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const base = camera.quaternion.clone();
-    const target = base.clone().multiply(
-      new Quaternion().setFromEuler(new Euler(-Math.PI / 8, Math.PI / 4, 0, 'YXZ')),
-    );
-    const response = 1 - Math.exp(-1);
-    const firstStep = base.clone().multiply(
-      new Quaternion().setFromEuler(new Euler(
-        -Math.PI / 8 * response,
-        Math.PI / 4 * response,
-        0,
-        'YXZ',
-      )),
-    );
-
-    world.setPointer(2, -2);
-    world.update(0.1, 0.1);
-    expect(Math.abs(camera.quaternion.dot(firstStep))).toBeCloseTo(1, 8);
-    expect(camera.quaternion.angleTo(target)).toBeGreaterThan(0);
-
-    for (let index = 2; index <= 12; index += 1) world.update(index * 0.1, 0.1);
-    expect(camera.quaternion.angleTo(target)).toBeLessThan(1e-5);
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('immediately reaches the survival cursor target when reduced motion becomes active', () => {
-    const reducedMotion = { matches: false };
-    const camera = new PerspectiveCamera();
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      reducedMotion as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const base = camera.quaternion.clone();
-    const target = base.clone().multiply(
-      new Quaternion().setFromEuler(new Euler(Math.PI / 8, Math.PI / 4, 0, 'YXZ')),
-    );
-
-    world.setPointer(1, 1);
-    world.update(0.1, 0.1);
-
-    expect(camera.quaternion.angleTo(base)).toBeGreaterThan(0);
-
-    reducedMotion.matches = true;
-    world.update(0.2, 0.1);
-
-    expect(Math.abs(camera.quaternion.dot(target))).toBeCloseTo(1, 8);
+    expect(world).not.toHaveProperty('setPointer');
+    for (let index = 1; index <= 12; index += 1) {
+      world.update(index * 0.1, 0.1);
+      expect(Math.abs(camera.quaternion.dot(base))).toBeCloseTo(1, 8);
+    }
     world.dispose();
     propModels.dispose();
   });

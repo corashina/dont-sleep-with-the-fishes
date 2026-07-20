@@ -271,23 +271,12 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onEventItem = (itemId) => this.handleEventItem(itemId);
     this.ui.onEndure = () => this.handleEndure();
     this.ui.onRestart = () => this.requestRestart();
-    this.ui.onPointer = (x, y) => this.handlePointer(x, y);
     this.ui.onAnchorHighlight = (anchorId) => {
       if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
     };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
-  }
-
-  private handlePointer(clientX: number, clientY: number): void {
-    if (this.disposed) return;
-    const rect = this.context.mount.getBoundingClientRect();
-    const width = rect.width || this.context.mount.clientWidth || 1;
-    const height = rect.height || this.context.mount.clientHeight || 1;
-    const normalizedX = ((clientX - rect.left) / width) * 2 - 1;
-    const normalizedY = 1 - ((clientY - rect.top) / height) * 2;
-    this.world.setPointer?.(normalizedX, normalizedY);
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
