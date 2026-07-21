@@ -28,6 +28,7 @@ import { PlayerController } from '../player/PlayerController';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
 import { GameUI, type ScavengePresentation } from '../ui/GameUI';
 import { World } from '../world/World';
+import { commitBoatDeposit } from './scavengeDeposit';
 
 const RUN_SECONDS = 120;
 export const TITLE_CAMERA_POSITION = [-26, 8, -4] as const;
@@ -236,7 +237,12 @@ export class ScavengePhase implements GamePhase {
       availableItems.push(object);
       instances.set(instance.instanceId, instance);
     }
-    const target = this.interaction.update(availableItems, this.world.lifeboat, instances);
+    const target = this.interaction.update(
+      availableItems,
+      this.world.lifeboat,
+      this.world.boatDepositTarget,
+      instances,
+    );
     const distanceToEvacuation = this.player.localPosition.distanceTo(this.world.evacuationPoint);
     this.contextAction = this.carry.flightActive
       ? { type: 'none', prompt: '' }
@@ -255,8 +261,8 @@ export class ScavengePhase implements GamePhase {
       if (object && this.session.pickUp(action.item.instanceId)) {
         this.carry.pickUp(action.item, object);
       }
-    } else if (action.type === 'throwToBoat') {
-      this.carry.throw();
+    } else if (action.type === 'depositBundle') {
+      commitBoatDeposit(this.session, this.carry, this.world);
     } else if (action.type === 'drop') {
       this.carry.drop();
     } else if (action.type === 'evacuate') {

@@ -98,6 +98,16 @@ export class ScavengeSession {
     return this.releaseCarried('saved');
   }
 
+  saveCarriedBundle(): readonly Readonly<ItemInstance>[] | null {
+    if (this.status !== 'running' || this.carriedIds.length === 0) return null;
+    const instanceIds = this.carriedIds.splice(0);
+    instanceIds.forEach((instanceId) => {
+      this.items[instanceId]!.status = 'saved';
+    });
+    this.savedCount += instanceIds.length;
+    return Object.freeze(instanceIds.map((instanceId) => this.cloneInstance(instanceId)));
+  }
+
   loseCarried(): ItemInstance | null {
     return this.releaseCarried('lost');
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -12,6 +13,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   Points,
+  PointsMaterial,
   Quaternion,
   Scene,
   ShaderMaterial,
@@ -130,6 +132,35 @@ describe('world builders', () => {
     world.dispose();
     expect(libraryDispose).not.toHaveBeenCalled();
     shipFurniture.dispose();
+    propModels.dispose();
+  });
+
+  it('owns a raycast-only deposit target across the lifeboat station deck', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const target = world.boatDepositTarget;
+    const size = new Box3().setFromObject(target).getSize(new Vector3());
+    const material = target.material as Material;
+    const geometryDispose = vi.spyOn(target.geometry, 'dispose');
+    const materialDispose = vi.spyOn(material, 'dispose');
+
+    expect(target.name).toBe('lifeboat-deposit-target');
+    expect(target.parent).toBe(world.ship);
+    expect(target.userData.boatDepositTarget).toBe(true);
+    expect(target.position.x).toBeCloseTo(4.9);
+    expect(target.position.y).toBeCloseTo(2.26);
+    expect(target.position.z).toBeCloseTo(0);
+    expect(size.x).toBeCloseTo(2.2);
+    expect(size.y).toBeCloseTo(0.08);
+    expect(size.z).toBeCloseTo(3.2);
+    expect(material.colorWrite).toBe(false);
+    expect(material.depthWrite).toBe(false);
+
+    world.dispose();
+    world.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
@@ -712,9 +743,12 @@ describe('world builders', () => {
     );
     const cannedFood = instances.find(({ instanceId }) => instanceId === 'cannedFood-3')!;
     const flareGun = instances.find(({ instanceId }) => instanceId === 'flareGun-1')!;
+    const smoke = world.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points;
 
-    world.saveItem(cannedFood);
-    world.saveItem(flareGun);
+    world.saveItems([cannedFood, flareGun]);
+
+    expect(smoke).toBeInstanceOf(Points);
+    expect(smoke.visible).toBe(true);
 
     for (const instance of [cannedFood, flareGun]) {
       const prop = world.itemObjects.get(instance.instanceId)!;
@@ -727,6 +761,45 @@ describe('world builders', () => {
     }
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('moves deposit smoke with standard motion, fades in reduced motion, and disposes it once', () => {
+    const propModels = createTestPropModels();
+    const regular = createTestWorld(new Scene(), propModels);
+    const reduced = createTestWorld(new Scene(), propModels);
+    const regularSmoke = regular.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points<
+      BufferGeometry,
+      PointsMaterial
+    >;
+    const reducedSmoke = reduced.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points<
+      BufferGeometry,
+      PointsMaterial
+    >;
+    const regularStart = Array.from(regularSmoke.geometry.getAttribute('position').array);
+    const reducedStart = Array.from(reducedSmoke.geometry.getAttribute('position').array);
+    const instance = createItemInstances()[0]!;
+    const sinking = getSinkingState(0, 120);
+    const geometryDispose = vi.spyOn(regularSmoke.geometry, 'dispose');
+    const materialDispose = vi.spyOn(regularSmoke.material, 'dispose');
+
+    regular.saveItems([instance]);
+    reduced.saveItems([instance]);
+    regular.update(0, 0.1, sinking, new Vector3(), false);
+    reduced.update(0, 0.1, sinking, new Vector3(), true);
+
+    expect(Array.from(regularSmoke.geometry.getAttribute('position').array))
+      .not.toEqual(regularStart);
+    expect(Array.from(reducedSmoke.geometry.getAttribute('position').array))
+      .toEqual(reducedStart);
+    expect(regularSmoke.material.opacity).toBeLessThan(0.72);
+    expect(reducedSmoke.material.opacity).toBeLessThan(0.72);
+
+    regular.dispose();
+    regular.dispose();
+    reduced.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
