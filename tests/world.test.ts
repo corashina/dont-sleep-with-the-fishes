@@ -31,6 +31,7 @@ import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
+import { SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { World } from '../src/world/World';
 import {
   createTestPropModels,
@@ -136,20 +137,34 @@ describe('world builders', () => {
   it('removes and disposes the ship when construction fails during item assignment', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
+    let observed: Map<BufferGeometry | Material, number> | undefined;
     const oversizedInventory = Array.from({ length: 40 }, (_, index): ItemInstance => ({
       instanceId: `cannedFood-${index + 1}` as ItemInstance['instanceId'],
       type: 'cannedFood',
     }));
+    const observeShipResources = (): number => {
+      if (!observed) {
+        const ship = scene.getObjectByName('sinking-ship')!;
+        expect(ship.getObjectByName('ship-deck-details')).toBeDefined();
+        expect(ship.getObjectByName('ship-rigging')).toBeDefined();
+        expect(ship.getObjectByName('freighter-smoke')).toBeDefined();
+        const resources = collectRenderResources(ship);
+        observed = observeDisposals([...resources.geometries, ...resources.materials]);
+      }
+      return 0.4;
+    };
 
     expect(() => createTestWorld(
       scene,
       propModels,
       createTestMoonTexture(),
       oversizedInventory,
-      () => 0.4,
+      observeShipResources,
     ))
       .toThrow('Unable to place ship item');
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    expect(observed?.size).toBeGreaterThan(0);
+    observed?.forEach((count) => expect(count).toBe(1));
     propModels.dispose();
   });
 
@@ -1007,8 +1022,10 @@ describe('world builders', () => {
 
   it('builds the furnished freighter contract with surplus authored anchors', () => {
     const ship = createTestShip();
-    expect(ship.itemSurfaces.length).toBeGreaterThan(createItemInstances().length);
-    expect(ship.colliders.length).toBeGreaterThanOrEqual(24);
+    const detailRoot = ship.root.getObjectByName('ship-deck-details')!;
+    const riggingRoot = ship.root.getObjectByName('ship-rigging')!;
+    expect(ship.itemSurfaces).toHaveLength(32);
+    expect(ship.colliders.length).toBeGreaterThanOrEqual(40);
     expect(ship.playerStart.toArray()).toEqual([0, 3.72, 8.8]);
     expect(ship.evacuationPoint.toArray()).toEqual([7.1, 3.72, 0]);
     expect(ship.lifeboatAnchor.toArray()).toEqual([10.75, 0.35, 0]);
@@ -1029,8 +1046,73 @@ describe('world builders', () => {
       },
     });
     expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
+    expect(detailRoot.parent?.name).toBe('coastal-freighter');
+    expect(riggingRoot.parent?.name).toBe('coastal-freighter');
+    expect(ship.root.getObjectsByProperty('name', 'ship-deck-details')).toHaveLength(1);
+    expect(ship.root.getObjectsByProperty('name', 'ship-rigging')).toHaveLength(1);
+    expect(ship.root.getObjectByName('sail:foremast')).toBeDefined();
+    expect(ship.root.getObjectByName('sail:aft-mast')).toBeDefined();
     expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();
     ship.dispose();
+  });
+
+  it('aggregates authored detail and mast-base colliders without blocking cosmetic rigging', () => {
+    const ship = createTestShip();
+    const contains = (point: Vector3): boolean => ship.colliders.some((box) =>
+      point.x >= box.minX && point.x <= box.maxX
+      && point.y >= box.minY && point.y <= box.maxY
+      && point.z >= box.minZ && point.z <= box.maxZ);
+
+    SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize).forEach((detail) => {
+      expect(contains(new Vector3(
+        detail.position[0],
+        detail.position[1] + detail.colliderSize![1] * detail.scale[1] / 2,
+        detail.position[2],
+      )), detail.id).toBe(true);
+    });
+    SHIP_LAYOUT.rigging.masts.forEach((mast) => {
+      expect(contains(new Vector3(
+        mast.position[0],
+        mast.position[1] + mast.height / 2,
+        mast.position[2],
+      )), mast.id).toBe(true);
+      expect(contains(new Vector3(
+        mast.position[0],
+        mast.position[1] + mast.height * 0.75,
+        mast.position[2] + mast.sailDirectionZ,
+      )), `cosmetic sail:${mast.id}`).toBe(false);
+    });
+    expect(ship.itemSurfaces.every(({ standingPoints }) => standingPoints.length > 0)).toBe(true);
+    ship.dispose();
+  });
+
+  it('forwards deterministic effect time and reduced motion to rigging', () => {
+    const first = createTestShip();
+    const second = createTestShip();
+    const firstSail = first.root.getObjectByName('sail:aft-mast')!;
+    const secondSail = second.root.getObjectByName('sail:aft-mast')!;
+    const neutral = firstSail.rotation.z;
+
+    first.updateEffects(0.25, 0.5, false);
+    second.updateEffects(0.1, 0.5, false);
+    expect(firstSail.rotation.z).not.toBeCloseTo(neutral);
+    expect(firstSail.rotation.z).toBeCloseTo(secondSail.rotation.z);
+    first.updateEffects(0.25, 0.5, true);
+    expect(firstSail.rotation.z).toBeCloseTo(neutral);
+
+    first.dispose();
+    second.dispose();
+  });
+
+  it('ignores effect updates after idempotent disposal', () => {
+    const ship = createTestShip();
+    const sail = ship.root.getObjectByName('sail:aft-mast')!;
+    const neutral = sail.rotation.z;
+
+    ship.dispose();
+    ship.dispose();
+    expect(() => ship.updateEffects(0.1, 0.5, false)).not.toThrow();
+    expect(sail.rotation.z).toBe(neutral);
   });
 
   it('places all world items on unique authored anchors', () => {
