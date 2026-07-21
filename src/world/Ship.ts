@@ -202,12 +202,12 @@ export function createShip(
     arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
-    playerStart: new Vector3(0, 3.72, 7.2),
-    evacuationPoint: new Vector3(5.4, 3.72, 0),
-    lifeboatAnchor: new Vector3(9.0, 0.35, 0),
+    playerStart: new Vector3(0, 3.72, 8.8),
+    evacuationPoint: new Vector3(7.1, 3.72, 0),
+    lifeboatAnchor: new Vector3(10.75, 0.35, 0),
     playerNavigationBounds: {
-      safe: { minX: -5.9, maxX: 5.9, minZ: -17.2, maxZ: 17.2 },
-      fall: { minX: -7, maxX: 7, minZ: -18, maxZ: 18 },
+      safe: { minX: -7.65, maxX: 7.65, minZ: -21.2, maxZ: 21.2 },
+      fall: { minX: -8.8, maxX: 8.8, minZ: -22.8, maxZ: 22.8 },
     },
     waterExclusion: assembledGeometry.waterExclusion,
     updateEffects: (delta, progress, reducedMotion) =>

@@ -274,7 +274,7 @@ describe('PlayerController', () => {
     );
 
     controller.update(0, input.asControllerInput());
-    expect(controller.localPosition.z).toBeCloseTo(7.2);
+    expect(controller.localPosition.z).toBeCloseTo(8.8);
     const resolvedStart = controller.localPosition.clone();
 
     input.movement = { x: 0, z: 1 };
@@ -307,9 +307,9 @@ describe('PlayerController', () => {
   it.each([
     ['forward port exterior', new Vector3(-4.5, 3.72, 14.5)],
     ['forward starboard exterior', new Vector3(4.5, 3.72, 14.5)],
-    ['aft port exterior', new Vector3(-3.4, 3.72, -15.9)],
+    ['aft port exterior', new Vector3(-4.1, 3.72, -15.9)],
     ['storage room', new Vector3(0, 3.72, -9.2)],
-    ['lifeboat approach', new Vector3(5.9, 3.72, 0)],
+    ['lifeboat approach', new Vector3(7.1, 3.72, 0)],
   ])('keeps the freighter %s inside the playable bounds', (_label, position) => {
     const shipBuild = createTestShip();
     const onFall = vi.fn();

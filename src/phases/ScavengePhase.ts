@@ -30,8 +30,8 @@ import { GameUI, type ScavengePresentation } from '../ui/GameUI';
 import { World } from '../world/World';
 
 const RUN_SECONDS = 120;
-export const TITLE_CAMERA_POSITION = [-26, 8, -4] as const;
-export const TITLE_CAMERA_TARGET = [0, 3.5, -4] as const;
+export const TITLE_CAMERA_POSITION = [-33, 11.5, -4] as const;
+export const TITLE_CAMERA_TARGET = [0, 5.5, -3] as const;
 const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
 
 export class ScavengePhase implements GamePhase {
