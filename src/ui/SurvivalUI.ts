@@ -162,7 +162,7 @@ export class SurvivalUI {
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
-  onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => void) | null = null;
+  onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
@@ -590,7 +590,7 @@ export class SurvivalUI {
 
     if (modeChanged) {
       if (previousMode === 'hidden' && state.mode !== 'hidden') {
-        this.fishingReturnTarget = this.resolveCommandOrigin();
+        this.fishingReturnTarget = this.latestCommandOrigin ?? this.resolveCommandOrigin();
       }
       this.fishingCastIssued = false;
       this.fishingReelIssued = false;
@@ -616,7 +616,7 @@ export class SurvivalUI {
       this.hideLayer(this.fishingLayer);
       const target = this.fishingReturnTarget;
       this.fishingReturnTarget = null;
-      if (this.topmostModal() === null && !this.busy) this.restoreCommandFocus(target);
+      if (this.topmostModal() === null && !this.busy) this.restoreFishingFocus(target);
       return;
     }
 
@@ -1073,12 +1073,16 @@ export class SurvivalUI {
   }
 
   private isUsableCommand(element: HTMLElement | null): element is HTMLElement {
+    return this.isFocusableCommand(element)
+      && element.getAttribute('aria-disabled') !== 'true';
+  }
+
+  private isFocusableCommand(element: HTMLElement | null): element is HTMLElement {
     return element !== null
       && element.isConnected
       && !element.hidden
       && element.closest('[hidden], [inert], [aria-hidden="true"]') === null
-      && (!(element instanceof HTMLButtonElement) || !element.disabled)
-      && element.getAttribute('aria-disabled') !== 'true';
+      && (!(element instanceof HTMLButtonElement) || !element.disabled);
   }
 
   private isCommandControl(element: Element | null): element is HTMLButtonElement {
@@ -1100,7 +1104,28 @@ export class SurvivalUI {
 
   restoreCommandFocus(target: HTMLElement | null = this.latestCommandOrigin): void {
     if (this.disposed) return;
-    const destination = this.isUsableCommand(target) ? target : this.firstUsableAction();
+    const replacementAnchor = target?.dataset.anchorId === undefined
+      ? null
+      : this.anchorButtons.get(target.dataset.anchorId) ?? null;
+    const destination = this.isUsableCommand(target)
+      ? target
+      : this.isUsableCommand(replacementAnchor)
+        ? replacementAnchor
+        : this.firstUsableAction();
+    this.latestCommandOrigin = null;
+    destination?.focus();
+  }
+
+  private restoreFishingFocus(target: HTMLElement | null): void {
+    if (this.disposed) return;
+    const replacementAnchor = target?.dataset.anchorId === undefined
+      ? null
+      : this.anchorButtons.get(target.dataset.anchorId) ?? null;
+    const destination = this.isFocusableCommand(target)
+      ? target
+      : this.isFocusableCommand(replacementAnchor)
+        ? replacementAnchor
+        : this.firstUsableAction();
     this.latestCommandOrigin = null;
     destination?.focus();
   }
@@ -1292,12 +1317,14 @@ export class SurvivalUI {
   private issueFishingCast(clientX?: number, clientY?: number): void {
     if (this.fishingMode !== 'aiming' || this.fishingCastIssued || this.paused) return;
     this.fishingCastIssued = true;
+    let accepted = false;
     if (clientX === undefined || clientY === undefined) {
-      this.onFishingCast?.(null);
-      return;
+      accepted = this.onFishingCast?.(null) ?? false;
+    } else {
+      const bounds = this.mount.getBoundingClientRect();
+      accepted = this.onFishingCast?.({ x: clientX - bounds.left, y: clientY - bounds.top }) ?? false;
     }
-    const bounds = this.mount.getBoundingClientRect();
-    this.onFishingCast?.({ x: clientX - bounds.left, y: clientY - bounds.top });
+    if (!accepted) this.fishingCastIssued = false;
   }
 
   private issueFishingReel(): void {

@@ -162,13 +162,12 @@ export class SurvivalSession {
     return this.unavailable(action, option)?.message ?? null;
   }
 
-  perform(action: DayActionId, option?: DayActionOption): ActionOutcome {
+  perform(action: Exclude<DayActionId, 'fish'>, option?: DayActionOption): ActionOutcome {
     const unavailable = this.unavailable(action, option);
     if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
 
     let outcome: ActionOutcome;
     switch (action) {
-      case 'fish': return this.reject('interactive-action', 'Fishing uses the interactive fishing action.');
       case 'dive': outcome = this.dive(); break;
       case 'eat': outcome = this.eat(); break;
       case 'repair': outcome = this.repair(option); break;
@@ -432,7 +431,13 @@ export class SurvivalSession {
 
     switch (action) {
       case 'fish':
-        return { code: 'interactive-action', message: 'Fishing uses the interactive fishing action.' };
+        if (this.actedToday) {
+          return { code: 'already-acted', message: 'A daytime action has already been taken.' };
+        }
+        if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
+          return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };
+        }
+        return null;
       case 'dive':
         if (!this.inventory.hasUsable('scubaSet')) {
           return { code: 'no-scuba-set', message: 'Diving requires a recovered scuba set.' };
@@ -509,7 +514,7 @@ export class SurvivalSession {
 
   private invalidOption(action: DayActionId, option?: DayActionOption): Rejection | null {
     const valid = action === 'fish'
-      ? option === undefined || option?.kind === 'fishing'
+      ? option === undefined
       : action === 'repair'
         ? option?.kind === 'hullRepair'
         : action === 'repairItem'

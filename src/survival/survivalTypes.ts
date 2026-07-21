@@ -8,7 +8,6 @@ export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
   | 'treat' | 'sendMessage' | 'useEnergyBar' | 'endDay';
 export type DayActionOption =
-  | { readonly kind: 'fishing'; readonly useBait: boolean }
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
