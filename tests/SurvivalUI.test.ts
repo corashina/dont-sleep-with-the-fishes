@@ -1044,6 +1044,30 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  it('does not restore anchor focus or republish a highlight while disposing active fishing', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlights: Array<string | null> = [];
+    ui.onAnchorHighlight = (anchorId) => highlights.push(anchorId);
+    ui.render(snapshot(), () => null);
+    const dive = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-test"]')!;
+    const teardownFocus = vi.fn();
+    dive.addEventListener('focus', teardownFocus);
+    dive.focus();
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(highlights).toEqual(['scubaSet-test', null]);
+    teardownFocus.mockClear();
+    const callbacksBeforeDispose = highlights.length;
+
+    ui.dispose();
+
+    expect(teardownFocus).not.toHaveBeenCalled();
+    expect(highlights.at(-1)).toBeNull();
+    expect(highlights.slice(callbacksBeforeDispose)).toEqual([]);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('keeps unavailable projected actions focusable while suppressing commands', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
