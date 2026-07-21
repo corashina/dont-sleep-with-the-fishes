@@ -82,6 +82,7 @@ export interface ShipDeckDetailSpec {
   readonly position: readonly [number, number, number];
   readonly rotationY: number;
   readonly scale: readonly [number, number, number];
+  readonly visualSize: readonly [number, number];
   readonly colliderSize?: readonly [number, number, number];
 }
 
@@ -93,6 +94,26 @@ export interface ShipMastSpec {
   readonly sailKind: 'stay' | 'boom';
   readonly sailArea: number;
   readonly sailDirectionZ: -1 | 1;
+}
+
+export const SHIP_SAIL_CLOTH_CLEARANCE_Y = 5.2;
+export const SHIP_SAIL_CLOTH_MIN_Y = 5.21;
+export const SHIP_SAIL_TOP_OFFSET = 0.25;
+export const SHIP_SAIL_MAX_LENGTH = 4.6;
+
+export interface ShipSailGeometryLimits {
+  readonly top: number;
+  readonly clothHeight: number;
+  readonly clothLength: number;
+}
+
+export function shipSailGeometryLimits(
+  spec: Pick<ShipMastSpec, 'height' | 'sailArea'>,
+): ShipSailGeometryLimits {
+  const top = spec.height - SHIP_SAIL_TOP_OFFSET;
+  const clothHeight = top - SHIP_SAIL_CLOTH_MIN_Y;
+  const clothLength = Math.min(SHIP_SAIL_MAX_LENGTH, (spec.sailArea * 2) / clothHeight);
+  return { top, clothHeight, clothLength };
 }
 
 export interface ShipRiggingSpec {
@@ -253,17 +274,33 @@ export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number
   lifeRing: 4, coveredHatch: 1, spareTimber: 2, toolbox: 3, foldedCanvas: 2,
 };
 
+export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
+  Record<ShipDeckDetailKind, readonly [number, number]>
+> = {
+  barrel: [0.96, 0.96],
+  ropeCoil: [1.32, 1.32],
+  bollard: [0.42, 0.42],
+  cleat: [0.56, 0.56],
+  lamp: [0.44, 0.44],
+  vent: [0.9, 0.58],
+  lifeRing: [1.26, 0.12],
+  coveredHatch: [2.3, 1.5],
+  spareTimber: [1.8, 0.56],
+  toolbox: [1, 0.5],
+  foldedCanvas: [1, 0.65],
+};
+
 const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
   barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-3.8, -2], [3.8, -2]],
   ropeCoil: [[-6.2, 19], [6.2, 19], [-6.2, -19], [6.2, -19]],
   bollard: [[-6.8, 18], [6.8, 18], [-5.2, 20], [5.2, 20], [-6.8, -18], [6.8, -18], [-5.2, -20], [5.2, -20]],
   cleat: [[-5.4, 20], [5.4, 20], [-5.8, 16], [5.8, 16], [-5.4, -20], [5.4, -20], [-5.8, -16], [5.8, -16]],
   lamp: [[-6, 14], [6, 14], [-6, 4], [6, 4], [-6, -8], [6, -8]],
-  vent: [[-3.6, 3], [3.6, 3], [-3.6, -6], [3.6, -6]],
+  vent: [[-4.6, 4.7], [4.6, 4.7], [-4.6, -7.4], [4.6, -7.4]],
   lifeRing: [[-6.5, 10], [6.5, 10], [-6.5, -12], [6.5, -12]],
   coveredHatch: [[0, 1.8]],
   spareTimber: [[-3.8, -4.5], [3.8, -4.5]],
-  toolbox: [[-4, 3.5], [4, 3.5], [4, -6.5]],
+  toolbox: [[-4.75, 3.6], [4.75, 3.6], [4.75, -6.2]],
   foldedCanvas: [[-6.2, 12], [6.2, -14]],
 };
 
@@ -271,10 +308,17 @@ const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, nu
   barrel: [0.9, 1.15, 0.9], bollard: [0.35, 0.65, 0.35], spareTimber: [1.8, 0.35, 0.55],
 };
 
+const detailRotations: Partial<Record<ShipDeckDetailKind, readonly number[]>> = {
+  toolbox: [PI_OVER_TWO, PI_OVER_TWO, PI_OVER_TWO],
+};
+
 const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailPositions) as ShipDeckDetailKind[]).flatMap((kind) =>
   detailPositions[kind].map(([x, z], index) => ({
     id: `${kind}-${index + 1}`, kind, position: [x, FREIGHTER_DIMENSIONS.deckY, z],
-    rotationY: 0, scale: [1, 1, 1], colliderSize: colliders[kind],
+    rotationY: detailRotations[kind]?.[index] ?? 0,
+    scale: [1, 1, 1],
+    visualSize: SHIP_DECK_DETAIL_VISUAL_SIZES[kind],
+    colliderSize: colliders[kind],
   })));
 
 function itemSurface(
@@ -637,10 +681,22 @@ export function furnitureRect(spec: ShipFurniturePlacementSpec): Rect2 {
 
 export function detailRect(spec: ShipDeckDetailSpec): Rect2 {
   const size = spec.colliderSize ?? [0, 0, 0];
+  return detailFootprintRect(spec, size[0], size[2]);
+}
+
+export function detailVisualRect(spec: ShipDeckDetailSpec): Rect2 {
+  return detailFootprintRect(spec, spec.visualSize[0], spec.visualSize[1]);
+}
+
+function detailFootprintRect(
+  spec: ShipDeckDetailSpec,
+  unscaledWidth: number,
+  unscaledDepth: number,
+): Rect2 {
   const cosine = Math.abs(Math.cos(spec.rotationY));
   const sine = Math.abs(Math.sin(spec.rotationY));
-  const scaledWidth = size[0] * spec.scale[0];
-  const scaledDepth = size[2] * spec.scale[2];
+  const scaledWidth = unscaledWidth * spec.scale[0];
+  const scaledDepth = unscaledDepth * spec.scale[2];
   const width = scaledWidth * cosine + scaledDepth * sine;
   const depth = scaledWidth * sine + scaledDepth * cosine;
   return rect(spec.position[0] - width / 2, spec.position[0] + width / 2, spec.position[2] - depth / 2, spec.position[2] + depth / 2);
@@ -947,18 +1003,29 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
     [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
   ];
+  const detailVisualBounds = layout.details.map((spec) => {
+    if (!finiteTuple(spec.position) || !Number.isFinite(spec.rotationY)
+      || spec.scale.some((value) => !positive(value))
+      || !spec.visualSize || spec.visualSize.some((value) => !positive(value))) {
+      throw new Error(`Detail ${spec.id} must have a positive visual footprint`);
+    }
+    if (spec.colliderSize?.some((value) => !positive(value))) {
+      throw new Error(`Detail ${spec.id} must have finite transforms and positive dimensions`);
+    }
+    const bounds = detailVisualRect(spec);
+    if (!validRect(bounds)
+      || !pointInPolygon([spec.position[0], spec.position[2]], cargoZone.polygon)) {
+      throw new Error(`Detail ${spec.id} lies outside the cargoDeck hull polygon`);
+    }
+    return { spec, bounds };
+  });
   const detailBounds = layout.details.flatMap((spec) => {
     if (!finiteTuple(spec.position) || !Number.isFinite(spec.rotationY)
       || spec.scale.some((value) => !positive(value))
       || spec.colliderSize?.some((value) => !positive(value))) {
       throw new Error(`Detail ${spec.id} must have finite transforms and positive dimensions`);
     }
-    if (!spec.colliderSize) {
-      if (!pointInPolygon([spec.position[0], spec.position[2]], cargoZone.polygon)) {
-        throw new Error(`Detail ${spec.id} lies outside the cargoDeck hull polygon`);
-      }
-      return [];
-    }
+    if (!spec.colliderSize) return [];
     const bounds = detailRect(spec);
     if (!validRect(bounds) || rectCorners(bounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
       throw new Error(`Detail ${spec.id} collider crosses the cargoDeck hull polygon`);
@@ -967,9 +1034,12 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   });
   const mastBounds = layout.rigging.masts.map((spec) => {
     const sailAreaLimit = spec.id === 'foremast' ? 14 : 12;
+    const sailGeometry = shipSailGeometryLimits(spec);
     if (!finiteTuple(spec.position) || !positive(spec.height) || !positive(spec.baseDiameter)
       || !positive(spec.sailArea) || spec.sailArea > sailAreaLimit
-      || spec.position[1] + spec.height <= 5.2) {
+      || sailGeometry.top <= SHIP_SAIL_CLOTH_CLEARANCE_Y
+      || !positive(sailGeometry.clothHeight)
+      || !positive(sailGeometry.clothLength)) {
       throw new Error(`Mast ${spec.id} has invalid height, base, sail area, or cloth clearance`);
     }
     const bounds = mastRect(spec);
@@ -1065,6 +1135,21 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       || first.surface.clearanceHeight !== second.surface.clearanceHeight) {
       throw new Error(`Physical slot ${physicalSlotId} has invalid ownership aliases`);
     }
+  });
+  const accessBounds = secondaryAccessRectangles(layout.furniture);
+  detailVisualBounds.filter(({ spec }) => !spec.colliderSize).forEach((detail) => {
+    furnitureBounds.filter(({ spec }) => spec.surfaces.length > 0).forEach((furnitureObstacle) => {
+      if (overlaps(detail.bounds, furnitureObstacle.bounds)) {
+        throw new Error(
+          `${detail.spec.id} visual footprint overlaps searchable furniture ${furnitureObstacle.spec.id}`,
+        );
+      }
+    });
+    accessBounds.forEach((access) => {
+      if (overlaps(detail.bounds, access.bounds)) {
+        throw new Error(`${detail.spec.id} visual footprint overlaps item access ${access.id}`);
+      }
+    });
   });
   const authoredObstacles = [...detailBounds, ...mastBounds];
   authoredObstacles.forEach((obstacle, index) => {
