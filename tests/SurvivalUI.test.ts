@@ -907,7 +907,7 @@ describe('SurvivalUI', () => {
     document.body.append(mount);
     const ui = createUI(mount);
     const cast = vi.fn();
-    const reel = vi.fn();
+    const reel = vi.fn(() => true);
     ui.onFishingCast = cast;
     ui.onFishingReel = reel;
 
@@ -937,7 +937,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const reel = vi.fn();
+    const reel = vi.fn(() => true);
     ui.onFishingReel = reel;
     const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
 
