@@ -73,7 +73,7 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.dispose();
   });
 
-  it('keeps the phase unlocked when legacy baited fishing awaits interactive integration', async () => {
+  it('keeps the phase unlocked when the direct fishing action awaits interactive integration', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
@@ -96,8 +96,8 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.start();
 
     const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-tools"]')!;
+    fish.focus();
     fish.click();
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
     expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(false);
     expect(play).not.toHaveBeenCalled();
     await flushPromises();
