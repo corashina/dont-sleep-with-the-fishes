@@ -9,7 +9,6 @@ import {
   MeshStandardMaterial,
   Shape,
   ShapeGeometry,
-  SphereGeometry,
   Texture,
   TorusGeometry,
   TubeGeometry,
@@ -289,19 +288,6 @@ export function createLifeboat(): LifeboatBuild {
     createPaddle('port', materials.wood, materials.metal, materials.rope),
     createPaddle('starboard', materials.wood, materials.metal, materials.rope),
   );
-
-  const line = new Mesh(new CylinderGeometry(0.004, 0.004, 1.72, 4), materials.rope);
-  line.name = 'fishing-line';
-  line.position.set(1.78, 0.02, -0.30);
-  line.visible = false;
-  root.add(line);
-
-  const catchMesh = new Mesh(new SphereGeometry(0.12, 7, 5), materials.metal);
-  catchMesh.name = 'fishing-catch';
-  catchMesh.position.set(1.78, -0.78, -0.30);
-  catchMesh.scale.set(1.8, 0.65, 0.45);
-  catchMesh.visible = false;
-  root.add(catchMesh);
 
   const storageRoot = new Group();
   storageRoot.name = 'lifeboat-storage';

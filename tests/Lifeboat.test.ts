@@ -27,7 +27,7 @@ function disposeBuild(root: ReturnType<typeof createLifeboat>['root'], textures:
 
 describe('survival lifeboat builder', () => {
 
-  it('provides named storage, repair, cue, paddle, and fitting objects', () => {
+  it('provides named storage, repair, paddle, and fitting objects without fishing placeholders', () => {
     const build = createLifeboat();
     expect(build.root.name).toBe('lifeboat');
     expect(build.storageRoot.name).toBe('lifeboat-storage');
@@ -35,8 +35,8 @@ describe('survival lifeboat builder', () => {
     expect(build.root.getObjectByName('hull-repair-tools')).toBeDefined();
     expect(build.root.getObjectByName('repair-tool-plank')).toBeDefined();
     expect(build.root.getObjectByName('repair-tool-hammer')).toBeDefined();
-    expect(build.root.getObjectByName('fishing-line')?.visible).toBe(false);
-    expect(build.root.getObjectByName('fishing-catch')?.visible).toBe(false);
+    expect(build.root.getObjectByName('fishing-line')).toBeUndefined();
+    expect(build.root.getObjectByName('fishing-catch')).toBeUndefined();
     expect(build.root.getObjectByName('paddle-port')).toBeDefined();
     expect(build.root.getObjectByName('paddle-starboard')).toBeDefined();
     expect(build.root.getObjectByName('survival-gunwale')).toBeDefined();

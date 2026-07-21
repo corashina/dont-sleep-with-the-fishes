@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   FogExp2,
@@ -26,6 +27,8 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld } from '../src/survival/BoatWorld';
+import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
+import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -178,7 +181,7 @@ describe('BoatWorld helpers', () => {
     expect(motionRig.rotation.z).toBeCloseTo(-expected.roll);
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
-    expect(line.visible).toBe(true);
+    expect(line.visible).toBe(false);
     expect(line.rotation.toArray()).toEqual(authoredLineRotation.toArray());
     expect(oceanUniforms.uTime!.value).toBeGreaterThan(initialOceanTime);
     expect(oceanUniforms.uTime!.value).toBe(4);
@@ -924,7 +927,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('animates fishing cues from the fixed rod without saved items', () => {
+  it('acknowledges generic fish cues from the fixed rod without starting minigame visuals', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -938,8 +941,8 @@ describe('BoatWorld helpers', () => {
     world.play('fish');
     world.update(0.7, 0.7);
     expect(rod.rotation.z).toBeLessThan(before);
-    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('fishing-catch')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(false);
     world.dispose();
     propModels.dispose();
   });
@@ -960,6 +963,272 @@ describe('BoatWorld helpers', () => {
     expect(world.presentationCueForTest()).toBeNull();
     world.dispose();
     propModels.dispose();
+  });
+
+  it('reuses one project-authored catch template per family with authored appearance', () => {
+    const library = new FishingCatchLibrary();
+    const templates = new Map<string, Object3D>();
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    const boundsByCatch = new Map<string, Vector3>();
+
+    for (const definition of FISHING_CATCHES) {
+      const prepared = library.prepare(definition.id);
+      expect(prepared.userData.fishingFamily).toBe(definition.family);
+      const familyTemplate = templates.get(definition.family);
+      if (familyTemplate) expect(prepared).toBe(familyTemplate);
+      else templates.set(definition.family, prepared);
+
+      prepared.updateMatrixWorld(true);
+      boundsByCatch.set(
+        definition.id,
+        new Box3().setFromObject(prepared, true).getSize(new Vector3()),
+      );
+      prepared.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        geometries.add(object.geometry);
+        const assigned = Array.isArray(object.material) ? object.material : [object.material];
+        assigned.forEach((material) => materials.add(material));
+      });
+      const body = prepared.getObjectByName(`fishing-catch:${definition.family}:body`) as Mesh;
+      expect((body.material as MeshStandardMaterial).color.getHex())
+        .toBe(definition.appearance.color);
+    }
+
+    expect(templates.size).toBe(8);
+    expect(boundsByCatch.get('tuna')!.toArray())
+      .not.toEqual(boundsByCatch.get('sardine')!.toArray());
+    const resourceCounts = [geometries.size, materials.size];
+    library.prepare('cod');
+    library.prepare('salmon');
+    expect([geometries.size, materials.size]).toEqual(resourceCounts);
+
+    const disposeSpies = [
+      ...geometries,
+      ...materials,
+    ].map((resource) => vi.spyOn(resource, 'dispose'));
+    library.dispose();
+    library.dispose();
+    disposeSpies.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+  });
+
+  it('moves to the authored bow camera pose and returns exactly through explicit updates', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const normalPosition = camera.position.clone();
+    const normalQuaternion = camera.quaternion.clone();
+
+    let entered = false;
+    const entering = world.enterFishingView().then(() => { entered = true; });
+    expect(entered).toBe(false);
+    world.update(0.5, 0.5);
+    expect(camera.position.toArray()).not.toEqual(normalPosition.toArray());
+    expect(entered).toBe(false);
+    world.update(1, 0.5);
+    await entering;
+    const bowPosition = camera.position.clone();
+    const bowQuaternion = camera.quaternion.clone();
+    expect(bowPosition.toArray()).not.toEqual(normalPosition.toArray());
+    expect(Math.abs(bowQuaternion.dot(normalQuaternion))).toBeLessThan(0.9999);
+
+    const returning = world.exitFishingView();
+    world.update(1.5, 0.5);
+    world.update(2, 0.5);
+    await returning;
+    expect(camera.position.toArray()).toEqual(normalPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(normalQuaternion.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses stable camera endpoints and minimal fishing motion when reduced motion is active', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: true } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const normalPosition = camera.position.clone();
+    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    const baseRodRotation = rod.rotation.z;
+    const entering = world.enterFishingView();
+    expect(camera.position.toArray()).not.toEqual(normalPosition.toArray());
+    world.update(0.01, 0.01);
+    await entering;
+
+    const casting = world.playFishingCast(world.centeredFishingCast());
+    world.update(0.02, 0.01);
+    expect(Math.abs(rod.rotation.z - baseRodRotation)).toBeLessThan(0.12);
+    await casting;
+
+    const returning = world.exitFishingView();
+    expect(camera.position.toArray()).toEqual(normalPosition.toArray());
+    world.update(0.03, 0.01);
+    await returning;
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('raycasts only the bounded authored fishing water and exposes an immutable center cast', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    camera.updateProjectionMatrix();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const entering = world.enterFishingView();
+    world.update(1, 1);
+    await entering;
+
+    expect(world.castFishingAtScreenPoint(-1, 360, 1280, 720)).toBeNull();
+    expect(world.castFishingAtScreenPoint(1281, 360, 1280, 720)).toBeNull();
+    expect(world.castFishingAtScreenPoint(0, 0, 1280, 720)).toBeNull();
+    const cast = world.castFishingAtScreenPoint(640, 360, 1280, 720);
+    expect(cast).toEqual({ x: expect.any(Number), z: expect.any(Number) });
+    expect(Object.isFrozen(cast)).toBe(true);
+    const centered = world.centeredFishingCast();
+    expect(centered).toEqual({ x: expect.any(Number), z: expect.any(Number) });
+    expect(Object.isFrozen(centered)).toBe(true);
+    expect(() => world.playFishingCast(centered)).not.toThrow();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('advances casting only from update and reuses its line and effect pools', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    const line = world.scene.getObjectByName('fishing-line')!;
+    const bobber = world.scene.getObjectByName('fishing-bobber')!;
+    const bubbles = world.scene.getObjectByName('fishing-bubbles')!;
+    const ripples = world.scene.getObjectByName('fishing-ripples')!;
+    const poolSizes = [bubbles.children.length, ripples.children.length];
+    const baseRodRotation = rod.rotation.z;
+    let finished = false;
+
+    const cast = world.playFishingCast(world.centeredFishingCast())
+      .then(() => { finished = true; });
+    expect(finished).toBe(false);
+    expect(line.visible).toBe(true);
+    world.update(0.2, 0.2);
+    expect(rod.rotation.z).not.toBe(baseRodRotation);
+    expect(bobber.visible).toBe(true);
+    expect(finished).toBe(false);
+    world.update(0.8, 0.6);
+    await cast;
+    expect([bubbles.children.length, ripples.children.length]).toEqual(poolSizes);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps bobber, splash, bubbles, ripples, and bite projection on the shared wave sample', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    camera.updateProjectionMatrix();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const point = world.centeredFishingCast();
+    world.showFishingWaiting(point);
+    world.showFishingBite(point);
+    const time = 2.4;
+    world.update(time, 0.1);
+    const expectedHeight = sampleWaveField(DEFAULT_WAVES, time, point.x, point.z, 0.78).height;
+    for (const name of ['fishing-bobber', 'fishing-splash', 'fishing-bubbles', 'fishing-ripples']) {
+      const object = world.scene.getObjectByName(name)!;
+      expect(object.position.x).toBeCloseTo(point.x, 8);
+      expect(object.position.y).toBeCloseTo(expectedHeight, 8);
+      expect(object.position.z).toBeCloseTo(point.z, 8);
+    }
+    const projected = new Vector3(point.x, expectedHeight, point.z).project(camera);
+    expect(world.projectFishingBite(1280, 720)).toMatchObject({
+      x: expect.closeTo((projected.x * 0.5 + 0.5) * 1280, 5),
+      y: expect.closeTo((-projected.y * 0.5 + 0.5) * 720, 5),
+      visible: true,
+    });
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('resets fishing visuals after reel and miss before returning the camera', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const normalPosition = camera.position.clone();
+    const point = world.centeredFishingCast();
+    world.showFishingBite(point);
+    const reel = world.playFishingReel('cod');
+    world.update(0.5, 0.5);
+    expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
+    world.update(1, 0.5);
+    await reel;
+    for (const name of ['fishing-line', 'fishing-bobber', 'fishing-bubbles', 'fishing-ripples', 'fishing-catch-display']) {
+      expect(world.scene.getObjectByName(name)?.visible).toBe(false);
+    }
+
+    world.showFishingBite(point);
+    const miss = world.playFishingMiss();
+    world.update(1.5, 0.5);
+    world.update(2, 0.5);
+    await miss;
+    const returning = world.exitFishingView();
+    world.update(2.5, 0.5);
+    world.update(3, 0.5);
+    await returning;
+    expect(camera.position.toArray()).toEqual(normalPosition.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles dedicated fishing handles and disposes idempotently from every fishing stage', async () => {
+    const stages: Array<(world: BoatWorld) => Promise<void> | void> = [
+      (world) => world.enterFishingView(),
+      (world) => world.playFishingCast(world.centeredFishingCast()),
+      (world) => { world.showFishingWaiting(world.centeredFishingCast()); },
+      (world) => { world.showFishingBite(world.centeredFishingCast()); },
+      (world) => world.playFishingReel('cod'),
+      (world) => world.playFishingMiss(),
+      (world) => world.exitFishingView(),
+    ];
+
+    for (const enterStage of stages) {
+      const propModels = createTestPropModels();
+      const world = new BoatWorld(
+        new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+        { matches: false } as MediaQueryList,
+        propModels,
+        createTestMoonTexture(),
+      );
+      const pending = enterStage(world);
+      world.dispose();
+      world.dispose();
+      await pending;
+      propModels.dispose();
+    }
   });
 
 });
