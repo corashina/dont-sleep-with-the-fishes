@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -130,6 +131,35 @@ describe('world builders', () => {
     world.dispose();
     expect(libraryDispose).not.toHaveBeenCalled();
     shipFurniture.dispose();
+    propModels.dispose();
+  });
+
+  it('owns a raycast-only deposit target across the lifeboat station deck', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const target = world.boatDepositTarget;
+    const size = new Box3().setFromObject(target).getSize(new Vector3());
+    const material = target.material as Material;
+    const geometryDispose = vi.spyOn(target.geometry, 'dispose');
+    const materialDispose = vi.spyOn(material, 'dispose');
+
+    expect(target.name).toBe('lifeboat-deposit-target');
+    expect(target.parent).toBe(world.ship);
+    expect(target.userData.boatDepositTarget).toBe(true);
+    expect(target.position.x).toBeCloseTo(4.9);
+    expect(target.position.y).toBeCloseTo(2.26);
+    expect(target.position.z).toBeCloseTo(0);
+    expect(size.x).toBeCloseTo(2.2);
+    expect(size.y).toBeCloseTo(0.08);
+    expect(size.z).toBeCloseTo(3.2);
+    expect(material.colorWrite).toBe(false);
+    expect(material.depthWrite).toBe(false);
+
+    world.dispose();
+    world.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
@@ -713,8 +743,7 @@ describe('world builders', () => {
     const cannedFood = instances.find(({ instanceId }) => instanceId === 'cannedFood-3')!;
     const flareGun = instances.find(({ instanceId }) => instanceId === 'flareGun-1')!;
 
-    world.saveItem(cannedFood);
-    world.saveItem(flareGun);
+    world.saveItems([cannedFood, flareGun]);
 
     for (const instance of [cannedFood, flareGun]) {
       const prop = world.itemObjects.get(instance.instanceId)!;

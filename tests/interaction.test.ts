@@ -36,14 +36,17 @@ describe('chooseContextAction', () => {
     })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'LEFT CLICK — PICK UP FLARE GUN' });
   });
 
-  it('offers a lifeboat throw while carrying', () => {
+  it('offers a bundle deposit while carrying at a deposit target', () => {
     expect(chooseContextAction({
-      target: 'lifeboat',
+      target: 'deposit',
       targetItem: null,
       carriedItem: item('ductTape-1', 'ductTape'),
       remainingCapacity: 2,
       nearEvacuation: false,
-    }).type).toBe('throwToBoat');
+    })).toEqual({
+      type: 'depositBundle',
+      prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
+    });
   });
 
   it('explains when a targeted pickup exceeds remaining capacity', () => {
@@ -98,16 +101,16 @@ describe('chooseContextAction', () => {
     })).toEqual({ type: 'none', prompt: '' });
   });
 
-  it('prioritizes a targeted lifeboat over mixed evacuation and drop inputs', () => {
+  it('prioritizes a deposit target over mixed evacuation and drop inputs', () => {
     const umbrella = item('umbrella-1', 'umbrella');
     expect(chooseContextAction({
-      target: 'lifeboat',
+      target: 'deposit',
       targetItem: item('flareGun-1', 'flareGun'),
       carriedItem: umbrella,
       remainingCapacity: 1,
       nearEvacuation: true,
     })).toEqual({
-      type: 'throwToBoat', item: umbrella, prompt: 'LEFT CLICK — THROW UMBRELLA TO LIFEBOAT',
+      type: 'depositBundle', prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
     });
   });
 });
@@ -128,13 +131,13 @@ describe('InteractionSystem', () => {
 
     const flareGun = { instanceId: 'flareGun-1', type: 'flareGun' } as const;
     const result = new InteractionSystem(camera).update(
-      [item], lifeboat, new Map([[flareGun.instanceId, flareGun]]),
+      [item], lifeboat, new Group(), new Map([[flareGun.instanceId, flareGun]]),
     );
 
     expect(result).toEqual({ target: 'item', targetItem: flareGun });
   });
 
-  it('treats a tagged saved item nested under the lifeboat as the lifeboat', () => {
+  it('treats a tagged saved item nested under the lifeboat as a deposit target', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const lifeboat = new Group();
     lifeboat.name = 'lifeboat';
@@ -146,10 +149,10 @@ describe('InteractionSystem', () => {
 
     const medicalKit = item('medicalKit-1', 'medicalKit');
     const result = new InteractionSystem(camera).update(
-      [savedItem], lifeboat, new Map([[medicalKit.instanceId, medicalKit]]),
+      [savedItem], lifeboat, new Group(), new Map([[medicalKit.instanceId, medicalKit]]),
     );
 
-    expect(result).toEqual({ target: 'lifeboat', targetItem: null });
+    expect(result).toEqual({ target: 'deposit', targetItem: null });
   });
 
   it('resolves a direct lifeboat mesh', () => {
@@ -162,12 +165,65 @@ describe('InteractionSystem', () => {
     lifeboat.add(mesh);
     const interaction = new InteractionSystem(camera);
 
-    const result = interaction.update([], lifeboat, new Map());
+    const result = interaction.update([], lifeboat, new Group(), new Map());
 
-    expect(result).toEqual({ target: 'lifeboat', targetItem: null });
+    expect(result).toEqual({ target: 'deposit', targetItem: null });
     expect(mesh.material).not.toBe(material);
     interaction.dispose();
     expect(mesh.material).toBe(material);
+  });
+
+  it('resolves the tagged station deck as a deposit target', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.x = 10;
+    const depositTarget = new Mesh(
+      new BoxGeometry(2, 0.1, 2),
+      new MeshStandardMaterial(),
+    );
+    depositTarget.position.z = -2;
+    depositTarget.userData.boatDepositTarget = true;
+    const interaction = new InteractionSystem(camera);
+
+    const result = interaction.update(
+      [],
+      lifeboat,
+      depositTarget,
+      new Map(),
+    );
+
+    expect(result).toEqual({ target: 'deposit', targetItem: null });
+  });
+
+  it('keeps an available item selectable through the station target surface', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.x = 10;
+    const depositTarget = new Mesh(
+      new BoxGeometry(2, 0.1, 2),
+      new MeshStandardMaterial(),
+    );
+    depositTarget.position.z = -1.8;
+    depositTarget.userData.boatDepositTarget = true;
+    const availableItem = new Group();
+    availableItem.position.z = -2;
+    availableItem.userData.instanceId = 'flareGun-1';
+    availableItem.add(new Mesh(
+      new BoxGeometry(0.5, 0.5, 0.5),
+      new MeshStandardMaterial(),
+    ));
+    const flareGun = item('flareGun-1', 'flareGun');
+
+    const result = new InteractionSystem(camera).update(
+      [availableItem],
+      lifeboat,
+      depositTarget,
+      new Map([[flareGun.instanceId, flareGun]]),
+    );
+
+    expect(result).toEqual({ target: 'item', targetItem: flareGun });
   });
 
   it('switches highlighted targets and clears one beyond ray range', () => {
@@ -188,26 +244,27 @@ describe('InteractionSystem', () => {
     lifeboat.name = 'lifeboat';
     lifeboat.position.set(10, 0, -2);
     const interaction = new InteractionSystem(camera);
+    const depositTarget = new Group();
     const instances = new Map([
       ['flareGun-1', item('flareGun-1', 'flareGun')],
       ['ductTape-1', item('ductTape-1', 'ductTape')],
     ] as const);
 
-    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+    expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'item', targetItem: item('flareGun-1', 'flareGun'),
     });
     expect(firstMesh.material).not.toBe(firstMaterial);
 
     first.position.x = 2;
     second.position.x = 0;
-    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+    expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'item', targetItem: item('ductTape-1', 'ductTape'),
     });
     expect(firstMesh.material).toBe(firstMaterial);
     expect(secondMesh.material).not.toBe(secondMaterial);
 
     second.position.z = -4;
-    expect(interaction.update([first, second], lifeboat, instances)).toEqual({
+    expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'none', targetItem: null,
     });
     expect(secondMesh.material).toBe(secondMaterial);
@@ -233,8 +290,9 @@ describe('InteractionSystem', () => {
     lifeboat.name = 'lifeboat';
     lifeboat.position.set(10, 0, -2);
     const interaction = new InteractionSystem(camera);
+    const depositTarget = new Group();
 
-    interaction.update([aimedItem, otherItem], lifeboat, new Map([
+    interaction.update([aimedItem, otherItem], lifeboat, depositTarget, new Map([
       ['ductTape-1', item('ductTape-1', 'ductTape')],
       ['baitTin-1', item('baitTin-1', 'baitTin')],
     ] as const));

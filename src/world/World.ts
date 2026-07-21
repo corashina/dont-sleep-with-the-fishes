@@ -1,10 +1,12 @@
 import {
   Box3,
+  BoxGeometry,
   BufferGeometry,
   Color,
   Group,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Scene,
   Texture,
@@ -41,6 +43,7 @@ import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './Sc
 import { createShip, type ShipBuild } from './Ship';
 import { assignShipItems } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
 
 export type WorldConstructionStage = 'lifeboat' | 'ocean' | 'environment' | 'buoyancy';
 
@@ -82,6 +85,7 @@ const FREIGHTER_DRAFT = 0.76;
 export class World {
   readonly ship: Group;
   readonly lifeboat: Group;
+  readonly boatDepositTarget!: Mesh<BoxGeometry, MeshBasicMaterial>;
   readonly itemObjects = new Map<ItemInstanceId, Group>();
   readonly colliders: CollisionBox[];
   readonly arcColliders: CollisionArc[];
@@ -158,6 +162,37 @@ export class World {
     try {
       scene.add(this.ship);
       rollback.push(() => scene.remove(this.ship));
+      const depositZone = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation');
+      if (!depositZone) throw new Error('Missing lifeboat station deposit zone');
+      const depositWidth = depositZone.bounds.maxX - depositZone.bounds.minX;
+      const depositLength = depositZone.bounds.maxZ - depositZone.bounds.minZ;
+      const depositGeometry = new BoxGeometry(depositWidth, 0.08, depositLength);
+      const depositMaterial = new MeshBasicMaterial({
+        colorWrite: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0,
+      });
+      this.ownedGeometries.add(depositGeometry);
+      this.ownedMaterials.add(depositMaterial);
+      rollback.push(() => {
+        depositMaterial.dispose();
+        this.ownedMaterials.delete(depositMaterial);
+      });
+      rollback.push(() => {
+        depositGeometry.dispose();
+        this.ownedGeometries.delete(depositGeometry);
+      });
+      this.boatDepositTarget = new Mesh(depositGeometry, depositMaterial);
+      this.boatDepositTarget.name = 'lifeboat-deposit-target';
+      this.boatDepositTarget.userData.boatDepositTarget = true;
+      this.boatDepositTarget.position.set(
+        (depositZone.bounds.minX + depositZone.bounds.maxX) / 2,
+        FREIGHTER_DIMENSIONS.deckY + 0.04,
+        (depositZone.bounds.minZ + depositZone.bounds.maxZ) / 2,
+      );
+      this.ship.add(this.boatDepositTarget);
+      rollback.push(() => this.boatDepositTarget.removeFromParent());
       const assignments = assignShipItems(
         instances,
         this.shipBuild.itemSurfaces,
@@ -345,14 +380,23 @@ export class World {
   }
 
   saveItem(instance: ItemInstance): void {
+    this.storeItem(instance);
+  }
+
+  saveItems(instances: readonly ItemInstance[]): void {
+    instances.forEach((instance) => this.storeItem(instance));
+  }
+
+  private storeItem(instance: ItemInstance): boolean {
     const item = this.itemObjects.get(instance.instanceId);
-    if (!item || item.userData.itemType !== instance.type) return;
+    if (!item || item.userData.itemType !== instance.type) return false;
     const transform = boatStorageTransform(instance);
     item.removeFromParent();
     this.boatStorage.add(item);
     item.position.copy(transform.position);
     item.rotation.copy(transform.rotation);
     item.scale.setScalar(transform.scale);
+    return true;
   }
 
   loseItem(instanceId: ItemInstanceId): void {
