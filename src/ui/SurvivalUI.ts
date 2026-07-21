@@ -163,7 +163,7 @@ export class SurvivalUI {
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
-  onFishingReel: (() => void) | null = null;
+  onFishingReel: (() => boolean) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -1330,7 +1330,8 @@ export class SurvivalUI {
   private issueFishingReel(): void {
     if (this.fishingMode !== 'bite' || this.fishingReelIssued || this.paused) return;
     this.fishingReelIssued = true;
-    this.onFishingReel?.();
+    const accepted = this.onFishingReel?.() ?? false;
+    if (!accepted) this.fishingReelIssued = false;
   }
 
   private readonly handleFishingPointerUp = (event: PointerEvent): void => {

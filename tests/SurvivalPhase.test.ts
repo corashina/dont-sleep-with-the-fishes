@@ -600,16 +600,16 @@ describe('SurvivalPhase orchestration', () => {
 
     const reel = fishingReelCallback(rig);
     rig.phase.setPaused(true);
-    reel();
+    expect(reel()).toBe(false);
     expect(attempt.snapshot().state).toBe('bite');
     expect(rig.session.finishFishing).not.toHaveBeenCalled();
     rig.phase.setPaused(false);
     fakeDocument.hidden = true;
-    reel();
+    expect(reel()).toBe(false);
     expect(attempt.snapshot().state).toBe('bite');
     expect(rig.session.finishFishing).not.toHaveBeenCalled();
     fakeDocument.hidden = false;
-    reel();
+    expect(reel()).toBe(true);
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
   });
 
@@ -661,8 +661,8 @@ describe('SurvivalPhase orchestration', () => {
     rig.calls.length = 0;
 
     const reel = fishingReelCallback(rig);
-    reel();
-    reel();
+    expect(reel()).toBe(true);
+    expect(reel()).toBe(false);
     rig.phase.update(3.1, 0.1);
 
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
@@ -748,14 +748,14 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.update(3, 3);
 
     const reel = fishingReelCallback(rig);
-    reel();
+    expect(reel()).toBe(false);
     expect(rig.ui.showFeedback).toHaveBeenCalledWith(rejection);
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'bite', message: 'BITE - REEL NOW', biteTarget: rig.biteTarget,
     });
     expect(rig.world.playFishingReel).not.toHaveBeenCalled();
 
-    reel();
+    expect(reel()).toBe(true);
     expect(rig.session.finishFishing).toHaveBeenCalledTimes(2);
     expect(rig.world.playFishingReel).toHaveBeenCalledOnce();
     expect(rig.realSession.snapshot().food).toBe(1);

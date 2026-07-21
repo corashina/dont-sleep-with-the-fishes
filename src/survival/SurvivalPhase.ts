@@ -482,7 +482,7 @@ export class SurvivalPhase implements GamePhase {
     });
   }
 
-  private handleFishingReel(): void {
+  private handleFishingReel(): boolean {
     const attempt = this.activeFishing;
     const generation = this.lifecycleGeneration;
     if (
@@ -492,26 +492,25 @@ export class SurvivalPhase implements GamePhase {
       || this.paused
       || this.documentIsHidden()
       || !this.isContinuationActive(generation)
-    ) return;
+    ) return false;
     const current = attempt.snapshot();
     if (current.state === 'resolved' && current.result !== null) {
-      this.settleFishing(attempt, current.result, generation);
-      return;
+      return this.settleFishing(attempt, current.result, generation);
     }
     const reel = attempt.reel();
-    if (!reel.accepted || reel.result === undefined) return;
-    if (!attempt.completeReel().accepted) return;
+    if (!reel.accepted || reel.result === undefined) return false;
+    if (!attempt.completeReel().accepted) return false;
     const result = attempt.snapshot().result;
-    if (result === null || result !== reel.result) return;
-    this.settleFishing(attempt, result, generation);
+    if (result === null || result !== reel.result) return false;
+    return this.settleFishing(attempt, result, generation);
   }
 
   private settleFishing(
     attempt: FishingSession,
     result: FishingTerminalResult,
     generation: number,
-  ): void {
-    if (!this.isCurrentFishing(attempt, generation) || this.fishingSettlementInProgress) return;
+  ): boolean {
+    if (!this.isCurrentFishing(attempt, generation) || this.fishingSettlementInProgress) return false;
     this.fishingSettlementInProgress = true;
     this.fishingPresentation = 'settling';
     const outcome = this.session.finishFishing?.(attempt.snapshot().id, result);
@@ -520,10 +519,11 @@ export class SurvivalPhase implements GamePhase {
       this.fishingSettlementInProgress = false;
       this.fishingPresentation = 'bite';
       this.syncFishingBiteTarget();
-      return;
+      return false;
     }
     this.renderSnapshot(false, false);
     void this.presentFishingResult(attempt, result, generation);
+    return true;
   }
 
   private async presentFishingResult(

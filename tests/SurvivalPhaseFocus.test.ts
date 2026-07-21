@@ -73,7 +73,7 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.dispose();
   });
 
-  it('moves focus through interactive fishing and unlocks only after the camera returns', async () => {
+  it('rearms real fishing input after a rejected settlement and unlocks only after return', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
@@ -90,6 +90,16 @@ describe('SurvivalPhase focus synchronization', () => {
     const cast = new Promise<void>((resolve) => { finishCast = resolve; });
     const reel = new Promise<void>((resolve) => { finishReel = resolve; });
     const exit = new Promise<void>((resolve) => { finishExit = resolve; });
+    const settlementRejection = {
+      accepted: false,
+      code: 'fishing-result-mismatch',
+      message: 'That result does not belong to the active fishing attempt.',
+      deltas: {},
+      cue: 'none' as const,
+    };
+    const finishFishing = vi.fn()
+      .mockImplementationOnce(() => settlementRejection)
+      .mockImplementation((attemptId, result) => session.finishFishing(attemptId, result));
     const world = {
       syncInventory: () => undefined,
       projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
@@ -113,7 +123,7 @@ describe('SurvivalPhase focus synchronization', () => {
         availableReason: (action, option) => session.availableReason(action, option),
         perform: (action, option) => session.perform(action, option),
         beginFishing: () => session.beginFishing(),
-        finishFishing: (attemptId, result) => session.finishFishing(attemptId, result),
+        finishFishing,
         requestDayEvent: () => ({
           accepted: false,
           code: 'day-event-used',
@@ -152,6 +162,12 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.update(3, 3);
     expect(document.activeElement).toBe(mount.querySelector('[data-fishing-bite]'));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(finishFishing).toHaveBeenCalledOnce();
+    expect(session.snapshot()).toMatchObject({ food: 0, bait: 1 });
+    expect(world.playFishingReel).not.toHaveBeenCalled();
+    expect(mount.querySelector('[data-fishing-instruction]')?.textContent).toBe('BITE - REEL NOW');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(finishFishing).toHaveBeenCalledTimes(2);
     expect(session.snapshot()).toMatchObject({ food: 1, bait: 0 });
     expect(world.playFishingReel).toHaveBeenCalledOnce();
     finishReel();
