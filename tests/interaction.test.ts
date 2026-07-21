@@ -257,6 +257,29 @@ describe('InteractionSystem', () => {
 });
 
 describe('CarryController', () => {
+  it('releases the full carried bundle without starting a flight', () => {
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    scene.add(camera);
+    const objects = [new Group(), new Group(), new Group()];
+    objects.forEach((object) => scene.add(object));
+    const carry = new CarryController(scene, camera);
+    const instances = [
+      item('cannedFood-1', 'cannedFood'),
+      item('ductTape-1', 'ductTape'),
+      item('flashlight-1', 'flashlight'),
+    ];
+    instances.forEach((instance, index) => {
+      carry.pickUp(instance, objects[index]!);
+    });
+
+    expect(carry.releaseAll()).toEqual(instances);
+    expect(carry.activeInstance).toBeNull();
+    expect(carry.busy).toBe(false);
+    expect(carry.flightActive).toBe(false);
+    expect(objects.every(({ parent }) => parent === camera)).toBe(true);
+  });
+
   it('attaches three light instances as a visible bundle and releases LIFO', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
@@ -322,39 +345,11 @@ describe('CarryController', () => {
     const beforeQuaternion = item.getWorldQuaternion(new Quaternion());
     const beforeScale = item.getWorldScale(new Vector3());
 
-    carry.throw();
+    carry.drop();
 
     expect(item.getWorldPosition(new Vector3()).distanceTo(beforePosition)).toBeLessThan(1e-10);
     expect(item.getWorldQuaternion(new Quaternion()).angleTo(beforeQuaternion)).toBeLessThan(1e-10);
     expect(item.getWorldScale(new Vector3()).distanceTo(beforeScale)).toBeLessThan(1e-10);
-  });
-
-  it('reaches the moved scavenging lifeboat with the normal throw speed', () => {
-    const scene = new Scene();
-    const camera = new PerspectiveCamera();
-    camera.position.set(5.4, 3.72, 0);
-    camera.lookAt(9.0, 1.5, 0);
-    scene.add(camera);
-    const object = new Group();
-    scene.add(object);
-    const carry = new CarryController(scene, camera);
-    const outcomes: string[] = [];
-    const lifeboatBox = new Box3(
-      new Vector3(7.65, 0.05, -2.72),
-      new Vector3(10.35, 1.35, 2.72),
-    );
-
-    carry.pickUp({ instanceId: 'umbrella-1', type: 'umbrella' }, object);
-    carry.throw();
-    for (let frame = 0; frame < 120 && carry.flightActive; frame += 1) {
-      carry.update(1 / 60, lifeboatBox, () => -100, {
-        onSaved: (instance) => outcomes.push(`saved:${instance.instanceId}`),
-        onLost: (instance) => outcomes.push(`lost:${instance.instanceId}`),
-        onLanded: (instance) => outcomes.push(`landed:${instance.instanceId}`),
-      });
-    }
-
-    expect(outcomes).toEqual(['saved:umbrella-1']);
   });
 
   it('detects a lifeboat hit across a large delta and reports it once', () => {
@@ -374,12 +369,12 @@ describe('CarryController', () => {
       onLanded: (instance: ItemInstance) => outcomes.push(`landed:${instance.instanceId}`),
     };
     const lifeboatBox = new Box3(
-      new Vector3(6.4, 1.8, -3.2),
-      new Vector3(6.8, 2.4, -2.75),
+      new Vector3(6.4, 1.8, -1.65),
+      new Vector3(6.8, 2.4, -1.2),
     );
 
     carry.pickUp({ instanceId: 'medicalKit-1', type: 'medicalKit' }, item);
-    carry.throw();
+    carry.drop();
     carry.update(1, lifeboatBox, () => -100, handlers);
     carry.update(1, lifeboatBox, () => -100, handlers);
 
@@ -500,7 +495,7 @@ describe('CarryController', () => {
     expect(item.scale.equals(originalScale)).toBe(true);
 
     carry.pickUp({ instanceId: 'flashlight-1', type: 'flashlight' }, item);
-    carry.throw();
+    carry.drop();
     carry.reset();
     expect(carry.busy).toBe(false);
     expect(item.parent).toBe(ship);

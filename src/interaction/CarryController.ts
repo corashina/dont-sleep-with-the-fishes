@@ -71,23 +71,13 @@ export class CarryController {
     return true;
   }
 
-  throw(speed = 7.5): ItemInstanceId | null {
-    if (this.flight !== null) return null;
-    const released = this.carried.pop();
-    if (!released) return null;
-    const { instance, object } = released;
-    this.scene.attach(object);
-    this.camera.getWorldDirection(this.direction);
-    this.flight = {
-      ...released,
-      velocity: this.direction.multiplyScalar(speed).add(new Vector3(0, 1.5, 0)),
-    };
-    this.reflowCarried();
-    return instance.instanceId;
+  releaseAll(): readonly ItemInstance[] {
+    if (this.flight !== null || this.carried.length === 0) return [];
+    return Object.freeze(this.carried.splice(0).map(({ instance }) => instance));
   }
 
   drop(): ItemInstanceId | null {
-    return this.throw(1.2);
+    return this.launch(1.2);
   }
 
   update(
@@ -156,5 +146,20 @@ export class CarryController {
       object.rotation.set(-0.15, 0.45 - index * 0.2, 0.08);
       object.scale.setScalar(0.72);
     });
+  }
+
+  private launch(speed: number): ItemInstanceId | null {
+    if (this.flight !== null) return null;
+    const released = this.carried.pop();
+    if (!released) return null;
+    const { instance, object } = released;
+    this.scene.attach(object);
+    this.camera.getWorldDirection(this.direction);
+    this.flight = {
+      ...released,
+      velocity: this.direction.multiplyScalar(speed).add(new Vector3(0, 1.5, 0)),
+    };
+    this.reflowCarried();
+    return instance.instanceId;
   }
 }
