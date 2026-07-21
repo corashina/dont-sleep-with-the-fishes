@@ -1,5 +1,6 @@
 import {
   DataTexture,
+  DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
   Material,
@@ -28,6 +29,7 @@ export interface ShipMaterials {
   glass: MeshPhysicalMaterial;
   emergency: MeshStandardMaterial;
   beacon: MeshStandardMaterial;
+  canvas: MeshStandardMaterial;
   ownedMaterialsForTest(): readonly Material[];
   ownedTexturesForTest(): readonly Texture[];
   textureBytesForTest(): readonly (readonly number[])[];
@@ -230,6 +232,12 @@ export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMat
   const glass = new MeshPhysicalMaterial({ color: 0x6d8790, roughness: 0.18, transmission: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
   const emergency = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
   const beacon = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
+  const canvas = new MeshStandardMaterial({
+    color: 0xc7ad7a,
+    roughness: 0.96,
+    metalness: 0,
+    side: DoubleSide,
+  });
 
   const ownedMaterials = new Set<Material>([
     crewFloor,
@@ -247,6 +255,7 @@ export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMat
     glass,
     emergency,
     beacon,
+    canvas,
   ]);
   const ownedTextures = [
     warmWood.color,
@@ -280,6 +289,7 @@ export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMat
     glass,
     emergency,
     beacon,
+    canvas,
     ownedMaterialsForTest: () => [...ownedMaterials],
     ownedTexturesForTest: () => [...ownedTextures],
     textureBytesForTest: () => ownedTextures.map((texture) =>
