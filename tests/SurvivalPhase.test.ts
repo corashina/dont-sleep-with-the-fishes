@@ -38,7 +38,7 @@ function completedEntry(
     },
   },
 ): JournalEntry {
-  return { day, weather: 'calm', daytime: null, nighttime };
+  return { day, weather: 'calm', actions: [], daytime: null, nighttime };
 }
 
 function accepted(overrides: Record<string, unknown> = {}) {

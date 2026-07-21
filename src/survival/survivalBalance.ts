@@ -11,8 +11,6 @@ export const SURVIVAL_BALANCE = {
     minimumBiteDelaySeconds: 3,
     biteDelayRangeSeconds: 4,
     reactionSeconds: 1.5,
-    rodSuccess: 0.70, rodDouble: 0.20, rodBaitSuccess: 0.90,
-    rodBaitDouble: 0.40, handSuccess: 0.30, handBaitSuccess: 0.55,
   },
   diving: {
     success: 0.65, injury: 0.25, flashlightSuccess: 0.80,

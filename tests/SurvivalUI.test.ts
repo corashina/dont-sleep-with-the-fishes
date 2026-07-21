@@ -21,6 +21,7 @@ const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) =>
 const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
   day,
   weather: day === 1 ? 'calm' : 'overcast',
+  actions: [],
   daytime: null,
   nighttime: {
     kind: 'event',
@@ -1043,7 +1044,7 @@ describe('SurvivalUI', () => {
     await Promise.resolve();
 
     observer.disconnect();
-    expect(publications.filter((message) => message === 'Fishing requires a recovered fishing rod.')).toHaveLength(2);
+    expect(publications.filter((message) => message === 'Fishing uses the interactive fishing action.')).toHaveLength(2);
     expect(publications).toContain('Diving requires a recovered scuba set.');
     expect(action).not.toHaveBeenCalled();
   });

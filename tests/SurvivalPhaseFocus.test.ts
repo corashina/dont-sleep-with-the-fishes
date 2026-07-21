@@ -73,17 +73,16 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.dispose();
   });
 
-  it('restores accepted baited fishing to Fish when another action precedes it', async () => {
+  it('keeps the phase unlocked when legacy baited fishing awaits interactive integration', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
     const session = new SurvivalSession([rod, bait, scuba], { seed: 1 });
-    let finishCue!: () => void;
-    const cue = new Promise<void>((resolve) => { finishCue = resolve; });
+    const play = vi.fn(() => Promise.resolve());
     const world = {
       syncInventory: () => undefined,
       projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
-      play: () => cue,
+      play,
       dispose: () => undefined,
     };
     const phase = SurvivalPhase.forTest({
@@ -99,9 +98,8 @@ describe('SurvivalPhase focus synchronization', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
     fish.click();
     mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(true);
-
-    finishCue();
+    expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(false);
+    expect(play).not.toHaveBeenCalled();
     await flushPromises();
 
     expect(document.activeElement).toBe(fish);
