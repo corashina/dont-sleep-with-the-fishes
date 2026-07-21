@@ -30,8 +30,13 @@ import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
+import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
+import { createShipFurniture } from '../src/world/ShipFurniture';
+import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
 import { SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { createShipMaterials } from '../src/world/ShipMaterials';
+import { createShipRigging } from '../src/world/ShipRigging';
 import { World } from '../src/world/World';
 import {
   createTestPropModels,
@@ -1056,52 +1061,77 @@ describe('world builders', () => {
     ship.dispose();
   });
 
-  it('aggregates authored detail and mast-base colliders without blocking cosmetic rigging', () => {
+  it('publishes every collider exactly once in shell, furniture, detail, then rigging order', () => {
     const ship = createTestShip();
-    const contains = (point: Vector3): boolean => ship.colliders.some((box) =>
-      point.x >= box.minX && point.x <= box.maxX
-      && point.y >= box.minY && point.y <= box.maxY
-      && point.z >= box.minZ && point.z <= box.maxZ);
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const geometry = createShipGeometry(materials);
+    const furniture = createShipFurniture(materials, library, SHIP_LAYOUT);
+    const details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
+    const rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
+    const components = [
+      geometry.shellColliders,
+      furniture.colliders,
+      details.colliders,
+      rigging.colliders,
+    ] as const;
 
-    SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize).forEach((detail) => {
-      expect(contains(new Vector3(
-        detail.position[0],
-        detail.position[1] + detail.colliderSize![1] * detail.scale[1] / 2,
-        detail.position[2],
-      )), detail.id).toBe(true);
+    expect(components.map(({ length }) => length)).toEqual([36, 22, 16, 2]);
+    expect(SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize)).toHaveLength(16);
+    expect(SHIP_LAYOUT.rigging.masts).toHaveLength(2);
+    expect(SHIP_LAYOUT.rigging.masts.flatMap(({ id }) => [
+      rigging.root.getObjectByName(`sail:${id}`),
+      rigging.root.getObjectByName(`stay:${id}`),
+    ]).every(Boolean)).toBe(true);
+    expect(ship.colliders).toHaveLength(76);
+    expect(ship.colliders).toEqual(components.flat());
+    let offset = 0;
+    components.forEach((component) => {
+      expect(ship.colliders.slice(offset, offset + component.length)).toEqual(component);
+      offset += component.length;
     });
-    SHIP_LAYOUT.rigging.masts.forEach((mast) => {
-      expect(contains(new Vector3(
-        mast.position[0],
-        mast.position[1] + mast.height / 2,
-        mast.position[2],
-      )), mast.id).toBe(true);
-      expect(contains(new Vector3(
-        mast.position[0],
-        mast.position[1] + mast.height * 0.75,
-        mast.position[2] + mast.sailDirectionZ,
-      )), `cosmetic sail:${mast.id}`).toBe(false);
-    });
+    const colliderKeys = ship.colliders.map((box) => [
+      box.minX,
+      box.maxX,
+      box.minY,
+      box.maxY,
+      box.minZ,
+      box.maxZ,
+    ].join(':'));
+    expect(new Set(colliderKeys).size).toBe(ship.colliders.length);
     expect(ship.itemSurfaces.every(({ standingPoints }) => standingPoints.length > 0)).toBe(true);
+
+    rigging.disposeGeometry();
+    details.disposeGeometry();
+    furniture.disposeGeometry();
+    geometry.disposeGeometry();
+    library.dispose();
+    materials.dispose();
     ship.dispose();
   });
 
   it('forwards deterministic effect time and reduced motion to rigging', () => {
-    const first = createTestShip();
-    const second = createTestShip();
-    const firstSail = first.root.getObjectByName('sail:aft-mast')!;
-    const secondSail = second.root.getObjectByName('sail:aft-mast')!;
-    const neutral = firstSail.rotation.z;
+    const split = createTestShip();
+    const combined = createTestShip();
+    const different = createTestShip();
+    const splitSail = split.root.getObjectByName('sail:aft-mast')!;
+    const combinedSail = combined.root.getObjectByName('sail:aft-mast')!;
+    const differentSail = different.root.getObjectByName('sail:aft-mast')!;
+    const neutral = splitSail.rotation.z;
 
-    first.updateEffects(0.25, 0.5, false);
-    second.updateEffects(0.1, 0.5, false);
-    expect(firstSail.rotation.z).not.toBeCloseTo(neutral);
-    expect(firstSail.rotation.z).toBeCloseTo(secondSail.rotation.z);
-    first.updateEffects(0.25, 0.5, true);
-    expect(firstSail.rotation.z).toBeCloseTo(neutral);
+    split.updateEffects(0.03, 0.5, false);
+    split.updateEffects(0.04, 0.5, false);
+    combined.updateEffects(0.07, 0.5, false);
+    different.updateEffects(0.03, 0.5, false);
+    expect(splitSail.rotation.z).not.toBeCloseTo(neutral);
+    expect(splitSail.rotation.z).toBeCloseTo(combinedSail.rotation.z, 10);
+    expect(splitSail.rotation.z).not.toBeCloseTo(differentSail.rotation.z, 6);
+    split.updateEffects(0.03, 0.5, true);
+    expect(splitSail.rotation.z).toBeCloseTo(neutral);
 
-    first.dispose();
-    second.dispose();
+    split.dispose();
+    combined.dispose();
+    different.dispose();
   });
 
   it('ignores effect updates after idempotent disposal', () => {
