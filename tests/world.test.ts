@@ -148,18 +148,23 @@ describe('world builders', () => {
     const target = world.boatDepositTarget;
     const size = new Box3().setFromObject(target).getSize(new Vector3());
     const material = target.material as Material;
+    const depositZone = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
     const geometryDispose = vi.spyOn(target.geometry, 'dispose');
     const materialDispose = vi.spyOn(material, 'dispose');
 
     expect(target.name).toBe('lifeboat-deposit-target');
     expect(target.parent).toBe(world.ship);
     expect(target.userData.boatDepositTarget).toBe(true);
-    expect(target.position.x).toBeCloseTo(4.9);
+    expect(target.position.x).toBeCloseTo(
+      (depositZone.bounds.minX + depositZone.bounds.maxX) / 2,
+    );
     expect(target.position.y).toBeCloseTo(2.26);
-    expect(target.position.z).toBeCloseTo(0);
-    expect(size.x).toBeCloseTo(2.2);
+    expect(target.position.z).toBeCloseTo(
+      (depositZone.bounds.minZ + depositZone.bounds.maxZ) / 2,
+    );
+    expect(size.x).toBeCloseTo(depositZone.bounds.maxX - depositZone.bounds.minX);
     expect(size.y).toBeCloseTo(0.08);
-    expect(size.z).toBeCloseTo(3.2);
+    expect(size.z).toBeCloseTo(depositZone.bounds.maxZ - depositZone.bounds.minZ);
     expect(material.colorWrite).toBe(false);
     expect(material.depthWrite).toBe(false);
 
