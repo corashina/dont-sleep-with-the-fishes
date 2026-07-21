@@ -1,9 +1,11 @@
 import {
+  Box3,
   BufferGeometry,
   CylinderGeometry,
   DoubleSide,
   Mesh,
   type Object3D,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { SHIP_LAYOUT } from '../src/world/ShipLayout';
@@ -12,6 +14,38 @@ import { createShipRigging } from '../src/world/ShipRigging';
 
 function mesh(root: Object3D, name: string): Mesh {
   return root.getObjectByName(name) as Mesh;
+}
+
+function transformedClothBounds(sail: Mesh): Box3 {
+  const position = sail.geometry.getAttribute('position');
+  const bounds = new Box3();
+  const vertex = new Vector3();
+  sail.updateMatrix();
+  for (let index = 0; index < position.count; index += 1) {
+    vertex.fromBufferAttribute(position, index).applyMatrix4(sail.matrix);
+    bounds.expandByPoint(vertex);
+  }
+  return bounds;
+}
+
+function advanceRiggingTo(
+  update: (delta: number, reducedMotion: boolean) => void,
+  targetElapsed: number,
+): void {
+  let elapsed = 0;
+  while (elapsed + 0.1 < targetElapsed) {
+    update(0.1, false);
+    elapsed += 0.1;
+  }
+  update(targetElapsed - elapsed, false);
+}
+
+function expectClothClearance(sail: Mesh, mastHeight: number): void {
+  const bounds = transformedClothBounds(sail);
+  expect(bounds.min.x).toBeGreaterThanOrEqual(-2.4);
+  expect(bounds.max.x).toBeLessThanOrEqual(2.4);
+  expect(bounds.min.y).toBeGreaterThan(5.2);
+  expect(bounds.max.y).toBeLessThanOrEqual(mastHeight);
 }
 
 describe('ship rigging', () => {
@@ -50,7 +84,7 @@ describe('ship rigging', () => {
       const clothBounds = sail.geometry.boundingBox!;
       expect(clothBounds.min.x).toBeGreaterThanOrEqual(-2.4);
       expect(clothBounds.max.x).toBeLessThanOrEqual(2.4);
-      expect(clothBounds.min.y).toBeGreaterThanOrEqual(5.2);
+      expect(clothBounds.min.y).toBeGreaterThan(5.2);
       expect(clothBounds.max.y).toBeLessThanOrEqual(spec.height);
 
       const halfBase = spec.baseDiameter / 2;
@@ -103,6 +137,35 @@ describe('ship rigging', () => {
 
     first.disposeGeometry();
     second.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('keeps transformed cloth within clearance at both motion extrema', () => {
+    const materials = createShipMaterials();
+    const angularSpeed = 1.4;
+    const phases = SHIP_LAYOUT.rigging.masts.map((_spec, index) => 0.35 + index * 0.9);
+    const extrema = [
+      { angle: Math.PI / 2, rotation: 0.025 },
+      { angle: 3 * Math.PI / 2, rotation: -0.025 },
+    ] as const;
+
+    extrema.forEach(({ angle, rotation }) => {
+      SHIP_LAYOUT.rigging.masts.forEach((_targetSpec, targetIndex) => {
+        const build = createShipRigging(materials, SHIP_LAYOUT.rigging);
+        const targetElapsed = (angle - phases[targetIndex]!) / angularSpeed;
+        advanceRiggingTo(build.update, targetElapsed);
+
+        SHIP_LAYOUT.rigging.masts.forEach((spec, index) => {
+          const sail = mesh(build.root, `sail:${spec.id}`);
+          expectClothClearance(sail, spec.height);
+          if (index === targetIndex) {
+            expect(sail.rotation.z).toBeCloseTo(rotation, 10);
+          }
+        });
+
+        build.disposeGeometry();
+      });
+    });
     materials.dispose();
   });
 
