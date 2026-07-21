@@ -1,4 +1,5 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
@@ -44,6 +45,17 @@ export interface ActionOutcome {
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
 }
+
+export type BeginFishingResult =
+  | {
+      readonly accepted: true;
+      readonly outcome: ActionOutcome;
+      readonly attempt: FishingSession;
+    }
+  | {
+      readonly accepted: false;
+      readonly outcome: ActionOutcome;
+    };
 
 export interface EventResponse {
   itemId: ItemId;

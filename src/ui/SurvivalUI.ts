@@ -548,6 +548,7 @@ export class SurvivalUI {
     this.focusReturnTarget = this.journalMarker;
     this.journalEntries = entries.map((entry) => ({
       ...entry,
+      actions: entry.actions.map((action) => ({ ...action })),
       daytime: entry.daytime === null ? null : { ...entry.daytime },
       nighttime: entry.nighttime.kind === 'quiet'
         ? { kind: 'quiet' }

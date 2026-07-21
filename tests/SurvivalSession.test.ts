@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
 import type {
   DayActionId,
   DayActionOption,
@@ -26,6 +27,33 @@ function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number)
   session.perform('endDay');
   session.beginDawn();
   return session.snapshot().state;
+}
+
+function beginFishing(session: SurvivalSession): FishingSession {
+  const begun = session.beginFishing();
+  expect(begun.accepted).toBe(true);
+  if (!begun.accepted) throw new Error(`Fishing start was rejected: ${begun.outcome.code}`);
+  return begun.attempt;
+}
+
+function reelCatch(attempt: FishingSession): FishingTerminalResult {
+  expect(attempt.cast({ x: 4, z: -2 }).accepted).toBe(true);
+  expect(attempt.completeCast().accepted).toBe(true);
+  attempt.advance(attempt.snapshot().biteDelaySeconds);
+  const reeled = attempt.reel();
+  expect(reeled.accepted).toBe(true);
+  if (reeled.result === undefined) throw new Error('Expected a fishing catch result.');
+  expect(attempt.completeReel().accepted).toBe(true);
+  return reeled.result;
+}
+
+function missCatch(attempt: FishingSession): FishingTerminalResult {
+  expect(attempt.cast({ x: 4, z: -2 }).accepted).toBe(true);
+  expect(attempt.completeCast().accepted).toBe(true);
+  attempt.advance(attempt.snapshot().biteDelaySeconds + 2);
+  const result = attempt.snapshot().result;
+  if (result === null) throw new Error('Expected a fishing miss result.');
+  return result;
 }
 
 describe('SurvivalSession daytime actions', () => {
@@ -92,17 +120,231 @@ describe('SurvivalSession daytime actions', () => {
     expect(state.savedItems.every(Object.isFrozen)).toBe(true);
   });
 
-  it('fishes deterministically with rod and bait', () => {
-    const session = new SurvivalSession(saved('fishingRod', 'baitTin'), {
+  it('begins fishing without a recovered rod and captures bait through the injected random source', () => {
+    const draws = [0.25, 0];
+    let drawIndex = 0;
+    const session = new SurvivalSession(saved('baitTin'), {
       seed: 1,
-      random: sequenceRandom([0.1, 0.1]),
+      random: { next: () => draws[drawIndex++] ?? 0 },
     });
-    expect(session.perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
+
+    const begun = session.beginFishing();
+
+    expect(begun).toMatchObject({
       accepted: true,
-      deltas: { energy: -1, food: 2, bait: -1 },
+      outcome: { code: 'fishing-started', deltas: { energy: -1 }, cue: 'none' },
+      attempt: {},
     });
-    expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 0, actedToday: true });
-    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
+    if (!begun.accepted) throw new Error('Expected fishing to begin.');
+    expect(begun.attempt.snapshot()).toMatchObject({
+      id: 'fishing-1-1',
+      capturedBait: true,
+      biteDelaySeconds: 4,
+    });
+    expect(begun.attempt.snapshot().id).toBe(begun.attempt.snapshot().id);
+    expect(drawIndex).toBe(2);
+    expect(session.snapshot()).toMatchObject({ energy: 2, bait: 1, actedToday: true });
+  });
+
+  it('rejects invalid fishing starts atomically', () => {
+    const cases: Array<{ session: SurvivalSession; code: string }> = [
+      {
+        session: new SurvivalSession(saved(), { seed: 1, initial: { energy: 0 } }),
+        code: 'not-enough-energy',
+      },
+      {
+        session: new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' }),
+        code: 'not-daytime',
+      },
+      {
+        session: new SurvivalSession(saved(), { seed: 1, initial: { health: 0 } }),
+        code: 'terminal',
+      },
+    ];
+    const acted = new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 2 } });
+    expect(acted.perform('useEnergyBar').accepted).toBe(true);
+    cases.push({ session: acted, code: 'already-acted' });
+
+    for (const { session, code } of cases) {
+      const before = session.snapshot();
+      expect(session.beginFishing()).toMatchObject({ accepted: false, outcome: { code } });
+      expect(session.snapshot()).toEqual(before);
+    }
+
+    const active = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0, 0]) });
+    expect(active.beginFishing().accepted).toBe(true);
+    const before = active.snapshot();
+    expect(active.beginFishing()).toMatchObject({
+      accepted: false,
+      outcome: { code: 'fishing-in-progress' },
+    });
+    expect(active.snapshot()).toEqual(before);
+  });
+
+  it('locks ordinary actions, events, and day transitions during an active fishing transaction', () => {
+    const session = new SurvivalSession(saved('cannedFood'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+      initial: { hunger: 80 },
+    });
+    beginFishing(session);
+    const before = session.snapshot();
+
+    const outcomes = [
+      session.perform('eat'),
+      session.requestDayEvent(),
+      session.endDay(),
+      session.resolveEvent(null),
+      session.beginDawn(),
+    ];
+
+    expect(outcomes.every((outcome) => !outcome.accepted && outcome.code === 'fishing-in-progress')).toBe(true);
+    expect(session.snapshot()).toEqual(before);
+  });
+
+  it('awards catalog food and consumes one captured recovered bait in existing resource order', () => {
+    const cod = new SurvivalSession(saved('baitTin', 'baitTin'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+    });
+    (cod as unknown as { bait: number }).bait = 3;
+    const codAttempt = beginFishing(cod);
+    const codResult = reelCatch(codAttempt);
+    expect(cod.finishFishing(codAttempt.snapshot().id, codResult)).toMatchObject({
+      accepted: true,
+      code: 'fish-caught',
+      deltas: { food: 1, bait: -1 },
+      cue: 'none',
+    });
+    expect(cod.snapshot()).toMatchObject({ food: 1, bait: 2, recoveredBait: 1 });
+    expect(cod.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
+    expect(cod.snapshot().inventory['baitTin-2']?.condition).toBe('usable');
+
+    const swordfish = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0.47]),
+    });
+    const swordfishAttempt = beginFishing(swordfish);
+    const swordfishResult = reelCatch(swordfishAttempt);
+    expect(swordfishResult).toMatchObject({ kind: 'catch', catch: { id: 'swordfish', food: 2 } });
+    expect(swordfish.finishFishing(swordfishAttempt.snapshot().id, swordfishResult)).toMatchObject({
+      deltas: { food: 2 },
+      cue: 'none',
+    });
+  });
+
+  it('does not consume bait that was unavailable when the fishing attempt began', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0, 0]) });
+    const attempt = beginFishing(session);
+    (session as unknown as { bait: number }).bait = 1;
+    const result = reelCatch(attempt);
+
+    expect(session.finishFishing(attempt.snapshot().id, result).deltas).toEqual({ food: 1 });
+    expect(session.snapshot().bait).toBe(1);
+  });
+
+  it('awards no food and consumes no bait for junk or a miss', () => {
+    const junk = new SurvivalSession(saved('baitTin'), {
+      seed: 1,
+      random: sequenceRandom([0, 0.7]),
+    });
+    const junkAttempt = beginFishing(junk);
+    const junkResult = reelCatch(junkAttempt);
+    expect(junkResult).toMatchObject({ kind: 'catch', catch: { id: 'seaweed', kind: 'junk' } });
+    expect(junk.finishFishing(junkAttempt.snapshot().id, junkResult)).toMatchObject({
+      accepted: true,
+      code: 'junk-caught',
+      deltas: {},
+      cue: 'none',
+    });
+    expect(junk.snapshot()).toMatchObject({ food: 0, bait: 1, recoveredBait: 1 });
+
+    const missed = new SurvivalSession(saved('baitTin'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+    });
+    const missedAttempt = beginFishing(missed);
+    const missedResult = missCatch(missedAttempt);
+    expect(missed.finishFishing(missedAttempt.snapshot().id, missedResult)).toMatchObject({
+      accepted: true,
+      code: 'fish-missed',
+      deltas: {},
+      cue: 'none',
+    });
+    expect(missed.snapshot()).toMatchObject({ food: 0, bait: 1, recoveredBait: 1 });
+  });
+
+  it('requires the matching attempt terminal state and exact stable result object', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0, 0]) });
+    const attempt = beginFishing(session);
+    const unresolved = session.snapshot();
+    expect(session.finishFishing(attempt.snapshot().id, { kind: 'miss' })).toMatchObject({
+      accepted: false,
+      code: 'fishing-unresolved',
+    });
+    expect(session.snapshot()).toEqual(unresolved);
+
+    const result = reelCatch(attempt);
+    const beforeFinish = session.snapshot();
+    expect(session.finishFishing('foreign-attempt', result)).toMatchObject({
+      accepted: false,
+      code: 'fishing-attempt-mismatch',
+    });
+    expect(session.finishFishing(attempt.snapshot().id, { ...result })).toMatchObject({
+      accepted: false,
+      code: 'fishing-result-mismatch',
+    });
+    expect(session.snapshot()).toEqual(beforeFinish);
+
+    expect(session.finishFishing(attempt.snapshot().id, result).accepted).toBe(true);
+    const finished = session.snapshot();
+    expect(session.finishFishing(attempt.snapshot().id, result)).toMatchObject({
+      accepted: false,
+      code: 'no-fishing-attempt',
+    });
+    expect(session.snapshot()).toEqual(finished);
+  });
+
+  it('rejects a stale attempt ID without clearing the current transaction', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0, 0, 0.5, 0, 0]),
+    });
+    const first = beginFishing(session);
+    const firstResult = reelCatch(first);
+    expect(session.finishFishing(first.snapshot().id, firstResult).accepted).toBe(true);
+    expect(session.endDay().code).toBe('quiet-night');
+    expect(session.beginDawn().accepted).toBe(true);
+    const second = beginFishing(session);
+    const secondResult = reelCatch(second);
+    const before = session.snapshot();
+
+    expect(session.finishFishing(first.snapshot().id, secondResult)).toMatchObject({
+      accepted: false,
+      code: 'fishing-attempt-mismatch',
+    });
+    expect(session.snapshot()).toEqual(before);
+    expect(session.finishFishing(second.snapshot().id, secondResult).accepted).toBe(true);
+  });
+
+  it('records start, fish, junk, and miss outcomes without the generic fish cue', () => {
+    const cases = [
+      { roll: 0, terminal: reelCatch, finishCode: 'fish-caught' },
+      { roll: 0.7, terminal: reelCatch, finishCode: 'junk-caught' },
+      { roll: 0, terminal: missCatch, finishCode: 'fish-missed' },
+    ] as const;
+
+    for (const testCase of cases) {
+      const session = new SurvivalSession(saved(), {
+        seed: 1,
+        random: sequenceRandom([0, testCase.roll]),
+      });
+      const attempt = beginFishing(session);
+      expect(session.snapshot().lastOutcome).toMatchObject({ code: 'fishing-started', cue: 'none' });
+      const result = testCase.terminal(attempt);
+      session.finishFishing(attempt.snapshot().id, result);
+      expect(session.snapshot().lastOutcome).toMatchObject({ code: testCase.finishCode, cue: 'none' });
+    }
   });
 
   it('does not restore a consumed recovered can when diving finds loose food', () => {
@@ -122,11 +364,13 @@ describe('SurvivalSession daytime actions', () => {
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
     const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
-      random: sequenceRandom([0.99, 0, 0.99, 0.3]),
+      random: sequenceRandom([0, 0, 0, 0.99, 0.3]),
       initial: { energy: 3 },
     });
 
-    session.perform('fish', { kind: 'fishing', useBait: true });
+    const attempt = beginFishing(session);
+    const result = reelCatch(attempt);
+    session.finishFishing(attempt.snapshot().id, result);
     expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
     session.perform('useEnergyBar');
     session.perform('dive');
@@ -134,11 +378,14 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
   });
 
-  it('requires a rod for fishing and scuba for diving', () => {
-    expect(new SurvivalSession(saved(), { seed: 1 }).perform('fish')).toMatchObject({ code: 'no-fishing-rod' });
+  it('routes legacy fishing to the interactive action and still requires scuba for diving', () => {
+    expect(new SurvivalSession(saved(), { seed: 1 }).perform('fish')).toMatchObject({ code: 'interactive-action' });
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('dive')).toMatchObject({ code: 'no-scuba-set' });
-    expect(new SurvivalSession(saved('fishingRod'), { seed: 1, random: sequenceRandom([0]) })
-      .perform('fish').accepted).toBe(true);
+    expect(new SurvivalSession(saved('fishingRod', 'baitTin'), { seed: 1 })
+      .perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
+        accepted: false,
+        code: 'interactive-action',
+      });
     expect(new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0, 0, 0]) })
       .perform('dive').accepted).toBe(true);
   });
@@ -320,7 +567,8 @@ describe('SurvivalSession daytime actions', () => {
       initial: { day: 2 },
     });
     expect(session.requestDayEvent().code).toBe('act-first');
-    session.perform('fish');
+    const attempt = beginFishing(session);
+    session.finishFishing(attempt.snapshot().id, reelCatch(attempt));
     expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
     expect(session.snapshot().state).toBe('dayEvent');
     const first = session.resolveEvent('map');
@@ -328,6 +576,17 @@ describe('SurvivalSession daytime actions', () => {
     const inventory = session.snapshot().inventory;
     expect(session.resolveEvent('map').accepted).toBe(false);
     expect(session.snapshot().inventory).toEqual(inventory);
+    expect(session.endDay().code).toBe('quiet-night');
+    const journal = session.snapshot().journalEntries[0]!;
+    expect(journal).toMatchObject({
+      daytime: { eventId: expect.any(String) },
+      actions: [{
+        kind: 'fishing', attemptId: 'fishing-2-1', result: 'fish',
+        catchId: 'cod', catchLabel: 'Cod', food: 1, baitConsumed: false,
+      }],
+    });
+    expect(Object.isFrozen(journal.actions)).toBe(true);
+    expect(Object.isFrozen(journal.actions[0])).toBe(true);
   });
 
   it('routes a usable recovered item not authored for the event through its itemless outcome', () => {
