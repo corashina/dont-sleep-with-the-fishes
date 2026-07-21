@@ -73,22 +73,54 @@ describe('SurvivalPhase focus synchronization', () => {
     phase.dispose();
   });
 
-  it('keeps the phase unlocked when the direct fishing action awaits interactive integration', async () => {
+  it('moves focus through interactive fishing and unlocks only after the camera returns', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
-    const session = new SurvivalSession([bait, scuba], { seed: 1 });
+    const session = new SurvivalSession([bait, scuba], {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+    });
     const play = vi.fn(() => Promise.resolve());
+    let finishEnter!: () => void;
+    let finishCast!: () => void;
+    let finishReel!: () => void;
+    let finishExit!: () => void;
+    const enter = new Promise<void>((resolve) => { finishEnter = resolve; });
+    const cast = new Promise<void>((resolve) => { finishCast = resolve; });
+    const reel = new Promise<void>((resolve) => { finishReel = resolve; });
+    const exit = new Promise<void>((resolve) => { finishExit = resolve; });
     const world = {
       syncInventory: () => undefined,
       projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
+      enterFishingView: vi.fn(() => enter),
+      centeredFishingCast: vi.fn(() => ({ x: 4, z: -2 })),
+      playFishingCast: vi.fn(() => cast),
+      showFishingWaiting: vi.fn(),
+      showFishingBite: vi.fn(),
+      projectFishingBite: vi.fn(() => ({
+        x: 360, y: 220, width: 56, height: 48, depth: 2, visible: true,
+      })),
+      playFishingReel: vi.fn(() => reel),
+      exitFishingView: vi.fn(() => exit),
+      clearFishingPresentation: vi.fn(),
       play,
       dispose: () => undefined,
     };
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: () => session.snapshot(),
+        availableReason: (action, option) => session.availableReason(action, option),
         perform: (action, option) => session.perform(action, option),
+        beginFishing: () => session.beginFishing(),
+        finishFishing: (attemptId, result) => session.finishFishing(attemptId, result),
+        requestDayEvent: () => ({
+          accepted: false,
+          code: 'day-event-used',
+          message: 'No daytime event remains.',
+          deltas: {},
+          cue: 'none',
+        }),
       },
       world,
       ui,
@@ -98,11 +130,44 @@ describe('SurvivalPhase focus synchronization', () => {
     const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-tools"]')!;
     fish.focus();
     fish.click();
-    expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(false);
+    const fishingFocusState = ui as unknown as {
+      readonly latestCommandOrigin: HTMLElement | null;
+      readonly fishingReturnTarget: HTMLElement | null;
+    };
+    expect(fishingFocusState.latestCommandOrigin).toBe(fish);
+    expect(fishingFocusState.fishingReturnTarget).toBe(fish);
+    expect(session.snapshot()).toMatchObject({ energy: 2, actedToday: true });
+    expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(true);
     expect(play).not.toHaveBeenCalled();
+    expect(world.enterFishingView).toHaveBeenCalledOnce();
+    expect(mount.querySelector('[data-fishing]')?.classList).toContain('is-visible');
+
+    finishEnter();
+    await flushPromises();
+    expect(mount.querySelector('[data-fishing-instruction]')?.textContent).toBe('CLICK THE WATER TO CAST');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(world.centeredFishingCast).toHaveBeenCalledOnce();
+    finishCast();
+    await flushPromises();
+    phase.update(3, 3);
+    expect(document.activeElement).toBe(mount.querySelector('[data-fishing-bite]'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(session.snapshot()).toMatchObject({ food: 1, bait: 0 });
+    expect(world.playFishingReel).toHaveBeenCalledOnce();
+    finishReel();
+    await flushPromises();
+    expect(mount.querySelector('[data-fishing-instruction]')?.textContent).toBe('CAUGHT COD');
+    expect(world.exitFishingView).toHaveBeenCalledOnce();
+    expect(fishingFocusState.fishingReturnTarget).toBe(fish);
+    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.disabled).toBe(true);
+    finishExit();
     await flushPromises();
 
-    expect(document.activeElement).toBe(fish);
+    expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
+    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.disabled).toBe(false);
+    expect(document.activeElement).toBe(
+      mount.querySelector('[data-anchor-id="fishing-tools"]'),
+    );
     phase.dispose();
   });
 

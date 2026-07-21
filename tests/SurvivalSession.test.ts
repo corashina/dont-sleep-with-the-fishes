@@ -378,14 +378,11 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
   });
 
-  it('routes legacy fishing to the interactive action and still requires scuba for diving', () => {
-    expect(new SurvivalSession(saved(), { seed: 1 }).perform('fish')).toMatchObject({ code: 'interactive-action' });
+  it('reports fishing availability from the interactive start contract and still requires scuba for diving', () => {
+    expect(new SurvivalSession(saved(), { seed: 1 }).availableReason('fish')).toBeNull();
+    expect(new SurvivalSession(saved(), { seed: 1, initial: { energy: 0 } }).availableReason('fish'))
+      .toBe('Fishing requires one energy.');
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('dive')).toMatchObject({ code: 'no-scuba-set' });
-    expect(new SurvivalSession(saved('baitTin'), { seed: 1 })
-      .perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
-        accepted: false,
-        code: 'interactive-action',
-      });
     expect(new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0, 0, 0]) })
       .perform('dive').accepted).toBe(true);
   });
@@ -512,24 +509,22 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('rejects every invalid action option before gates without mutating state', () => {
-    const fishing = { kind: 'fishing', useBait: false } as const;
     const hullRepair = { kind: 'hullRepair', material: 'repairMaterial' } as const;
     const itemRepair = { kind: 'itemRepair', target: 'compass-1' } as const;
     const cases: Array<{
-      action: DayActionId;
+      action: Exclude<DayActionId, 'fish'>;
       option: DayActionOption | null | undefined;
     }> = [
-      { action: 'fish', option: hullRepair },
-      { action: 'dive', option: fishing },
-      { action: 'eat', option: fishing },
+      { action: 'dive', option: hullRepair },
+      { action: 'eat', option: hullRepair },
       { action: 'repair', option: undefined },
       { action: 'repair', option: itemRepair },
       { action: 'repairItem', option: undefined },
-      { action: 'repairItem', option: fishing },
-      { action: 'treat', option: fishing },
-      { action: 'sendMessage', option: fishing },
-      { action: 'useEnergyBar', option: fishing },
-      { action: 'endDay', option: fishing },
+      { action: 'repairItem', option: hullRepair },
+      { action: 'treat', option: hullRepair },
+      { action: 'sendMessage', option: hullRepair },
+      { action: 'useEnergyBar', option: hullRepair },
+      { action: 'endDay', option: hullRepair },
     ];
 
     for (const { action, option } of cases) {
@@ -556,7 +551,7 @@ describe('SurvivalSession daytime actions', () => {
     session.beginDawn();
     expect(session.snapshot().state).toBe('dead');
     const terminal = session.snapshot();
-    expect(session.perform('fish').accepted).toBe(false);
+    expect(session.beginFishing()).toMatchObject({ accepted: false, outcome: { code: 'terminal' } });
     expect(session.snapshot()).toEqual(terminal);
   });
 

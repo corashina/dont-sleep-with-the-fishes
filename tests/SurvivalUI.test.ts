@@ -878,6 +878,30 @@ describe('SurvivalUI', () => {
     expect(cast).toHaveBeenCalledOnce();
   });
 
+  it('rearms aiming after a rejected cast but keeps a synchronously accepted cast gated', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const acceptedResults = [false, true];
+    const cast = vi.fn(() => acceptedResults.shift() ?? true);
+    ui.onFishingCast = cast;
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 30, left: 20, top: 30, right: 820, bottom: 630,
+      width: 800, height: 600,
+      toJSON: () => ({}),
+    });
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 80, clientY: 90 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 180, clientY: 190 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 280, clientY: 290 }));
+
+    expect(cast.mock.calls).toEqual([
+      [{ x: 60, y: 60 }],
+      [{ x: 160, y: 160 }],
+    ]);
+  });
+
   it('maps Enter and Space to centered casts or reels only in their matching modes', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -1231,7 +1255,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const session = new SurvivalSession(saved(), { seed: 7 });
+    const session = new SurvivalSession(saved(), { seed: 7, initial: { energy: 0 } });
     const action = vi.fn();
     const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
     const publications: string[] = [];
@@ -1253,7 +1277,7 @@ describe('SurvivalUI', () => {
     await Promise.resolve();
 
     observer.disconnect();
-    expect(publications.filter((message) => message === 'Fishing uses the interactive fishing action.')).toHaveLength(2);
+    expect(publications.filter((message) => message === 'Fishing requires one energy.')).toHaveLength(2);
     expect(publications).toContain('Diving requires a recovered scuba set.');
     expect(action).not.toHaveBeenCalled();
   });
