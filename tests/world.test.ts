@@ -32,7 +32,13 @@ import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createProp } from '../src/world/PropFactory';
+import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
+import { createShipFurniture } from '../src/world/ShipFurniture';
+import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
+import { SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { createShipMaterials } from '../src/world/ShipMaterials';
+import { createShipRigging } from '../src/world/ShipRigging';
 import { World } from '../src/world/World';
 import {
   createTestPropModels,
@@ -125,7 +131,7 @@ describe('world builders', () => {
     const surfaceIds = [...world.itemObjects.values()]
       .map((object) => object.userData.shipSurfaceId as string);
 
-    expect(world.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
+    expect(world.playerStart.toArray()).toEqual([0, 3.72, 8.8]);
     expect(surfaceIds).toHaveLength(22);
     expect(new Set(surfaceIds).size).toBe(22);
     expect(surfaceIds.every(Boolean)).toBe(true);
@@ -167,20 +173,34 @@ describe('world builders', () => {
   it('removes and disposes the ship when construction fails during item assignment', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
+    let observed: Map<BufferGeometry | Material, number> | undefined;
     const oversizedInventory = Array.from({ length: 40 }, (_, index): ItemInstance => ({
       instanceId: `cannedFood-${index + 1}` as ItemInstance['instanceId'],
       type: 'cannedFood',
     }));
+    const observeShipResources = (): number => {
+      if (!observed) {
+        const ship = scene.getObjectByName('sinking-ship')!;
+        expect(ship.getObjectByName('ship-deck-details')).toBeDefined();
+        expect(ship.getObjectByName('ship-rigging')).toBeDefined();
+        expect(ship.getObjectByName('freighter-smoke')).toBeDefined();
+        const resources = collectRenderResources(ship);
+        observed = observeDisposals([...resources.geometries, ...resources.materials]);
+      }
+      return 0.4;
+    };
 
     expect(() => createTestWorld(
       scene,
       propModels,
       createTestMoonTexture(),
       oversizedInventory,
-      () => 0.4,
+      observeShipResources,
     ))
       .toThrow('Unable to place ship item');
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+    expect(observed?.size).toBeGreaterThan(0);
+    observed?.forEach((count) => expect(count).toBe(1));
     propModels.dispose();
   });
 
@@ -463,7 +483,7 @@ describe('world builders', () => {
     const cameraPosition = new Vector3(14, 7, -11);
     const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
       sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-    const target = buoyancy.sampleTarget(time, 9.0, 0, sinking.waveAmplitudeScale);
+    const target = buoyancy.sampleTarget(time, 10.75, 0, sinking.waveAmplitudeScale);
     const expectedPose = smoothBoatPose(
       { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
       target,
@@ -472,7 +492,7 @@ describe('world builders', () => {
     );
     const freighterBuoyancy = new BoatBuoyancy(
       (sampleTime, x, z, scale) => sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale),
-      { length: 30, width: 10 },
+      { length: 38, width: 13 },
     );
     const freighterTarget = freighterBuoyancy.sampleTarget(
       time,
@@ -517,7 +537,7 @@ describe('world builders', () => {
     const oceanMaterial = ocean.material as ShaderMaterial;
     expect(oceanMaterial.uniforms.uTime!.value).toBe(time);
     expect(oceanMaterial.uniforms.uAmplitudeScale!.value).toBe(sinking.waveAmplitudeScale);
-    expect(world.lifeboat.position.x).toBeCloseTo(9.0 + expectedPose.driftX);
+    expect(world.lifeboat.position.x).toBeCloseTo(10.75 + expectedPose.driftX);
     expect(world.lifeboat.position.y).toBeCloseTo(0.35 + expectedPose.y);
     expect(world.lifeboat.position.z).toBeCloseTo(expectedPose.driftZ);
     expect(world.lifeboat.rotation.x).toBeCloseTo(expectedPose.pitch);
@@ -591,16 +611,16 @@ describe('world builders', () => {
     const upperLocalYs = uniforms.uExclusionUpperLocalYs!.value as number[];
     expect(uniforms.uExclusionCount!.value).toBe(2);
     expect(bounds.map((value) => value.toArray())).toEqual([
-      [-6.25, 6.25, -18, 18],
+      [-8, 8, -22, 22],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
-    expect(taperStarts).toEqual([14, 1.05]);
+    expect(taperStarts).toEqual([17.8, 1.05]);
     expect(minimumLocalYs).toEqual([0.76, -0.38]);
     expect(lowerBounds.map((value) => value.toArray())).toEqual([
-      [-5.375, 5.375, -17.28, 17.28],
+      [-6.88, 6.88, -21.12, 21.12],
       [-1.6, 1.6, -3.04, 3.04],
     ]);
-    expect(lowerTaperStarts).toEqual([13.44, 1.05]);
+    expect(lowerTaperStarts).toEqual([17.088, 1.05]);
     expect(upperLocalYs).toEqual([1.86, -0.38]);
     expect(matrices[0]!.elements).toEqual(world.ship.matrixWorld.clone().invert().elements);
     expect(world.ship.position.y).not.toBe(0);
@@ -624,23 +644,23 @@ describe('world builders', () => {
       freighterRegion,
     )).toBe(true);
     expect(pointInWaterExclusion(
-      world.ship.localToWorld(new Vector3(5.5, 1.2, 16.5)),
+      world.ship.localToWorld(new Vector3(7.04, 1.2, 20.17)),
       freighterRegion,
     )).toBe(false);
     expect(pointInWaterExclusion(
-      world.ship.localToWorld(new Vector3(5.7, 0.76, 0)),
+      world.ship.localToWorld(new Vector3(7.3, 0.76, 0)),
       freighterRegion,
     )).toBe(false);
     expect(pointInWaterExclusion(
-      world.ship.localToWorld(new Vector3(5.7, 1.86, 0)),
+      world.ship.localToWorld(new Vector3(7.3, 1.86, 0)),
       freighterRegion,
     )).toBe(true);
     expect(pointInWaterExclusion(
-      world.ship.localToWorld(new Vector3(0, 0.76, 17.5)),
+      world.ship.localToWorld(new Vector3(0, 0.76, 21.4)),
       freighterRegion,
     )).toBe(false);
     expect(pointInWaterExclusion(
-      world.ship.localToWorld(new Vector3(0, 1.86, 17.5)),
+      world.ship.localToWorld(new Vector3(0, 1.86, 21.4)),
       freighterRegion,
     )).toBe(true);
     expect(matrices[1]!.elements).toEqual(world.lifeboat.matrixWorld.clone().invert().elements);
@@ -1080,26 +1100,122 @@ describe('world builders', () => {
 
   it('builds the furnished freighter contract with surplus authored anchors', () => {
     const ship = createTestShip();
-    expect(ship.itemSurfaces.length).toBeGreaterThan(createItemInstances().length);
-    expect(ship.colliders.length).toBeGreaterThanOrEqual(24);
-    expect(ship.playerStart.toArray()).toEqual([0, 3.72, 7.2]);
-    expect(ship.evacuationPoint.toArray()).toEqual([5.4, 3.72, 0]);
-    expect(ship.lifeboatAnchor.toArray()).toEqual([9.0, 0.35, 0]);
+    const detailRoot = ship.root.getObjectByName('ship-deck-details')!;
+    const riggingRoot = ship.root.getObjectByName('ship-rigging')!;
+    expect(ship.itemSurfaces).toHaveLength(32);
+    expect(ship.colliders.length).toBeGreaterThanOrEqual(40);
+    expect(ship.playerStart.toArray()).toEqual([0, 3.72, 8.8]);
+    expect(ship.evacuationPoint.toArray()).toEqual([7.1, 3.72, 0]);
+    expect(ship.lifeboatAnchor.toArray()).toEqual([10.75, 0.35, 0]);
+    expect(ship.playerNavigationBounds).toEqual({
+      safe: { minX: -7.65, maxX: 7.65, minZ: -21.2, maxZ: 21.2 },
+      fall: { minX: -8.8, maxX: 8.8, minZ: -22.8, maxZ: 22.8 },
+    });
     expect(ship.waterExclusion).toEqual({
-      halfWidth: 6.25,
-      halfLength: 18,
-      taperStart: 14,
+      halfWidth: 8,
+      halfLength: 22,
+      taperStart: 17.8,
       minimumLocalY: 0.76,
       heightProfile: {
-        lowerHalfWidth: 5.375,
-        lowerHalfLength: 17.28,
-        lowerTaperStart: 13.44,
+        lowerHalfWidth: 6.88,
+        lowerHalfLength: 21.12,
+        lowerTaperStart: 17.088,
         upperLocalY: 1.86,
       },
     });
     expect(ship.root.getObjectByName('ship-furniture')).toBeDefined();
+    expect(detailRoot.parent?.name).toBe('coastal-freighter');
+    expect(riggingRoot.parent?.name).toBe('coastal-freighter');
+    expect(ship.root.getObjectsByProperty('name', 'ship-deck-details')).toHaveLength(1);
+    expect(ship.root.getObjectsByProperty('name', 'ship-rigging')).toHaveLength(1);
+    expect(ship.root.getObjectByName('sail:foremast')).toBeDefined();
+    expect(ship.root.getObjectByName('sail:aft-mast')).toBeDefined();
     expect(ship.root.getObjectByName('freighter-smoke')).toBeDefined();
     ship.dispose();
+  });
+
+  it('publishes every collider exactly once in shell, furniture, detail, then rigging order', () => {
+    const ship = createTestShip();
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const geometry = createShipGeometry(materials);
+    const furniture = createShipFurniture(materials, library, SHIP_LAYOUT);
+    const details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
+    const rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
+    const components = [
+      geometry.shellColliders,
+      furniture.colliders,
+      details.colliders,
+      rigging.colliders,
+    ] as const;
+
+    expect(components.map(({ length }) => length)).toEqual([36, 22, 16, 2]);
+    expect(SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize)).toHaveLength(16);
+    expect(SHIP_LAYOUT.rigging.masts).toHaveLength(2);
+    expect(SHIP_LAYOUT.rigging.masts.flatMap(({ id }) => [
+      rigging.root.getObjectByName(`sail:${id}`),
+      rigging.root.getObjectByName(`stay:${id}`),
+    ]).every(Boolean)).toBe(true);
+    expect(ship.colliders).toHaveLength(76);
+    expect(ship.colliders).toEqual(components.flat());
+    let offset = 0;
+    components.forEach((component) => {
+      expect(ship.colliders.slice(offset, offset + component.length)).toEqual(component);
+      offset += component.length;
+    });
+    const colliderKeys = ship.colliders.map((box) => [
+      box.minX,
+      box.maxX,
+      box.minY,
+      box.maxY,
+      box.minZ,
+      box.maxZ,
+    ].join(':'));
+    expect(new Set(colliderKeys).size).toBe(ship.colliders.length);
+    expect(ship.itemSurfaces.every(({ standingPoints }) => standingPoints.length > 0)).toBe(true);
+
+    rigging.disposeGeometry();
+    details.disposeGeometry();
+    furniture.disposeGeometry();
+    geometry.disposeGeometry();
+    library.dispose();
+    materials.dispose();
+    ship.dispose();
+  });
+
+  it('forwards deterministic effect time and reduced motion to rigging', () => {
+    const split = createTestShip();
+    const combined = createTestShip();
+    const different = createTestShip();
+    const splitSail = split.root.getObjectByName('sail:aft-mast')!;
+    const combinedSail = combined.root.getObjectByName('sail:aft-mast')!;
+    const differentSail = different.root.getObjectByName('sail:aft-mast')!;
+    const neutral = splitSail.rotation.z;
+
+    split.updateEffects(0.03, 0.5, false);
+    split.updateEffects(0.04, 0.5, false);
+    combined.updateEffects(0.07, 0.5, false);
+    different.updateEffects(0.03, 0.5, false);
+    expect(splitSail.rotation.z).not.toBeCloseTo(neutral);
+    expect(splitSail.rotation.z).toBeCloseTo(combinedSail.rotation.z, 10);
+    expect(splitSail.rotation.z).not.toBeCloseTo(differentSail.rotation.z, 6);
+    split.updateEffects(0.03, 0.5, true);
+    expect(splitSail.rotation.z).toBeCloseTo(neutral);
+
+    split.dispose();
+    combined.dispose();
+    different.dispose();
+  });
+
+  it('ignores effect updates after idempotent disposal', () => {
+    const ship = createTestShip();
+    const sail = ship.root.getObjectByName('sail:aft-mast')!;
+    const neutral = sail.rotation.z;
+
+    ship.dispose();
+    ship.dispose();
+    expect(() => ship.updateEffects(0.1, 0.5, false)).not.toThrow();
+    expect(sail.rotation.z).toBe(neutral);
   });
 
   it('places all world items on unique authored anchors', () => {

@@ -251,12 +251,12 @@ describe('player movement helpers', () => {
     const ship = createTestShip();
     try {
       const result = resolveLocalMovement(
-        { x: 5.4, y: PLAYER_Y, z: 0 },
-        { x: 6.4, y: PLAYER_Y, z: 0 },
+        { x: 7.1, y: PLAYER_Y, z: 0 },
+        { x: 8.1, y: PLAYER_Y, z: 0 },
         PLAYER_LAYOUT_RADIUS,
         ship.colliders,
       );
-      expect(result.x).toBeCloseTo(6.4);
+      expect(result.x).toBeCloseTo(8.1);
     } finally {
       ship.dispose();
     }
@@ -266,12 +266,12 @@ describe('player movement helpers', () => {
     const ship = createTestShip();
     try {
       const result = resolveLocalMovement(
-        { x: 5.4, y: PLAYER_Y, z: 4 },
-        { x: 6.4, y: PLAYER_Y, z: 4 },
+        { x: 7.1, y: PLAYER_Y, z: 4 },
+        { x: 8.1, y: PLAYER_Y, z: 4 },
         PLAYER_LAYOUT_RADIUS,
         ship.colliders,
       );
-      expect(result.x).toBeLessThan(6);
+      expect(result.x).toBeLessThan(7.7);
     } finally {
       ship.dispose();
     }
@@ -280,9 +280,9 @@ describe('player movement helpers', () => {
   it.each([
     ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
     ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
-    ['wheelhouse console', new Vector3(0, 2.72, 13.25)],
-    ['storage workbench', new Vector3(-2.55, 2.72, -9.78)],
-    ['stern machinery', new Vector3(0, 3.72, -13)],
+    ['wheelhouse console', new Vector3(0, 2.72, 16.6)],
+    ['storage workbench', new Vector3(-2.8, 2.72, -12.72)],
+    ['stern machinery', new Vector3(0, 3.72, -16.2)],
   ])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {
@@ -313,11 +313,13 @@ describe('player movement helpers', () => {
     ['starboard', 1],
   ] as const)('crosses the %s storage doorway at player radius', (_side, direction) => {
     const ship = createTestShip();
+    const door = layoutDoor(direction < 0 ? 'storage-port-door' : 'storage-starboard-door');
+    const doorZ = door.center[1];
     try {
-      const outside = new Vector3(direction * EXTERIOR_ROUTE_X, 3.72, -8.2);
-      const inside = new Vector3(direction * 3.3, 3.72, -8.2);
-      followPath(outside, [inside, new Vector3(0, 3.72, -8.2)], ship.colliders);
-      followPath(new Vector3(0, 3.72, -8.2), [inside, outside], ship.colliders);
+      const outside = new Vector3(direction * EXTERIOR_ROUTE_X, PLAYER_Y, doorZ);
+      const inside = new Vector3(door.center[0] - direction * 0.55, PLAYER_Y, doorZ);
+      followPath(outside, [inside, new Vector3(0, PLAYER_Y, doorZ)], ship.colliders);
+      followPath(new Vector3(0, PLAYER_Y, doorZ), [inside, outside], ship.colliders);
     } finally {
       ship.dispose();
     }
@@ -340,12 +342,9 @@ describe('player movement helpers', () => {
         new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, cabinZ),
         new Vector3(cabinPort.center[0] - 0.55, PLAYER_Y, cabinZ),
         new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, cabinZ),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 6.2),
-        new Vector3(0, PLAYER_Y, 6.2),
-        new Vector3(0, PLAYER_Y, cabinZ),
+        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 7.5),
         new Vector3(0, PLAYER_Y, 7.5),
-        new Vector3(0, PLAYER_Y, 6.2),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 6.2),
+        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 7.5),
         new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, cabinZ),
         new Vector3(cabinPort.center[0] - 0.55, PLAYER_Y, cabinZ),
         new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, cabinZ),
@@ -399,7 +398,7 @@ describe('player movement helpers', () => {
   it.each([
     ['starboard side window', new Vector3(3.2, 3.72, 13), new Vector3(5.2, 3.72, 13), 'x'],
     ['port forward window', new Vector3(-3.2, 3.72, 13), new Vector3(-5.2, 3.72, 13), 'x'],
-    ['front window', new Vector3(0, 3.72, 13.3), new Vector3(0, 3.72, 14.6), 'z'],
+    ['front window', new Vector3(0, 3.72, 16.5), new Vector3(0, 3.72, 18.2), 'z'],
   ] as const)('blocks radius movement through the %s', (_label, current, desired, axis) => {
     const ship = createTestShip();
     try {
