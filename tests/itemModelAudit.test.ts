@@ -4,12 +4,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const itemIds = [
+const collectibleItemIds = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
-  'energyBar', 'fishingRod',
+  'energyBar',
 ];
+const equipmentModelIds = ['fishingRod'];
+const modelIds = [...collectibleItemIds, ...equipmentModelIds];
 
 interface InvalidModelOptions {
   readonly externalBuffer?: boolean;
@@ -110,7 +112,7 @@ describe('item model audit CLI', () => {
   beforeEach(async () => {
     modelsDir = await mkdtemp(join(tmpdir(), 'item-model-audit-'));
     ledgerPath = `${modelsDir}-ledger.md`;
-    for (const itemId of itemIds) {
+    for (const itemId of modelIds) {
       await cp(
         resolve('src', 'assets', 'models', 'items', `${itemId}.glb`),
         join(modelsDir, `${itemId}.glb`),
@@ -151,10 +153,12 @@ describe('item model audit CLI', () => {
     );
   }
 
-  it('audits an exact model set from the requested directory', () => {
+  it('audits the exact collectible and fixed-equipment model set', () => {
     const result = runAudit();
 
     expect(result.status, result.stderr).toBe(0);
+    expect(collectibleItemIds).toHaveLength(18);
+    expect(equipmentModelIds).toEqual(['fishingRod']);
     expect(result.stdout.match(/\.glb: \d+ \/ 3000 triangles/g)).toHaveLength(19);
     expect(result.stdout).toMatch(/total: \d+ \/ 40000 triangles/);
   });
@@ -162,14 +166,14 @@ describe('item model audit CLI', () => {
   it('generates ordered finite triangle and raw-bounds metadata for every model', async () => {
     const result = spawnSync(
       process.execPath,
-      ['scripts/item-model-metadata.mjs', modelsDir, ...itemIds],
+      ['scripts/item-model-metadata.mjs', modelsDir, ...modelIds],
       { encoding: 'utf8' },
     );
 
     expect(result.status, result.stderr).toBe(0);
     const metadata = JSON.parse(await readFile(join(modelsDir, 'item-model-metadata.json'), 'utf8'));
-    expect(Object.keys(metadata)).toEqual(itemIds);
-    for (const id of itemIds) {
+    expect(Object.keys(metadata)).toEqual(modelIds);
+    for (const id of modelIds) {
       expect(metadata[id].triangles).toBeGreaterThan(0);
       expect([...metadata[id].rawBounds.min, ...metadata[id].rawBounds.max].every(Number.isFinite))
         .toBe(true);
@@ -216,7 +220,7 @@ describe('item model audit CLI', () => {
     await writeInvalidModel(modelsDir, {});
     const metadata = spawnSync(
       process.execPath,
-      ['scripts/item-model-metadata.mjs', modelsDir, ...itemIds],
+      ['scripts/item-model-metadata.mjs', modelsDir, ...modelIds],
       { encoding: 'utf8' },
     );
     expect(metadata.status, metadata.stderr).toBe(0);

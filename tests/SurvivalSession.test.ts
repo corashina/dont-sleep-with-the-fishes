@@ -362,7 +362,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
-    const session = new SurvivalSession(saved('fishingRod', 'baitTin', 'scubaSet', 'energyBar'), {
+    const session = new SurvivalSession(saved('baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
       random: sequenceRandom([0, 0, 0, 0.99, 0.3]),
       initial: { energy: 3 },
@@ -381,7 +381,7 @@ describe('SurvivalSession daytime actions', () => {
   it('routes legacy fishing to the interactive action and still requires scuba for diving', () => {
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('fish')).toMatchObject({ code: 'interactive-action' });
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('dive')).toMatchObject({ code: 'no-scuba-set' });
-    expect(new SurvivalSession(saved('fishingRod', 'baitTin'), { seed: 1 })
+    expect(new SurvivalSession(saved('baitTin'), { seed: 1 })
       .perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
         accepted: false,
         code: 'interactive-action',
@@ -561,7 +561,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('opens one day event only after an action and resolves an authored choice once', () => {
-    const session = new SurvivalSession(saved('fishingRod', 'map'), {
+    const session = new SurvivalSession(saved('map'), {
       seed: 2,
       random: sequenceRandom([0, 0, 0]),
       initial: { day: 2 },
@@ -1106,7 +1106,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('breaks random eligible items without replacement', () => {
-    const session = new SurvivalSession(saved('anchor', 'bucket', 'map', 'fishingRod'), {
+    const session = new SurvivalSession(saved('anchor', 'bucket', 'map', 'spyglass'), {
       seed: 16,
       random: sequenceRandom([0, 0, 0.99, 0]),
       initialEventId: 'windy-night',
@@ -1115,13 +1115,13 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'broken' },
       'bucket-1': { condition: 'usable' },
-      'map-1': { condition: 'broken' },
-      'fishingRod-1': { condition: 'usable' },
+      'map-1': { condition: 'usable' },
+      'spyglass-1': { condition: 'broken' },
     });
   });
 
   it('loses random usable or broken items without replacement', () => {
-    const session = new SurvivalSession(saved('anchor', 'map', 'fishingRod'), {
+    const session = new SurvivalSession(saved('anchor', 'map', 'spyglass'), {
       seed: 17,
       random: sequenceRandom([0.9, 0, 0.99, 0]),
       initialConditions: { 'map-1': 'broken' },
@@ -1130,8 +1130,8 @@ describe('SurvivalSession daytime actions', () => {
     session.resolveEvent(null);
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'lost' },
-      'map-1': { condition: 'lost' },
-      'fishingRod-1': { condition: 'usable' },
+      'map-1': { condition: 'broken' },
+      'spyglass-1': { condition: 'lost' },
     });
   });
 

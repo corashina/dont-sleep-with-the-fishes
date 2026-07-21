@@ -21,16 +21,19 @@ export interface ProjectedBoatBounds extends BoatInteractionHitArea {
   visible: boolean;
 }
 
+export type BoatToolId = 'repairTools' | 'fishingRod';
+
 export interface BoatInteractionAnchor {
-  id: string;
-  itemType: ItemId | null;
-  action: DayActionId | null;
-  x: number;
-  y: number;
-  visible: boolean;
-  depleted: boolean;
-  remainingUses: number | null;
-  hitArea?: BoatInteractionHitArea;
+  readonly id: string;
+  readonly itemType: ItemId | null;
+  readonly toolId: BoatToolId | null;
+  readonly action: DayActionId | null;
+  readonly x: number;
+  readonly y: number;
+  readonly visible: boolean;
+  readonly depleted: boolean;
+  readonly remainingUses: number | null;
+  readonly hitArea?: BoatInteractionHitArea;
 }
 
 const TARGET_PADDING = 8;

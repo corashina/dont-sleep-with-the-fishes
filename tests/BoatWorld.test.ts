@@ -154,7 +154,7 @@ describe('BoatWorld helpers', () => {
       { matches: true } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
-      [savedItem('fishingRod')],
+      [],
     );
     const line = world.scene.getObjectByName('fishing-line')!;
     const authoredLineRotation = line.rotation.clone();
@@ -568,7 +568,7 @@ describe('BoatWorld helpers', () => {
       );
       const anchors = world.projectInteractionAnchors(1280, 720)
         .filter((anchor) => anchor.itemType !== null && anchor.visible);
-      expect(anchors).toHaveLength(22);
+      expect(anchors).toHaveLength(21);
       const tooClose: string[] = [];
       let minimumSpacing = Number.POSITIVE_INFINITY;
       for (let first = 0; first < anchors.length; first += 1) {
@@ -676,7 +676,7 @@ describe('BoatWorld helpers', () => {
   it('builds every saved instance once at its stable type-aware transform', () => {
     const savedItems = [
       savedItem('cannedFood', 3),
-      savedItem('fishingRod'),
+      savedItem('harpoonGun'),
       savedItem('ductTape'),
       savedItem('scubaSet'),
     ];
@@ -692,7 +692,7 @@ describe('BoatWorld helpers', () => {
 
     expect(storage.children.map(({ name }) => name)).toEqual([
       'prop:cannedFood-3',
-      'prop:fishingRod-1',
+      'prop:harpoonGun-1',
       'prop:ductTape-1',
       'prop:scubaSet-1',
     ]);
@@ -798,8 +798,8 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects saved props plus the repair tools anchor', () => {
-    const savedItems = [savedItem('fishingRod'), savedItem('flareGun')];
+  it('projects saved props plus fixed fishing and repair tool anchors', () => {
+    const savedItems = [savedItem('flareGun')];
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
     camera.updateProjectionMatrix();
@@ -813,15 +813,16 @@ describe('BoatWorld helpers', () => {
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
-    expect(anchors).toHaveLength(savedItems.length + 1);
+    expect(world.scene.getObjectByName('lifeboat-equipment:fishingRod')).toBeDefined();
+    expect(anchors).toHaveLength(savedItems.length + 2);
     expect(anchors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish' }),
-      expect.objectContaining({ id: 'flareGun-1', itemType: 'flareGun', action: null }),
-      expect.objectContaining({ id: 'repair-tools', itemType: null, action: 'repair' }),
+      expect.objectContaining({ id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish' }),
+      expect.objectContaining({ id: 'flareGun-1', itemType: 'flareGun', toolId: null, action: null }),
+      expect.objectContaining({ id: 'repair-tools', itemType: null, toolId: 'repairTools', action: 'repair' }),
     ]));
     expect(anchors.some(({ id }) => id === 'horizon' || id === 'rest')).toBe(false);
     expect(anchors.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
-    const itemAnchor = anchors.find(({ id }) => id === 'fishingRod-1')!;
+    const itemAnchor = anchors.find(({ id }) => id === 'fishing-tools')!;
     const repair = anchors.find(({ id }) => id === 'repair-tools')!;
     expect(itemAnchor.hitArea).toEqual({
       width: expect.any(Number),
@@ -837,6 +838,28 @@ describe('BoatWorld helpers', () => {
     });
     expect(repair.hitArea!.width).toBeGreaterThanOrEqual(44);
     expect(repair.hitArea!.height).toBeGreaterThanOrEqual(44);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('owns the fixed fishing rod and fish action anchor with no saved items', () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [],
+    );
+
+    expect(world.scene.getObjectByName('lifeboat-equipment:fishingRod')).toBeDefined();
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish',
+      }),
+    ]));
     world.dispose();
     propModels.dispose();
   });
@@ -901,36 +924,23 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('animates fishing cues from the recovered rod and has no hand-line fallback', () => {
+  it('animates fishing cues from the fixed rod without saved items', () => {
     const propModels = createTestPropModels();
-    const rodWorld = new BoatWorld(
-      new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
-      propModels,
-      createTestMoonTexture(),
-      [savedItem('fishingRod'), savedItem('scubaSet')],
-    );
-    const rod = rodWorld.scene.getObjectByName('prop:fishingRod-1')!;
-    const before = rod.rotation.z;
-    rodWorld.play('fish');
-    rodWorld.update(0.7, 0.7);
-    expect(rod.rotation.z).toBeLessThan(before);
-    expect(rodWorld.scene.getObjectByName('fishing-line')?.visible).toBe(true);
-    expect(rodWorld.scene.getObjectByName('fishing-catch')?.visible).toBe(true);
-    rodWorld.dispose();
-
-    const emptyWorld = new BoatWorld(
+    const world = new BoatWorld(
       new PerspectiveCamera(),
       { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       [],
     );
-    emptyWorld.play('fish');
-    emptyWorld.update(0.7, 0.7);
-    expect(emptyWorld.scene.getObjectByName('fishing-line')?.visible).toBe(false);
-    expect(emptyWorld.scene.getObjectByName('fishing-catch')?.visible).toBe(false);
-    emptyWorld.dispose();
+    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    const before = rod.rotation.z;
+    world.play('fish');
+    world.update(0.7, 0.7);
+    expect(rod.rotation.z).toBeLessThan(before);
+    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-catch')?.visible).toBe(true);
+    world.dispose();
     propModels.dispose();
   });
 

@@ -13,6 +13,7 @@ const can: ItemInstance = { instanceId: 'cannedFood-1', type: 'cannedFood' };
 const canAnchor: BoatInteractionAnchor = {
   id: can.instanceId,
   itemType: can.type,
+  toolId: null,
   action: 'eat',
   remainingUses: 1,
   x: 320,
@@ -21,15 +22,14 @@ const canAnchor: BoatInteractionAnchor = {
   depleted: false,
 };
 
-const rod: ItemInstance = { instanceId: 'fishingRod-1', type: 'fishingRod' };
 const bait: ItemInstance = { instanceId: 'baitTin-1', type: 'baitTin' };
 const scuba: ItemInstance = { instanceId: 'scubaSet-1', type: 'scubaSet' };
 const scubaAnchor: BoatInteractionAnchor = {
-  id: scuba.instanceId, itemType: scuba.type, action: 'dive', remainingUses: null,
+  id: scuba.instanceId, itemType: scuba.type, toolId: null, action: 'dive', remainingUses: null,
   x: 220, y: 220, visible: true, depleted: false,
 };
 const rodAnchor: BoatInteractionAnchor = {
-  id: rod.instanceId, itemType: rod.type, action: 'fish', remainingUses: null,
+  id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null,
   x: 360, y: 220, visible: true, depleted: false,
 };
 
@@ -77,7 +77,7 @@ describe('SurvivalPhase focus synchronization', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
-    const session = new SurvivalSession([rod, bait, scuba], { seed: 1 });
+    const session = new SurvivalSession([bait, scuba], { seed: 1 });
     const play = vi.fn(() => Promise.resolve());
     const world = {
       syncInventory: () => undefined,
@@ -95,7 +95,7 @@ describe('SurvivalPhase focus synchronization', () => {
     });
     phase.start();
 
-    const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
+    const fish = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-tools"]')!;
     fish.click();
     mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
     expect(mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!.disabled).toBe(false);

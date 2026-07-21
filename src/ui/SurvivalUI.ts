@@ -2,7 +2,7 @@ import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstance
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
-import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
+import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
@@ -28,6 +28,22 @@ interface ActionDefinition {
 
 interface ActionPreview { cost: string; effect: string; risk: ActionDefinition['risk'] }
 
+interface BoatToolCopy {
+  label: string;
+  description: string;
+}
+
+const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze({
+  repairTools: {
+    label: 'PLANK & HAMMER',
+    description: 'Use the hull-repair tools to repair the lifeboat.',
+  },
+  fishingRod: {
+    label: 'FISH',
+    description: 'Cast from the bow to find food or drifting junk.',
+  },
+});
+
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
 
 const METER_ARTWORK: Record<MeterId, UiArtworkId> = {
@@ -48,7 +64,7 @@ interface MeterDefinition {
 }
 
 const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', shortcut: '1', cost: '2 ENERGY', effect: 'Chance to gain food', risk: 'uncertain' },
+  { id: 'fish', label: 'FISH', shortcut: '1', cost: '1 ENERGY', effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', shortcut: '2', cost: '3 ENERGY', effect: 'May recover supplies; injury risk', risk: 'dangerous' },
   { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', effect: 'HUNGER -35', risk: 'safe' },
   { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', effect: 'HULL +25 (tape +15)', risk: 'safe' },
@@ -698,11 +714,12 @@ export class SurvivalUI {
     ];
     const quantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
       : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
+    const toolCopy = anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
     const itemLabel = anchor.itemType === null
-      ? 'PLANK & HAMMER'
+      ? toolCopy?.label ?? 'UNKNOWN TOOL'
       : `${ITEM_LABELS[anchor.itemType]}${quantity === undefined ? '' : ` x${quantity}`}`;
     const itemDescription = anchor.itemType === null
-      ? 'Use the hull-repair tools to repair the lifeboat.'
+      ? toolCopy?.description ?? 'Permanent lifeboat equipment.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
     const reason = this.anchorUnavailableReason(anchor);
@@ -715,11 +732,13 @@ export class SurvivalUI {
     const stateText = state === null ? '' : ` — ${state}`;
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
-      : `${itemLabel}${stateText} — ${action.label} [${action.shortcut}] — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
+      : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = text;
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
+    if (anchor.toolId === null) delete button.dataset.tool;
+    else button.dataset.tool = anchor.toolId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
     button.setAttribute('aria-label', text);

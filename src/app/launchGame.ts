@@ -149,7 +149,9 @@ function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof ItemModelLoadError) {
-    const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
+    const itemLabel = error.itemId === 'fishingRod'
+      ? 'Fishing Rod'
+      : ITEM_DEFINITIONS[error.itemId].label;
     mount.replaceChildren(screen(
       'SUPPLIES UNAVAILABLE',
       `Unable to recover ${itemLabel}`,

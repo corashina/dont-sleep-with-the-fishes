@@ -50,7 +50,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .item-artwork__stroke-thin { fill: none; stroke-width: 3; }
 .item-artwork--flareGun { --item-primary: #e14f2d; --item-secondary: #39414a; --item-light: #f3c94b; }
 .item-artwork--ductTape { --item-primary: #30343b; --item-secondary: #8d969d; --item-light: #d8dde0; }
-.item-artwork--fishingRod { --item-primary: #e65b2f; --item-secondary: #343b47; --item-light: #dbe9ef; }
 .item-artwork--baitTin { --item-primary: #d37a2c; --item-secondary: #79858e; --item-light: #d9e0e2; }
 .item-artwork--medicalKit { --item-primary: #c7372e; --item-secondary: #6d211e; --item-light: #f1eadb; }
 .item-artwork--cannedFood { --item-primary: #3d7ca2; --item-secondary: #89949a; --item-light: #e7ece8; }
