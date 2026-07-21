@@ -75,7 +75,7 @@ function sampleDefaultWave(
   return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
 }
 
-const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 30, width: 10 };
+const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 38, width: 13 };
 const FREIGHTER_BUOYANCY_DAMPING = 2.4;
 const FREIGHTER_DRAFT = 0.76;
 
