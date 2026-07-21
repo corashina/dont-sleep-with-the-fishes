@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Mesh, TorusGeometry } from 'three';
+import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Mesh, TorusGeometry } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import {
@@ -69,6 +69,42 @@ describe('ship deck details', () => {
     materials.dispose();
   });
 
+  it('declares conservative visual footprints that cover the generated meshes', () => {
+    const materials = createShipMaterials();
+    const build = createShipDeckDetails(materials, SHIP_LAYOUT.details);
+
+    SHIP_LAYOUT.details.forEach((spec, index) => {
+      const detail = build.root.children[index]!;
+      const visualSize = (spec as ShipDeckDetailSpec & {
+        readonly visualSize?: readonly [number, number];
+      }).visualSize;
+      expect(visualSize, spec.id).toBeDefined();
+      if (!visualSize) return;
+
+      const cosine = Math.abs(Math.cos(spec.rotationY));
+      const sine = Math.abs(Math.sin(spec.rotationY));
+      const localWidth = visualSize[0] * spec.scale[0];
+      const localDepth = visualSize[1] * spec.scale[2];
+      const width = localWidth * cosine + localDepth * sine;
+      const depth = localWidth * sine + localDepth * cosine;
+      const declared = {
+        minX: spec.position[0] - width / 2,
+        maxX: spec.position[0] + width / 2,
+        minZ: spec.position[2] - depth / 2,
+        maxZ: spec.position[2] + depth / 2,
+      };
+      const measured = new Box3().setFromObject(detail);
+
+      expect(measured.min.x, `${spec.id} minX`).toBeGreaterThanOrEqual(declared.minX - 1e-6);
+      expect(measured.max.x, `${spec.id} maxX`).toBeLessThanOrEqual(declared.maxX + 1e-6);
+      expect(measured.min.z, `${spec.id} minZ`).toBeGreaterThanOrEqual(declared.minZ - 1e-6);
+      expect(measured.max.z, `${spec.id} maxZ`).toBeLessThanOrEqual(declared.maxZ + 1e-6);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('transforms collider size by rotation and non-uniform scale from deck height', () => {
     const materials = createShipMaterials();
     const spec: ShipDeckDetailSpec = {
@@ -78,6 +114,7 @@ describe('ship deck details', () => {
       rotationY: Math.PI / 2,
       scale: [2, 3, 4],
       colliderSize: [1, 2, 3],
+      visualSize: [1, 3],
     };
     const build = createShipDeckDetails(materials, [spec]);
 

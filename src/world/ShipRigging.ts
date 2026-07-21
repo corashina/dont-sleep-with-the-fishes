@@ -6,7 +6,12 @@ import {
   Mesh,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
-import type { ShipMastSpec, ShipRiggingSpec } from './ShipLayout';
+import {
+  SHIP_SAIL_CLOTH_MIN_Y,
+  shipSailGeometryLimits,
+  type ShipMastSpec,
+  type ShipRiggingSpec,
+} from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
 
 export interface ShipRiggingBuild {
@@ -16,21 +21,14 @@ export interface ShipRiggingBuild {
   disposeGeometry(): void;
 }
 
-const CLOTH_MIN_Y = 5.21;
-const CLOTH_MAX_LENGTH = 4.6;
-
 function createSailGeometry(spec: ShipMastSpec): BufferGeometry {
   const geometry = new BufferGeometry();
-  const top = spec.height - 0.25;
-  const length = Math.min(
-    CLOTH_MAX_LENGTH,
-    (spec.sailArea * 2) / (top - CLOTH_MIN_Y),
-  );
-  const tipZ = spec.sailDirectionZ * length;
+  const { top, clothLength } = shipSailGeometryLimits(spec);
+  const tipZ = spec.sailDirectionZ * clothLength;
   geometry.setAttribute('position', new Float32BufferAttribute([
     0, top, 0,
-    0, CLOTH_MIN_Y, 0,
-    0, CLOTH_MIN_Y, tipZ,
+    0, SHIP_SAIL_CLOTH_MIN_Y, 0,
+    0, SHIP_SAIL_CLOTH_MIN_Y, tipZ,
   ], 3));
   geometry.computeVertexNormals();
   geometry.name = `sail-geometry:${spec.id}`;
@@ -143,7 +141,7 @@ export function createShipRigging(
         cylinder,
         materials.darkMetal,
         `boom:${mastSpec.id}`,
-        [0, CLOTH_MIN_Y, mastSpec.sailDirectionZ * clothLength / 2],
+        [0, SHIP_SAIL_CLOTH_MIN_Y, mastSpec.sailDirectionZ * clothLength / 2],
         [0.11, clothLength, 0.11],
         Math.PI / 2,
       );
@@ -153,7 +151,7 @@ export function createShipRigging(
       cylinder,
       materials.exposedMetal,
       `pulley:${mastSpec.id}`,
-      [0, CLOTH_MIN_Y + 0.16, mastSpec.sailDirectionZ * 0.16],
+      [0, SHIP_SAIL_CLOTH_MIN_Y + 0.16, mastSpec.sailDirectionZ * 0.16],
       [0.18, 0.12, 0.18],
       0,
       Math.PI / 2,
