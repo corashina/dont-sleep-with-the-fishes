@@ -35,6 +35,7 @@ import {
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
+import { BoatDepositSmoke } from './BoatDepositSmoke';
 import { Environment } from './Environment';
 import { createLifeboat, type LifeboatBuild } from './Lifeboat';
 import { createProp } from './PropFactory';
@@ -96,6 +97,7 @@ export class World {
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
   private readonly boatStorage: Group;
+  private readonly boatDepositSmoke!: BoatDepositSmoke;
   private readonly buoyancy: BoatBuoyancy;
   private readonly freighterBuoyancy = new BoatBuoyancy(
     sampleDefaultWave,
@@ -261,6 +263,13 @@ export class World {
           });
         },
       );
+      this.boatDepositSmoke = new BoatDepositSmoke();
+      this.boatDepositSmoke.points.position.set(0, 0.92, 0);
+      this.boatStorage.add(this.boatDepositSmoke.points);
+      rollback.push(() => {
+        this.boatDepositSmoke.points.removeFromParent();
+        this.boatDepositSmoke.dispose();
+      });
       scene.add(this.lifeboat);
       rollback.push(() => scene.remove(this.lifeboat));
       construction.checkpoint?.('lifeboat');
@@ -326,6 +335,7 @@ export class World {
       sinking.rollRadians - this.freighterPose.roll,
     );
     this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
+    this.boatDepositSmoke.update(delta, reducedMotion);
 
     this.environment.update(delta, sinking, cameraPosition, reducedMotion);
     const atmosphere = this.environment.atmosphere;
@@ -384,7 +394,11 @@ export class World {
   }
 
   saveItems(instances: readonly ItemInstance[]): void {
-    instances.forEach((instance) => this.storeItem(instance));
+    let stored = 0;
+    instances.forEach((instance) => {
+      if (this.storeItem(instance)) stored += 1;
+    });
+    if (stored > 0) this.boatDepositSmoke.trigger();
   }
 
   private storeItem(instance: ItemInstance): boolean {
@@ -417,6 +431,7 @@ export class World {
       () => this.ocean.dispose(),
       () => this.environment.dispose(),
       () => this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh),
+      () => this.boatDepositSmoke.dispose(),
       () => this.shipBuild.dispose(),
       () => disposeResourceSets(
         this.ownedGeometries,

@@ -13,6 +13,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   Points,
+  PointsMaterial,
   Quaternion,
   Scene,
   ShaderMaterial,
@@ -742,8 +743,12 @@ describe('world builders', () => {
     );
     const cannedFood = instances.find(({ instanceId }) => instanceId === 'cannedFood-3')!;
     const flareGun = instances.find(({ instanceId }) => instanceId === 'flareGun-1')!;
+    const smoke = world.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points;
 
     world.saveItems([cannedFood, flareGun]);
+
+    expect(smoke).toBeInstanceOf(Points);
+    expect(smoke.visible).toBe(true);
 
     for (const instance of [cannedFood, flareGun]) {
       const prop = world.itemObjects.get(instance.instanceId)!;
@@ -756,6 +761,45 @@ describe('world builders', () => {
     }
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('moves deposit smoke with standard motion, fades in reduced motion, and disposes it once', () => {
+    const propModels = createTestPropModels();
+    const regular = createTestWorld(new Scene(), propModels);
+    const reduced = createTestWorld(new Scene(), propModels);
+    const regularSmoke = regular.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points<
+      BufferGeometry,
+      PointsMaterial
+    >;
+    const reducedSmoke = reduced.lifeboat.getObjectByName('lifeboat-deposit-smoke') as Points<
+      BufferGeometry,
+      PointsMaterial
+    >;
+    const regularStart = Array.from(regularSmoke.geometry.getAttribute('position').array);
+    const reducedStart = Array.from(reducedSmoke.geometry.getAttribute('position').array);
+    const instance = createItemInstances()[0]!;
+    const sinking = getSinkingState(0, 120);
+    const geometryDispose = vi.spyOn(regularSmoke.geometry, 'dispose');
+    const materialDispose = vi.spyOn(regularSmoke.material, 'dispose');
+
+    regular.saveItems([instance]);
+    reduced.saveItems([instance]);
+    regular.update(0, 0.1, sinking, new Vector3(), false);
+    reduced.update(0, 0.1, sinking, new Vector3(), true);
+
+    expect(Array.from(regularSmoke.geometry.getAttribute('position').array))
+      .not.toEqual(regularStart);
+    expect(Array.from(reducedSmoke.geometry.getAttribute('position').array))
+      .toEqual(reducedStart);
+    expect(regularSmoke.material.opacity).toBeLessThan(0.72);
+    expect(reducedSmoke.material.opacity).toBeLessThan(0.72);
+
+    regular.dispose();
+    regular.dispose();
+    reduced.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
