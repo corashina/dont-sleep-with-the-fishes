@@ -97,7 +97,7 @@ describe('SurvivalPhase orchestration', () => {
     const current = snapshot();
     const syncInventory = vi.fn();
     const anchors = [{
-      id: 'can', itemType: 'cannedFood' as const, action: 'eat' as const,
+      id: 'can', itemType: 'cannedFood' as const, toolId: null, action: 'eat' as const,
       remainingUses: 1, x: 400, y: 80, visible: true, depleted: false,
     }];
     const projectInteractionAnchors = vi.fn(() => anchors);
@@ -487,11 +487,11 @@ describe('SurvivalPhase orchestration', () => {
       session: { snapshot: vi.fn(() => snapshot()) },
       world: { setHighlightedItem, dispose: vi.fn() }, ui,
     });
-    ui.onAnchorHighlight?.('fishingRod-1');
+    ui.onAnchorHighlight?.('bucket-1');
     ui.onAnchorHighlight?.(null);
-    expect(setHighlightedItem.mock.calls).toEqual([['fishingRod-1'], [null]]);
+    expect(setHighlightedItem.mock.calls).toEqual([['bucket-1'], [null]]);
     phase.dispose();
-    ui.onAnchorHighlight?.('fishingRod-1');
+    ui.onAnchorHighlight?.('bucket-1');
     expect(setHighlightedItem).toHaveBeenCalledTimes(2);
   });
 

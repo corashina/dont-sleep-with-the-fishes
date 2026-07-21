@@ -59,7 +59,6 @@ const BOAT_STORAGE_SLOTS = {
   flashlight: [floorSlot('flashlight', 1.35, -0.95, 0.10, 0.50, -0.185)],
   harpoonGun: [slot([0.90, -0.10, -2.28], Math.PI / 2, 0.50)],
   energyBar: [slot([0.50, -0.18, -2.75], -0.08, 0.50)],
-  fishingRod: [slot([-1.35, 0.12, -1.55], -0.08, 0.50)],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
 function instanceOrdinal(instance: ItemInstance): number {

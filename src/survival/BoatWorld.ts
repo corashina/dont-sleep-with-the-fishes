@@ -211,7 +211,8 @@ export class BoatWorld {
   private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
   private readonly repairTools: Object3D;
   private readonly repairToolsBounds = new Box3();
-  private readonly rod: Object3D | undefined;
+  private readonly rod: Object3D;
+  private readonly rodBounds = new Box3();
   private readonly line: Object3D | undefined;
   private readonly catchMesh: Object3D | undefined;
   private readonly baseRodRotationZ: number;
@@ -290,6 +291,11 @@ export class BoatWorld {
     if (repairTools === undefined) throw new Error('Lifeboat requires hull repair tools');
     this.repairTools = repairTools;
 
+    this.rod = propModels.createEquipment('fishingRod');
+    this.rod.position.set(1.28, 0.47, -1.65);
+    this.rod.rotation.y = -0.08;
+    this.boat.add(this.rod);
+
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
     this.motionRig.add(this.boat, this.cameraRig);
@@ -298,14 +304,10 @@ export class BoatWorld {
     camera.lookAt(0, -0.18, -1.35);
     this.baseCameraQuaternion = camera.quaternion.clone();
 
-    const rodInstance = savedItems.find(({ type }) => type === 'fishingRod');
-    this.rod = rodInstance === undefined
-      ? undefined
-      : this.savedPropByInstanceId.get(rodInstance.instanceId);
     this.line = this.boat.getObjectByName('fishing-line');
     this.catchMesh = this.boat.getObjectByName('fishing-catch');
     this.baseLineRotation = this.line?.rotation.clone();
-    this.baseRodRotationZ = this.rod?.rotation.z ?? 0;
+    this.baseRodRotationZ = this.rod.rotation.z;
 
     this.bowAnchor.name = 'survival-bow-motion-anchor';
     this.bowAnchor.position.set(0, 0.1, -2.75);
@@ -391,6 +393,7 @@ export class BoatWorld {
       return {
         id: instance.instanceId,
         itemType: instance.type,
+        toolId: null,
         action: prop.userData.condition === 'usable' ? ACTION_FOR_ITEM[instance.type] ?? null : null,
         ...point,
         visible: prop.visible && point.visible,
@@ -399,6 +402,33 @@ export class BoatWorld {
         hitArea: { width: hitWidth, height: hitHeight, depth },
       } satisfies BoatInteractionAnchor;
     });
+    const fishingProjection = projectBoatBounds(
+      this.rodBounds.setFromObject(this.rod, true),
+      this.camera,
+      width,
+      height,
+    );
+    const {
+      width: fishingHitWidth,
+      height: fishingHitHeight,
+      depth: fishingDepth,
+      ...fishingPoint
+    } = fishingProjection;
+    const fishingAnchor = {
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      ...fishingPoint,
+      visible: this.rod.visible && fishingPoint.visible,
+      depleted: false,
+      remainingUses: null,
+      hitArea: {
+        width: fishingHitWidth,
+        height: fishingHitHeight,
+        depth: fishingDepth,
+      },
+    } satisfies BoatInteractionAnchor;
     const repairProjection = projectBoatBounds(
       this.repairToolsBounds.setFromObject(this.repairTools, true),
       this.camera,
@@ -409,6 +439,7 @@ export class BoatWorld {
     const repairAnchor = {
       id: 'repair-tools',
       itemType: null,
+      toolId: 'repairTools',
       action: 'repair',
       ...point,
       visible: this.repairTools.visible && point.visible,
@@ -416,7 +447,7 @@ export class BoatWorld {
       remainingUses: null,
       hitArea: { width: hitWidth, height: hitHeight, depth },
     } satisfies BoatInteractionAnchor;
-    return [...itemAnchors, repairAnchor];
+    return [...itemAnchors, fishingAnchor, repairAnchor];
   }
 
   play(cue: PresentationCue): Promise<void> {
@@ -558,7 +589,7 @@ export class BoatWorld {
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
-    if (this.rod) this.rod.rotation.z = this.baseRodRotationZ;
+    this.rod.rotation.z = this.baseRodRotationZ;
     if (this.line && this.baseLineRotation) this.line.rotation.copy(this.baseLineRotation);
     if (this.line) this.line.visible = false;
     if (this.catchMesh) this.catchMesh.visible = false;
@@ -630,11 +661,9 @@ export class BoatWorld {
       case 'none':
         break;
       case 'fish':
-        if (this.rod) {
-          this.rod.rotation.z = this.baseRodRotationZ - eased * 0.82;
-          if (this.line) this.line.visible = progress > 0.12;
-          if (this.catchMesh) this.catchMesh.visible = progress > 0.42;
-        }
+        this.rod.rotation.z = this.baseRodRotationZ - eased * 0.82;
+        if (this.line) this.line.visible = progress > 0.12;
+        if (this.catchMesh) this.catchMesh.visible = progress > 0.42;
         break;
       case 'dive':
         if (!reduced) this.cameraRig.position.y -= pulse * 0.72;

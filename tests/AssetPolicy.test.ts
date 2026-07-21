@@ -8,6 +8,7 @@ const activeAssetFiles = [
   'AGENTS.md',
   'THIRD_PARTY_ASSETS.md',
   'src/world/itemModelManifest.ts',
+  'src/world/lifeboatEquipmentManifest.ts',
   'scripts/fetch-item-models.ps1',
   'scripts/check-item-models.mjs',
 ];
@@ -24,7 +25,7 @@ describe('third-party asset policy', () => {
     expect(contents[1]).toMatch(/Quaternius exception is approved only for the committed runtime models `compass`, `flareGun`, and `anchor`/i);
     expect(contents[1]).toMatch(/Production code must not fetch models, textures, audio, UI art, or effects from a store/i);
     expect(contents[2]).toContain('https://kenney.nl/assets/');
-    expect(contents[2]).toMatch(/twelve third-party runtime item models: nine Kenney-derived and three Quaternius-derived/i);
+    expect(contents[2]).toMatch(/twelve third-party runtime models: nine Kenney-derived and three Quaternius-derived/i);
     for (const content of contents) expect(content).not.toMatch(/poly\.pizza/i);
   });
 
@@ -55,7 +56,7 @@ describe('third-party asset policy', () => {
       expect(normalizedActiveContract, forbidden).not.toContain(forbidden);
     }
     expect(productionText).not.toMatch(/fourteen-item|water charge/i);
-    expect(ITEM_IDS).toHaveLength(19);
-    expect(createItemInstances()).toHaveLength(22);
+    expect(ITEM_IDS).toHaveLength(18);
+    expect(createItemInstances()).toHaveLength(21);
   });
 });

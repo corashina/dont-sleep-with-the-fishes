@@ -14,7 +14,6 @@ describe('BoatInteraction', () => {
       medicalKit: 'treat',
       bottledPaper: 'sendMessage',
       energyBar: 'useEnergyBar',
-      fishingRod: 'fish',
       scubaSet: 'dive',
     });
   });
