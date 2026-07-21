@@ -1200,16 +1200,19 @@ export class BoatWorld {
   }
 
   private updateFishingEffects(time: number): void {
+    const animateBiteEffects = !this.reducedMotion.matches;
     if (this.fishing.bubbles.visible) {
       for (let index = 0; index < this.fishing.bubbles.children.length; index += 1) {
         const bubble = this.fishing.bubbles.children[index]!;
-        bubble.position.y = 0.03 + index * 0.025 + Math.sin(time * 3.4 + index) * 0.035;
+        bubble.position.y = 0.03 + index * 0.025
+          + (animateBiteEffects ? Math.sin(time * 3.4 + index) * 0.035 : 0);
       }
     }
     if (this.fishing.ripples.visible) {
       for (let index = 0; index < this.fishing.ripples.children.length; index += 1) {
         const ripple = this.fishing.ripples.children[index]!;
-        const scale = 0.75 + index * 0.45 + (Math.sin(time * 2.8 + index) + 1) * 0.09;
+        const scale = 0.75 + index * 0.45
+          + (animateBiteEffects ? (Math.sin(time * 2.8 + index) + 1) * 0.09 : 0.09);
         ripple.scale.setScalar(scale);
       }
     }
