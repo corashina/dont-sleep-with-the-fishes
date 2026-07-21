@@ -63,18 +63,43 @@ describe('scavenging ship layout', () => {
     ]);
   });
 
-  it('limits every furnished zone to four role-specific perimeter groups', () => {
+  it('limits every furnished zone to its exact role-specific perimeter fixtures', () => {
     const counts = Object.fromEntries(SHIP_LAYOUT.zones.map(({ id }) => [
       id,
       SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === id).length,
     ]));
 
     expect(counts).toEqual({
-      crewCabin: 4,
-      wheelhouse: 4,
-      cargoDeck: 4,
-      storageWorkroom: 4,
+      crewCabin: 6,
+      wheelhouse: 6,
+      cargoDeck: 7,
+      storageWorkroom: 3,
       lifeboatStation: 0,
+    });
+    expect(Object.fromEntries(SHIP_LAYOUT.zones.map(({ id, furniturePolicy }) => [
+      id,
+      {
+        maxFixtures: furniturePolicy.maxFixtures,
+        allowedModelIds: furniturePolicy.allowedModelIds,
+      },
+    ]))).toEqual({
+      crewCabin: {
+        maxFixtures: 6,
+        allowedModelIds: ['bedBunk', 'desk', 'bookcaseOpen', 'sideTableDrawers'],
+      },
+      wheelhouse: {
+        maxFixtures: 6,
+        allowedModelIds: ['desk', 'sideTableDrawers'],
+      },
+      cargoDeck: {
+        maxFixtures: 7,
+        allowedModelIds: ['cargoCrate', 'cargoRack'],
+      },
+      storageWorkroom: {
+        maxFixtures: 3,
+        allowedModelIds: ['table', 'bookcaseOpen'],
+      },
+      lifeboatStation: { maxFixtures: 0, allowedModelIds: [] },
     });
     expect(SHIP_LAYOUT.furniture.filter(({ modelId }) => modelId === 'bedBunk')
       .every(({ zoneId }) => zoneId === 'crewCabin')).toBe(true);
@@ -144,45 +169,62 @@ describe('scavenging ship layout', () => {
   it('authors the exact perimeter placement and surface catalog', () => {
     expect(SHIP_LAYOUT.furniture.map(({ id, modelId, position }) => ({ id, modelId, position })))
       .toEqual([
-        { id: 'cabin-bunk-port', modelId: 'bedBunk', position: [-3, 2.22, 7.9] },
-        { id: 'cabin-bunk-starboard', modelId: 'bedBunk', position: [3, 2.22, 7.9] },
-        { id: 'cabin-desk-aft', modelId: 'desk', position: [-1.8, 2.22, 5.6] },
-        { id: 'cabin-bookcase-forward', modelId: 'bookcaseOpen', position: [0, 2.22, 11.8] },
+        { id: 'cabin-bunk-port', modelId: 'bedBunk', position: [-3.9, 2.22, 10.1] },
+        { id: 'cabin-bunk-starboard', modelId: 'bedBunk', position: [3.9, 2.22, 10.1] },
+        { id: 'cabin-desk-aft', modelId: 'desk', position: [-2.4, 2.22, 5.51] },
+        { id: 'cabin-bookcase-forward', modelId: 'bookcaseOpen', position: [0, 2.22, 12.05] },
+        { id: 'cabin-food-cabinet', modelId: 'sideTableDrawers', position: [-3.9, 2.22, 11.75] },
+        { id: 'cabin-side-cabinet', modelId: 'sideTableDrawers', position: [3.9, 2.22, 11.75] },
         { id: 'helm-desk-forward', modelId: 'desk', position: [0, 2.22, 16.6] },
-        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [2.1, 2.22, 13.9] },
-        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.8, 2.22, 14.6] },
-        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.8, 2.22, 15.75] },
-        { id: 'workbench-port', modelId: 'table', position: [-2.55, 2.22, -9.78] },
-        { id: 'workbench-starboard', modelId: 'table', position: [2.55, 2.22, -9.78] },
-        { id: 'storage-shelf-port', modelId: 'bookcaseOpen', position: [-1.7, 2.22, -12.9] },
-        { id: 'storage-shelf-starboard', modelId: 'bookcaseOpen', position: [1.7, 2.22, -12.9] },
-        { id: 'cargo-rod-rack-forward-port', modelId: 'cargoRack', position: [-2.6, 2.22, 2.3] },
-        { id: 'cargo-crate-forward-starboard', modelId: 'cargoCrate', position: [2.6, 2.22, 2.8] },
-        { id: 'cargo-crate-aft-port', modelId: 'cargoCrate', position: [-3.7, 2.22, -7] },
-        { id: 'cargo-crate-aft-starboard', modelId: 'cargoCrate', position: [3.7, 2.22, -7] },
+        { id: 'chart-table-port', modelId: 'sideTableDrawers', position: [-3, 2.22, 13.77] },
+        { id: 'chart-cabinet-port', modelId: 'sideTableDrawers', position: [-2.4, 2.22, 16.83] },
+        { id: 'instrument-cabinet-starboard-aft', modelId: 'sideTableDrawers', position: [3.9, 2.22, 14.1] },
+        { id: 'instrument-cabinet-starboard-center', modelId: 'sideTableDrawers', position: [3.9, 2.22, 15.4] },
+        { id: 'instrument-cabinet-starboard-forward', modelId: 'sideTableDrawers', position: [3.9, 2.22, 16.55] },
+        { id: 'workbench-port', modelId: 'table', position: [-2.8, 2.22, -12.72] },
+        { id: 'workbench-starboard', modelId: 'table', position: [2.8, 2.22, -12.72] },
+        { id: 'storage-shelf-forward', modelId: 'bookcaseOpen', position: [0, 2.22, -8.35] },
+        { id: 'cargo-crate-forward-port', modelId: 'cargoCrate', position: [-3.6, 2.22, 3.8] },
+        { id: 'cargo-crate-forward-starboard', modelId: 'cargoCrate', position: [3.6, 2.22, 3.8] },
+        { id: 'cargo-crate-aft-port', modelId: 'cargoCrate', position: [-3.6, 2.22, -6.4] },
+        { id: 'cargo-crate-aft-starboard', modelId: 'cargoCrate', position: [3.6, 2.22, -6.4] },
+        { id: 'cargo-rack-port', modelId: 'cargoRack', position: [-3.6, 2.22, 1.5] },
+        { id: 'cargo-rack-starboard', modelId: 'cargoRack', position: [3.6, 2.22, 1.5] },
+        { id: 'cargo-rod-rack-port', modelId: 'cargoRack', position: [-3.6, 2.22, -3.8] },
       ]);
     const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
-    expect(surfaces.filter(({ fallback }) => !fallback)).toHaveLength(27);
-    expect(surfaces.filter(({ fallback }) => fallback)).toHaveLength(0);
-    expect(new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size).toBe(27);
+    expect(surfaces).toHaveLength(32);
+    expect(new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size).toBe(32);
+    expect(surfaces.every(({ categories, fallback }) => categories.length === 1 && !fallback))
+      .toBe(true);
+    expect(Object.fromEntries(['provisions', 'navigation', 'workshop', 'deckGear'].map((category) => [
+      category,
+      surfaces.filter(({ categories }) => categories[0] === category).length,
+    ]))).toEqual({ provisions: 8, navigation: 7, workshop: 8, deckGear: 9 });
     const categoriesByFurniture = Object.fromEntries(SHIP_LAYOUT.furniture.map(({ id, surfaces }) => [
       id,
       [...new Set(surfaces.flatMap(({ categories }) => categories))].sort(),
     ]));
     expect(categoriesByFurniture['cabin-desk-aft']).toEqual(['provisions']);
     expect(categoriesByFurniture['cabin-bookcase-forward']).toEqual(['provisions']);
+    expect(categoriesByFurniture['cabin-food-cabinet']).toEqual(['provisions']);
+    expect(categoriesByFurniture['cabin-side-cabinet']).toEqual(['provisions']);
     expect(categoriesByFurniture['helm-desk-forward']).toEqual(['navigation']);
     expect(categoriesByFurniture['chart-table-port']).toEqual(['navigation']);
+    expect(categoriesByFurniture['chart-cabinet-port']).toEqual(['navigation']);
     expect(categoriesByFurniture['instrument-cabinet-starboard-aft']).toEqual(['navigation']);
+    expect(categoriesByFurniture['instrument-cabinet-starboard-center']).toEqual(['navigation']);
     expect(categoriesByFurniture['instrument-cabinet-starboard-forward']).toEqual(['navigation']);
-    expect(categoriesByFurniture['workbench-port']).toEqual(['deckGear', 'workshop']);
-    expect(categoriesByFurniture['workbench-starboard']).toEqual(['deckGear', 'workshop']);
-    expect(categoriesByFurniture['storage-shelf-port']).toEqual(['deckGear', 'workshop']);
-    expect(categoriesByFurniture['storage-shelf-starboard']).toEqual(['deckGear', 'workshop']);
-    expect(categoriesByFurniture['cargo-rod-rack-forward-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['workbench-port']).toEqual(['workshop']);
+    expect(categoriesByFurniture['workbench-starboard']).toEqual(['workshop']);
+    expect(categoriesByFurniture['storage-shelf-forward']).toEqual(['workshop']);
+    expect(categoriesByFurniture['cargo-crate-forward-port']).toEqual(['deckGear']);
     expect(categoriesByFurniture['cargo-crate-forward-starboard']).toEqual(['deckGear']);
     expect(categoriesByFurniture['cargo-crate-aft-port']).toEqual(['deckGear']);
     expect(categoriesByFurniture['cargo-crate-aft-starboard']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-rack-port']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-rack-starboard']).toEqual(['deckGear']);
+    expect(categoriesByFurniture['cargo-rod-rack-port']).toEqual(['deckGear']);
   });
 
   it('rejects the old blocked cabin exit and overlapping cargo arrangement by object id', () => {

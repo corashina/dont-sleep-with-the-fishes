@@ -93,7 +93,7 @@ describe('ship item placement', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     try {
-      expect(ship.itemSurfaces).toHaveLength(27);
+      expect(ship.itemSurfaces).toHaveLength(32);
       expect(ship.itemSurfaces.find(({ id }) => id === 'cabin-bookcase-forward:level-1')
         ?.standingPoints.length).toBeGreaterThan(0);
       const assignments = assignShipItems(
@@ -280,6 +280,7 @@ describe('ship item placement', () => {
     const ship = createShip(library, 8);
     const byId = new Map(ship.itemSurfaces.map((candidate) => [candidate.id, candidate]));
     try {
+      expect(ship.itemSurfaces).toHaveLength(32);
       for (let seed = 0; seed < 64; seed += 1) {
         const instances = createItemInstances();
         const assignments = assignShipItems(
@@ -327,10 +328,10 @@ describe('ship item placement', () => {
         expect(assignments.get('fishingRod-1')!.scale).toBe(1);
       }
       expect(ship.playerNavigationBounds.safe).toEqual({
-        minX: -5.9,
-        maxX: 5.9,
-        minZ: -17.2,
-        maxZ: 17.2,
+        minX: -7.65,
+        maxX: 7.65,
+        minZ: -21.2,
+        maxZ: 21.2,
       });
     } finally {
       ship.dispose();
