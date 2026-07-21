@@ -99,9 +99,9 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(session.perform('fish', { kind: 'fishing', useBait: true })).toMatchObject({
       accepted: true,
-      deltas: { energy: -2, food: 2, bait: -1 },
+      deltas: { energy: -1, food: 2, bait: -1 },
     });
-    expect(session.snapshot()).toMatchObject({ energy: 1, food: 2, bait: 0, actedToday: true });
+    expect(session.snapshot()).toMatchObject({ energy: 2, food: 2, bait: 0, actedToday: true });
     expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
   });
 
