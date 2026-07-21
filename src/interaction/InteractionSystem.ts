@@ -14,7 +14,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 
-export type RayTarget = 'none' | 'item' | 'lifeboat';
+export type RayTarget = 'none' | 'item' | 'deposit';
 
 export interface ContextInput {
   target: RayTarget;
@@ -28,16 +28,15 @@ export type ContextAction =
   | { type: 'none'; prompt: '' }
   | { type: 'pickUp'; item: ItemInstance; prompt: string }
   | { type: 'drop'; item: ItemInstance; prompt: string }
-  | { type: 'throwToBoat'; item: ItemInstance; prompt: string }
+  | { type: 'depositBundle'; prompt: string }
   | { type: 'capacityFull'; prompt: string }
   | { type: 'evacuate'; prompt: string };
 
 export function chooseContextAction(input: ContextInput): ContextAction {
-  if (input.target === 'lifeboat' && input.carriedItem) {
+  if (input.target === 'deposit' && input.carriedItem) {
     return {
-      type: 'throwToBoat',
-      item: input.carriedItem,
-      prompt: `LEFT CLICK — THROW ${ITEM_LABELS[input.carriedItem.type]} TO LIFEBOAT`,
+      type: 'depositBundle',
+      prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
     };
   }
   if (input.target === 'item' && input.targetItem) {
@@ -71,7 +70,9 @@ function findTaggedAncestor(object: Object3D | null): Object3D | null {
   let current = object;
   let item: Object3D | null = null;
   while (current) {
-    if (current.name === 'lifeboat') return current;
+    if (current.name === 'lifeboat' || current.userData.boatDepositTarget === true) {
+      return current;
+    }
     if (!item && current.userData.instanceId) item = current;
     current = current.parent;
   }
@@ -97,18 +98,35 @@ export class InteractionSystem {
   update(
     items: readonly Object3D[],
     lifeboat: Object3D,
+    depositTarget: Object3D,
     instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
   ): InteractionTarget {
     this.camera.updateWorldMatrix(true, false);
     items.forEach((item) => item.updateWorldMatrix(true, true));
     lifeboat.updateWorldMatrix(true, true);
+    depositTarget.updateWorldMatrix(true, true);
     this.raycaster.setFromCamera(this.center, this.camera);
-    const hit = this.raycaster.intersectObjects([...items, lifeboat], true)[0];
-    const tagged = findTaggedAncestor(hit?.object ?? null);
+    const hits = this.raycaster.intersectObjects([...items, lifeboat, depositTarget], true);
+    let tagged = findTaggedAncestor(hits[0]?.object ?? null);
+    if (tagged?.userData.boatDepositTarget === true) {
+      for (let index = 1; index < hits.length; index += 1) {
+        const candidate = findTaggedAncestor(hits[index]!.object);
+        if (candidate?.name === 'lifeboat') break;
+        if (
+          candidate?.userData.instanceId
+          && instances.has(candidate.userData.instanceId as ItemInstanceId)
+        ) {
+          tagged = candidate;
+          break;
+        }
+      }
+    }
     this.setHighlight(tagged);
 
     if (!tagged) return { target: 'none', targetItem: null };
-    if (tagged.name === 'lifeboat') return { target: 'lifeboat', targetItem: null };
+    if (tagged.name === 'lifeboat' || tagged.userData.boatDepositTarget === true) {
+      return { target: 'deposit', targetItem: null };
+    }
     const targetItem = instances.get(tagged.userData.instanceId as ItemInstanceId) ?? null;
     return targetItem
       ? { target: 'item', targetItem }
