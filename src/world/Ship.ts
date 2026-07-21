@@ -2,12 +2,14 @@ import { Group, Vector3 } from 'three';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
+import { createShipDeckDetails } from './ShipDeckDetails';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
+import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
 
 export interface ShipBuild {
@@ -168,21 +170,32 @@ export function createShip(
   const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy);
   let geometry: ReturnType<typeof createShipGeometry> | undefined;
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
+  let details: ReturnType<typeof createShipDeckDetails> | undefined;
+  let rigging: ReturnType<typeof createShipRigging> | undefined;
   let smoke: ShipSmoke | undefined;
   try {
     geometry = createShipGeometry(materials);
     furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT);
+    details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
+    rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
+    const structuralColliders = [
+      ...geometry.shellColliders,
+      ...details.colliders,
+      ...rigging.colliders,
+    ];
     validateShipItemSurfaces(
       furniture.surfaces,
-      geometry.shellColliders,
+      structuralColliders,
       furniture.colliderByFurnitureId,
     );
     smoke = new ShipSmoke(geometry.stackOutlets);
     smoke.points.name = 'freighter-smoke';
-    geometry.root.add(furniture.root, smoke.points);
+    geometry.root.add(furniture.root, details.root, rigging.root, smoke.points);
     root.add(geometry.root);
   } catch (error) {
     smoke?.dispose();
+    rigging?.disposeGeometry();
+    details?.disposeGeometry();
     furniture?.disposeGeometry();
     geometry?.disposeGeometry();
     materials.dispose();
@@ -191,8 +204,15 @@ export function createShip(
 
   const assembledGeometry = geometry;
   const assembledFurniture = furniture;
+  const assembledDetails = details;
+  const assembledRigging = rigging;
   const assembledSmoke = smoke;
-  const colliders = [...assembledGeometry.shellColliders, ...assembledFurniture.colliders];
+  const colliders = [
+    ...assembledGeometry.shellColliders,
+    ...assembledFurniture.colliders,
+    ...assembledDetails.colliders,
+    ...assembledRigging.colliders,
+  ];
   const itemSurfaces = visibleProductionSurfaces(assembledFurniture.surfaces, colliders);
   let disposed = false;
 
@@ -202,20 +222,25 @@ export function createShip(
     arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
-    playerStart: new Vector3(0, 3.72, 7.2),
-    evacuationPoint: new Vector3(5.4, 3.72, 0),
-    lifeboatAnchor: new Vector3(9.0, 0.35, 0),
+    playerStart: new Vector3(0, 3.72, 8.8),
+    evacuationPoint: new Vector3(7.1, 3.72, 0),
+    lifeboatAnchor: new Vector3(10.75, 0.35, 0),
     playerNavigationBounds: {
-      safe: { minX: -5.9, maxX: 5.9, minZ: -17.2, maxZ: 17.2 },
-      fall: { minX: -7, maxX: 7, minZ: -18, maxZ: 18 },
+      safe: { minX: -7.65, maxX: 7.65, minZ: -21.2, maxZ: 21.2 },
+      fall: { minX: -8.8, maxX: 8.8, minZ: -22.8, maxZ: 22.8 },
     },
     waterExclusion: assembledGeometry.waterExclusion,
-    updateEffects: (delta, progress, reducedMotion) =>
-      assembledSmoke.update(delta, progress, reducedMotion),
+    updateEffects: (delta, progress, reducedMotion) => {
+      if (disposed) return;
+      assembledSmoke.update(delta, progress, reducedMotion);
+      assembledRigging.update(delta, reducedMotion);
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;
       assembledSmoke.dispose();
+      assembledRigging.disposeGeometry();
+      assembledDetails.disposeGeometry();
       assembledFurniture.disposeGeometry();
       assembledGeometry.disposeGeometry();
       materials.dispose();

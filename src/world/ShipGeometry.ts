@@ -43,12 +43,12 @@ const ROOM_WALL_HEIGHT = 3.4;
 const HULL_HEIGHT = 1.1;
 const HULL_TOP_Y = 1.86;
 const HULL_BOTTOM_TAPER = { widthScale: 0.86, lengthScale: 0.96 } as const;
-const DECK_WIDTH = 12;
+const DECK_WIDTH = 15.5;
 const DECK_THICKNESS = 0.28;
-const DECK_LENGTH = 34;
+const DECK_LENGTH = 42;
 const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
-const END_CAP_DEPTH = 4;
+const END_CAP_DEPTH = 4.2;
 const WALL_THICKNESS = 0.22;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
@@ -784,8 +784,12 @@ export function createShipGeometry(
       minimumLocalY: HULL_TOP_Y - HULL_HEIGHT,
       heightProfile: {
         lowerHalfWidth: HALF_WIDTH * HULL_BOTTOM_TAPER.widthScale,
-        lowerHalfLength: HALF_LENGTH * HULL_BOTTOM_TAPER.lengthScale,
-        lowerTaperStart: (HALF_LENGTH - END_CAP_DEPTH) * HULL_BOTTOM_TAPER.lengthScale,
+        lowerHalfLength: Math.round(
+          HALF_LENGTH * HULL_BOTTOM_TAPER.lengthScale * 1000,
+        ) / 1000,
+        lowerTaperStart: Math.round(
+          (HALF_LENGTH - END_CAP_DEPTH) * HULL_BOTTOM_TAPER.lengthScale * 1000,
+        ) / 1000,
         upperLocalY: HULL_TOP_Y,
       },
     },

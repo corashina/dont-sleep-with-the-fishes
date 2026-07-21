@@ -19,6 +19,7 @@ describe('ship furniture', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();
     const build = createShipFurniture(materials, library);
+    expect(build.surfaces).toHaveLength(32);
     const colliders = SHIP_LAYOUT.furniture.map((placement) => ({
       id: placement.id,
       box: build.colliders.find((box) => box.furnitureId === placement.id)!,
@@ -116,7 +117,7 @@ describe('ship furniture', () => {
 
     expect(lowestShelf).toBeDefined();
     expect(lowestShelf.standingPoints).toHaveLength(1);
-    expect(lowestShelf.standingPoints[0]!.z).toBeCloseTo(8.33);
+    expect(lowestShelf.standingPoints[0]!.z).toBeCloseTo(10.9);
     expect(isShipSurfaceStandingPointVisible(
       lowestShelf,
       lowestShelf.standingPoints[0]!,
