@@ -2,7 +2,7 @@ import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstance
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
-import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
+import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
   DayActionId,
@@ -40,7 +40,7 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
   },
   fishingRod: {
     label: 'FISH',
-    description: 'Cast from the bow to find food or drifting junk.',
+    description: 'Cast from the bow to find food or drifting junk. Bait is used automatically when available.',
   },
 });
 
@@ -121,6 +121,7 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
 
 const SLEEP_TRANSITION_MS = 650;
 const SLEEP_HOLD_MS = 450;
+const FISHING_FADE_MS = 180;
 const REDUCED_TRANSITION_MS = 1;
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -140,6 +141,18 @@ function meterMarkup(meter: MeterDefinition): string {
     </div>`;
 }
 
+export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result';
+
+export interface FishingUiState {
+  readonly mode: FishingUiMode;
+  readonly message: string;
+  readonly biteTarget: ProjectedBoatBounds | null;
+}
+
+interface PendingFishingFade {
+  readonly finish: () => void;
+}
+
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId) => void = () => undefined;
@@ -149,6 +162,8 @@ export class SurvivalUI {
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
+  onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => void) | null = null;
+  onFishingReel: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -169,9 +184,11 @@ export class SurvivalUI {
   private readonly eventTarget: HTMLElement;
   private readonly eventItems: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
-  private readonly actionOptionsLayer: HTMLElement;
-  private readonly actionOptionsTitle: HTMLElement;
-  private readonly fishingOptionButtons: HTMLButtonElement[];
+  private readonly fishingLayer: HTMLElement;
+  private readonly fishingInstruction: HTMLElement;
+  private readonly fishingLive: HTMLElement;
+  private readonly fishingBiteTarget: HTMLButtonElement;
+  private readonly fishingFade: HTMLElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
   private readonly repairTargets: HTMLElement;
@@ -204,9 +221,9 @@ export class SurvivalUI {
   private announcementVersion = 0;
   private feedbackTimer: number | undefined;
   private restartIssued = false;
-  private availableBait = 0;
   private focusReturnTarget: HTMLElement | null = null;
   private pauseReturnTarget: HTMLElement | null = null;
+  private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
   private journalEntries: readonly JournalEntry[] = [];
@@ -214,9 +231,17 @@ export class SurvivalUI {
   private hoveredAnchorId: string | null = null;
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
+  private fishingMode: FishingUiMode = 'hidden';
+  private fishingMessage = '';
+  private fishingTarget: ProjectedBoatBounds | null = null;
+  private fishingCastIssued = false;
+  private fishingReelIssued = false;
+  private suppressFishingClick = false;
+  private fishingAnnouncementVersion = 0;
+  private pendingFishingFade: PendingFishingFade | null = null;
 
   constructor(
-    mount: HTMLElement,
+    private readonly mount: HTMLElement,
     private readonly reducedMotion: Pick<MediaQueryList, 'matches'> = { matches: false },
   ) {
     this.root = document.createElement('div');
@@ -245,17 +270,16 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="survival-overlay action-options-overlay cinematic-overlay" data-action-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fishing options" inert>
-        <div class="cinematic-overlay__content">
-          <p class="eyebrow">FISHING METHOD</p>
-          <h2 data-action-options-title tabindex="-1">Bait the line?</h2>
-          <p>Cast now, or spend one bait for a better chance.</p>
-          <div class="action-options">
-            <button type="button" class="secondary-action timber-action" data-action-option="fish">FISH WITHOUT BAIT</button>
-            <button type="button" class="primary-action timber-action" data-action-option="useBait">USE 1 BAIT</button>
-          </div>
+      <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert>
+        <div class="fishing-reticle" data-fishing-reticle aria-hidden="true"></div>
+        <div class="fishing-instruction-panel">
+          <p class="fishing-instruction" data-fishing-instruction tabindex="-1"></p>
+          <p class="fishing-help">Click the water, or press Enter or Space.</p>
         </div>
+        <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
+        <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
       </section>
+      <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
       <section class="survival-overlay repair-options-overlay cinematic-overlay" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
         <div class="cinematic-overlay__content">
           <p class="eyebrow">DUCT TAPE</p>
@@ -335,9 +359,11 @@ export class SurvivalUI {
     this.eventTarget = requireElement(this.root, '[data-event-target]');
     this.eventItems = requireElement(this.root, '[data-event-items]');
     this.endureButton = requireElement(this.root, '[data-endure]');
-    this.actionOptionsLayer = requireElement(this.root, '[data-action-options]');
-    this.actionOptionsTitle = requireElement(this.root, '[data-action-options-title]');
-    this.fishingOptionButtons = [...this.actionOptionsLayer.querySelectorAll<HTMLButtonElement>('[data-action-option]')];
+    this.fishingLayer = requireElement(this.root, '[data-fishing]');
+    this.fishingInstruction = requireElement(this.root, '[data-fishing-instruction]');
+    this.fishingLive = requireElement(this.root, '[data-fishing-live]');
+    this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
+    this.fishingFade = requireElement(this.root, '[data-fishing-fade]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
     this.repairTargets = requireElement(this.root, '[data-repair-targets]');
@@ -361,16 +387,17 @@ export class SurvivalUI {
     this.modalLayers = [
       this.pauseLayer,
       this.journalLayer,
-      this.actionOptionsLayer,
       this.repairOptionsLayer,
       this.endingLayer,
       this.eventLayer,
+      this.fishingLayer,
     ];
 
     ACTIONS.forEach(({ id }) => this.actionReasons.set(id, null));
     METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
 
     this.root.addEventListener('click', this.handleClick);
+    this.root.addEventListener('pointerup', this.handleFishingPointerUp);
     this.root.addEventListener('pointerover', this.handleAnchorPointerOver);
     this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.addEventListener('focusin', this.handleAnchorFocusIn);
@@ -386,7 +413,6 @@ export class SurvivalUI {
     this.updateText('phase', this.phase, PHASE_LABELS[snapshot.state]);
 
     METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
-    this.availableBait = snapshot.bait;
     ACTIONS.forEach(({ id }) => {
       const reason = unavailable(id);
       this.actionReasons.set(id, reason);
@@ -554,6 +580,75 @@ export class SurvivalUI {
     return new Promise((resolve) => window.setTimeout(resolve, delay));
   }
 
+  setFishingState(state: FishingUiState): void {
+    if (this.disposed) return;
+    const previousMode = this.fishingMode;
+    const modeChanged = state.mode !== previousMode;
+    const messageChanged = state.message !== this.fishingMessage;
+    const targetChanged = !this.sameFishingTarget(state.biteTarget, this.fishingTarget);
+    if (!modeChanged && !messageChanged && !targetChanged) return;
+
+    if (modeChanged) {
+      if (previousMode === 'hidden' && state.mode !== 'hidden') {
+        this.fishingReturnTarget = this.resolveCommandOrigin();
+      }
+      this.fishingCastIssued = false;
+      this.fishingReelIssued = false;
+      this.suppressFishingClick = false;
+    }
+
+    this.fishingMode = state.mode;
+    this.fishingLayer.dataset.mode = state.mode;
+    if (messageChanged || modeChanged) {
+      this.fishingMessage = state.message;
+      this.fishingInstruction.textContent = state.message;
+      this.fishingLive.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
+      if (state.mode === 'hidden') {
+        this.fishingAnnouncementVersion += 1;
+        this.fishingLive.textContent = '';
+      } else {
+        this.publishFishingAnnouncement(state.message);
+      }
+    }
+    if (targetChanged || modeChanged) this.renderFishingTarget(state.biteTarget);
+
+    if (state.mode === 'hidden') {
+      this.hideLayer(this.fishingLayer);
+      const target = this.fishingReturnTarget;
+      this.fishingReturnTarget = null;
+      if (this.topmostModal() === null && !this.busy) this.restoreCommandFocus(target);
+      return;
+    }
+
+    this.showLayer(this.fishingLayer);
+    if (this.topmostModal() === this.fishingLayer && modeChanged) this.focusModal(this.fishingLayer);
+  }
+
+  setFishingFade(covered: boolean): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingFishingFade?.finish();
+    this.fishingFade.classList.toggle('is-covered', covered);
+    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : FISHING_FADE_MS;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        this.fishingFade.removeEventListener('transitionend', handleTransitionEnd);
+        if (this.pendingFishingFade?.finish === finish) this.pendingFishingFade = null;
+        resolve();
+      };
+      const handleTransitionEnd = (event: TransitionEvent): void => {
+        if (event.target === this.fishingFade && event.propertyName === 'opacity') finish();
+      };
+      this.fishingFade.addEventListener('transitionend', handleTransitionEnd);
+      timer = window.setTimeout(finish, delay);
+      this.pendingFishingFade = { finish };
+    });
+  }
+
   holdSleep(): Promise<void> {
     const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_HOLD_MS;
     return new Promise((resolve) => window.setTimeout(resolve, delay));
@@ -644,10 +739,21 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.clearAnchorHighlight();
+    this.pendingFishingFade?.finish();
+    this.fishingAnnouncementVersion += 1;
+    if (this.fishingMode !== 'hidden') {
+      this.fishingLayer.classList.remove('is-visible');
+      this.fishingMode = 'hidden';
+      this.syncBackgroundInteraction();
+      const target = this.fishingReturnTarget;
+      this.fishingReturnTarget = null;
+      if (this.isUsableCommand(target)) target.focus();
+    }
     this.disposed = true;
     this.announcementVersion += 1;
     window.clearTimeout(this.feedbackTimer);
     this.root.removeEventListener('click', this.handleClick);
+    this.root.removeEventListener('pointerup', this.handleFishingPointerUp);
     this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
     this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
@@ -661,6 +767,8 @@ export class SurvivalUI {
     this.onPauseChange = () => undefined;
     this.onJournalOpen = () => undefined;
     this.onJournalClose = () => undefined;
+    this.onFishingCast = null;
+    this.onFishingReel = null;
     this.root.remove();
   }
 
@@ -822,7 +930,6 @@ export class SurvivalUI {
     this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item]').forEach((button) => {
       button.disabled = this.busy || button.dataset.usable !== 'true';
     });
-    this.fishingOptionButtons.forEach((button) => { button.disabled = this.busy; });
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
@@ -919,37 +1026,22 @@ export class SurvivalUI {
   private focusModal(layer: HTMLElement): void {
     if (layer === this.eventLayer) this.eventTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
-    else if (layer === this.actionOptionsLayer) this.actionOptionsTitle.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
+    else if (layer === this.fishingLayer) {
+      if (this.fishingMode === 'bite' && !this.fishingBiteTarget.hidden) this.fishingBiteTarget.focus();
+      else this.fishingInstruction.focus();
+    }
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
     this.latestCommandOrigin = origin;
-    if (action === 'fish' && this.availableBait > 0) {
-      this.showLayer(this.actionOptionsLayer);
-      this.actionOptionsTitle.focus();
-      return;
-    }
     if (action === 'repairItem') {
       this.openRepairOptions();
       return;
     }
     this.onAction(action, undefined);
-  }
-
-  private chooseFishingOption(option: DayActionOption | undefined): void {
-    this.hideLayer(this.actionOptionsLayer);
-    this.onAction('fish', option);
-    if (this.topmostModal() === null && !this.busy) {
-      this.restoreCommandFocus(this.latestCommandOrigin);
-    }
-  }
-
-  private closeActionOptions(): void {
-    this.hideLayer(this.actionOptionsLayer);
-    this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private openRepairOptions(): void {
@@ -1055,9 +1147,21 @@ export class SurvivalUI {
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    const topmostModal = this.topmostModal();
+    if (this.fishingLayer.contains(target) && topmostModal === this.fishingLayer) {
+      if (target.closest('[data-fishing-bite]') !== null) {
+        this.issueFishingReel();
+        return;
+      }
+      if (this.suppressFishingClick) {
+        this.suppressFishingClick = false;
+        return;
+      }
+      this.issueFishingCast(event.clientX, event.clientY);
+      return;
+    }
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
-    const topmostModal = this.topmostModal();
     if (topmostModal !== null && !topmostModal.contains(button)) return;
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (button.getAttribute('aria-disabled') === 'true') {
@@ -1084,11 +1188,6 @@ export class SurvivalUI {
     if (action !== undefined) {
       if (this.overlayOpen()) return;
       this.activateDayAction(action.id, button);
-      return;
-    }
-    const actionOption = button.dataset.actionOption;
-    if (actionOption === 'fish' || actionOption === 'useBait') {
-      this.chooseFishingOption({ kind: 'fishing', useBait: actionOption === 'useBait' });
       return;
     }
     const repairTarget = button.dataset.repairTarget as ItemInstanceId | undefined;
@@ -1122,15 +1221,20 @@ export class SurvivalUI {
       if (topmostModal === this.journalLayer) {
         event.preventDefault();
         this.onJournalClose();
-      } else if (topmostModal === this.actionOptionsLayer) {
-        event.preventDefault();
-        this.closeActionOptions();
       } else if (topmostModal === this.repairOptionsLayer) {
         event.preventDefault();
         this.closeRepairOptions();
       } else {
         event.preventDefault();
         this.onPauseChange(!this.paused);
+      }
+      return;
+    }
+    if (topmostModal === this.fishingLayer) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        if (this.fishingMode === 'aiming') this.issueFishingCast();
+        else if (this.fishingMode === 'bite') this.issueFishingReel();
       }
       return;
     }
@@ -1149,5 +1253,70 @@ export class SurvivalUI {
       )) ?? null;
     button?.focus();
     this.activateDayAction(action.id, button);
+  };
+
+  private sameFishingTarget(
+    left: ProjectedBoatBounds | null,
+    right: ProjectedBoatBounds | null,
+  ): boolean {
+    if (left === null || right === null) return left === right;
+    return left.x === right.x
+      && left.y === right.y
+      && left.width === right.width
+      && left.height === right.height
+      && left.depth === right.depth
+      && left.visible === right.visible;
+  }
+
+  private renderFishingTarget(target: ProjectedBoatBounds | null): void {
+    this.fishingTarget = target === null ? null : { ...target };
+    const visible = this.fishingMode === 'bite' && target?.visible === true;
+    this.fishingBiteTarget.hidden = !visible;
+    if (!visible || target === null) return;
+    const width = Math.max(44, Math.round(target.width));
+    const height = Math.max(44, Math.round(target.height));
+    this.fishingBiteTarget.style.transform = `translate(${Math.round(target.x)}px, ${Math.round(target.y)}px)`;
+    this.fishingBiteTarget.style.width = `${width}px`;
+    this.fishingBiteTarget.style.height = `${height}px`;
+    this.fishingBiteTarget.style.marginLeft = `${-width / 2}px`;
+    this.fishingBiteTarget.style.marginTop = `${-height / 2}px`;
+  }
+
+  private publishFishingAnnouncement(message: string): void {
+    const version = ++this.fishingAnnouncementVersion;
+    this.fishingLive.textContent = '';
+    queueMicrotask(() => {
+      if (this.disposed || version !== this.fishingAnnouncementVersion) return;
+      this.fishingLive.textContent = message;
+    });
+  }
+
+  private issueFishingCast(clientX?: number, clientY?: number): void {
+    if (this.fishingMode !== 'aiming' || this.fishingCastIssued || this.paused) return;
+    this.fishingCastIssued = true;
+    if (clientX === undefined || clientY === undefined) {
+      this.onFishingCast?.(null);
+      return;
+    }
+    const bounds = this.mount.getBoundingClientRect();
+    this.onFishingCast?.({ x: clientX - bounds.left, y: clientY - bounds.top });
+  }
+
+  private issueFishingReel(): void {
+    if (this.fishingMode !== 'bite' || this.fishingReelIssued || this.paused) return;
+    this.fishingReelIssued = true;
+    this.onFishingReel?.();
+  }
+
+  private readonly handleFishingPointerUp = (event: PointerEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Element)
+      || !this.fishingLayer.contains(target)
+      || target.closest('[data-fishing-bite]') !== null
+      || this.topmostModal() !== this.fishingLayer
+      || this.fishingMode !== 'aiming') return;
+    this.suppressFishingClick = true;
+    this.issueFishingCast(event.clientX, event.clientY);
+    queueMicrotask(() => { this.suppressFishingClick = false; });
   };
 }

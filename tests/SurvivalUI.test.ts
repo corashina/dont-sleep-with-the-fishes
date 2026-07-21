@@ -370,7 +370,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    for (const selector of ['[data-action-options]', '[data-repair-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
+    for (const selector of ['[data-repair-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
       const overlay = mount.querySelector<HTMLElement>(selector)!;
       expect(overlay.children).toHaveLength(1);
       expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
@@ -801,44 +801,148 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.hidden).toBe(false);
   });
 
-  it('emits unbaited fishing directly when no bait remains', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    const action = vi.fn();
-    ui.onAction = action;
-    ui.render(snapshot({ bait: 0 }), () => null);
-    const options = mount.querySelector<HTMLElement>('[data-action-options]');
-
-    expect(options).not.toBeNull();
-    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
-
-    expect(action).toHaveBeenCalledWith('fish', undefined);
-    expect(options?.classList).not.toContain('is-visible');
-  });
-
-  it('emits both fishing choices with their matching option values', () => {
+  it('emits fishing directly from the rod and shortcut regardless of bait', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
     ui.onAction = action;
     ui.render(snapshot({ bait: 2 }), () => null);
-    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
 
-    fish.click();
-    expect(action).not.toHaveBeenCalled();
-    mount.querySelector<HTMLButtonElement>('[data-action-option="fish"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: false });
-    expect(document.activeElement).toBe(fish);
-
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: true });
-    expect(action).toHaveBeenCalledTimes(2);
-    expect(document.activeElement).toBe(fish);
+
+    expect(action.mock.calls).toEqual([
+      ['fish', undefined],
+      ['fish', undefined],
+    ]);
+    expect(mount.querySelector('[data-action-options]')).toBeNull();
   });
 
-  it('isolates fishing choices and restores their command origin on Escape', () => {
+  it('describes automatic bait use on the fixed one-energy fishing action', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ bait: 0 }), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const copy = fish.querySelector('[role="tooltip"]')?.textContent ?? '';
+
+    expect(copy).toContain('FISH');
+    expect(copy).toContain('1 ENERGY');
+    expect(copy).toMatch(/bait.*automat/i);
+  });
+
+  it('renders every fishing mode with exact interaction copy', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const instruction = mount.querySelector<HTMLElement>('[data-fishing-instruction]')!;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(instruction.textContent).toBe('CLICK THE WATER TO CAST');
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    expect(instruction.textContent).toBe('WAIT FOR A BITE');
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    expect(instruction.textContent).toBe('BITE - REEL NOW');
+    ui.setFishingState({ mode: 'result', message: 'CAUGHT MACKEREL', biteTarget: null });
+    expect(instruction.textContent).toBe('CAUGHT MACKEREL');
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    expect(instruction.textContent).toBe('IT GOT AWAY');
+    ui.setFishingState({ mode: 'hidden', message: '', biteTarget: null });
+    expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
+  });
+
+  it('forwards one mount-local aiming pointer cast and ignores pointer input in other modes', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const cast = vi.fn();
+    ui.onFishingCast = cast;
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+      x: 40, y: 70, left: 40, top: 70, right: 840, bottom: 670, width: 800, height: 600,
+      toJSON: () => ({}),
+    });
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 190, clientY: 230 }));
+    layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 190, clientY: 230 }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(cast).toHaveBeenCalledWith({ x: 150, y: 160 });
+
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 220, clientY: 260 }));
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 220, clientY: 260 }));
+    expect(cast).toHaveBeenCalledOnce();
+  });
+
+  it('maps Enter and Space to centered casts or reels only in their matching modes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const cast = vi.fn();
+    const reel = vi.fn();
+    ui.onFishingCast = cast;
+    ui.onFishingReel = reel;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', repeat: true }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(cast).toHaveBeenCalledWith(null);
+
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(reel).not.toHaveBeenCalled();
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    expect(reel).toHaveBeenCalledOnce();
+  });
+
+  it('focuses and repositions the urgent bite target without duplicate reel intents', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const reel = vi.fn();
+    ui.onFishingReel = reel;
+    const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    expect(document.activeElement).toBe(bite);
+    expect(bite.getAttribute('aria-label')).toBe('BITE - REEL NOW');
+    expect(mount.querySelector('[data-fishing-live]')?.getAttribute('aria-live')).toBe('assertive');
+    expect(bite.style.transform).toBe('translate(160px, 90px)');
+    expect(bite.style.width).toBe('60px');
+    expect(bite.style.height).toBe('44px');
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true },
+    });
+    expect(bite.style.transform).toBe('translate(220px, 130px)');
+    expect(mainStyles).not.toMatch(/@keyframes fishing-bite-pulse\s*\{[^}]*transform/s);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true }));
+    bite.click();
+    expect(reel).toHaveBeenCalledOnce();
+  });
+
+  it('isolates background actions during fishing while Escape and pause remain operable', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -846,44 +950,98 @@ describe('SurvivalUI', () => {
     const pause = vi.fn();
     ui.onAction = action;
     ui.onPauseChange = pause;
-    ui.render(snapshot({ bait: 1 }), () => null);
-    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
-    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
-    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+    ui.render(snapshot(), () => null);
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
 
-    fish.click();
-    expect(options.classList).toContain('is-visible');
-    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
     expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
-    dive.click();
+    expect(mount.querySelector('[data-survival-top]')?.hasAttribute('inert')).toBe(true);
+    expect(fishing.hasAttribute('inert')).toBe(false);
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     expect(action).not.toHaveBeenCalled();
-
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    expect(options.classList).not.toContain('is-visible');
-    expect(document.activeElement).toBe(fish);
-    expect(pause).not.toHaveBeenCalled();
+    expect(pause).toHaveBeenCalledWith(true);
+
+    ui.setPaused(true);
+    expect(fishing.hasAttribute('inert')).toBe(true);
+    expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
+    ui.setPaused(false);
+    expect(fishing.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(bite);
   });
 
-  it('keeps Pause above fishing choices and resumes into the choice layer', () => {
+  it('announces fishing state changes but not projected-position-only updates', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const live = mount.querySelector<HTMLElement>('[data-fishing-live]')!;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => publications.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, subtree: true, characterData: true });
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    await Promise.resolve();
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true },
+    });
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
+  });
+
+  it('settles and safely supersedes reduced-motion fishing fades without transition events', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount, { matches: true });
+    activeUIs.push(ui);
+    const fade = mount.querySelector<HTMLElement>('[data-fishing-fade]')!;
+
+    const first = ui.setFishingFade(true);
+    expect(fade.classList).toContain('is-covered');
+    const second = ui.setFishingFade(false);
+    await first;
+    expect(fade.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+    expect(mainStyles).toMatch(/\.fishing-fade\s*\{[^}]*transition:\s*opacity/s);
+    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.fishing-fade\s*\{[^}]*transition-duration:\s*1ms/s);
+  });
+
+  it('disposes fishing listeners, pending fade work, inert state, and focused controls once', async () => {
+    vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const action = vi.fn();
-    ui.onAction = action;
-    ui.render(snapshot({ bait: 1 }), () => null);
-    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+    const cast = vi.fn();
+    const reel = vi.fn();
+    ui.onFishingCast = cast;
+    ui.onFishingReel = reel;
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    const pendingFade = ui.setFishingFade(true);
 
-    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
-    ui.setPaused(true);
-    expect(options.hasAttribute('inert')).toBe(true);
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).not.toHaveBeenCalled();
-
-    ui.setPaused(false);
-    expect(options.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenCalledWith('fish', { kind: 'fishing', useBait: true });
+    ui.dispose();
+    ui.dispose();
+    await pendingFade;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(cast).not.toHaveBeenCalled();
+    expect(reel).not.toHaveBeenCalled();
+    expect(mount.querySelector('.survival-ui')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('keeps unavailable projected actions focusable while suppressing commands', () => {
