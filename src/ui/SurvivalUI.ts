@@ -745,9 +745,7 @@ export class SurvivalUI {
       this.fishingLayer.classList.remove('is-visible');
       this.fishingMode = 'hidden';
       this.syncBackgroundInteraction();
-      const target = this.fishingReturnTarget;
       this.fishingReturnTarget = null;
-      if (this.isUsableCommand(target)) target.focus();
     }
     this.disposed = true;
     this.announcementVersion += 1;
