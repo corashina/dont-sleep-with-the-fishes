@@ -11,6 +11,7 @@ const BLOCKED_STATE_SETUPS = [
 const ITEM_MUTATIONS = [
   { name: 'dropCarried', run: (session: ScavengeSession) => session.dropCarried(), rejected: null },
   { name: 'saveCarried', run: (session: ScavengeSession) => session.saveCarried(), rejected: null },
+  { name: 'saveCarriedBundle', run: (session: ScavengeSession) => session.saveCarriedBundle(), rejected: null },
   { name: 'loseCarried', run: (session: ScavengeSession) => session.loseCarried(), rejected: null },
   { name: 'lose', run: (session: ScavengeSession) => session.lose('ductTape-1'), rejected: false },
 ] as const;
@@ -71,6 +72,41 @@ describe('ScavengeSession', () => {
       expect(session.saveCarried()?.instanceId).toBe(id);
     }
     expect(session.snapshot().savedCount).toBe(3);
+  });
+
+  it('saves the full carried bundle atomically in pickup order', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('cannedFood-1');
+    session.pickUp('ductTape-1');
+    session.pickUp('flashlight-1');
+
+    expect(session.saveCarriedBundle()).toEqual([
+      { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      { instanceId: 'ductTape-1', type: 'ductTape' },
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ]);
+    expect(session.snapshot()).toMatchObject({
+      carriedItems: [],
+      carriedWeight: 0,
+      savedCount: 3,
+      items: {
+        'cannedFood-1': { status: 'saved' },
+        'ductTape-1': { status: 'saved' },
+        'flashlight-1': { status: 'saved' },
+      },
+    });
+  });
+
+  it('rejects a bundle save without mutation outside running state', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('flareGun-1');
+    session.pause();
+    const before = session.snapshot();
+
+    expect(session.saveCarriedBundle()).toBeNull();
+    expect(session.snapshot()).toEqual(before);
   });
 
   it('keys snapshot items only by physical instance ID', () => {

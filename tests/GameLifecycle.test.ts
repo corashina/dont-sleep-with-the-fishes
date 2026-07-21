@@ -552,11 +552,13 @@ describe('ScavengePhase lifecycle integration', () => {
     internals.updateInteraction();
 
     const firstItems = updateInteraction.mock.calls[0]![0];
-    const firstInstances = updateInteraction.mock.calls[0]![2];
+    const depositTarget = updateInteraction.mock.calls[0]![2];
+    const firstInstances = updateInteraction.mock.calls[0]![3];
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
     expect(internals.world.itemObjects.size).toBe(22);
     expect(firstItems).toHaveLength(22);
     expect(firstItems).toContain(cannedFood);
+    expect(depositTarget).toBe(internals.world.boatDepositTarget);
     expect(firstInstances.size).toBe(22);
     expect(firstInstances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1',
@@ -567,7 +569,7 @@ describe('ScavengePhase lifecycle integration', () => {
     internals.updateInteraction();
 
     const nextItems = updateInteraction.mock.calls[1]![0];
-    const nextInstances = updateInteraction.mock.calls[1]![2];
+    const nextInstances = updateInteraction.mock.calls[1]![3];
     expect(nextItems).toHaveLength(21);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
@@ -746,10 +748,11 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('handles capacity rejection without mutating gameplay or world state', () => {
     const session = { pickUp: vi.fn(), evacuate: vi.fn() };
-    const carry = { pickUp: vi.fn(), throw: vi.fn(), drop: vi.fn() };
+    const carry = { pickUp: vi.fn(), releaseAll: vi.fn(), drop: vi.fn() };
     const world = {
       itemObjects: new Map(),
       saveItem: vi.fn(),
+      saveItems: vi.fn(),
       landItem: vi.fn(),
       loseItem: vi.fn(),
     };
@@ -769,9 +772,10 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(session.pickUp).not.toHaveBeenCalled();
     expect(session.evacuate).not.toHaveBeenCalled();
     expect(carry.pickUp).not.toHaveBeenCalled();
-    expect(carry.throw).not.toHaveBeenCalled();
+    expect(carry.releaseAll).not.toHaveBeenCalled();
     expect(carry.drop).not.toHaveBeenCalled();
     expect(world.saveItem).not.toHaveBeenCalled();
+    expect(world.saveItems).not.toHaveBeenCalled();
     expect(world.landItem).not.toHaveBeenCalled();
     expect(world.loseItem).not.toHaveBeenCalled();
   });

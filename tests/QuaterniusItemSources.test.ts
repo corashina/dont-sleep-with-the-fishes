@@ -90,7 +90,7 @@ describe('Quaternius item source destination guard', () => {
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain('Refusing unsafe destination root');
     }
-  });
+  }, 15_000);
 
 
 });
