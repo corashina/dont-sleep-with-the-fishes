@@ -362,6 +362,10 @@ describe('player movement helpers', () => {
 
   it('enters one wheelhouse door, exits the second, and closes the exterior circuit', () => {
     const ship = createTestShip();
+    const target = (id: string): Vector3 => {
+      const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
+      return new Vector3(position[0], PLAYER_Y, position[1]);
+    };
     const wheelhouseAft = layoutDoor('wheelhouse-aft-door');
     const wheelhousePort = layoutDoor('wheelhouse-port-door');
     const storagePort = layoutDoor('storage-port-door');
@@ -370,6 +374,10 @@ describe('player movement helpers', () => {
     const start = new Vector3(EXTERIOR_ROUTE_X, PLAYER_Y, wheelhouseAft.center[1] - 0.5);
     try {
       const end = followPath(start, [
+        target('bow-starboard'),
+        target('bow-center'),
+        target('bow-port'),
+        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, wheelhouseAft.center[1] - 0.5),
         new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1] - 0.5),
         new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1]),
         new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1] + 0.55),

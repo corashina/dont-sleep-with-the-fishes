@@ -76,18 +76,39 @@ describe('scavenging ship layout', () => {
       { id: 'barrel-2', kind: 'barrel', position: [6, 2.22, 18.2], rotationY: 0, scale: [1, 1, 1] },
       { id: 'barrel-3', kind: 'barrel', position: [-6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
       { id: 'barrel-4', kind: 'barrel', position: [6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'barrel-5', kind: 'barrel', position: [-3.8, 2.22, -2], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'barrel-6', kind: 'barrel', position: [3.8, 2.22, -2], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'ropeCoil-1', kind: 'ropeCoil', position: [-6.2, 2.22, 19], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'ropeCoil-2', kind: 'ropeCoil', position: [6.2, 2.22, 19], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'ropeCoil-3', kind: 'ropeCoil', position: [-6.2, 2.22, -19], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'ropeCoil-4', kind: 'ropeCoil', position: [6.2, 2.22, -19], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-1', kind: 'lifeRing', position: [-6.5, 2.22, 10], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-2', kind: 'lifeRing', position: [6.5, 2.22, 10], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-3', kind: 'lifeRing', position: [-6.5, 2.22, -12], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-4', kind: 'lifeRing', position: [6.5, 2.22, -12], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'spareTimber-1', kind: 'spareTimber', position: [-3.8, 2.22, -4.5], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'spareTimber-2', kind: 'spareTimber', position: [3.8, 2.22, -4.5], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-5', kind: 'barrel', position: [-1.8, 2.22, 4.4], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-6', kind: 'barrel', position: [1.9, 2.22, -7.3], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-1', kind: 'ropeCoil', position: [-6.85, 2.22, 13], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-2', kind: 'ropeCoil', position: [6.85, 2.22, 10.1], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-3', kind: 'ropeCoil', position: [-6.85, 2.22, -9], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-4', kind: 'ropeCoil', position: [6.85, 2.22, -12.9], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-1', kind: 'lifeRing', position: [-7.2, 2.22, 9.5], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-2', kind: 'lifeRing', position: [7.2, 2.22, 14], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-3', kind: 'lifeRing', position: [-7.2, 2.22, -13.8], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-4', kind: 'lifeRing', position: [7.2, 2.22, -7], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-1', kind: 'spareTimber', position: [2.8, 2.22, 12.8], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-2', kind: 'spareTimber', position: [-2.8, 2.22, -13.9], rotationY: 0, scale: [1, 1, 1] },
+    ]);
+  });
+
+  it('locks every retained deck detail to its approved position', () => {
+    expect(SHIP_LAYOUT.details.map(({ id, position }) => ({ id, position }))).toEqual([
+      { id: 'barrel-1', position: [-6, 2.22, 18.2] },
+      { id: 'barrel-2', position: [6, 2.22, 18.2] },
+      { id: 'barrel-3', position: [-6, 2.22, -18.2] },
+      { id: 'barrel-4', position: [6, 2.22, -18.2] },
+      { id: 'barrel-5', position: [-1.8, 2.22, 4.4] },
+      { id: 'barrel-6', position: [1.9, 2.22, -7.3] },
+      { id: 'ropeCoil-1', position: [-6.85, 2.22, 13] },
+      { id: 'ropeCoil-2', position: [6.85, 2.22, 10.1] },
+      { id: 'ropeCoil-3', position: [-6.85, 2.22, -9] },
+      { id: 'ropeCoil-4', position: [6.85, 2.22, -12.9] },
+      { id: 'lifeRing-1', position: [-7.2, 2.22, 9.5] },
+      { id: 'lifeRing-2', position: [7.2, 2.22, 14] },
+      { id: 'lifeRing-3', position: [-7.2, 2.22, -13.8] },
+      { id: 'lifeRing-4', position: [7.2, 2.22, -7] },
+      { id: 'spareTimber-1', position: [2.8, 2.22, 12.8] },
+      { id: 'spareTimber-2', position: [-2.8, 2.22, -13.9] },
     ]);
   });
 
@@ -248,7 +269,7 @@ describe('scavenging ship layout', () => {
     const crateOverlap = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
-        ? { ...detail, position: [-3.6, 2.22, 3.8] as const }
+        ? { ...detail, position: [-4.1, 2.22, 3.8] as const }
         : detail),
     };
     expect(() => validateShipLayout(crateOverlap))
@@ -257,11 +278,23 @@ describe('scavenging ship layout', () => {
     const accessOverlap = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'lifeRing-1'
-        ? { ...detail, position: [-3.6, 2.22, 2.65] as const }
+        ? { ...detail, position: [-4.1, 2.22, 2.65] as const }
         : detail),
     };
     expect(() => validateShipLayout(accessOverlap))
       .toThrow(/lifeRing-1.*cargo-crate-forward-port:top-access-0/i);
+  });
+
+  it('rejects visual footprints spaced less than one metre apart', () => {
+    const crowdedDetails = {
+      ...SHIP_LAYOUT,
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'lifeRing-1'
+        ? { ...detail, position: [-7.2, 2.22, 11.4] as const }
+        : detail),
+    };
+
+    expect(() => validateShipLayout(crowdedDetails))
+      .toThrow(/ropeCoil-1.*lifeRing-1.*1 metre/i);
   });
 
   it('authors the exact perimeter placement and surface catalog', () => {
