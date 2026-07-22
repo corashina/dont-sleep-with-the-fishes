@@ -254,8 +254,27 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('SUPPLIES UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to recover DUCT TAPE');
     expect(mount.textContent).toContain('DUCT TAPE');
     expect(mount.textContent).toContain('download failed');
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('renders a fixed-equipment failure when the lifeboat rod cannot preload', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.reject(new ItemModelLoadError('fishingRod', 'rod download failed')),
+      { createGame },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('EQUIPMENT UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare the lifeboat Fishing Rod');
+    expect(mount.textContent).toContain('A required fixed equipment model could not be loaded.');
+    expect(mount.textContent).toContain('rod download failed');
+    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
+    expect(mount.textContent).not.toContain('Unable to recover Fishing Rod');
     expect(createGame).not.toHaveBeenCalled();
   });
 

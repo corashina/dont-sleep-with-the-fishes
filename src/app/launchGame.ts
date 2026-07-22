@@ -149,9 +149,17 @@ function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof ItemModelLoadError) {
-    const itemLabel = error.itemId === 'fishingRod'
-      ? 'Fishing Rod'
-      : ITEM_DEFINITIONS[error.itemId].label;
+    if (error.itemId === 'fishingRod') {
+      mount.replaceChildren(screen(
+        'EQUIPMENT UNAVAILABLE',
+        'Unable to prepare the lifeboat Fishing Rod',
+        'A required fixed equipment model could not be loaded.',
+        error.message,
+      ));
+      return;
+    }
+
+    const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
     mount.replaceChildren(screen(
       'SUPPLIES UNAVAILABLE',
       `Unable to recover ${itemLabel}`,
