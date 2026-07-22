@@ -1136,8 +1136,6 @@ export class BoatWorld {
         break;
       case 'reel':
       case 'miss':
-        this.resetFishingVisuals();
-        this.fishingPhase = 'ready';
         break;
       case 'return':
         this.resetFishingVisuals();

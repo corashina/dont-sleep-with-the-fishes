@@ -1223,9 +1223,11 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
     world.update(2, 0.5);
     await reel;
-    for (const name of ['fishing-line', 'fishing-bobber', 'fishing-bubbles', 'fishing-ripples', 'fishing-catch-display']) {
-      expect(world.scene.getObjectByName(name)?.visible).toBe(false);
-    }
+    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-bobber')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-bubbles')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('fishing-ripples')?.visible).toBe(false);
     expect(camera.position.toArray()).toEqual(bowPosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(bowQuaternion.toArray());
 
@@ -1234,10 +1236,16 @@ describe('BoatWorld helpers', () => {
     world.update(2.5, 0.5);
     world.update(3, 0.5);
     await miss;
+    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-bobber')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(false);
     expect(camera.position.toArray()).toEqual(bowPosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(bowQuaternion.toArray());
 
     const returning = world.exitFishingView();
+    for (const name of ['fishing-line', 'fishing-bobber', 'fishing-bubbles', 'fishing-ripples', 'fishing-catch-display']) {
+      expect(world.scene.getObjectByName(name)?.visible).toBe(false);
+    }
     world.update(3.5, 0.5);
     world.update(4, 0.5);
     await returning;
@@ -1245,6 +1253,57 @@ describe('BoatWorld helpers', () => {
     expect(camera.quaternion.toArray()).toEqual(normalQuaternion.toArray());
     world.dispose();
     propModels.dispose();
+  });
+
+  it('renders reduced-motion catch and miss results for a frame without timers before explicit clear', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: true } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const timer = vi.spyOn(globalThis, 'setTimeout');
+    const point = world.centeredFishingCast();
+
+    try {
+      world.showFishingBite(point);
+      const reel = world.playFishingReel('cod');
+      world.update(1 / 60, 1 / 60);
+      const catchFrame = {
+        line: world.scene.getObjectByName('fishing-line')?.visible,
+        bobber: world.scene.getObjectByName('fishing-bobber')?.visible,
+        catch: world.scene.getObjectByName('fishing-catch-display')?.visible,
+      };
+      await reel;
+
+      expect(catchFrame).toEqual({ line: true, bobber: true, catch: true });
+      expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
+      const returning = world.exitFishingView();
+      expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(false);
+      world.update(2 / 60, 1 / 60);
+      await returning;
+
+      world.showFishingBite(point);
+      const miss = world.playFishingMiss();
+      world.update(3 / 60, 1 / 60);
+      const missFrame = {
+        line: world.scene.getObjectByName('fishing-line')?.visible,
+        bobber: world.scene.getObjectByName('fishing-bobber')?.visible,
+        catch: world.scene.getObjectByName('fishing-catch-display')?.visible,
+      };
+      await miss;
+
+      expect(missFrame).toEqual({ line: true, bobber: true, catch: false });
+      world.clearFishingPresentation();
+      expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(false);
+      expect(world.scene.getObjectByName('fishing-bobber')?.visible).toBe(false);
+      expect(timer).not.toHaveBeenCalled();
+    } finally {
+      timer.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
   });
 
   it('settles active fishing handles when a new command supersedes them', async () => {
