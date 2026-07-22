@@ -868,6 +868,26 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('authors the fishing rod forward from a named bow pivot', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
+    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    expect(pivot.position.z).toBeLessThan(-2);
+    expect(rod.position.z).toBeLessThan(0);
+    const tip = world.scene.getObjectByName('fishing-line-origin')!;
+    expect(tip.getWorldPosition(new Vector3()).z)
+      .toBeLessThan(pivot.getWorldPosition(new Vector3()).z);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps broken props inspectable, hides used and lost props, and restores repaired state', () => {
     const savedItems = [savedItem('bucket'), savedItem('energyBar'), savedItem('map')];
     const propModels = createTestPropModels();
@@ -937,11 +957,11 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       [],
     );
-    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
-    const before = rod.rotation.z;
+    const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
+    const before = pivot.rotation.x;
     world.play('fish');
     world.update(0.7, 0.7);
-    expect(rod.rotation.z).toBeLessThan(before);
+    expect(pivot.rotation.x).toBeLessThan(before);
     expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(false);
     expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(false);
     world.dispose();
@@ -1025,22 +1045,23 @@ describe('BoatWorld helpers', () => {
     const normalPosition = camera.position.clone();
     const normalQuaternion = camera.quaternion.clone();
 
-    let entered = false;
-    const entering = world.enterFishingView().then(() => { entered = true; });
-    expect(entered).toBe(false);
-    world.update(0.5, 0.5);
-    expect(camera.position.toArray()).not.toEqual(normalPosition.toArray());
-    expect(entered).toBe(false);
-    world.update(1, 0.5);
+    const entering = world.enterFishingView();
+    expect(camera.position.toArray()).toEqual(normalPosition.toArray());
+    world.update(0.016, 0.016);
+    expect(camera.position.distanceTo(normalPosition)).toBeLessThan(0.1);
+    world.update(0.55, 0.534);
+    const midpoint = camera.position.clone();
+    world.update(1.1, 0.55);
     await entering;
     const bowPosition = camera.position.clone();
     const bowQuaternion = camera.quaternion.clone();
-    expect(bowPosition.toArray()).not.toEqual(normalPosition.toArray());
+    expect(midpoint.distanceTo(normalPosition)).toBeGreaterThan(0.1);
+    expect(midpoint.distanceTo(camera.position)).toBeGreaterThan(0.1);
+    expect(camera.position.z).toBeLessThan(-1.2);
     expect(Math.abs(bowQuaternion.dot(normalQuaternion))).toBeLessThan(0.9999);
 
     const returning = world.exitFishingView();
-    world.update(1.5, 0.5);
-    world.update(2, 0.5);
+    world.update(2.2, 1.1);
     await returning;
     expect(camera.position.toArray()).toEqual(normalPosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(normalQuaternion.toArray());
@@ -1058,8 +1079,8 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const normalPosition = camera.position.clone();
-    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
-    const baseRodRotation = rod.rotation.z;
+    const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
+    const baseRodRotation = pivot.rotation.x;
     const entering = world.enterFishingView();
     expect(camera.position.toArray()).not.toEqual(normalPosition.toArray());
     world.update(0.01, 0.01);
@@ -1067,7 +1088,7 @@ describe('BoatWorld helpers', () => {
 
     const casting = world.playFishingCast(world.centeredFishingCast());
     world.update(0.02, 0.01);
-    expect(Math.abs(rod.rotation.z - baseRodRotation)).toBeLessThan(0.12);
+    expect(Math.abs(pivot.rotation.x - baseRodRotation)).toBeLessThan(0.12);
     await casting;
 
     const returning = world.exitFishingView();
@@ -1116,7 +1137,7 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const entering = world.enterFishingView();
-    world.update(1, 1);
+    world.update(1.1, 1.1);
     await entering;
 
     expect(world.castFishingAtScreenPoint(-1, 360, 1280, 720)).toBeNull();
@@ -1133,7 +1154,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('advances casting only from update and reuses its line and effect pools', async () => {
+  it('stages the cast through the rod pivot, bobber arc, and landing splash', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
@@ -1141,13 +1162,14 @@ describe('BoatWorld helpers', () => {
       propModels,
       createTestMoonTexture(),
     );
-    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
     const line = world.scene.getObjectByName('fishing-line')!;
     const bobber = world.scene.getObjectByName('fishing-bobber')!;
+    const splash = world.scene.getObjectByName('fishing-splash')!;
     const bubbles = world.scene.getObjectByName('fishing-bubbles')!;
     const ripples = world.scene.getObjectByName('fishing-ripples')!;
     const poolSizes = [bubbles.children.length, ripples.children.length];
-    const baseRodRotation = rod.rotation.z;
+    const baseRodRotation = pivot.rotation.x;
     let finished = false;
 
     const cast = world.playFishingCast(world.centeredFishingCast())
@@ -1155,11 +1177,22 @@ describe('BoatWorld helpers', () => {
     expect(finished).toBe(false);
     expect(line.visible).toBe(true);
     world.update(0.2, 0.2);
-    expect(rod.rotation.z).not.toBe(baseRodRotation);
+    const quarterPosition = bobber.position.clone();
+    expect(pivot.rotation.x).not.toBe(baseRodRotation);
     expect(bobber.visible).toBe(true);
+    expect(splash.visible).toBe(false);
     expect(finished).toBe(false);
-    world.update(0.8, 0.6);
+    world.update(0.4, 0.2);
+    const midpoint = bobber.position.clone();
+    expect(splash.visible).toBe(false);
+    world.update(0.74, 0.34);
+    expect(splash.visible).toBe(true);
+    world.update(0.8, 0.06);
+    const landingPosition = bobber.position.clone();
     await cast;
+    expect(midpoint.y).toBeGreaterThan(quarterPosition.y);
+    expect(midpoint.y).toBeGreaterThan(landingPosition.y);
+    expect(splash.visible).toBe(false);
     expect([bubbles.children.length, ripples.children.length]).toEqual(poolSizes);
     world.dispose();
     propModels.dispose();
@@ -1210,22 +1243,30 @@ describe('BoatWorld helpers', () => {
     const normalQuaternion = camera.quaternion.clone();
     const point = world.centeredFishingCast();
     const entering = world.enterFishingView();
-    world.update(0.5, 0.5);
-    world.update(1, 0.5);
+    world.update(0.55, 0.55);
+    world.update(1.1, 0.55);
     await entering;
     const bowPosition = camera.position.clone();
     const bowQuaternion = camera.quaternion.clone();
     expect(bowPosition.toArray()).not.toEqual(normalPosition.toArray());
 
     world.showFishingBite(point);
+    const catchDisplay = world.scene.getObjectByName('fishing-catch-display')!;
+    const castPosition = catchDisplay.position.clone();
+    const lineOrigin = world.scene.getObjectByName('fishing-line-origin')!;
+    const lineOriginWorld = lineOrigin.getWorldPosition(new Vector3());
     const reel = world.playFishingReel('cod');
     world.update(1.5, 0.5);
-    expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
+    expect(catchDisplay.visible).toBe(true);
+    expect(catchDisplay.position.y).toBeGreaterThan(castPosition.y);
+    expect(Math.abs(catchDisplay.position.z - lineOriginWorld.z))
+      .toBeLessThan(Math.abs(castPosition.z - lineOriginWorld.z));
     world.update(2, 0.5);
     await reel;
     expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(true);
     expect(world.scene.getObjectByName('fishing-bobber')?.visible).toBe(true);
     expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
+    expect(catchDisplay.position.z).not.toBe(castPosition.z);
     expect(world.scene.getObjectByName('fishing-bubbles')?.visible).toBe(false);
     expect(world.scene.getObjectByName('fishing-ripples')?.visible).toBe(false);
     expect(camera.position.toArray()).toEqual(bowPosition.toArray());
@@ -1246,8 +1287,8 @@ describe('BoatWorld helpers', () => {
     for (const name of ['fishing-line', 'fishing-bobber', 'fishing-bubbles', 'fishing-ripples', 'fishing-catch-display']) {
       expect(world.scene.getObjectByName(name)?.visible).toBe(false);
     }
-    world.update(3.5, 0.5);
-    world.update(4, 0.5);
+    world.update(3.55, 0.55);
+    world.update(4.1, 0.55);
     await returning;
     expect(camera.position.toArray()).toEqual(normalPosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(normalQuaternion.toArray());
