@@ -149,6 +149,11 @@ export interface FishingUiState {
   readonly biteTarget: ProjectedBoatBounds | null;
 }
 
+export interface FishingResultView {
+  readonly title: string;
+  readonly detail: string;
+}
+
 interface PendingFishingFade {
   readonly finish: () => void;
 }
@@ -164,6 +169,7 @@ export class SurvivalUI {
   onJournalClose: () => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
+  onFishingResultContinue: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -189,6 +195,10 @@ export class SurvivalUI {
   private readonly fishingLive: HTMLElement;
   private readonly fishingBiteTarget: HTMLButtonElement;
   private readonly fishingFade: HTMLElement;
+  private readonly fishingResultLayer: HTMLElement;
+  private readonly fishingResultTitle: HTMLElement;
+  private readonly fishingResultDetail: HTMLElement;
+  private readonly fishingResultContinue: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
   private readonly repairTargets: HTMLElement;
@@ -247,6 +257,7 @@ export class SurvivalUI {
   private suppressFishingClick = false;
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFishingFade | null = null;
+  private fishingResultContinueIssued = false;
 
   constructor(
     private readonly mount: HTMLElement,
@@ -288,6 +299,14 @@ export class SurvivalUI {
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
+      <section class="survival-overlay fishing-result-overlay cinematic-overlay" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
+        <div class="cinematic-overlay__content fishing-result-card">
+          <p class="eyebrow">FISHING RESULT</p>
+          <h2 id="fishing-result-title" data-fishing-result-title></h2>
+          <p class="fishing-result-detail" data-fishing-result-detail></p>
+          <button type="button" class="primary-action timber-action" data-fishing-result-continue>CONTINUE</button>
+        </div>
+      </section>
       <section class="survival-overlay repair-options-overlay cinematic-overlay" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
         <div class="cinematic-overlay__content">
           <p class="eyebrow">DUCT TAPE</p>
@@ -372,6 +391,10 @@ export class SurvivalUI {
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
     this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
     this.fishingFade = requireElement(this.root, '[data-fishing-fade]');
+    this.fishingResultLayer = requireElement(this.root, '[data-fishing-result]');
+    this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
+    this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
+    this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
     this.repairTargets = requireElement(this.root, '[data-repair-targets]');
@@ -398,6 +421,7 @@ export class SurvivalUI {
       this.repairOptionsLayer,
       this.endingLayer,
       this.eventLayer,
+      this.fishingResultLayer,
       this.fishingLayer,
     ];
 
@@ -632,6 +656,20 @@ export class SurvivalUI {
     if (this.topmostModal() === this.fishingLayer && modeChanged) this.focusModal(this.fishingLayer);
   }
 
+  showFishingResult(view: FishingResultView): void {
+    if (this.disposed) return;
+    this.fishingResultContinueIssued = false;
+    this.fishingResultTitle.textContent = view.title;
+    this.fishingResultDetail.textContent = view.detail;
+    this.showLayer(this.fishingResultLayer);
+    this.fishingResultContinue.focus();
+  }
+
+  hideFishingResult(): void {
+    if (this.disposed) return;
+    this.hideLayer(this.fishingResultLayer);
+  }
+
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
     if (
       this.disposed
@@ -784,6 +822,7 @@ export class SurvivalUI {
     this.onJournalClose = () => undefined;
     this.onFishingCast = null;
     this.onFishingReel = null;
+    this.onFishingResultContinue = null;
     this.root.remove();
   }
 
@@ -856,7 +895,8 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = text;
+    const visibleText = anchor.toolId === 'fishingRod' ? 'Fishing rod' : text;
+    requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = visibleText;
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
@@ -864,7 +904,7 @@ export class SurvivalUI {
     else button.dataset.tool = anchor.toolId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
-    button.setAttribute('aria-label', text);
+    button.setAttribute('aria-label', anchor.toolId === 'fishingRod' ? 'Fishing rod' : text);
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
@@ -1041,6 +1081,7 @@ export class SurvivalUI {
   private focusModal(layer: HTMLElement): void {
     if (layer === this.eventLayer) this.eventTitle.focus();
     else if (layer === this.endingLayer) this.endingTitle.focus();
+    else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
@@ -1223,6 +1264,12 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-journal-close')) {
       this.onJournalClose();
+      return;
+    }
+    if (button.hasAttribute('data-fishing-result-continue')) {
+      if (this.fishingResultContinueIssued) return;
+      this.fishingResultContinueIssued = true;
+      this.onFishingResultContinue?.();
       return;
     }
     if (action !== undefined) {
