@@ -73,8 +73,10 @@ export interface ShipLaneSpec {
 }
 
 export type ShipDeckDetailKind =
-  | 'barrel' | 'ropeCoil' | 'bollard' | 'cleat' | 'lamp' | 'vent'
-  | 'lifeRing' | 'coveredHatch' | 'spareTimber' | 'toolbox' | 'foldedCanvas';
+  | 'barrel'
+  | 'ropeCoil'
+  | 'lifeRing'
+  | 'spareTimber';
 
 export interface ShipDeckDetailSpec {
   readonly id: string;
@@ -270,8 +272,10 @@ const doors: readonly ShipDoorSpec[] = [
 ];
 
 export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number>> = {
-  barrel: 6, ropeCoil: 4, bollard: 8, cleat: 8, lamp: 6, vent: 4,
-  lifeRing: 4, coveredHatch: 1, spareTimber: 2, toolbox: 3, foldedCanvas: 2,
+  barrel: 6,
+  ropeCoil: 4,
+  lifeRing: 4,
+  spareTimber: 2,
 };
 
 export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
@@ -279,43 +283,26 @@ export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
 > = {
   barrel: [0.96, 0.96],
   ropeCoil: [1.32, 1.32],
-  bollard: [0.42, 0.42],
-  cleat: [0.56, 0.56],
-  lamp: [0.44, 0.44],
-  vent: [0.9, 0.58],
   lifeRing: [1.26, 0.12],
-  coveredHatch: [2.3, 1.5],
   spareTimber: [1.8, 0.56],
-  toolbox: [1, 0.5],
-  foldedCanvas: [1, 0.65],
 };
 
 const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
   barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-3.8, -2], [3.8, -2]],
   ropeCoil: [[-6.2, 19], [6.2, 19], [-6.2, -19], [6.2, -19]],
-  bollard: [[-6.8, 18], [6.8, 18], [-5.2, 20], [5.2, 20], [-6.8, -18], [6.8, -18], [-5.2, -20], [5.2, -20]],
-  cleat: [[-5.4, 20], [5.4, 20], [-5.8, 16], [5.8, 16], [-5.4, -20], [5.4, -20], [-5.8, -16], [5.8, -16]],
-  lamp: [[-6, 14], [6, 14], [-6, 4], [6, 4], [-6, -8], [6, -8]],
-  vent: [[-4.6, 4.7], [4.6, 4.7], [-4.6, -7.4], [4.6, -7.4]],
   lifeRing: [[-6.5, 10], [6.5, 10], [-6.5, -12], [6.5, -12]],
-  coveredHatch: [[0, 1.8]],
   spareTimber: [[-3.8, -4.5], [3.8, -4.5]],
-  toolbox: [[-4.75, 3.6], [4.75, 3.6], [4.75, -6.2]],
-  foldedCanvas: [[-6.2, 12], [6.2, -14]],
 };
 
 const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, number]>> = {
-  barrel: [0.9, 1.15, 0.9], bollard: [0.35, 0.65, 0.35], spareTimber: [1.8, 0.35, 0.55],
-};
-
-const detailRotations: Partial<Record<ShipDeckDetailKind, readonly number[]>> = {
-  toolbox: [PI_OVER_TWO, PI_OVER_TWO, PI_OVER_TWO],
+  barrel: [0.9, 1.15, 0.9],
+  spareTimber: [1.8, 0.35, 0.55],
 };
 
 const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailPositions) as ShipDeckDetailKind[]).flatMap((kind) =>
   detailPositions[kind].map(([x, z], index) => ({
     id: `${kind}-${index + 1}`, kind, position: [x, FREIGHTER_DIMENSIONS.deckY, z],
-    rotationY: detailRotations[kind]?.[index] ?? 0,
+    rotationY: 0,
     scale: [1, 1, 1],
     visualSize: SHIP_DECK_DETAIL_VISUAL_SIZES[kind],
     colliderSize: colliders[kind],

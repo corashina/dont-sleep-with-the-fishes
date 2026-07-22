@@ -50,27 +50,21 @@ describe('scavenging ship layout', () => {
     expect(SHIP_LAYOUT.evacuationRect).toEqual({
       minX: 6.75, maxX: 7.45, minZ: -0.35, maxZ: 0.35,
     });
-    expect(SHIP_LAYOUT.details).toHaveLength(48);
+    expect(SHIP_LAYOUT.details).toHaveLength(16);
     expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
-      barrel: 6, ropeCoil: 4, bollard: 8, cleat: 8, lamp: 6, vent: 4,
-      lifeRing: 4, coveredHatch: 1, spareTimber: 2, toolbox: 3, foldedCanvas: 2,
+      barrel: 6,
+      ropeCoil: 4,
+      lifeRing: 4,
+      spareTimber: 2,
     });
+    expect([...new Set(SHIP_LAYOUT.details.map(({ kind }) => kind))].sort()).toEqual([
+      'barrel', 'lifeRing', 'ropeCoil', 'spareTimber',
+    ]);
     expect(SHIP_LAYOUT.rigging.masts.map(({ id, position, height, baseDiameter }) => ({
       id, position, height, baseDiameter,
     }))).toEqual([
       { id: 'foremast', position: [0, 2.22, 19.1], height: 8, baseDiameter: 0.6 },
       { id: 'aft-mast', position: [0, 2.22, -4.8], height: 7.2, baseDiameter: 0.6 },
-    ]);
-    expect(SHIP_LAYOUT.details
-      .filter(({ kind }) => kind === 'vent' || kind === 'toolbox')
-      .map(({ id, position, rotationY }) => ({ id, position, rotationY }))).toEqual([
-      { id: 'vent-1', position: [-4.6, 2.22, 4.7], rotationY: 0 },
-      { id: 'vent-2', position: [4.6, 2.22, 4.7], rotationY: 0 },
-      { id: 'vent-3', position: [-4.6, 2.22, -7.4], rotationY: 0 },
-      { id: 'vent-4', position: [4.6, 2.22, -7.4], rotationY: 0 },
-      { id: 'toolbox-1', position: [-4.75, 2.22, 3.6], rotationY: Math.PI / 2 },
-      { id: 'toolbox-2', position: [4.75, 2.22, 3.6], rotationY: Math.PI / 2 },
-      { id: 'toolbox-3', position: [4.75, 2.22, -6.2], rotationY: Math.PI / 2 },
     ]);
   });
 
@@ -197,40 +191,40 @@ describe('scavenging ship layout', () => {
     const missingVisualFootprint = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => {
-        if (detail.id !== 'vent-1') return detail;
+        if (detail.id !== 'ropeCoil-1') return detail;
         const { visualSize: _visualSize, ...withoutVisualSize } = detail;
         return withoutVisualSize;
       }),
     } as unknown as typeof SHIP_LAYOUT;
     expect(() => validateShipLayout(missingVisualFootprint))
-      .toThrow(/vent-1.*visual footprint/i);
+      .toThrow(/ropeCoil-1.*visual footprint/i);
 
     const invalidVisualFootprint = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'vent-1'
-        ? { ...detail, visualSize: [0, 0.58] as const }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
+        ? { ...detail, visualSize: [0, 1.32] as const }
         : detail),
     };
     expect(() => validateShipLayout(invalidVisualFootprint))
-      .toThrow(/vent-1.*visual footprint/i);
+      .toThrow(/ropeCoil-1.*visual footprint/i);
 
     const crateOverlap = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'vent-1'
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
         ? { ...detail, position: [-3.6, 2.22, 3.8] as const }
         : detail),
     };
     expect(() => validateShipLayout(crateOverlap))
-      .toThrow(/vent-1.*cargo-crate-forward-port/i);
+      .toThrow(/ropeCoil-1.*cargo-crate-forward-port/i);
 
     const accessOverlap = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'toolbox-1'
-        ? { ...detail, position: [-3.6, 2.22, 2.65] as const, rotationY: 0 }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'lifeRing-1'
+        ? { ...detail, position: [-3.6, 2.22, 2.65] as const }
         : detail),
     };
     expect(() => validateShipLayout(accessOverlap))
-      .toThrow(/toolbox-1.*cargo-crate-forward-port:top-access-0/i);
+      .toThrow(/lifeRing-1.*cargo-crate-forward-port:top-access-0/i);
   });
 
   it('authors the exact perimeter placement and surface catalog', () => {
