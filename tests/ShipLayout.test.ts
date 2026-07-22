@@ -50,28 +50,70 @@ describe('scavenging ship layout', () => {
     expect(SHIP_LAYOUT.evacuationRect).toEqual({
       minX: 6.75, maxX: 7.45, minZ: -0.35, maxZ: 0.35,
     });
-    expect(SHIP_LAYOUT.details).toHaveLength(48);
+    expect(SHIP_LAYOUT.details).toHaveLength(12);
     expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
-      barrel: 6, ropeCoil: 4, bollard: 8, cleat: 8, lamp: 6, vent: 4,
-      lifeRing: 4, coveredHatch: 1, spareTimber: 2, toolbox: 3, foldedCanvas: 2,
+      barrel: 6,
+      ropeCoil: 4,
+      spareTimber: 2,
     });
+    expect([...new Set(SHIP_LAYOUT.details.map(({ kind }) => kind))].sort()).toEqual([
+      'barrel', 'ropeCoil', 'spareTimber',
+    ]);
     expect(SHIP_LAYOUT.rigging.masts.map(({ id, position, height, baseDiameter }) => ({
       id, position, height, baseDiameter,
     }))).toEqual([
       { id: 'foremast', position: [0, 2.22, 19.1], height: 8, baseDiameter: 0.6 },
       { id: 'aft-mast', position: [0, 2.22, -4.8], height: 7.2, baseDiameter: 0.6 },
     ]);
-    expect(SHIP_LAYOUT.details
-      .filter(({ kind }) => kind === 'vent' || kind === 'toolbox')
-      .map(({ id, position, rotationY }) => ({ id, position, rotationY }))).toEqual([
-      { id: 'vent-1', position: [-4.6, 2.22, 4.7], rotationY: 0 },
-      { id: 'vent-2', position: [4.6, 2.22, 4.7], rotationY: 0 },
-      { id: 'vent-3', position: [-4.6, 2.22, -7.4], rotationY: 0 },
-      { id: 'vent-4', position: [4.6, 2.22, -7.4], rotationY: 0 },
-      { id: 'toolbox-1', position: [-4.75, 2.22, 3.6], rotationY: Math.PI / 2 },
-      { id: 'toolbox-2', position: [4.75, 2.22, 3.6], rotationY: Math.PI / 2 },
-      { id: 'toolbox-3', position: [4.75, 2.22, -6.2], rotationY: Math.PI / 2 },
+  });
+
+  it('locks every retained deck detail to its current authored transform', () => {
+    expect(SHIP_LAYOUT.details.map(({ id, kind, position, rotationY, scale }) => ({
+      id, kind, position, rotationY, scale,
+    }))).toEqual([
+      { id: 'barrel-1', kind: 'barrel', position: [-6, 2.22, 18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-2', kind: 'barrel', position: [6, 2.22, 18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-3', kind: 'barrel', position: [-6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-4', kind: 'barrel', position: [6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-5', kind: 'barrel', position: [-1.8, 2.22, 4.4], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-6', kind: 'barrel', position: [1.9, 2.22, -7.3], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-1', kind: 'ropeCoil', position: [-6.85, 2.22, 13], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-2', kind: 'ropeCoil', position: [6.85, 2.22, 10.1], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-3', kind: 'ropeCoil', position: [-6.85, 2.22, -9], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-4', kind: 'ropeCoil', position: [6.85, 2.22, -12.9], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-1', kind: 'spareTimber', position: [2.8, 2.22, 12.8], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-2', kind: 'spareTimber', position: [-2.8, 2.22, -13.9], rotationY: 0, scale: [1, 1, 1] },
     ]);
+  });
+
+  it('locks every retained deck detail to its approved position', () => {
+    expect(SHIP_LAYOUT.details.map(({ id, position }) => ({ id, position }))).toEqual([
+      { id: 'barrel-1', position: [-6, 2.22, 18.2] },
+      { id: 'barrel-2', position: [6, 2.22, 18.2] },
+      { id: 'barrel-3', position: [-6, 2.22, -18.2] },
+      { id: 'barrel-4', position: [6, 2.22, -18.2] },
+      { id: 'barrel-5', position: [-1.8, 2.22, 4.4] },
+      { id: 'barrel-6', position: [1.9, 2.22, -7.3] },
+      { id: 'ropeCoil-1', position: [-6.85, 2.22, 13] },
+      { id: 'ropeCoil-2', position: [6.85, 2.22, 10.1] },
+      { id: 'ropeCoil-3', position: [-6.85, 2.22, -9] },
+      { id: 'ropeCoil-4', position: [6.85, 2.22, -12.9] },
+      { id: 'spareTimber-1', position: [2.8, 2.22, 12.8] },
+      { id: 'spareTimber-2', position: [-2.8, 2.22, -13.9] },
+    ]);
+  });
+
+  it('assigns deck detail colliders only to barrels and spare timber', () => {
+    expect(Object.fromEntries([
+      'barrel', 'ropeCoil', 'spareTimber',
+    ].map((kind) => [
+      kind,
+      SHIP_LAYOUT.details.filter((detail) => detail.kind === kind && detail.colliderSize).length,
+    ]))).toEqual({
+      barrel: 6,
+      ropeCoil: 0,
+      spareTimber: 2,
+    });
   });
 
   it('limits every furnished zone to its exact role-specific perimeter fixtures', () => {
@@ -197,40 +239,52 @@ describe('scavenging ship layout', () => {
     const missingVisualFootprint = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => {
-        if (detail.id !== 'vent-1') return detail;
+        if (detail.id !== 'ropeCoil-1') return detail;
         const { visualSize: _visualSize, ...withoutVisualSize } = detail;
         return withoutVisualSize;
       }),
     } as unknown as typeof SHIP_LAYOUT;
     expect(() => validateShipLayout(missingVisualFootprint))
-      .toThrow(/vent-1.*visual footprint/i);
+      .toThrow(/ropeCoil-1.*visual footprint/i);
 
     const invalidVisualFootprint = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'vent-1'
-        ? { ...detail, visualSize: [0, 0.58] as const }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
+        ? { ...detail, visualSize: [0, 1.32] as const }
         : detail),
     };
     expect(() => validateShipLayout(invalidVisualFootprint))
-      .toThrow(/vent-1.*visual footprint/i);
+      .toThrow(/ropeCoil-1.*visual footprint/i);
 
     const crateOverlap = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'vent-1'
-        ? { ...detail, position: [-3.6, 2.22, 3.8] as const }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
+        ? { ...detail, position: [-4.1, 2.22, 3.8] as const }
         : detail),
     };
     expect(() => validateShipLayout(crateOverlap))
-      .toThrow(/vent-1.*cargo-crate-forward-port/i);
+      .toThrow(/ropeCoil-1.*cargo-crate-forward-port/i);
 
     const accessOverlap = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'toolbox-1'
-        ? { ...detail, position: [-3.6, 2.22, 2.65] as const, rotationY: 0 }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
+        ? { ...detail, position: [-3.6, 2.22, -5.1] as const }
         : detail),
     };
     expect(() => validateShipLayout(accessOverlap))
-      .toThrow(/toolbox-1.*cargo-crate-forward-port:top-access-0/i);
+      .toThrow(/ropeCoil-1.*cargo-crate-aft-port:top-access-1/i);
+  });
+
+  it('rejects visual footprints spaced less than one metre apart', () => {
+    const crowdedDetails = {
+      ...SHIP_LAYOUT,
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-2'
+        ? { ...detail, position: [-6.85, 2.22, 11] as const }
+        : detail),
+    };
+
+    expect(() => validateShipLayout(crowdedDetails))
+      .toThrow(/ropeCoil-1.*ropeCoil-2.*1 metre/i);
   });
 
   it('authors the exact perimeter placement and surface catalog', () => {
