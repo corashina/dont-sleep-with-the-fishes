@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Mesh, TorusGeometry } from 'three';
+import { Box3, BufferGeometry, CylinderGeometry, Mesh, TorusGeometry } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import {
@@ -14,7 +14,7 @@ describe('ship deck details', () => {
     const build = createShipDeckDetails(materials, SHIP_LAYOUT.details);
 
     expect(build.root.name).toBe('ship-deck-details');
-    expect(build.root.children).toHaveLength(48);
+    expect(build.root.children).toHaveLength(16);
     expect(Object.fromEntries(Object.keys(SHIP_DECK_DETAIL_COUNTS).map((kind) => [
       kind,
       build.root.children.filter((child) => child.userData.detailKind === kind).length,
@@ -31,6 +31,7 @@ describe('ship deck details', () => {
     expect(build.colliders).toHaveLength(
       SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize !== undefined).length,
     );
+    expect(build.colliders).toHaveLength(8);
 
     build.disposeGeometry();
     materials.dispose();
@@ -48,16 +49,17 @@ describe('ship deck details', () => {
     expect(mesh('barrel-band-lower').material).toBe(materials.darkMetal);
     expect(mesh('rope-coil').geometry).toBeInstanceOf(TorusGeometry);
     expect(mesh('rope-coil').material).toBe(materials.rope);
-    expect(detail('cleat-1').children).toHaveLength(3);
-    expect(mesh('cleat-centre').geometry).toBeInstanceOf(BoxGeometry);
-    expect(mesh('lamp-lens').material).toBe(materials.emergency);
     expect(mesh('life-ring').material).toBe(materials.emergency);
-    expect(mesh('covered-hatch').material).toBe(materials.paintedSteel);
-    expect(detail('coveredHatch-1').children).toHaveLength(5);
     expect(detail('spareTimber-1').children).toHaveLength(3);
-    expect(detail('foldedCanvas-1').children).toHaveLength(3);
     expect(mesh('spare-timber-1').material).toBe(materials.crewFloor);
-    expect(mesh('toolbox-body').material).toBe(materials.paintedSteel);
+    expect(build.root.getObjectByName('toolbox-body')).toBeUndefined();
+    expect(build.root.getObjectByName('bollard-post')).toBeUndefined();
+    expect(build.root.getObjectByName('cleat-centre')).toBeUndefined();
+    expect(build.root.getObjectByName('lamp-lens')).toBeUndefined();
+    expect(build.root.getObjectByName('vent-body')).toBeUndefined();
+    expect(build.root.getObjectByName('covered-hatch')).toBeUndefined();
+    expect(build.root.getObjectByName('folded-canvas-1')).toBeUndefined();
+    expect(build.colliders).toHaveLength(8);
 
     const barrelBodies = build.root.children
       .filter(({ userData }) => userData.detailKind === 'barrel')
