@@ -476,6 +476,7 @@ export class BoatWorld {
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
+  private fishingCastOriginY = 0;
   private fishingWaveHeight = 0;
   private currentTime = 0;
   private weather: WeatherId = 'calm';
@@ -761,6 +762,8 @@ export class BoatWorld {
   playFishingCast(point: FishingCastPoint): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.setFishingCastPoint(point);
+    this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
+    this.fishingCastOriginY = this.fishingLineOriginWorld.y;
     this.fishingPhase = 'casting';
     return this.startFishingAnimation(
       'cast',
@@ -1206,14 +1209,20 @@ export class BoatWorld {
       weatherAmplitudeScale(this.weather),
     );
     this.fishingWaveHeight = this.fishingWaveSample.height;
-    if (this.fishingPhase !== 'casting') {
+    if (this.fishingPhase === 'casting') {
+      this.fishing.splash.position.set(
+        this.fishingCastPosition.x,
+        this.fishingWaveHeight,
+        this.fishingCastPosition.z,
+      );
+    } else {
       this.fishing.bobber.position.set(
         this.fishingCastPosition.x,
         this.fishingWaveHeight,
         this.fishingCastPosition.z,
       );
+      this.fishing.splash.position.copy(this.fishing.bobber.position);
     }
-    this.fishing.splash.position.copy(this.fishing.bobber.position);
     this.fishing.bubbles.position.copy(this.fishing.bobber.position);
     this.fishing.ripples.position.copy(this.fishing.bobber.position);
     if (this.fishingPhase !== 'reeling') {
@@ -1263,10 +1272,11 @@ export class BoatWorld {
         + (this.fishingCastPosition.x - this.fishingLineOriginWorld.x) * progress;
       this.fishingLineEndWorld.z = this.fishingLineOriginWorld.z
         + (this.fishingCastPosition.z - this.fishingLineOriginWorld.z) * progress;
-      this.fishingLineEndWorld.y = this.fishingWaveHeight + 0.075
+      this.fishingLineEndWorld.y = this.fishingCastOriginY
+        + (this.fishingWaveHeight + 0.075 - this.fishingCastOriginY) * progress
         + Math.sin(Math.PI * progress) * (this.reducedMotion.matches ? 0.08 : 1.35);
       this.fishing.bobber.position.copy(this.fishingLineEndWorld);
-    } else if (animation?.kind === 'reel' && this.activeFishingCatch) {
+    } else if (this.fishingPhase === 'reeling' && this.activeFishingCatch) {
       this.fishingLineEndWorld.copy(this.fishing.catchDisplay.position);
     }
 

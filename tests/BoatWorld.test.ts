@@ -1170,9 +1170,10 @@ describe('BoatWorld helpers', () => {
     const ripples = world.scene.getObjectByName('fishing-ripples')!;
     const poolSizes = [bubbles.children.length, ripples.children.length];
     const baseRodRotation = pivot.rotation.x;
+    const point = world.centeredFishingCast();
     let finished = false;
 
-    const cast = world.playFishingCast(world.centeredFishingCast())
+    const cast = world.playFishingCast(point)
       .then(() => { finished = true; });
     expect(finished).toBe(false);
     expect(line.visible).toBe(true);
@@ -1187,6 +1188,16 @@ describe('BoatWorld helpers', () => {
     expect(splash.visible).toBe(false);
     world.update(0.74, 0.34);
     expect(splash.visible).toBe(true);
+    const landingWaveHeight = sampleWaveField(
+      DEFAULT_WAVES,
+      0.74,
+      point.x,
+      point.z,
+      0.78,
+    ).height;
+    expect(splash.position.x).toBeCloseTo(point.x, 8);
+    expect(splash.position.y).toBeCloseTo(landingWaveHeight, 8);
+    expect(splash.position.z).toBeCloseTo(point.z, 8);
     world.update(0.8, 0.06);
     const landingPosition = bobber.position.clone();
     await cast;
@@ -1194,6 +1205,40 @@ describe('BoatWorld helpers', () => {
     expect(midpoint.y).toBeGreaterThan(landingPosition.y);
     expect(splash.visible).toBe(false);
     expect([bubbles.children.length, ripples.children.length]).toEqual(poolSizes);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('starts the cast endpoint at the rod tip and interpolates toward the shared wave', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const point = world.centeredFishingCast();
+    const lineOrigin = world.scene.getObjectByName('fishing-line-origin')!;
+    const line = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry>;
+    const bobber = world.scene.getObjectByName('fishing-bobber')!;
+    const castOriginY = lineOrigin.getWorldPosition(new Vector3()).y;
+    const cast = world.playFishingCast(point);
+
+    world.update(0.000001, 0.000001);
+    expect(bobber.position.y).toBeCloseTo(castOriginY, 4);
+    expect((line.geometry.getAttribute('position') as BufferAttribute).getY(4))
+      .toBeCloseTo(castOriginY, 4);
+
+    world.update(0.08, 0.079999);
+    const progress = 0.1 ** 2 * (3 - 2 * 0.1);
+    const waveHeight = sampleWaveField(DEFAULT_WAVES, 0.08, point.x, point.z, 0.78).height;
+    const expectedY = castOriginY
+      + (waveHeight + 0.075 - castOriginY) * progress
+      + Math.sin(Math.PI * progress) * 1.35;
+    expect(bobber.position.y).toBeCloseTo(expectedY, 8);
+
+    world.update(0.801, 0.721);
+    await cast;
     world.dispose();
     propModels.dispose();
   });
@@ -1252,6 +1297,7 @@ describe('BoatWorld helpers', () => {
 
     world.showFishingBite(point);
     const catchDisplay = world.scene.getObjectByName('fishing-catch-display')!;
+    const fishingLine = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry>;
     const castPosition = catchDisplay.position.clone();
     const lineOrigin = world.scene.getObjectByName('fishing-line-origin')!;
     const lineOriginWorld = lineOrigin.getWorldPosition(new Vector3());
@@ -1267,6 +1313,14 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('fishing-bobber')?.visible).toBe(true);
     expect(world.scene.getObjectByName('fishing-catch-display')?.visible).toBe(true);
     expect(catchDisplay.position.z).not.toBe(castPosition.z);
+    const completedLinePositions = fishingLine.geometry.getAttribute('position') as BufferAttribute;
+    expect(completedLinePositions.getX(4)).toBeCloseTo(catchDisplay.position.x, 6);
+    expect(completedLinePositions.getY(4)).toBeCloseTo(catchDisplay.position.y, 6);
+    expect(completedLinePositions.getZ(4)).toBeCloseTo(catchDisplay.position.z, 6);
+    world.update(2.1, 0.1);
+    expect(completedLinePositions.getX(4)).toBeCloseTo(catchDisplay.position.x, 6);
+    expect(completedLinePositions.getY(4)).toBeCloseTo(catchDisplay.position.y, 6);
+    expect(completedLinePositions.getZ(4)).toBeCloseTo(catchDisplay.position.z, 6);
     expect(world.scene.getObjectByName('fishing-bubbles')?.visible).toBe(false);
     expect(world.scene.getObjectByName('fishing-ripples')?.visible).toBe(false);
     expect(camera.position.toArray()).toEqual(bowPosition.toArray());
