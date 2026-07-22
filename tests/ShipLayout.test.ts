@@ -68,6 +68,43 @@ describe('scavenging ship layout', () => {
     ]);
   });
 
+  it('locks every retained deck detail to its current authored transform', () => {
+    expect(SHIP_LAYOUT.details.map(({ id, kind, position, rotationY, scale }) => ({
+      id, kind, position, rotationY, scale,
+    }))).toEqual([
+      { id: 'barrel-1', kind: 'barrel', position: [-6, 2.22, 18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-2', kind: 'barrel', position: [6, 2.22, 18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-3', kind: 'barrel', position: [-6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-4', kind: 'barrel', position: [6, 2.22, -18.2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-5', kind: 'barrel', position: [-3.8, 2.22, -2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'barrel-6', kind: 'barrel', position: [3.8, 2.22, -2], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-1', kind: 'ropeCoil', position: [-6.2, 2.22, 19], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-2', kind: 'ropeCoil', position: [6.2, 2.22, 19], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-3', kind: 'ropeCoil', position: [-6.2, 2.22, -19], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'ropeCoil-4', kind: 'ropeCoil', position: [6.2, 2.22, -19], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-1', kind: 'lifeRing', position: [-6.5, 2.22, 10], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-2', kind: 'lifeRing', position: [6.5, 2.22, 10], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-3', kind: 'lifeRing', position: [-6.5, 2.22, -12], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'lifeRing-4', kind: 'lifeRing', position: [6.5, 2.22, -12], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-1', kind: 'spareTimber', position: [-3.8, 2.22, -4.5], rotationY: 0, scale: [1, 1, 1] },
+      { id: 'spareTimber-2', kind: 'spareTimber', position: [3.8, 2.22, -4.5], rotationY: 0, scale: [1, 1, 1] },
+    ]);
+  });
+
+  it('assigns deck detail colliders only to barrels and spare timber', () => {
+    expect(Object.fromEntries([
+      'barrel', 'ropeCoil', 'lifeRing', 'spareTimber',
+    ].map((kind) => [
+      kind,
+      SHIP_LAYOUT.details.filter((detail) => detail.kind === kind && detail.colliderSize).length,
+    ]))).toEqual({
+      barrel: 6,
+      ropeCoil: 0,
+      lifeRing: 0,
+      spareTimber: 2,
+    });
+  });
+
   it('limits every furnished zone to its exact role-specific perimeter fixtures', () => {
     const counts = Object.fromEntries(SHIP_LAYOUT.zones.map(({ id }) => [
       id,
