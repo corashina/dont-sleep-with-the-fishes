@@ -940,11 +940,12 @@ describe('SurvivalUI', () => {
     const reel = vi.fn(() => true);
     ui.onFishingReel = reel;
     const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+    const target = { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true };
 
     ui.setFishingState({
       mode: 'bite',
       message: 'BITE - REEL NOW',
-      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+      biteTarget: target,
     });
     expect(document.activeElement).toBe(bite);
     expect(bite.getAttribute('aria-label')).toBe('BITE - REEL NOW');
@@ -953,11 +954,8 @@ describe('SurvivalUI', () => {
     expect(bite.style.width).toBe('60px');
     expect(bite.style.height).toBe('44px');
 
-    ui.setFishingState({
-      mode: 'bite',
-      message: 'BITE - REEL NOW',
-      biteTarget: { x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true },
-    });
+    Object.assign(target, { x: 220, y: 130, width: 72, height: 48, depth: 2 });
+    ui.updateFishingBiteTarget(target);
     expect(bite.style.transform).toBe('translate(220px, 130px)');
     expect(mainStyles).not.toMatch(/@keyframes fishing-bite-pulse\s*\{[^}]*transform/s);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
@@ -1013,10 +1011,8 @@ describe('SurvivalUI', () => {
       biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
     });
     await Promise.resolve();
-    ui.setFishingState({
-      mode: 'bite',
-      message: 'BITE - REEL NOW',
-      biteTarget: { x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true },
+    ui.updateFishingBiteTarget({
+      x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true,
     });
     await Promise.resolve();
 

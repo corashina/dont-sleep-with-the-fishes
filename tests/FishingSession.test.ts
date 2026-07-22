@@ -19,7 +19,7 @@ function castToWaiting(session: FishingSession): void {
 
 describe('FishingSession', () => {
   it('consumes bite delay then hidden catch during construction', () => {
-    const source = sequenceRandom([0.25, 0]);
+    const source = sequenceRandom([0.25, 0.999999]);
     const draws: number[] = [];
     const random: RandomSource = { next: () => {
       const value = source.next();
@@ -29,8 +29,14 @@ describe('FishingSession', () => {
 
     const session = new FishingSession({ id: 'attempt-1', day: 1, capturedBait: false, random });
 
-    expect(draws).toEqual([0.25, 0]);
+    expect(draws).toEqual([0.25, 0.999999]);
     expect(session.snapshot()).toMatchObject({ biteDelaySeconds: 4, result: null });
+    castToWaiting(session);
+    session.advance(4);
+    expect(session.reel()).toMatchObject({
+      accepted: true,
+      result: { kind: 'catch', catch: { id: 'plasticBottle' } },
+    });
   });
 
   it('derives bite delays from the full documented range', () => {
@@ -137,13 +143,33 @@ describe('FishingSession', () => {
   it('does not progress while a caller omits advance during a pause', () => {
     const session = createSession([0, 0]);
     castToWaiting(session);
+    session.advance(3.25);
     const beforePause = session.snapshot();
     const afterPause = session.snapshot();
+    expect(beforePause.biteSeconds).toBeGreaterThan(0);
     expect(afterPause).toMatchObject({
-      state: 'waiting',
+      state: 'bite',
       waitingSeconds: beforePause.waitingSeconds,
       biteSeconds: beforePause.biteSeconds,
     });
+  });
+
+  it('reuses a frozen live view for allocation-free state reads', () => {
+    const session = createSession();
+    const view = session.view();
+
+    expect(Object.isFrozen(view)).toBe(true);
+    expect(session.view()).toBe(view);
+    expect(view).toMatchObject({ state: 'aiming', castPoint: null, result: null });
+
+    session.cast({ x: 4, z: -2 });
+
+    expect(session.view()).toBe(view);
+    expect(view).toMatchObject({ state: 'casting', castPoint: { x: 4, z: -2 } });
+    expect(Object.isFrozen(view.castPoint)).toBe(true);
+    expect(() => {
+      (view as { state: string }).state = 'missed';
+    }).toThrow(TypeError);
   });
 
   it('returns frozen snapshots without exposing its internal cast point', () => {

@@ -397,7 +397,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('builds twenty-two model instances including a distinct scuba set', () => {
+  it('builds twenty-one model instances including a distinct scuba set', () => {
     const propModels = createTestPropModels();
     const world = createTestWorld(
       new Scene(),
