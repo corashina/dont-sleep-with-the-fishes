@@ -83,7 +83,7 @@ Day and night events present a danger label, narrative prompt, and the recovered
 
 End Day fades the survivor to sleep. Most nights open an event decision; some nights pass quietly. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
-Each journal page retells that day's daytime and nighttime events as a short first-person entry. The entry mentions supplies only when they were attempted during an event.
+Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 

@@ -528,6 +528,14 @@ export class SurvivalPhase implements GamePhase {
       return false;
     }
     this.renderSnapshot(false, false);
+    this.fishingPresentation = 'result';
+    this.ui.setFishingState?.({
+      mode: 'result',
+      message: result.kind === 'catch'
+        ? `CAUGHT ${result.catch.label.toLocaleUpperCase('en-US')}`
+        : 'IT GOT AWAY',
+      biteTarget: null,
+    });
     void this.presentFishingResult(attempt, result, generation);
     return true;
   }
@@ -544,14 +552,6 @@ export class SurvivalPhase implements GamePhase {
     }
     if (!this.isCurrentFishing(attempt, generation)) return;
 
-    this.fishingPresentation = 'result';
-    this.ui.setFishingState?.({
-      mode: 'result',
-      message: result.kind === 'catch'
-        ? `CAUGHT ${result.catch.label.toLocaleUpperCase('en-US')}`
-        : 'IT GOT AWAY',
-      biteTarget: null,
-    });
     this.fishingPresentation = 'returning';
     if (!await this.transitionFishingView('exit', generation)) return;
     if (!this.isCurrentFishing(attempt, generation)) return;
