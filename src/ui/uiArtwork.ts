@@ -35,7 +35,6 @@ const ITEM_ARTWORK: Readonly<Record<ItemId, string>> = {
   swimRing: '<circle class="item-artwork__primary" cx="40" cy="36" r="29"/><circle class="item-artwork__cutout" cx="40" cy="36" r="14"/><path class="item-artwork__secondary" d="m18 15 11 12-8 10L9 26zm44 0L51 27l8 10 12-11zM18 57l11-12-8-10L9 46zm44 0L51 45l8-10 12 11z"/>',
   harpoonGun: '<g transform="rotate(-11 40 36)"><path class="item-artwork__secondary" d="M9 25h50v13H9z"/><path class="item-artwork__primary" d="M27 36h18l-4 23H26z"/><path class="item-artwork__light" d="M7 20h55v6H7z"/><path class="item-artwork__ink" d="m62 17 12 6-12 6z"/></g>',
   energyBar: '<path class="item-artwork__primary" d="m12 22 7-8h42l7 8v30l-7 8H19l-7-8z"/><path class="item-artwork__secondary" d="M19 14h8v46h-8zm34 0h8v46h-8z"/><path class="item-artwork__light" d="M29 28h22v18H29z"/><path class="item-artwork__ink" d="m38 29-7 11h8l-2 9 12-15h-8l3-5z"/>',
-  fishingRod: '<path class="item-artwork__primary item-artwork__stroke" d="M16 61 62 10"/><path class="item-artwork__secondary item-artwork__stroke" d="m20 56-7 8"/><circle class="item-artwork__secondary" cx="31" cy="47" r="9"/><circle class="item-artwork__cutout" cx="31" cy="47" r="4"/><path class="item-artwork__light item-artwork__stroke-thin" d="M61 11c8 10 7 23-2 31"/>',
 };
 
 const CSS_IDENTIFIER = /^-?[_a-zA-Z][_a-zA-Z0-9-]*$/;

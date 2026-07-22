@@ -23,6 +23,11 @@ import {
   ITEM_MODEL_MAX_TOTAL_TRIANGLES,
   ITEM_MODEL_SPECS,
 } from '../src/world/itemModelManifest';
+import {
+  LIFEBOAT_EQUIPMENT_IDS,
+  LIFEBOAT_EQUIPMENT_MODEL_SPECS,
+  type LifeboatEquipmentId,
+} from '../src/world/lifeboatEquipmentManifest';
 
 interface Deferred<T> {
   readonly promise: Promise<T>;
@@ -61,6 +66,12 @@ function templates(factory: (id: ItemId, index: number) => Group = () => modelRo
   return new Map(ITEM_IDS.map((id, index) => [id, factory(id, index)]));
 }
 
+function equipmentTemplates(
+  factory: (id: LifeboatEquipmentId) => Group = () => modelRoot(),
+): Map<LifeboatEquipmentId, Group> {
+  return new Map(LIFEBOAT_EQUIPMENT_IDS.map((id) => [id, factory(id)]));
+}
+
 function instance(type: ItemId, suffix = 1): ItemInstance {
   return { instanceId: `${type}-${suffix}`, type };
 }
@@ -76,7 +87,7 @@ function firstMesh(root: Group): Mesh<BufferGeometry, Material | Material[]> {
 
 function replaceLedgerRow(
   ledger: string,
-  id: ItemId,
+  id: string,
   replace: (row: string) => string,
 ): string {
   return ledger.split(/\r?\n/).map((row) => (
@@ -86,8 +97,8 @@ function replaceLedgerRow(
 
 function swapLedgerRowValues(
   ledger: string,
-  firstId: ItemId,
-  secondId: ItemId,
+  firstId: string,
+  secondId: string,
   firstValues: readonly string[],
   secondValues: readonly string[],
 ): string {
@@ -235,8 +246,14 @@ describe('PropModelLibrary preload', () => {
     const loading = PropModelLibrary.load(loader);
     void loading.catch(() => undefined);
 
-    expect([...requests.keys()]).toEqual(ITEM_IDS.map((id) => ITEM_MODEL_SPECS[id].url));
+    expect([...requests.keys()]).toEqual([
+      ...ITEM_IDS.map((id) => ITEM_MODEL_SPECS[id].url),
+      ...LIFEBOAT_EQUIPMENT_IDS.map((id) => LIFEBOAT_EQUIPMENT_MODEL_SPECS[id].url),
+    ]);
     for (const id of ITEM_IDS) requests.get(ITEM_MODEL_SPECS[id].url)?.resolve(modelRoot());
+    for (const id of LIFEBOAT_EQUIPMENT_IDS) {
+      requests.get(LIFEBOAT_EQUIPMENT_MODEL_SPECS[id].url)?.resolve(modelRoot());
+    }
     const library = await loading;
     library.dispose();
   });
@@ -286,6 +303,17 @@ describe('PropModelLibrary preload', () => {
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       materials.forEach((material) => material.dispose());
     }
+
+    const equipment = library.createEquipment('fishingRod');
+    const equipmentSize = new Box3().setFromObject(equipment).getSize(new Vector3());
+    expect(Math.max(...equipmentSize.toArray())).toBeCloseTo(
+      LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.targetLongestDimension,
+    );
+    const equipmentMesh = firstMesh(equipment);
+    equipmentMesh.geometry.dispose();
+    const equipmentMaterials = Array.isArray(equipmentMesh.material)
+      ? equipmentMesh.material : [equipmentMesh.material];
+    equipmentMaterials.forEach((material) => material.dispose());
 
     library.dispose();
   });
@@ -352,11 +380,15 @@ describe('PropModelLibrary preload', () => {
     const triangleCounts = ITEM_IDS.map((_id, index) => index < 13 ? 3_000 : 1);
     const roots = templates((_id, index) => modelRoot(triangleCounts[index]!));
     const geometryDisposes = [...roots.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    const equipmentRoot = modelRoot(1);
+    geometryDisposes.push(vi.spyOn(firstMesh(equipmentRoot).geometry, 'dispose'));
     expect(Math.max(...triangleCounts)).toBe(3_000);
     expect(triangleCounts.reduce((sum, count) => sum + count, 0))
       .toBeLessThanOrEqual(ITEM_MODEL_MAX_TOTAL_TRIANGLES);
     const loader: ItemModelLoader = {
-      load: async (url) => roots.get(ITEM_IDS.find((id) => ITEM_MODEL_SPECS[id].url === url)!)!,
+      load: async (url) => url === LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.url
+        ? equipmentRoot
+        : roots.get(ITEM_IDS.find((id) => ITEM_MODEL_SPECS[id].url === url)!)!,
     };
 
     const library = await PropModelLibrary.load(loader);
@@ -366,11 +398,14 @@ describe('PropModelLibrary preload', () => {
 
   it('reports the first failing item in manifest order and disposes every fulfilled template', async () => {
     const roots = templates();
+    const equipmentRoot = modelRoot();
     const geometryDisposes = [...roots.entries()]
       .filter(([id]) => id !== 'ductTape' && id !== 'bucket')
       .map(([, root]) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    geometryDisposes.push(vi.spyOn(firstMesh(equipmentRoot).geometry, 'dispose'));
     const loader: ItemModelLoader = {
       load: async (url) => {
+        if (url === LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.url) return equipmentRoot;
         const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
         if (id === 'ductTape' || id === 'bucket') throw new Error(`failed ${id}`);
         return roots.get(id)!;
@@ -383,15 +418,17 @@ describe('PropModelLibrary preload', () => {
 
   it('continues failed-load rollback without masking the primary item error', async () => {
     const roots = templates();
+    const equipmentRoot = modelRoot();
     const loadFailure = new Error('duct tape download failed');
     const cleanupFailure = new Error('flare cleanup failed');
     const firstGeometryDispose = vi.spyOn(firstMesh(roots.get('flareGun')!).geometry, 'dispose')
       .mockImplementation(() => {
         throw cleanupFailure;
       });
-    const laterGeometryDispose = vi.spyOn(firstMesh(roots.get('fishingRod')!).geometry, 'dispose');
+    const laterGeometryDispose = vi.spyOn(firstMesh(equipmentRoot).geometry, 'dispose');
     const loader: ItemModelLoader = {
       load: async (url) => {
+        if (url === LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.url) return equipmentRoot;
         const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)!;
         if (id === 'ductTape') throw loadFailure;
         return roots.get(id)!;
@@ -408,6 +445,22 @@ describe('PropModelLibrary preload', () => {
 });
 
 describe('PropModelLibrary instance ownership', () => {
+  it('creates fixed equipment independently from collectible item instances', () => {
+    const equipmentTemplates = new Map<LifeboatEquipmentId, Group>([
+      ['fishingRod', modelRoot()],
+    ]);
+    const library = PropModelLibrary.fromTemplatesForTest(templates(), equipmentTemplates);
+
+    const equipment = library.createEquipment('fishingRod');
+    const item = library.create(instance('bucket'));
+
+    expect(equipment.name).toBe('lifeboat-equipment:fishingRod');
+    expect(equipment.userData).toMatchObject({ equipmentId: 'fishingRod' });
+    expect(equipment).not.toBe(item);
+    expect(firstMesh(equipment).geometry).not.toBe(firstMesh(item).geometry);
+    library.dispose();
+  });
+
   it('creates independently owned roots, geometries, materials, and stable metadata', () => {
     const originals = templates((_id, index) => modelRoot(12, [
       new MeshStandardMaterial({ color: 0x112233 + index }),
@@ -450,12 +503,14 @@ describe('PropModelLibrary instance ownership', () => {
 
   it('disposes each owned template resource exactly once across repeated disposal', () => {
     const originals = templates();
-    const geometryDisposes = [...originals.values()].map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
-    const materialDisposes = [...originals.values()].map((root) => {
+    const equipmentOriginals = equipmentTemplates();
+    const allTemplates = [...originals.values(), ...equipmentOriginals.values()];
+    const geometryDisposes = allTemplates.map((root) => vi.spyOn(firstMesh(root).geometry, 'dispose'));
+    const materialDisposes = allTemplates.map((root) => {
       const material = firstMesh(root).material;
       return vi.spyOn(Array.isArray(material) ? material[0]! : material, 'dispose');
     });
-    const library = PropModelLibrary.fromTemplatesForTest(originals);
+    const library = PropModelLibrary.fromTemplatesForTest(originals, equipmentOriginals);
 
     library.dispose();
     library.dispose();

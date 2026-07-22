@@ -22,12 +22,49 @@ const event = (overrides: Partial<JournalEventRecord> = {}): JournalEventRecord 
 const entry = (overrides: Partial<JournalEntry> = {}): JournalEntry => ({
   day: 4,
   weather: 'overcast',
+  actions: [],
   daytime: null,
   nighttime: { kind: 'event', event: event() },
   ...overrides,
 });
 
 describe('formatJournalEntry', () => {
+  it('prepends named fishing results and bait use before a daytime event', () => {
+    const page = formatJournalEntry(entry({
+      actions: [
+        {
+          kind: 'fishing', attemptId: 'fishing-4-1', result: 'fish', catchId: 'cod',
+          catchLabel: 'Cod', food: 1, baitConsumed: true,
+        },
+        {
+          kind: 'fishing', attemptId: 'fishing-4-2', result: 'fish', catchId: 'swordfish',
+          catchLabel: 'Swordfish', food: 2, baitConsumed: false,
+        },
+        {
+          kind: 'fishing', attemptId: 'fishing-4-3', result: 'junk', catchId: 'seaweed',
+          catchLabel: 'Seaweed', food: 0, baitConsumed: false,
+        },
+        {
+          kind: 'fishing', attemptId: 'fishing-4-4', result: 'miss', catchId: null,
+          catchLabel: null, food: 0, baitConsumed: false,
+        },
+      ],
+      daytime: event({
+        phase: 'day',
+        eventId: 'day-sudden-squall',
+        title: 'Sudden Squall',
+      }),
+    }));
+
+    expect(page.daytime).toContain('I caught a cod and gained one food. I used one bait.');
+    expect(page.daytime).toContain('I caught a swordfish and gained two food.');
+    expect(page.daytime).toContain('I reeled in seaweed, but it was no use.');
+    expect(page.daytime).toContain('I went fishing, but it got away.');
+    expect(page.daytime).toContain('During the day, I encountered sudden squall.');
+    expect(page.daytime.indexOf('I caught a cod')).toBeLessThan(page.daytime.indexOf('During the day'));
+    expect((page.daytime.match(/bait/gi) ?? [])).toHaveLength(1);
+  });
+
   it('writes a quiet day and a suitable item attempt as story prose', () => {
     const page = formatJournalEntry(entry());
     expect(page).toEqual({

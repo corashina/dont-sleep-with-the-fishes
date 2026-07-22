@@ -8,6 +8,11 @@ import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import { BoatWorld } from './BoatWorld';
 import { survivalEventById } from './events';
+import type {
+  FishingCastPoint,
+  FishingSession,
+  FishingTerminalResult,
+} from './FishingSession';
 import { SurvivalSession } from './SurvivalSession';
 import type {
   ActionOutcome,
@@ -24,19 +29,34 @@ export interface SurvivalPhaseTestDependencies {
   ui: Partial<SurvivalUI>;
   onRestart?: () => void;
   sceneRenderer?: SceneRenderer;
+  reducedMotion?: boolean;
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+
+type FishingPresentationState =
+  | 'idle'
+  | 'entering'
+  | 'aiming'
+  | 'casting'
+  | 'waiting'
+  | 'bite'
+  | 'settling'
+  | 'result'
+  | 'returning';
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
 }
 
-function testContext(sceneRenderer: SceneRenderer = {
-  render: () => undefined,
-  resize: () => undefined,
-  dispose: () => undefined,
-}): PhaseContext {
+function testContext(
+  sceneRenderer: SceneRenderer = {
+    render: () => undefined,
+    resize: () => undefined,
+    dispose: () => undefined,
+  },
+  reducedMotion = false,
+): PhaseContext {
   const mount = {
     clientWidth: 1,
     clientHeight: 1,
@@ -47,7 +67,7 @@ function testContext(sceneRenderer: SceneRenderer = {
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
     sceneRenderer,
     camera: new PerspectiveCamera(),
-    reducedMotion: { matches: false } as MediaQueryList,
+    reducedMotion: { matches: reducedMotion } as MediaQueryList,
     propModels: {} as PropModelLibrary,
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
@@ -82,6 +102,11 @@ export class SurvivalPhase implements GamePhase {
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
+  private activeFishing: FishingSession | null = null;
+  private fishingPresentation: FishingPresentationState = 'idle';
+  private fishingSettlementInProgress = false;
+  private fishingDayEventPending = false;
+  private lifecycleGeneration = 0;
 
   constructor(
     context: PhaseContext,
@@ -135,7 +160,7 @@ export class SurvivalPhase implements GamePhase {
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
-      testContext(dependencies.sceneRenderer),
+      testContext(dependencies.sceneRenderer, dependencies.reducedMotion ?? false),
       [],
       0,
       0,
@@ -163,6 +188,7 @@ export class SurvivalPhase implements GamePhase {
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
+    if (this.started) this.advanceFishing(deltaSeconds);
     this.presentTerminalOnce(snapshot);
   }
 
@@ -173,6 +199,7 @@ export class SurvivalPhase implements GamePhase {
     this.context.camera.aspect = width / height;
     this.context.camera.updateProjectionMatrix();
     this.syncPresentation(this.session.snapshot());
+    this.syncFishingBiteTarget();
   }
 
   render(): void {
@@ -186,6 +213,10 @@ export class SurvivalPhase implements GamePhase {
 
   handleAction(action: DayActionId, option?: DayActionOption): void {
     if (!this.canAcceptCommand()) return;
+    if (action === 'fish') {
+      void this.beginFishing();
+      return;
+    }
     const selectedOption = action === 'repair' ? this.repairOption(this.session.snapshot()) : option;
     const outcome = this.session.perform?.(action, selectedOption);
     if (outcome === undefined) return;
@@ -234,12 +265,18 @@ export class SurvivalPhase implements GamePhase {
   requestRestart(): void {
     if (this.disposed || this.restartRequested) return;
     this.restartRequested = true;
+    this.lifecycleGeneration += 1;
     this.onRestart();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.lifecycleGeneration += 1;
+    this.activeFishing = null;
+    this.fishingPresentation = 'idle';
+    this.fishingSettlementInProgress = false;
+    this.fishingDayEventPending = false;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -272,11 +309,15 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onEndure = () => this.handleEndure();
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onAnchorHighlight = (anchorId) => {
-      if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
+      if (!this.disposed && (!this.busy || anchorId === null)) {
+        this.world.setHighlightedItem?.(anchorId);
+      }
     };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
+    this.ui.onFishingCast = (point) => this.handleFishingCast(point);
+    this.ui.onFishingReel = () => this.handleFishingReel();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -316,6 +357,260 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setBusy?.(busy);
   }
 
+  private async beginFishing(): Promise<void> {
+    const begun = this.session.beginFishing?.();
+    if (begun === undefined) return;
+    if (!begun.accepted) {
+      this.ui.showFeedback?.(begun.outcome);
+      return;
+    }
+
+    const generation = ++this.lifecycleGeneration;
+    const attempt = begun.attempt;
+    this.activeFishing = attempt;
+    this.fishingPresentation = 'entering';
+    this.fishingSettlementInProgress = false;
+    this.fishingDayEventPending = true;
+    this.setBusy(true);
+    this.renderSnapshot(false, false);
+    this.ui.setFishingState?.({
+      mode: 'waiting',
+      message: 'CLICK THE WATER TO CAST',
+      biteTarget: null,
+    });
+
+    if (!await this.transitionFishingView('enter', generation)) return;
+    if (!this.isCurrentFishing(attempt, generation)) return;
+    this.fishingPresentation = 'aiming';
+    this.ui.setFishingState?.({
+      mode: 'aiming',
+      message: 'CLICK THE WATER TO CAST',
+      biteTarget: null,
+    });
+  }
+
+  private handleFishingCast(
+    screenPoint: { readonly x: number; readonly y: number } | null,
+  ): boolean {
+    const attempt = this.activeFishing;
+    if (
+      attempt === null
+      || this.fishingPresentation !== 'aiming'
+      || this.paused
+      || this.documentIsHidden()
+      || !this.isContinuationActive(this.lifecycleGeneration)
+    ) return false;
+
+    const castPoint = screenPoint === null
+      ? this.world.centeredFishingCast?.() ?? null
+      : this.world.castFishingAtScreenPoint?.(
+        screenPoint.x,
+        screenPoint.y,
+        this.viewportWidth,
+        this.viewportHeight,
+      ) ?? null;
+    if (castPoint === null || !attempt.cast(castPoint).accepted) return false;
+
+    const storedPoint = attempt.snapshot().castPoint;
+    if (storedPoint === null) return false;
+    const generation = this.lifecycleGeneration;
+    this.fishingPresentation = 'casting';
+    void this.completeFishingCast(attempt, storedPoint, generation);
+    return true;
+  }
+
+  private async completeFishingCast(
+    attempt: FishingSession,
+    point: FishingCastPoint,
+    generation: number,
+  ): Promise<void> {
+    await (this.world.playFishingCast?.(point) ?? Promise.resolve());
+    if (!this.isCurrentFishing(attempt, generation)) return;
+    if (!attempt.completeCast().accepted) return;
+    const storedPoint = attempt.snapshot().castPoint;
+    if (storedPoint === null) return;
+    this.fishingPresentation = 'waiting';
+    this.world.showFishingWaiting?.(storedPoint);
+    this.ui.setFishingState?.({
+      mode: 'waiting',
+      message: 'WAIT FOR A BITE',
+      biteTarget: null,
+    });
+  }
+
+  private advanceFishing(deltaSeconds: number): void {
+    const attempt = this.activeFishing;
+    if (
+      attempt === null
+      || this.fishingSettlementInProgress
+      || (this.fishingPresentation !== 'waiting' && this.fishingPresentation !== 'bite')
+      || !Number.isFinite(deltaSeconds)
+      || deltaSeconds < 0
+    ) return;
+
+    const current = attempt.view();
+    const previousState = current.state;
+    attempt.advance(deltaSeconds);
+    if (current.castPoint === null) return;
+    if (current.state === 'bite') {
+      if (this.fishingPresentation !== 'bite') {
+        this.enterFishingBite(current.castPoint);
+        return;
+      }
+      this.syncFishingBiteTarget();
+      return;
+    }
+    if (current.state !== 'missed' || current.result === null) return;
+    if (previousState === 'waiting' && this.fishingPresentation !== 'bite') {
+      this.enterFishingBite(current.castPoint);
+    }
+    this.settleFishing(attempt, current.result, this.lifecycleGeneration);
+  }
+
+  private enterFishingBite(point: FishingCastPoint): void {
+    this.fishingPresentation = 'bite';
+    this.world.showFishingBite?.(point);
+    this.ui.setFishingState?.({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: this.world.projectFishingBite?.(
+        this.viewportWidth,
+        this.viewportHeight,
+      ) ?? null,
+    });
+  }
+
+  private syncFishingBiteTarget(): void {
+    if (this.activeFishing === null || this.fishingPresentation !== 'bite') return;
+    this.ui.updateFishingBiteTarget?.(this.world.projectFishingBite?.(
+      this.viewportWidth,
+      this.viewportHeight,
+    ) ?? null);
+  }
+
+  private handleFishingReel(): boolean {
+    const attempt = this.activeFishing;
+    const generation = this.lifecycleGeneration;
+    if (
+      attempt === null
+      || this.fishingPresentation !== 'bite'
+      || this.fishingSettlementInProgress
+      || this.paused
+      || this.documentIsHidden()
+      || !this.isContinuationActive(generation)
+    ) return false;
+    const current = attempt.snapshot();
+    if (current.state === 'resolved' && current.result !== null) {
+      return this.settleFishing(attempt, current.result, generation);
+    }
+    const reel = attempt.reel();
+    if (!reel.accepted || reel.result === undefined) return false;
+    if (!attempt.completeReel().accepted) return false;
+    const result = attempt.snapshot().result;
+    if (result === null || result !== reel.result) return false;
+    return this.settleFishing(attempt, result, generation);
+  }
+
+  private settleFishing(
+    attempt: FishingSession,
+    result: FishingTerminalResult,
+    generation: number,
+  ): boolean {
+    if (!this.isCurrentFishing(attempt, generation) || this.fishingSettlementInProgress) return false;
+    this.fishingSettlementInProgress = true;
+    this.fishingPresentation = 'settling';
+    const outcome = this.session.finishFishing?.(attempt.snapshot().id, result);
+    if (outcome === undefined || !outcome.accepted) {
+      if (outcome !== undefined) this.ui.showFeedback?.(outcome);
+      this.fishingSettlementInProgress = false;
+      this.fishingPresentation = 'bite';
+      this.syncFishingBiteTarget();
+      return false;
+    }
+    this.renderSnapshot(false, false);
+    this.fishingPresentation = 'result';
+    this.ui.setFishingState?.({
+      mode: 'result',
+      message: result.kind === 'catch'
+        ? `CAUGHT ${result.catch.label.toLocaleUpperCase('en-US')}`
+        : 'IT GOT AWAY',
+      biteTarget: null,
+    });
+    void this.presentFishingResult(attempt, result, generation);
+    return true;
+  }
+
+  private async presentFishingResult(
+    attempt: FishingSession,
+    result: FishingTerminalResult,
+    generation: number,
+  ): Promise<void> {
+    if (result.kind === 'catch') {
+      await (this.world.playFishingReel?.(result.catch.id) ?? Promise.resolve());
+    } else {
+      await (this.world.playFishingMiss?.() ?? Promise.resolve());
+    }
+    if (!this.isCurrentFishing(attempt, generation)) return;
+
+    this.fishingPresentation = 'returning';
+    if (!await this.transitionFishingView('exit', generation)) return;
+    if (!this.isCurrentFishing(attempt, generation)) return;
+    this.completeFishingPresentation(generation);
+  }
+
+  private completeFishingPresentation(generation: number): void {
+    if (!this.isContinuationActive(generation)) return;
+    const requestDayEvent = this.fishingDayEventPending;
+    const day = this.session.snapshot().day;
+    this.fishingDayEventPending = false;
+    this.fishingSettlementInProgress = false;
+    this.fishingPresentation = 'idle';
+    this.activeFishing = null;
+    this.setBusy(false);
+    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
+    this.world.clearFishingPresentation?.();
+
+    if (!requestDayEvent || this.requestedDayEventDays.has(day)) return;
+    this.pendingDayEventDay = day;
+    void this.openPostFishingDayEvent(generation);
+  }
+
+  private async openPostFishingDayEvent(generation: number): Promise<void> {
+    const snapshot = await this.openScheduledDayEvent(this.session.snapshot(), generation);
+    if (!this.isContinuationActive(generation)) return;
+    if (snapshot.pendingEventId !== null) this.openPendingEvent(snapshot);
+  }
+
+  private async transitionFishingView(
+    direction: 'enter' | 'exit',
+    generation: number,
+  ): Promise<boolean> {
+    const reducedMotion = this.context.reducedMotion.matches;
+    if (reducedMotion) {
+      await (this.ui.setFishingFade?.(true) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return false;
+    }
+    await (direction === 'enter'
+      ? this.world.enterFishingView?.() ?? Promise.resolve()
+      : this.world.exitFishingView?.() ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return false;
+    if (reducedMotion) {
+      await (this.ui.setFishingFade?.(false) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return false;
+    }
+    return true;
+  }
+
+  private isCurrentFishing(attempt: FishingSession, generation: number): boolean {
+    return this.activeFishing === attempt && this.isContinuationActive(generation);
+  }
+
+  private isContinuationActive(generation?: number): boolean {
+    return !this.disposed
+      && !this.restartRequested
+      && (generation === undefined || generation === this.lifecycleGeneration);
+  }
+
   private async runDayAction(outcome: ActionOutcome): Promise<void> {
     this.setBusy(true);
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
@@ -334,7 +629,10 @@ export class SurvivalPhase implements GamePhase {
     else this.ui.restoreCommandFocus?.();
   }
 
-  private async openScheduledDayEvent(snapshot: SurvivalSnapshot): Promise<SurvivalSnapshot> {
+  private async openScheduledDayEvent(
+    snapshot: SurvivalSnapshot,
+    generation?: number,
+  ): Promise<SurvivalSnapshot> {
     if (
       this.pendingDayEventDay === null
       || snapshot.day !== this.pendingDayEventDay
@@ -351,7 +649,7 @@ export class SurvivalPhase implements GamePhase {
       return this.renderSnapshot(false, false);
     }
     await (this.world.play?.(eventOutcome.cue) ?? Promise.resolve());
-    if (this.disposed) return snapshot;
+    if (!this.isContinuationActive(generation)) return snapshot;
     return this.renderSnapshot(false, false);
   }
 

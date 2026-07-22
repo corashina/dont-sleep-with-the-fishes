@@ -1,9 +1,10 @@
 import { BoxGeometry, Color, Group, Mesh, MeshStandardMaterial, type Object3D } from 'three';
 import { ITEM_IDS, type ItemId } from '../../src/game/ItemState';
+import type { LifeboatEquipmentId } from '../../src/world/lifeboatEquipmentManifest';
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {
-  const templates = new Map<ItemId, Group>(ITEM_IDS.map((id, index) => {
+  const template = (id: string, index: number): Group => {
     const root = new Group();
     const model = new Group();
     model.name = `model:${id}`;
@@ -17,10 +18,17 @@ export function createTestPropModels(): PropModelLibrary {
       }),
     ));
     root.add(model);
-    return [id, root];
-  }));
+    return root;
+  };
+  const itemTemplates = new Map<ItemId, Group>(ITEM_IDS.map((id, index) => [
+    id,
+    template(id, index),
+  ]));
+  const equipmentTemplates = new Map<LifeboatEquipmentId, Group>([
+    ['fishingRod', template('fishingRod', ITEM_IDS.length)],
+  ]);
 
-  return PropModelLibrary.fromTemplatesForTest(templates);
+  return PropModelLibrary.fromTemplatesForTest(itemTemplates, equipmentTemplates);
 }
 
 export function testPropModel(root: Object3D): Object3D {

@@ -557,11 +557,11 @@ describe('ScavengePhase lifecycle integration', () => {
     const depositTarget = updateInteraction.mock.calls[0]![2];
     const firstInstances = updateInteraction.mock.calls[0]![3];
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
-    expect(internals.world.itemObjects.size).toBe(22);
-    expect(firstItems).toHaveLength(22);
+    expect(internals.world.itemObjects.size).toBe(21);
+    expect(firstItems).toHaveLength(21);
     expect(firstItems).toContain(cannedFood);
     expect(depositTarget).toBe(internals.world.boatDepositTarget);
-    expect(firstInstances.size).toBe(22);
+    expect(firstInstances.size).toBe(21);
     expect(firstInstances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1',
       type: 'cannedFood',
@@ -572,7 +572,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
     const nextItems = updateInteraction.mock.calls[1]![0];
     const nextInstances = updateInteraction.mock.calls[1]![3];
-    expect(nextItems).toHaveLength(21);
+    expect(nextItems).toHaveLength(20);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();

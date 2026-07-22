@@ -6,8 +6,10 @@ import {
 } from '../game/ItemState';
 import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
 import { resolveWeightedOutcome } from './eventResolver';
+import { FishingSession, type FishingTerminalResult } from './FishingSession';
 import { SurvivalInventoryState } from './inventory';
 import type {
+  JournalDayActionRecord,
   JournalEntry,
   JournalEventRecord,
   JournalNightRecord,
@@ -18,6 +20,7 @@ import { mulberry32 } from './random';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
+  BeginFishingResult,
   DayActionOption,
   DayActionId,
   EventResponseId,
@@ -49,10 +52,16 @@ declare module './survivalTypes' {
 }
 
 export type { DayActionOption } from './survivalTypes';
+export type { BeginFishingResult } from './survivalTypes';
 
 interface Rejection {
   code: string;
   message: string;
+}
+
+interface ActiveFishingTransaction {
+  readonly attempt: FishingSession;
+  readonly capturedBait: boolean;
 }
 
 export class SurvivalSession {
@@ -81,9 +90,12 @@ export class SurvivalSession {
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalEventRecord | null = null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
+  private pendingJournalActions: JournalDayActionRecord[] = [];
   private readonly journalEntries: JournalEntry[] = [];
   private readonly seed: number;
   private readonly random: RandomSource;
+  private fishingCounter = 0;
+  private activeFishing: ActiveFishingTransaction | null = null;
 
   constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions) {
     this.seed = options.seed;
@@ -150,13 +162,12 @@ export class SurvivalSession {
     return this.unavailable(action, option)?.message ?? null;
   }
 
-  perform(action: DayActionId, option?: DayActionOption): ActionOutcome {
+  perform(action: Exclude<DayActionId, 'fish'>, option?: DayActionOption): ActionOutcome {
     const unavailable = this.unavailable(action, option);
     if (unavailable !== null) return this.reject(unavailable.code, unavailable.message);
 
     let outcome: ActionOutcome;
     switch (action) {
-      case 'fish': outcome = this.fish(option?.kind === 'fishing' && option.useBait); break;
       case 'dive': outcome = this.dive(); break;
       case 'eat': outcome = this.eat(); break;
       case 'repair': outcome = this.repair(option); break;
@@ -170,7 +181,84 @@ export class SurvivalSession {
     return outcome;
   }
 
+  beginFishing(): BeginFishingResult {
+    let rejection: ActionOutcome | null = null;
+    if (this.activeFishing !== null) {
+      rejection = this.fishingInProgress();
+    } else if (this.isTerminal()) {
+      rejection = this.reject('terminal', 'The survival journey has already ended.');
+    } else if (this.state !== 'day') {
+      rejection = this.reject('not-daytime', 'Fishing is only available during the day.');
+    } else if (this.actedToday) {
+      rejection = this.reject('already-acted', 'A daytime action has already been taken.');
+    } else if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
+      rejection = this.reject('not-enough-energy', 'Fishing requires one energy.');
+    }
+    if (rejection !== null) return { accepted: false, outcome: rejection };
+
+    const capturedBait = this.bait > 0;
+    const attempt = new FishingSession({
+      id: `fishing-${this.day}-${++this.fishingCounter}`,
+      day: this.day,
+      capturedBait,
+      random: this.random,
+    });
+    const outcome = this.commit(
+      'fishing-started',
+      'You ready the line and look for a place to cast.',
+      { energy: -SURVIVAL_BALANCE.actions.fishEnergy },
+      'none',
+    );
+    this.actedToday = true;
+    this.activeFishing = { attempt, capturedBait };
+    return { accepted: true, outcome, attempt };
+  }
+
+  finishFishing(attemptId: string, result: FishingTerminalResult): ActionOutcome {
+    const transaction = this.activeFishing;
+    if (transaction === null) {
+      return this.reject('no-fishing-attempt', 'There is no active fishing attempt.');
+    }
+    const snapshot = transaction.attempt.snapshot();
+    if (snapshot.id !== attemptId) {
+      return this.reject('fishing-attempt-mismatch', 'That fishing attempt is no longer active.');
+    }
+    if (snapshot.result === null || (snapshot.state !== 'resolved' && snapshot.state !== 'missed')) {
+      return this.reject('fishing-unresolved', 'The fishing attempt has not reached a result.');
+    }
+    if (snapshot.result !== result) {
+      return this.reject('fishing-result-mismatch', 'That result does not belong to the active fishing attempt.');
+    }
+
+    const isCatch = result.kind === 'catch';
+    const isFish = isCatch && result.catch.kind === 'fish';
+    const food = isFish ? result.catch.food : 0;
+    const baitConsumed = isFish && transaction.capturedBait;
+    const deltas: ResourceDelta = {};
+    if (food > 0) deltas.food = food;
+    if (baitConsumed) deltas.bait = -1;
+    const code = result.kind === 'miss' ? 'fish-missed' : isFish ? 'fish-caught' : 'junk-caught';
+    const message = result.kind === 'miss'
+      ? 'The fish got away.'
+      : isFish
+        ? `You caught a ${result.catch.label.toLocaleLowerCase('en-US')}.`
+        : `You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`;
+    const outcome = this.commit(code, message, deltas, 'none');
+    this.pendingJournalActions.push(Object.freeze({
+      kind: 'fishing',
+      attemptId,
+      result: result.kind === 'miss' ? 'miss' : result.catch.kind,
+      catchId: result.kind === 'miss' ? null : result.catch.id,
+      catchLabel: result.kind === 'miss' ? null : result.catch.label,
+      food,
+      baitConsumed,
+    }));
+    this.activeFishing = null;
+    return outcome;
+  }
+
   requestDayEvent(): ActionOutcome {
+    if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'A day event cannot begin right now.');
     if (!this.actedToday) return this.reject('act-first', 'Take a survival action before looking beyond the boat.');
@@ -183,6 +271,7 @@ export class SurvivalSession {
   }
 
   endDay(): ActionOutcome {
+    if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
 
@@ -199,6 +288,7 @@ export class SurvivalSession {
   }
 
   resolveEvent(choiceId: EventResponseId | null): ActionOutcome {
+    if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if ((this.state !== 'dayEvent' && this.state !== 'nightEvent') || this.pendingEvent === null) {
       return this.reject('no-event', 'There is no unresolved event.');
@@ -279,6 +369,7 @@ export class SurvivalSession {
   }
 
   beginDawn(): ActionOutcome {
+    if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
     if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
@@ -286,6 +377,7 @@ export class SurvivalSession {
     this.day += 1;
     this.pendingJournalDaytime = null;
     this.pendingJournalNighttime = null;
+    this.pendingJournalActions = [];
     this.actedToday = false;
     this.dayEventOccurred = false;
     this.pendingEvent = null;
@@ -329,6 +421,9 @@ export class SurvivalSession {
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
+    if (this.activeFishing !== null) {
+      return { code: 'fishing-in-progress', message: 'Finish the active fishing attempt first.' };
+    }
     const invalidOption = this.invalidOption(action, option);
     if (invalidOption !== null) return invalidOption;
     if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
@@ -336,14 +431,11 @@ export class SurvivalSession {
 
     switch (action) {
       case 'fish':
-        if (!this.inventory.hasUsable('fishingRod')) {
-          return { code: 'no-fishing-rod', message: 'Fishing requires a recovered fishing rod.' };
+        if (this.actedToday) {
+          return { code: 'already-acted', message: 'A daytime action has already been taken.' };
         }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
-          return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
-        }
-        if (option?.kind === 'fishing' && option.useBait && this.bait < 1) {
-          return { code: 'no-bait', message: 'No bait remains.' };
+          return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };
         }
         return null;
       case 'dive':
@@ -422,37 +514,13 @@ export class SurvivalSession {
 
   private invalidOption(action: DayActionId, option?: DayActionOption): Rejection | null {
     const valid = action === 'fish'
-      ? option === undefined || option?.kind === 'fishing'
+      ? option === undefined
       : action === 'repair'
         ? option?.kind === 'hullRepair'
         : action === 'repairItem'
           ? option?.kind === 'itemRepair'
           : option === undefined;
     return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
-  }
-
-  private fish(useBait: boolean): ActionOutcome {
-    const successChance = useBait
-      ? SURVIVAL_BALANCE.fishing.rodBaitSuccess
-      : SURVIVAL_BALANCE.fishing.rodSuccess;
-    const caught = this.random.next() < successChance;
-    let food = caught ? 1 : 0;
-
-    if (caught) {
-      const doubleChance = useBait
-        ? SURVIVAL_BALANCE.fishing.rodBaitDouble
-        : SURVIVAL_BALANCE.fishing.rodDouble;
-      if (this.random.next() < doubleChance) food += 1;
-    }
-
-    const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.fishEnergy, food };
-    if (useBait) deltas.bait = -1;
-    return this.commit(
-      caught ? 'fish-caught' : 'fish-missed',
-      caught ? `You caught ${food === 2 ? 'two fish' : 'a fish'}.` : 'The line came back empty.',
-      deltas,
-      'fish',
-    );
   }
 
   private dive(): ActionOutcome {
@@ -596,6 +664,7 @@ export class SurvivalSession {
     this.journalEntries.push({
       day: this.day,
       weather: this.weather,
+      actions: this.cloneJournalActions(this.pendingJournalActions),
       daytime: this.pendingJournalDaytime,
       nighttime: this.pendingJournalNighttime,
     });
@@ -610,6 +679,7 @@ export class SurvivalSession {
   private journalSnapshot(): readonly JournalEntry[] {
     return this.journalEntries.map((entry) => ({
       ...entry,
+      actions: this.cloneJournalActions(entry.actions),
       daytime: entry.daytime === null ? null : this.cloneJournalRecord(entry.daytime),
       nighttime: this.cloneJournalNight(entry.nighttime),
     }));
@@ -620,6 +690,12 @@ export class SurvivalSession {
       ...record,
       inventoryMutations: this.cloneInventoryMutations(record.inventoryMutations),
     });
+  }
+
+  private cloneJournalActions(
+    actions: readonly JournalDayActionRecord[],
+  ): readonly JournalDayActionRecord[] {
+    return Object.freeze(actions.map((action) => Object.freeze({ ...action })));
   }
 
   private cloneInventoryMutations(
@@ -672,6 +748,10 @@ export class SurvivalSession {
 
   private reject(code: string, message: string): ActionOutcome {
     return { accepted: false, code, message, deltas: {}, cue: 'none' };
+  }
+
+  private fishingInProgress(): ActionOutcome {
+    return this.reject('fishing-in-progress', 'Finish the active fishing attempt first.');
   }
 
   private commit(code: string, message: string, deltas: ResourceDelta, cue: PresentationCue): ActionOutcome {

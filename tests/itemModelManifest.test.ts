@@ -4,10 +4,17 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { ITEM_MODEL_ASSET_LEDGER, ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
+import {
+  LIFEBOAT_EQUIPMENT_IDS,
+  LIFEBOAT_EQUIPMENT_MODEL_SPECS,
+  type LifeboatEquipmentId,
+} from '../src/world/lifeboatEquipmentManifest';
 
 const MODELS_DIR = resolve('src', 'assets', 'models', 'items');
+const MODEL_IDS = [...ITEM_IDS, ...LIFEBOAT_EQUIPMENT_IDS];
+type RuntimeModelId = ItemId | LifeboatEquipmentId;
 const EXPECTED_MODEL_FILES = [
-  ...ITEM_IDS.map((id) => `${id}.glb`),
+  ...MODEL_IDS.map((id) => `${id}.glb`),
   'item-model-metadata.json',
 ].sort();
 const CC0_URL = 'https://creativecommons.org/publicdomain/zero/1.0/';
@@ -33,7 +40,7 @@ const TARGET_LONGEST_DIMENSIONS = {
   medicalKit: 0.72, spyglass: 0.72, fishingNet: 0.82, bucket: 0.68, flareGun: 0.68,
   scubaSet: 0.88, anchor: 0.88, bottledPaper: 0.62, umbrella: 0.90, swimRing: 0.70,
   flashlight: 0.72, harpoonGun: 1.00, energyBar: 0.48, fishingRod: 1.80,
-} as const satisfies Readonly<Record<ItemId, number>>;
+} as const satisfies Readonly<Record<RuntimeModelId, number>>;
 const EXPECTED_ROTATIONS = {
   cannedFood: [0, 0, 0], baitTin: [0, 0, 0], ductTape: [0, 0, 0],
   compass: [0, 0, 0], map: [0, 0, 0], medicalKit: [0, 0, 0],
@@ -43,10 +50,16 @@ const EXPECTED_ROTATIONS = {
   umbrella: [0, 0, Math.PI / 2], swimRing: [0, 0, 0],
   flashlight: [0, 0, Math.PI / 2], harpoonGun: [0, 0, 0],
   energyBar: [0, 0, 0], fishingRod: [Math.PI / 2, 0, 0],
-} as const satisfies Readonly<Record<ItemId, readonly [number, number, number]>>;
+} as const satisfies Readonly<Record<RuntimeModelId, readonly [number, number, number]>>;
+
+function runtimeModelSpec(id: RuntimeModelId) {
+  return id === 'fishingRod'
+    ? LIFEBOAT_EQUIPMENT_MODEL_SPECS[id]
+    : ITEM_MODEL_SPECS[id];
+}
 
 function runtimeLedgerRows(): readonly (readonly string[])[] {
-  const heading = '## Runtime item asset ledger';
+  const heading = '## Runtime model asset ledger';
   const start = ITEM_MODEL_ASSET_LEDGER.indexOf(heading);
   const nextHeading = ITEM_MODEL_ASSET_LEDGER.indexOf('\n## ', start + heading.length);
   const runtimeLedger = ITEM_MODEL_ASSET_LEDGER.slice(start, nextHeading === -1 ? undefined : nextHeading);
@@ -56,17 +69,27 @@ function runtimeLedgerRows(): readonly (readonly string[])[] {
 }
 
 describe('item model manifest', () => {
+  it('separates collectible item models from fixed lifeboat equipment', () => {
+    expect(Object.keys(ITEM_MODEL_SPECS).sort()).toEqual([...ITEM_IDS].sort());
+    expect(ITEM_IDS).not.toContain('fishingRod');
+    expect(LIFEBOAT_EQUIPMENT_IDS).toEqual(['fishingRod']);
+    expect(Object.keys(LIFEBOAT_EQUIPMENT_MODEL_SPECS)).toEqual(['fishingRod']);
+    expect(LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.url).toMatch(/fishingRod\.glb$/);
+    expect(LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.generatedMetadata.triangles).toBe(376);
+  });
+
   it('authors a natural resting rotation for every runtime item', () => {
-    for (const id of ITEM_IDS) {
-      expect(ITEM_MODEL_SPECS[id].rotation, id).toEqual(EXPECTED_ROTATIONS[id]);
+    for (const id of MODEL_IDS) {
+      expect(runtimeModelSpec(id).rotation, id).toEqual(EXPECTED_ROTATIONS[id]);
     }
   });
 
-  it('publishes exactly one local GLB per runtime item plus generated metadata', async () => {
+  it('publishes exactly one local GLB per runtime model plus generated metadata', async () => {
     expect((await readdir(MODELS_DIR)).sort()).toEqual(EXPECTED_MODEL_FILES);
     expect(Object.keys(ITEM_MODEL_SPECS).sort()).toEqual([...ITEM_IDS].sort());
-    for (const id of ITEM_IDS) {
-      const spec = ITEM_MODEL_SPECS[id];
+    expect(Object.keys(LIFEBOAT_EQUIPMENT_MODEL_SPECS)).toEqual(['fishingRod']);
+    for (const id of MODEL_IDS) {
+      const spec = runtimeModelSpec(id);
       expect(spec.url).toMatch(/\.glb$/);
       expect(spec.maxTriangles).toBe(3_000);
       expect(spec.targetLongestDimension).toBe(TARGET_LONGEST_DIMENSIONS[id]);
@@ -81,7 +104,7 @@ describe('item model manifest', () => {
 
   it('distinguishes the exact third-party and project-authored provenance sets', () => {
     for (const [id, [sourceUrl, sourceAssetId, creator]] of Object.entries(THIRD_PARTY_SOURCES)) {
-      expect(ITEM_MODEL_SPECS[id as ItemId].provenance).toEqual({
+      expect(runtimeModelSpec(id as RuntimeModelId).provenance).toEqual({
         kind: 'thirdParty', sourceUrl, sourceAssetId, creator, licenseUrl: CC0_URL,
       });
     }
