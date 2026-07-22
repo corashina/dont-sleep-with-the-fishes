@@ -16,6 +16,9 @@ import { Skybox } from './Skybox';
 import type { SkyPalette, SkyState } from './skyPalette';
 
 const SPRAY_DROP_COUNT = 220;
+const SPRAY_FIELD_WIDTH = 4;
+const SPRAY_FIELD_LENGTH = 7;
+const SPRAY_FIELD_HEIGHT = 2.2;
 const SCAVENGE_SKY_STATE: Readonly<SkyState> = Object.freeze({
   weather: 'calm',
   phase: 'day',
@@ -36,14 +39,16 @@ const SCAVENGE_SHADOW_CONFIG = Object.freeze({
 
 function particleField(
   count: number,
-  spread: number,
+  width: number,
+  length: number,
   height: number,
+  random: () => number,
 ): { points: Points<BufferGeometry, PointsMaterial>; positions: Float32Array } {
   const positions = new Float32Array(count * 3);
   for (let index = 0; index < count; index += 1) {
-    positions[index * 3] = (Math.random() - 0.5) * spread;
-    positions[index * 3 + 1] = Math.random() * height;
-    positions[index * 3 + 2] = (Math.random() - 0.5) * spread;
+    positions[index * 3] = (random() - 0.5) * width;
+    positions[index * 3 + 1] = random() * height;
+    positions[index * 3 + 2] = (random() - 0.5) * length;
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
@@ -64,7 +69,11 @@ export class Environment {
 
   get atmosphere(): Readonly<SkyPalette> { return this.sky.palette; }
 
-  constructor(private readonly scene: Scene, moonTexture: Texture) {
+  constructor(
+    private readonly scene: Scene,
+    moonTexture: Texture,
+    random: () => number = Math.random,
+  ) {
     this.previousBackground = scene.background;
     this.previousFog = scene.fog;
     this.sky = new Skybox(scene, SCAVENGE_SKY_STATE, moonTexture);
@@ -102,7 +111,13 @@ export class Environment {
     shadowCamera.updateProjectionMatrix();
     scene.add(this.fillLight, this.keyLight);
 
-    const sprayField = particleField(SPRAY_DROP_COUNT, 18, 2.2);
+    const sprayField = particleField(
+      SPRAY_DROP_COUNT,
+      SPRAY_FIELD_WIDTH,
+      SPRAY_FIELD_LENGTH,
+      SPRAY_FIELD_HEIGHT,
+      random,
+    );
     this.spray = sprayField.points;
     this.sprayPositions = sprayField.positions;
     this.spray.material.setValues({
@@ -120,16 +135,19 @@ export class Environment {
     delta: number,
     sinking: SinkingState,
     cameraPosition: Vector3,
+    sprayCenter: Vector3,
     reducedMotion: boolean,
   ): void {
     if (this.disposed) return;
     const spraySpeed = reducedMotion ? 0.5 : 1.3 + sinking.progress;
     for (let index = 0; index < SPRAY_DROP_COUNT; index += 1) {
       const offset = index * 3 + 1;
-      this.sprayPositions[offset] = (this.sprayPositions[offset]! + delta * spraySpeed) % 2.2;
+      this.sprayPositions[offset] = (
+        this.sprayPositions[offset]! + delta * spraySpeed
+      ) % SPRAY_FIELD_HEIGHT;
     }
     (this.spray.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
-    this.spray.position.set(4.5, 0, -5.8);
+    this.spray.position.set(sprayCenter.x, 0, sprayCenter.z);
 
     this.sky.resetTransient();
     const atmosphere = this.sky.update(

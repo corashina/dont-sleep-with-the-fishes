@@ -279,7 +279,7 @@ export class World {
       scene.add(this.ocean.mesh);
       rollback.push(() => scene.remove(this.ocean.mesh));
       construction.checkpoint?.('ocean');
-      this.environment = new Environment(scene, moonTexture);
+      this.environment = new Environment(scene, moonTexture, random);
       rollback.push(() => this.environment.dispose());
       construction.checkpoint?.('environment');
       this.buoyancy = new BoatBuoyancy(sampleDefaultWave, undefined, sampleDefaultWaveInto);
@@ -337,20 +337,6 @@ export class World {
     this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
     this.boatDepositSmoke.update(delta, reducedMotion);
 
-    this.environment.update(delta, sinking, cameraPosition, reducedMotion);
-    const atmosphere = this.environment.atmosphere;
-    this.oceanAtmosphere.fogColor.copy(atmosphere.fogColor);
-    this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
-    this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
-    this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
-    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
-    this.ocean.update(
-      time,
-      sinking.waveAmplitudeScale,
-      atmosphere.fogDensity,
-      this.oceanAtmosphere,
-    );
-    this.ocean.follow(cameraPosition.x, cameraPosition.z);
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,
       time,
@@ -365,6 +351,26 @@ export class World {
       this.boatAnchor.z + this.boatPose.driftZ,
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
+    this.environment.update(
+      delta,
+      sinking,
+      cameraPosition,
+      this.lifeboat.position,
+      reducedMotion,
+    );
+    const atmosphere = this.environment.atmosphere;
+    this.oceanAtmosphere.fogColor.copy(atmosphere.fogColor);
+    this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
+    this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
+    this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
+    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
+    this.ocean.update(
+      time,
+      sinking.waveAmplitudeScale,
+      atmosphere.fogDensity,
+      this.oceanAtmosphere,
+    );
+    this.ocean.follow(cameraPosition.x, cameraPosition.z);
     this.ocean.setExclusions([
       createWaterExclusion(
         this.ship,

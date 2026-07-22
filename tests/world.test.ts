@@ -26,6 +26,7 @@ import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
+import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -36,7 +37,7 @@ import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems } from '../src/world/ShipItemPlacement';
-import { SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 import { World } from '../src/world/World';
@@ -753,6 +754,35 @@ describe('world builders', () => {
     expect(reducedScene.getObjectByName('procedural-skybox')).toBeDefined();
     regular.dispose();
     reduced.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps sea spray beside the lifeboat and clear of the freighter', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const random = mulberry32(421);
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      () => random.next(),
+    );
+
+    world.update(1, 0.1, getSinkingState(0, 120), new Vector3(), false);
+
+    const spray = scene.getObjectByName('sea-spray') as Points;
+    const positions = (
+      spray.geometry.getAttribute('position') as BufferAttribute
+    ).array as Float32Array;
+    expect(spray.position.x).toBeCloseTo(world.lifeboat.position.x);
+    expect(spray.position.z).toBeCloseTo(world.lifeboat.position.z);
+    for (let offset = 0; offset < positions.length; offset += 3) {
+      expect(spray.position.x + positions[offset]!)
+        .toBeGreaterThan(FREIGHTER_DIMENSIONS.width / 2);
+    }
+
+    world.dispose();
     propModels.dispose();
   });
 
