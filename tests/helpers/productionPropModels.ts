@@ -7,6 +7,10 @@ import {
   type ItemModelLoader,
 } from '../../src/world/PropModelLibrary';
 import { ITEM_MODEL_SPECS } from '../../src/world/itemModelManifest';
+import {
+  LIFEBOAT_EQUIPMENT_IDS,
+  LIFEBOAT_EQUIPMENT_MODEL_SPECS,
+} from '../../src/world/lifeboatEquipmentManifest';
 
 export interface NormalizedPropBoundsFixture {
   readonly min: readonly [number, number, number];
@@ -19,8 +23,11 @@ export const PRODUCTION_NORMALIZED_PROP_BOUNDS = Object.freeze(Object.fromEntrie
 
 class CheckedInItemModelLoader implements ItemModelLoader {
   async load(url: string) {
-    const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url);
-    if (!id) throw new Error(`Unknown checked-in item model URL: ${url}`);
+    const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)
+      ?? LIFEBOAT_EQUIPMENT_IDS.find(
+        (equipmentId) => LIFEBOAT_EQUIPMENT_MODEL_SPECS[equipmentId].url === url,
+      );
+    if (!id) throw new Error(`Unknown checked-in runtime model URL: ${url}`);
     const bytes = await readFile(resolve('src', 'assets', 'models', 'items', `${id}.glb`));
     const data = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(data).set(bytes);

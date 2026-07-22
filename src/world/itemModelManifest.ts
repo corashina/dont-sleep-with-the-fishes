@@ -5,7 +5,7 @@ import assetLedger from '../../THIRD_PARTY_ASSETS.md?raw';
 import generatedMetadataJson from '../assets/models/items/item-model-metadata.json';
 import { ITEM_IDS, type ItemId } from '../game/ItemState';
 
-export interface GeneratedItemModelMetadata {
+export interface GeneratedRuntimeModelMetadata {
   readonly triangles: number;
   readonly rawBounds: {
     readonly min: readonly [number, number, number];
@@ -13,7 +13,7 @@ export interface GeneratedItemModelMetadata {
   };
 }
 
-export type ItemModelProvenance =
+export type RuntimeModelProvenance<ModelId extends string = string> =
   | {
       readonly kind: 'thirdParty';
       readonly sourceUrl: string;
@@ -23,11 +23,11 @@ export type ItemModelProvenance =
     }
   | {
       readonly kind: 'project';
-      readonly recipeId: `project-item-models@1:${ItemId}`;
+      readonly recipeId: `project-item-models@1:${ModelId}`;
       readonly creator: 'Project team';
     };
 
-export interface ItemModelSpec {
+export interface RuntimeModelSpec<ModelId extends string = string> {
   readonly url: string;
   readonly targetLongestDimension: number;
   readonly normalizedSize: readonly [number, number, number];
@@ -38,14 +38,22 @@ export interface ItemModelSpec {
   readonly rotation: readonly [number, number, number];
   readonly offset: readonly [number, number, number];
   readonly maxTriangles: number;
-  readonly generatedMetadata: GeneratedItemModelMetadata;
-  readonly provenance: ItemModelProvenance;
+  readonly generatedMetadata: GeneratedRuntimeModelMetadata;
+  readonly provenance: RuntimeModelProvenance<ModelId>;
 }
+
+export type GeneratedItemModelMetadata = GeneratedRuntimeModelMetadata;
+export type ItemModelProvenance = RuntimeModelProvenance<ItemId>;
+export type ItemModelSpec = RuntimeModelSpec<ItemId>;
 
 export const ITEM_MODEL_ASSET_LEDGER = assetLedger;
 export const ITEM_MODEL_MAX_TOTAL_TRIANGLES = 40_000;
 
-type Presentation = Pick<ItemModelSpec, 'targetLongestDimension' | 'rotation' | 'offset'>;
+export type RuntimeModelPresentation = Pick<
+  RuntimeModelSpec,
+  'targetLongestDimension' | 'rotation' | 'offset'
+>;
+type Presentation = RuntimeModelPresentation;
 const presentation = {
   cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
   baitTin: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0.12, 0] },
@@ -65,7 +73,6 @@ const presentation = {
   flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, Math.PI / 2], offset: [0, 0.19, 0] },
   harpoonGun: { targetLongestDimension: 1.00, rotation: [0, 0, 0], offset: [0, 0, 0] },
   energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  fishingRod: { targetLongestDimension: 1.80, rotation: [Math.PI / 2, 0, 0], offset: [0, 0, 0] },
 } as const satisfies Readonly<Record<ItemId, Presentation>>;
 
 const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/' as const;
@@ -88,16 +95,16 @@ const provenance = {
   flashlight: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/flashlight', creator: 'Kenney', licenseUrl: CC0 },
   harpoonGun: { kind: 'project', recipeId: 'project-item-models@1:harpoonGun', creator: 'Project team' },
   energyBar: { kind: 'project', recipeId: 'project-item-models@1:energyBar', creator: 'Project team' },
-  fishingRod: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/fishingRod', creator: 'Kenney', licenseUrl: CC0 },
 } as const satisfies Readonly<Record<ItemId, ItemModelProvenance>>;
 
 const generatedMetadata = generatedMetadataJson as unknown as Readonly<
-  Record<ItemId, GeneratedItemModelMetadata>
+  Record<string, GeneratedRuntimeModelMetadata>
 >;
 const BOUNDS_EPSILON = 1e-9;
 
-function generatedNormalization(id: ItemId, authored: Presentation) {
+function generatedNormalization(id: string, authored: RuntimeModelPresentation) {
   const metadata = generatedMetadata[id];
+  if (metadata === undefined) throw new Error(`Missing generated model metadata: ${id}`);
   const raw = new Box3(
     new Vector3(...metadata.rawBounds.min),
     new Vector3(...metadata.rawBounds.max),
@@ -125,14 +132,21 @@ function generatedNormalization(id: ItemId, authored: Presentation) {
   } as const;
 }
 
-export const ITEM_MODEL_SPECS = Object.freeze(Object.fromEntries(ITEM_IDS.map((id) => {
-  const authored = presentation[id];
-  return [id, {
+export function createRuntimeModelSpec<ModelId extends string>(
+  id: ModelId,
+  authored: RuntimeModelPresentation,
+  modelProvenance: RuntimeModelProvenance<ModelId>,
+): RuntimeModelSpec<ModelId> {
+  return Object.freeze({
     url: new URL(`../assets/models/items/${id}.glb`, import.meta.url).href,
     ...authored,
     ...generatedNormalization(id, authored),
     maxTriangles: 3_000,
-    generatedMetadata: generatedMetadata[id],
-    provenance: provenance[id],
-  }];
+    generatedMetadata: generatedMetadata[id]!,
+    provenance: modelProvenance,
+  });
+}
+
+export const ITEM_MODEL_SPECS = Object.freeze(Object.fromEntries(ITEM_IDS.map((id) => {
+  return [id, createRuntimeModelSpec(id, presentation[id], provenance[id])];
 })) as unknown as Readonly<Record<ItemId, ItemModelSpec>>);

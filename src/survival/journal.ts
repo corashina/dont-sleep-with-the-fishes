@@ -4,6 +4,7 @@ import {
   type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
+import type { FishingCatchId } from './fishingCatalog';
 import type { WeatherId } from './survivalTypes';
 
 export type JournalResolution = 'suitableItem' | 'unsuitableItem' | 'endure';
@@ -30,9 +31,22 @@ export type JournalNightRecord =
   | { kind: 'event'; event: JournalEventRecord }
   | { kind: 'quiet' };
 
+export interface JournalFishingRecord {
+  readonly kind: 'fishing';
+  readonly attemptId: string;
+  readonly result: 'fish' | 'junk' | 'miss';
+  readonly catchId: FishingCatchId | null;
+  readonly catchLabel: string | null;
+  readonly food: 0 | 1 | 2;
+  readonly baitConsumed: boolean;
+}
+
+export type JournalDayActionRecord = JournalFishingRecord;
+
 export interface JournalEntry {
   day: number;
   weather: WeatherId;
+  readonly actions: readonly JournalDayActionRecord[];
   daytime: JournalEventRecord | null;
   nighttime: JournalNightRecord;
 }
@@ -101,13 +115,31 @@ function formatNight(record: JournalNightRecord): string {
     : formatEvent(record.event);
 }
 
+function formatFishing(record: JournalFishingRecord): string {
+  let sentence: string;
+  if (record.result === 'miss') {
+    sentence = 'I went fishing, but it got away.';
+  } else {
+    if (record.catchLabel === null) {
+      throw new Error(`Fishing journal record ${record.attemptId} requires a catch label.`);
+    }
+    const label = record.catchLabel.toLocaleLowerCase('en-US');
+    sentence = record.result === 'junk'
+      ? `I reeled in ${label}, but it was no use.`
+      : `I caught a ${label} and gained ${record.food === 1 ? 'one' : 'two'} food.`;
+  }
+  return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
+}
+
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
+  const actions = entry.actions.map(formatFishing).join(' ');
+  const daytime = entry.daytime === null
+    ? 'The daylight hours passed quietly.'
+    : formatEvent(entry.daytime);
   return {
     heading: `DAY ${entry.day}`,
     weather: WEATHER_LABELS[entry.weather],
-    daytime: entry.daytime === null
-      ? 'The daylight hours passed quietly.'
-      : formatEvent(entry.daytime),
+    daytime: actions.length === 0 ? daytime : `${actions} ${daytime}`,
     nighttime: formatNight(entry.nighttime),
   };
 }

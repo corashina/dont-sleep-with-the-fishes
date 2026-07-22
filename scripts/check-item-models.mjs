@@ -6,12 +6,14 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 
 export const MODEL_LIMIT = 3_000;
 export const LIBRARY_LIMIT = 40_000;
-export const ITEM_IDS = [
+export const COLLECTIBLE_ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
-  'energyBar', 'fishingRod',
+  'energyBar',
 ];
+export const EQUIPMENT_MODEL_IDS = ['fishingRod'];
+export const MODEL_IDS = [...COLLECTIBLE_ITEM_IDS, ...EQUIPMENT_MODEL_IDS];
 const PROJECT_ITEM_IDS = [
   'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ];
@@ -91,7 +93,7 @@ const LEDGER_REQUIREMENTS = {
     DOWNLOADED,
   ],
   fishingRod: [
-    'fishingRod', '`fishingRod.glb`', 'Fishing rod composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
+    'fishingRod', '`fishingRod.glb`', 'Fixed lifeboat fishing equipment / Kenney', 'https://kenney.nl/assets/prototype-kit',
     '`prototype-kit@1.0:composite/fishingRod`', CC0_LEDGER_CELL, '376', '376',
     `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 376. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` rod T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.018, 1.6, 0.018]\`, RGBA \`[0.95, 0.25, 0.08, 1]\`; \`Models/GLB format/shape-cylinder-detailed.glb\` grip T \`[0, -0.35, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.04, 0.35, 0.04]\`, RGBA \`[0.12, 0.12, 0.14, 1]\`; \`Models/GLB format/shape-hollow-cylinder-detailed.glb\` reel T \`[0.05, -0.14, 0]\`, R \`[0.7071067811865476, 0, 0, 0.7071067811865476]\`, S \`[0.08, 0.05, 0.08]\`, RGBA \`[0.2, 0.24, 0.3, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
     DOWNLOADED,
@@ -432,8 +434,8 @@ async function main() {
 
   try {
     const runtimeIds = await runtimeItemIds();
-    if (JSON.stringify(runtimeIds) !== JSON.stringify(ITEM_IDS)) {
-      errors.push(`audit ITEM_IDS do not match runtime ITEM_IDS: ${runtimeIds.join(', ')}`);
+    if (JSON.stringify(runtimeIds) !== JSON.stringify(COLLECTIBLE_ITEM_IDS)) {
+      errors.push(`audit collectible IDs do not match runtime ITEM_IDS: ${runtimeIds.join(', ')}`);
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
@@ -441,7 +443,7 @@ async function main() {
 
   try {
     const expectedEntries = new Set([
-      ...ITEM_IDS.map((itemId) => `${itemId}.glb`),
+      ...MODEL_IDS.map((itemId) => `${itemId}.glb`),
       'item-model-metadata.json',
     ]);
     const entries = await readdir(modelsDir, { withFileTypes: true });
@@ -461,14 +463,14 @@ async function main() {
   try {
     metadata = JSON.parse(await readFile(resolve(modelsDir, 'item-model-metadata.json'), 'utf8'));
     const metadataIds = Object.keys(metadata);
-    if (JSON.stringify(metadataIds) !== JSON.stringify(ITEM_IDS)) {
-      errors.push(`item-model-metadata.json keys do not match runtime ITEM_IDS: ${metadataIds.join(', ')}`);
+    if (JSON.stringify(metadataIds) !== JSON.stringify(MODEL_IDS)) {
+      errors.push(`item-model-metadata.json keys do not match audited model IDs: ${metadataIds.join(', ')}`);
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
 
-  for (const itemId of ITEM_IDS) {
+  for (const itemId of MODEL_IDS) {
     const filePath = resolve(modelsDir, `${itemId}.glb`);
     try {
       await access(filePath);
@@ -487,7 +489,7 @@ async function main() {
   }
 
   if (metadata) {
-    for (const itemId of ITEM_IDS) {
+    for (const itemId of MODEL_IDS) {
       const expected = metadata[itemId];
       const measured = measurements[itemId];
       if (!expected || !measured) continue;

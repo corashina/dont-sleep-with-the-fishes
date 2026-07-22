@@ -12,18 +12,35 @@ import {
   ITEM_MODEL_ASSET_LEDGER,
   ITEM_MODEL_MAX_TOTAL_TRIANGLES,
   ITEM_MODEL_SPECS,
-  type ItemModelSpec,
+  type RuntimeModelSpec,
 } from './itemModelManifest';
+import {
+  LIFEBOAT_EQUIPMENT_IDS,
+  LIFEBOAT_EQUIPMENT_MODEL_SPECS,
+  type LifeboatEquipmentId,
+} from './lifeboatEquipmentManifest';
 import { collectMeshResources, disposeMeshResources } from './SceneResources';
+
+type RuntimeModelId = ItemId | LifeboatEquipmentId;
+const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
+  ...ITEM_IDS,
+  ...LIFEBOAT_EQUIPMENT_IDS,
+];
+
+function runtimeModelSpec(id: RuntimeModelId): RuntimeModelSpec {
+  return id === 'fishingRod'
+    ? LIFEBOAT_EQUIPMENT_MODEL_SPECS[id]
+    : ITEM_MODEL_SPECS[id];
+}
 
 export interface ItemModelLoader {
   load(url: string): Promise<Group>;
 }
 
 export class ItemModelLoadError extends Error {
-  readonly itemId: ItemId;
+  readonly itemId: RuntimeModelId;
 
-  constructor(itemId: ItemId, message: string, options?: ErrorOptions) {
+  constructor(itemId: RuntimeModelId, message: string, options?: ErrorOptions) {
     super(`Item model ${itemId}: ${message}`, options);
     this.name = 'ItemModelLoadError';
     this.itemId = itemId;
@@ -82,8 +99,8 @@ function ledgerCreator(cell: string): string | null {
 }
 
 function validateLedgerEntry(
-  id: ItemId,
-  spec: ItemModelSpec,
+  id: RuntimeModelId,
+  spec: RuntimeModelSpec,
   rows: readonly (readonly string[])[],
 ): void {
   const matches = rows.filter((row) => row[0] === id);
@@ -115,7 +132,7 @@ function validateLedgerEntry(
   }
 }
 
-function validateSpec(id: ItemId, spec: ItemModelSpec | undefined): ItemModelSpec {
+function validateSpec(id: RuntimeModelId, spec: RuntimeModelSpec | undefined): RuntimeModelSpec {
   if (!spec) throw new ItemModelLoadError(id, 'manifest entry is missing');
   const metadata = spec.generatedMetadata;
   if (
@@ -142,7 +159,7 @@ function validateSpec(id: ItemId, spec: ItemModelSpec | undefined): ItemModelSpe
   return spec;
 }
 
-function validateGeometry(id: ItemId, geometry: BufferGeometry): number {
+function validateGeometry(id: RuntimeModelId, geometry: BufferGeometry): number {
   const position = geometry.getAttribute('position');
   if (!position || position.count === 0) {
     throw new ItemModelLoadError(id, 'mesh has missing or empty position data');
@@ -166,7 +183,7 @@ function finiteBox(box: Box3): boolean {
   return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
 }
 
-function normalizeTemplate(id: ItemId, root: Group, spec: ItemModelSpec): number {
+function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSpec): number {
   root.rotation.set(...spec.rotation);
   root.updateMatrixWorld(true);
 
@@ -246,21 +263,25 @@ interface LoadedTemplate {
 export class PropModelLibrary {
   private disposed = false;
 
-  private constructor(private readonly templates: ReadonlyMap<ItemId, Group>) {}
+  private constructor(
+    private readonly itemTemplates: ReadonlyMap<ItemId, Group>,
+    private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group>,
+  ) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
     const ledgerRows = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
       .map(ledgerCells)
       .filter((row): row is readonly string[] => row !== null);
-    for (const id of ITEM_IDS) {
-      const spec = validateSpec(id, ITEM_MODEL_SPECS[id]);
+    for (const id of RUNTIME_MODEL_IDS) {
+      const spec = validateSpec(id, runtimeModelSpec(id));
       if (spec.provenance.kind === 'thirdParty') validateLedgerEntry(id, spec, ledgerRows);
     }
 
-    const results = await Promise.allSettled(ITEM_IDS.map(async (id): Promise<LoadedTemplate> => {
-      const root = await loader.load(ITEM_MODEL_SPECS[id].url);
+    const results = await Promise.allSettled(RUNTIME_MODEL_IDS.map(async (id): Promise<LoadedTemplate> => {
+      const spec = runtimeModelSpec(id);
+      const root = await loader.load(spec.url);
       try {
-        const triangles = normalizeTemplate(id, root, ITEM_MODEL_SPECS[id]);
+        const triangles = normalizeTemplate(id, root, spec);
         const template = new Group();
         template.add(root);
         return { root: template, triangles };
@@ -273,7 +294,7 @@ export class PropModelLibrary {
     const fulfilledRoots = results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []);
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
-      const id = ITEM_IDS[firstFailureIndex]!;
+      const id = RUNTIME_MODEL_IDS[firstFailureIndex]!;
       const rejected = results[firstFailureIndex] as PromiseRejectedResult;
       const cause = rejected.reason;
       attemptCleanup(() => disposeRoots(fulfilledRoots));
@@ -288,7 +309,7 @@ export class PropModelLibrary {
       aggregateTriangles += loaded[index]!.triangles;
       if (aggregateTriangles > ITEM_MODEL_MAX_TOTAL_TRIANGLES) {
         const error = new ItemModelLoadError(
-          ITEM_IDS[index]!,
+          RUNTIME_MODEL_IDS[index]!,
           `aggregate triangle count ${aggregateTriangles} exceeds the ${ITEM_MODEL_MAX_TOTAL_TRIANGLES} limit`,
         );
         attemptCleanup(() => disposeRoots(fulfilledRoots));
@@ -296,17 +317,24 @@ export class PropModelLibrary {
       }
     }
 
-    return new PropModelLibrary(new Map(
-      ITEM_IDS.map((id, index) => [id, loaded[index]!.root]),
-    ));
+    return new PropModelLibrary(
+      new Map(ITEM_IDS.map((id, index) => [id, loaded[index]!.root])),
+      new Map(LIFEBOAT_EQUIPMENT_IDS.map((id, index) => [
+        id,
+        loaded[ITEM_IDS.length + index]!.root,
+      ])),
+    );
   }
 
-  static fromTemplatesForTest(templates: ReadonlyMap<ItemId, Group>): PropModelLibrary {
-    return new PropModelLibrary(templates);
+  static fromTemplatesForTest(
+    itemTemplates: ReadonlyMap<ItemId, Group>,
+    equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group> = new Map(),
+  ): PropModelLibrary {
+    return new PropModelLibrary(itemTemplates, equipmentTemplates);
   }
 
   create(instance: ItemInstance): Group {
-    const template = this.templates.get(instance.type);
+    const template = this.itemTemplates.get(instance.type);
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
     const clone = cloneOwnedTemplate(template);
     clone.position.set(0, 0, 0);
@@ -318,9 +346,24 @@ export class PropModelLibrary {
     return clone;
   }
 
+  createEquipment(id: LifeboatEquipmentId): Group {
+    const template = this.equipmentTemplates.get(id);
+    if (!template) throw new Error(`Missing equipment model template: ${id}`);
+    const clone = cloneOwnedTemplate(template);
+    clone.position.set(0, 0, 0);
+    clone.quaternion.identity();
+    clone.scale.set(1, 1, 1);
+    clone.name = `lifeboat-equipment:${id}`;
+    clone.userData.equipmentId = id;
+    return clone;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    disposeRoots(this.templates.values());
+    disposeRoots([
+      ...this.itemTemplates.values(),
+      ...this.equipmentTemplates.values(),
+    ]);
   }
 }

@@ -89,7 +89,7 @@ async function measuredNormalizedBounds(id: ItemId): Promise<Box3> {
 }
 
 describe('ship item placement', () => {
-  it('places all twenty-two Dorothy instances on unique compatible slots', () => {
+  it('places all twenty-one Dorothy instances on unique compatible slots', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     try {
@@ -102,10 +102,10 @@ describe('ship item placement', () => {
         mulberry32(421),
         ship.colliders,
       );
-      expect(assignments.size).toBe(22);
-      expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
+      expect(assignments.size).toBe(21);
+      expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(21);
       expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-        .toBe(22);
+        .toBe(21);
       for (const instance of createItemInstances()) {
         expect(assignments.has(instance.instanceId), instance.instanceId).toBe(true);
       }
@@ -220,11 +220,11 @@ describe('ship item placement', () => {
       standingPoints: [new Vector3(10, 2.22, 0)],
     })])).toThrow(/too-far.*reach/i);
 
-    const rod = createItemInstances().filter(({ type }) => type === 'fishingRod');
-    expect(() => assignShipItems(rod, [surface('narrow', ['deckGear'], 0, {
+    const harpoon = createItemInstances().filter(({ type }) => type === 'harpoonGun');
+    expect(() => assignShipItems(harpoon, [surface('narrow', ['workshop'], 0, {
       rotation: new Euler(0, Math.PI / 2, 0),
       footprint: { width: 0.5, depth: 0.5 },
-    })])).toThrow('Unable to place ship item: fishingRod-1');
+    })])).toThrow('Unable to place ship item: harpoonGun-1');
   });
 
   it('uniformly scales a model to fit but rejects scales below three quarters', () => {
@@ -289,10 +289,10 @@ describe('ship item placement', () => {
           mulberry32(seed),
           ship.colliders,
         );
-        expect(assignments.size, `seed ${seed}`).toBe(22);
-        expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
+        expect(assignments.size, `seed ${seed}`).toBe(21);
+        expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(21);
         expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-          .toBe(22);
+          .toBe(21);
         expect([...assignments.values()].every(({ usedFallbackSurface }) => !usedFallbackSurface))
           .toBe(true);
         for (const [instanceId, assignment] of assignments) {
@@ -325,7 +325,7 @@ describe('ship item placement', () => {
             expect(overlap, `${seed}:${instanceId}:${assignment.surfaceId}`).toBe(false);
           });
         }
-        expect(assignments.get('fishingRod-1')!.scale).toBe(1);
+        expect([...assignments.keys()]).not.toContain('fishingRod-1');
       }
       expect(ship.playerNavigationBounds.safe).toEqual({
         minX: -7.65,

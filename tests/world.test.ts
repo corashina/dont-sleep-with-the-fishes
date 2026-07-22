@@ -132,8 +132,8 @@ describe('world builders', () => {
       .map((object) => object.userData.shipSurfaceId as string);
 
     expect(world.playerStart.toArray()).toEqual([0, 3.72, 8.8]);
-    expect(surfaceIds).toHaveLength(22);
-    expect(new Set(surfaceIds).size).toBe(22);
+    expect(surfaceIds).toHaveLength(21);
+    expect(new Set(surfaceIds).size).toBe(21);
     expect(surfaceIds.every(Boolean)).toBe(true);
     world.dispose();
     expect(libraryDispose).not.toHaveBeenCalled();
@@ -423,7 +423,7 @@ describe('world builders', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels, createTestMoonTexture(), createItemInstances());
-    expect(world.itemObjects.size).toBe(22);
+    expect(world.itemObjects.size).toBe(21);
     expect(world.colliders.length).toBeGreaterThanOrEqual(10);
     expect(scene.getObjectByName('sinking-ship')).toBeDefined();
     expect(scene.getObjectByName('lifeboat')).toBeDefined();
@@ -453,7 +453,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('builds twenty-two model instances including a distinct scuba set', () => {
+  it('builds twenty-one model instances including a distinct scuba set', () => {
     const propModels = createTestPropModels();
     const world = createTestWorld(
       new Scene(),
@@ -461,7 +461,7 @@ describe('world builders', () => {
       createTestMoonTexture(),
       createItemInstances(),
     );
-    expect(world.itemObjects.size).toBe(22);
+    expect(world.itemObjects.size).toBe(21);
     expect(world.itemObjects.get('scubaSet-1')?.userData.itemType).toBe('scubaSet');
     expect(world.itemObjects.get('scubaSet-1')?.userData.instanceId).toBe('scubaSet-1');
     world.dispose();
@@ -895,7 +895,7 @@ describe('world builders', () => {
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
     expect(shipMaterials.size).toBeGreaterThan(0);
-    expect(propResources).toHaveLength(22);
+    expect(propResources).toHaveLength(21);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
@@ -1236,8 +1236,8 @@ describe('world builders', () => {
     const surfacesById = new Map(referenceShip.itemSurfaces.map((surface) => [surface.id, surface]));
     const assignments = assignShipItems(createItemInstances(), referenceShip.itemSurfaces, () => 0.35);
     const surfaceIds = [...world.itemObjects.values()].map((item) => item.userData.shipSurfaceId as string);
-    expect(surfaceIds).toHaveLength(22);
-    expect(new Set(surfaceIds).size).toBe(22);
+    expect(surfaceIds).toHaveLength(21);
+    expect(new Set(surfaceIds).size).toBe(21);
     expect(surfaceIds.every(Boolean)).toBe(true);
     world.itemObjects.forEach((item, instanceId) => {
       const surface = surfacesById.get(item.userData.shipSurfaceId as string);

@@ -62,7 +62,7 @@ describe('boat item layout', () => {
 
   it('defines exactly one stable transform per possible item instance', () => {
     const instances = createItemInstances();
-    expect(instances).toHaveLength(22);
+    expect(instances).toHaveLength(21);
     expect([...new Set(instances.map(({ type }) => type))]).toEqual(ITEM_IDS);
     for (const instance of instances) {
       const first = boatStorageTransform(instance);
@@ -209,7 +209,7 @@ describe('boat item layout', () => {
   it('leaves the central longitudinal floor clear outside the bow zone', () => {
     for (const instance of createItemInstances()) {
       const { position } = boatStorageTransform(instance);
-      if (position.z > -2.05 && instance.type !== 'fishingRod') {
+      if (position.z > -2.05) {
         expect(Math.abs(position.x), instance.instanceId).toBeGreaterThanOrEqual(0.58);
       }
     }

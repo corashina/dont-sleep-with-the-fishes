@@ -16,7 +16,7 @@ const EXPECTED = {
   map: [1, 1], medicalKit: [1, 2], spyglass: [1, 1], fishingNet: [1, 2],
   bucket: [1, 2], flareGun: [1, 1], scubaSet: [1, 3], anchor: [1, 3],
   bottledPaper: [1, 1], umbrella: [1, 2], swimRing: [1, 2], flashlight: [1, 1],
-  harpoonGun: [1, 2], energyBar: [1, 1], fishingRod: [1, 2],
+  harpoonGun: [1, 2], energyBar: [1, 1],
 } as const;
 
 describe('physical item catalog', () => {
@@ -29,12 +29,14 @@ describe('physical item catalog', () => {
     expect(ITEM_IDS).not.toContain('waterJug');
     expect(ITEM_IDS).not.toContain('repairKit');
     expect(ITEM_IDS).not.toContain('chest');
+    expect(ITEM_IDS).not.toContain('fishingRod');
+    expect(ITEM_IDS).toHaveLength(18);
   });
 
-  it('creates twenty-two stable unique physical instances', () => {
+  it('creates twenty-one stable unique physical instances', () => {
     const instances = createItemInstances();
-    expect(instances).toHaveLength(22);
-    expect(new Set(instances.map(({ instanceId }) => instanceId))).toHaveLength(22);
+    expect(instances).toHaveLength(21);
+    expect(new Set(instances.map(({ instanceId }) => instanceId))).toHaveLength(21);
     expect(instances.filter(({ type }) => type === 'cannedFood')).toHaveLength(3);
     expect(instances.filter(({ type }) => type === 'baitTin')).toHaveLength(2);
     expect(instances.filter(({ type }) => type === 'ductTape')).toEqual([

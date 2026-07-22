@@ -21,6 +21,7 @@ const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) =>
 const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
   day,
   weather: day === 1 ? 'calm' : 'overcast',
+  actions: [],
   daytime: null,
   nighttime: {
     kind: 'event',
@@ -48,15 +49,16 @@ afterEach(() => {
 function createUI(mount: HTMLElement): SurvivalUI {
   const ui = new SurvivalUI(mount);
   ui.setAnchors([
-    { id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
-    { id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null, x: 240, y: 250, visible: true, depleted: false },
-    { id: 'cannedFood-test', itemType: 'cannedFood', action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
+    { id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null, x: 90, y: 180, visible: true, depleted: false },
+    { id: 'bucket-test', itemType: 'bucket', toolId: null, action: null, remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
+    { id: 'scubaSet-test', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null, x: 240, y: 250, visible: true, depleted: false },
+    { id: 'cannedFood-test', itemType: 'cannedFood', toolId: null, action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
     {
-      id: 'repair-tools', itemType: null, action: 'repair', remainingUses: null,
+      id: 'repair-tools', itemType: null, toolId: 'repairTools', action: 'repair', remainingUses: null,
       x: 440, y: 280, visible: true, depleted: false,
       hitArea: { width: 96, height: 52, depth: 2.4 },
     },
-    { id: 'medicalKit-test', itemType: 'medicalKit', action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
+    { id: 'medicalKit-test', itemType: 'medicalKit', toolId: null, action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
   ]);
   activeUIs.push(ui);
   return ui;
@@ -64,7 +66,7 @@ function createUI(mount: HTMLElement): SurvivalUI {
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    ...new SurvivalSession(saved('fishingRod'), {
+    ...new SurvivalSession(saved('map'), {
       seed: 7,
       random: sequenceRandom([0.5]),
     }).snapshot(),
@@ -72,8 +74,8 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   };
 }
 
-function testEvent(itemIds: readonly ItemId[] = ['fishingRod']): SurvivalEventDefinition {
-  const selected = itemIds.length > 0 ? itemIds : ['fishingRod'] as const;
+function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinition {
+  const selected = itemIds.length > 0 ? itemIds : ['map'] as const;
   const eventChoice = (itemId: ItemId) => ({
     id: itemId,
     label: `Use ${itemId}`,
@@ -102,8 +104,8 @@ describe('SurvivalUI', () => {
     const state = new SurvivalSession(saved('bottledPaper', 'energyBar'), { seed: 1, initial: { energy: 2 } }).snapshot();
     ui.render(state, () => null);
     ui.setAnchors([
-      { id: 'bottledPaper-1', itemType: 'bottledPaper', action: 'sendMessage', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
-      { id: 'energyBar-2', itemType: 'energyBar', action: 'useEnergyBar', remainingUses: 1, x: 200, y: 100, visible: true, depleted: false },
+      { id: 'bottledPaper-1', itemType: 'bottledPaper', toolId: null, action: 'sendMessage', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
+      { id: 'energyBar-2', itemType: 'energyBar', toolId: null, action: 'useEnergyBar', remainingUses: 1, x: 200, y: 100, visible: true, depleted: false },
     ]);
     const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
     expect(mount.querySelector('[data-action="rest"]')).toBeNull();
@@ -129,7 +131,7 @@ describe('SurvivalUI', () => {
     const action = vi.fn();
     ui.onAction = action;
     ui.render(state, () => null);
-    ui.setAnchors([{ id: 'ductTape-1', itemType: 'ductTape', action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false }]);
+    ui.setAnchors([{ id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false }]);
     mount.querySelector<HTMLButtonElement>('[data-action="repairItem"]')!.click();
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
@@ -238,17 +240,17 @@ describe('SurvivalUI', () => {
     const highlight = vi.fn();
     ui.onAnchorHighlight = highlight;
     ui.render(snapshot(), () => null);
-    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
     const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
 
     repair.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     repair.focus();
     expect(highlight).not.toHaveBeenCalled();
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
     item.focus();
     item.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
-    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
     item.blur();
     expect(highlight).toHaveBeenLastCalledWith(null);
 
@@ -262,7 +264,7 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const highlight = vi.fn();
     ui.onAnchorHighlight = highlight;
-    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     ui.setBusy(true);
@@ -282,12 +284,12 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const highlight = vi.fn();
     ui.onAnchorHighlight = highlight;
-    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
     ui.setAnchors([{
-      id: 'fishingRod-test', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      id: 'bucket-test', itemType: 'bucket', toolId: null, action: null, remainingUses: null,
       x: 140, y: 180, visible: false, depleted: false,
     }]);
 
@@ -299,12 +301,12 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const highlight = vi.fn();
     ui.onAnchorHighlight = highlight;
-    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    expect(highlight).toHaveBeenLastCalledWith('fishingRod-test');
+    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
     ui.setAnchors([{
-      id: 'fishingRod-test', itemType: null, action: 'repair', remainingUses: null,
+      id: 'bucket-test', itemType: null, toolId: 'repairTools', action: 'repair', remainingUses: null,
       x: 140, y: 180, visible: true, depleted: false,
     }]);
 
@@ -315,14 +317,14 @@ describe('SurvivalUI', () => {
     {
       state: 'invisible',
       anchor: {
-        id: 'fishingRod-test', itemType: 'fishingRod' as const, action: 'fish' as const, remainingUses: null,
+        id: 'bucket-test', itemType: 'bucket' as const, toolId: null, action: null, remainingUses: null,
         x: 140, y: 180, visible: false, depleted: false,
       },
     },
     {
       state: 'tool',
       anchor: {
-        id: 'fishingRod-test', itemType: null, action: 'repair' as const, remainingUses: null,
+        id: 'bucket-test', itemType: null, toolId: 'repairTools' as const, action: 'repair' as const, remainingUses: null,
         x: 140, y: 180, visible: true, depleted: false,
       },
     },
@@ -332,24 +334,24 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const highlight = vi.fn();
     ui.onAnchorHighlight = highlight;
-    const hovered = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-test"]')!;
+    const hovered = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
     const focused = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-test"]')!;
 
     hovered.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     focused.focus();
-    expect(highlight.mock.calls).toEqual([['fishingRod-test'], ['scubaSet-test']]);
+    expect(highlight.mock.calls).toEqual([['bucket-test'], ['scubaSet-test']]);
     highlight.mockClear();
 
     ui.setAnchors([
       anchor,
       {
-        id: 'scubaSet-test', itemType: 'scubaSet', action: 'dive', remainingUses: null,
+        id: 'scubaSet-test', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null,
         x: 240, y: 250, visible: true, depleted: false,
       },
     ]);
     focused.blur();
 
-    expect(highlight).not.toHaveBeenCalledWith('fishingRod-test');
+    expect(highlight).not.toHaveBeenCalledWith('bucket-test');
     expect(highlight.mock.calls).toEqual([[null]]);
   });
 
@@ -368,7 +370,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    for (const selector of ['[data-action-options]', '[data-repair-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
+    for (const selector of ['[data-repair-options]', '[data-event]', '[data-pause]', '[data-ending]']) {
       const overlay = mount.querySelector<HTMLElement>(selector)!;
       expect(overlay.children).toHaveLength(1);
       expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
@@ -390,12 +392,12 @@ describe('SurvivalUI', () => {
     expect(repair.querySelector('[role="tooltip"]')?.textContent).toMatch(/PLANK.*HAMMER.*REPAIR.*2 ENERGY/is);
 
     ui.setAnchors([{
-      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      id: 'scubaSet-1', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
       hitArea: { width: 96, height: 52, depth: 2.4 },
     }]);
 
-    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishingRod-1"]')!;
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!;
     expect(anchor.dataset.targetKind).toBe('item');
     expect(anchor.style.transform).toBe('translate(320px, 240px)');
     expect(anchor.style.width).toBe('96px');
@@ -403,10 +405,36 @@ describe('SurvivalUI', () => {
     expect(anchor.style.marginLeft).toBe('-48px');
     expect(anchor.style.marginTop).toBe('-26px');
     expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
-    expect(anchor.getAttribute('aria-keyshortcuts')).toBe('1');
-    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/FISHING ROD.*FISH.*2 ENERGY/is);
+    expect(anchor.getAttribute('aria-keyshortcuts')).toBe('2');
+    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toMatch(/SCUBA GEAR.*DIVE.*3 ENERGY/is);
     expect(mount.querySelector('.survival-actions')).toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
+  });
+
+  it('renders the fixed fishing equipment with permanent one-energy tool copy', () => {
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    ui.render(new SurvivalSession([], { seed: 1 }).snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      remainingUses: null,
+      x: 320,
+      y: 240,
+      visible: true,
+      depleted: false,
+    }]);
+
+    const fishing = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-tools"]')!;
+    expect(fishing.dataset.targetKind).toBe('tool');
+    expect(fishing.dataset.tool).toBe('fishingRod');
+    expect(fishing.getAttribute('aria-keyshortcuts')).toBe('1');
+    expect(fishing.querySelector('[role="tooltip"]')?.textContent).toMatch(
+      /FISH.*Cast from the bow to find food or drifting junk.*1 ENERGY/is,
+    );
+    ui.dispose();
   });
 
 
@@ -417,9 +445,9 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const onAction = vi.fn();
     ui.onAction = onAction;
-    ui.render(snapshot(), (action) => action === 'fish' ? 'Fishing requires a recovered fishing rod.' : null);
+    ui.render(snapshot(), (action) => action === 'fish' ? 'Fishing is unavailable in this weather.' : null);
     ui.setAnchors([{
-      id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null,
+      id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
@@ -439,7 +467,7 @@ describe('SurvivalUI', () => {
     }).snapshot();
     ui.render(state, () => null);
     ui.setAnchors([{
-      id: 'bucket-1', itemType: 'bucket', action: null, remainingUses: 0,
+      id: 'bucket-1', itemType: 'bucket', toolId: null, action: null, remainingUses: 0,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
@@ -460,10 +488,10 @@ describe('SurvivalUI', () => {
     }).snapshot();
     ui.render(state, () => null);
     ui.setAnchors([
-      { id: 'flareGun-1', itemType: 'flareGun', action: null, remainingUses: 1, x: 1, y: 1, visible: true, depleted: false },
-      { id: 'flashlight-2', itemType: 'flashlight', action: null, remainingUses: null, x: 2, y: 2, visible: true, depleted: false },
-      { id: 'baitTin-3', itemType: 'baitTin', action: null, remainingUses: 1, x: 3, y: 3, visible: true, depleted: false },
-      { id: 'bucket-4', itemType: 'bucket', action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: false },
+      { id: 'flareGun-1', itemType: 'flareGun', toolId: null, action: null, remainingUses: 1, x: 1, y: 1, visible: true, depleted: false },
+      { id: 'flashlight-2', itemType: 'flashlight', toolId: null, action: null, remainingUses: null, x: 2, y: 2, visible: true, depleted: false },
+      { id: 'baitTin-3', itemType: 'baitTin', toolId: null, action: null, remainingUses: 1, x: 3, y: 3, visible: true, depleted: false },
+      { id: 'bucket-4', itemType: 'bucket', toolId: null, action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: false },
     ]);
 
     expect(mount.querySelector('[data-anchor-id="flareGun-1"]')?.textContent).toContain('signal flare');
@@ -478,8 +506,8 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     ui.setAnchors([
-      { id: 'left', itemType: 'flareGun', action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
-      { id: 'right', itemType: 'flashlight', action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
+      { id: 'left', itemType: 'flareGun', toolId: null, action: null, remainingUses: 1, x: 8, y: 300, visible: true, depleted: false },
+      { id: 'right', itemType: 'flashlight', toolId: null, action: null, remainingUses: null, x: window.innerWidth - 8, y: 300, visible: true, depleted: false },
     ]);
     const style = document.createElement('style');
     style.textContent = mainStyles;
@@ -516,10 +544,10 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     const fish = mount.querySelector<HTMLElement>('[data-action="fish"]')!;
-    expect(fish.textContent).toContain('2 ENERGY');
+    expect(fish.textContent).toContain('1 ENERGY');
     expect(fish.textContent).toContain('Chance to gain food');
     expect(fish.textContent).toContain('UNCERTAIN');
-    expect(fish.getAttribute('aria-description')).toContain('2 ENERGY');
+    expect(fish.getAttribute('aria-description')).toContain('1 ENERGY');
     expect(fish.querySelector('[role="tooltip"]')).not.toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
   });
@@ -556,20 +584,20 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const state = snapshot({
-      ...new SurvivalSession(saved('cannedFood', 'baitTin', 'fishingRod'), { seed: 1 }).snapshot(),
+      ...new SurvivalSession(saved('cannedFood', 'baitTin', 'fishingNet'), { seed: 1 }).snapshot(),
       food: 2,
       bait: 3,
     });
     ui.render(state, () => null);
     ui.setAnchors([
-      { id: 'cannedFood-1', itemType: 'cannedFood', action: 'eat', remainingUses: 0, x: 1, y: 1, visible: true, depleted: true },
-      { id: 'baitTin-1', itemType: 'baitTin', action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
-      { id: 'fishingRod-1', itemType: 'fishingRod', action: 'fish', remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
+      { id: 'cannedFood-1', itemType: 'cannedFood', toolId: null, action: 'eat', remainingUses: 0, x: 1, y: 1, visible: true, depleted: true },
+      { id: 'baitTin-2', itemType: 'baitTin', toolId: null, action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
+      { id: 'fishingNet-3', itemType: 'fishingNet', toolId: null, action: null, remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
     expect(mount.querySelector('[data-item="baitTin"]')?.textContent).toMatch(/bait|fishing/i);
-    expect(mount.querySelector('[data-item="fishingRod"]')?.textContent).toMatch(/food|fish/i);
-    ui.showEvent(testEvent(['fishingRod']), state);
-    expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')?.getAttribute('aria-description')).toMatch(/food|fish/i);
+    expect(mount.querySelector('[data-item="fishingNet"]')?.textContent).toMatch(/fish|supplies/i);
+    ui.showEvent(testEvent(['fishingNet']), state);
+    expect(mount.querySelector('[data-event-items] [data-item="fishingNet"]')?.getAttribute('aria-description')).toMatch(/fish|supplies/i);
   });
 
   it('describes Energy Bar event choices with the three-energy cap', () => {
@@ -587,7 +615,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot({ inventory: new SurvivalSession(saved(), { seed: 1 }).snapshot().inventory }), () => null);
-    ui.setAnchors([{ id: 'repair-tools', itemType: null, action: 'repair', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
+    ui.setAnchors([{ id: 'repair-tools', itemType: null, toolId: 'repairTools', action: 'repair', remainingUses: null, x: 1, y: 1, visible: true, depleted: false }]);
     expect(mount.textContent).not.toMatch(/hand-line/i);
     expect(mount.querySelector('[data-action="fish"]')).toBeNull();
   });
@@ -601,7 +629,7 @@ describe('SurvivalUI', () => {
       expect(meter.getAttribute('aria-label')).toBeTruthy();
       expect(meter.querySelector('[data-meter-value]')?.textContent).toMatch(/^\d+$/);
     });
-    [...mount.querySelectorAll<HTMLButtonElement>('[data-action]')].forEach((button) => {
+    [...mount.querySelectorAll<HTMLButtonElement>('[data-action]:not([data-action=""])')].forEach((button) => {
       expect(button.textContent?.trim()).not.toBe('');
       expect(button.getAttribute('aria-keyshortcuts')).toMatch(/^[1-7]$/);
     });
@@ -751,8 +779,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('3');
     expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
-    expect(mount.querySelectorAll('[data-action]')).toHaveLength(6);
-    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(5);
+    expect(mount.querySelectorAll('[data-action]:not([data-action=""])')).toHaveLength(6);
+    expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
   });
 
@@ -773,44 +801,170 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.hidden).toBe(false);
   });
 
-  it('emits unbaited fishing directly when no bait remains', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    const action = vi.fn();
-    ui.onAction = action;
-    ui.render(snapshot({ bait: 0 }), () => null);
-    const options = mount.querySelector<HTMLElement>('[data-action-options]');
-
-    expect(options).not.toBeNull();
-    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
-
-    expect(action).toHaveBeenCalledWith('fish', undefined);
-    expect(options?.classList).not.toContain('is-visible');
-  });
-
-  it('emits both fishing choices with their matching option values', () => {
+  it('emits fishing directly from the rod and shortcut regardless of bait', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
     ui.onAction = action;
     ui.render(snapshot({ bait: 2 }), () => null);
-    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
 
-    fish.click();
-    expect(action).not.toHaveBeenCalled();
-    mount.querySelector<HTMLButtonElement>('[data-action-option="fish"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: false });
-    expect(document.activeElement).toBe(fish);
-
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenLastCalledWith('fish', { kind: 'fishing', useBait: true });
-    expect(action).toHaveBeenCalledTimes(2);
-    expect(document.activeElement).toBe(fish);
+
+    expect(action.mock.calls).toEqual([
+      ['fish', undefined],
+      ['fish', undefined],
+    ]);
+    expect(mount.querySelector('[data-action-options]')).toBeNull();
   });
 
-  it('isolates fishing choices and restores their command origin on Escape', () => {
+  it('describes automatic bait use on the fixed one-energy fishing action', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ bait: 0 }), () => null);
+    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const copy = fish.querySelector('[role="tooltip"]')?.textContent ?? '';
+
+    expect(copy).toContain('FISH');
+    expect(copy).toContain('1 ENERGY');
+    expect(copy).toMatch(/bait.*automat/i);
+  });
+
+  it('renders every fishing mode with exact interaction copy', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const instruction = mount.querySelector<HTMLElement>('[data-fishing-instruction]')!;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(instruction.textContent).toBe('CLICK THE WATER TO CAST');
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    expect(instruction.textContent).toBe('WAIT FOR A BITE');
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    expect(instruction.textContent).toBe('BITE - REEL NOW');
+    ui.setFishingState({ mode: 'result', message: 'CAUGHT MACKEREL', biteTarget: null });
+    expect(instruction.textContent).toBe('CAUGHT MACKEREL');
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    expect(instruction.textContent).toBe('IT GOT AWAY');
+    ui.setFishingState({ mode: 'hidden', message: '', biteTarget: null });
+    expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
+  });
+
+  it('forwards one mount-local aiming pointer cast and ignores pointer input in other modes', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const cast = vi.fn();
+    ui.onFishingCast = cast;
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+      x: 40, y: 70, left: 40, top: 70, right: 840, bottom: 670, width: 800, height: 600,
+      toJSON: () => ({}),
+    });
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 190, clientY: 230 }));
+    layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 190, clientY: 230 }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(cast).toHaveBeenCalledWith({ x: 150, y: 160 });
+
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 220, clientY: 260 }));
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 220, clientY: 260 }));
+    expect(cast).toHaveBeenCalledOnce();
+  });
+
+  it('rearms aiming after a rejected cast but keeps a synchronously accepted cast gated', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const acceptedResults = [false, true];
+    const cast = vi.fn(() => acceptedResults.shift() ?? true);
+    ui.onFishingCast = cast;
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 30, left: 20, top: 30, right: 820, bottom: 630,
+      width: 800, height: 600,
+      toJSON: () => ({}),
+    });
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 80, clientY: 90 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 180, clientY: 190 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 280, clientY: 290 }));
+
+    expect(cast.mock.calls).toEqual([
+      [{ x: 60, y: 60 }],
+      [{ x: 160, y: 160 }],
+    ]);
+  });
+
+  it('maps Enter and Space to centered casts or reels only in their matching modes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const cast = vi.fn();
+    const reel = vi.fn(() => true);
+    ui.onFishingCast = cast;
+    ui.onFishingReel = reel;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', repeat: true }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(cast).toHaveBeenCalledWith(null);
+
+    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    expect(cast).toHaveBeenCalledOnce();
+    expect(reel).not.toHaveBeenCalled();
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    expect(reel).toHaveBeenCalledOnce();
+  });
+
+  it('focuses and repositions the urgent bite target without duplicate reel intents', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const reel = vi.fn(() => true);
+    ui.onFishingReel = reel;
+    const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+    const target = { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true };
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: target,
+    });
+    expect(document.activeElement).toBe(bite);
+    expect(bite.getAttribute('aria-label')).toBe('BITE - REEL NOW');
+    expect(mount.querySelector('[data-fishing-live]')?.getAttribute('aria-live')).toBe('assertive');
+    expect(bite.style.transform).toBe('translate(160px, 90px)');
+    expect(bite.style.width).toBe('60px');
+    expect(bite.style.height).toBe('44px');
+
+    Object.assign(target, { x: 220, y: 130, width: 72, height: 48, depth: 2 });
+    ui.updateFishingBiteTarget(target);
+    expect(bite.style.transform).toBe('translate(220px, 130px)');
+    expect(mainStyles).not.toMatch(/@keyframes fishing-bite-pulse\s*\{[^}]*transform/s);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true }));
+    bite.click();
+    expect(reel).toHaveBeenCalledOnce();
+  });
+
+  it('isolates background actions during fishing while Escape and pause remain operable', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -818,44 +972,120 @@ describe('SurvivalUI', () => {
     const pause = vi.fn();
     ui.onAction = action;
     ui.onPauseChange = pause;
-    ui.render(snapshot({ bait: 1 }), () => null);
-    const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
-    const dive = mount.querySelector<HTMLButtonElement>('[data-action="dive"]')!;
-    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+    ui.render(snapshot(), () => null);
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
 
-    fish.click();
-    expect(options.classList).toContain('is-visible');
-    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
     expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
-    dive.click();
+    expect(mount.querySelector('[data-survival-top]')?.hasAttribute('inert')).toBe(true);
+    expect(fishing.hasAttribute('inert')).toBe(false);
+    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     expect(action).not.toHaveBeenCalled();
-
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    expect(options.classList).not.toContain('is-visible');
-    expect(document.activeElement).toBe(fish);
-    expect(pause).not.toHaveBeenCalled();
+    expect(pause).toHaveBeenCalledWith(true);
+
+    ui.setPaused(true);
+    expect(fishing.hasAttribute('inert')).toBe(true);
+    expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
+    ui.setPaused(false);
+    expect(fishing.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(bite);
   });
 
-  it('keeps Pause above fishing choices and resumes into the choice layer', () => {
+  it('announces fishing state changes but not projected-position-only updates', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const live = mount.querySelector<HTMLElement>('[data-fishing-live]')!;
+    const publications: string[] = [];
+    const observer = new MutationObserver(() => publications.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, subtree: true, characterData: true });
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    await Promise.resolve();
+    ui.updateFishingBiteTarget({
+      x: 220, y: 130, width: 72, height: 48, depth: 2, visible: true,
+    });
+    await Promise.resolve();
+
+    observer.disconnect();
+    expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
+  });
+
+  it('settles and safely supersedes reduced-motion fishing fades without transition events', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount, { matches: true });
+    activeUIs.push(ui);
+    const fade = mount.querySelector<HTMLElement>('[data-fishing-fade]')!;
+
+    const first = ui.setFishingFade(true);
+    expect(fade.classList).toContain('is-covered');
+    const second = ui.setFishingFade(false);
+    await first;
+    expect(fade.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+    expect(mainStyles).toMatch(/\.fishing-fade\s*\{[^}]*transition:\s*opacity/s);
+    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.fishing-fade\s*\{[^}]*transition-duration:\s*1ms/s);
+  });
+
+  it('disposes fishing listeners, pending fade work, inert state, and focused controls once', async () => {
+    vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const action = vi.fn();
-    ui.onAction = action;
-    ui.render(snapshot({ bait: 1 }), () => null);
-    const options = mount.querySelector<HTMLElement>('[data-action-options]')!;
+    const cast = vi.fn();
+    const reel = vi.fn();
+    ui.onFishingCast = cast;
+    ui.onFishingReel = reel;
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE - REEL NOW',
+      biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
+    });
+    const pendingFade = ui.setFishingFade(true);
 
-    mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
-    ui.setPaused(true);
-    expect(options.hasAttribute('inert')).toBe(true);
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).not.toHaveBeenCalled();
+    ui.dispose();
+    ui.dispose();
+    await pendingFade;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(cast).not.toHaveBeenCalled();
+    expect(reel).not.toHaveBeenCalled();
+    expect(mount.querySelector('.survival-ui')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
 
-    ui.setPaused(false);
-    expect(options.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(mount.querySelector('[data-action-options-title]'));
-    mount.querySelector<HTMLButtonElement>('[data-action-option="useBait"]')!.click();
-    expect(action).toHaveBeenCalledWith('fish', { kind: 'fishing', useBait: true });
+  it('does not restore anchor focus or republish a highlight while disposing active fishing', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlights: Array<string | null> = [];
+    ui.onAnchorHighlight = (anchorId) => highlights.push(anchorId);
+    ui.render(snapshot(), () => null);
+    const dive = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-test"]')!;
+    const teardownFocus = vi.fn();
+    dive.addEventListener('focus', teardownFocus);
+    dive.focus();
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(highlights).toEqual(['scubaSet-test', null]);
+    teardownFocus.mockClear();
+    const callbacksBeforeDispose = highlights.length;
+
+    ui.dispose();
+
+    expect(teardownFocus).not.toHaveBeenCalled();
+    expect(highlights.at(-1)).toBeNull();
+    expect(highlights.slice(callbacksBeforeDispose)).toEqual([]);
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('keeps unavailable projected actions focusable while suppressing commands', () => {
@@ -960,7 +1190,7 @@ describe('SurvivalUI', () => {
 
     expect(mount.querySelector('[data-event]')?.classList).toContain('is-visible');
     expect(mount.querySelector('[data-event]')?.hasAttribute('inert')).toBe(false);
-    expect(mount.querySelector('[data-event-items] [data-item="fishingRod"]')).not.toBeNull();
+    expect(mount.querySelector('[data-event-items] [data-item="map"]')).not.toBeNull();
     expect(document.activeElement).toBe(mount.querySelector('[data-event-title]'));
   });
 
@@ -1021,7 +1251,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const session = new SurvivalSession(saved(), { seed: 7 });
+    const session = new SurvivalSession(saved(), { seed: 7, initial: { energy: 0 } });
     const action = vi.fn();
     const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
     const publications: string[] = [];
@@ -1043,7 +1273,7 @@ describe('SurvivalUI', () => {
     await Promise.resolve();
 
     observer.disconnect();
-    expect(publications.filter((message) => message === 'Fishing requires a recovered fishing rod.')).toHaveLength(2);
+    expect(publications.filter((message) => message === 'Fishing requires one energy.')).toHaveLength(2);
     expect(publications).toContain('Diving requires a recovered scuba set.');
     expect(action).not.toHaveBeenCalled();
   });
@@ -1061,9 +1291,9 @@ describe('SurvivalUI', () => {
     fish.focus();
 
     ui.showEvent(testEvent(), snapshot());
-    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="fishingRod"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="map"]')!.click();
     mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
-    expect(eventItem).toHaveBeenCalledWith('fishingRod');
+    expect(eventItem).toHaveBeenCalledWith('map');
     expect(endure).toHaveBeenCalledOnce();
   });
 
@@ -1257,7 +1487,7 @@ describe('SurvivalUI', () => {
     expect(pause.hasAttribute('inert')).toBe(false);
     expect(eventLayer.hasAttribute('inert')).toBe(true);
     expect(eventLayer.getAttribute('aria-hidden')).toBe('true');
-    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="fishingRod"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-event-items] [data-item="map"]')!.click();
     mount.querySelector<HTMLButtonElement>('[data-endure]')!.click();
     expect(eventItem).not.toHaveBeenCalled();
     expect(endure).not.toHaveBeenCalled();
