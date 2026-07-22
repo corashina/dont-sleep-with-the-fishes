@@ -1184,14 +1184,14 @@ describe('world builders', () => {
       rigging.colliders,
     ] as const;
 
-    expect(components.map(({ length }) => length)).toEqual([36, 22, 16, 2]);
-    expect(SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize)).toHaveLength(16);
+    expect(components.map(({ length }) => length)).toEqual([36, 22, 8, 2]);
+    expect(SHIP_LAYOUT.details.filter(({ colliderSize }) => colliderSize)).toHaveLength(8);
     expect(SHIP_LAYOUT.rigging.masts).toHaveLength(2);
     expect(SHIP_LAYOUT.rigging.masts.flatMap(({ id }) => [
       rigging.root.getObjectByName(`sail:${id}`),
       rigging.root.getObjectByName(`stay:${id}`),
     ]).every(Boolean)).toBe(true);
-    expect(ship.colliders).toHaveLength(76);
+    expect(ship.colliders).toHaveLength(68);
     expect(ship.colliders).toEqual(components.flat());
     let offset = 0;
     components.forEach((component) => {
