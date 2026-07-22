@@ -180,7 +180,7 @@ export class SurvivalSession {
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'endDay': return this.endDay();
     }
-    if (action !== 'endDay') this.dayActivity = 'other';
+    this.dayActivity = 'other';
     this.actedToday = true;
     return outcome;
   }
