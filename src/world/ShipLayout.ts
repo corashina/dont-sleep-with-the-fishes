@@ -287,11 +287,13 @@ export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
   spareTimber: [1.8, 0.56],
 };
 
+export const SHIP_DECK_DETAIL_MIN_GAP = 1;
+
 const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
-  barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-3.8, -2], [3.8, -2]],
-  ropeCoil: [[-6.2, 19], [6.2, 19], [-6.2, -19], [6.2, -19]],
-  lifeRing: [[-6.5, 10], [6.5, 10], [-6.5, -12], [6.5, -12]],
-  spareTimber: [[-3.8, -4.5], [3.8, -4.5]],
+  barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-1.8, 4.4], [1.9, -7.3]],
+  ropeCoil: [[-6.85, 13], [6.85, 10.1], [-6.85, -9], [6.85, -12.9]],
+  lifeRing: [[-7.2, 9.5], [7.2, 14], [-7.2, -13.8], [7.2, -7]],
+  spareTimber: [[2.8, 12.8], [-2.8, -13.9]],
 };
 
 const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, number]>> = {
@@ -675,6 +677,12 @@ export function detailVisualRect(spec: ShipDeckDetailSpec): Rect2 {
   return detailFootprintRect(spec, spec.visualSize[0], spec.visualSize[1]);
 }
 
+function rectangleGap(left: Rect2, right: Rect2): number {
+  const x = Math.max(0, left.minX - right.maxX, right.minX - left.maxX);
+  const z = Math.max(0, left.minZ - right.maxZ, right.minZ - left.maxZ);
+  return Math.hypot(x, z);
+}
+
 function detailFootprintRect(
   spec: ShipDeckDetailSpec,
   unscaledWidth: number,
@@ -1005,6 +1013,15 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       throw new Error(`Detail ${spec.id} lies outside the cargoDeck hull polygon`);
     }
     return { spec, bounds };
+  });
+  detailVisualBounds.forEach((left, index) => {
+    detailVisualBounds.slice(index + 1).forEach((right) => {
+      if (rectangleGap(left.bounds, right.bounds) < SHIP_DECK_DETAIL_MIN_GAP) {
+        throw new Error(
+          `Details ${left.spec.id} and ${right.spec.id} must remain at least 1 metre apart`,
+        );
+      }
+    });
   });
   const detailBounds = layout.details.flatMap((spec) => {
     if (!finiteTuple(spec.position) || !Number.isFinite(spec.rotationY)
