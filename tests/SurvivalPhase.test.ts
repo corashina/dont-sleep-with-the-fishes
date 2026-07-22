@@ -167,6 +167,9 @@ function createFishingRig(options: FishingRigOptions = {}) {
       }
     }),
   };
+  const updateFishingBiteTarget = vi.fn((target: ProjectedBoatBounds | null) => {
+    calls.push(`ui:bite-target:${target?.x ?? 'hidden'}`);
+  });
   const ui: Partial<SurvivalUI> = {
     render: vi.fn((current: SurvivalSnapshot) => {
       calls.push(`render:${current.energy}:${current.food}:${current.bait}`);
@@ -177,6 +180,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
     setFishingState: vi.fn((state: FishingUiState) => {
       calls.push(`ui:${state.mode}:${state.message}`);
     }),
+    updateFishingBiteTarget,
     setFishingFade: vi.fn((covered: boolean) => {
       calls.push(covered ? 'fade:cover' : 'fade:uncover');
       const handle = deferred();
@@ -206,6 +210,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
     animations,
     castPoint,
     biteTarget,
+    updateFishingBiteTarget,
   };
 }
 
@@ -643,11 +648,35 @@ describe('SurvivalPhase orchestration', () => {
     expect(attempt.snapshot()).toEqual(beforeResize);
     expect(rig.world.showFishingBite).toHaveBeenCalledOnce();
     expect(rig.world.projectFishingBite).toHaveBeenLastCalledWith(1280, 720);
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
-      mode: 'bite',
-      message: 'BITE - REEL NOW',
-      biteTarget: resizedTarget,
-    });
+    expect(rig.updateFishingBiteTarget).toHaveBeenLastCalledWith(resizedTarget);
+  });
+
+  it('reads the live attempt view and only updates bite position on active frames', async () => {
+    const rig = createFishingRig();
+    rig.phase.start();
+    rig.phase.handleAction('fish');
+    await settleFishingEntry(rig);
+    expect(fishingCastCallback(rig)(null)).toBe(true);
+    await completeFishingCast(rig);
+    const attempt = rig.session.beginFishing.mock.results[0]!.value.attempt;
+    const attemptSnapshot = vi.spyOn(attempt, 'snapshot');
+    attemptSnapshot.mockClear();
+    const stateCallsBeforeBite = vi.mocked(rig.ui.setFishingState!).mock.calls.length;
+
+    rig.phase.update(3, 3);
+
+    expect(attemptSnapshot).not.toHaveBeenCalled();
+    expect(vi.mocked(rig.ui.setFishingState!).mock.calls).toHaveLength(stateCallsBeforeBite + 1);
+    const stateCallsAtBite = vi.mocked(rig.ui.setFishingState!).mock.calls.length;
+    rig.updateFishingBiteTarget.mockClear();
+
+    rig.phase.update(3.1, 0.1);
+    rig.phase.update(3.2, 0.1);
+
+    expect(attemptSnapshot).not.toHaveBeenCalled();
+    expect(vi.mocked(rig.ui.setFishingState!).mock.calls).toHaveLength(stateCallsAtBite);
+    expect(rig.updateFishingBiteTarget).toHaveBeenCalledTimes(2);
+    expect(rig.updateFishingBiteTarget).toHaveBeenLastCalledWith(rig.biteTarget);
   });
 
   it('commits one reel before presentation and requests the day event only after return', async () => {

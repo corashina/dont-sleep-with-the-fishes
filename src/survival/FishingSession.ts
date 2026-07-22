@@ -28,6 +28,13 @@ export interface FishingAttemptSnapshot {
   readonly result: FishingTerminalResult | null;
 }
 
+export interface FishingAttemptView {
+  readonly id: string;
+  readonly state: FishingAttemptState;
+  readonly castPoint: FishingCastPoint | null;
+  readonly result: FishingTerminalResult | null;
+}
+
 export interface FishingCommandResult {
   readonly accepted: boolean;
   readonly code: string;
@@ -58,6 +65,7 @@ export class FishingSession {
   private waitingSeconds = 0;
   private biteSeconds = 0;
   private result: FishingTerminalResult | null = null;
+  private readonly liveView: FishingAttemptView;
 
   constructor(options: FishingSessionOptions) {
     this.id = options.id;
@@ -67,6 +75,17 @@ export class FishingSession {
     this.biteDelaySeconds = SURVIVAL_BALANCE.fishing.minimumBiteDelaySeconds
       + biteDelayRoll * SURVIVAL_BALANCE.fishing.biteDelayRangeSeconds;
     this.hiddenCatch = selectFishingCatch(options.day, options.capturedBait, catchRoll);
+    const session = this;
+    this.liveView = Object.freeze({
+      get id(): string { return session.id; },
+      get state(): FishingAttemptState { return session.state; },
+      get castPoint(): FishingCastPoint | null { return session.castPoint; },
+      get result(): FishingTerminalResult | null { return session.result; },
+    });
+  }
+
+  view(): FishingAttemptView {
+    return this.liveView;
   }
 
   snapshot(): FishingAttemptSnapshot {

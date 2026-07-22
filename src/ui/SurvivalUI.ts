@@ -233,7 +233,15 @@ export class SurvivalUI {
   private publishedAnchorId: string | null = null;
   private fishingMode: FishingUiMode = 'hidden';
   private fishingMessage = '';
-  private fishingTarget: ProjectedBoatBounds | null = null;
+  private readonly fishingTarget = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    depth: 0,
+    visible: false,
+  };
+  private hasFishingTarget = false;
   private fishingCastIssued = false;
   private fishingReelIssued = false;
   private suppressFishingClick = false;
@@ -585,7 +593,7 @@ export class SurvivalUI {
     const previousMode = this.fishingMode;
     const modeChanged = state.mode !== previousMode;
     const messageChanged = state.message !== this.fishingMessage;
-    const targetChanged = !this.sameFishingTarget(state.biteTarget, this.fishingTarget);
+    const targetChanged = !this.sameFishingTarget(state.biteTarget);
     if (!modeChanged && !messageChanged && !targetChanged) return;
 
     if (modeChanged) {
@@ -622,6 +630,15 @@ export class SurvivalUI {
 
     this.showLayer(this.fishingLayer);
     if (this.topmostModal() === this.fishingLayer && modeChanged) this.focusModal(this.fishingLayer);
+  }
+
+  updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
+    if (
+      this.disposed
+      || this.fishingMode !== 'bite'
+      || this.sameFishingTarget(target)
+    ) return;
+    this.renderFishingTarget(target);
   }
 
   setFishingFade(covered: boolean): Promise<void> {
@@ -1278,27 +1295,35 @@ export class SurvivalUI {
     this.activateDayAction(action.id, button);
   };
 
-  private sameFishingTarget(
-    left: ProjectedBoatBounds | null,
-    right: ProjectedBoatBounds | null,
-  ): boolean {
-    if (left === null || right === null) return left === right;
-    return left.x === right.x
-      && left.y === right.y
-      && left.width === right.width
-      && left.height === right.height
-      && left.depth === right.depth
-      && left.visible === right.visible;
+  private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {
+    if (target === null) return !this.hasFishingTarget;
+    if (!this.hasFishingTarget) return false;
+    return target.x === this.fishingTarget.x
+      && target.y === this.fishingTarget.y
+      && target.width === this.fishingTarget.width
+      && target.height === this.fishingTarget.height
+      && target.depth === this.fishingTarget.depth
+      && target.visible === this.fishingTarget.visible;
   }
 
   private renderFishingTarget(target: ProjectedBoatBounds | null): void {
-    this.fishingTarget = target === null ? null : { ...target };
-    const visible = this.fishingMode === 'bite' && target?.visible === true;
+    this.hasFishingTarget = target !== null;
+    if (target !== null) {
+      this.fishingTarget.x = target.x;
+      this.fishingTarget.y = target.y;
+      this.fishingTarget.width = target.width;
+      this.fishingTarget.height = target.height;
+      this.fishingTarget.depth = target.depth;
+      this.fishingTarget.visible = target.visible;
+    }
+    const visible = this.fishingMode === 'bite'
+      && this.hasFishingTarget
+      && this.fishingTarget.visible;
     this.fishingBiteTarget.hidden = !visible;
-    if (!visible || target === null) return;
-    const width = Math.max(44, Math.round(target.width));
-    const height = Math.max(44, Math.round(target.height));
-    this.fishingBiteTarget.style.transform = `translate(${Math.round(target.x)}px, ${Math.round(target.y)}px)`;
+    if (!visible) return;
+    const width = Math.max(44, Math.round(this.fishingTarget.width));
+    const height = Math.max(44, Math.round(this.fishingTarget.height));
+    this.fishingBiteTarget.style.transform = `translate(${Math.round(this.fishingTarget.x)}px, ${Math.round(this.fishingTarget.y)}px)`;
     this.fishingBiteTarget.style.width = `${width}px`;
     this.fishingBiteTarget.style.height = `${height}px`;
     this.fishingBiteTarget.style.marginLeft = `${-width / 2}px`;

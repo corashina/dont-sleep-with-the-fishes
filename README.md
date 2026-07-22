@@ -6,17 +6,17 @@ The 3D world uses original procedural geometry and shaders. Its shared cloudless
 
 The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
 
-Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and fishing or diving gear stays on large equipment racks. Dorothy contains exactly 19 supply types and 22 physical pickups: Food appears three times, Bait twice, and every other type once.
+Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and bulky diving gear stays on large equipment racks. Dorothy contains exactly 18 collectible types and 21 physical pickups: Food appears three times, Bait twice, and every other collectible type once.
 
 The ship uses original procedural materials and geometry: varied wooden planks and panels, worn furniture, painted steel, rust details, railings, working-deck fittings, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
 
 ## Dorothy supplies
 
-The carry limit is three weight points, not three objects. Weight-one supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Spyglass, Flare Gun, Bottled Paper, Flashlight, and Energy Bar. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Harpoon Gun, and Fishing Rod. Scuba Gear and Anchor each weigh three points.
+The carry limit is three weight points, not three objects. Weight-one supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Spyglass, Flare Gun, Bottled Paper, Flashlight, and Energy Bar. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, and Harpoon Gun. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, Harpoon Gun, and Energy Bar are one-use supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Spyglass, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, Flashlight, and Fishing Rod are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, Harpoon Gun, and Energy Bar are one-use supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Spyglass, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The Repair Kit is fixed to the lifeboat rather than collected on Dorothy. It uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
+The Repair Kit and bow-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the Repair Kit uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
 The event catalog adapts the original game's ordinary item responses to this single-survivor rescue loop. Recovered usable items can unlock suitable responses; unavailable, broken, consumed, and lost supplies cannot. Unsupported companion, trade, later-loot, story-branch, and alternate-ending outcomes remain outside this milestone. The wiki informed the committed event data but is not a runtime dependency.
 
@@ -48,15 +48,15 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 
 | Input | Action |
 |---|---|
-| Mouse | Hover physical recovered props for details; click a prop to perform its action |
+| Mouse | Hover physical recovered props for details; click a prop to perform its action. While fishing, click valid water to cast and click the bubbles to reel |
 | `Tab` / `Shift+Tab` | Move forward or backward through controls |
-| `Enter` | Activate the focused control |
-| `Escape` | Close the fishing-choice dialog first; otherwise pause or resume |
+| `Enter` / `Space` | Activate the focused control; while fishing, cast at the centered water point or reel during a bite |
+| `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |
 | `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Top-center End Day button / `7` | Fade into sleep and advance to an event or quiet night |
 
-Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. **Fish** exists only when a usable fishing rod was rescued, and **Dive** only when usable Scuba Gear was rescued; without those tools, shortcuts `1` and `2` do nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
+Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed bow rod projects the **Fish - 1 Energy** action in every run, and shortcut `1` activates the same action. **Dive** still requires usable recovered Scuba Gear; without it, shortcut `2` does nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
 
 Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
 
@@ -66,7 +66,7 @@ The ship sinks in two minutes. Search the cabin, wheelhouse, cargo deck, and sto
 
 In the lifeboat, each day gives three energy for daytime actions:
 
-- **Fish** requires a rescued fishing rod and attempts to add food. When bait remains, each cast offers a choice to spend one bait for better odds or fish without it.
+- **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
 - **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
 - **Repair** uses the lifeboat's fixed Repair Kit and recovered material to restore hull; Duct Tape can make a smaller emergency patch.

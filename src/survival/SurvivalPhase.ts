@@ -448,12 +448,15 @@ export class SurvivalPhase implements GamePhase {
       || deltaSeconds < 0
     ) return;
 
-    const previousState = attempt.snapshot().state;
+    const current = attempt.view();
+    const previousState = current.state;
     attempt.advance(deltaSeconds);
-    const current = attempt.snapshot();
     if (current.castPoint === null) return;
     if (current.state === 'bite') {
-      if (this.fishingPresentation !== 'bite') this.enterFishingBite(current.castPoint);
+      if (this.fishingPresentation !== 'bite') {
+        this.enterFishingBite(current.castPoint);
+        return;
+      }
       this.syncFishingBiteTarget();
       return;
     }
@@ -467,11 +470,6 @@ export class SurvivalPhase implements GamePhase {
   private enterFishingBite(point: FishingCastPoint): void {
     this.fishingPresentation = 'bite';
     this.world.showFishingBite?.(point);
-    this.syncFishingBiteTarget();
-  }
-
-  private syncFishingBiteTarget(): void {
-    if (this.activeFishing === null || this.fishingPresentation !== 'bite') return;
     this.ui.setFishingState?.({
       mode: 'bite',
       message: 'BITE - REEL NOW',
@@ -480,6 +478,14 @@ export class SurvivalPhase implements GamePhase {
         this.viewportHeight,
       ) ?? null,
     });
+  }
+
+  private syncFishingBiteTarget(): void {
+    if (this.activeFishing === null || this.fishingPresentation !== 'bite') return;
+    this.ui.updateFishingBiteTarget?.(this.world.projectFishingBite?.(
+      this.viewportWidth,
+      this.viewportHeight,
+    ) ?? null);
   }
 
   private handleFishingReel(): boolean {
