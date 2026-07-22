@@ -75,7 +75,6 @@ export interface ShipLaneSpec {
 export type ShipDeckDetailKind =
   | 'barrel'
   | 'ropeCoil'
-  | 'lifeRing'
   | 'spareTimber';
 
 export interface ShipDeckDetailSpec {
@@ -274,7 +273,6 @@ const doors: readonly ShipDoorSpec[] = [
 export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number>> = {
   barrel: 6,
   ropeCoil: 4,
-  lifeRing: 4,
   spareTimber: 2,
 };
 
@@ -283,7 +281,6 @@ export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
 > = {
   barrel: [0.96, 0.96],
   ropeCoil: [1.32, 1.32],
-  lifeRing: [1.26, 0.12],
   spareTimber: [1.8, 0.56],
 };
 
@@ -292,7 +289,6 @@ export const SHIP_DECK_DETAIL_MIN_GAP = 1;
 const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
   barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-1.8, 4.4], [1.9, -7.3]],
   ropeCoil: [[-6.85, 13], [6.85, 10.1], [-6.85, -9], [6.85, -12.9]],
-  lifeRing: [[-7.2, 9.5], [7.2, 14], [-7.2, -13.8], [7.2, -7]],
   spareTimber: [[2.8, 12.8], [-2.8, -13.9]],
 };
 

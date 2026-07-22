@@ -61,10 +61,6 @@ function addRopeCoil(root: Group, geometry: DetailGeometry, materials: ShipMater
   addPart(root, geometry.torus, materials.rope, 'rope-coil', [1.1, 1.1, 0.55], [0, 0.07, 0], [Math.PI / 2, 0, 0]);
 }
 
-function addLifeRing(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
-  addPart(root, geometry.torus, materials.emergency, 'life-ring', [1.05, 1.05, 0.6], [0, 0.72, 0]);
-}
-
 function addSpareTimber(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
   ([-0.2, 0, 0.2] as const).forEach((z, index) => {
     addPart(root, geometry.box, materials.crewFloor, `spare-timber-${index + 1}`, [1.8, 0.22, 0.16], [0, 0.11, z]);
@@ -80,7 +76,6 @@ function addDetailParts(
   switch (kind) {
     case 'barrel': addBarrel(root, geometry, materials); break;
     case 'ropeCoil': addRopeCoil(root, geometry, materials); break;
-    case 'lifeRing': addLifeRing(root, geometry, materials); break;
     case 'spareTimber': addSpareTimber(root, geometry, materials); break;
   }
 }

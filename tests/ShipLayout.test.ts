@@ -50,15 +50,14 @@ describe('scavenging ship layout', () => {
     expect(SHIP_LAYOUT.evacuationRect).toEqual({
       minX: 6.75, maxX: 7.45, minZ: -0.35, maxZ: 0.35,
     });
-    expect(SHIP_LAYOUT.details).toHaveLength(16);
+    expect(SHIP_LAYOUT.details).toHaveLength(12);
     expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
       barrel: 6,
       ropeCoil: 4,
-      lifeRing: 4,
       spareTimber: 2,
     });
     expect([...new Set(SHIP_LAYOUT.details.map(({ kind }) => kind))].sort()).toEqual([
-      'barrel', 'lifeRing', 'ropeCoil', 'spareTimber',
+      'barrel', 'ropeCoil', 'spareTimber',
     ]);
     expect(SHIP_LAYOUT.rigging.masts.map(({ id, position, height, baseDiameter }) => ({
       id, position, height, baseDiameter,
@@ -82,10 +81,6 @@ describe('scavenging ship layout', () => {
       { id: 'ropeCoil-2', kind: 'ropeCoil', position: [6.85, 2.22, 10.1], rotationY: 0, scale: [1, 1, 1] },
       { id: 'ropeCoil-3', kind: 'ropeCoil', position: [-6.85, 2.22, -9], rotationY: 0, scale: [1, 1, 1] },
       { id: 'ropeCoil-4', kind: 'ropeCoil', position: [6.85, 2.22, -12.9], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-1', kind: 'lifeRing', position: [-7.2, 2.22, 9.5], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-2', kind: 'lifeRing', position: [7.2, 2.22, 14], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-3', kind: 'lifeRing', position: [-7.2, 2.22, -13.8], rotationY: 0, scale: [1, 1, 1] },
-      { id: 'lifeRing-4', kind: 'lifeRing', position: [7.2, 2.22, -7], rotationY: 0, scale: [1, 1, 1] },
       { id: 'spareTimber-1', kind: 'spareTimber', position: [2.8, 2.22, 12.8], rotationY: 0, scale: [1, 1, 1] },
       { id: 'spareTimber-2', kind: 'spareTimber', position: [-2.8, 2.22, -13.9], rotationY: 0, scale: [1, 1, 1] },
     ]);
@@ -103,10 +98,6 @@ describe('scavenging ship layout', () => {
       { id: 'ropeCoil-2', position: [6.85, 2.22, 10.1] },
       { id: 'ropeCoil-3', position: [-6.85, 2.22, -9] },
       { id: 'ropeCoil-4', position: [6.85, 2.22, -12.9] },
-      { id: 'lifeRing-1', position: [-7.2, 2.22, 9.5] },
-      { id: 'lifeRing-2', position: [7.2, 2.22, 14] },
-      { id: 'lifeRing-3', position: [-7.2, 2.22, -13.8] },
-      { id: 'lifeRing-4', position: [7.2, 2.22, -7] },
       { id: 'spareTimber-1', position: [2.8, 2.22, 12.8] },
       { id: 'spareTimber-2', position: [-2.8, 2.22, -13.9] },
     ]);
@@ -114,14 +105,13 @@ describe('scavenging ship layout', () => {
 
   it('assigns deck detail colliders only to barrels and spare timber', () => {
     expect(Object.fromEntries([
-      'barrel', 'ropeCoil', 'lifeRing', 'spareTimber',
+      'barrel', 'ropeCoil', 'spareTimber',
     ].map((kind) => [
       kind,
       SHIP_LAYOUT.details.filter((detail) => detail.kind === kind && detail.colliderSize).length,
     ]))).toEqual({
       barrel: 6,
       ropeCoil: 0,
-      lifeRing: 0,
       spareTimber: 2,
     });
   });
@@ -277,24 +267,24 @@ describe('scavenging ship layout', () => {
 
     const accessOverlap = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'lifeRing-1'
-        ? { ...detail, position: [-4.1, 2.22, 2.65] as const }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-1'
+        ? { ...detail, position: [-3.6, 2.22, -5.1] as const }
         : detail),
     };
     expect(() => validateShipLayout(accessOverlap))
-      .toThrow(/lifeRing-1.*cargo-crate-forward-port:top-access-0/i);
+      .toThrow(/ropeCoil-1.*cargo-crate-aft-port:top-access-1/i);
   });
 
   it('rejects visual footprints spaced less than one metre apart', () => {
     const crowdedDetails = {
       ...SHIP_LAYOUT,
-      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'lifeRing-1'
-        ? { ...detail, position: [-7.2, 2.22, 11.4] as const }
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'ropeCoil-2'
+        ? { ...detail, position: [-6.85, 2.22, 11] as const }
         : detail),
     };
 
     expect(() => validateShipLayout(crowdedDetails))
-      .toThrow(/ropeCoil-1.*lifeRing-1.*1 metre/i);
+      .toThrow(/ropeCoil-1.*ropeCoil-2.*1 metre/i);
   });
 
   it('authors the exact perimeter placement and surface catalog', () => {

@@ -14,7 +14,7 @@ describe('ship deck details', () => {
     const build = createShipDeckDetails(materials, SHIP_LAYOUT.details);
 
     expect(build.root.name).toBe('ship-deck-details');
-    expect(build.root.children).toHaveLength(16);
+    expect(build.root.children).toHaveLength(12);
     expect(Object.fromEntries(Object.keys(SHIP_DECK_DETAIL_COUNTS).map((kind) => [
       kind,
       build.root.children.filter((child) => child.userData.detailKind === kind).length,
@@ -49,7 +49,7 @@ describe('ship deck details', () => {
     expect(mesh('barrel-band-lower').material).toBe(materials.darkMetal);
     expect(mesh('rope-coil').geometry).toBeInstanceOf(TorusGeometry);
     expect(mesh('rope-coil').material).toBe(materials.rope);
-    expect(mesh('life-ring').material).toBe(materials.emergency);
+    expect(build.root.getObjectByName('life-ring')).toBeUndefined();
     expect(detail('spareTimber-1').children).toHaveLength(3);
     expect(mesh('spare-timber-1').material).toBe(materials.crewFloor);
     expect(build.root.getObjectByName('toolbox-body')).toBeUndefined();
