@@ -98,6 +98,35 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
 }
 
 describe('SurvivalUI', () => {
+  it('keeps condition indicators unchanged and uses the approved survival perimeter layout', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    expect([...mount.querySelectorAll('[data-meter]')].map((meter) => meter.getAttribute('data-meter')))
+      .toEqual(['health', 'hunger', 'energy', 'hull']);
+    expect(mount.querySelector('[data-survival-top] [data-journal-open]')).not.toBeNull();
+    expect(mount.querySelector('[data-survival-top] [data-action="endDay"]')).not.toBeNull();
+    expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*top:\s*20px[^}]*right:\s*24px/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*right:\s*24px[^}]*bottom:\s*24px/s);
+    expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*top:\s*18px[^}]*left:\s*22px/s);
+    ui.dispose();
+  });
+
+  it('renders the journal as a tall binder with rings, tabs, and a paper close strip', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showJournal(journalEntries);
+
+    expect(mount.querySelector('[data-journal-book]')).not.toBeNull();
+    expect(mount.querySelectorAll('[data-journal-ring]')).toHaveLength(3);
+    expect(mount.querySelectorAll('[data-journal-tab]')).toHaveLength(4);
+    expect(mount.querySelector('[data-journal-close]')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe('X CLOSE JOURNAL');
+    expect(mainStyles).toMatch(/\.journal-book\s*\{[^}]*width:\s*min\(620px/s);
+    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*aspect-ratio:\s*0\.72/s);
+    ui.dispose();
+  });
+
   it('removes Rest while retaining catalog-backed one-use actions and dawn recovery', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);

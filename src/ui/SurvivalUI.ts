@@ -327,26 +327,25 @@ export class SurvivalUI {
         </div>
       </section>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
-        <article class="journal-page">
-          <p class="journal-page__weather" data-journal-weather></p>
-          <h2 data-journal-title tabindex="-1"></h2>
-          <div class="journal-page__story" data-journal-story>
-            <section aria-labelledby="journal-day-label">
-              <h3 id="journal-day-label">DAY</h3>
-              <p data-journal-day></p>
-            </section>
-            <section aria-labelledby="journal-night-label">
-              <h3 id="journal-night-label">NIGHT</h3>
-              <p data-journal-night></p>
-            </section>
-          </div>
-          <nav class="journal-page__navigation" aria-label="Journal pages">
-            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
-            <span class="journal-page__folio" data-journal-page-count>PAGE 0 OF 0</span>
-            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next" data-journal-next aria-label="Next journal page">&rsaquo;</button>
-          </nav>
-          <button type="button" class="journal-page__bookmark" data-journal-close>CLOSE JOURNAL</button>
-        </article>
+        <div class="journal-book" data-journal-book>
+          <div class="journal-book__cover" aria-hidden="true"></div>
+          <div class="journal-book__rings" data-journal-rings aria-hidden="true"><i data-journal-ring></i><i data-journal-ring></i><i data-journal-ring></i></div>
+          <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
+          <article class="journal-page">
+            <p class="journal-page__weather" data-journal-weather></p>
+            <h2 data-journal-title tabindex="-1"></h2>
+            <div class="journal-page__story" data-journal-story>
+              <section aria-labelledby="journal-day-label"><h3 id="journal-day-label">DAY</h3><p data-journal-day></p></section>
+              <section aria-labelledby="journal-night-label"><h3 id="journal-night-label">NIGHT</h3><p data-journal-night></p></section>
+            </div>
+            <nav class="journal-page__navigation" aria-label="Journal pages">
+              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
+              <span class="journal-page__folio" data-journal-page-count>PAGE 0 OF 0</span>
+              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next" data-journal-next aria-label="Next journal page">&rsaquo;</button>
+            </nav>
+            <button type="button" class="journal-page__close-strip" data-journal-close>X  CLOSE JOURNAL</button>
+          </article>
+        </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <div class="cinematic-overlay__content">

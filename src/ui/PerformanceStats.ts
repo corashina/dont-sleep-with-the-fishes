@@ -4,10 +4,11 @@ export class PerformanceStats {
   private frames = 0;
   private disposed = false;
 
-  constructor(mount: HTMLElement) {
+  constructor(mount: HTMLElement, visible = false) {
     this.element = document.createElement('output');
     this.element.className = 'performance-stats';
     this.element.dataset.performanceStats = '';
+    this.element.hidden = !visible;
     this.element.textContent = 'FPS --';
     this.element.setAttribute('aria-label', 'Rendering performance: waiting for FPS data');
     mount.append(this.element);
