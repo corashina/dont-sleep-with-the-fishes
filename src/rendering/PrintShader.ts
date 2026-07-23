@@ -4,6 +4,7 @@ export const PrintShader = {
   name: 'RestrainedPrintShader',
   uniforms: {
     tDiffuse: { value: null },
+    tInkFrame: { value: null },
     uResolution: { value: new Vector2(1, 1) },
     uPixelRatio: { value: 1 },
     uContrast: { value: 1 },
@@ -14,6 +15,8 @@ export const PrintShader = {
     uShadowTintStrength: { value: 0 },
     uHighlightTint: { value: new Color(0xffffff) },
     uHighlightTintStrength: { value: 0 },
+    uPosterizationLevels: { value: 12 },
+    uInkFrameStrength: { value: 0 },
     uHalftoneStrength: { value: 0 },
     uHalftoneSizeCssPixels: { value: 5 },
     uVignetteStrength: { value: 0 },
@@ -31,6 +34,7 @@ export const PrintShader = {
   `,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
+    uniform sampler2D tInkFrame;
     uniform vec2 uResolution;
     uniform float uPixelRatio;
     uniform float uContrast;
@@ -41,6 +45,8 @@ export const PrintShader = {
     uniform float uShadowTintStrength;
     uniform vec3 uHighlightTint;
     uniform float uHighlightTintStrength;
+    uniform float uPosterizationLevels;
+    uniform float uInkFrameStrength;
     uniform float uHalftoneStrength;
     uniform float uHalftoneSizeCssPixels;
     uniform float uVignetteStrength;
@@ -92,6 +98,11 @@ export const PrintShader = {
         color * (vec3(0.65) + uHighlightTint),
         highlightWeight * uHighlightTintStrength
       );
+
+      float levels = max(2.0, uPosterizationLevels);
+      color = floor(color * levels + 0.5) / levels;
+      float frameInk = texture2D(tInkFrame, vUv).r;
+      color *= 1.0 - frameInk * uInkFrameStrength;
 
       vec2 cssPixel = gl_FragCoord.xy / uPixelRatio;
       vec2 cell = fract(cssPixel / max(2.0, uHalftoneSizeCssPixels)) - 0.5;

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DataTexture,
   PerspectiveCamera,
   Scene,
   type Vector2,
@@ -206,7 +207,22 @@ describe('post-processing pipeline construction', () => {
     expect(PrintShader.uniforms.uPixelRatio.value).toBe(1);
     expect(PrintShader.fragmentShader).toContain('gl_FragCoord.xy / uPixelRatio');
     expect(PrintShader.fragmentShader).toContain('uChromaticAberrationCssPixels * uPixelRatio');
+    expect(PrintShader.fragmentShader).toContain('uniform sampler2D tInkFrame');
+    expect(PrintShader.fragmentShader).toContain('uPosterizationLevels');
+    expect(PrintShader.fragmentShader).toContain('uInkFrameStrength');
     expect(PrintShader.fragmentShader).not.toMatch(/https?:\/\//);
+  });
+
+  it('disposes the generated ink frame exactly once', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer());
+    const shaderPass = postProcessingMocks.printPasses[0];
+    const frame = shaderPass?.uniforms?.tInkFrame?.value as DataTexture;
+    const disposeFrame = vi.spyOn(frame, 'dispose');
+
+    pipeline.dispose();
+    pipeline.dispose();
+
+    expect(disposeFrame).toHaveBeenCalledOnce();
   });
 
   it('avoids Three injected shader helper name collisions', () => {

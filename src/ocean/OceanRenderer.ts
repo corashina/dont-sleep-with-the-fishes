@@ -28,6 +28,11 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
   horizonRadialSegments: 48,
 });
 
+export const OCEAN_PRESENTATION = Object.freeze({
+  foamGain: 1.15,
+  grazingReflectionGain: 1.12,
+});
+
 export interface OceanAtmosphere {
   fogColor: Color;
   horizonColor: Color;
@@ -309,7 +314,11 @@ const fragmentShader = `
     float forwardScatter = pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 4.0);
     waterBody += uShallowColor * forwardScatter * uDirectLightStrength
       * (0.055 + vWaveSlope * 0.12);
-    float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
+    float reflectionStrength = clamp(
+      (0.07 + fresnel * 0.89) * ${OCEAN_PRESENTATION.grazingReflectionGain},
+      0.0,
+      0.95
+    );
     vec3 color = mix(waterBody, reflectedColor, reflectionStrength);
 
     vec3 halfDirection = normalize(lightDirection + viewDirection);
@@ -348,12 +357,24 @@ const fragmentShader = `
       vViewDepth
     );
     capFoam *= capDistanceFade;
-    float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
+    float foam = clamp(
+      (bodyFoam + capFoam) * ${OCEAN_PRESENTATION.foamGain},
+      0.0,
+      1.0
+    );
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
       * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
     vec3 capFoamColor = mix(uFoamColor, uSunColor, 0.08 * uDirectLightStrength);
-    color = mix(color, uFoamColor, bodyFoam * 0.64);
-    color = mix(color, capFoamColor, capFoam * 0.90);
+    color = mix(
+      color,
+      uFoamColor,
+      clamp(bodyFoam * 0.64 * ${OCEAN_PRESENTATION.foamGain}, 0.0, 1.0)
+    );
+    color = mix(
+      color,
+      capFoamColor,
+      clamp(capFoam * 0.90 * ${OCEAN_PRESENTATION.foamGain}, 0.0, 1.0)
+    );
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
