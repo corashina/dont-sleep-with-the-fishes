@@ -198,6 +198,7 @@ const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
 const FISHING_REDUCED_DURATION = Number.EPSILON;
+const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
 const FISHING_CAST_MAX_X = 2.7;
 const FISHING_CAST_MIN_Z = -7.4;
@@ -478,6 +479,7 @@ export class BoatWorld {
   private hasFishingCast = false;
   private fishingCastOriginY = 0;
   private fishingWaveHeight = 0;
+  private fishingSplashHoldRemaining = 0;
   private currentTime = 0;
   private weather: WeatherId = 'calm';
   private phase: 'day' | 'night' = 'day';
@@ -762,6 +764,7 @@ export class BoatWorld {
   playFishingCast(point: FishingCastPoint): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.setFishingCastPoint(point);
+    this.fishingSplashHoldRemaining = 0;
     this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
     this.fishingCastOriginY = this.fishingLineOriginWorld.y;
     this.fishingPhase = 'casting';
@@ -1040,6 +1043,10 @@ export class BoatWorld {
   }
 
   private advanceFishingPresentation(delta: number): void {
+    this.fishingSplashHoldRemaining = Math.max(
+      0,
+      this.fishingSplashHoldRemaining - delta,
+    );
     this.applyFishingPhasePresentation();
     const animation = this.activeFishingAnimation;
     if (!animation) return;
@@ -1070,6 +1077,9 @@ export class BoatWorld {
 
     this.fishing.line.visible = true;
     this.fishing.bobber.visible = true;
+    if (this.fishingPhase === 'waiting' && this.fishingSplashHoldRemaining > 0) {
+      this.fishing.splash.visible = true;
+    }
     if (this.fishingPhase === 'bite') {
       this.fishing.bubbles.visible = true;
       this.fishing.ripples.visible = true;
@@ -1156,6 +1166,7 @@ export class BoatWorld {
         break;
       case 'cast':
         this.fishingPhase = 'waiting';
+        this.fishingSplashHoldRemaining = FISHING_SPLASH_HOLD_DURATION;
         break;
       case 'reel':
       case 'miss':
@@ -1177,6 +1188,7 @@ export class BoatWorld {
     this.fishingCatches.hide();
     this.activeFishingCatch = null;
     this.hasFishingCast = false;
+    this.fishingSplashHoldRemaining = 0;
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
   }
 

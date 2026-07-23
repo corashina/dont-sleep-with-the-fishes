@@ -1203,8 +1203,31 @@ describe('BoatWorld helpers', () => {
     await cast;
     expect(midpoint.y).toBeGreaterThan(quarterPosition.y);
     expect(midpoint.y).toBeGreaterThan(landingPosition.y);
+    expect(splash.visible).toBe(true);
+    world.update(0.93, 0.13);
     expect(splash.visible).toBe(false);
     expect([bubbles.children.length, ripples.children.length]).toEqual(poolSizes);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('renders the landing splash when a coarse frame completes the cast', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const splash = world.scene.getObjectByName('fishing-splash')!;
+    const cast = world.playFishingCast(world.centeredFishingCast());
+
+    world.update(0.8, 0.8);
+    await cast;
+
+    expect(splash.visible).toBe(true);
+    world.update(0.93, 0.13);
+    expect(splash.visible).toBe(false);
     world.dispose();
     propModels.dispose();
   });
