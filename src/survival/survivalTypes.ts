@@ -56,14 +56,6 @@ export type BeginFishingResult =
       readonly outcome: ActionOutcome;
     };
 
-export type EventResponse =
-  | {
-    readonly kind: 'item';
-    readonly choiceId: EventResponseId;
-    readonly instanceId: ItemInstanceId;
-  }
-  | { readonly kind: 'endure' };
-
 export type EventResource =
   | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'rescueProgress';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
@@ -97,6 +89,13 @@ export interface EventChoiceDefinition {
 }
 
 export type EventResponseId = string;
+export type EventResponse =
+  | {
+      readonly kind: 'item';
+      readonly choiceId: EventResponseId;
+      readonly instanceId: ItemInstanceId;
+    }
+  | { readonly kind: 'endure' };
 
 export interface SurvivalEventDefinition {
   id: string;

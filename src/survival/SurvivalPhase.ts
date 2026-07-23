@@ -22,6 +22,7 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
+  EventResponse,
   EventResponseId,
   SurvivalSnapshot,
   SurvivalState,

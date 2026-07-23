@@ -19,6 +19,8 @@ export interface PostProcessingProfile {
   shadowTintStrength: number;
   highlightTint: number;
   highlightTintStrength: number;
+  posterizationLevels: number;
+  inkFrameStrength: number;
   halftoneStrength: number;
   halftoneSizeCssPixels: number;
   vignetteStrength: number;
@@ -36,6 +38,7 @@ const PROFILES = {
     shadowLift: 0,
     shadowTint: 0x123039, shadowTintStrength: 0.08,
     highlightTint: 0xd8aa6d, highlightTintStrength: 0.035,
+    posterizationLevels: 12, inkFrameStrength: 0.42,
     halftoneStrength: 0.075, halftoneSizeCssPixels: 4.5,
     vignetteStrength: 0.22, chromaticAberrationCssPixels: 0.45, grainStrength: 0.022,
   }),
@@ -44,6 +47,7 @@ const PROFILES = {
     shadowLift: 0,
     shadowTint: 0x18343a, shadowTintStrength: 0.06,
     highlightTint: 0xe0b879, highlightTintStrength: 0.045,
+    posterizationLevels: 10, inkFrameStrength: 0.72,
     halftoneStrength: 0.055, halftoneSizeCssPixels: 5,
     vignetteStrength: 0.18, chromaticAberrationCssPixels: 0.3, grainStrength: 0.018,
   }),
@@ -52,6 +56,7 @@ const PROFILES = {
     shadowLift: 0.005,
     shadowTint: 0x17343c, shadowTintStrength: 0.085,
     highlightTint: 0xc8ad7c, highlightTintStrength: 0.03,
+    posterizationLevels: 9, inkFrameStrength: 0.76,
     halftoneStrength: 0.06, halftoneSizeCssPixels: 5,
     vignetteStrength: 0.21, chromaticAberrationCssPixels: 0.38, grainStrength: 0.023,
   }),
@@ -60,6 +65,7 @@ const PROFILES = {
     shadowLift: 0.008,
     shadowTint: 0x0d2832, shadowTintStrength: 0.12,
     highlightTint: 0xb39c77, highlightTintStrength: 0.02,
+    posterizationLevels: 8, inkFrameStrength: 0.82,
     halftoneStrength: 0.045, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.29, chromaticAberrationCssPixels: 0.55, grainStrength: 0.035,
   }),
@@ -68,6 +74,7 @@ const PROFILES = {
     shadowLift: 0.025,
     shadowTint: 0x153442, shadowTintStrength: 0.1,
     highlightTint: 0xb9a477, highlightTintStrength: 0.025,
+    posterizationLevels: 8, inkFrameStrength: 0.78,
     halftoneStrength: 0.035, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.24, chromaticAberrationCssPixels: 0.35, grainStrength: 0.024,
   }),
@@ -76,6 +83,7 @@ const PROFILES = {
     shadowLift: 0.03,
     shadowTint: 0x102e3b, shadowTintStrength: 0.12,
     highlightTint: 0xa89777, highlightTintStrength: 0.018,
+    posterizationLevels: 7, inkFrameStrength: 0.82,
     halftoneStrength: 0.03, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.27, chromaticAberrationCssPixels: 0.42, grainStrength: 0.029,
   }),
@@ -84,6 +92,7 @@ const PROFILES = {
     shadowLift: 0.035,
     shadowTint: 0x0b2531, shadowTintStrength: 0.14,
     highlightTint: 0x97886f, highlightTintStrength: 0.012,
+    posterizationLevels: 6, inkFrameStrength: 0.88,
     halftoneStrength: 0.025, halftoneSizeCssPixels: 6,
     vignetteStrength: 0.31, chromaticAberrationCssPixels: 0.6, grainStrength: 0.04,
   }),
