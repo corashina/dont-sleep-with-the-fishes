@@ -1088,20 +1088,33 @@ describe('SurvivalPhase orchestration', () => {
     const cue = deferred();
     const resolveEvent = vi.fn(() => accepted({ code: 'event-resolved', cue: 'impact' }));
     const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => snapshot({ state: 'dayEvent' })), resolveEvent },
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dayEvent',
+          pendingEventId: 'shower-night',
+          inventory: inventory({
+            'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'usable' },
+          }),
+        })),
+        resolveEvent,
+      },
       world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
       ui: { hideEvent: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
     });
 
-    phase.handleEventItem('custom-event-choice');
+    phase.handleEventItem('bucket');
     phase.handleEndure();
     expect(resolveEvent).toHaveBeenCalledOnce();
-    expect(resolveEvent).toHaveBeenCalledWith('custom-event-choice');
+    expect(resolveEvent).toHaveBeenCalledWith({
+      kind: 'item',
+      choiceId: 'bucket',
+      instanceId: 'bucket-1',
+    });
 
     cue.resolve();
     await flushPromises();
     phase.handleEndure();
-    expect(resolveEvent).toHaveBeenLastCalledWith(null);
+    expect(resolveEvent).toHaveBeenLastCalledWith({ kind: 'endure' });
   });
 
   it('shows an ending once and restarts only through its callback', () => {
