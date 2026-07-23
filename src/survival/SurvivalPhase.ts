@@ -18,6 +18,7 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
+  EventResponse,
   EventResponseId,
   SurvivalSnapshot,
   SurvivalState,
@@ -252,11 +253,22 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleEventItem(choiceId: EventResponseId): void {
-    this.resolveEvent(choiceId);
+    const snapshot = this.session.snapshot();
+    const event = snapshot.pendingEventId === null
+      ? undefined
+      : survivalEventById(snapshot.pendingEventId);
+    const itemId = event?.choices.find((choice) => choice.id === choiceId)?.itemId;
+    const item = itemId === undefined
+      ? undefined
+      : Object.values(snapshot.inventory).find((candidate) => (
+        candidate?.type === itemId && candidate.condition === 'usable'
+      ));
+    if (item === undefined) return;
+    this.resolveEvent({ kind: 'item', choiceId, instanceId: item.instanceId });
   }
 
   handleEndure(): void {
-    this.resolveEvent(null);
+    this.resolveEvent({ kind: 'endure' });
   }
 
   handleJournalOpen(): void {
@@ -705,10 +717,10 @@ export class SurvivalPhase implements GamePhase {
     this.openPendingEvent(snapshot);
   }
 
-  private resolveEvent(choiceId: EventResponseId | null): void {
+  private resolveEvent(response: EventResponse): void {
     if (!this.canAcceptCommand()) return;
     const eventState = this.session.snapshot().state;
-    const outcome = this.session.resolveEvent?.(choiceId);
+    const outcome = this.session.resolveEvent?.(response);
     if (outcome === undefined) return;
     if (!outcome.accepted) {
       this.ui.showFeedback?.(outcome);

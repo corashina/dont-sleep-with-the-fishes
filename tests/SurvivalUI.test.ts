@@ -1265,7 +1265,7 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(mount.querySelector('[data-event-title]'));
   });
 
-  it('routes another usable recovered item through the unsuitable event outcome without mutating it', () => {
+  it('routes another usable recovered item to atomic unsuitable-response rejection', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1275,7 +1275,11 @@ describe('SurvivalUI', () => {
       initialEventId: 'shower-night',
     });
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
-    const eventChoice = vi.fn((choiceId: string) => session.resolveEvent(choiceId));
+    const eventChoice = vi.fn((choiceId: string) => session.resolveEvent({
+      kind: 'item',
+      choiceId,
+      instanceId: 'anchor-1',
+    }));
     ui.onEventItem = eventChoice;
 
     ui.showEvent(event, session.snapshot());
@@ -1288,15 +1292,11 @@ describe('SurvivalUI', () => {
 
     expect(eventChoice).toHaveBeenCalledWith('anchor');
     expect(session.snapshot().inventory['anchor-1']?.condition).toBe('usable');
-    const nighttime = session.snapshot().journalEntries[0]?.nighttime;
-    expect(nighttime?.kind).toBe('event');
-    if (nighttime?.kind !== 'event') throw new Error('Expected a nighttime event journal record.');
-    expect(nighttime.event).toMatchObject({
-      attemptedChoiceId: 'anchor',
-      attemptedItemId: 'anchor',
-      resolution: 'unsuitableItem',
-      inventoryMutations: [],
+    expect(eventChoice.mock.results[0]?.value).toMatchObject({
+      accepted: false,
+      code: 'choice-unavailable',
     });
+    expect(session.snapshot().journalEntries).toEqual([]);
   });
 
   it('shows recovered unusable alternatives disabled with suitability and condition semantics', () => {
