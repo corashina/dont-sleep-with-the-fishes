@@ -24,6 +24,26 @@ export const INCLUDED_EVENT_PHASES = Object.freeze({
 
 type IncludedEventId = keyof typeof INCLUDED_EVENT_PHASES;
 
+const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.freeze({
+  'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
+  leak: 'Water pushes through a split in the hull.',
+  'school-of-fish': 'A dense school churns the water beside the boat.',
+  snatcher: 'Something reaches over the gunwale and grabs one of your supplies.',
+  'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
+  'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
+  whirlpool: 'The sea begins circling faster around the boat.',
+  'shark-men': 'Figures cut through the water and surround the hull.',
+  'shower-night': 'Rain starts falling over the exposed boat.',
+  'windy-night': 'Wind catches every loose object on the boat.',
+  'bad-sleep': 'Uneasy darkness settles over the boat.',
+  thunderstorm: 'Thunder rolls as the storm breaks overhead.',
+  'restless-waves': 'Waves hammer the sides through the night.',
+  'man-in-the-fog': 'A lone figure appears in the fog.',
+  ghosts: 'Pale shapes gather around the drifting boat.',
+  'eerie-melody': 'A distant melody drifts across the water.',
+  'face-on-the-moon': 'A face takes shape across the moon.',
+});
+
 const resource = (
   resourceName: EventResource,
   operation: ResourceEffect['operation'],
@@ -90,6 +110,7 @@ function event(
     id,
     phase: INCLUDED_EVENT_PHASES[id],
     title,
+    revealText: EVENT_REVEAL_TEXT[id],
     prompt: 'Choose a response.',
     danger: riskForCue(cue),
     cue,
@@ -425,6 +446,9 @@ export function validateSurvivalEventCatalog(
   const eventIds = new Set<string>();
   for (const eventEntry of catalog) {
     if (typeof eventEntry.id !== 'string' || eventEntry.id.trim().length === 0) throw new Error('event ID is blank');
+    if (typeof eventEntry.revealText !== 'string' || eventEntry.revealText.trim().length === 0) {
+      throw new Error(`${eventEntry.id} reveal text is blank`);
+    }
     if (eventIds.has(eventEntry.id)) throw new Error(`event ID ${eventEntry.id} is duplicated`);
     eventIds.add(eventEntry.id);
     if (!Number.isFinite(eventEntry.weight) || eventEntry.weight <= 0) throw new Error(`${eventEntry.id} event weight is invalid`);
@@ -502,12 +526,14 @@ export function eligibleEvents(
 const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> = deepFreeze({
   day: {
     id: 'day-calm-fallback', phase: 'day', title: 'Quiet Waters',
+    revealText: 'The sea stays calm around the boat.',
     prompt: 'The day passes without incident.', danger: 'safe', cue: 'none',
     weight: 1, earliestDay: 1, cooldownDays: 0,
     choices: [choice('sleep', 'Continue', undefined, outcome(1, 'The day passes quietly.'))],
   },
   night: {
     id: 'night-calm-fallback', phase: 'night', title: 'Quiet Night',
+    revealText: 'The dark water drifts past without disturbance.',
     prompt: 'The night passes without incident.', danger: 'safe', cue: 'none',
     weight: 1, earliestDay: 1, cooldownDays: 0,
     choices: [choice('sleep', 'Sleep', undefined, outcome(1, 'The night passes quietly.'))],

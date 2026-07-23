@@ -87,6 +87,7 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
     id: 'test',
     phase: 'day',
     title: 'A shadow',
+    revealText: 'A shadow moves beneath the boat.',
     prompt: 'Something moves below.',
     danger: 'dangerous',
     earliestDay: 1,

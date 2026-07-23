@@ -56,14 +56,13 @@ export type BeginFishingResult =
       readonly outcome: ActionOutcome;
     };
 
-export interface EventResponse {
-  itemId: ItemId;
-  message: string;
-  deltas: Readonly<ResourceDelta>;
-  cue: PresentationCue;
-  consume: boolean;
-  rescue?: boolean;
-}
+export type EventResponse =
+  | {
+    readonly kind: 'item';
+    readonly choiceId: EventResponseId;
+    readonly instanceId: ItemInstanceId;
+  }
+  | { readonly kind: 'endure' };
 
 export type EventResource =
   | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'rescueProgress';
@@ -103,6 +102,7 @@ export interface SurvivalEventDefinition {
   id: string;
   phase: 'day' | 'night';
   title: string;
+  revealText: string;
   prompt: string;
   danger: RiskLabel;
   earliestDay: number;
