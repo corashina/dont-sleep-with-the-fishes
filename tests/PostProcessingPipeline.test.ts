@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DataTexture,
   PerspectiveCamera,
   Scene,
   type Vector2,
@@ -39,6 +40,23 @@ const postProcessingMocks = vi.hoisted((): {
   outputPasses: [],
   setSizeFailure: null,
 }));
+
+const inkFrameMocks = vi.hoisted((): { frames: DataTexture[] } => ({
+  frames: [],
+}));
+
+vi.mock('../src/rendering/inkFrameMask', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/rendering/inkFrameMask')>();
+  return {
+    ...actual,
+    createInkFrameMask: vi.fn((size?: number) => {
+      const frame = actual.createInkFrameMask(size);
+      vi.spyOn(frame, 'dispose');
+      inkFrameMocks.frames.push(frame);
+      return frame;
+    }),
+  };
+});
 
 vi.mock('three/addons/postprocessing/EffectComposer.js', () => ({
   EffectComposer: class {
@@ -113,6 +131,7 @@ describe('post-processing pipeline construction', () => {
     postProcessingMocks.printPasses.length = 0;
     postProcessingMocks.outputPasses.length = 0;
     postProcessingMocks.setSizeFailure = null;
+    inkFrameMocks.frames.length = 0;
   });
 
   it('falls back to direct rendering when pipeline construction throws', () => {
@@ -173,6 +192,28 @@ describe('post-processing pipeline construction', () => {
     expect(renderer.render).toHaveBeenCalledWith(scene, camera);
   });
 
+  it('disposes the ink frame when renderer sizing fails before composer construction', () => {
+    const failure = new Error('renderer sizing failed');
+    const renderer = createRenderer();
+    renderer.getSize = vi.fn(() => {
+      throw failure;
+    });
+    const reportFallback = vi.fn();
+
+    const sceneRenderer = createSceneRenderer(
+      renderer,
+      (value) => new PostProcessingPipeline(value),
+      reportFallback,
+    );
+
+    expect(reportFallback).toHaveBeenCalledWith(failure);
+    expect(inkFrameMocks.frames).toHaveLength(1);
+    expect(inkFrameMocks.frames[0]?.dispose).toHaveBeenCalledOnce();
+    expect(postProcessingMocks.composers).toHaveLength(0);
+
+    sceneRenderer.dispose();
+  });
+
   it('leaves composer size and uniforms unchanged for invalid or extreme resize inputs', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(1_024));
     const composer = postProcessingMocks.composers[0];
@@ -206,7 +247,22 @@ describe('post-processing pipeline construction', () => {
     expect(PrintShader.uniforms.uPixelRatio.value).toBe(1);
     expect(PrintShader.fragmentShader).toContain('gl_FragCoord.xy / uPixelRatio');
     expect(PrintShader.fragmentShader).toContain('uChromaticAberrationCssPixels * uPixelRatio');
+    expect(PrintShader.fragmentShader).toContain('uniform sampler2D tInkFrame');
+    expect(PrintShader.fragmentShader).toContain('uPosterizationLevels');
+    expect(PrintShader.fragmentShader).toContain('uInkFrameStrength');
     expect(PrintShader.fragmentShader).not.toMatch(/https?:\/\//);
+  });
+
+  it('disposes the generated ink frame exactly once', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer());
+    const shaderPass = postProcessingMocks.printPasses[0];
+    const frame = shaderPass?.uniforms?.tInkFrame?.value as DataTexture;
+    const disposeFrame = vi.mocked(frame.dispose);
+
+    pipeline.dispose();
+    pipeline.dispose();
+
+    expect(disposeFrame).toHaveBeenCalledOnce();
   });
 
   it('avoids Three injected shader helper name collisions', () => {
