@@ -275,7 +275,9 @@ export class Game {
     this.phaseGeneration = 0;
     let resizeListenerRegistered = false;
     try {
-      this.performanceStats = new PerformanceStats(mount);
+      const showDevelopmentStats = import.meta.env.DEV
+        && new URLSearchParams(window.location.search).has('stats');
+      this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);
       this.seed = this.createSeed();
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
