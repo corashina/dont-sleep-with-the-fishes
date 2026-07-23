@@ -431,7 +431,7 @@ describe('SurvivalUI', () => {
     expect(fishing.dataset.targetKind).toBe('tool');
     expect(fishing.dataset.tool).toBe('fishingRod');
     expect(fishing.getAttribute('aria-keyshortcuts')).toBe('1');
-    expect(fishing.querySelector('[role="tooltip"]')?.textContent).toMatch(
+    expect(fishing.getAttribute('aria-description')).toMatch(
       /FISH.*Cast from the bow to find food or drifting junk.*1 ENERGY/is,
     );
     ui.dispose();
@@ -544,10 +544,10 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
     const fish = mount.querySelector<HTMLElement>('[data-action="fish"]')!;
-    expect(fish.textContent).toContain('1 ENERGY');
-    expect(fish.textContent).toContain('Chance to gain food');
-    expect(fish.textContent).toContain('UNCERTAIN');
-    expect(fish.getAttribute('aria-description')).toContain('1 ENERGY');
+    const description = fish.getAttribute('aria-description') ?? '';
+    expect(description).toContain('1 ENERGY');
+    expect(description).toContain('Chance to gain food');
+    expect(description).toContain('UNCERTAIN');
     expect(fish.querySelector('[role="tooltip"]')).not.toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
   });
@@ -824,11 +824,49 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     ui.render(snapshot({ bait: 0 }), () => null);
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
-    const copy = fish.querySelector('[role="tooltip"]')?.textContent ?? '';
+    const copy = fish.getAttribute('aria-description') ?? '';
 
     expect(copy).toContain('FISH');
     expect(copy).toContain('1 ENERGY');
     expect(copy).toMatch(/bait.*automat/i);
+  });
+
+  it('shows only the simple fishing rod tooltip while preserving accessible detail', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([
+      { id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null, x: 90, y: 180, visible: true, depleted: false },
+    ]);
+
+    const button = mount.querySelector<HTMLButtonElement>('[data-tool="fishingRod"]')!;
+    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('Fishing rod');
+    expect(button.getAttribute('aria-description')).toContain('1 ENERGY');
+    ui.dispose();
+  });
+
+  it('shows a modal fishing result and emits one Continue intent', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onContinue = vi.fn();
+    ui.onFishingResultContinue = onContinue;
+
+    ui.showFishingResult({ title: 'COD', detail: '+1 FOOD' });
+
+    const dialog = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    expect(dialog.classList.contains('is-visible')).toBe(true);
+    expect(dialog.querySelector('[data-fishing-result-title]')?.textContent).toBe('COD');
+    expect(dialog.querySelector('[data-fishing-result-detail]')?.textContent).toBe('+1 FOOD');
+    const button = dialog.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!;
+    expect(document.activeElement).toBe(button);
+    button.click();
+    button.click();
+    expect(onContinue).toHaveBeenCalledOnce();
+
+    ui.hideFishingResult();
+    expect(dialog.classList.contains('is-visible')).toBe(false);
+    ui.dispose();
   });
 
   it('renders every fishing mode with exact interaction copy', () => {
