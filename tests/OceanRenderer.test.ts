@@ -1,9 +1,14 @@
 import { Color, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { OCEAN_PRESENTATION, OceanRenderer } from '../src/ocean/OceanRenderer';
 import { SUN_DIRECTION } from '../src/world/celestialLight';
 
 describe('OceanRenderer', () => {
+  it('uses the authored foam and grazing-reflection response gains', () => {
+    expect(OCEAN_PRESENTATION.foamGain).toBe(1.15);
+    expect(OCEAN_PRESENTATION.grazingReflectionGain).toBe(1.12);
+  });
+
   it('disposes each ocean geometry once', () => {
     const ocean = new OceanRenderer();
     const disposeOceanGeometry = vi.spyOn(ocean.mesh.geometry, 'dispose');
