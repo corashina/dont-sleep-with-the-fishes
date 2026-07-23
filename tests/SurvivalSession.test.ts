@@ -75,6 +75,63 @@ describe('SurvivalSession daytime actions', () => {
     expect(unowned.snapshot()).toEqual(before);
   });
 
+  it('mutates the exact suitable item instance selected for an event', () => {
+    const session = new SurvivalSession(saved('bucket', 'bucket'), {
+      seed: 1,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'leak',
+    });
+
+    expect(session.resolveEvent({
+      kind: 'item',
+      choiceId: 'bucket',
+      instanceId: 'bucket-2',
+    })).toMatchObject({ accepted: true, cue: 'none' });
+    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory['bucket-2']?.condition).toBe('broken');
+  });
+
+  it('rejects stale or mismatched physical responses before drawing an outcome', () => {
+    let randomCalls = 0;
+    const session = new SurvivalSession(saved('bucket', 'umbrella'), {
+      seed: 1,
+      random: { next: () => { randomCalls += 1; return 0; } },
+      initialEventId: 'leak',
+    });
+    const before = session.snapshot();
+
+    expect(session.resolveEvent({
+      kind: 'item',
+      choiceId: 'bucket',
+      instanceId: 'umbrella-1',
+    })).toMatchObject({ accepted: false, code: 'item-unavailable' });
+    expect(session.snapshot()).toEqual(before);
+    expect(randomCalls).toBe(0);
+  });
+
+  it('offers Endure only when no suitable usable item exists', () => {
+    const equipped = new SurvivalSession(saved('bucket'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'leak',
+    });
+    expect(equipped.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: false,
+      code: 'endure-unavailable',
+    });
+
+    const unequipped = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'leak',
+    });
+    expect(unequipped.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: true,
+      code: 'event-resolved',
+      cue: 'none',
+    });
+  });
+
   it('guards dawn while an event is pending and exposes nightfall then dawn cues', () => {
     const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0.5, 0, 0.99]) });
     expect(session.perform('endDay').cue).toBe('nightfall');

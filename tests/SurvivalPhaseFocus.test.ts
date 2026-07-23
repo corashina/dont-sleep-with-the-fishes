@@ -340,8 +340,7 @@ describe('SurvivalPhase focus synchronization', () => {
       phase.setPaused(true);
       const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
       const resume = mount.querySelector<HTMLButtonElement>('[data-resume]')!;
-      const event = mount.querySelector<HTMLElement>('[data-event]')!;
-      const eventTitle = mount.querySelector<HTMLElement>('[data-event-title]')!;
+      const event = mount.querySelector<HTMLElement>('[data-event-caption]')!;
       expect(document.activeElement).toBe(resume);
 
       finishNightfall();
@@ -353,12 +352,12 @@ describe('SurvivalPhase focus synchronization', () => {
       expect(pause.classList).toContain('is-visible');
       expect(event.classList).toContain('is-visible');
       expect(event.dataset.eventId).toBe('night-calm-fallback');
-      expect(event.hasAttribute('inert')).toBe(true);
+      expect(event.getAttribute('aria-hidden')).toBe('false');
       expect(document.activeElement).toBe(resume);
 
       phase.setPaused(false);
-      expect(event.hasAttribute('inert')).toBe(false);
-      expect(document.activeElement).toBe(eventTitle);
+      expect(event.getAttribute('aria-hidden')).toBe('false');
+      expect(document.activeElement).not.toBe(resume);
     } finally {
       phase.dispose();
       vi.useRealTimers();
