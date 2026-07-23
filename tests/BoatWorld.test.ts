@@ -802,6 +802,69 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('mutes event props, restores eligible color, and animates the exact selected instance', async () => {
+    const savedItems = [savedItem('cannedFood'), savedItem('cannedFood', 2)];
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems));
+    const first = world.scene.getObjectByName('prop:cannedFood-1')!;
+    const second = world.scene.getObjectByName('prop:cannedFood-2')!;
+    const normalFirstColor = (firstMesh(first).material as MeshStandardMaterial).color.getHex();
+    const normalSecondColor = (firstMesh(second).material as MeshStandardMaterial).color.getHex();
+
+    world.setEventEligibleItems(new Set());
+    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).not.toBe(normalFirstColor);
+    expect((firstMesh(second).material as MeshStandardMaterial).color.getHex()).not.toBe(normalSecondColor);
+
+    world.setEventEligibleItems(new Set(['cannedFood-2']));
+    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).not.toBe(normalFirstColor);
+    expect((firstMesh(second).material as MeshStandardMaterial).color.getHex()).toBe(normalSecondColor);
+    world.setHighlightedItem('cannedFood-1');
+    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).not.toBe(normalFirstColor);
+
+    const firstStart = first.position.clone();
+    const secondStart = second.position.clone();
+    const use = world.playEventItemUse('cannedFood-2');
+    world.update(.3, .3);
+    expect(first.position).toEqual(firstStart);
+    expect(second.position.y).toBeGreaterThan(secondStart.y);
+    world.update(1, 1);
+    await use;
+    expect(second.position).toEqual(secondStart);
+
+    world.setEventEligibleItems(null);
+    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).toBe(normalFirstColor);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles missing and reduced-motion event item use without leaving a transform', async () => {
+    const savedItems = [savedItem('bucket')];
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: true } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    const prop = world.scene.getObjectByName('prop:bucket-1')!;
+    const start = prop.position.clone();
+    await world.playEventItemUse('bucket-2');
+    const use = world.playEventItemUse('bucket-1');
+    world.update(.01, .01);
+    await use;
+    expect(prop.position).toEqual(start);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('projects saved props plus fixed fishing and repair tool anchors', () => {
     const savedItems = [savedItem('flareGun')];
     const propModels = createTestPropModels();
