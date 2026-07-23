@@ -54,35 +54,38 @@ const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
 
 export class PostProcessingPipeline implements SceneRenderer {
-  private readonly inkFrame = createInkFrameMask();
+  private readonly inkFrame: ReturnType<typeof createInkFrameMask>;
   private readonly composer: EffectComposer;
   private readonly renderPass: RenderPass;
   private readonly printPass: ShaderPass;
   private readonly outputPass: OutputPass;
   private readonly uniforms: PrintUniforms;
-  private readonly size = new Vector2();
+  private readonly size: Vector2;
   private readonly maxTextureSize: number;
   private disposed = false;
 
   constructor(private readonly renderer: WebGLRenderer) {
-    const reportedMaxTextureSize = renderer.capabilities.maxTextureSize;
-    this.maxTextureSize = Number.isFinite(reportedMaxTextureSize) && reportedMaxTextureSize > 0
-      ? reportedMaxTextureSize
-      : FALLBACK_MAX_TEXTURE_SIZE;
-    renderer.getSize(this.size);
-    const target = new WebGLRenderTarget(
-      Math.max(1, this.size.x),
-      Math.max(1, this.size.y),
-      { type: HalfFloatType },
-    );
-    target.texture.name = 'restrained-print-composer';
-    target.samples = Math.min(4, Math.max(0, renderer.capabilities.maxSamples ?? 0));
-
+    this.inkFrame = createInkFrameMask();
+    let target: WebGLRenderTarget | undefined;
     let composer!: EffectComposer;
     let renderPass!: RenderPass;
     let printPass!: ShaderPass;
     let outputPass!: OutputPass;
     try {
+      this.size = new Vector2();
+      const reportedMaxTextureSize = renderer.capabilities.maxTextureSize;
+      this.maxTextureSize = Number.isFinite(reportedMaxTextureSize) && reportedMaxTextureSize > 0
+        ? reportedMaxTextureSize
+        : FALLBACK_MAX_TEXTURE_SIZE;
+      renderer.getSize(this.size);
+      target = new WebGLRenderTarget(
+        Math.max(1, this.size.x),
+        Math.max(1, this.size.y),
+        { type: HalfFloatType },
+      );
+      target.texture.name = 'restrained-print-composer';
+      target.samples = Math.min(4, Math.max(0, renderer.capabilities.maxSamples ?? 0));
+
       composer = new EffectComposer(renderer, target);
       renderPass = new RenderPass(new Scene(), new Camera());
       printPass = new ShaderPass(PrintShader);
@@ -102,7 +105,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.inkFrame.dispose();
       printPass?.dispose();
       outputPass?.dispose();
-      if (composer === undefined) target.dispose();
+      if (composer === undefined) target?.dispose();
       else composer.dispose();
       throw error;
     }
