@@ -30,6 +30,7 @@ import {
   ITEM_DEFINITIONS,
   type ItemId,
   type ItemInstance,
+  type ItemInstanceId,
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
@@ -178,6 +179,18 @@ interface ConditionMaterialBinding {
   readonly mesh: Mesh;
   readonly usable: Material | Material[];
   readonly broken: Material | Material[];
+  readonly mutedUsable: Material | Material[];
+  readonly mutedBroken: Material | Material[];
+}
+
+interface ActiveEventItemAnimation {
+  readonly instanceId: ItemInstanceId;
+  readonly prop: Object3D;
+  readonly basePosition: Vector3;
+  readonly baseQuaternion: Quaternion;
+  elapsed: number;
+  readonly duration: number;
+  readonly resolve: () => void;
 }
 
 interface InteractionHighlightState {
@@ -205,6 +218,7 @@ const FISHING_CAST_MIN_Z = -7.4;
 const FISHING_CAST_MAX_Z = -3.7;
 const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -5.3 });
 const FISHING_TARGET_SIZE = 52;
+const EVENT_ITEM_USE_DURATION = .65;
 
 function addOwnedFishingMesh(
   root: Group,
@@ -363,6 +377,28 @@ function brokenMaterial(material: Material): Material {
   return clone;
 }
 
+function mutedMaterial(material: Material): Material {
+  const clone = material.clone();
+  if (clone instanceof MeshStandardMaterial) {
+    clone.color.lerp(new Color(0x596063), .78);
+    clone.emissive.lerp(new Color(0x1d2224), .8);
+    clone.emissiveIntensity *= .25;
+    clone.roughness = Math.max(.8, clone.roughness);
+  }
+  return clone;
+}
+
+function mapMaterial(
+  material: Material | Material[],
+  transform: (entry: Material) => Material,
+): Material | Material[] {
+  return Array.isArray(material) ? material.map(transform) : transform(material);
+}
+
+function materialList(material: Material | Material[]): readonly Material[] {
+  return Array.isArray(material) ? material : [material];
+}
+
 function setPropHighlighted(root: Object3D, highlighted: boolean): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
@@ -474,6 +510,7 @@ export class BoatWorld {
     visible: false,
   };
   private activeFishingAnimation: ActiveFishingAnimation | null = null;
+  private activeEventItemAnimation: ActiveEventItemAnimation | null = null;
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
@@ -487,6 +524,8 @@ export class BoatWorld {
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private highlightedItemId: string | null = null;
+  private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
+  private eventSelectedItemId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
@@ -521,9 +560,12 @@ export class BoatWorld {
         const broken = Array.isArray(usable)
           ? usable.map((material) => brokenMaterial(material))
           : brokenMaterial(usable);
-        const brokenList = Array.isArray(broken) ? broken : [broken];
-        brokenList.forEach((material) => this.ownedMaterials.add(material));
-        materials.push({ mesh: object, usable, broken });
+        const mutedUsable = mapMaterial(usable, mutedMaterial);
+        const mutedBroken = mapMaterial(broken, mutedMaterial);
+        materialList(broken).forEach((material) => this.ownedMaterials.add(material));
+        materialList(mutedUsable).forEach((material) => this.ownedMaterials.add(material));
+        materialList(mutedBroken).forEach((material) => this.ownedMaterials.add(material));
+        materials.push({ mesh: object, usable, broken, mutedUsable, mutedBroken });
       });
       const transform = boatStorageTransform(instance);
       prop.position.copy(transform.position);
@@ -607,7 +649,7 @@ export class BoatWorld {
 
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
-    this.savedProps.forEach(({ instance, prop, materials }) => {
+    this.savedProps.forEach(({ instance, prop }) => {
       const condition = snapshot.inventory[instance.instanceId]?.condition ?? 'lost';
       const visible = condition === 'usable' || condition === 'broken';
       prop.visible = visible;
@@ -616,9 +658,7 @@ export class BoatWorld {
       prop.userData.remainingUses = condition === 'usable'
         ? ITEM_DEFINITIONS[instance.type].charges
         : 0;
-      materials.forEach(({ mesh, usable, broken }) => {
-        mesh.material = condition === 'broken' ? broken : usable;
-      });
+      this.applySavedPropMaterials(instance.instanceId);
     });
     if (this.highlightedItemId !== null) {
       const highlighted = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
@@ -638,6 +678,91 @@ export class BoatWorld {
     if (next === undefined || !next.visible) return;
     setPropHighlighted(next, true);
     this.highlightedItemId = instanceId;
+  }
+
+  setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
+    if (this.disposed) return;
+    this.eventEligibleItemIds = instanceIds === null ? null : new Set(instanceIds);
+    if (
+      this.eventSelectedItemId !== null
+      && this.eventEligibleItemIds?.has(this.eventSelectedItemId) !== true
+    ) {
+      this.eventSelectedItemId = null;
+    }
+    this.savedProps.forEach(({ instance }) => this.applySavedPropMaterials(instance.instanceId));
+  }
+
+  setEventSelectedItem(instanceId: ItemInstanceId | null): void {
+    if (this.disposed) return;
+    this.eventSelectedItemId = instanceId;
+    this.savedProps.forEach(({ instance }) => this.applySavedPropMaterials(instance.instanceId));
+  }
+
+  playEventItemUse(instanceId: ItemInstanceId): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.cancelActiveEventItemAnimation();
+    const prop = this.savedPropByInstanceId.get(instanceId);
+    if (prop === undefined || !prop.visible) return Promise.resolve();
+    const duration = this.reducedMotion.matches ? Number.EPSILON : EVENT_ITEM_USE_DURATION;
+    return new Promise((resolve) => {
+      this.activeEventItemAnimation = {
+        instanceId,
+        prop,
+        basePosition: prop.position.clone(),
+        baseQuaternion: prop.quaternion.clone(),
+        elapsed: 0,
+        duration,
+        resolve,
+      };
+    });
+  }
+
+  private applySavedPropMaterials(instanceId: ItemInstanceId): void {
+    const saved = this.savedProps.find(({ instance }) => instance.instanceId === instanceId);
+    if (saved === undefined) return;
+    setPropHighlighted(saved.prop, false);
+    const muted = this.eventEligibleItemIds !== null
+      && !this.eventEligibleItemIds.has(instanceId)
+      && this.eventSelectedItemId !== instanceId;
+    const broken = saved.prop.userData.condition === 'broken';
+    saved.materials.forEach((binding) => {
+      binding.mesh.material = broken
+        ? muted ? binding.mutedBroken : binding.broken
+        : muted ? binding.mutedUsable : binding.usable;
+    });
+    const highlighted = this.eventSelectedItemId === instanceId
+      || this.eventEligibleItemIds?.has(instanceId) === true
+      || (
+        this.highlightedItemId === instanceId
+        && (this.eventEligibleItemIds === null || !muted)
+      );
+    if (highlighted) setPropHighlighted(saved.prop, true);
+  }
+
+  private advanceEventItemAnimation(delta: number): void {
+    const animation = this.activeEventItemAnimation;
+    if (animation === null) return;
+    animation.elapsed = Math.min(animation.duration, animation.elapsed + delta);
+    const progress = animation.elapsed / animation.duration;
+    const eased = easeInOut(progress);
+    animation.prop.position.copy(animation.basePosition);
+    animation.prop.position.y += Math.sin(Math.PI * eased) * .28;
+    animation.prop.quaternion.copy(animation.baseQuaternion);
+    animation.prop.rotateZ(Math.sin(Math.PI * eased) * .16);
+    if (progress < 1) return;
+    this.activeEventItemAnimation = null;
+    animation.prop.position.copy(animation.basePosition);
+    animation.prop.quaternion.copy(animation.baseQuaternion);
+    animation.resolve();
+  }
+
+  private cancelActiveEventItemAnimation(): void {
+    const animation = this.activeEventItemAnimation;
+    if (animation === null) return;
+    this.activeEventItemAnimation = null;
+    animation.prop.position.copy(animation.basePosition);
+    animation.prop.quaternion.copy(animation.baseQuaternion);
+    animation.resolve();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -939,6 +1064,7 @@ export class BoatWorld {
     }
 
     this.advanceFishingPresentation(delta);
+    this.advanceEventItemAnimation(delta);
     this.updateFishingWave(time);
     this.updateFishingEffects(time);
 
@@ -973,6 +1099,7 @@ export class BoatWorld {
       () => this.setHighlightedItem(null),
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
+      () => this.cancelActiveEventItemAnimation(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),
