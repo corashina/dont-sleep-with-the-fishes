@@ -8,6 +8,18 @@
 
 **Tech Stack:** TypeScript 5.9, Three.js 0.180, HTML/CSS, Vite 7, Vitest 3, jsdom
 
+## Implementation History
+
+Work paused on 2026-07-23 so the host PC can be formatted.
+
+- **Task 1 complete** — survival HUD restaging, screenshot-inspired binder journal, and opt-in development statistics (`cb07a22`, `229ffc1`). Independent re-review approved the bounded journal layout.
+- **Task 2 complete** — deterministic ink-frame mask, stronger posterization/print treatment, and ocean presentation gains (`8a5121a`, `04aab09`). Independent re-review approved shader ordering, three-pass ownership, and failed-construction cleanup.
+- **Task 3 complete** — exact physical event-item response contract and duplicate-instance targeting (`b463bed`). Independent review approved atomic pre-draw validation and unchanged authored outcomes/random sequencing.
+- **Tasks 4–8 deferred** — the presentation director, boat presentation rig and setpieces, scene-led phase orchestration, sleep/activity/fishing polish, and final browser acceptance were not implemented in this pass.
+- **Verification at stopping point** — Task 3 reported 144 focused tests and 804 full-suite tests passing, plus typecheck and diff-check. A fresh integration verification is required after merging with the newer `master`.
+
+The intentionally stopped Task 4 produced no committed implementation. Resume from **Task 4: Exclusive Presentation Director**.
+
 ## Global Constraints
 
 - Do not change the upper-left condition indicators' artwork, values, danger states, order, scale, layout, markup, or CSS declarations.
