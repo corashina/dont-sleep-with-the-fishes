@@ -64,6 +64,26 @@ const EXPECTED_METADATA = {
   'face-on-the-moon': ['Face on the Moon', 'darkness', 5, 17, undefined, 50],
 } as const;
 
+const EXPECTED_REVEAL_TEXT = {
+  'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
+  leak: 'Water pushes through a split in the hull.',
+  'school-of-fish': 'A dense school churns the water beside the boat.',
+  snatcher: 'Something reaches over the gunwale and grabs one of your supplies.',
+  'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
+  'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
+  whirlpool: 'The sea begins circling faster around the boat.',
+  'shark-men': 'Figures cut through the water and surround the hull.',
+  'shower-night': 'Rain starts falling over the exposed boat.',
+  'windy-night': 'Wind catches every loose object on the boat.',
+  'bad-sleep': 'Uneasy darkness settles over the boat.',
+  thunderstorm: 'Thunder rolls as the storm breaks overhead.',
+  'restless-waves': 'Waves hammer the sides through the night.',
+  'man-in-the-fog': 'A lone figure appears in the fog.',
+  ghosts: 'Pale shapes gather around the drifting boat.',
+  'eerie-melody': 'A distant melody drifts across the water.',
+  'face-on-the-moon': 'A face takes shape across the moon.',
+} as const;
+
 const EXPECTED_CHOICES = {
   'dangerous-waters': [
     choice('map', 'Use Map', 'map',
@@ -194,6 +214,12 @@ describe('survival events', () => {
     }
   });
 
+  it('authors one concise scene reveal for every included event', () => {
+    expect(Object.fromEntries(
+      SURVIVAL_EVENTS.map(({ id, revealText }) => [id, revealText]),
+    )).toEqual(EXPECTED_REVEAL_TEXT);
+  });
+
   it('defines the exact canonical Snatcher target types in event data', () => {
     const snatcher = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher')!;
     expect(snatcher.targetItemIds).toEqual([
@@ -272,6 +298,7 @@ describe('survival events', () => {
     expect(() => validateSurvivalEventCatalog()).not.toThrow();
     rejects((catalog) => { catalog[1].id = catalog[0].id; }, /event ID.*duplicated/i);
     rejects((catalog) => { catalog[0].id = ' '; }, /event ID.*blank/i);
+    rejects((catalog) => { catalog[0].revealText = ' '; }, /reveal text.*blank/i);
     rejects((catalog) => { catalog[0].choices[1].id = catalog[0].choices[0].id; }, /choice ID.*duplicated/i);
     rejects((catalog) => { catalog[0].choices = []; }, /choices.*empty/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes = []; }, /outcomes.*empty/i);

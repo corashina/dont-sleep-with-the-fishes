@@ -75,6 +75,63 @@ describe('SurvivalSession daytime actions', () => {
     expect(unowned.snapshot()).toEqual(before);
   });
 
+  it('mutates the exact suitable item instance selected for an event', () => {
+    const session = new SurvivalSession(saved('bucket', 'bucket'), {
+      seed: 1,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'leak',
+    });
+
+    expect(session.resolveEvent({
+      kind: 'item',
+      choiceId: 'bucket',
+      instanceId: 'bucket-2',
+    })).toMatchObject({ accepted: true, cue: 'none' });
+    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory['bucket-2']?.condition).toBe('broken');
+  });
+
+  it('rejects stale or mismatched physical responses before drawing an outcome', () => {
+    let randomCalls = 0;
+    const session = new SurvivalSession(saved('bucket', 'umbrella'), {
+      seed: 1,
+      random: { next: () => { randomCalls += 1; return 0; } },
+      initialEventId: 'leak',
+    });
+    const before = session.snapshot();
+
+    expect(session.resolveEvent({
+      kind: 'item',
+      choiceId: 'bucket',
+      instanceId: 'umbrella-1',
+    })).toMatchObject({ accepted: false, code: 'item-unavailable' });
+    expect(session.snapshot()).toEqual(before);
+    expect(randomCalls).toBe(0);
+  });
+
+  it('offers Endure only when no suitable usable item exists', () => {
+    const equipped = new SurvivalSession(saved('bucket'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'leak',
+    });
+    expect(equipped.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: false,
+      code: 'endure-unavailable',
+    });
+
+    const unequipped = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'leak',
+    });
+    expect(unequipped.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: true,
+      code: 'event-resolved',
+      cue: 'none',
+    });
+  });
+
   it('guards dawn while an event is pending and exposes nightfall then dawn cues', () => {
     const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0.5, 0, 0.99]) });
     expect(session.perform('endDay').cue).toBe('nightfall');
@@ -720,6 +777,7 @@ describe('SurvivalSession daytime actions', () => {
       id: 'test-unsuitable-food-loss',
       phase: 'day',
       title: 'Food Loss',
+      revealText: 'Food is at risk.',
       prompt: 'Choose.',
       danger: 'dangerous',
       cue: 'impact',
@@ -768,7 +826,7 @@ describe('SurvivalSession daytime actions', () => {
       });
       const resourceLossEvent: SurvivalEventDefinition = {
         id: `test-unsuitable-${resource}-floor`,
-        phase: 'day', title: 'Supply Loss', prompt: 'Choose.', danger: 'dangerous', cue: 'impact',
+        phase: 'day', title: 'Supply Loss', revealText: 'Supplies are at risk.', prompt: 'Choose.', danger: 'dangerous', cue: 'impact',
         weight: 1, earliestDay: 1, cooldownDays: 0,
         choices: [{ id: 'sleep', label: 'Endure', outcomes: [{
           weight: 1,
@@ -797,7 +855,7 @@ describe('SurvivalSession daytime actions', () => {
     (session as unknown as { food: number }).food = 2;
     const resourceLossEvent: SurvivalEventDefinition = {
       id: 'test-unsuitable-loose-food-loss',
-      phase: 'day', title: 'Food Loss', prompt: 'Choose.', danger: 'dangerous', cue: 'impact',
+      phase: 'day', title: 'Food Loss', revealText: 'Food is at risk.', prompt: 'Choose.', danger: 'dangerous', cue: 'impact',
       weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{ id: 'sleep', label: 'Endure', outcomes: [{
         weight: 1,
@@ -894,7 +952,7 @@ describe('SurvivalSession daytime actions', () => {
   it('honors an immediate rescue outcome and stays terminal', () => {
     const session = new SurvivalSession(saved(), { seed: 3, initialEventId: 'shower-night' });
     const rescueEvent: SurvivalEventDefinition = {
-      id: 'test-rescue', phase: 'night', title: 'Rescue', prompt: 'Choose.',
+      id: 'test-rescue', phase: 'night', title: 'Rescue', revealText: 'A ship appears.', prompt: 'Choose.',
       danger: 'safe', cue: 'sighting', weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{
         id: 'sleep', label: 'Signal', outcomes: [{
@@ -1293,7 +1351,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 24, random: sequenceRandom([0]), initial: { health: 50 }, initialEventId: 'shower-night',
     });
     const orderedEvent: SurvivalEventDefinition = {
-      id: 'test-ordered', phase: 'night', title: 'Ordered', prompt: 'Choose.',
+      id: 'test-ordered', phase: 'night', title: 'Ordered', revealText: 'Several effects arrive.', prompt: 'Choose.',
       danger: 'dangerous', cue: 'impact', weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{
         weight: 1, message: 'Ordered effects.', effects: { resources: [
@@ -1340,7 +1398,7 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(session.snapshot().pendingEventTargetId).toBe('cannedFood-2');
     const combinedEvent: SurvivalEventDefinition = {
-      id: 'test-combined-food-loss', phase: 'day', title: 'Combined Loss', prompt: 'Choose.',
+      id: 'test-combined-food-loss', phase: 'day', title: 'Combined Loss', revealText: 'Food stores are threatened.', prompt: 'Choose.',
       danger: 'dangerous', cue: 'impact', weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{
         weight: 1,

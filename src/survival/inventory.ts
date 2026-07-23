@@ -57,6 +57,30 @@ export class SurvivalInventoryState {
     return true;
   }
 
+  consumePreferred(
+    type: ItemId,
+    quantity = 1,
+    preferredInstanceId: ItemInstanceId | null = null,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): ItemInstanceId[] {
+    const consumed: ItemInstanceId[] = [];
+    const preferred = preferredInstanceId === null ? undefined : this.items.get(preferredInstanceId);
+    if (
+      quantity > 0
+      && preferred?.type === type
+      && !excludedInstanceIds.has(preferredInstanceId!)
+      && this.consumeInstance(preferredInstanceId!)
+    ) {
+      consumed.push(preferredInstanceId!);
+    }
+    if (consumed.length >= quantity) return consumed;
+
+    const exclusions = new Set(excludedInstanceIds);
+    for (const instanceId of consumed) exclusions.add(instanceId);
+    consumed.push(...this.consume(type, quantity - consumed.length, exclusions));
+    return consumed;
+  }
+
   break(instanceId: ItemInstanceId): boolean {
     const item = this.items.get(instanceId);
     if (item === undefined || item.condition !== 'usable' || !ITEM_DEFINITIONS[item.type]?.breakable) {

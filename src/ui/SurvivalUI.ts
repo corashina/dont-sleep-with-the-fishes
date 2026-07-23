@@ -1,4 +1,4 @@
-import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId, type ItemInstanceId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -160,7 +160,7 @@ interface PendingFishingFade {
 
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
-  onEventItem: (choiceId: EventResponseId) => void = () => undefined;
+  onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
@@ -183,12 +183,10 @@ export class SurvivalUI {
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
   private readonly anchorLayer: HTMLElement;
-  private readonly eventLayer: HTMLElement;
+  private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
-  private readonly eventPrompt: HTMLElement;
+  private readonly eventReveal: HTMLElement;
   private readonly eventDanger: HTMLElement;
-  private readonly eventTarget: HTMLElement;
-  private readonly eventItems: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingInstruction: HTMLElement;
@@ -258,6 +256,10 @@ export class SurvivalUI {
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFishingFade | null = null;
   private fishingResultContinueIssued = false;
+  private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
+  private eventSelectedInstanceId: ItemInstanceId | null = null;
+  private eventRevealVersion = 0;
+  private eventPresentationActive = false;
 
   constructor(
     private readonly mount: HTMLElement,
@@ -316,18 +318,20 @@ export class SurvivalUI {
           <button type="button" class="secondary-action timber-action" data-repair-cancel>CANCEL</button>
         </div>
       </section>
-      <section class="survival-overlay event-overlay cinematic-overlay" data-event role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival event" inert>
-        <div class="cinematic-overlay__content">
-          <p class="event-danger" data-event-danger></p>
-          <h2 data-event-title tabindex="-1"></h2>
-          <p data-event-prompt></p>
-          <p class="event-target" data-event-target hidden></p>
-          <div class="event-items" data-event-items aria-label="Choose a recovered item"></div>
-          <button type="button" class="secondary-action timber-action" data-endure>ENDURE</button>
-        </div>
+      <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
+        <p class="event-caption__danger" data-event-danger></p>
+        <h2 data-event-title></h2>
+        <p data-event-reveal></p>
       </section>
+      <button type="button" class="event-endure timber-action" data-endure hidden>ENDURE</button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
-        <article class="journal-page">
+        <div class="journal-book" data-journal-cover>
+          <div class="journal-book__binding" data-journal-binding aria-hidden="true"></div>
+          <i class="journal-book__bookmark journal-book__bookmark--1" data-journal-bookmark aria-hidden="true"></i>
+          <i class="journal-book__bookmark journal-book__bookmark--2" data-journal-bookmark aria-hidden="true"></i>
+          <i class="journal-book__bookmark journal-book__bookmark--3" data-journal-bookmark aria-hidden="true"></i>
+          <i class="journal-book__bookmark journal-book__bookmark--4" data-journal-bookmark aria-hidden="true"></i>
+          <article class="journal-page">
           <p class="journal-page__weather" data-journal-weather></p>
           <h2 data-journal-title tabindex="-1"></h2>
           <div class="journal-page__story" data-journal-story>
@@ -345,8 +349,9 @@ export class SurvivalUI {
             <span class="journal-page__folio" data-journal-page-count>PAGE 0 OF 0</span>
             <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next" data-journal-next aria-label="Next journal page">&rsaquo;</button>
           </nav>
-          <button type="button" class="journal-page__bookmark" data-journal-close>CLOSE JOURNAL</button>
-        </article>
+            <button type="button" class="journal-page__close-strip" data-journal-close>X CLOSE JOURNAL</button>
+          </article>
+        </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <div class="cinematic-overlay__content">
@@ -379,12 +384,10 @@ export class SurvivalUI {
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
-    this.eventLayer = requireElement(this.root, '[data-event]');
+    this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.eventPrompt = requireElement(this.root, '[data-event-prompt]');
+    this.eventReveal = requireElement(this.root, '[data-event-reveal]');
     this.eventDanger = requireElement(this.root, '[data-event-danger]');
-    this.eventTarget = requireElement(this.root, '[data-event-target]');
-    this.eventItems = requireElement(this.root, '[data-event-items]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingInstruction = requireElement(this.root, '[data-fishing-instruction]');
@@ -420,7 +423,6 @@ export class SurvivalUI {
       this.journalLayer,
       this.repairOptionsLayer,
       this.endingLayer,
-      this.eventLayer,
       this.fishingResultLayer,
       this.fishingLayer,
     ];
@@ -501,94 +503,54 @@ export class SurvivalUI {
     );
   }
 
-  showEvent(
-    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'prompt' | 'danger' | 'choices'>,
-    snapshot: SurvivalSnapshot,
-  ): void {
-    if (this.disposed) return;
-    this.focusReturnTarget = this.resolveCommandOrigin();
+  showEventReveal(
+    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
+  ): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const version = ++this.eventRevealVersion;
     this.updateText('event:title', this.eventTitle, event.title);
-    this.updateText('event:prompt', this.eventPrompt, event.prompt);
+    this.updateText('event:reveal', this.eventReveal, event.revealText);
     this.updateText('event:danger', this.eventDanger, event.danger.toUpperCase());
-    this.eventLayer.dataset.eventId = event.id;
-    this.eventLayer.dataset.danger = event.danger;
-    this.eventItems.replaceChildren();
-    const pendingTargetId = (snapshot as SurvivalSnapshot & {
-      pendingEventTargetId?: ItemInstanceId | null;
-    }).pendingEventTargetId ?? null;
-    const pendingTarget = pendingTargetId === null ? undefined : snapshot.inventory[pendingTargetId];
-    this.eventTarget.hidden = pendingTarget === undefined;
-    this.eventTarget.textContent = pendingTarget === undefined
-      ? ''
-      : `TARGET — ${ITEM_LABELS[pendingTarget.type]}${pendingTarget.condition === 'broken' ? ' — BROKEN' : ''}`;
-
-    const authoredChoices = event.choices.filter(
-      (choice): choice is typeof choice & { readonly itemId: ItemId } => choice.itemId !== undefined,
-    );
-    const authoredItemIds = new Set(authoredChoices.map(({ itemId }) => itemId));
-    const recoveredAlternativeIds = ITEM_IDS.filter((itemId) => (
-      !authoredItemIds.has(itemId)
-      && Object.values(snapshot.inventory).some((item) => item?.type === itemId)
-    ));
-    const entries = [
-      ...authoredChoices.map((choice) => ({
-        choiceId: choice.id,
-        id: choice.itemId,
-        label: choice.label,
-        suitability: 'suitable' as const,
-      })),
-      ...recoveredAlternativeIds.map((id) => ({
-        choiceId: id,
-        id,
-        label: `Try ${ITEM_LABELS[id]}`,
-        suitability: 'unsuitable' as const,
-      })),
-    ];
-    entries.forEach(({ choiceId, id, label, suitability }) => {
-      const candidates = Object.values(snapshot.inventory).filter((item) => item?.type === id);
-      const item = candidates.find((candidate) => candidate?.condition === 'usable')
-        ?? candidates.find((candidate) => candidate?.condition === 'broken')
-        ?? candidates.find((candidate) => candidate?.condition === 'consumed')
-        ?? candidates.find((candidate) => candidate?.condition === 'lost');
-      const condition = item?.condition ?? null;
-      const usable = condition === 'usable';
-      const conditionLabel = condition === 'broken' ? 'BROKEN'
-        : condition === 'consumed' ? 'USED'
-          : condition === 'lost' ? 'LOST' : condition === null ? 'NOT RECOVERED' : '';
-      const quantity = id === 'cannedFood' ? snapshot.food : id === 'baitTin' ? snapshot.bait : null;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'event-item';
-      button.dataset.item = id;
-      button.dataset.eventChoice = choiceId;
-      button.dataset.suitability = suitability;
-      button.dataset.usable = usable ? 'true' : 'false';
-      button.dataset.condition = condition ?? 'unowned';
-      button.textContent = `${label}${suitability === 'unsuitable' ? ' — UNSUITABLE' : ''}${quantity === null ? '' : ` x${quantity}`}${conditionLabel ? ` — ${conditionLabel}` : ''}`;
-      button.disabled = this.busy || !usable;
-      const reason = condition === 'broken' ? ' This item is broken.'
-        : condition === 'consumed' ? ' This item was used.'
-          : condition === 'lost' ? ' This item was lost.'
-            : condition === null ? ' This item was not recovered.' : '';
-      const suitabilityDescription = suitability === 'suitable'
-        ? ' Authored response for this event.'
-        : ' Unsuitable response; the event consequence will still occur.';
-      button.setAttribute('aria-description', `${SURVIVAL_ITEM_DESCRIPTIONS[id]}${suitabilityDescription}${reason}`);
-      this.eventItems.append(button);
-    });
-    if (this.eventItems.childElementCount === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'event-items__empty';
-      empty.textContent = 'NO RECOVERED ITEM CAN HELP';
-      this.eventItems.append(empty);
-    }
-    this.endureButton.disabled = this.busy;
-    this.showLayer(this.eventLayer);
-    if (this.topmostModal() === this.eventLayer) this.eventTitle.focus();
+    this.eventCaption.dataset.eventId = event.id;
+    this.eventCaption.dataset.danger = event.danger;
+    this.eventPresentationActive = true;
+    this.eventCaption.classList.add('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.syncCommandState();
+    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : 900;
+    return new Promise((resolve) => window.setTimeout(() => {
+      if (!this.disposed && version === this.eventRevealVersion) {
+        this.eventCaption.dataset.revealed = 'true';
+      }
+      resolve();
+    }, delay));
   }
 
-  hideEvent(): void {
-    if (!this.disposed) this.hideLayer(this.eventLayer);
+  setEventSelection(eligible: ReadonlyMap<ItemInstanceId, EventResponseId>): void {
+    if (this.disposed) return;
+    this.eventEligibility = new Map(eligible);
+    this.eventSelectedInstanceId = null;
+    this.endureButton.hidden = eligible.size > 0;
+    this.syncCommandState();
+  }
+
+  setEventUsing(instanceId: ItemInstanceId): void {
+    if (this.disposed || this.eventEligibility === null) return;
+    this.eventSelectedInstanceId = instanceId;
+    this.syncCommandState();
+  }
+
+  clearEventPresentation(): void {
+    if (this.disposed) return;
+    this.eventRevealVersion += 1;
+    this.eventEligibility = null;
+    this.eventSelectedInstanceId = null;
+    this.eventPresentationActive = false;
+    this.eventCaption.classList.remove('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'true');
+    delete this.eventCaption.dataset.revealed;
+    this.endureButton.hidden = true;
+    this.syncCommandState();
   }
 
   showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
@@ -775,7 +737,7 @@ export class SurvivalUI {
       : state === 'dead'
         ? { title: 'The sea outlasted you.', body: 'Your empty lifeboat drifts on beneath the weather.' }
         : { title: 'Boat is gone.', body: 'The damaged hull slips under and leaves no refuge behind.' };
-    this.hideLayer(this.eventLayer);
+    this.clearEventPresentation();
     this.setPaused(false);
     this.updateText('ending:title', this.endingTitle, copy.title);
     this.updateText('ending:body', this.endingBody, copy.body);
@@ -895,7 +857,9 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleText = anchor.toolId === 'fishingRod' ? 'Fishing rod' : text;
+    const visibleText = anchor.itemType !== null
+      ? ITEM_LABELS[anchor.itemType]
+      : anchor.toolId === 'fishingRod' ? 'Fishing rod' : text;
     requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = visibleText;
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
@@ -904,7 +868,7 @@ export class SurvivalUI {
     else button.dataset.tool = anchor.toolId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
-    button.setAttribute('aria-label', anchor.toolId === 'fishingRod' ? 'Fishing rod' : text);
+    button.setAttribute('aria-label', visibleText);
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
@@ -979,11 +943,21 @@ export class SurvivalUI {
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
+      if (this.eventPresentationActive && anchor !== undefined && anchor.itemType !== null) {
+        const instanceId = id as ItemInstanceId;
+        const eligible = this.eventEligibility?.has(instanceId) === true;
+        const selected = this.eventSelectedInstanceId === instanceId;
+        button.dataset.eventState = selected ? 'selected' : eligible ? 'eligible' : 'muted';
+        button.disabled = false;
+        button.setAttribute(
+          'aria-disabled',
+          eligible && !this.busy && this.eventSelectedInstanceId === null ? 'false' : 'true',
+        );
+        return;
+      }
+      delete button.dataset.eventState;
       button.disabled = this.busy;
       button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
-    });
-    this.eventItems.querySelectorAll<HTMLButtonElement>('button[data-item]').forEach((button) => {
-      button.disabled = this.busy || button.dataset.usable !== 'true';
     });
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
@@ -1079,8 +1053,7 @@ export class SurvivalUI {
   }
 
   private focusModal(layer: HTMLElement): void {
-    if (layer === this.eventLayer) this.eventTitle.focus();
-    else if (layer === this.endingLayer) this.endingTitle.focus();
+    if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
@@ -1149,8 +1122,15 @@ export class SurvivalUI {
 
   private firstUsableAction(): HTMLButtonElement | null {
     return [...this.anchorButtons.values()].find((button) => (
-      button.dataset.action !== '' && this.isUsableCommand(button)
-    )) ?? (this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
+      (
+        button.dataset.action !== ''
+        || this.eventEligibility?.has(button.dataset.anchorId as ItemInstanceId) === true
+      )
+      && this.isUsableCommand(button)
+    ))
+      ?? (this.eventPresentationActive && this.isUsableCommand(this.endureButton)
+        ? this.endureButton
+        : this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
   }
 
   private resolveCommandOrigin(): HTMLElement | null {
@@ -1244,6 +1224,22 @@ export class SurvivalUI {
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
+    const eventInstanceId = button.dataset.anchorId as ItemInstanceId | undefined;
+    if (
+      this.eventPresentationActive
+      && eventInstanceId !== undefined
+      && button.dataset.targetKind === 'item'
+    ) {
+      const choiceId = this.eventEligibility?.get(eventInstanceId);
+      if (
+        choiceId !== undefined
+        && !this.busy
+        && this.eventSelectedInstanceId === null
+      ) {
+        this.onEventItem(choiceId, eventInstanceId);
+      }
+      return;
+    }
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (button.getAttribute('aria-disabled') === 'true') {
       if (action !== undefined && !this.overlayOpen()) this.showUnavailableActionFeedback(action.id);
@@ -1273,7 +1269,7 @@ export class SurvivalUI {
       return;
     }
     if (action !== undefined) {
-      if (this.overlayOpen()) return;
+      if (this.overlayOpen() || this.eventPresentationActive) return;
       this.activateDayAction(action.id, button);
       return;
     }
@@ -1284,11 +1280,6 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-repair-cancel')) {
       this.closeRepairOptions();
-      return;
-    }
-    const choiceId = button.dataset.eventChoice;
-    if (choiceId !== undefined && this.eventItems.contains(button)) {
-      this.onEventItem(choiceId);
       return;
     }
     if (button.hasAttribute('data-endure')) this.onEndure();
@@ -1325,7 +1316,7 @@ export class SurvivalUI {
       }
       return;
     }
-    if (this.overlayOpen() || this.busy) return;
+    if (this.overlayOpen() || this.busy || this.eventPresentationActive) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);
     if (action === undefined) return;
     if (this.showUnavailableActionFeedback(action.id)) {

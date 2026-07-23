@@ -482,7 +482,7 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.handleAction('dive');
     rig.phase.handleAction('repair');
     rig.phase.handleAction('endDay');
-    rig.phase.handleEventItem('unused-choice');
+    rig.phase.handleEventItem('unused-choice', 'baitTin-1');
     rig.phase.handleEndure();
     rig.phase.handleJournalOpen();
     expect(rig.session.perform).not.toHaveBeenCalled();
@@ -490,7 +490,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.ui.showJournal).toBeUndefined();
     rig.world.setHighlightedItem.mockClear();
     rig.ui.onAnchorHighlight?.('baitTin-1');
-    expect(rig.world.setHighlightedItem).not.toHaveBeenCalled();
+    expect(rig.world.setHighlightedItem).toHaveBeenCalledWith('baitTin-1');
 
     await settleFishingEntry(rig);
 
@@ -973,7 +973,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(async (cue) => { calls.push(cue); }), dispose: vi.fn() },
       ui: {
         render: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), setJournalUnread: vi.fn(),
-        showEvent: vi.fn(() => calls.push('event')), dispose: vi.fn(),
+        showEventReveal: vi.fn(async () => { calls.push('event'); }), dispose: vi.fn(),
       },
     });
 
@@ -997,7 +997,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(async () => { calls.push('nightfall'); }), dispose: vi.fn() },
       ui: {
         setSleepCovered: vi.fn(async (covered) => { calls.push(covered ? 'cover' : 'uncover'); }),
-        setBusy: vi.fn(), render: vi.fn(), showEvent: vi.fn(() => { calls.push('event'); }),
+        setBusy: vi.fn(), render: vi.fn(), showEventReveal: vi.fn(async () => { calls.push('event'); }),
         setJournalUnread: vi.fn(), dispose: vi.fn(),
       },
     });
@@ -1084,24 +1084,48 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('routes item and endure event commands through the same presentation lock', async () => {
+  it('routes one eligible physical item through the presentation lock', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     const cue = deferred();
+    let current = snapshot({
+      state: 'dayEvent',
+      pendingEventId: event.id,
+      inventory: inventory({
+        'compass-1': { instanceId: 'compass-1', type: 'compass', condition: 'usable' },
+      }),
+    });
     const resolveEvent = vi.fn(() => accepted({ code: 'event-resolved', cue: 'impact' }));
     const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => snapshot({ state: 'dayEvent' })), resolveEvent },
-      world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
-      ui: { hideEvent: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), dispose: vi.fn() },
+      session: { snapshot: vi.fn(() => current), resolveEvent },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => cue.promise),
+        dispose: vi.fn(),
+      },
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        showFeedback: vi.fn(),
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
     });
 
-    phase.handleEventItem('custom-event-choice');
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('compass', 'compass-1');
     phase.handleEndure();
-    expect(resolveEvent).toHaveBeenCalledOnce();
-    expect(resolveEvent).toHaveBeenCalledWith('custom-event-choice');
+    expect(resolveEvent).not.toHaveBeenCalled();
 
     cue.resolve();
     await flushPromises();
-    phase.handleEndure();
-    expect(resolveEvent).toHaveBeenLastCalledWith(null);
+    expect(resolveEvent).toHaveBeenCalledOnce();
+    expect(resolveEvent).toHaveBeenCalledWith({
+      kind: 'item',
+      choiceId: 'compass',
+      instanceId: 'compass-1',
+    });
+    current = snapshot({ state: 'day' });
   });
 
   it('shows an ending once and restarts only through its callback', () => {
@@ -1151,7 +1175,8 @@ describe('SurvivalPhase orchestration', () => {
     ['dayEvent', false],
     ['nightEvent', true],
   ] as const)('resolves %s and calls dawn only for night events', async (state, expectsDawn) => {
-    let current = snapshot({ state });
+    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === (state === 'dayEvent' ? 'day' : 'night'))!;
+    let current = snapshot({ state, pendingEventId: event.id });
     const beginDawn = vi.fn(() => {
       current = snapshot({ state: 'day', day: 2 });
       return accepted({ code: 'dawn', cue: 'dawn' });
@@ -1167,17 +1192,21 @@ describe('SurvivalPhase orchestration', () => {
       },
       world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
       ui: {
-        hideEvent: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
+        showEventReveal: vi.fn(() => Promise.resolve()), setEventSelection: vi.fn(),
+        showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
         setJournalUnread: vi.fn(), restoreCommandFocus: vi.fn(), dispose: vi.fn(),
       },
     });
+    phase.start();
+    await flushPromises();
     phase.handleEndure();
     await flushPromises();
     expect(beginDawn).toHaveBeenCalledTimes(expectsDawn ? 1 : 0);
   });
 
   it('shows a terminal night ending after its cue and skips dawn', async () => {
-    let current = snapshot({ state: 'nightEvent', day: 5 });
+    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
+    let current = snapshot({ state: 'nightEvent', pendingEventId: event.id, day: 5 });
     const beginDawn = vi.fn();
     const showEnding = vi.fn();
     const phase = SurvivalPhase.forTest({
@@ -1191,10 +1220,13 @@ describe('SurvivalPhase orchestration', () => {
       },
       world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
       ui: {
-        hideEvent: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
+        showEventReveal: vi.fn(() => Promise.resolve()), setEventSelection: vi.fn(),
+        showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
         setJournalUnread: vi.fn(), showEnding, dispose: vi.fn(),
       },
     });
+    phase.start();
+    await flushPromises();
     phase.handleEndure();
     await flushPromises();
     expect(showEnding).toHaveBeenCalledOnce();
