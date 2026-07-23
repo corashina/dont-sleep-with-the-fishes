@@ -127,6 +127,10 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
+  it('keeps the journal page within its padded binder at desktop and short heights', () => {
+    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*width:\s*min\(100%,\s*calc\(\(100dvh - 72px\) \* \.72\)\)[^}]*max-height:\s*100%/s);
+    expect(mainStyles).toMatch(/@media \(max-height: 760px\) and \(min-width: 761px\)[\s\S]*?\.journal-page\s*\{[^}]*min-height:\s*0[^}]*max-height:\s*100%/s);
+  });
   it('removes Rest while retaining catalog-backed one-use actions and dawn recovery', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
