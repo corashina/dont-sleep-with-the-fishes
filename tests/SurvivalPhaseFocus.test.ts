@@ -100,6 +100,13 @@ describe('SurvivalPhase focus synchronization', () => {
     const finishFishing = vi.fn()
       .mockImplementationOnce(() => settlementRejection)
       .mockImplementation((attemptId, result) => session.finishFishing(attemptId, result));
+    const requestDayEvent = vi.fn(() => ({
+      accepted: false,
+      code: 'day-event-used',
+      message: 'No daytime event remains.',
+      deltas: {},
+      cue: 'none' as const,
+    }));
     const world = {
       syncInventory: () => undefined,
       projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
@@ -124,13 +131,7 @@ describe('SurvivalPhase focus synchronization', () => {
         perform: (action, option) => session.perform(action, option),
         beginFishing: () => session.beginFishing(),
         finishFishing,
-        requestDayEvent: () => ({
-          accepted: false,
-          code: 'day-event-used',
-          message: 'No daytime event remains.',
-          deltas: {},
-          cue: 'none',
-        }),
+        requestDayEvent,
       },
       world,
       ui,
@@ -176,7 +177,7 @@ describe('SurvivalPhase focus synchronization', () => {
     const committed = session.snapshot();
     expect(biteButton.hidden).toBe(true);
     expect(document.activeElement).toBe(instruction);
-    expect(instruction.textContent).toBe('CAUGHT COD');
+    expect(instruction.textContent).toBe('REELING IN');
     expect(fishingLive.getAttribute('aria-live')).toBe('polite');
     biteButton.click();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
@@ -184,10 +185,18 @@ describe('SurvivalPhase focus synchronization', () => {
     expect(session.snapshot()).toEqual(committed);
     finishReel();
     await flushPromises();
-    expect(instruction.textContent).toBe('CAUGHT COD');
-    expect(world.exitFishingView).toHaveBeenCalledOnce();
+    const resultDialog = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    const resultContinue = mount.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!;
+    expect(resultDialog.classList).toContain('is-visible');
+    expect(resultDialog.querySelector('[data-fishing-result-title]')?.textContent).toBe('COD');
+    expect(resultDialog.querySelector('[data-fishing-result-detail]')?.textContent).toBe('+1 FOOD - 1 BAIT USED');
+    expect(document.activeElement).toBe(resultContinue);
+    expect(world.exitFishingView).not.toHaveBeenCalled();
     expect(fishingFocusState.fishingReturnTarget).toBe(fish);
     expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.disabled).toBe(true);
+    resultContinue.click();
+    resultContinue.click();
+    expect(world.exitFishingView).toHaveBeenCalledOnce();
     finishExit();
     await flushPromises();
 
@@ -196,6 +205,7 @@ describe('SurvivalPhase focus synchronization', () => {
     expect(document.activeElement).toBe(
       mount.querySelector('[data-anchor-id="fishing-tools"]'),
     );
+    expect(requestDayEvent).not.toHaveBeenCalled();
     phase.dispose();
   });
 
@@ -216,6 +226,13 @@ describe('SurvivalPhase focus synchronization', () => {
     const miss = new Promise<void>((resolve) => { finishMiss = resolve; });
     const exit = new Promise<void>((resolve) => { finishExit = resolve; });
     const finishFishing = vi.fn((attemptId, result) => session.finishFishing(attemptId, result));
+    const requestDayEvent = vi.fn(() => ({
+      accepted: false,
+      code: 'day-event-used',
+      message: 'No daytime event remains.',
+      deltas: {},
+      cue: 'none' as const,
+    }));
     const world = {
       syncInventory: () => undefined,
       projectInteractionAnchors: () => [rodAnchor],
@@ -241,13 +258,7 @@ describe('SurvivalPhase focus synchronization', () => {
         perform: (action, option) => session.perform(action, option),
         beginFishing: () => session.beginFishing(),
         finishFishing,
-        requestDayEvent: () => ({
-          accepted: false,
-          code: 'day-event-used',
-          message: 'No daytime event remains.',
-          deltas: {},
-          cue: 'none',
-        }),
+        requestDayEvent,
       },
       world,
       ui,
@@ -275,7 +286,7 @@ describe('SurvivalPhase focus synchronization', () => {
     expect(session.snapshot()).toMatchObject({ food: 0, bait: 1 });
     expect(biteButton.hidden).toBe(true);
     expect(document.activeElement).toBe(instruction);
-    expect(instruction.textContent).toBe('IT GOT AWAY');
+    expect(instruction.textContent).toBe('THE LINE WENT SLACK');
     expect(fishingLive.getAttribute('aria-live')).toBe('polite');
     const committed = session.snapshot();
     biteButton.click();
@@ -286,11 +297,21 @@ describe('SurvivalPhase focus synchronization', () => {
 
     finishMiss();
     await flushPromises();
+    const resultDialog = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    const resultContinue = mount.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!;
+    expect(resultDialog.classList).toContain('is-visible');
+    expect(resultDialog.querySelector('[data-fishing-result-title]')?.textContent).toBe('IT GOT AWAY');
+    expect(resultDialog.querySelector('[data-fishing-result-detail]')?.textContent).toBe('NO CATCH');
+    expect(document.activeElement).toBe(resultContinue);
+    expect(world.exitFishingView).not.toHaveBeenCalled();
+    resultContinue.click();
+    resultContinue.click();
     expect(world.exitFishingView).toHaveBeenCalledOnce();
     finishExit();
     await flushPromises();
     expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
     expect(document.activeElement).toBe(fish);
+    expect(requestDayEvent).not.toHaveBeenCalled();
     phase.dispose();
   });
 

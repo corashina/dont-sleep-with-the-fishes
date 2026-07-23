@@ -430,6 +430,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 
 .fishing-fade.is-covered { opacity: 1; }
+.fishing-result-card { text-align: center; }
+.survival-overlay.fishing-result-overlay .cinematic-overlay__content.fishing-result-card > p.fishing-result-detail {
+  color: var(--ink-bone);
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: clamp(1rem, 2vw, 1.35rem);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 @keyframes fishing-bite-pulse { 50% { opacity: .72; box-shadow: 0 0 0 13px #ad342f2b, 0 0 34px #f0b13acc; } }
 
 .boat-anchor {

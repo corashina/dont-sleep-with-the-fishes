@@ -64,6 +64,8 @@ interface ActiveFishingTransaction {
   readonly capturedBait: boolean;
 }
 
+type DayActivity = 'none' | 'fishing' | 'other';
+
 export class SurvivalSession {
   private state: SurvivalState = 'day';
   private day: number;
@@ -79,6 +81,7 @@ export class SurvivalSession {
   private rescueProgress: number;
   private weather: WeatherId;
   private actedToday = false;
+  private dayActivity: DayActivity = 'none';
   private dayEventOccurred = false;
   private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
@@ -177,6 +180,7 @@ export class SurvivalSession {
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'endDay': return this.endDay();
     }
+    this.dayActivity = 'other';
     this.actedToday = true;
     return outcome;
   }
@@ -189,8 +193,11 @@ export class SurvivalSession {
       rejection = this.reject('terminal', 'The survival journey has already ended.');
     } else if (this.state !== 'day') {
       rejection = this.reject('not-daytime', 'Fishing is only available during the day.');
-    } else if (this.actedToday) {
-      rejection = this.reject('already-acted', 'A daytime action has already been taken.');
+    } else if (this.dayActivity === 'other') {
+      rejection = this.reject(
+        'fishing-activity-chosen',
+        'Another daytime activity has already been chosen.',
+      );
     } else if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
       rejection = this.reject('not-enough-energy', 'Fishing requires one energy.');
     }
@@ -210,6 +217,7 @@ export class SurvivalSession {
       'none',
     );
     this.actedToday = true;
+    this.dayActivity = 'fishing';
     this.activeFishing = { attempt, capturedBait };
     return { accepted: true, outcome, attempt };
   }
@@ -261,6 +269,12 @@ export class SurvivalSession {
     if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'A day event cannot begin right now.');
+    if (this.dayActivity === 'fishing') {
+      return this.reject(
+        'fishing-day-event-disabled',
+        'Fishing results replace today\'s daytime event.',
+      );
+    }
     if (!this.actedToday) return this.reject('act-first', 'Take a survival action before looking beyond the boat.');
     if (this.dayEventOccurred) return this.reject('day-event-used', 'Today\'s event has already passed.');
 
@@ -379,6 +393,7 @@ export class SurvivalSession {
     this.pendingJournalNighttime = null;
     this.pendingJournalActions = [];
     this.actedToday = false;
+    this.dayActivity = 'none';
     this.dayEventOccurred = false;
     this.pendingEvent = null;
     this.pendingEventId = null;
@@ -428,11 +443,20 @@ export class SurvivalSession {
     if (invalidOption !== null) return invalidOption;
     if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
     if (this.state !== 'day') return { code: 'not-daytime', message: 'That action is only available during the day.' };
+    if (action !== 'fish' && action !== 'endDay' && this.dayActivity === 'fishing') {
+      return {
+        code: 'fishing-activity-chosen',
+        message: 'Fishing is today\'s chosen activity.',
+      };
+    }
 
     switch (action) {
       case 'fish':
-        if (this.actedToday) {
-          return { code: 'already-acted', message: 'A daytime action has already been taken.' };
+        if (this.dayActivity === 'other') {
+          return {
+            code: 'fishing-activity-chosen',
+            message: 'Another daytime activity has already been chosen.',
+          };
         }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };

@@ -190,12 +190,15 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
 const easeInOut = (value: number): number => value * value * (3 - 2 * value);
+const smootherStep = (value: number): number =>
+  value * value * value * (value * (value * 6 - 15) + 10);
 
-const FISHING_CAMERA_DURATION = 1;
+const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
 const FISHING_REDUCED_DURATION = Number.EPSILON;
+const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
 const FISHING_CAST_MAX_X = 2.7;
 const FISHING_CAST_MIN_Z = -7.4;
@@ -417,8 +420,8 @@ export class BoatWorld {
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
   private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.35);
-  private readonly bowCameraPosition = new Vector3(0, 1.32, -0.72);
-  private readonly bowCameraLookTarget = new Vector3(0, -0.58, -5.3);
+  private readonly bowCameraPosition = new Vector3(0, 1.22, -1.62);
+  private readonly bowCameraLookTarget = new Vector3(0, -0.38, -5.65);
   private readonly bowCameraQuaternion = new Quaternion();
   private readonly fishingCameraStartPosition = new Vector3();
   private readonly fishingCameraStartQuaternion = new Quaternion();
@@ -427,12 +430,13 @@ export class BoatWorld {
   private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
   private readonly repairTools: Object3D;
   private readonly repairToolsBounds = new Box3();
+  private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly rodBounds = new Box3();
   private readonly fishingLineOrigin = new Object3D();
   private readonly fishingCatches: FishingCatchLibrary;
   private readonly fishing: FishingVisuals;
-  private readonly baseRodRotationZ: number;
+  private readonly baseRodPivotRotationX: number;
   private readonly buoyancy = new BoatBuoyancy(
     sampleDefaultWave,
     undefined,
@@ -473,7 +477,9 @@ export class BoatWorld {
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
+  private fishingCastOriginY = 0;
   private fishingWaveHeight = 0;
+  private fishingSplashHoldRemaining = 0;
   private currentTime = 0;
   private weather: WeatherId = 'calm';
   private phase: 'day' | 'night' = 'day';
@@ -534,13 +540,16 @@ export class BoatWorld {
     if (repairTools === undefined) throw new Error('Lifeboat requires hull repair tools');
     this.repairTools = repairTools;
 
+    this.rodPivot.name = 'fishing-rod-pivot';
+    this.rodPivot.position.set(0.62, 0.56, -2.28);
     this.rod = propModels.createEquipment('fishingRod');
-    this.rod.position.set(1.28, 0.47, -1.65);
-    this.rod.rotation.y = -0.08;
+    this.rod.position.set(0, 0, -0.9);
+    this.rod.rotation.x = -Math.PI / 2;
     this.fishingLineOrigin.name = 'fishing-line-origin';
-    this.fishingLineOrigin.position.set(0, 0.82, 0);
+    this.fishingLineOrigin.position.set(0, 0.9, 0);
     this.rod.add(this.fishingLineOrigin);
-    this.boat.add(this.rod);
+    this.rodPivot.add(this.rod);
+    this.boat.add(this.rodPivot);
 
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
@@ -556,7 +565,7 @@ export class BoatWorld {
       camera.up,
     );
     this.bowCameraQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
-    this.baseRodRotationZ = this.rod.rotation.z;
+    this.baseRodPivotRotationX = this.rodPivot.rotation.x;
 
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
@@ -656,7 +665,7 @@ export class BoatWorld {
       } satisfies BoatInteractionAnchor;
     });
     const fishingProjection = projectBoatBounds(
-      this.rodBounds.setFromObject(this.rod, true),
+      this.rodBounds.setFromObject(this.rodPivot, true),
       this.camera,
       width,
       height,
@@ -755,6 +764,9 @@ export class BoatWorld {
   playFishingCast(point: FishingCastPoint): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.setFishingCastPoint(point);
+    this.fishingSplashHoldRemaining = 0;
+    this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
+    this.fishingCastOriginY = this.fishingLineOriginWorld.y;
     this.fishingPhase = 'casting';
     return this.startFishingAnimation(
       'cast',
@@ -1013,7 +1025,7 @@ export class BoatWorld {
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.position.copy(this.baseCameraPosition);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
-    this.rod.rotation.z = this.baseRodRotationZ;
+    this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     this.distantVessel.visible = false;
     this.vesselMaterial.opacity = 0;
   }
@@ -1031,6 +1043,10 @@ export class BoatWorld {
   }
 
   private advanceFishingPresentation(delta: number): void {
+    this.fishingSplashHoldRemaining = Math.max(
+      0,
+      this.fishingSplashHoldRemaining - delta,
+    );
     this.applyFishingPhasePresentation();
     const animation = this.activeFishingAnimation;
     if (!animation) return;
@@ -1053,7 +1069,7 @@ export class BoatWorld {
     this.fishing.catchDisplay.visible = false;
     if (this.fishingPhase === 'idle') return;
 
-    this.rod.rotation.z = this.baseRodRotationZ;
+    this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     if (this.fishingPhase === 'entering' || this.fishingPhase === 'returning') return;
     this.camera.position.copy(this.bowCameraPosition);
     this.camera.quaternion.copy(this.bowCameraQuaternion);
@@ -1061,6 +1077,9 @@ export class BoatWorld {
 
     this.fishing.line.visible = true;
     this.fishing.bobber.visible = true;
+    if (this.fishingPhase === 'waiting' && this.fishingSplashHoldRemaining > 0) {
+      this.fishing.splash.visible = true;
+    }
     if (this.fishingPhase === 'bite') {
       this.fishing.bubbles.visible = true;
       this.fishing.ripples.visible = true;
@@ -1081,10 +1100,10 @@ export class BoatWorld {
           this.camera.position.lerpVectors(
             this.fishingCameraStartPosition,
             this.bowCameraPosition,
-            eased,
+            smootherStep(normalized),
           );
           this.camera.quaternion.copy(this.fishingCameraStartQuaternion)
-            .slerp(this.bowCameraQuaternion, eased);
+            .slerp(this.bowCameraQuaternion, smootherStep(normalized));
         }
         break;
       case 'return':
@@ -1095,32 +1114,46 @@ export class BoatWorld {
           this.camera.position.lerpVectors(
             this.fishingCameraStartPosition,
             this.baseCameraPosition,
-            eased,
+            smootherStep(normalized),
           );
           this.camera.quaternion.copy(this.fishingCameraStartQuaternion)
-            .slerp(this.baseCameraQuaternion, eased);
+            .slerp(this.baseCameraQuaternion, smootherStep(normalized));
         }
         break;
       case 'cast': {
-        const swing = this.reducedMotion.matches ? 0.05 : 0.68;
-        this.rod.rotation.z = this.baseRodRotationZ - Math.sin(Math.PI * normalized) * swing;
-        this.fishing.splash.visible = normalized >= 0.68 && normalized < 1;
+        const drawBack = this.reducedMotion.matches
+          ? -Math.sin(Math.PI * normalized) * 0.05
+          : normalized < 0.28
+            ? easeInOut(normalized / 0.28) * 0.42
+            : (1 - easeOut((normalized - 0.28) / 0.72)) * 0.42
+              - Math.sin(Math.PI * (normalized - 0.28) / 0.72) * 0.5;
+        this.rodPivot.rotation.x = this.baseRodPivotRotationX + drawBack;
+        this.fishing.splash.visible = normalized >= 0.9 && normalized < 1;
         break;
       }
       case 'reel': {
         const swing = this.reducedMotion.matches ? 0.04 : 0.34;
-        this.rod.rotation.z = this.baseRodRotationZ - Math.sin(Math.PI * normalized) * swing;
+        this.rodPivot.rotation.x = this.baseRodPivotRotationX
+          - Math.sin(Math.PI * normalized) * swing;
         if (this.activeFishingCatch) {
-          this.activeFishingCatch.position.y = eased * (this.reducedMotion.matches ? 0.18 : 1.5);
+          this.activeFishingCatch.position.set(0, 0, 0);
           this.activeFishingCatch.rotation.z = this.reducedMotion.matches
             ? 0
             : Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
+          this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
+          this.fishing.catchDisplay.position.lerpVectors(
+            this.fishingCastPosition,
+            this.fishingLineOriginWorld,
+            eased * 0.82,
+          );
+          this.fishing.catchDisplay.position.y += Math.sin(Math.PI * eased) * 0.45;
         }
         break;
       }
       case 'miss': {
         const swing = this.reducedMotion.matches ? 0.025 : 0.18;
-        this.rod.rotation.z = this.baseRodRotationZ + Math.sin(Math.PI * normalized) * swing;
+        this.rodPivot.rotation.x = this.baseRodPivotRotationX
+          + Math.sin(Math.PI * normalized) * swing;
         break;
       }
     }
@@ -1133,6 +1166,7 @@ export class BoatWorld {
         break;
       case 'cast':
         this.fishingPhase = 'waiting';
+        this.fishingSplashHoldRemaining = FISHING_SPLASH_HOLD_DURATION;
         break;
       case 'reel':
       case 'miss':
@@ -1154,7 +1188,8 @@ export class BoatWorld {
     this.fishingCatches.hide();
     this.activeFishingCatch = null;
     this.hasFishingCast = false;
-    this.rod.rotation.z = this.baseRodRotationZ;
+    this.fishingSplashHoldRemaining = 0;
+    this.rodPivot.rotation.x = this.baseRodPivotRotationX;
   }
 
   private setFishingCastPoint(point: FishingCastPoint): void {
@@ -1186,15 +1221,25 @@ export class BoatWorld {
       weatherAmplitudeScale(this.weather),
     );
     this.fishingWaveHeight = this.fishingWaveSample.height;
-    this.fishing.bobber.position.set(
-      this.fishingCastPosition.x,
-      this.fishingWaveHeight,
-      this.fishingCastPosition.z,
-    );
-    this.fishing.splash.position.copy(this.fishing.bobber.position);
+    if (this.fishingPhase === 'casting') {
+      this.fishing.splash.position.set(
+        this.fishingCastPosition.x,
+        this.fishingWaveHeight,
+        this.fishingCastPosition.z,
+      );
+    } else {
+      this.fishing.bobber.position.set(
+        this.fishingCastPosition.x,
+        this.fishingWaveHeight,
+        this.fishingCastPosition.z,
+      );
+      this.fishing.splash.position.copy(this.fishing.bobber.position);
+    }
     this.fishing.bubbles.position.copy(this.fishing.bobber.position);
     this.fishing.ripples.position.copy(this.fishing.bobber.position);
-    this.fishing.catchDisplay.position.copy(this.fishing.bobber.position);
+    if (this.fishingPhase !== 'reeling') {
+      this.fishing.catchDisplay.position.copy(this.fishing.bobber.position);
+    }
   }
 
   private updateFishingEffects(time: number): void {
@@ -1239,12 +1284,12 @@ export class BoatWorld {
         + (this.fishingCastPosition.x - this.fishingLineOriginWorld.x) * progress;
       this.fishingLineEndWorld.z = this.fishingLineOriginWorld.z
         + (this.fishingCastPosition.z - this.fishingLineOriginWorld.z) * progress;
-      this.fishingLineEndWorld.y = this.fishingLineOriginWorld.y
-        + (this.fishingWaveHeight + 0.075 - this.fishingLineOriginWorld.y) * progress
-        + Math.sin(Math.PI * progress) * (this.reducedMotion.matches ? 0.08 : 1.15);
+      this.fishingLineEndWorld.y = this.fishingCastOriginY
+        + (this.fishingWaveHeight + 0.075 - this.fishingCastOriginY) * progress
+        + Math.sin(Math.PI * progress) * (this.reducedMotion.matches ? 0.08 : 1.35);
       this.fishing.bobber.position.copy(this.fishingLineEndWorld);
-    } else if (animation?.kind === 'reel' && this.activeFishingCatch) {
-      this.fishingLineEndWorld.y += this.activeFishingCatch.position.y;
+    } else if (this.fishingPhase === 'reeling' && this.activeFishingCatch) {
+      this.fishingLineEndWorld.copy(this.fishing.catchDisplay.position);
     }
 
     const slack = this.fishingPhase === 'missing'
@@ -1319,7 +1364,7 @@ export class BoatWorld {
       case 'none':
         break;
       case 'fish':
-        this.rod.rotation.z = this.baseRodRotationZ - eased * (reduced ? 0.035 : 0.12);
+        this.rodPivot.rotation.x = this.baseRodPivotRotationX - eased * (reduced ? 0.035 : 0.12);
         break;
       case 'dive':
         if (!reduced) this.cameraRig.position.y -= pulse * 0.72;
