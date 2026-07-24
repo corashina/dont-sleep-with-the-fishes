@@ -1,5 +1,23 @@
 # Repository Guidance
 
+## Visual direction
+
+Aim for a cleaner, authored interpretation of the original game's character:
+darkly comic and melancholic maritime, with enough detail and irregularity to
+feel illustrated rather than basic or demo-like.
+
+The visual language rests on four pillars: authored illustrated forms,
+scene-integrated interface, tactile keyed motion, and restrained print
+treatment. Geometry, materials, lighting, composition, and animation create
+the substance; ambient occlusion, grain, halftone, and edge treatment only
+unify it.
+
+Before changing player-facing UI, models, materials, lighting, composition,
+animation, or post-processing, read
+[`docs/VISUAL_STYLE_GUIDE.md`](docs/VISUAL_STYLE_GUIDE.md). Use
+[`docs/VISUAL_AUDIT.md`](docs/VISUAL_AUDIT.md) for the dated list of current
+mismatches and recommended improvement sequence.
+
 ## Engineering rules
 
 - Keep gameplay rules deterministic and testable without a renderer. Isolate randomness behind an injectable source.

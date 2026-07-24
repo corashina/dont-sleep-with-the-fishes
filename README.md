@@ -2,6 +2,19 @@
 
 A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
+## Visual identity
+
+The game uses an authored illustrated style: darkly comic, melancholic, and
+maritime. Stylized models favor recognizable silhouettes, purposeful
+irregularity, and constructed detail; sparse scene-integrated UI and tactile
+keyed animation keep the physical world dominant. Selective ambient occlusion
+and restrained print treatment add cohesion without substituting for geometry,
+materials, lighting, or composition.
+
+See the [visual style guide](docs/VISUAL_STYLE_GUIDE.md) for the durable
+direction and the [current visual audit](docs/VISUAL_AUDIT.md) for prioritized
+recommendations.
+
 The 3D world uses original procedural geometry and shaders. Its shared cloudless atmosphere combines grounded maritime scattering, a locally committed original gibbous-moon texture, weather-aware celestial light, fog, lighting, and synchronized ocean reflections without external sky art.
 
 The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
