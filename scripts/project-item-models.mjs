@@ -16,7 +16,9 @@ const CHART_WATER = [0.159, 0.342, 0.410, 1];
 const CHART_LAND = [0.658, 0.533, 0.250, 1];
 const CHART_INK = [0.035, 0.076, 0.091, 1];
 const CHART_ROUTE = [0.78, 0.18, 0.08, 1];
+const CHART_FOLD = [0.175, 0.365, 0.420, 1];
 const PURPLE = [0.162, 0.061, 0.366, 1];
+const DARK_STEEL = [0.16, 0.20, 0.22, 1];
 const SAFETY_ORANGE = [0.95, 0.28, 0.03, 1];
 const WARM_WHITE = [0.96, 0.92, 0.82, 1];
 const IDENTITY = [0, 0, 0, 1];
@@ -89,6 +91,28 @@ const UMBRELLA_FOLDS = Array.from({ length: 8 }, (_, index) => {
     PURPLE,
     QX90,
     8,
+  );
+});
+
+const UMBRELLA_RIBS = Array.from({ length: 8 }, (_, index) => {
+  const angle = index / 8 * Math.PI * 2;
+  const point = (radius, z) => [
+    Math.cos(angle) * radius,
+    Math.sin(angle) * radius,
+    z,
+  ];
+  return tubePathPart(
+    `rib-${index + 1}`,
+    [
+      point(0.100, -0.34),
+      point(0.090, -0.12),
+      point(0.070, 0.12),
+      point(0.045, 0.32),
+      point(0.020, 0.47),
+    ],
+    0.0065,
+    DARK_STEEL,
+    6,
   );
 });
 
@@ -186,6 +210,16 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
         [0.42, 0.24], [0.15, 0.22], [0.07, 0.06],
       ], 0.018, [0, 0.022, 0], CHART_LAND),
       ...mapGrid,
+      tubePathPart('fold-ridge-vertical', [
+        [-0.035, 0.026, -0.275], [-0.035, 0.031, -0.15],
+        [-0.035, 0.034, 0], [-0.035, 0.031, 0.15],
+        [-0.035, 0.026, 0.275],
+      ], 0.003, CHART_FOLD, 6),
+      tubePathPart('fold-ridge-horizontal', [
+        [-0.415, 0.026, 0.025], [-0.22, 0.031, 0.025],
+        [0, 0.034, 0.025], [0.22, 0.031, 0.025],
+        [0.415, 0.026, 0.025],
+      ], 0.003, CHART_FOLD, 6),
       tubePathPart('route', [
         [-0.30, 0.038, -0.15], [-0.12, 0.040, -0.03],
         [0.10, 0.040, 0.04], [0.29, 0.038, 0.17],
@@ -251,6 +285,7 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
   umbrella: {
     parts: [
       ...UMBRELLA_FOLDS,
+      ...UMBRELLA_RIBS,
       part('shaft', 'cylinder', [0.028, 1.08, 0.028], [0, 0, 0], DARK, QX90, 10),
       part('metal-tip', 'cone', [0.055, 0.16, 0.055], [0, 0, 0.61], STEEL, QX90, 8),
       part('fastening-strap', 'torus', [0.18, 0.025, 0.18], [0, 0, -0.12], DARK, QX90, 12),

@@ -120,6 +120,52 @@ function parseMtl(source, itemId, filename) {
   return materials;
 }
 
+function validateUnitFactor(value, itemId, filename, materialName, factorName) {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw sourceError(
+      itemId,
+      filename,
+      `material override ${materialName} ${factorName} must be finite and within [0, 1]`,
+    );
+  }
+}
+
+function validateMaterialOverride(override, itemId, filename, materialName) {
+  if (override === null || typeof override !== 'object' || Array.isArray(override)) {
+    throw sourceError(itemId, filename, `material override ${materialName} must be an object`);
+  }
+  if (Object.hasOwn(override, 'baseColorFactor')) {
+    if (!Array.isArray(override.baseColorFactor) || override.baseColorFactor.length !== 4) {
+      throw sourceError(
+        itemId,
+        filename,
+        `material override ${materialName} baseColorFactor must contain exactly 4 factors`,
+      );
+    }
+    override.baseColorFactor.forEach((value) => (
+      validateUnitFactor(value, itemId, filename, materialName, 'baseColorFactor')
+    ));
+  }
+  if (Object.hasOwn(override, 'metallicFactor')) {
+    validateUnitFactor(
+      override.metallicFactor,
+      itemId,
+      filename,
+      materialName,
+      'metallicFactor',
+    );
+  }
+  if (Object.hasOwn(override, 'roughnessFactor')) {
+    validateUnitFactor(
+      override.roughnessFactor,
+      itemId,
+      filename,
+      materialName,
+      'roughnessFactor',
+    );
+  }
+}
+
 function parsePositiveIndex(value, count, itemId, filename, kind, line) {
   if (!/^[1-9]\d*$/.test(value)) {
     throw sourceError(itemId, filename, `line ${line}: ${kind} index must be a positive integer`);
@@ -249,9 +295,13 @@ function buildDocument(itemId, filename, parsed, materials, materialOverrides = 
     const materialSpec = materials.get(name);
     const override = materialOverrides[name];
     const material = document.createMaterial(name)
-      .setBaseColorFactor(override?.baseColorFactor ?? [...materialSpec.color, materialSpec.opacity])
-      .setMetallicFactor(override?.metallicFactor ?? 0)
-      .setRoughnessFactor(override?.roughnessFactor ?? 1);
+      .setBaseColorFactor(override?.baseColorFactor ?? [...materialSpec.color, materialSpec.opacity]);
+    if (override && Object.hasOwn(override, 'metallicFactor')) {
+      material.setMetallicFactor(override.metallicFactor);
+    }
+    if (override && Object.hasOwn(override, 'roughnessFactor')) {
+      material.setRoughnessFactor(override.roughnessFactor);
+    }
     const primitive = document.createPrimitive()
       .setAttribute('POSITION', position)
       .setAttribute('NORMAL', normal)
@@ -280,10 +330,11 @@ async function buildObjDocument(sourceRoot, itemId, recipe) {
     readSource(sourceRoot, itemId, recipe, recipe.mtl),
   ]);
   const materials = parseMtl(mtlSource, itemId, recipe.mtl);
-  for (const name of Object.keys(recipe.materialOverrides ?? {})) {
+  for (const [name, override] of Object.entries(recipe.materialOverrides ?? {})) {
     if (!materials.has(name)) {
       throw sourceError(itemId, recipe.mtl, `material override ${name} does not match a parsed material`);
     }
+    validateMaterialOverride(override, itemId, recipe.mtl, name);
   }
   const parsed = parseObj(objSource, materials, itemId, recipe.obj);
   const document = buildDocument(itemId, recipe.obj, parsed, materials, recipe.materialOverrides);
