@@ -770,20 +770,49 @@ describe('SurvivalUI', () => {
     const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
 
     const closing = ui.setSleepCovered(true);
+    let closingSettled = false;
+    void closing.then(() => { closingSettled = true; });
     expect(cover.classList).toContain('is-covered');
     expect(cover.getAttribute('aria-hidden')).toBe('true');
-    await vi.advanceTimersByTimeAsync(650);
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(closingSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await closing;
+    expect(closingSettled).toBe(true);
 
     const hold = ui.holdSleep();
     await vi.advanceTimersByTimeAsync(450);
     await hold;
 
     const opening = ui.setSleepCovered(false);
-    await vi.advanceTimersByTimeAsync(650);
+    const transitionEnd = new Event('transitionend');
+    Object.defineProperty(transitionEnd, 'propertyName', { value: 'opacity' });
+    cover.dispatchEvent(transitionEnd);
     await opening;
     expect(cover.classList).not.toContain('is-covered');
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2500ms ease,\s*transform 2500ms ease-in/s);
     vi.useRealTimers();
+  });
+
+  it('settles and safely supersedes reduced-motion sleep covers', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount, { matches: true });
+    activeUIs.push(ui);
+    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
+
+    const first = ui.setSleepCovered(true);
+    expect(cover.classList).toContain('is-covered');
+    const second = ui.setSleepCovered(false);
+    await first;
+    expect(cover.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+
+    const pendingAtDispose = ui.setSleepCovered(true);
+    ui.dispose();
+    await pendingAtDispose;
+    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.sleep-cover\s*\{[^}]*transition-duration:\s*1ms/s);
   });
 
   it('keeps Pause and terminal modals above covered sleep with focus isolated', () => {
