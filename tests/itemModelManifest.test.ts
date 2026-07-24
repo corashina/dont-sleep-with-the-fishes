@@ -44,8 +44,8 @@ const TARGET_LONGEST_DIMENSIONS = {
 const EXPECTED_ROTATIONS = {
   cannedFood: [0, 0, 0], baitTin: [0, 0, 0], ductTape: [0, 0, 0],
   compass: [0, 0, 0], map: [0, 0, 0], medicalKit: [0, 0, 0],
-  spyglass: [0, 0, 0], fishingNet: [0, 0, Math.PI / 2], bucket: [0, 0, 0],
-  flareGun: [Math.PI / 2, Math.PI / 2, 0], scubaSet: [0, 0, Math.PI / 2],
+  spyglass: [0, 0, 0], fishingNet: [0, 0, 0], bucket: [0, 0, 0],
+  flareGun: [Math.PI / 2, 0, 0], scubaSet: [0, 0, Math.PI / 2],
   anchor: [0, 0, 0], bottledPaper: [0, 0, Math.PI / 2],
   umbrella: [0, 0, Math.PI / 2], swimRing: [0, 0, 0],
   flashlight: [0, 0, Math.PI / 2], harpoonGun: [0, 0, 0],

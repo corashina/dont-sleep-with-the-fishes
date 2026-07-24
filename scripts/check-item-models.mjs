@@ -65,7 +65,7 @@ const LEDGER_REQUIREMENTS = {
   anchor: [
     'anchor', '`anchor.glb`', 'Anchor / Quaternius', 'https://quaternius.com/packs/piratekit.html',
     '`quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj`', CC0_LEDGER_CELL, '544', '544',
-    `Pirate Kit November 2023 archive SHA-256 \`${QUATERNIUS_PIRATE_KIT_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
+    `Pirate Kit November 2023 archive SHA-256 \`${QUATERNIUS_PIRATE_KIT_SHA256}\`; restricted OBJ parsing; MTL transfer with project steel PBR override (base color #66737d, metallic 0.85, roughness 0.42); fan triangulation; prune, dedup, unpartition, and embedded resources.`,
     QUATERNIUS_DOWNLOADED,
   ],
   medicalKit: [
