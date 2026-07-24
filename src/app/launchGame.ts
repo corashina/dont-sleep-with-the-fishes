@@ -1,6 +1,10 @@
 import { Game } from '../Game';
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
+  createSystemScreen,
+  type SystemScreenDescription,
+} from '../ui/SystemScreen';
+import {
   ItemModelLoadError,
   PropModelLibrary,
 } from '../world/PropModelLibrary';
@@ -106,47 +110,22 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
   }
 }
 
-function screen(
-  kicker: string,
-  title: string,
-  lead: string,
-  detail?: string,
+function renderSystemScreen(
+  mount: HTMLElement,
+  description: SystemScreenDescription,
 ): HTMLElement {
-  const section = document.createElement('section');
-  section.className = 'screen is-visible pause-screen';
-
-  const kickerElement = document.createElement('p');
-  kickerElement.className = 'kicker';
-  kickerElement.textContent = kicker;
-  section.append(kickerElement);
-
-  const heading = document.createElement('h1');
-  heading.textContent = title;
-  section.append(heading);
-
-  const leadElement = document.createElement('p');
-  leadElement.className = 'lead';
-  leadElement.textContent = lead;
-  section.append(leadElement);
-
-  if (detail !== undefined) {
-    const detailElement = document.createElement('p');
-    detailElement.className = 'fine-print';
-    detailElement.textContent = detail;
-    section.append(detailElement);
-  }
-
-  return section;
+  const element = createSystemScreen(description);
+  mount.replaceChildren(element);
+  return element;
 }
 
 function renderLoading(mount: HTMLElement): HTMLElement {
-  const loading = screen(
-    'RECOVERING SUPPLIES',
-    'Preparing the ship',
-    'Loading the equipment you will need to survive.',
-  );
-  mount.replaceChildren(loading);
-  return loading;
+  return renderSystemScreen(mount, {
+    kind: 'loading',
+    kicker: 'RECOVERING SUPPLIES',
+    title: 'Preparing the ship',
+    lead: 'Loading the equipment you will need to survive.',
+  });
 }
 
 function errorMessage(error: unknown): string {
@@ -154,63 +133,69 @@ function errorMessage(error: unknown): string {
 }
 
 function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
-  mount.replaceChildren(screen(
-    'WEBGL UNAVAILABLE',
-    'Unable to launch',
-    'This demo needs WebGL 2 in a current desktop browser.',
-    errorMessage(error),
-  ));
+  renderSystemScreen(mount, {
+    kind: 'error',
+    kicker: 'WEBGL UNAVAILABLE',
+    title: 'Unable to launch',
+    lead: 'This demo needs WebGL 2 in a current desktop browser.',
+    detail: errorMessage(error),
+  });
 }
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof ItemModelLoadError) {
     if (error.itemId === 'fishingRod') {
-      mount.replaceChildren(screen(
-        'EQUIPMENT UNAVAILABLE',
-        'Unable to prepare the lifeboat Fishing Rod',
-        'A required fixed equipment model could not be loaded.',
-        error.message,
-      ));
+      renderSystemScreen(mount, {
+        kind: 'error',
+        kicker: 'EQUIPMENT UNAVAILABLE',
+        title: 'Unable to prepare the lifeboat Fishing Rod',
+        lead: 'A required fixed equipment model could not be loaded.',
+        detail: error.message,
+      });
       return;
     }
 
     const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
-    mount.replaceChildren(screen(
-      'SUPPLIES UNAVAILABLE',
-      `Unable to recover ${itemLabel}`,
-      'A required item model could not be loaded.',
-      error.message,
-    ));
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'SUPPLIES UNAVAILABLE',
+      title: `Unable to recover ${itemLabel}`,
+      lead: 'A required item model could not be loaded.',
+      detail: error.message,
+    });
     return;
   }
 
   if (error instanceof SkyAssetLoadError) {
-    mount.replaceChildren(screen(
-      'ATMOSPHERE UNAVAILABLE',
-      'Unable to prepare the sky',
-      'A required local sky texture could not be loaded.',
-      error.message,
-    ));
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'ATMOSPHERE UNAVAILABLE',
+      title: 'Unable to prepare the sky',
+      lead: 'A required local sky texture could not be loaded.',
+      detail: error.message,
+    });
     return;
   }
 
   if (error instanceof ShipFurnitureLoadError) {
-    mount.replaceChildren(screen(
-      'FURNITURE UNAVAILABLE',
-      `Unable to prepare ${error.modelId}`,
-      'A required local ship furniture model could not be loaded.',
-      error.message,
-    ));
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'FURNITURE UNAVAILABLE',
+      title: `Unable to prepare ${error.modelId}`,
+      lead: 'A required local ship furniture model could not be loaded.',
+      detail: error.message,
+    });
     return;
   }
 
   if (error instanceof LifeboatAssetLoadError) {
-    mount.replaceChildren(screen(
-      'LIFEBOAT UNAVAILABLE',
-      'Unable to prepare the wooden lifeboat',
-      'Required local wood textures could not be loaded.',
-      error.message,
-    ));
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'LIFEBOAT UNAVAILABLE',
+      title: 'Unable to prepare the wooden lifeboat',
+      lead: 'Required local wood textures could not be loaded.',
+      detail: error.message,
+    });
     return;
   }
 
