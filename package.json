@@ -12,10 +12,10 @@
     "typecheck": "tsc --noEmit",
     "models:fetch:items": "powershell -ExecutionPolicy Bypass -File scripts/fetch-item-models.ps1",
     "models:fetch:ship": "powershell -ExecutionPolicy Bypass -File scripts/fetch-ship-furniture.ps1",
-    "models:fetch": "bun run models:fetch:items && bun run models:fetch:ship",
+    "models:fetch": "npm run models:fetch:items && npm run models:fetch:ship",
     "models:check:items": "node scripts/check-item-models.mjs",
     "models:check:ship": "node scripts/check-ship-furniture.mjs",
-    "models:check": "bun run models:check:items && bun run models:check:ship"
+    "models:check": "npm run models:check:items && npm run models:check:ship"
   },
   "dependencies": {
     "three": "^0.180.0"

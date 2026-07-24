@@ -201,9 +201,9 @@ describe('item model audit CLI', () => {
     expect(result.stderr).toContain('flareGun: metadata triangle count does not match measured value');
   });
 
-  it('rejects a third-party ledger row for a project-authored model', async () => {
+  it('rejects a synthetic forbidden ledger row for a project-authored model', async () => {
     const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
-    await writeFile(ledgerPath, `${ledger}\n| map | \`map.glb\` | Map / Project team | project | \`project-item-models@1:map\` | project | 80 | 80 | none | 2026-07-15 |\n`);
+    await writeFile(ledgerPath, `${ledger}\n| map | \`map.glb\` | Map / Project team | project | \`project-item-models@2:map\` | project | 264 | 264 | synthetic forbidden audit fixture | 2026-07-15 |\n`);
 
     const result = spawnSync(
       process.execPath,
