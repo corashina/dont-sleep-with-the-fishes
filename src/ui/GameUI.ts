@@ -39,38 +39,38 @@ export class GameUI {
     this.root.className = 'game-ui';
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
-      <div class="hud illustrated-hud">
+      <div class="hud illustrated-hud ui-role-context">
         <div class="crosshair" aria-hidden="true"></div>
-        <div class="prompt brush-label" data-prompt aria-live="polite"></div>
+        <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
         <div class="carried" data-carried>
           <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
           <div class="timer-block pocket-watch">
             ${uiArtwork('watch', 'pocket-watch__art')}
-            <strong data-timer>02:00</strong>
+            <strong class="ui-role-numeral" data-timer>02:00</strong>
           </div>
         </div>
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
-          <p class="kicker">THE HULL HAS BEEN BREACHED</p>
-          <h1>DON'T SLEEP<br>WITH THE<br>FISHES</h1>
-          <p class="lead">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
-          <dl class="controls"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>LEFT CLICK</dd></div></dl>
-          <button type="button" class="primary-action timber-action" data-start-button>BEGIN EVACUATION</button>
-          <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+          <p class="kicker ui-role-context">THE HULL HAS BEEN BREACHED</p>
+          <h1 class="ui-role-display">DON'T SLEEP<br>WITH THE<br>FISHES</h1>
+          <p class="lead ui-role-narrative">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
+          <dl class="controls ui-role-context"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>LEFT CLICK</dd></div></dl>
+          <button type="button" class="primary-action timber-action ui-role-context" data-start-button>BEGIN EVACUATION</button>
+          <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
             <span data-pointer-lock-error-copy></span>
           </p>
-          <p class="fine-print">Desktop keyboard and mouse required. Click to enable mouse look.</p>
+          <p class="fine-print ui-role-narrative">Desktop keyboard and mouse required. Click to enable mouse look.</p>
         </div>
       </section>
       <section class="screen pause-screen poster-screen" data-pause>
         <div class="screen__content">
-          <p class="kicker">THE CLOCK IS STILL</p>
-          <h2>Back to the deck?</h2>
-          <p class="lead">The countdown is stopped while the mouse is released.</p>
-          <button type="button" class="primary-action timber-action" data-resume-button>RESUME</button>
-          <p class="input-error illustrated-warning" data-pointer-lock-error aria-live="polite">
+          <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
+          <h2 class="ui-role-display">Back to the deck?</h2>
+          <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
+          <button type="button" class="primary-action timber-action ui-role-context" data-resume-button>RESUME</button>
+          <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
             <span data-pointer-lock-error-copy></span>
           </p>
@@ -79,18 +79,18 @@ export class GameUI {
       <section class="screen failure-screen poster-screen" data-failure aria-live="assertive">
         <div class="screen__content">
           ${uiArtwork('warning', 'failure-mark')}
-          <p class="kicker">EVACUATION FAILED</p>
-          <h2>The ship is going under.</h2>
-          <p class="lead">Hold on...</p>
+          <p class="kicker ui-role-context">EVACUATION FAILED</p>
+          <h2 class="ui-role-display">The ship is going under.</h2>
+          <p class="lead ui-role-narrative">Hold on...</p>
         </div>
       </section>
       <section class="screen result-screen poster-screen" data-result>
         <div class="screen__content">
-          <p class="kicker">THE SEA KEEPS SCORE</p>
-          <h2 data-result-title></h2>
-          <p class="lead" data-result-body></p>
-          <p class="result-items" data-result-items></p>
-          <button type="button" class="primary-action timber-action" data-replay-button>TRY ANOTHER ROUTE</button>
+          <p class="kicker ui-role-context">THE SEA KEEPS SCORE</p>
+          <h2 class="ui-role-display" data-result-title></h2>
+          <p class="lead ui-role-narrative" data-result-body></p>
+          <p class="result-items ui-role-numeral" data-result-items></p>
+          <button type="button" class="primary-action timber-action ui-role-context" data-replay-button>TRY ANOTHER ROUTE</button>
         </div>
       </section>
     `;

@@ -22,6 +22,29 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
+  it('assigns display, narrative, contextual, and numeral roles explicitly', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('[data-start] h1')?.classList)
+      .toContain('ui-role-display');
+    expect(mount.querySelector('[data-start] .lead')?.classList)
+      .toContain('ui-role-narrative');
+    expect(mount.querySelector('[data-start] .kicker')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-start] .controls')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-start-button]')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-timer]')?.classList)
+      .toContain('ui-role-numeral');
+    expect(mount.querySelector('[data-prompt]')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-result-items]')?.classList)
+      .toContain('ui-role-numeral');
+
+    ui.dispose();
+  });
 
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
