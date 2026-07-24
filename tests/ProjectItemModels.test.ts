@@ -11,6 +11,10 @@ import {
   PROJECT_ITEM_RECIPES,
   PROJECT_ITEM_RECIPE_VERSION,
 } from '../scripts/project-item-models.mjs';
+import type {
+  TorusArcAuthoredPart,
+  TubePathAuthoredPart,
+} from '../scripts/project-item-models.mjs';
 
 const PROJECT_IDS = [
   'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
@@ -57,7 +61,7 @@ describe('project-authored item model builder', () => {
     ]));
 
     const arcs = PROJECT_ITEM_RECIPES.swimRing.parts.filter(
-      ({ shape }) => shape === 'torusArc',
+      (part): part is TorusArcAuthoredPart => part.shape === 'torusArc',
     );
     const whiteLength = arcs.filter(({ role }) => role === 'white-band')
       .reduce((sum, { arcLength }) => sum + arcLength, 0);
@@ -127,11 +131,11 @@ describe('project-authored item model builder', () => {
     const document = await new NodeIO().read(join(outputRoot, 'map.glb'));
     const routeNode = document.getRoot().listNodes().find((node) => node.getName() === 'route');
     const position = routeNode!.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
-    const route = PROJECT_ITEM_RECIPES.map.parts.find(({ name }) => name === 'route') as {
-      points: number[][];
-      radialSegments: number;
-    };
-    expect(position.getCount()).toBe(route.points.length * route.radialSegments);
+    const route = PROJECT_ITEM_RECIPES.map.parts.find(
+      (part): part is TubePathAuthoredPart => part.name === 'route',
+    );
+    expect(route).toBeDefined();
+    expect(position.getCount()).toBe(route!.points.length * route!.radialSegments!);
   });
 
   it('builds a bounded partial torus through the torusArc dispatch', async () => {
