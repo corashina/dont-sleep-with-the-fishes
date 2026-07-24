@@ -329,7 +329,8 @@ function tubePathGeometry(points, radius, radialSegments) {
     throw new Error('tubePath requires at least two points');
   }
 
-  const rings = points.map((point, index) => {
+  const geometry = { positions: [], normals: [], indices: [] };
+  points.forEach((point, index) => {
     const tangent = normalizeVector(
       index === 0
         ? subtractVector(points[1], point)
@@ -344,28 +345,37 @@ function tubePathGeometry(points, radius, radialSegments) {
       `tubePath point ${index} has no usable frame`,
     );
     const secondNormal = crossVector(tangent, firstNormal);
-    return Array.from({ length: radialSegments }, (_, radial) => {
+    for (let radial = 0; radial < radialSegments; radial += 1) {
       const angle = radial / radialSegments * Math.PI * 2;
-      const firstScale = Math.cos(angle) * radius;
-      const secondScale = Math.sin(angle) * radius;
-      return [
-        point[0] + firstNormal[0] * firstScale + secondNormal[0] * secondScale,
-        point[1] + firstNormal[1] * firstScale + secondNormal[1] * secondScale,
-        point[2] + firstNormal[2] * firstScale + secondNormal[2] * secondScale,
+      const firstWeight = Math.cos(angle);
+      const secondWeight = Math.sin(angle);
+      const sideNormal = [
+        firstNormal[0] * firstWeight + secondNormal[0] * secondWeight,
+        firstNormal[1] * firstWeight + secondNormal[1] * secondWeight,
+        firstNormal[2] * firstWeight + secondNormal[2] * secondWeight,
       ];
-    });
+      geometry.positions.push(
+        point[0] + sideNormal[0] * radius,
+        point[1] + sideNormal[1] * radius,
+        point[2] + sideNormal[2] * radius,
+      );
+      geometry.normals.push(...sideNormal);
+    }
   });
 
-  const geometry = { positions: [], normals: [], indices: [] };
-  for (let pathIndex = 0; pathIndex < rings.length - 1; pathIndex += 1) {
+  for (let pathIndex = 0; pathIndex < points.length - 1; pathIndex += 1) {
+    const firstRing = pathIndex * radialSegments;
+    const secondRing = (pathIndex + 1) * radialSegments;
     for (let radial = 0; radial < radialSegments; radial += 1) {
       const nextRadial = (radial + 1) % radialSegments;
-      const first = rings[pathIndex][radial];
-      const second = rings[pathIndex][nextRadial];
-      const third = rings[pathIndex + 1][nextRadial];
-      const fourth = rings[pathIndex + 1][radial];
-      pushFace(geometry, [first, second, third], normal(first, second, third), [0, 1, 2]);
-      pushFace(geometry, [first, third, fourth], normal(first, third, fourth), [0, 1, 2]);
+      geometry.indices.push(
+        firstRing + radial,
+        firstRing + nextRadial,
+        secondRing + nextRadial,
+        firstRing + radial,
+        secondRing + nextRadial,
+        secondRing + radial,
+      );
     }
   }
   return geometry;
