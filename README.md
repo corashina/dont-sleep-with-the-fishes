@@ -54,7 +54,7 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |
 | `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
-| Top-center End Day button / `7` | Fade into sleep and advance to an event or quiet night |
+| Bottom-right End Day button / `7` | Fade into sleep and advance to an event or quiet night |
 
 Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed bow rod projects the **Fish - 1 Energy** action in every run, and shortcut `1` activates the same action. **Dive** still requires usable recovered Scuba Gear; without it, shortcut `2` does nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
 
@@ -79,9 +79,9 @@ In the lifeboat, each day gives three energy for daytime actions:
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
-Day and night events present a danger label, narrative prompt, and the recovered items that can be attempted. A suitable item can reduce harm or create an opportunity; an unsuitable recovered item resolves to the event's fallback result without corrupting it, and **Endure** uses no item. A one-use event supply is consumed only when its authored outcome spends it.
+Day and night events fade to black for 2.5 seconds, stage the committed event while covered, and fade into the event over 2.5 seconds. The event title appears at the top of the scene; green, yellow, or red title color communicates its risk. Suitable recovered physical items become selectable after the reveal, while **Endure** appears when no recovered item response is available. A one-use event supply is consumed only when its authored outcome spends it.
 
-End Day fades the survivor to sleep. Most nights open an event decision; some nights pass quietly. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
+End Day uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 

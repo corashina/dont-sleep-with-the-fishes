@@ -960,10 +960,13 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.dispose();
   });
 
-  it('plays a scheduled day event cue and opens it without a continuation gate', async () => {
+  it('covers a scheduled day event and unlocks choices only after the reveal', async () => {
     const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'day')!;
     let current = snapshot();
     const calls: string[] = [];
+    const cover = deferred();
+    const uncover = deferred();
+    const setEventSelection = vi.fn(() => { calls.push('selection'); });
     const requestDayEvent = vi.fn(() => {
       current = snapshot({ state: 'dayEvent', pendingEventId: event.id, actedToday: true });
       return accepted({ code: 'event-opened', cue: event.cue, deltas: {} });
@@ -973,7 +976,13 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(async (cue) => { calls.push(cue); }), dispose: vi.fn() },
       ui: {
         render: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), setJournalUnread: vi.fn(),
+        beginEventPresentation: vi.fn(() => { calls.push('begin-event'); }),
+        setSleepCovered: vi.fn((covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+          return covered ? cover.promise : uncover.promise;
+        }),
         showEventReveal: vi.fn(async () => { calls.push('event'); }), dispose: vi.fn(),
+        setEventSelection,
       },
     });
 
@@ -981,10 +990,22 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(requestDayEvent).toHaveBeenCalledOnce();
-    expect(calls).toEqual(['fish', event.cue, 'event']);
+    expect(calls).toEqual(['fish', 'begin-event', 'cover']);
+    expect(setEventSelection).not.toHaveBeenCalled();
+
+    cover.resolve();
+    await flushPromises();
+    expect(calls).toEqual(['fish', 'begin-event', 'cover', 'event', event.cue, 'uncover']);
+    expect(setEventSelection).not.toHaveBeenCalled();
+
+    uncover.resolve();
+    await flushPromises();
+    expect(calls).toEqual([
+      'fish', 'begin-event', 'cover', 'event', event.cue, 'uncover', 'selection',
+    ]);
   });
 
-  it('covers sleep before revealing a committed night event', async () => {
+  it('stages a committed night event under cover before revealing choices', async () => {
     const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
     let current = snapshot();
     const calls: string[] = [];
@@ -994,22 +1015,27 @@ describe('SurvivalPhase orchestration', () => {
     });
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), perform },
-      world: { play: vi.fn(async () => { calls.push('nightfall'); }), dispose: vi.fn() },
+      world: { play: vi.fn(async (cue) => { calls.push(cue); }), dispose: vi.fn() },
       ui: {
+        beginEventPresentation: vi.fn(() => { calls.push('begin-event'); }),
         setSleepCovered: vi.fn(async (covered) => { calls.push(covered ? 'cover' : 'uncover'); }),
         setBusy: vi.fn(), render: vi.fn(), showEventReveal: vi.fn(async () => { calls.push('event'); }),
+        setEventSelection: vi.fn(() => { calls.push('selection'); }),
         setJournalUnread: vi.fn(), dispose: vi.fn(),
       },
     });
     phase.handleAction('endDay');
     await flushPromises();
-    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('event'));
-    expect(calls.indexOf('uncover')).toBeLessThan(calls.indexOf('event'));
+    expect(calls).toEqual([
+      'begin-event', 'nightfall', 'cover', 'event', event.cue, 'uncover', 'selection',
+    ]);
   });
 
   it('holds a quiet night under cover and begins dawn without a journal modal', async () => {
+    const calls: string[] = [];
     let current = snapshot({ state: 'nightEvent', journalEntries: [completedEntry(1, { kind: 'quiet' })] });
     const beginDawn = vi.fn(() => {
+      calls.push('begin-dawn');
       current = snapshot({ day: 2, state: 'day', journalEntries: current.journalEntries });
       return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
     });
@@ -1020,9 +1046,13 @@ describe('SurvivalPhase orchestration', () => {
         perform: vi.fn(() => accepted({ code: 'quiet-night', cue: 'nightfall', deltas: {} })),
         beginDawn,
       },
-      world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      world: { play: vi.fn((cue) => { calls.push(cue); return Promise.resolve(); }), dispose: vi.fn() },
       ui: {
-        setSleepCovered: vi.fn(() => Promise.resolve()), holdSleep: vi.fn(() => Promise.resolve()),
+        setSleepCovered: vi.fn((covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+          return Promise.resolve();
+        }),
+        holdSleep: vi.fn(() => { calls.push('hold'); return Promise.resolve(); }),
         setBusy: vi.fn(), render: vi.fn(), setJournalUnread: vi.fn(), showJournal,
         restoreCommandFocus: vi.fn(), dispose: vi.fn(),
       },
@@ -1031,7 +1061,45 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(beginDawn).toHaveBeenCalledOnce();
     expect(showJournal).not.toHaveBeenCalled();
+    expect(calls).toEqual(['nightfall', 'cover', 'hold', 'begin-dawn', 'dawn', 'uncover']);
   });
+
+  it.each(['dispose', 'restart'] as const)(
+    'does not stage an event after %s supersedes its pending cover',
+    async (teardown) => {
+      const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'day')!;
+      const cover = deferred();
+      const showEventReveal = vi.fn(() => Promise.resolve());
+      const setEventSelection = vi.fn();
+      const onRestart = vi.fn();
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => snapshot({ state: 'dayEvent', pendingEventId: event.id })),
+        },
+        world: { dispose: vi.fn() },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => cover.promise),
+          showEventReveal,
+          setEventSelection,
+          clearEventPresentation: vi.fn(),
+          dispose: vi.fn(),
+        },
+        onRestart,
+      });
+
+      phase.start();
+      await flushPromises();
+      if (teardown === 'dispose') phase.dispose();
+      else phase.requestRestart();
+      cover.resolve();
+      await flushPromises();
+
+      expect(showEventReveal).not.toHaveBeenCalled();
+      expect(setEventSelection).not.toHaveBeenCalled();
+      expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
+    },
+  );
 
   it('selects the best hull repair resource and passes only repair options', () => {
     let current = snapshot({ bait: 1, repairMaterial: 1 });

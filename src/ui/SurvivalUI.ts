@@ -119,7 +119,7 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
   squall: 'SQUALL',
 };
 
-const SLEEP_TRANSITION_MS = 650;
+const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
 const REDUCED_TRANSITION_MS = 1;
@@ -154,7 +154,7 @@ export interface FishingResultView {
   readonly detail: string;
 }
 
-interface PendingFishingFade {
+interface PendingFade {
   readonly finish: () => void;
 }
 
@@ -185,8 +185,6 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
-  private readonly eventReveal: HTMLElement;
-  private readonly eventDanger: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingInstruction: HTMLElement;
@@ -254,11 +252,11 @@ export class SurvivalUI {
   private fishingReelIssued = false;
   private suppressFishingClick = false;
   private fishingAnnouncementVersion = 0;
-  private pendingFishingFade: PendingFishingFade | null = null;
+  private pendingFishingFade: PendingFade | null = null;
+  private pendingSleepTransition: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private eventSelectedInstanceId: ItemInstanceId | null = null;
-  private eventRevealVersion = 0;
   private eventPresentationActive = false;
 
   constructor(
@@ -319,9 +317,7 @@ export class SurvivalUI {
         </div>
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
-        <p class="event-caption__danger" data-event-danger></p>
         <h2 data-event-title></h2>
-        <p data-event-reveal></p>
       </section>
       <button type="button" class="event-endure timber-action" data-endure hidden>ENDURE</button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
@@ -378,8 +374,6 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.eventReveal = requireElement(this.root, '[data-event-reveal]');
-    this.eventDanger = requireElement(this.root, '[data-event-danger]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingInstruction = requireElement(this.root, '[data-fishing-instruction]');
@@ -495,27 +489,28 @@ export class SurvivalUI {
     );
   }
 
+  beginEventPresentation(): void {
+    if (this.disposed) return;
+    this.eventPresentationActive = true;
+    this.syncCommandState();
+  }
+
   showEventReveal(
-    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
+    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const version = ++this.eventRevealVersion;
     this.updateText('event:title', this.eventTitle, event.title);
-    this.updateText('event:reveal', this.eventReveal, event.revealText);
-    this.updateText('event:danger', this.eventDanger, event.danger.toUpperCase());
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
+    this.eventCaption.setAttribute(
+      'aria-label',
+      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event: ${event.title}`,
+    );
     this.eventPresentationActive = true;
     this.eventCaption.classList.add('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'false');
     this.syncCommandState();
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : 900;
-    return new Promise((resolve) => window.setTimeout(() => {
-      if (!this.disposed && version === this.eventRevealVersion) {
-        this.eventCaption.dataset.revealed = 'true';
-      }
-      resolve();
-    }, delay));
+    return Promise.resolve();
   }
 
   setEventSelection(eligible: ReadonlyMap<ItemInstanceId, EventResponseId>): void {
@@ -534,13 +529,14 @@ export class SurvivalUI {
 
   clearEventPresentation(): void {
     if (this.disposed) return;
-    this.eventRevealVersion += 1;
     this.eventEligibility = null;
     this.eventSelectedInstanceId = null;
     this.eventPresentationActive = false;
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
-    delete this.eventCaption.dataset.revealed;
+    this.eventCaption.removeAttribute('aria-label');
+    delete this.eventCaption.dataset.eventId;
+    delete this.eventCaption.dataset.danger;
     this.endureButton.hidden = true;
     this.syncCommandState();
   }
@@ -561,9 +557,27 @@ export class SurvivalUI {
 
   setSleepCovered(covered: boolean): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
     const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_TRANSITION_MS;
-    return new Promise((resolve) => window.setTimeout(resolve, delay));
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        this.sleepCover.removeEventListener('transitionend', handleTransitionEnd);
+        if (this.pendingSleepTransition?.finish === finish) this.pendingSleepTransition = null;
+        resolve();
+      };
+      const handleTransitionEnd = (event: TransitionEvent): void => {
+        if (event.target === this.sleepCover && event.propertyName === 'opacity') finish();
+      };
+      this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
+      timer = window.setTimeout(finish, delay);
+      this.pendingSleepTransition = { finish };
+    });
   }
 
   setFishingState(state: FishingUiState): void {
@@ -748,6 +762,7 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.clearAnchorHighlight();
+    this.pendingSleepTransition?.finish();
     this.pendingFishingFade?.finish();
     this.fishingAnnouncementVersion += 1;
     if (this.fishingMode !== 'hidden') {
@@ -924,6 +939,7 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
+    this.endDayButton.hidden = this.eventPresentationActive;
     const endDayReason = this.actionReasons.get('endDay') ?? null;
     this.endDayButton.disabled = this.busy;
     this.endDayButton.setAttribute('aria-disabled', endDayReason === null ? 'false' : 'true');
