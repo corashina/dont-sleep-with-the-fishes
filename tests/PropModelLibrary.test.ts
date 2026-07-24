@@ -222,7 +222,7 @@ describe('PropModelLibrary preload', () => {
   it('rejects a project recipe whose item suffix does not match before loading', async () => {
     await expectManifestRejectedBeforeLoad('flareGun', (spec) => ({
       ...spec,
-      provenance: { kind: 'project', recipeId: 'project-item-models@1:anchor', creator: 'Project team' },
+      provenance: { kind: 'project', recipeId: 'project-item-models@2:anchor', creator: 'Project team' },
     }));
   });
 

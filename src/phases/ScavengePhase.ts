@@ -11,10 +11,10 @@ import {
   type ScavengeResult,
 } from '../game/ScavengeSession';
 import {
-  createItemInstances,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
+import { createScavengeItemInstances } from '../game/scavengeCatalog';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -70,7 +70,7 @@ export class ScavengePhase implements GamePhase {
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
-    const instances = createItemInstances();
+    const instances = createScavengeItemInstances();
     this.session = new ScavengeSession(instances);
     this.world = new World(
       this.scene,

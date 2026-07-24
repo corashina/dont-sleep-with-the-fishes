@@ -27,7 +27,19 @@ export const QUATERNIUS_PACKS = Object.freeze({
 export const QUATERNIUS_ITEM_RECIPES = Object.freeze({
   compass: { pack: 'survival', obj: 'Compass_Open.obj', mtl: 'Compass_Open.mtl', expectedTriangles: 656 },
   flareGun: { pack: 'survival', obj: 'FlareGun.obj', mtl: 'FlareGun.mtl', expectedTriangles: 540 },
-  anchor: { pack: 'pirate', obj: 'Prop_Anchor.obj', mtl: 'Prop_Anchor.mtl', expectedTriangles: 544 },
+  anchor: {
+    pack: 'pirate',
+    obj: 'Prop_Anchor.obj',
+    mtl: 'Prop_Anchor.mtl',
+    expectedTriangles: 544,
+    materialOverrides: {
+      Atlas: {
+        baseColorFactor: [0.1329, 0.1714, 0.2051, 1],
+        metallicFactor: 0.85,
+        roughnessFactor: 0.42,
+      },
+    },
+  },
 });
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -106,6 +118,52 @@ function parseMtl(source, itemId, filename) {
     }
   }
   return materials;
+}
+
+function validateUnitFactor(value, itemId, filename, materialName, factorName) {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw sourceError(
+      itemId,
+      filename,
+      `material override ${materialName} ${factorName} must be finite and within [0, 1]`,
+    );
+  }
+}
+
+function validateMaterialOverride(override, itemId, filename, materialName) {
+  if (override === null || typeof override !== 'object' || Array.isArray(override)) {
+    throw sourceError(itemId, filename, `material override ${materialName} must be an object`);
+  }
+  if (Object.hasOwn(override, 'baseColorFactor')) {
+    if (!Array.isArray(override.baseColorFactor) || override.baseColorFactor.length !== 4) {
+      throw sourceError(
+        itemId,
+        filename,
+        `material override ${materialName} baseColorFactor must contain exactly 4 factors`,
+      );
+    }
+    override.baseColorFactor.forEach((value) => (
+      validateUnitFactor(value, itemId, filename, materialName, 'baseColorFactor')
+    ));
+  }
+  if (Object.hasOwn(override, 'metallicFactor')) {
+    validateUnitFactor(
+      override.metallicFactor,
+      itemId,
+      filename,
+      materialName,
+      'metallicFactor',
+    );
+  }
+  if (Object.hasOwn(override, 'roughnessFactor')) {
+    validateUnitFactor(
+      override.roughnessFactor,
+      itemId,
+      filename,
+      materialName,
+      'roughnessFactor',
+    );
+  }
 }
 
 function parsePositiveIndex(value, count, itemId, filename, kind, line) {
@@ -196,7 +254,7 @@ function parseObj(source, materials, itemId, filename) {
   return { positions, normals, trianglesByMaterial };
 }
 
-function buildDocument(itemId, filename, parsed, materials) {
+function buildDocument(itemId, filename, parsed, materials, materialOverrides = {}) {
   const document = new Document();
   const buffer = document.createBuffer('buffer');
   const vertexIndices = new Map();
@@ -235,8 +293,15 @@ function buildDocument(itemId, filename, parsed, materials) {
   const mesh = document.createMesh(itemId);
   for (const [name, indices] of materialIndices) {
     const materialSpec = materials.get(name);
+    const override = materialOverrides[name];
     const material = document.createMaterial(name)
-      .setBaseColorFactor([...materialSpec.color, materialSpec.opacity]);
+      .setBaseColorFactor(override?.baseColorFactor ?? [...materialSpec.color, materialSpec.opacity]);
+    if (override && Object.hasOwn(override, 'metallicFactor')) {
+      material.setMetallicFactor(override.metallicFactor);
+    }
+    if (override && Object.hasOwn(override, 'roughnessFactor')) {
+      material.setRoughnessFactor(override.roughnessFactor);
+    }
     const primitive = document.createPrimitive()
       .setAttribute('POSITION', position)
       .setAttribute('NORMAL', normal)
@@ -265,8 +330,14 @@ async function buildObjDocument(sourceRoot, itemId, recipe) {
     readSource(sourceRoot, itemId, recipe, recipe.mtl),
   ]);
   const materials = parseMtl(mtlSource, itemId, recipe.mtl);
+  for (const [name, override] of Object.entries(recipe.materialOverrides ?? {})) {
+    if (!materials.has(name)) {
+      throw sourceError(itemId, recipe.mtl, `material override ${name} does not match a parsed material`);
+    }
+    validateMaterialOverride(override, itemId, recipe.mtl, name);
+  }
   const parsed = parseObj(objSource, materials, itemId, recipe.obj);
-  const document = buildDocument(itemId, recipe.obj, parsed, materials);
+  const document = buildDocument(itemId, recipe.obj, parsed, materials, recipe.materialOverrides);
   await document.transform(prune(), dedup(), unpartition());
   return document;
 }
