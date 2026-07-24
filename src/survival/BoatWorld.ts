@@ -166,6 +166,7 @@ interface FishingVisuals {
   readonly bobber: Group;
   readonly splash: Group;
   readonly bubbles: Group;
+  readonly bubbleMaterials: readonly MeshStandardMaterial[];
   readonly ripples: Group;
   readonly catchDisplay: Group;
 }
@@ -329,24 +330,22 @@ function createFishingVisuals(
   const bubbles = new Group();
   bubbles.name = 'fishing-bubbles';
   const bubbleGeometry = new SphereGeometry(0.055, 6, 4);
-  const bubbleMaterial = new MeshStandardMaterial({
-    color: 0xb7d9d6,
-    roughness: 0.3,
-    transparent: true,
-    opacity: 0.68,
-    flatShading: true,
-  });
+  geometries.add(bubbleGeometry);
+  const bubbleMaterials: MeshStandardMaterial[] = [];
   for (let index = 0; index < 6; index += 1) {
-    const bubble = addOwnedFishingMesh(
-      bubbles,
-      bubbleGeometry,
-      bubbleMaterial,
-      geometries,
-      materials,
-    );
-    const angle = index * Math.PI * 2 / 6;
-    bubble.position.set(Math.cos(angle) * 0.21, 0.03 + index * 0.025, Math.sin(angle) * 0.21);
-    bubble.scale.setScalar(0.72 + (index % 3) * 0.18);
+    const material = new MeshStandardMaterial({
+      color: 0xb7d9d6,
+      roughness: 0.3,
+      transparent: true,
+      opacity: 0.42,
+      flatShading: true,
+    });
+    materials.add(material);
+    bubbleMaterials.push(material);
+    const bubble = new Mesh(bubbleGeometry, material);
+    bubble.castShadow = true;
+    bubble.receiveShadow = true;
+    bubbles.add(bubble);
   }
   bubbles.visible = false;
   root.add(bubbles);
@@ -389,6 +388,7 @@ function createFishingVisuals(
     bobber,
     splash,
     bubbles,
+    bubbleMaterials,
     ripples,
     catchDisplay,
   };
@@ -1403,14 +1403,40 @@ export class BoatWorld {
   }
 
   private updateFishingEffects(time: number): void {
-    const animateBiteEffects = !this.reducedMotion.matches;
     if (this.fishing.bubbles.visible) {
-      for (let index = 0; index < this.fishing.bubbles.children.length; index += 1) {
+      const bubbleCount = this.fishing.bubbles.children.length;
+      for (let index = 0; index < bubbleCount; index += 1) {
         const bubble = this.fishing.bubbles.children[index]!;
-        bubble.position.y = 0.03 + index * 0.025
-          + (animateBiteEffects ? Math.sin(time * 3.4 + index) * 0.035 : 0);
+        const material = this.fishing.bubbleMaterials[index]!;
+        const angle = index * Math.PI * 2 / bubbleCount;
+        const baseScale = 0.72 + (index % 3) * 0.18;
+
+        if (this.reducedMotion.matches) {
+          const radius = 0.18 + (index % 2) * 0.04;
+          bubble.position.set(
+            Math.cos(angle) * radius,
+            0.04 + index * 0.02,
+            Math.sin(angle) * radius,
+          );
+          bubble.scale.setScalar(baseScale);
+          material.opacity = 0.3 + (index % 3) * 0.06;
+          continue;
+        }
+
+        const cycle = (time * 0.55 + index / bubbleCount) % 1;
+        const fadeIn = Math.min(1, cycle / 0.18);
+        const fadeOut = Math.min(1, (1 - cycle) / 0.32);
+        const radius = 0.15 + cycle * 0.2;
+        bubble.position.set(
+          Math.cos(angle) * radius,
+          0.025 + cycle * 0.34,
+          Math.sin(angle) * radius,
+        );
+        bubble.scale.setScalar(baseScale * (0.78 + cycle * 0.34));
+        material.opacity = 0.72 * Math.min(fadeIn, fadeOut);
       }
     }
+    const animateBiteEffects = !this.reducedMotion.matches;
     if (this.fishing.ripples.visible) {
       for (let index = 0; index < this.fishing.ripples.children.length; index += 1) {
         const ripple = this.fishing.ripples.children[index]!;

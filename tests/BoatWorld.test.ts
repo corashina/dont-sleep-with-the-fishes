@@ -1168,6 +1168,45 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('runs staggered fading bubble loops without growing the pool', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.showFishingBite(world.centeredFishingCast());
+    const bubbles = world.scene.getObjectByName('fishing-bubbles')!;
+    const poolSize = bubbles.children.length;
+
+    world.update(1, 0.1);
+    const first = bubbles.children.map((bubble) => {
+      const material = (bubble as Mesh).material as MeshStandardMaterial;
+      return {
+        opacity: material.opacity,
+        position: bubble.position.toArray(),
+        scale: bubble.scale.x,
+      };
+    });
+    world.update(1.45, 0.45);
+    const second = bubbles.children.map((bubble) => {
+      const material = (bubble as Mesh).material as MeshStandardMaterial;
+      return {
+        opacity: material.opacity,
+        position: bubble.position.toArray(),
+        scale: bubble.scale.x,
+      };
+    });
+
+    expect(bubbles.children).toHaveLength(poolSize);
+    expect(new Set(first.map(({ opacity }) => opacity)).size).toBeGreaterThan(1);
+    expect(second).not.toEqual(first);
+    expect(second.every(({ opacity }) => opacity >= 0 && opacity <= 0.72)).toBe(true);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps reduced-motion bite pools visible without continuous oscillation', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1182,14 +1221,24 @@ describe('BoatWorld helpers', () => {
     const ripples = world.scene.getObjectByName('fishing-ripples')!;
 
     world.update(1, 0.1);
-    const bubbleHeights = bubbles.children.map(({ position }) => position.y);
+    const first = bubbles.children.map((bubble) => ({
+      position: bubble.position.toArray(),
+      scale: bubble.scale.toArray(),
+      opacity: ((bubble as Mesh).material as MeshStandardMaterial).opacity,
+    }));
     const rippleScales = ripples.children.map(({ scale }) => scale.toArray());
     world.update(4, 0.1);
+    const second = bubbles.children.map((bubble) => ({
+      position: bubble.position.toArray(),
+      scale: bubble.scale.toArray(),
+      opacity: ((bubble as Mesh).material as MeshStandardMaterial).opacity,
+    }));
 
     expect(bobber.visible).toBe(true);
     expect(bubbles.visible).toBe(true);
     expect(ripples.visible).toBe(true);
-    expect(bubbles.children.map(({ position }) => position.y)).toEqual(bubbleHeights);
+    expect(second).toEqual(first);
+    expect(first.every(({ opacity }) => opacity > 0 && opacity < 0.68)).toBe(true);
     expect(ripples.children.map(({ scale }) => scale.toArray())).toEqual(rippleScales);
     world.dispose();
     propModels.dispose();
@@ -1651,11 +1700,11 @@ describe('BoatWorld helpers', () => {
       };
       const line = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry, Material>;
       const pooledMeshes = [
-        'fishing-bobber',
-        'fishing-splash',
-        'fishing-bubbles',
-        'fishing-ripples',
-      ].map((name) => firstMesh(world.scene.getObjectByName(name)!));
+        firstMesh(world.scene.getObjectByName('fishing-bobber')!),
+        firstMesh(world.scene.getObjectByName('fishing-splash')!),
+        ...(world.scene.getObjectByName('fishing-bubbles')!.children as Mesh[]),
+        firstMesh(world.scene.getObjectByName('fishing-ripples')!),
+      ];
       const presentationGeometries = new Set<BufferGeometry>([
         line.geometry,
         ...pooledMeshes.map(({ geometry }) => geometry),
