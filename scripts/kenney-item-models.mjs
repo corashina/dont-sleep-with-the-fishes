@@ -6,7 +6,6 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { cloneDocument, copyToDocument, dedup, prune, unpartition } from '@gltf-transform/functions';
 
 const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
-const QX90 = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 
 export const KENNEY_PACKS = Object.freeze({
   'food-kit': {
@@ -58,13 +57,6 @@ const sourcePart = (name, pack, entry, translation, scale, color, rotation = [0,
 
 export const KENNEY_ITEM_RECIPES = Object.freeze({
   ductTape: direct('prototype-kit', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', 192, [1, 0.35, 1]),
-  fishingRod: {
-    kind: 'composite', expectedTriangles: 376, parts: [
-      sourcePart('rod', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, 0, 0], [0.018, 1.6, 0.018], [0.95, 0.25, 0.08, 1]),
-      sourcePart('grip', 'prototype-kit', 'Models/GLB format/shape-cylinder-detailed.glb', [0, -0.35, 0], [0.04, 0.35, 0.04], [0.12, 0.12, 0.14, 1]),
-      sourcePart('reel', 'prototype-kit', 'Models/GLB format/shape-hollow-cylinder-detailed.glb', [0.05, -0.14, 0], [0.08, 0.05, 0.08], [0.2, 0.24, 0.3, 1], QX90),
-    ],
-  },
   baitTin: direct('food-kit', 'Models/GLB format/can-small.glb', 154),
   medicalKit: {
     kind: 'composite', expectedTriangles: 228, parts: [

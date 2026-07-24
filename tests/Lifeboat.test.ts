@@ -43,8 +43,11 @@ describe('survival lifeboat builder', () => {
     expect(build.root.getObjectByName('survival-benches')?.children).toHaveLength(3);
     expect(build.root.getObjectByName('survival-ribs')?.children.length)
       .toBeGreaterThanOrEqual(6);
-    expect(build.root.getObjectByName('survival-fittings')?.children.length)
-      .toBeGreaterThanOrEqual(16);
+    expect(build.root.getObjectByName('survival-fittings')).toBeUndefined();
+    expect(build.root.getObjectByName('lifeboat-cleat-port-0')).toBeUndefined();
+    expect(build.root.getObjectByName('lifeboat-cleat-starboard-0')).toBeUndefined();
+    expect(build.root.getObjectByName('oar-mount-port')).toBeUndefined();
+    expect(build.root.getObjectByName('oar-mount-starboard')).toBeUndefined();
     expect(build.root.getObjectByName('lifeboat-wear-details')).toBeDefined();
     const timber = build.root.getObjectByName('lifeboat-floorboard-4') as Mesh;
     expect((timber.material as MeshStandardMaterial).map).toBe(assets.color);

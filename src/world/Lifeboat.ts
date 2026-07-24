@@ -233,61 +233,6 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   }
 }
 
-function createCleat(
-  name: string,
-  x: number,
-  z: number,
-  materials: LifeboatMaterials,
-): Group {
-  const cleat = new Group();
-  cleat.name = name;
-  cleat.position.set(x, 0.46, z);
-  const base = new Mesh(new BoxGeometry(0.22, 0.05, 0.08), materials.metal);
-  const horn = new Mesh(new BoxGeometry(0.38, 0.07, 0.07), materials.metal);
-  horn.position.y = 0.07;
-  cleat.add(base, horn);
-  return cleat;
-}
-
-function addFittings(target: Group, materials: LifeboatMaterials): void {
-  const fittings = new Group();
-  fittings.name = 'survival-fittings';
-  for (const sign of [-1, 1] as const) {
-    const side = sign < 0 ? 'port' : 'starboard';
-    const seam = new Mesh(new BoxGeometry(0.045, 0.045, 4.75), materials.seam);
-    seam.name = `inner-seam-${side}`;
-    seam.position.set(sign * 1.47, 0.08, 0.08);
-    fittings.add(seam);
-    for (const [index, z] of [-2.12, -1.48, -0.82, -0.16, 0.50, 1.16, 1.82, 2.35].entries()) {
-      const fastener = new Mesh(
-        new CylinderGeometry(0.032, 0.032, 0.026, 7),
-        materials.metal,
-      );
-      fastener.name = `fastener-${side}-${index}`;
-      fastener.position.set(sign * 1.51, 0.17, z);
-      fastener.rotation.z = Math.PI / 2;
-      fittings.add(fastener);
-    }
-    for (const [index, z] of [-1.92, 1.66].entries()) {
-      fittings.add(createCleat(
-        `lifeboat-cleat-${side}-${index}`,
-        sign * 1.47,
-        z,
-        materials,
-      ));
-    }
-    const oarMount = new Mesh(
-      new TorusGeometry(0.13, 0.035, 6, 12, Math.PI),
-      materials.metal,
-    );
-    oarMount.name = `oar-mount-${side}`;
-    oarMount.position.set(sign * 1.54, 0.40, -0.42);
-    oarMount.rotation.set(Math.PI / 2, 0, sign * Math.PI / 2);
-    fittings.add(oarMount);
-  }
-  target.add(fittings);
-}
-
 function addWear(target: Group, materials: LifeboatMaterials): void {
   const wear = new Group();
   wear.name = 'lifeboat-wear-details';
@@ -371,7 +316,6 @@ export function createLifeboat(assets: LifeboatAssets): LifeboatBuild {
   addFloor(root, materials);
   addFramesAndBenches(root, materials);
   addGunwalesAndKeel(root, materials);
-  addFittings(root, materials);
   addWear(root, materials);
   root.add(createPaddle('port', materials), createPaddle('starboard', materials));
 

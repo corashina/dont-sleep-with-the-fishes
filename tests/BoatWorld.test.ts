@@ -10,10 +10,12 @@ import {
   Matrix4,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   Points,
+  Quaternion,
   ShaderMaterial,
   Texture,
   Vector3,
@@ -28,7 +30,7 @@ import {
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
-import { BoatWorld } from '../src/survival/BoatWorld';
+import { BoatWorld, FISHING_PLAYER_SEAT } from '../src/survival/BoatWorld';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { boatStorageTransform } from '../src/world/BoatStorage';
@@ -1211,7 +1213,7 @@ describe('BoatWorld helpers', () => {
     disposeSpies.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 
-  it('moves to the authored bow camera pose and returns exactly through explicit updates', async () => {
+  it('moves to a centered forward-facing position only for fishing', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1231,12 +1233,26 @@ describe('BoatWorld helpers', () => {
     const midpoint = camera.position.clone();
     world.update(1.1, 0.55);
     await entering;
-    const bowPosition = camera.position.clone();
-    const bowQuaternion = camera.quaternion.clone();
+    const fishingPosition = camera.position.clone();
+    const fishingQuaternion = camera.quaternion.clone();
     expect(midpoint.distanceTo(normalPosition)).toBeGreaterThan(0.1);
     expect(midpoint.distanceTo(camera.position)).toBeGreaterThan(0.1);
-    expect(camera.position.toArray()).toEqual([0, 1.38, -0.72]);
-    expect(Math.abs(bowQuaternion.dot(normalQuaternion))).toBeLessThan(0.9999);
+    expect(fishingPosition.toArray()).toEqual([
+      FISHING_PLAYER_SEAT.x,
+      FISHING_PLAYER_SEAT.y,
+      FISHING_PLAYER_SEAT.z,
+    ]);
+    expect(fishingPosition.x).toBe(0);
+    const expectedFishingQuaternion = new Quaternion().setFromRotationMatrix(
+      new Matrix4().lookAt(
+        new Vector3(0, 1.38, -1.42),
+        new Vector3(0, -0.42, -7.4),
+        camera.up,
+      ),
+    );
+    expect(fishingQuaternion.toArray()).toEqual(expectedFishingQuaternion.toArray());
+    expect(fishingQuaternion.y).toBeCloseTo(0, 10);
+    expect(fishingQuaternion.z).toBeCloseTo(0, 10);
 
     const returning = world.exitFishingView();
     world.update(2.2, 1.1);
@@ -1291,7 +1307,7 @@ describe('BoatWorld helpers', () => {
 
     world.update(1, 0.1);
     const first = bubbles.children.map((bubble) => {
-      const material = (bubble as Mesh).material as MeshStandardMaterial;
+      const material = (bubble as Mesh).material as MeshBasicMaterial;
       return {
         opacity: material.opacity,
         position: bubble.position.toArray(),
@@ -1300,7 +1316,7 @@ describe('BoatWorld helpers', () => {
     });
     world.update(1.45, 0.45);
     const second = bubbles.children.map((bubble) => {
-      const material = (bubble as Mesh).material as MeshStandardMaterial;
+      const material = (bubble as Mesh).material as MeshBasicMaterial;
       return {
         opacity: material.opacity,
         position: bubble.position.toArray(),
@@ -1311,7 +1327,11 @@ describe('BoatWorld helpers', () => {
     expect(bubbles.children).toHaveLength(poolSize);
     expect(new Set(first.map(({ opacity }) => opacity)).size).toBeGreaterThan(1);
     expect(second).not.toEqual(first);
-    expect(second.every(({ opacity }) => opacity >= 0 && opacity <= 0.72)).toBe(true);
+    expect(second.every(({ opacity }) => opacity >= 0 && opacity <= 0.46)).toBe(true);
+    expect(bubbles.children.every((bubble) => bubble.rotation.x === -Math.PI / 2)).toBe(true);
+    expect(bubbles.children.every((bubble) => (
+      ((bubble as Mesh).material as MeshBasicMaterial).depthWrite === false
+    ))).toBe(true);
     world.dispose();
     propModels.dispose();
   });
@@ -1410,14 +1430,14 @@ describe('BoatWorld helpers', () => {
     const first = bubbles.children.map((bubble) => ({
       position: bubble.position.toArray(),
       scale: bubble.scale.toArray(),
-      opacity: ((bubble as Mesh).material as MeshStandardMaterial).opacity,
+      opacity: ((bubble as Mesh).material as MeshBasicMaterial).opacity,
     }));
     const rippleScales = ripples.children.map(({ scale }) => scale.toArray());
     world.update(4, 0.1);
     const second = bubbles.children.map((bubble) => ({
       position: bubble.position.toArray(),
       scale: bubble.scale.toArray(),
-      opacity: ((bubble as Mesh).material as MeshStandardMaterial).opacity,
+      opacity: ((bubble as Mesh).material as MeshBasicMaterial).opacity,
     }));
 
     expect(bobber.visible).toBe(true);
@@ -1469,7 +1489,7 @@ describe('BoatWorld helpers', () => {
     const accepted = [
       { x: -2.7, z: -6.4 },
       { x: 2.7, z: -6.4 },
-      { x: 0, z: -8.5 },
+      { x: 0, z: -10.5 },
       { x: 0, z: -4.8 },
     ] as const;
     for (const point of accepted) {
@@ -1481,7 +1501,7 @@ describe('BoatWorld helpers', () => {
     const rejected = [
       { x: -2.7 - epsilon, z: -6.4 },
       { x: 2.7 + epsilon, z: -6.4 },
-      { x: 0, z: -8.5 - epsilon },
+      { x: 0, z: -10.5 - epsilon },
       { x: 0, z: -4.8 + epsilon },
     ] as const;
     for (const point of rejected) {

@@ -44,6 +44,7 @@ try {
   $archivesRoot = Join-Path $tempRoot 'archives'
   $sourceRoot = Join-Path $tempRoot 'sources'
   $kenneyBuildRoot = Join-Path $tempRoot 'kenney-build'
+  $polyPizzaBuildRoot = Join-Path $tempRoot 'poly-pizza-build'
   $quaterniusBuildRoot = Join-Path $tempRoot 'quaternius-build'
   $projectBuildRoot = Join-Path $tempRoot 'project-build'
   $quaterniusSourceRoot = Join-Path $repositoryRoot 'third_party\quaternius-items'
@@ -73,6 +74,16 @@ try {
 
   Push-Location $repositoryRoot
   try {
+    $polyPizzaSourceJson = & node scripts/poly-pizza-fishing-rod.mjs --source
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned Poly Pizza fishing rod descriptor query failed' }
+    $polyPizzaSource = $polyPizzaSourceJson | ConvertFrom-Json
+    $fishingRodSourcePath = Join-Path $tempRoot 'poly-pizza-fishing-rod.glb'
+    Invoke-WebRequest -UseBasicParsing -Uri $polyPizzaSource.downloadUrl -OutFile $fishingRodSourcePath
+    Assert-FileSha256 -Path $fishingRodSourcePath -Expected $polyPizzaSource.sha256
+    & node scripts/poly-pizza-fishing-rod.mjs `
+      $fishingRodSourcePath `
+      (Join-Path $polyPizzaBuildRoot 'fishingRod.glb')
+    if ($LASTEXITCODE -ne 0) { throw 'Poly Pizza fishing rod build failed' }
     & node scripts/kenney-item-models.mjs $sourceRoot $kenneyBuildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Kenney item model build failed' }
     & node scripts/project-item-models.mjs $projectBuildRoot
@@ -84,7 +95,7 @@ try {
   }
 
   Copy-UniqueModelBuildOutputs `
-    -BuildRoots @($kenneyBuildRoot, $quaterniusBuildRoot, $projectBuildRoot) `
+    -BuildRoots @($kenneyBuildRoot, $polyPizzaBuildRoot, $quaterniusBuildRoot, $projectBuildRoot) `
     -DestinationRoot $stagedRoot
 
   Push-Location $repositoryRoot

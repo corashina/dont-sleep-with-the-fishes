@@ -23,6 +23,7 @@ const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
 
 const CC0_LEDGER_CELL = '[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)';
+const CC_BY_3_LEDGER_CELL = '[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)';
 const FOOD_SHA256 = 'CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7C6F6F';
 const SURVIVAL_SHA256 = 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E';
 const PROTOTYPE_SHA256 = '213B522FB12BCC9B9AC66C4F7581F7C74623293272212E40A70C39936AD3DA95';
@@ -30,6 +31,8 @@ const DOWNLOADED = '2026-07-15';
 const QUATERNIUS_SURVIVAL_SHA256 = 'DB7E41CE2B2F872480E3C24236FDB5CE64AD05071C436B6C47BC455CD3540EB5';
 const QUATERNIUS_PIRATE_KIT_SHA256 = 'ED201326D2F80CFAC4E3CDC7DB34152078AE35F98D77AA14ED7416A931276D36';
 const QUATERNIUS_DOWNLOADED = '2026-07-17';
+const POLY_PIZZA_FISHING_ROD_SHA256 = 'B51A2E1A642E0DF431B2C8992EB251F88F83B294282F7591319433A76EA396A7';
+const POLY_PIZZA_DOWNLOADED = '2026-07-24';
 
 const LEDGER_REQUIREMENTS = {
   cannedFood: [
@@ -93,10 +96,10 @@ const LEDGER_REQUIREMENTS = {
     DOWNLOADED,
   ],
   fishingRod: [
-    'fishingRod', '`fishingRod.glb`', 'Fixed lifeboat fishing equipment / Kenney', 'https://kenney.nl/assets/prototype-kit',
-    '`prototype-kit@1.0:composite/fishingRod`', CC0_LEDGER_CELL, '376', '376',
-    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 376. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` rod T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.018, 1.6, 0.018]\`, RGBA \`[0.95, 0.25, 0.08, 1]\`; \`Models/GLB format/shape-cylinder-detailed.glb\` grip T \`[0, -0.35, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.04, 0.35, 0.04]\`, RGBA \`[0.12, 0.12, 0.14, 1]\`; \`Models/GLB format/shape-hollow-cylinder-detailed.glb\` reel T \`[0.05, -0.14, 0]\`, R \`[0.7071067811865476, 0, 0, 0.7071067811865476]\`, S \`[0.08, 0.05, 0.08]\`, RGBA \`[0.2, 0.24, 0.3, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
+    'fishingRod', '`fishingRod.glb`', 'Fishing rod / Justin Randall', 'https://poly.pizza/m/9gXWYDqB6vt',
+    '`poly-pizza:b50b26a5-173d-4833-af8f-1f30f97d3e59`', CC_BY_3_LEDGER_CELL, '14860', '2964',
+    `Source GLB SHA-256 \`${POLY_PIZZA_FISHING_ROD_SHA256}\`; downloaded from the model's official Poly Pizza static asset. Removed split source normals, welded coincident positions, simplified each material primitive with meshoptimizer ratio 0.16 and error limit 0.012, regenerated flat normals, pruned unused data, unpartitioned buffers, renamed the scene and root node, and embedded all resources in the committed GLB. Kenney Survival Kit 2.0 was checked first but contains no standalone fishing rod.`,
+    POLY_PIZZA_DOWNLOADED,
   ],
   scubaSet: [
     'scubaSet', '`scubaSet.glb`', 'Scuba set composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
