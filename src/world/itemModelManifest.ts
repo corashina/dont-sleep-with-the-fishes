@@ -23,7 +23,7 @@ export type RuntimeModelProvenance<ModelId extends string = string> =
     }
   | {
       readonly kind: 'project';
-      readonly recipeId: `project-item-models@1:${ModelId}`;
+      readonly recipeId: `project-item-models@2:${ModelId}`;
       readonly creator: 'Project team';
     };
 
@@ -64,7 +64,7 @@ const presentation = {
   spyglass: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
   fishingNet: { targetLongestDimension: 0.82, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
   bucket: { targetLongestDimension: 0.68, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  flareGun: { targetLongestDimension: 0.68, rotation: [0, Math.PI / 2, 0], offset: [0, 0.07, 0] },
+  flareGun: { targetLongestDimension: 0.68, rotation: [Math.PI / 2, Math.PI / 2, 0], offset: [0, 0.07, 0] },
   scubaSet: { targetLongestDimension: 0.88, rotation: [0, 0, Math.PI / 2], offset: [0, 0.25, 0] },
   anchor: { targetLongestDimension: 0.88, rotation: [0, 0, 0], offset: [0, 0, 0] },
   bottledPaper: { targetLongestDimension: 0.62, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
@@ -81,20 +81,20 @@ const provenance = {
   baitTin: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/food-kit', sourceAssetId: 'food-kit@2.0:Models/GLB format/can-small.glb', creator: 'Kenney', licenseUrl: CC0 },
   ductTape: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb', creator: 'Kenney', licenseUrl: CC0 },
   compass: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/survival.html', sourceAssetId: 'quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj', creator: 'Quaternius', licenseUrl: CC0 },
-  map: { kind: 'project', recipeId: 'project-item-models@1:map', creator: 'Project team' },
+  map: { kind: 'project', recipeId: 'project-item-models@2:map', creator: 'Project team' },
   medicalKit: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/medicalKit', creator: 'Kenney', licenseUrl: CC0 },
-  spyglass: { kind: 'project', recipeId: 'project-item-models@1:spyglass', creator: 'Project team' },
-  fishingNet: { kind: 'project', recipeId: 'project-item-models@1:fishingNet', creator: 'Project team' },
+  spyglass: { kind: 'project', recipeId: 'project-item-models@2:spyglass', creator: 'Project team' },
+  fishingNet: { kind: 'project', recipeId: 'project-item-models@2:fishingNet', creator: 'Project team' },
   bucket: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/survival-kit', sourceAssetId: 'survival-kit@2.0:Models/GLB format/bucket.glb', creator: 'Kenney', licenseUrl: CC0 },
   flareGun: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/survival.html', sourceAssetId: 'quaternius-survival-pack@2020-09:OBJ/FlareGun.obj', creator: 'Quaternius', licenseUrl: CC0 },
   scubaSet: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/scubaSet', creator: 'Kenney', licenseUrl: CC0 },
   anchor: { kind: 'thirdParty', sourceUrl: 'https://quaternius.com/packs/piratekit.html', sourceAssetId: 'quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj', creator: 'Quaternius', licenseUrl: CC0 },
   bottledPaper: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/survival-kit', sourceAssetId: 'survival-kit@2.0:composite/bottledPaper', creator: 'Kenney + project', licenseUrl: CC0 },
-  umbrella: { kind: 'project', recipeId: 'project-item-models@1:umbrella', creator: 'Project team' },
-  swimRing: { kind: 'project', recipeId: 'project-item-models@1:swimRing', creator: 'Project team' },
+  umbrella: { kind: 'project', recipeId: 'project-item-models@2:umbrella', creator: 'Project team' },
+  swimRing: { kind: 'project', recipeId: 'project-item-models@2:swimRing', creator: 'Project team' },
   flashlight: { kind: 'thirdParty', sourceUrl: 'https://kenney.nl/assets/prototype-kit', sourceAssetId: 'prototype-kit@1.0:composite/flashlight', creator: 'Kenney', licenseUrl: CC0 },
-  harpoonGun: { kind: 'project', recipeId: 'project-item-models@1:harpoonGun', creator: 'Project team' },
-  energyBar: { kind: 'project', recipeId: 'project-item-models@1:energyBar', creator: 'Project team' },
+  harpoonGun: { kind: 'project', recipeId: 'project-item-models@2:harpoonGun', creator: 'Project team' },
+  energyBar: { kind: 'project', recipeId: 'project-item-models@2:energyBar', creator: 'Project team' },
 } as const satisfies Readonly<Record<ItemId, ItemModelProvenance>>;
 
 const generatedMetadata = generatedMetadataJson as unknown as Readonly<

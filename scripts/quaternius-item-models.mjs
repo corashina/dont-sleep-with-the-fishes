@@ -27,7 +27,19 @@ export const QUATERNIUS_PACKS = Object.freeze({
 export const QUATERNIUS_ITEM_RECIPES = Object.freeze({
   compass: { pack: 'survival', obj: 'Compass_Open.obj', mtl: 'Compass_Open.mtl', expectedTriangles: 656 },
   flareGun: { pack: 'survival', obj: 'FlareGun.obj', mtl: 'FlareGun.mtl', expectedTriangles: 540 },
-  anchor: { pack: 'pirate', obj: 'Prop_Anchor.obj', mtl: 'Prop_Anchor.mtl', expectedTriangles: 544 },
+  anchor: {
+    pack: 'pirate',
+    obj: 'Prop_Anchor.obj',
+    mtl: 'Prop_Anchor.mtl',
+    expectedTriangles: 544,
+    materialOverrides: {
+      Atlas: {
+        baseColorFactor: [0.1329, 0.1714, 0.2051, 1],
+        metallicFactor: 0.85,
+        roughnessFactor: 0.42,
+      },
+    },
+  },
 });
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -196,7 +208,7 @@ function parseObj(source, materials, itemId, filename) {
   return { positions, normals, trianglesByMaterial };
 }
 
-function buildDocument(itemId, filename, parsed, materials) {
+function buildDocument(itemId, filename, parsed, materials, materialOverrides = {}) {
   const document = new Document();
   const buffer = document.createBuffer('buffer');
   const vertexIndices = new Map();
@@ -235,8 +247,11 @@ function buildDocument(itemId, filename, parsed, materials) {
   const mesh = document.createMesh(itemId);
   for (const [name, indices] of materialIndices) {
     const materialSpec = materials.get(name);
+    const override = materialOverrides[name];
     const material = document.createMaterial(name)
-      .setBaseColorFactor([...materialSpec.color, materialSpec.opacity]);
+      .setBaseColorFactor(override?.baseColorFactor ?? [...materialSpec.color, materialSpec.opacity])
+      .setMetallicFactor(override?.metallicFactor ?? 0)
+      .setRoughnessFactor(override?.roughnessFactor ?? 1);
     const primitive = document.createPrimitive()
       .setAttribute('POSITION', position)
       .setAttribute('NORMAL', normal)
@@ -265,8 +280,13 @@ async function buildObjDocument(sourceRoot, itemId, recipe) {
     readSource(sourceRoot, itemId, recipe, recipe.mtl),
   ]);
   const materials = parseMtl(mtlSource, itemId, recipe.mtl);
+  for (const name of Object.keys(recipe.materialOverrides ?? {})) {
+    if (!materials.has(name)) {
+      throw sourceError(itemId, recipe.mtl, `material override ${name} does not match a parsed material`);
+    }
+  }
   const parsed = parseObj(objSource, materials, itemId, recipe.obj);
-  const document = buildDocument(itemId, recipe.obj, parsed, materials);
+  const document = buildDocument(itemId, recipe.obj, parsed, materials, recipe.materialOverrides);
   await document.transform(prune(), dedup(), unpartition());
   return document;
 }
