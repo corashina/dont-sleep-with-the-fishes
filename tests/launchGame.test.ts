@@ -70,6 +70,10 @@ describe('launchGame', () => {
     const handle = launchGame(mount, dependencies(() => pending.promise));
 
     expect(mount.textContent).toContain('RECOVERING SUPPLIES');
+    expect(mount.querySelector('[data-start]')).toBeNull();
+    expect(mount.querySelector('.system-screen--loading')).not.toBeNull();
+    expect(mount.querySelector('.system-screen h1')?.classList)
+      .toContain('ui-role-display');
     handle.cancel();
     pending.resolve(models);
     await handle.completion;
@@ -342,6 +346,9 @@ describe('launchGame', () => {
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
     expect(mount.textContent).toContain('renderer failed');
+    expect(mount.querySelector('.system-screen--error')).not.toBeNull();
+    expect(mount.querySelector('.system-screen .fine-print')?.textContent)
+      .toBe('renderer failed');
   });
 
   it('disposes unowned models after Game rolls back a failed initial resize', async () => {
