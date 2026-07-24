@@ -9,13 +9,17 @@ const DARK = [0.10, 0.12, 0.14, 1];
 const BRASS = [0.67, 0.45, 0.18, 1];
 const STEEL = [0.42, 0.49, 0.51, 1];
 const PAPER = [0.80, 0.73, 0.55, 1];
-const BLUE = [0.23, 0.44, 0.55, 1];
 const BROWN = [0.36, 0.22, 0.12, 1];
+const NET_BROWN = [0.044, 0.021, 0.010, 1];
+const NET_DARK = [0.023, 0.010, 0.005, 1];
+const CHART_WATER = [0.159, 0.342, 0.410, 1];
+const CHART_LAND = [0.658, 0.533, 0.250, 1];
+const CHART_INK = [0.035, 0.076, 0.091, 1];
+const CHART_ROUTE = [0.78, 0.18, 0.08, 1];
 const IDENTITY = [0, 0, 0, 1];
 const HALF_SQRT = Math.SQRT1_2;
 const QX90 = [HALF_SQRT, 0, 0, HALF_SQRT];
 const QX180 = [1, 0, 0, 0];
-const QZ_NEG_90 = [0, 0, -HALF_SQRT, HALF_SQRT];
 
 function quaternion(axis, radians) {
   const sine = Math.sin(radians / 2);
@@ -33,18 +37,76 @@ function part(name, shape, size, translation, color, rotation = IDENTITY, segmen
     : { name, shape, size, translation, rotation, color, segments };
 }
 
+function tubePathPart(name, points, radius, color, radialSegments = 6) {
+  return {
+    name, shape: 'tubePath', points, radius, color, radialSegments,
+    translation: [0, 0, 0], rotation: IDENTITY,
+  };
+}
+
+function polygonPart(name, points, height, translation, color) {
+  return {
+    name, shape: 'polygon', points, height, translation,
+    rotation: IDENTITY, color,
+  };
+}
+
+function torusArcPart(
+  name, size, translation, color, arcStart, arcLength, segments = 8,
+  rotation = IDENTITY,
+) {
+  return {
+    name, shape: 'torusArc', size, translation, rotation,
+    color, arcStart, arcLength, segments,
+  };
+}
+
 export const PROJECT_ITEM_IDS = Object.freeze([
   'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
 ]);
 
+export const PROJECT_ITEM_RECIPE_VERSION = 2;
+
+const mapGrid = [
+  ...[-0.30, -0.10, 0.10, 0.30].map((x, index) =>
+    part(`grid-longitude-${index + 1}`, 'box', [0.008, 0.010, 0.52],
+      [x, 0.025, 0], CHART_INK)),
+  ...[-0.18, -0.06, 0.06, 0.18].map((z, index) =>
+    part(`grid-latitude-${index + 1}`, 'box', [0.80, 0.010, 0.008],
+      [0, 0.026, z], CHART_INK)),
+];
+
 export const PROJECT_ITEM_RECIPES = Object.freeze({
   map: {
     parts: [
-      part('sheet', 'box', [0.78, 0.025, 0.52], [0, 0, 0], PAPER),
-      part('fold-left', 'box', [0.025, 0.020, 0.50], [-0.20, 0.0225, 0], BRASS),
-      part('fold-right', 'box', [0.025, 0.020, 0.50], [0.20, 0.0225, 0], BRASS),
-      part('route', 'box', [0.46, 0.018, 0.025], [-0.03, 0.024, 0], BLUE, quaternion('y', -0.34)),
-      part('mark', 'cylinder', [0.075, 0.025, 0.075], [0.23, 0.031, -0.08], RED_ORANGE),
+      part('chart-sheet', 'box', [0.86, 0.025, 0.58], [0, 0, 0], CHART_WATER),
+      polygonPart('landmass-west', [
+        [-0.40, -0.23], [-0.16, -0.25], [-0.09, -0.12],
+        [-0.18, 0.02], [-0.11, 0.24], [-0.39, 0.25],
+      ], 0.018, [0, 0.022, 0], CHART_LAND),
+      polygonPart('landmass-east', [
+        [0.12, -0.25], [0.40, -0.18], [0.35, 0.02],
+        [0.42, 0.24], [0.15, 0.22], [0.07, 0.06],
+      ], 0.018, [0, 0.022, 0], CHART_LAND),
+      ...mapGrid,
+      tubePathPart('route', [
+        [-0.30, 0.038, -0.15], [-0.12, 0.040, -0.03],
+        [0.10, 0.040, 0.04], [0.29, 0.038, 0.17],
+      ], 0.009, CHART_ROUTE, 6),
+      part('compass-north', 'cone', [0.045, 0.012, 0.10],
+        [0.27, 0.041, -0.08], CHART_INK, IDENTITY, 4),
+      part('compass-east', 'cone', [0.045, 0.012, 0.07],
+        [0.32, 0.041, -0.13], CHART_INK, quaternion('y', Math.PI / 2), 4),
+      part('compass-south', 'cone', [0.045, 0.012, 0.07],
+        [0.27, 0.041, -0.18], CHART_INK, QX180, 4),
+      part('compass-west', 'cone', [0.045, 0.012, 0.07],
+        [0.22, 0.041, -0.13], CHART_INK, quaternion('y', -Math.PI / 2), 4),
+      tubePathPart('corner-curl-left', [
+        [-0.43, 0.00, -0.29], [-0.41, 0.035, -0.27], [-0.38, 0.045, -0.25],
+      ], 0.012, CHART_WATER, 6),
+      tubePathPart('corner-curl-right', [
+        [0.43, 0.00, 0.29], [0.41, 0.035, 0.27], [0.38, 0.045, 0.25],
+      ], 0.012, CHART_WATER, 6),
     ],
   },
   spyglass: {
@@ -58,14 +120,34 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
   },
   fishingNet: {
     parts: [
-      part('handle', 'cylinder', [0.04, 0.92, 0.04], [0, -0.36, 0], BROWN),
-      part('frame', 'torus', [0.42, 0.025, 0.30], [0, 0.22, 0], STEEL, QX90),
-      part('net-line-1', 'cylinder', [0.010, 0.28, 0.010], [-0.10, 0.22, 0], PAPER),
-      part('net-line-2', 'cylinder', [0.010, 0.30, 0.010], [0, 0.22, 0], PAPER),
-      part('net-line-3', 'cylinder', [0.010, 0.28, 0.010], [0.10, 0.22, 0], PAPER),
-      part('net-line-4', 'cylinder', [0.010, 0.36, 0.010], [0, 0.22, 0], PAPER, quaternion('z', Math.PI / 3)),
-      part('net-line-5', 'cylinder', [0.010, 0.36, 0.010], [0, 0.22, 0], PAPER, quaternion('z', -Math.PI / 3)),
-      part('net-line-6', 'cylinder', [0.010, 0.34, 0.010], [0, 0.22, 0], PAPER, QZ_NEG_90),
+      ...[-0.24, -0.14, -0.04, 0.06, 0.16, 0.24].map((x, index) =>
+        tubePathPart(`warp-${index + 1}`, [
+          [x, 0.02, -0.27], [x + 0.025, 0.09, -0.09],
+          [x - 0.018, 0.05, 0.09], [x, 0.12, 0.27],
+        ], 0.012, NET_BROWN)),
+      ...[-0.23, -0.14, -0.05, 0.05, 0.14, 0.23].map((z, index) =>
+        tubePathPart(`weft-${index + 1}`, [
+          [-0.27, 0.04, z], [-0.09, 0.10, z - 0.02],
+          [0.09, 0.05, z + 0.02], [0.27, 0.11, z],
+        ], 0.012, NET_BROWN)),
+      tubePathPart('edge-north', [
+        [-0.28, 0.04, -0.28], [0, 0.08, -0.30], [0.28, 0.04, -0.28],
+      ], 0.022, NET_DARK, 8),
+      tubePathPart('edge-east', [
+        [0.28, 0.04, -0.28], [0.30, 0.10, 0], [0.28, 0.12, 0.28],
+      ], 0.022, NET_DARK, 8),
+      tubePathPart('edge-south', [
+        [0.28, 0.12, 0.28], [0, 0.16, 0.30], [-0.28, 0.12, 0.28],
+      ], 0.022, NET_DARK, 8),
+      tubePathPart('edge-west', [
+        [-0.28, 0.12, 0.28], [-0.30, 0.08, 0], [-0.28, 0.04, -0.28],
+      ], 0.022, NET_DARK, 8),
+      ...[
+        [-0.24, 0.05, -0.23], [0, 0.09, -0.14], [0.16, 0.08, -0.05],
+        [-0.14, 0.10, 0.05], [0.06, 0.12, 0.14], [0.24, 0.13, 0.23],
+      ].map((translation, index) =>
+        part(`knot-${index + 1}`, 'cylinder', [0.035, 0.028, 0.035],
+          translation, NET_DARK, IDENTITY, 8)),
     ],
   },
   umbrella: {
@@ -190,15 +272,20 @@ function torusPoint(majorX, majorZ, tubeRadius, around, radial) {
   ];
 }
 
-function torusGeometry([width, tubeDiameter, depth], tubularSegments) {
+function torusGeometry(
+  [width, tubeDiameter, depth],
+  tubularSegments,
+  arcStart = 0,
+  arcLength = Math.PI * 2,
+) {
   const radialSegments = 8;
   const tubeRadius = tubeDiameter / 2;
   const majorX = width / 2 - tubeRadius;
   const majorZ = depth / 2 - tubeRadius;
   const geometry = { positions: [], normals: [], indices: [] };
   for (let tubular = 0; tubular < tubularSegments; tubular += 1) {
-    const firstAround = tubular / tubularSegments * Math.PI * 2;
-    const secondAround = (tubular + 1) / tubularSegments * Math.PI * 2;
+    const firstAround = arcStart + tubular / tubularSegments * arcLength;
+    const secondAround = arcStart + (tubular + 1) / tubularSegments * arcLength;
     for (let radial = 0; radial < radialSegments; radial += 1) {
       const firstRadial = radial / radialSegments * Math.PI * 2;
       const secondRadial = (radial + 1) / radialSegments * Math.PI * 2;
@@ -213,12 +300,131 @@ function torusGeometry([width, tubeDiameter, depth], tubularSegments) {
   return geometry;
 }
 
+function normalizeVector(vector, message) {
+  const length = Math.hypot(...vector);
+  if (!Number.isFinite(length) || length === 0) {
+    throw new Error(message);
+  }
+  return vector.map((component) => component / length);
+}
+
+function subtractVector(first, second) {
+  return [
+    first[0] - second[0],
+    first[1] - second[1],
+    first[2] - second[2],
+  ];
+}
+
+function crossVector(first, second) {
+  return [
+    first[1] * second[2] - first[2] * second[1],
+    first[2] * second[0] - first[0] * second[2],
+    first[0] * second[1] - first[1] * second[0],
+  ];
+}
+
+function tubePathGeometry(points, radius, radialSegments) {
+  if (points.length < 2) {
+    throw new Error('tubePath requires at least two points');
+  }
+
+  const rings = points.map((point, index) => {
+    const tangent = normalizeVector(
+      index === 0
+        ? subtractVector(points[1], point)
+        : index === points.length - 1
+          ? subtractVector(point, points[index - 1])
+          : subtractVector(points[index + 1], points[index - 1]),
+      `tubePath point ${index} has no usable tangent`,
+    );
+    const reference = Math.abs(tangent[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const firstNormal = normalizeVector(
+      crossVector(tangent, reference),
+      `tubePath point ${index} has no usable frame`,
+    );
+    const secondNormal = crossVector(tangent, firstNormal);
+    return Array.from({ length: radialSegments }, (_, radial) => {
+      const angle = radial / radialSegments * Math.PI * 2;
+      const firstScale = Math.cos(angle) * radius;
+      const secondScale = Math.sin(angle) * radius;
+      return [
+        point[0] + firstNormal[0] * firstScale + secondNormal[0] * secondScale,
+        point[1] + firstNormal[1] * firstScale + secondNormal[1] * secondScale,
+        point[2] + firstNormal[2] * firstScale + secondNormal[2] * secondScale,
+      ];
+    });
+  });
+
+  const geometry = { positions: [], normals: [], indices: [] };
+  for (let pathIndex = 0; pathIndex < rings.length - 1; pathIndex += 1) {
+    for (let radial = 0; radial < radialSegments; radial += 1) {
+      const nextRadial = (radial + 1) % radialSegments;
+      const first = rings[pathIndex][radial];
+      const second = rings[pathIndex][nextRadial];
+      const third = rings[pathIndex + 1][nextRadial];
+      const fourth = rings[pathIndex + 1][radial];
+      pushFace(geometry, [first, second, third], normal(first, second, third), [0, 1, 2]);
+      pushFace(geometry, [first, third, fourth], normal(first, third, fourth), [0, 1, 2]);
+    }
+  }
+  return geometry;
+}
+
+function polygonGeometry(points, height) {
+  if (points.length < 3) {
+    throw new Error('polygon requires at least three points');
+  }
+
+  const signedArea = points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point[0] * next[1] - next[0] * point[1];
+  }, 0);
+  if (!Number.isFinite(signedArea) || signedArea === 0) {
+    throw new Error('polygon requires a finite non-zero area');
+  }
+  const counterClockwise = signedArea > 0 ? points : [...points].reverse();
+  const halfHeight = height / 2;
+  const top = counterClockwise.map(([x, z]) => [x, halfHeight, z]);
+  const bottom = counterClockwise.map(([x, z]) => [x, -halfHeight, z]);
+  const geometry = { positions: [], normals: [], indices: [] };
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    pushFace(
+      geometry,
+      [top[0], top[index + 1], top[index]],
+      [0, 1, 0],
+      [0, 1, 2],
+    );
+    pushFace(
+      geometry,
+      [bottom[0], bottom[index], bottom[index + 1]],
+      [0, -1, 0],
+      [0, 1, 2],
+    );
+  }
+  for (let index = 0; index < points.length; index += 1) {
+    const next = (index + 1) % points.length;
+    const vertices = [bottom[index], top[index], top[next], bottom[next]];
+    pushFace(geometry, vertices, normal(vertices[0], vertices[1], vertices[2]));
+  }
+  return geometry;
+}
+
 function createGeometry(spec) {
   switch (spec.shape) {
     case 'box': return boxGeometry(spec.size);
     case 'cylinder': return cylinderGeometry(spec.size, spec.segments ?? 8);
     case 'cone': return coneGeometry(spec.size, spec.segments ?? 8);
     case 'torus': return torusGeometry(spec.size, spec.segments ?? 12);
+    case 'torusArc': return torusGeometry(
+      spec.size,
+      spec.segments ?? 8,
+      spec.arcStart,
+      spec.arcLength,
+    );
+    case 'tubePath': return tubePathGeometry(spec.points, spec.radius, spec.radialSegments ?? 6);
+    case 'polygon': return polygonGeometry(spec.points, spec.height);
     default: throw new Error(`${spec.name}: unknown shape ${spec.shape}`);
   }
 }

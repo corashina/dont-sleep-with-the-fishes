@@ -8,7 +8,8 @@ import { NodeIO } from '@gltf-transform/core';
 import { countTriangles } from '../scripts/check-item-models.mjs';
 import {
   buildProjectItemModels,
-
+  PROJECT_ITEM_RECIPES,
+  PROJECT_ITEM_RECIPE_VERSION,
 } from '../scripts/project-item-models.mjs';
 
 const PROJECT_IDS = [
@@ -27,6 +28,24 @@ describe('project-authored item model builder', () => {
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('publishes the v2 nautical map and folded net recipes', () => {
+    expect(PROJECT_ITEM_RECIPE_VERSION).toBe(2);
+    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.some(({ name }) => name === 'handle')).toBe(false);
+    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.some(({ shape }) => shape === 'tubePath')).toBe(true);
+    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.every(({ color }) =>
+      color === undefined || color[0] < 0.25,
+    )).toBe(true);
+
+    const mapNames = PROJECT_ITEM_RECIPES.map.parts.map(({ name }) => name);
+    expect(mapNames).toEqual(expect.arrayContaining([
+      'chart-sheet', 'landmass-west', 'landmass-east', 'route',
+      'compass-north', 'compass-east', 'compass-south', 'compass-west',
+    ]));
+    expect(PROJECT_ITEM_RECIPES.map.parts.filter(({ name }) =>
+      name.startsWith('grid-'),
+    ).length).toBeGreaterThanOrEqual(8);
   });
 
   it('writes self-contained bounded triangle GLBs', async () => {
