@@ -35,8 +35,8 @@ interface BoatToolCopy {
 
 const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze({
   repairTools: {
-    label: 'PLANK & HAMMER',
-    description: 'Use the hull-repair tools to repair the lifeboat.',
+    label: 'REPAIR TOOLBOX',
+    description: 'Use the open repair toolbox to repair the lifeboat.',
   },
   fishingRod: {
     label: 'FISH',
@@ -825,21 +825,38 @@ export class SurvivalUI {
   }
 
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
-    const item = anchor.itemType === null ? undefined : this.currentSnapshot?.inventory[
-      anchor.id as ItemInstanceId
-    ];
-    const quantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
+    const backingInstanceId = anchor.backingInstanceId ?? (
+      anchor.id.startsWith('supply:') ? null : anchor.id as ItemInstanceId
+    );
+    const item = backingInstanceId === null
+      ? undefined
+      : this.currentSnapshot?.inventory[backingInstanceId];
+    const fallbackQuantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
       : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
+    const quantity = anchor.quantity ?? fallbackQuantity ?? 1;
+    const usableQuantity = anchor.usableQuantity ?? (
+      item?.condition === 'broken' ? 0 : quantity
+    );
+    const brokenQuantity = anchor.brokenQuantity ?? (
+      item?.condition === 'broken' ? quantity : 0
+    );
     const toolCopy = anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
     const itemLabel = anchor.itemType === null
-      ? toolCopy?.label ?? 'UNKNOWN TOOL'
-      : `${ITEM_LABELS[anchor.itemType]}${quantity === undefined ? '' : ` x${quantity}`}`;
+      ? anchor.supplyGroupId === 'repairMaterial'
+        ? `REPAIR MATERIAL ×${quantity}`
+        : toolCopy?.label ?? 'UNKNOWN TOOL'
+      : `${ITEM_LABELS[anchor.itemType]} ×${quantity}`;
     const itemDescription = anchor.itemType === null
-      ? toolCopy?.description ?? 'Permanent lifeboat equipment.'
+      ? anchor.supplyGroupId === 'repairMaterial'
+        ? 'Recovered timber, fasteners, and rope for hull repairs.'
+        : toolCopy?.description ?? 'Permanent lifeboat equipment.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
     const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
     const reason = this.anchorUnavailableReason(anchor);
-    const state = item?.condition === 'broken' ? 'BROKEN'
+    const state = brokenQuantity > 0 && usableQuantity > 0
+      ? `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`
+      : brokenQuantity > 0 ? 'BROKEN'
+      : item?.condition === 'broken' ? 'BROKEN'
       : item?.condition === 'consumed' ? 'USED'
         : item?.condition === 'lost' ? 'LOST' : null;
     const preview = action !== null && this.currentSnapshot !== null
@@ -850,14 +867,22 @@ export class SurvivalUI {
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     const visibleText = anchor.itemType !== null
-      ? ITEM_LABELS[anchor.itemType]
-      : anchor.toolId === 'fishingRod' ? 'Fishing rod' : text;
+      ? `${ITEM_LABELS[anchor.itemType]} ×${quantity}`
+      : anchor.supplyGroupId === 'repairMaterial'
+        ? `REPAIR MATERIAL ×${quantity}`
+        : anchor.toolId === 'fishingRod'
+          ? 'Fishing rod ⚡'
+          : anchor.toolId === 'repairTools'
+            ? 'REPAIR TOOLBOX ⚡⚡'
+            : text;
     requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = visibleText;
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
     if (anchor.toolId === null) delete button.dataset.tool;
     else button.dataset.tool = anchor.toolId;
+    if (backingInstanceId === null) delete button.dataset.backingInstanceId;
+    else button.dataset.backingInstanceId = backingInstanceId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
     button.setAttribute('aria-label', visibleText);
@@ -936,7 +961,15 @@ export class SurvivalUI {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
       if (this.eventPresentationActive && anchor !== undefined && anchor.itemType !== null) {
-        const instanceId = id as ItemInstanceId;
+        const instanceId = anchor.backingInstanceId ?? (
+          id.startsWith('supply:') ? null : id as ItemInstanceId
+        );
+        if (instanceId === null) {
+          button.dataset.eventState = 'muted';
+          button.disabled = false;
+          button.setAttribute('aria-disabled', 'true');
+          return;
+        }
         const eligible = this.eventEligibility?.has(instanceId) === true;
         const selected = this.eventSelectedInstanceId === instanceId;
         button.dataset.eventState = selected ? 'selected' : eligible ? 'eligible' : 'muted';
@@ -967,7 +1000,8 @@ export class SurvivalUI {
     const next = this.focusedAnchorId ?? this.hoveredAnchorId;
     if (next === this.publishedAnchorId) return;
     this.publishedAnchorId = next;
-    this.onAnchorHighlight(next);
+    const anchor = next === null ? undefined : this.anchors.get(next);
+    this.onAnchorHighlight(anchor?.backingInstanceId ?? next);
   }
 
   private invalidateAnchorHighlight(anchorId: string): boolean {
@@ -1116,7 +1150,9 @@ export class SurvivalUI {
     return [...this.anchorButtons.values()].find((button) => (
       (
         button.dataset.action !== ''
-        || this.eventEligibility?.has(button.dataset.anchorId as ItemInstanceId) === true
+        || this.eventEligibility?.has(
+          button.dataset.backingInstanceId as ItemInstanceId,
+        ) === true
       )
       && this.isUsableCommand(button)
     ))
@@ -1216,7 +1252,12 @@ export class SurvivalUI {
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
-    const eventInstanceId = button.dataset.anchorId as ItemInstanceId | undefined;
+    const eventInstanceId = button.dataset.backingInstanceId as ItemInstanceId | undefined
+      ?? (
+        button.dataset.anchorId?.startsWith('supply:')
+          ? undefined
+          : button.dataset.anchorId as ItemInstanceId | undefined
+      );
     if (
       this.eventPresentationActive
       && eventInstanceId !== undefined
