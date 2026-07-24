@@ -53,6 +53,7 @@ type FishingPresentationState =
 type EventPresentationState =
   | 'idle'
   | 'sleeping'
+  | 'transitioning'
   | 'revealing'
   | 'choosing'
   | 'using'
@@ -703,8 +704,10 @@ export class SurvivalPhase implements GamePhase {
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
     const generation = this.lifecycleGeneration;
-    this.eventPresentation = 'sleeping';
+    const opensEvent = outcome.code !== 'quiet-night';
+    this.eventPresentation = opensEvent ? 'transitioning' : 'sleeping';
     this.setBusy(true);
+    if (opensEvent) this.ui.beginEventPresentation?.();
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
       this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
@@ -726,9 +729,7 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
 
-    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-    await this.runPendingEventReveal(snapshot, generation);
+    await this.runPendingEventReveal(snapshot, generation, true);
   }
 
   private async resolveEventWithItem(
@@ -858,24 +859,37 @@ export class SurvivalPhase implements GamePhase {
   private async runPendingEventReveal(
     snapshot: SurvivalSnapshot,
     generation: number,
+    alreadyCovered = false,
   ): Promise<void> {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
-    this.eventPresentation = 'revealing';
+    this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
     this.setBusy(true);
+    if (!alreadyCovered) this.ui.beginEventPresentation?.();
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(new Set());
-    await Promise.all([
-      this.world.play?.(event.cue) ?? Promise.resolve(),
-      this.ui.showEventReveal?.(event) ?? Promise.resolve(),
-    ]);
-    if (!this.isContinuationActive(generation)) return;
+    if (!alreadyCovered) {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
-    this.eventEligibility = this.eventEligibilityFor(event, current);
+    this.eventPresentation = 'revealing';
+    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    await Promise.all([
+      this.world.play?.(event.cue) ?? Promise.resolve(),
+      this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+    ]);
+    if (!this.isContinuationActive(generation)) return;
+
+    const revealed = this.session.snapshot();
+    if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
+    this.eventEligibility = this.eventEligibilityFor(event, revealed);
     this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
     this.ui.setEventSelection?.(this.eventEligibility);
     this.eventPresentation = 'choosing';
