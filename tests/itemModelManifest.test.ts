@@ -45,7 +45,7 @@ const EXPECTED_ROTATIONS = {
   cannedFood: [0, 0, 0], baitTin: [0, 0, 0], ductTape: [0, 0, 0],
   compass: [0, 0, 0], map: [0, 0, 0], medicalKit: [0, 0, 0],
   spyglass: [0, 0, 0], fishingNet: [0, 0, Math.PI / 2], bucket: [0, 0, 0],
-  flareGun: [0, Math.PI / 2, 0], scubaSet: [0, 0, Math.PI / 2],
+  flareGun: [Math.PI / 2, Math.PI / 2, 0], scubaSet: [0, 0, Math.PI / 2],
   anchor: [0, 0, 0], bottledPaper: [0, 0, Math.PI / 2],
   umbrella: [0, 0, Math.PI / 2], swimRing: [0, 0, 0],
   flashlight: [0, 0, Math.PI / 2], harpoonGun: [0, 0, 0],
@@ -110,7 +110,7 @@ describe('item model manifest', () => {
     }
     for (const id of PROJECT_IDS) {
       expect(ITEM_MODEL_SPECS[id].provenance).toEqual({
-        kind: 'project', recipeId: `project-item-models@1:${id}`, creator: 'Project team',
+        kind: 'project', recipeId: `project-item-models@2:${id}`, creator: 'Project team',
       });
     }
     expect(ITEM_MODEL_SPECS.flareGun.provenance).toMatchObject({
