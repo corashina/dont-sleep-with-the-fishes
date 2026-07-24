@@ -147,12 +147,28 @@ describe('SurvivalUI', () => {
     expect(endDay.getAttribute('aria-description')).toBe('Rest and end the current day. Energy is restored at dawn.');
     expect(mount.querySelector('[data-action="sendMessage"]')?.textContent).toContain('BOTTLED PAPER');
     expect(mount.querySelector('[data-action="sendMessage"] [role="tooltip"]')?.textContent)
-      .toBe('BOTTLED PAPER');
+      .toBe('BOTTLED PAPER ⚡');
+    expect(mount.querySelector('[data-action="sendMessage"]')?.getAttribute('aria-label'))
+      .toBe('BOTTLED PAPER, one energy');
     expect(mount.querySelector('[data-action="sendMessage"]')?.getAttribute('aria-description'))
       .toContain('1 ENERGY — RESCUE +15');
     expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY BAR');
     expect(mount.querySelector('[data-action="useEnergyBar"]')?.getAttribute('aria-description'))
       .toContain('ENERGY TO 3');
+    ui.setAnchors([{
+      id: 'energyBar-1',
+      itemType: 'energyBar',
+      toolId: null,
+      action: 'useEnergyBar',
+      remainingUses: 1,
+      x: 140,
+      y: 180,
+      visible: true,
+      depleted: false,
+    }]);
+    const energyBar = mount.querySelector<HTMLButtonElement>('[data-anchor-id="energyBar-1"]')!;
+    expect(energyBar.querySelector('[role="tooltip"]')?.textContent).toBe('ENERGY BAR');
+    expect(energyBar.getAttribute('aria-label')).toBe('ENERGY BAR');
     expect(mount.textContent).not.toContain('WATER');
   });
 
@@ -463,7 +479,8 @@ describe('SurvivalUI', () => {
     expect(repair.style.marginLeft).toBe('-48px');
     expect(repair.style.marginTop).toBe('-26px');
     expect(Number(repair.style.zIndex)).toBeGreaterThan(0);
-    expect(repair.querySelector('[role="tooltip"]')?.textContent).toMatch(/PLANK.*HAMMER.*REPAIR.*2 ENERGY/is);
+    expect(repair.querySelector('[role="tooltip"]')?.textContent).toBe('PLANK & HAMMER ⚡⚡');
+    expect(repair.getAttribute('aria-label')).toBe('PLANK & HAMMER, two energy');
 
     ui.setAnchors([{
       id: 'scubaSet-1', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null,
@@ -480,7 +497,8 @@ describe('SurvivalUI', () => {
     expect(anchor.style.marginTop).toBe('-26px');
     expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
     expect(anchor.getAttribute('aria-keyshortcuts')).toBe('2');
-    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toBe('SCUBA GEAR');
+    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toBe('SCUBA GEAR ⚡⚡⚡');
+    expect(anchor.getAttribute('aria-label')).toBe('SCUBA GEAR, three energy');
     expect(anchor.getAttribute('aria-description')).toMatch(/SCUBA GEAR.*DIVE.*3 ENERGY/is);
     expect(mount.querySelector('.survival-actions')).toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
@@ -572,7 +590,7 @@ describe('SurvivalUI', () => {
 
     expect(mount.querySelector('[data-anchor-id="flareGun-1"] [role="tooltip"]')?.textContent).toBe('FLARE GUN');
     expect(mount.querySelector('[data-anchor-id="flashlight-2"] [role="tooltip"]')?.textContent).toBe('FLASHLIGHT');
-    expect(mount.querySelector('[data-anchor-id="baitTin-3"] [role="tooltip"]')?.textContent).toBe('BAIT');
+    expect(mount.querySelector('[data-anchor-id="baitTin-3"] [role="tooltip"]')?.textContent).toBe('BAIT x1');
     expect(mount.querySelector('[data-anchor-id="bucket-4"] [role="tooltip"]')?.textContent).toBe('BUCKET');
     expect(mount.querySelector('[data-anchor-id="bucket-4"]')?.getAttribute('aria-description')).toContain('BROKEN');
   });
@@ -659,7 +677,7 @@ describe('SurvivalUI', () => {
       { id: 'baitTin-2', itemType: 'baitTin', toolId: null, action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
       { id: 'fishingNet-3', itemType: 'fishingNet', toolId: null, action: null, remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
-    expect(mount.querySelector('[data-item="baitTin"] [role="tooltip"]')?.textContent).toBe('BAIT');
+    expect(mount.querySelector('[data-item="baitTin"] [role="tooltip"]')?.textContent).toBe('BAIT x3');
     expect(mount.querySelector('[data-item="fishingNet"] [role="tooltip"]')?.textContent).toBe('FISHING NET');
     expect(mount.querySelector('[data-item="cannedFood"]')?.getAttribute('aria-description'))
       .toContain('UNAVAILABLE');
@@ -894,7 +912,8 @@ describe('SurvivalUI', () => {
     ]);
 
     const button = mount.querySelector<HTMLButtonElement>('[data-tool="fishingRod"]')!;
-    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('Fishing rod');
+    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('Fishing rod ⚡');
+    expect(button.getAttribute('aria-label')).toBe('Fishing rod, one energy');
     expect(button.getAttribute('aria-description')).toContain('1 ENERGY');
     ui.dispose();
   });
@@ -923,27 +942,35 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
-  it('renders every fishing mode with exact interaction copy', () => {
+  it('keeps fishing state announcements and controls without a visible instruction panel', async () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
-    const instruction = mount.querySelector<HTMLElement>('[data-fishing-instruction]')!;
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const live = mount.querySelector<HTMLElement>('[data-fishing-live]')!;
+
+    expect(mount.querySelector('[data-fishing-instruction]')).toBeNull();
+    expect(mount.querySelector('.fishing-instruction-panel')).toBeNull();
 
     ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
-    expect(instruction.textContent).toBe('CLICK THE WATER TO CAST');
-    ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
-    expect(instruction.textContent).toBe('WAIT FOR A BITE');
+    await Promise.resolve();
+    expect(layer.classList).toContain('is-visible');
+    expect(layer.dataset.mode).toBe('aiming');
+    expect(live.textContent).toBe('CLICK THE WATER TO CAST');
+    expect(mount.querySelector('[data-fishing-reticle]')).not.toBeNull();
+
     ui.setFishingState({
       mode: 'bite',
       message: 'BITE - REEL NOW',
       biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
     });
-    expect(instruction.textContent).toBe('BITE - REEL NOW');
-    ui.setFishingState({ mode: 'result', message: 'CAUGHT MACKEREL', biteTarget: null });
-    expect(instruction.textContent).toBe('CAUGHT MACKEREL');
-    ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
-    expect(instruction.textContent).toBe('IT GOT AWAY');
+    await Promise.resolve();
+    expect(live.getAttribute('aria-live')).toBe('assertive');
+    expect(live.textContent).toBe('BITE - REEL NOW');
+    expect(mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')?.hidden).toBe(false);
+
     ui.setFishingState({ mode: 'hidden', message: '', biteTarget: null });
-    expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
+    expect(layer.classList).not.toContain('is-visible');
+    ui.dispose();
   });
 
   it('forwards one mount-local aiming pointer cast and ignores pointer input in other modes', () => {
