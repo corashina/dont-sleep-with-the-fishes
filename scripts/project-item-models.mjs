@@ -16,6 +16,9 @@ const CHART_WATER = [0.159, 0.342, 0.410, 1];
 const CHART_LAND = [0.658, 0.533, 0.250, 1];
 const CHART_INK = [0.035, 0.076, 0.091, 1];
 const CHART_ROUTE = [0.78, 0.18, 0.08, 1];
+const PURPLE = [0.162, 0.061, 0.366, 1];
+const SAFETY_ORANGE = [0.95, 0.28, 0.03, 1];
+const WARM_WHITE = [0.96, 0.92, 0.82, 1];
 const IDENTITY = [0, 0, 0, 1];
 const HALF_SQRT = Math.SQRT1_2;
 const QX90 = [HALF_SQRT, 0, 0, HALF_SQRT];
@@ -75,6 +78,38 @@ const mapGrid = [
     part(`grid-latitude-${index + 1}`, 'box', [0.80, 0.010, 0.008],
       [0, 0.026, z], CHART_INK)),
 ];
+
+const UMBRELLA_FOLDS = Array.from({ length: 8 }, (_, index) => {
+  const angle = index / 8 * Math.PI * 2;
+  return part(
+    `fabric-fold-${index + 1}`,
+    'cone',
+    [0.13, 0.86, 0.09],
+    [Math.cos(angle) * 0.045, Math.sin(angle) * 0.045, 0.05],
+    PURPLE,
+    QX90,
+    8,
+  );
+});
+
+const WHITE_ARC = Math.PI * 2 * 0.04;
+const ORANGE_ARC = Math.PI * 2 * 0.21;
+const ringParts = [];
+let ringAngle = 0;
+for (let index = 0; index < 4; index += 1) {
+  ringParts.push({
+    ...torusArcPart(`orange-${index + 1}`, [0.74, 0.18, 0.74], [0, 0, 0],
+      SAFETY_ORANGE, ringAngle, ORANGE_ARC, 11),
+    role: 'orange-body',
+  });
+  ringAngle += ORANGE_ARC;
+  ringParts.push({
+    ...torusArcPart(`white-${index + 1}`, [0.74, 0.18, 0.74], [0, 0, 0],
+      WARM_WHITE, ringAngle, WHITE_ARC, 3),
+    role: 'white-band',
+  });
+  ringAngle += WHITE_ARC;
+}
 
 export const PROJECT_ITEM_RECIPES = Object.freeze({
   map: {
@@ -152,21 +187,16 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
   },
   umbrella: {
     parts: [
-      part('canopy', 'cone', [0.34, 0.68, 0.34], [0, 0.13, 0], RED_ORANGE, QX180),
-      part('shaft', 'cylinder', [0.035, 0.92, 0.035], [0, -0.08, 0], DARK),
-      part('tip', 'cone', [0.075, 0.16, 0.075], [0, -0.61, 0], STEEL, QX180),
-      part('handle', 'torus', [0.18, 0.025, 0.18], [0.045, -0.51, 0], DARK, QX90),
-      part('grip', 'box', [0.16, 0.24, 0.08], [-0.02, -0.46, 0], DARK),
+      ...UMBRELLA_FOLDS,
+      part('shaft', 'cylinder', [0.028, 1.08, 0.028], [0, 0, 0], DARK, QX90, 10),
+      part('metal-tip', 'cone', [0.055, 0.16, 0.055], [0, 0, 0.61], STEEL, QX90, 8),
+      part('fastening-strap', 'torus', [0.18, 0.025, 0.18], [0, 0, -0.12], DARK, QX90, 12),
+      torusArcPart('curved-handle', [0.24, 0.035, 0.24],
+        [0, -0.08, -0.57], DARK, -Math.PI * 0.15, Math.PI * 1.3, 12, QX90),
     ],
   },
   swimRing: {
-    parts: [
-      part('ring', 'torus', [0.70, 0.16, 0.70], [0, 0, 0], RED_ORANGE),
-      part('band-north', 'box', [0.14, 0.18, 0.20], [0, 0, 0.27], PAPER),
-      part('band-east', 'box', [0.20, 0.18, 0.14], [0.27, 0, 0], PAPER),
-      part('band-south', 'box', [0.14, 0.18, 0.20], [0, 0, -0.27], PAPER),
-      part('band-west', 'box', [0.20, 0.18, 0.14], [-0.27, 0, 0], PAPER),
-    ],
+    parts: ringParts,
   },
   harpoonGun: {
     parts: [

@@ -48,6 +48,24 @@ describe('project-authored item model builder', () => {
     ).length).toBeGreaterThanOrEqual(8);
   });
 
+  it('authors a closed purple umbrella and narrow fitted ring bands', () => {
+    const umbrella = PROJECT_ITEM_RECIPES.umbrella.parts;
+    expect(umbrella.some(({ name }) => name === 'canopy')).toBe(false);
+    expect(umbrella.filter(({ name }) => name.startsWith('fabric-fold-'))).toHaveLength(8);
+    expect(umbrella.map(({ name }) => name)).toEqual(expect.arrayContaining([
+      'fastening-strap', 'shaft', 'metal-tip', 'curved-handle',
+    ]));
+
+    const arcs = PROJECT_ITEM_RECIPES.swimRing.parts.filter(
+      ({ shape }) => shape === 'torusArc',
+    );
+    const whiteLength = arcs.filter(({ role }) => role === 'white-band')
+      .reduce((sum, { arcLength }) => sum + arcLength, 0);
+    expect(whiteLength / (Math.PI * 2)).toBeCloseTo(0.16, 5);
+    expect(arcs.filter(({ role }) => role === 'white-band')).toHaveLength(4);
+    expect(arcs.filter(({ role }) => role === 'orange-body')).toHaveLength(4);
+  });
+
   it('writes self-contained bounded triangle GLBs', async () => {
     await buildProjectItemModels({ outputRoot });
     expect(await readdir(outputRoot)).toEqual(PROJECT_IDS.map((id) => `${id}.glb`).sort());
