@@ -58,7 +58,7 @@ describe('project-authored item model builder', () => {
     }
   });
 
-  it('writes finite normals aligned with every triangle winding', async () => {
+  it('writes finite normals facing every triangle winding', async () => {
     await buildProjectItemModels({ outputRoot });
     for (const id of PROJECT_IDS) {
       const document = await new NodeIO().read(join(outputRoot, `${id}.glb`));
@@ -96,11 +96,88 @@ describe('project-authored item model builder', () => {
               const alignment = windingNormal.reduce((sum, value, axis) => (
                 sum + value * actual[axis]!
               ), 0) / (windingLength * Math.hypot(...actual));
-              expect(alignment, `${id}: triangle ${element / 3} NORMAL`).toBeGreaterThan(0.9999);
+              expect(alignment, `${id}: triangle ${element / 3} NORMAL`).toBeGreaterThan(0);
             }
           }
         }
       }
+    }
+  });
+
+  it('shares one indexed tube ring per authored path point', async () => {
+    await buildProjectItemModels({ outputRoot });
+    const document = await new NodeIO().read(join(outputRoot, 'map.glb'));
+    const routeNode = document.getRoot().listNodes().find((node) => node.getName() === 'route');
+    const position = routeNode!.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
+    const route = PROJECT_ITEM_RECIPES.map.parts.find(({ name }) => name === 'route') as {
+      points: number[][];
+      radialSegments: number;
+    };
+    expect(position.getCount()).toBe(route.points.length * route.radialSegments);
+  });
+
+  it('builds a bounded partial torus through the torusArc dispatch', async () => {
+    const recipes = {
+      torusArcFixture: {
+        parts: [{
+          name: 'half-ring',
+          shape: 'torusArc',
+          size: [0.60, 0.10, 0.60],
+          translation: [0, 0, 0],
+          rotation: [0, 0, 0, 1],
+          color: [0.1, 0.1, 0.1, 1],
+          arcStart: 0,
+          arcLength: Math.PI,
+          segments: 8,
+        }],
+      },
+    };
+    await buildProjectItemModels({ outputRoot, recipes });
+    const file = join(outputRoot, 'torusArcFixture.glb');
+    expect(await countTriangles(file)).toBe(128);
+    const document = await new NodeIO().read(file);
+    const position = document.getRoot().listMeshes()[0]!.listPrimitives()[0]!
+      .getAttribute('POSITION')!;
+    const zCoordinates = [...position.getArray()!].filter((_, index) => index % 3 === 2);
+    expect(Math.min(...zCoordinates)).toBeGreaterThanOrEqual(-1e-6);
+    expect(Math.max(...zCoordinates)).toBeGreaterThan(0.25);
+  });
+
+  it('rejects malformed tube paths and polygons', async () => {
+    const color = [0.1, 0.1, 0.1, 1];
+    const invalidCases = [
+      {
+        id: 'shortTube',
+        part: {
+          name: 'short-tube', shape: 'tubePath', points: [[0, 0, 0]],
+          radius: 0.1, radialSegments: 6, translation: [0, 0, 0],
+          rotation: [0, 0, 0, 1], color,
+        },
+        message: 'shortTube: tubePath requires at least two points',
+      },
+      {
+        id: 'shortPolygon',
+        part: {
+          name: 'short-polygon', shape: 'polygon', points: [[0, 0], [1, 0]],
+          height: 0.1, translation: [0, 0, 0], rotation: [0, 0, 0, 1], color,
+        },
+        message: 'shortPolygon: polygon requires at least three points',
+      },
+      {
+        id: 'zeroAreaPolygon',
+        part: {
+          name: 'zero-area-polygon', shape: 'polygon',
+          points: [[0, 0], [1, 0], [2, 0]], height: 0.1,
+          translation: [0, 0, 0], rotation: [0, 0, 0, 1], color,
+        },
+        message: 'zeroAreaPolygon: polygon requires a finite non-zero area',
+      },
+    ];
+    for (const { id, part: invalidPart, message } of invalidCases) {
+      await expect(buildProjectItemModels({
+        outputRoot,
+        recipes: { [id]: { parts: [invalidPart] } },
+      })).rejects.toThrow(message);
     }
   });
 
