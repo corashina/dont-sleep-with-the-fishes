@@ -8,6 +8,10 @@ import {
   ShipFurnitureLibrary,
   ShipFurnitureLoadError,
 } from '../world/ShipFurnitureLibrary';
+import {
+  LifeboatAssetLoadError,
+  LifeboatAssets,
+} from '../world/LifeboatAssets';
 import { SkyAssetLoadError, SkyAssets } from '../world/SkyAssets';
 
 export interface LaunchHandle {
@@ -19,11 +23,13 @@ export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
+  loadLifeboatAssets(): Promise<LifeboatAssets>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
+    lifeboatAssets: LifeboatAssets,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -31,8 +37,9 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
-  createGame: (mount, models, shipFurniture, skyAssets) => (
-    new Game(mount, models, shipFurniture, skyAssets)
+  loadLifeboatAssets: () => LifeboatAssets.load(),
+  createGame: (mount, models, shipFurniture, skyAssets, lifeboatAssets) => (
+    new Game(mount, models, shipFurniture, skyAssets, lifeboatAssets)
   ),
 };
 
@@ -40,17 +47,19 @@ interface LoadedGameAssets {
   models: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
+  lifeboatAssets: LifeboatAssets;
 }
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
 ): Promise<LoadedGameAssets> {
-  const [models, shipFurniture, skyAssets] = await Promise.allSettled([
+  const [models, shipFurniture, skyAssets, lifeboatAssets] = await Promise.allSettled([
     dependencies.loadModels(),
     dependencies.loadShipFurniture(),
     dependencies.loadSkyAssets(),
+    dependencies.loadLifeboatAssets(),
   ]);
-  const results = [models, shipFurniture, skyAssets] as const;
+  const results = [models, shipFurniture, skyAssets, lifeboatAssets] as const;
   const firstFailure = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
@@ -69,6 +78,7 @@ async function loadGameAssets(
     models.status !== 'fulfilled'
     || shipFurniture.status !== 'fulfilled'
     || skyAssets.status !== 'fulfilled'
+    || lifeboatAssets.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
@@ -76,6 +86,7 @@ async function loadGameAssets(
     models: models.value,
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
+    lifeboatAssets: lifeboatAssets.value,
   };
 }
 
@@ -86,7 +97,11 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
     try {
       assets.shipFurniture.dispose();
     } finally {
-      assets.skyAssets.dispose();
+      try {
+        assets.skyAssets.dispose();
+      } finally {
+        assets.lifeboatAssets.dispose();
+      }
     }
   }
 }
@@ -189,6 +204,16 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
     return;
   }
 
+  if (error instanceof LifeboatAssetLoadError) {
+    mount.replaceChildren(screen(
+      'LIFEBOAT UNAVAILABLE',
+      'Unable to prepare the wooden lifeboat',
+      'Required local wood textures could not be loaded.',
+      error.message,
+    ));
+    return;
+  }
+
   renderWebGlFailure(mount, error);
 }
 
@@ -233,6 +258,7 @@ export function launchGame(
         unownedAssets.models,
         unownedAssets.shipFurniture,
         unownedAssets.skyAssets,
+        unownedAssets.lifeboatAssets,
       );
       game = createdGame;
       unownedAssets = null;

@@ -9,6 +9,11 @@ import {
   type ShipFurnitureLibrary,
 } from '../src/world/ShipFurnitureLibrary';
 import { SkyAssetLoadError, type SkyAssets } from '../src/world/SkyAssets';
+import {
+  LifeboatAssetLoadError,
+  type LifeboatAssets,
+} from '../src/world/LifeboatAssets';
+import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
@@ -42,6 +47,7 @@ function dependencies(
     loadModels,
     loadShipFurniture: () => Promise.resolve(createTestShipFurniture()),
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
+    loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
     createGame: vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() })),
     ...overrides,
   };
@@ -74,6 +80,7 @@ describe('launchGame', () => {
     const mount = connectedMount();
     const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
     const skyAssets = createTestSkyAssets();
+    const lifeboatAssets = createTestLifeboatAssets();
     const shipFurniture = createTestShipFurniture();
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
@@ -82,6 +89,7 @@ describe('launchGame', () => {
       {
         loadShipFurniture: () => Promise.resolve(shipFurniture),
         loadSkyAssets: () => Promise.resolve(skyAssets),
+        loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         createGame,
       },
     ));
@@ -91,7 +99,13 @@ describe('launchGame', () => {
     pending.resolve(models);
 
     await expect(handle.completion).resolves.toBe(game as unknown as Game);
-    expect(createGame).toHaveBeenCalledWith(mount, models, shipFurniture, skyAssets);
+    expect(createGame).toHaveBeenCalledWith(
+      mount,
+      models,
+      shipFurniture,
+      skyAssets,
+      lifeboatAssets,
+    );
     expect(game.start).toHaveBeenCalledOnce();
   });
 
@@ -99,9 +113,11 @@ describe('launchGame', () => {
     const modelLoad = deferred<PropModelLibrary>();
     const furnitureLoad = deferred<ShipFurnitureLibrary>();
     const skyLoad = deferred<SkyAssets>();
+    const lifeboatLoad = deferred<LifeboatAssets>();
     const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
     const shipFurniture = createTestShipFurniture();
     const skyAssets = createTestSkyAssets();
+    const lifeboatAssets = createTestLifeboatAssets();
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
     const mount = connectedMount();
@@ -110,6 +126,7 @@ describe('launchGame', () => {
       {
         loadShipFurniture: () => furnitureLoad.promise,
         loadSkyAssets: () => skyLoad.promise,
+        loadLifeboatAssets: () => lifeboatLoad.promise,
         createGame,
       },
     ));
@@ -123,8 +140,18 @@ describe('launchGame', () => {
     expect(createGame).not.toHaveBeenCalled();
 
     skyLoad.resolve(skyAssets);
+    await Promise.resolve();
+    expect(createGame).not.toHaveBeenCalled();
+
+    lifeboatLoad.resolve(lifeboatAssets);
     await expect(handle.completion).resolves.toBe(game as unknown as Game);
-    expect(createGame).toHaveBeenCalledWith(mount, models, shipFurniture, skyAssets);
+    expect(createGame).toHaveBeenCalledWith(
+      mount,
+      models,
+      shipFurniture,
+      skyAssets,
+      lifeboatAssets,
+    );
   });
 
   it('disposes fulfilled siblings and names a furniture preload failure', async () => {
@@ -216,6 +243,32 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(skyDispose).toHaveBeenCalledOnce();
+  });
+
+  it('disposes fulfilled siblings and reports a lifeboat texture failure', async () => {
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const skyAssets = createTestSkyAssets();
+    const shipFurniture = createTestShipFurniture();
+    const disposeSky = vi.spyOn(skyAssets, 'dispose');
+    const disposeFurniture = vi.spyOn(shipFurniture, 'dispose');
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        loadShipFurniture: () => Promise.resolve(shipFurniture),
+        loadSkyAssets: () => Promise.resolve(skyAssets),
+        loadLifeboatAssets: () => Promise.reject(
+          new LifeboatAssetLoadError('Lifeboat textures could not be loaded.'),
+        ),
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(models.dispose).toHaveBeenCalledOnce();
+    expect(disposeFurniture).toHaveBeenCalledOnce();
+    expect(disposeSky).toHaveBeenCalledOnce();
+    expect(mount.textContent).toContain('LIFEBOAT UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare the wooden lifeboat');
   });
 
   it('removes the launcher loading surface before constructing the game', async () => {
@@ -315,6 +368,7 @@ describe('launchGame', () => {
       propModels: PropModelLibrary,
       loadedShipFurniture: ShipFurnitureLibrary,
       loadedSkyAssets: SkyAssets,
+      loadedLifeboatAssets: LifeboatAssets,
     ) => Game.forTest({
       createScavenge: () => ({
         start: vi.fn(),
@@ -328,6 +382,7 @@ describe('launchGame', () => {
       propModels,
       shipFurniture: loadedShipFurniture,
       skyAssets: loadedSkyAssets,
+      lifeboatAssets: loadedLifeboatAssets,
       mount: gameMount,
       renderer,
     } as unknown as GameTestOptions);

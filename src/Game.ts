@@ -4,6 +4,7 @@ import {
   PerspectiveCamera,
   SRGBColorSpace,
   WebGLRenderer,
+  Texture,
 } from 'three';
 import type { GamePhase, PhaseContext } from './app/GamePhase';
 import type { ScavengeResult } from './game/ScavengeSession';
@@ -18,6 +19,7 @@ import type { PropModelLibrary } from './world/PropModelLibrary';
 import { runCleanupSteps } from './world/SceneResources';
 import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
 import type { SkyAssets } from './world/SkyAssets';
+import { LifeboatAssets } from './world/LifeboatAssets';
 
 export interface GameFactories {
   createScavenge(
@@ -60,6 +62,7 @@ export interface GameTestOptions {
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
+  lifeboatAssets?: LifeboatAssets;
   clock?: GameClock;
   createSeed?: () => number;
   mount?: HTMLElement;
@@ -85,6 +88,7 @@ export class Game {
   private propModels!: PropModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
+  private lifeboatAssets!: LifeboatAssets;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -104,6 +108,7 @@ export class Game {
     propModels: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
+    lifeboatAssets: LifeboatAssets,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -136,6 +141,7 @@ export class Game {
         propModels,
         shipFurniture,
         skyAssets,
+        lifeboatAssets,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -188,6 +194,11 @@ export class Game {
       options.propModels,
       options.shipFurniture,
       options.skyAssets,
+      options.lifeboatAssets ?? LifeboatAssets.fromTextures(
+        new Texture(),
+        new Texture(),
+        new Texture(),
+      ),
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -222,6 +233,7 @@ export class Game {
       () => this.propModels.dispose(),
       () => this.shipFurniture.dispose(),
       () => this.skyAssets.dispose(),
+      () => this.lifeboatAssets.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -238,6 +250,7 @@ export class Game {
     propModels: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
+    lifeboatAssets: LifeboatAssets,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -248,12 +261,14 @@ export class Game {
     this.propModels = propModels;
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;
+    this.lifeboatAssets = lifeboatAssets;
     this.factories = factories;
     this.createSeed = createSeed;
     const maxTextureAnisotropy = Math.max(
       1,
       renderer.capabilities.getMaxAnisotropy(),
     );
+    this.lifeboatAssets.configure(maxTextureAnisotropy);
     this.context = {
       mount,
       renderer,
@@ -264,6 +279,7 @@ export class Game {
       shipFurniture,
       maxTextureAnisotropy,
       skyAssets,
+      lifeboatAssets,
     };
     this.activePhase = null;
     this.performanceStats = null;

@@ -3,6 +3,7 @@ import type { SceneRenderer } from '../rendering/SceneRenderer';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
+import type { LifeboatAssets } from '../world/LifeboatAssets';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -14,6 +15,7 @@ export interface PhaseContext {
   shipFurniture: ShipFurnitureLibrary;
   maxTextureAnisotropy: number;
   skyAssets: SkyAssets;
+  lifeboatAssets: LifeboatAssets;
 }
 
 export interface GamePhase {

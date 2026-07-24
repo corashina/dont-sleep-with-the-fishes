@@ -17,6 +17,12 @@ import {
   PRODUCTION_NORMALIZED_PROP_BOUNDS,
   loadProductionPropModels,
 } from './helpers/productionPropModels';
+import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
+import {
+  BOAT_SUPPLY_GROUP_IDS,
+  boatSupplyCopyOffsets,
+  boatSupplyGroupTransform,
+} from '../src/world/BoatSupplyLayout';
 
 function placedProductionProp(
   library: Awaited<ReturnType<typeof loadProductionPropModels>>,
@@ -40,6 +46,26 @@ function disposeOwnedMeshes(root: Object3D): void {
 }
 
 describe('boat item layout', () => {
+  it('keeps grouped supplies compact in the forward bay at existing prop scale', () => {
+    for (const id of BOAT_SUPPLY_GROUP_IDS) {
+      const transform = boatSupplyGroupTransform(id);
+      expect(transform.position.x, id).toBeGreaterThanOrEqual(-1.3);
+      expect(transform.position.x, id).toBeLessThanOrEqual(1.3);
+      expect(transform.position.z, id).toBeGreaterThanOrEqual(-2.5);
+      expect(transform.position.z, id).toBeLessThan(0.9);
+      expect(transform.scale, id).toBe(id === 'repairMaterial' ? 1 : 0.5);
+    }
+  });
+
+  it('caps deterministic local pile offsets at three copies', () => {
+    expect(boatSupplyCopyOffsets('cannedFood', 1).map((offset) => offset.toArray()))
+      .toEqual([[0, 0, 0]]);
+    expect(boatSupplyCopyOffsets('cannedFood', 2)).toHaveLength(2);
+    expect(boatSupplyCopyOffsets('cannedFood', 3)).toHaveLength(3);
+    expect(boatSupplyCopyOffsets('baitTin', 3).map((offset) => offset.toArray()))
+      .toEqual(boatSupplyCopyOffsets('baitTin', 3).map((offset) => offset.toArray()));
+  });
+
   it('keeps the normalized production bounds fixture synchronized with checked-in models', async () => {
     const library = await loadProductionPropModels();
     try {
@@ -186,7 +212,8 @@ describe('boat item layout', () => {
       library,
       { instanceId: 'medicalKit-1', type: 'medicalKit' },
     );
-    const lifeboat = createLifeboat();
+    const assets = createTestLifeboatAssets();
+    const lifeboat = createLifeboat(assets);
     const repairPatch = lifeboat.root.getObjectByName('damaged-plank-patch')!;
     try {
       const medicalEnvelope = measureBoatStorageEnvelope(medicalKit);
@@ -202,7 +229,7 @@ describe('boat item layout', () => {
           materials.forEach((material) => material.dispose());
         }
       });
-      lifeboat.textures.forEach((texture) => texture.dispose());
+      assets.dispose();
     }
   });
 

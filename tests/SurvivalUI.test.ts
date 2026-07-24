@@ -154,7 +154,7 @@ describe('SurvivalUI', () => {
     expect(endDay.getAttribute('aria-description')).toBe('Rest and end the current day. Energy is restored at dawn.');
     expect(mount.querySelector('[data-action="sendMessage"]')?.textContent).toContain('BOTTLED PAPER');
     expect(mount.querySelector('[data-action="sendMessage"] [role="tooltip"]')?.textContent)
-      .toBe('BOTTLED PAPER');
+      .toBe('BOTTLED PAPER ×1');
     expect(mount.querySelector('[data-action="sendMessage"]')?.getAttribute('aria-description'))
       .toContain('1 ENERGY — RESCUE +15');
     expect(mount.querySelector('[data-action="useEnergyBar"]')?.textContent).toContain('ENERGY BAR');
@@ -217,7 +217,7 @@ describe('SurvivalUI', () => {
     const umbrella = mount.querySelector<HTMLButtonElement>('[data-anchor-id="umbrella-2"]')!;
     expect(bucket.dataset.eventState).toBe('eligible');
     expect(bucket.getAttribute('aria-disabled')).toBe('false');
-    expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
+    expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET ×1');
     expect(umbrella.dataset.eventState).toBe('muted');
     expect(umbrella.disabled).toBe(false);
     expect(umbrella.getAttribute('aria-disabled')).toBe('true');
@@ -503,7 +503,9 @@ describe('SurvivalUI', () => {
     expect(repair.style.marginLeft).toBe('-48px');
     expect(repair.style.marginTop).toBe('-26px');
     expect(Number(repair.style.zIndex)).toBeGreaterThan(0);
-    expect(repair.querySelector('[role="tooltip"]')?.textContent).toMatch(/PLANK.*HAMMER.*REPAIR.*2 ENERGY/is);
+    expect(repair.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('REPAIR TOOLBOX ⚡⚡');
+    expect(repair.getAttribute('aria-description')).toMatch(/REPAIR.*2 ENERGY/is);
 
     ui.setAnchors([{
       id: 'scubaSet-1', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null,
@@ -520,7 +522,7 @@ describe('SurvivalUI', () => {
     expect(anchor.style.marginTop).toBe('-26px');
     expect(Number(anchor.style.zIndex)).toBeGreaterThan(0);
     expect(anchor.getAttribute('aria-keyshortcuts')).toBe('2');
-    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toBe('SCUBA GEAR');
+    expect(anchor.querySelector('[role="tooltip"]')?.textContent).toBe('SCUBA GEAR ×1');
     expect(anchor.getAttribute('aria-description')).toMatch(/SCUBA GEAR.*DIVE.*3 ENERGY/is);
     expect(mount.querySelector('.survival-actions')).toBeNull();
     expect(mount.querySelector('.inventory-tray')).toBeNull();
@@ -588,7 +590,7 @@ describe('SurvivalUI', () => {
 
     const broken = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
     expect(broken.disabled).toBe(false);
-    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
+    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET ×1');
     expect(broken.getAttribute('aria-description')).toContain('BROKEN');
     expect(broken.dataset.condition).toBe('broken');
     broken.focus();
@@ -610,11 +612,53 @@ describe('SurvivalUI', () => {
       { id: 'bucket-4', itemType: 'bucket', toolId: null, action: null, remainingUses: 0, x: 4, y: 4, visible: true, depleted: false },
     ]);
 
-    expect(mount.querySelector('[data-anchor-id="flareGun-1"] [role="tooltip"]')?.textContent).toBe('FLARE GUN');
-    expect(mount.querySelector('[data-anchor-id="flashlight-2"] [role="tooltip"]')?.textContent).toBe('FLASHLIGHT');
-    expect(mount.querySelector('[data-anchor-id="baitTin-3"] [role="tooltip"]')?.textContent).toBe('BAIT');
-    expect(mount.querySelector('[data-anchor-id="bucket-4"] [role="tooltip"]')?.textContent).toBe('BUCKET');
+    expect(mount.querySelector('[data-anchor-id="flareGun-1"] [role="tooltip"]')?.textContent).toBe('FLARE GUN ×1');
+    expect(mount.querySelector('[data-anchor-id="flashlight-2"] [role="tooltip"]')?.textContent).toBe('FLASHLIGHT ×1');
+    expect(mount.querySelector('[data-anchor-id="baitTin-3"] [role="tooltip"]')?.textContent).toBe('BAIT ×1');
+    expect(mount.querySelector('[data-anchor-id="bucket-4"] [role="tooltip"]')?.textContent).toBe('BUCKET ×1');
     expect(mount.querySelector('[data-anchor-id="bucket-4"]')?.getAttribute('aria-description')).toContain('BROKEN');
+  });
+
+  it('renders exact grouped quantities and the repair toolbox prompt', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ food: 5 }), () => null);
+    ui.setAnchors([
+      {
+        id: 'supply:cannedFood',
+        itemType: 'cannedFood',
+        supplyGroupId: 'cannedFood',
+        toolId: null,
+        action: 'eat',
+        remainingUses: 1,
+        quantity: 5,
+        usableQuantity: 5,
+        brokenQuantity: 0,
+        backingInstanceId: 'cannedFood-1',
+        x: 220,
+        y: 220,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'repair-tools',
+        itemType: null,
+        toolId: 'repairTools',
+        action: 'repair',
+        remainingUses: null,
+        x: 320,
+        y: 220,
+        visible: true,
+        depleted: false,
+      },
+    ]);
+
+    expect(mount.querySelector(
+      '[data-anchor-id="supply:cannedFood"] [role="tooltip"]',
+    )?.textContent).toBe('FOOD ×5');
+    expect(mount.querySelector(
+      '[data-anchor-id="repair-tools"] [role="tooltip"]',
+    )?.textContent).toBe('REPAIR TOOLBOX ⚡⚡');
   });
 
   it('keeps edge-aligned tooltips inside the clipped survival viewport', () => {
@@ -699,8 +743,8 @@ describe('SurvivalUI', () => {
       { id: 'baitTin-2', itemType: 'baitTin', toolId: null, action: null, remainingUses: 0, x: 2, y: 2, visible: true, depleted: true },
       { id: 'fishingNet-3', itemType: 'fishingNet', toolId: null, action: null, remainingUses: null, x: 3, y: 3, visible: true, depleted: false },
     ]);
-    expect(mount.querySelector('[data-item="baitTin"] [role="tooltip"]')?.textContent).toBe('BAIT');
-    expect(mount.querySelector('[data-item="fishingNet"] [role="tooltip"]')?.textContent).toBe('FISHING NET');
+    expect(mount.querySelector('[data-item="baitTin"] [role="tooltip"]')?.textContent).toBe('BAIT ×3');
+    expect(mount.querySelector('[data-item="fishingNet"] [role="tooltip"]')?.textContent).toBe('FISHING NET ×1');
     expect(mount.querySelector('[data-item="cannedFood"]')?.getAttribute('aria-description'))
       .toContain('UNAVAILABLE');
   });
@@ -963,7 +1007,7 @@ describe('SurvivalUI', () => {
     ]);
 
     const button = mount.querySelector<HTMLButtonElement>('[data-tool="fishingRod"]')!;
-    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('Fishing rod');
+    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('Fishing rod ⚡');
     expect(button.getAttribute('aria-description')).toContain('1 ENERGY');
     ui.dispose();
   });
