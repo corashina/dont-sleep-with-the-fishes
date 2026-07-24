@@ -1,6 +1,7 @@
 import { Box3, type PerspectiveCamera, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
 import type { DayActionId } from './survivalTypes';
+import type { BoatSupplyGroupId } from '../world/BoatSupplyLayout';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
   ITEM_IDS.flatMap((id) => {
@@ -26,6 +27,7 @@ export type BoatToolId = 'repairTools' | 'fishingRod';
 export interface BoatInteractionAnchor {
   readonly id: string;
   readonly itemType: ItemId | null;
+  readonly supplyGroupId?: BoatSupplyGroupId;
   readonly toolId: BoatToolId | null;
   readonly action: DayActionId | null;
   readonly x: number;
@@ -33,6 +35,10 @@ export interface BoatInteractionAnchor {
   readonly visible: boolean;
   readonly depleted: boolean;
   readonly remainingUses: number | null;
+  readonly quantity?: number;
+  readonly usableQuantity?: number;
+  readonly brokenQuantity?: number;
+  readonly backingInstanceId?: import('../game/ItemState').ItemInstanceId | null;
   readonly hitArea?: BoatInteractionHitArea;
 }
 

@@ -32,6 +32,7 @@ import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
+import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { createProp } from '../src/world/PropFactory';
 import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import { createShipFurniture } from '../src/world/ShipFurniture';
@@ -1284,14 +1285,14 @@ describe('world builders', () => {
   });
 
   it('builds an unmarked storage root inside the lifeboat', () => {
-    const lifeboat = createLifeboat();
+    const lifeboat = createLifeboat(createTestLifeboatAssets());
     expect(lifeboat.storageRoot.name).toBe('lifeboat-storage');
     expect(lifeboat.storageRoot.children).toHaveLength(0);
     expect(lifeboat.root.getObjectByName('supply-slot-1')).toBeUndefined();
   });
 
   it('limits acceptance to the lifeboat interior above its floor', () => {
-    const { acceptanceBox } = createLifeboat();
+    const { acceptanceBox } = createLifeboat(createTestLifeboatAssets());
     expect(acceptanceBox.containsPoint(new Vector3(0, 0, 0))).toBe(true);
     expect(acceptanceBox.min.toArray()).toEqual([-1.35, -0.3, -2.72]);
     expect(acceptanceBox.max.toArray()).toEqual([1.35, 1, 2.72]);
@@ -1302,6 +1303,7 @@ describe('world builders', () => {
     ['endcap', new Vector3(0, 0, 2.9)],
     ['underside', new Vector3(0, -0.4, 0)],
   ])('rejects a thrown item at the lifeboat %s', (_label, point) => {
-    expect(createLifeboat().acceptanceBox.containsPoint(point)).toBe(false);
+    expect(createLifeboat(createTestLifeboatAssets()).acceptanceBox.containsPoint(point))
+      .toBe(false);
   });
 });

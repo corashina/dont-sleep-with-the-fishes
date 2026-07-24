@@ -28,7 +28,6 @@ import {
 } from 'three';
 import {
   ITEM_DEFINITIONS,
-  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -45,9 +44,10 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import { boatStorageTransform } from '../world/BoatStorage';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
-import { createProp } from '../world/PropFactory';
+import { LifeboatAssets } from '../world/LifeboatAssets';
+import { createRepairToolbox } from '../world/RepairToolbox';
+import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatSupplyLayout';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   collectMeshResources,
@@ -63,6 +63,7 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import { BoatSpray } from './BoatSpray';
+import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import type { FishingCatchId } from './fishingCatalog';
 import type {
@@ -169,35 +170,6 @@ interface FishingVisuals {
   readonly catchDisplay: Group;
 }
 
-interface SavedProp {
-  instance: ItemInstance;
-  prop: Object3D;
-  materials: readonly ConditionMaterialBinding[];
-}
-
-interface ConditionMaterialBinding {
-  readonly mesh: Mesh;
-  readonly usable: Material | Material[];
-  readonly broken: Material | Material[];
-  readonly mutedUsable: Material | Material[];
-  readonly mutedBroken: Material | Material[];
-}
-
-interface ActiveEventItemAnimation {
-  readonly instanceId: ItemInstanceId;
-  readonly prop: Object3D;
-  readonly basePosition: Vector3;
-  readonly baseQuaternion: Quaternion;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
-
-interface InteractionHighlightState {
-  emissive: number;
-  emissiveIntensity: number;
-}
-
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -218,7 +190,6 @@ const FISHING_CAST_MIN_Z = -7.4;
 const FISHING_CAST_MAX_Z = -3.7;
 const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -5.3 });
 const FISHING_TARGET_SIZE = 52;
-const EVENT_ITEM_USE_DURATION = .65;
 
 function addOwnedFishingMesh(
   root: Group,
@@ -367,60 +338,6 @@ function createFishingVisuals(
   };
 }
 
-function brokenMaterial(material: Material): Material {
-  const clone = material.clone();
-  if (clone instanceof MeshStandardMaterial) {
-    clone.color.lerp(new Color(0x384243), 0.68);
-    clone.roughness = Math.max(0.82, clone.roughness);
-    clone.metalness *= 0.45;
-  }
-  return clone;
-}
-
-function mutedMaterial(material: Material): Material {
-  const clone = material.clone();
-  if (clone instanceof MeshStandardMaterial) {
-    clone.color.lerp(new Color(0x596063), .78);
-    clone.emissive.lerp(new Color(0x1d2224), .8);
-    clone.emissiveIntensity *= .25;
-    clone.roughness = Math.max(.8, clone.roughness);
-  }
-  return clone;
-}
-
-function mapMaterial(
-  material: Material | Material[],
-  transform: (entry: Material) => Material,
-): Material | Material[] {
-  return Array.isArray(material) ? material.map(transform) : transform(material);
-}
-
-function materialList(material: Material | Material[]): readonly Material[] {
-  return Array.isArray(material) ? material : [material];
-}
-
-function setPropHighlighted(root: Object3D, highlighted: boolean): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    const material = object.material;
-    const state = material.userData.interactionHighlight as InteractionHighlightState | undefined;
-    if (state === undefined) {
-      material.userData.interactionHighlight = {
-        emissive: material.emissive.getHex(),
-        emissiveIntensity: material.emissiveIntensity,
-      } satisfies InteractionHighlightState;
-    }
-    const original = material.userData.interactionHighlight as InteractionHighlightState;
-    if (highlighted) {
-      material.emissive.setHex(0x6f4218);
-      material.emissiveIntensity = Math.max(.65, original.emissiveIntensity);
-    } else {
-      material.emissive.setHex(original.emissive);
-      material.emissiveIntensity = original.emissiveIntensity;
-    }
-  });
-}
-
 export class BoatWorld {
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
@@ -462,8 +379,7 @@ export class BoatWorld {
   private readonly fishingCameraStartPosition = new Vector3();
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
-  private readonly savedProps: SavedProp[] = [];
-  private readonly savedPropByInstanceId = new Map<ItemInstance['instanceId'], Object3D>();
+  private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly repairTools: Object3D;
   private readonly repairToolsBounds = new Box3();
   private readonly rodPivot = new Group();
@@ -510,7 +426,6 @@ export class BoatWorld {
     visible: false,
   };
   private activeFishingAnimation: ActiveFishingAnimation | null = null;
-  private activeEventItemAnimation: ActiveEventItemAnimation | null = null;
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
@@ -523,9 +438,6 @@ export class BoatWorld {
   private sprayCooldown = 0;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
-  private highlightedItemId: string | null = null;
-  private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
-  private eventSelectedItemId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
@@ -534,6 +446,7 @@ export class BoatWorld {
     propModels: PropModelLibrary,
     moonTexture: Texture,
     savedItems: readonly ItemInstance[] = [],
+    lifeboatAssets?: LifeboatAssets,
   ) {
     this.scene = new Scene();
     this.sky = new Skybox(
@@ -547,43 +460,61 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
 
-    const build = createLifeboat();
+    const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
+      new Texture(),
+      new Texture(),
+      new Texture(),
+    );
+    if (lifeboatAssets === undefined) {
+      this.ownedTextures.add(resolvedLifeboatAssets.color);
+      this.ownedTextures.add(resolvedLifeboatAssets.roughness);
+      this.ownedTextures.add(resolvedLifeboatAssets.normal);
+    }
+    const build = createLifeboat(resolvedLifeboatAssets);
     this.boat = build.root;
     this.waterExclusion = build.waterExclusion;
-    build.textures.forEach((texture) => this.ownedTextures.add(texture));
-    savedItems.forEach((instance) => {
-      const prop = createProp(propModels, instance);
-      const materials: ConditionMaterialBinding[] = [];
-      prop.traverse((object) => {
-        if (!(object instanceof Mesh)) return;
-        const usable = object.material;
-        const broken = Array.isArray(usable)
-          ? usable.map((material) => brokenMaterial(material))
-          : brokenMaterial(usable);
-        const mutedUsable = mapMaterial(usable, mutedMaterial);
-        const mutedBroken = mapMaterial(broken, mutedMaterial);
-        materialList(broken).forEach((material) => this.ownedMaterials.add(material));
-        materialList(mutedUsable).forEach((material) => this.ownedMaterials.add(material));
-        materialList(mutedBroken).forEach((material) => this.ownedMaterials.add(material));
-        materials.push({ mesh: object, usable, broken, mutedUsable, mutedBroken });
-      });
-      const transform = boatStorageTransform(instance);
-      prop.position.copy(transform.position);
-      prop.rotation.copy(transform.rotation);
-      prop.scale.setScalar(transform.scale);
-      build.storageRoot.add(prop);
-      this.savedProps.push({ instance, prop, materials });
-      this.savedPropByInstanceId.set(instance.instanceId, prop);
-      prop.userData.remainingUses = ITEM_DEFINITIONS[instance.type].charges;
-      prop.userData.condition = 'usable';
-    });
+    collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
 
-    const repairTools = this.boat.getObjectByName('hull-repair-tools');
-    if (repairTools === undefined) throw new Error('Lifeboat requires hull repair tools');
+    const platform = new Group();
+    platform.name = 'survival-supply-platform';
+    const platformWood = new MeshStandardMaterial({
+      color: 0x4d392c,
+      roughness: 0.96,
+      flatShading: true,
+    });
+    for (let index = 0; index < 9; index += 1) {
+      const slat = new Mesh(new BoxGeometry(0.25, 0.055, 3.20), platformWood);
+      slat.name = `survival-supply-platform-slat-${index}`;
+      slat.position.set((index - 4) * 0.27, -0.315, -1.05);
+      platform.add(slat);
+    }
+    for (const x of [-1.22, 1.22]) {
+      const rail = new Mesh(new BoxGeometry(0.08, 0.12, 3.32), platformWood);
+      rail.name = `survival-supply-platform-rail-${x < 0 ? 'port' : 'starboard'}`;
+      rail.position.set(x, -0.27, -1.05);
+      platform.add(rail);
+    }
+    this.boat.add(platform);
+    collectMeshResources(platform, this.ownedGeometries, this.ownedMaterials);
+
+    this.supplyDisplay = new BoatSupplyDisplay(
+      propModels,
+      build.storageRoot,
+      savedItems,
+      reducedMotion.matches,
+    );
+
+    const repairTools = createRepairToolbox();
+    repairTools.position.set(-0.48, -0.31, -0.72);
+    repairTools.rotation.y = 0.12;
+    repairTools.scale.setScalar(0.72);
+    this.boat.add(repairTools);
+    collectMeshResources(repairTools, this.ownedGeometries, this.ownedMaterials);
     this.repairTools = repairTools;
 
     this.rodPivot.name = 'fishing-rod-pivot';
-    this.rodPivot.position.set(0.62, 0.56, -2.28);
+    this.rodPivot.position.set(1.34, 0.50, -1.62);
+    this.rodPivot.rotation.z = -0.08;
     this.rod = propModels.createEquipment('fishingRod');
     this.rod.position.set(0, 0, -0.9);
     this.rod.rotation.x = -Math.PI / 2;
@@ -592,6 +523,7 @@ export class BoatWorld {
     this.rod.add(this.fishingLineOrigin);
     this.rodPivot.add(this.rod);
     this.boat.add(this.rodPivot);
+    collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);
 
     this.motionRig.name = 'boat-motion-rig';
     this.cameraRig.name = 'boat-camera-rig';
@@ -632,7 +564,6 @@ export class BoatWorld {
       this.distantVessel,
       this.fishing.root,
     );
-    collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
     this.applyBasePresentation();
   }
@@ -649,146 +580,75 @@ export class BoatWorld {
 
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
-    this.savedProps.forEach(({ instance, prop }) => {
-      const condition = snapshot.inventory[instance.instanceId]?.condition ?? 'lost';
-      const visible = condition === 'usable' || condition === 'broken';
-      prop.visible = visible;
-      prop.userData.condition = condition;
-      prop.userData.depleted = false;
-      prop.userData.remainingUses = condition === 'usable'
-        ? ITEM_DEFINITIONS[instance.type].charges
-        : 0;
-      this.applySavedPropMaterials(instance.instanceId);
-    });
-    if (this.highlightedItemId !== null) {
-      const highlighted = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
-      if (highlighted === undefined || !highlighted.visible) this.setHighlightedItem(null);
-    }
+    this.supplyDisplay.sync(snapshot);
   }
 
   setHighlightedItem(instanceId: string | null): void {
-    if (this.disposed || instanceId === this.highlightedItemId) return;
-    if (this.highlightedItemId !== null) {
-      const previous = this.savedPropByInstanceId.get(this.highlightedItemId as ItemInstance['instanceId']);
-      if (previous !== undefined) setPropHighlighted(previous, false);
-    }
-    this.highlightedItemId = null;
-    if (instanceId === null) return;
-    const next = this.savedPropByInstanceId.get(instanceId as ItemInstance['instanceId']);
-    if (next === undefined || !next.visible) return;
-    setPropHighlighted(next, true);
-    this.highlightedItemId = instanceId;
+    if (this.disposed) return;
+    this.supplyDisplay.setHighlighted(instanceId);
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
     if (this.disposed) return;
-    this.eventEligibleItemIds = instanceIds === null ? null : new Set(instanceIds);
-    if (
-      this.eventSelectedItemId !== null
-      && this.eventEligibleItemIds?.has(this.eventSelectedItemId) !== true
-    ) {
-      this.eventSelectedItemId = null;
-    }
-    this.savedProps.forEach(({ instance }) => this.applySavedPropMaterials(instance.instanceId));
+    this.supplyDisplay.setEventEligibleItems(instanceIds);
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
     if (this.disposed) return;
-    this.eventSelectedItemId = instanceId;
-    this.savedProps.forEach(({ instance }) => this.applySavedPropMaterials(instance.instanceId));
+    this.supplyDisplay.setEventSelectedItem(instanceId);
   }
 
   playEventItemUse(instanceId: ItemInstanceId): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.cancelActiveEventItemAnimation();
-    const prop = this.savedPropByInstanceId.get(instanceId);
-    if (prop === undefined || !prop.visible) return Promise.resolve();
-    const duration = this.reducedMotion.matches ? Number.EPSILON : EVENT_ITEM_USE_DURATION;
-    return new Promise((resolve) => {
-      this.activeEventItemAnimation = {
-        instanceId,
-        prop,
-        basePosition: prop.position.clone(),
-        baseQuaternion: prop.quaternion.clone(),
-        elapsed: 0,
-        duration,
-        resolve,
-      };
-    });
-  }
-
-  private applySavedPropMaterials(instanceId: ItemInstanceId): void {
-    const saved = this.savedProps.find(({ instance }) => instance.instanceId === instanceId);
-    if (saved === undefined) return;
-    setPropHighlighted(saved.prop, false);
-    const muted = this.eventEligibleItemIds !== null
-      && !this.eventEligibleItemIds.has(instanceId)
-      && this.eventSelectedItemId !== instanceId;
-    const broken = saved.prop.userData.condition === 'broken';
-    saved.materials.forEach((binding) => {
-      binding.mesh.material = broken
-        ? muted ? binding.mutedBroken : binding.broken
-        : muted ? binding.mutedUsable : binding.usable;
-    });
-    const highlighted = this.eventSelectedItemId === instanceId
-      || this.eventEligibleItemIds?.has(instanceId) === true
-      || (
-        this.highlightedItemId === instanceId
-        && (this.eventEligibleItemIds === null || !muted)
-      );
-    if (highlighted) setPropHighlighted(saved.prop, true);
-  }
-
-  private advanceEventItemAnimation(delta: number): void {
-    const animation = this.activeEventItemAnimation;
-    if (animation === null) return;
-    animation.elapsed = Math.min(animation.duration, animation.elapsed + delta);
-    const progress = animation.elapsed / animation.duration;
-    const eased = easeInOut(progress);
-    animation.prop.position.copy(animation.basePosition);
-    animation.prop.position.y += Math.sin(Math.PI * eased) * .28;
-    animation.prop.quaternion.copy(animation.baseQuaternion);
-    animation.prop.rotateZ(Math.sin(Math.PI * eased) * .16);
-    if (progress < 1) return;
-    this.activeEventItemAnimation = null;
-    animation.prop.position.copy(animation.basePosition);
-    animation.prop.quaternion.copy(animation.baseQuaternion);
-    animation.resolve();
-  }
-
-  private cancelActiveEventItemAnimation(): void {
-    const animation = this.activeEventItemAnimation;
-    if (animation === null) return;
-    this.activeEventItemAnimation = null;
-    animation.prop.position.copy(animation.basePosition);
-    animation.prop.quaternion.copy(animation.baseQuaternion);
-    animation.resolve();
+    return this.disposed
+      ? Promise.resolve()
+      : this.supplyDisplay.playEventItemUse(instanceId);
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
     if (this.disposed || width <= 0 || height <= 0) return [];
     this.scene.updateMatrixWorld(true);
 
-    const itemAnchors = this.savedProps.map(({ instance, prop }) => {
+    const itemAnchors = this.supplyDisplay.records()
+      .filter((record) => record.visibleCopies > 0)
+      .map((record) => {
       const projection = projectBoatBounds(
-        new Box3().setFromObject(prop, true),
+        new Box3().setFromObject(record.root, true),
         this.camera,
         width,
         height,
       );
       const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
+      const itemType = record.groupId === 'repairMaterial' ? null : record.groupId;
+      const layoutIndex = BOAT_SUPPLY_GROUP_IDS.indexOf(record.groupId);
+      const column = layoutIndex % 6;
+      const row = Math.floor(layoutIndex / 6);
       return {
-        id: instance.instanceId,
-        itemType: instance.type,
+        id: `supply:${record.groupId}`,
+        itemType,
+        supplyGroupId: record.groupId,
         toolId: null,
-        action: prop.userData.condition === 'usable' ? ACTION_FOR_ITEM[instance.type] ?? null : null,
+        action: itemType !== null && record.usableQuantity > 0
+          ? ACTION_FOR_ITEM[itemType] ?? null
+          : null,
         ...point,
-        visible: prop.visible && point.visible,
+        x: width / 2 + (column - 2.5) * 54,
+        y: height * 0.58 + (row - 1) * 54,
+        visible: record.visibleCopies > 0 && record.root.visible && point.visible,
         depleted: false,
-        remainingUses: prop.userData.remainingUses as number | null,
-        hitArea: { width: hitWidth, height: hitHeight, depth },
+        remainingUses: itemType === null || record.usableQuantity === 0
+          ? null
+          : ITEM_DEFINITIONS[itemType].charges,
+        quantity: record.quantity,
+        usableQuantity: record.usableQuantity,
+        brokenQuantity: record.brokenQuantity,
+        backingInstanceId: record.backingInstanceId,
+        hitArea: {
+          width: Math.min(50, Math.max(44, hitWidth)),
+          height: Math.min(50, Math.max(44, hitHeight)),
+          depth,
+        },
       } satisfies BoatInteractionAnchor;
-    });
+      });
     const fishingProjection = projectBoatBounds(
       this.rodBounds.setFromObject(this.rodPivot, true),
       this.camera,
@@ -810,6 +670,10 @@ export class BoatWorld {
       visible: this.rod.visible && fishingPoint.visible,
       depleted: false,
       remainingUses: null,
+      quantity: 1,
+      usableQuantity: 1,
+      brokenQuantity: 0,
+      backingInstanceId: null,
       hitArea: {
         width: fishingHitWidth,
         height: fishingHitHeight,
@@ -832,6 +696,10 @@ export class BoatWorld {
       visible: this.repairTools.visible && point.visible,
       depleted: false,
       remainingUses: null,
+      quantity: 1,
+      usableQuantity: 1,
+      brokenQuantity: 0,
+      backingInstanceId: null,
       hitArea: { width: hitWidth, height: hitHeight, depth },
     } satisfies BoatInteractionAnchor;
     return [...itemAnchors, fishingAnchor, repairAnchor];
@@ -1064,7 +932,7 @@ export class BoatWorld {
     }
 
     this.advanceFishingPresentation(delta);
-    this.advanceEventItemAnimation(delta);
+    this.supplyDisplay.update(delta);
     this.updateFishingWave(time);
     this.updateFishingEffects(time);
 
@@ -1099,7 +967,7 @@ export class BoatWorld {
       () => this.setHighlightedItem(null),
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
-      () => this.cancelActiveEventItemAnimation(),
+      () => this.supplyDisplay.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),

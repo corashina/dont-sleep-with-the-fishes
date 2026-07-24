@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropModelLibrary } from '../src/world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
+import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 
 const constructionMocks = vi.hoisted(() => ({
   createSceneRenderer: vi.fn(),
@@ -67,6 +68,7 @@ describe('Game construction rollback', () => {
         {} as PropModelLibrary,
         {} as ShipFurnitureLibrary,
         {} as SkyAssets,
+        {} as LifeboatAssets,
       );
     } catch (error) {
       thrown = error;

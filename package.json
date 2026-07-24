@@ -15,7 +15,9 @@
     "models:fetch": "bun run models:fetch:items && bun run models:fetch:ship",
     "models:check:items": "node scripts/check-item-models.mjs",
     "models:check:ship": "node scripts/check-ship-furniture.mjs",
-    "models:check": "bun run models:check:items && bun run models:check:ship"
+    "textures:fetch:lifeboat": "powershell -ExecutionPolicy Bypass -File scripts/fetch-lifeboat-textures.ps1",
+    "textures:check:lifeboat": "node scripts/check-lifeboat-textures.mjs",
+    "models:check": "bun run models:check:items && bun run models:check:ship && bun run textures:check:lifeboat"
   },
   "dependencies": {
     "three": "^0.180.0"

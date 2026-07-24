@@ -16,7 +16,7 @@ The carry limit is three weight points, not three objects. Weight-one supplies a
 
 Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, Harpoon Gun, and Energy Bar are one-use supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Spyglass, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The Repair Kit and bow-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the Repair Kit uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
+The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
 The event catalog adapts the original game's ordinary item responses to this single-survivor rescue loop. Recovered usable items can unlock suitable responses; unavailable, broken, consumed, and lost supplies cannot. Unsupported companion, trade, later-loot, story-branch, and alternate-ending outcomes remain outside this milestone. The wiki informed the committed event data but is not a runtime dependency.
 
@@ -42,7 +42,7 @@ Open the local URL printed by Vite and select **Begin Evacuation**. The scavengi
 | Left mouse click | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
 | `Escape` | Pause and release the mouse |
 
-Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The rescue-orange lifeboat has unlimited storage, so every supply thrown aboard remains visible and no full-boat state exists.
+Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The weathered wooden lifeboat has unlimited storage, so every supply thrown aboard is retained and no full-boat state exists.
 
 ### Lifeboat survival
 
@@ -56,7 +56,7 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Top-center End Day button / `7` | Fade into sleep and advance to an event or quiet night |
 
-Recovered supplies remain as physical props in the survival boat; there is no bottom dock or inventory tray. Hovering or keyboard-focusing any prop reveals its label, condition, and purpose. Props mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed bow rod projects the **Fish - 1 Energy** action in every run, and shortcut `1` activates the same action. **Dive** still requires usable recovered Scuba Gear; without it, shortcut `2` does nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
+Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, and purpose. Groups mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 1 Energy** action in every run, and shortcut `1` activates the same action. **Dive** still requires usable recovered Scuba Gear; without it, shortcut `2` does nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
 
 Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
 
@@ -69,7 +69,7 @@ In the lifeboat, each day gives three energy for daytime actions:
 - **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
 - **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
-- **Repair** uses the lifeboat's fixed Repair Kit and recovered material to restore hull; Duct Tape can make a smaller emergency patch.
+- **Repair** uses the lifeboat's fixed repair toolbox and recovered material to restore hull; Duct Tape can make a smaller emergency patch.
 - **Treat** consumes the recovered Medkit to restore health.
 - **Rest** requires no item, restores two energy, and is available once per day.
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
@@ -89,7 +89,7 @@ Rescue is variable rather than tied to a fixed day. Progress and elapsed days in
 
 ## Asset policy
 
-Kenney remains the project's default: use Kenney as the default third-party asset store. The Quaternius exception is approved only for the committed `compass`, `flareGun`, and `anchor` runtime models. Downloaded assets must come from an individual free CC0 pack, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. All runtime item models are committed locally with recorded provenance. Production never fetches models, textures, artwork, event data, or wiki content. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
+Kenney remains the project's default: use Kenney as the default third-party asset store. The Quaternius exception is approved only for the committed `compass`, `flareGun`, and `anchor` runtime models, and the lifeboat's wood maps come from Poly Haven's CC0 Wood Planks texture. Downloaded assets must come from an individual free CC0 pack or asset, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. All runtime item models and textures are committed locally with recorded provenance. Production never fetches models, textures, artwork, event data, or wiki content. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
 
 ## Commands
 

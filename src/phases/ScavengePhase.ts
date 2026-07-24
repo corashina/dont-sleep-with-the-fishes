@@ -79,6 +79,9 @@ export class ScavengePhase implements GamePhase {
       context.maxTextureAnisotropy,
       context.skyAssets.moonTexture,
       instances,
+      Math.random,
+      {},
+      context.lifeboatAssets,
     );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,

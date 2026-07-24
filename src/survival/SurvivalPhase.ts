@@ -10,6 +10,7 @@ import { SurvivalUI, type FishingResultView } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
+import type { LifeboatAssets } from '../world/LifeboatAssets';
 import { BoatWorld } from './BoatWorld';
 import { survivalEventById } from './events';
 import type {
@@ -102,6 +103,7 @@ function testContext(
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
+    lifeboatAssets: {} as LifeboatAssets,
   };
 }
 
@@ -164,6 +166,7 @@ export class SurvivalPhase implements GamePhase {
           context.propModels,
           context.skyAssets.moonTexture,
           savedItems,
+          context.lifeboatAssets,
         ),
         new SurvivalUI(context.mount, context.reducedMotion),
         scavengeElapsedSeconds,
