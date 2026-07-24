@@ -1,11 +1,11 @@
 import {
-  createItemInstances,
   ITEM_DEFINITIONS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
   type ItemStatus,
 } from './ItemState';
+import { createScavengeItemInstances } from './scavengeCatalog';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'success' | 'failure';
 
@@ -39,7 +39,7 @@ export class ScavengeSession {
   private readonly carriedIds: ItemInstanceId[] = [];
   private savedCount = 0;
 
-  constructor(instances: readonly ItemInstance[] = createItemInstances()) {
+  constructor(instances: readonly ItemInstance[] = createScavengeItemInstances()) {
     this.items = Object.fromEntries(instances.map((item) => [
       item.instanceId,
       { ...item, status: 'available' as const },

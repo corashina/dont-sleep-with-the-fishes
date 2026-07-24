@@ -17,6 +17,13 @@ const ITEM_MUTATIONS = [
 ] as const;
 
 describe('ScavengeSession', () => {
+  it('uses the scavenging roster by default', () => {
+    const session = new ScavengeSession();
+
+    expect(Object.keys(session.snapshot().items)).toHaveLength(20);
+    expect(session.snapshot().items['energyBar-1']).toBeUndefined();
+  });
+
   it('starts at 120 seconds and fails exactly once at expiry', () => {
     const session = new ScavengeSession();
     session.start();
