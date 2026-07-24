@@ -152,7 +152,7 @@ function validateSpec(id: RuntimeModelId, spec: RuntimeModelSpec | undefined): R
   }
   if (
     spec.provenance.kind === 'project'
-    && spec.provenance.recipeId !== `project-item-models@1:${id}`
+    && spec.provenance.recipeId !== `project-item-models@2:${id}`
   ) {
     throw new ItemModelLoadError(id, 'project recipe ID does not match the item ID');
   }
