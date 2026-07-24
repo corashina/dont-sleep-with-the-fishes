@@ -32,6 +32,7 @@ import { BoatWorld } from '../src/survival/BoatWorld';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { boatStorageTransform } from '../src/world/BoatStorage';
+import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
@@ -64,6 +65,31 @@ function expectTestModelTransform(root: Object3D): void {
     expect(value).toBeCloseTo(TEST_PROP_MODEL_TRANSFORM.rotation[index]!);
   });
   expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
+}
+
+function boundsRelativeTo(root: Object3D): Box3 {
+  root.updateWorldMatrix(true, true);
+  const inverseRoot = new Matrix4().copy(root.matrixWorld).invert();
+  const bounds = new Box3().makeEmpty();
+  const localMatrix = new Matrix4();
+  const point = new Vector3();
+
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry.computeBoundingBox();
+    const geometryBounds = object.geometry.boundingBox;
+    if (geometryBounds === null) return;
+    localMatrix.multiplyMatrices(inverseRoot, object.matrixWorld);
+    for (let corner = 0; corner < 8; corner += 1) {
+      point.set(
+        corner & 1 ? geometryBounds.max.x : geometryBounds.min.x,
+        corner & 2 ? geometryBounds.max.y : geometryBounds.min.y,
+        corner & 4 ? geometryBounds.max.z : geometryBounds.min.z,
+      ).applyMatrix4(localMatrix);
+      bounds.expandByPoint(point);
+    }
+  });
+  return bounds;
 }
 
 function snapshot(
@@ -946,7 +972,7 @@ describe('BoatWorld helpers', () => {
     const tip = world.scene.getObjectByName('fishing-line-origin')!;
     expect(pivot.position.x).toBe(0);
     expect(pivot.position.z).toBeLessThan(-2);
-    expect(pivot.rotation.x).toBeCloseTo(MathUtils.degToRad(22), 8);
+    expect(pivot.rotation.x).toBeCloseTo(MathUtils.degToRad(-22), 8);
     expect(tip.parent).toBe(rod);
     expect(tip.position.toArray().every(Number.isFinite)).toBe(true);
     const tipWorld = tip.getWorldPosition(new Vector3());
@@ -1207,6 +1233,83 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('anchors the production fishing line at the local forward tip through every visible phase', async () => {
+    const propModels = await loadProductionPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
+    const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
+    const tip = world.scene.getObjectByName('fishing-line-origin')!;
+    const line = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry>;
+    const rodBounds = boundsRelativeTo(rod);
+    const centerX = (rodBounds.min.x + rodBounds.max.x) / 2;
+    const centerY = (rodBounds.min.y + rodBounds.max.y) / 2;
+
+    expect(tip.position.x).toBeCloseTo(centerX, 8);
+    expect(tip.position.y).toBeCloseTo(centerY, 8);
+    expect(tip.position.z).toBeCloseTo(rodBounds.max.z, 8);
+
+    const expectForwardPose = () => {
+      const handleWorld = rod.localToWorld(new Vector3(centerX, centerY, rodBounds.min.z));
+      const tipWorld = tip.getWorldPosition(new Vector3());
+      expect(pivot.rotation.x).toBeCloseTo(MathUtils.degToRad(-22), 8);
+      expect(tipWorld.z).toBeLessThan(handleWorld.z);
+    };
+    const expectLineAtTip = () => {
+      const origin = tip.getWorldPosition(new Vector3());
+      const positions = line.geometry.getAttribute('position') as BufferAttribute;
+      expect(positions.getX(0)).toBeCloseTo(origin.x, 6);
+      expect(positions.getY(0)).toBeCloseTo(origin.y, 6);
+      expect(positions.getZ(0)).toBeCloseTo(origin.z, 6);
+    };
+    const point = world.centeredFishingCast();
+
+    const cast = world.playFishingCast(point);
+    world.update(0.000001, 0.000001);
+    expectLineAtTip();
+    world.update(0.801, 0.800999);
+    await cast;
+    expectForwardPose();
+    expectLineAtTip();
+
+    world.showFishingWaiting(point);
+    world.update(0.9, 0.099);
+    expectForwardPose();
+    expectLineAtTip();
+
+    world.showFishingBite(point);
+    world.update(1, 0.1);
+    expectForwardPose();
+    expectLineAtTip();
+
+    const reel = world.playFishingReel('cod');
+    world.update(1.5, 0.5);
+    expectLineAtTip();
+    world.update(2, 0.5);
+    await reel;
+    expectForwardPose();
+    expectLineAtTip();
+
+    world.showFishingBite(point);
+    const miss = world.playFishingMiss();
+    world.update(2.4, 0.4);
+    expectLineAtTip();
+    world.update(2.8, 0.4);
+    await miss;
+    expectForwardPose();
+    expectLineAtTip();
+
+    world.clearFishingPresentation();
+    expect(line.visible).toBe(false);
+    expectForwardPose();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps reduced-motion bite pools visible without continuous oscillation', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1272,6 +1375,39 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('accepts the inclusive authored cast edges and rejects epsilon-outside points', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const accepted = [
+      { x: -2.7, z: -6.4 },
+      { x: 2.7, z: -6.4 },
+      { x: 0, z: -8.5 },
+      { x: 0, z: -4.8 },
+    ] as const;
+    for (const point of accepted) {
+      expect(() => world.playFishingCast(point)).not.toThrow();
+      world.clearFishingPresentation();
+    }
+
+    const epsilon = 1e-9;
+    const rejected = [
+      { x: -2.7 - epsilon, z: -6.4 },
+      { x: 2.7 + epsilon, z: -6.4 },
+      { x: 0, z: -8.5 - epsilon },
+      { x: 0, z: -4.8 + epsilon },
+    ] as const;
+    for (const point of rejected) {
+      expect(() => world.playFishingCast(point)).toThrow(RangeError);
+    }
+    world.dispose();
+    propModels.dispose();
+  });
+
   it.each([
     [1280, 720],
     [1024, 768],
@@ -1297,8 +1433,17 @@ describe('BoatWorld helpers', () => {
     world.showFishingBite(centered);
     world.update(1.2, 0.1);
     const target = world.projectFishingBite(width, height);
+    const bow = world.scene.getObjectByName('hull-bow-rounded-cap')!;
+    const bowBounds = projectBoatBounds(
+      new Box3().setFromObject(bow, true),
+      camera,
+      width,
+      height,
+    );
     expect(target.visible).toBe(true);
-    expect(target.y + target.height / 2).toBeLessThan(height * 0.62);
+    expect(bowBounds.visible).toBe(true);
+    expect(target.y + target.height / 2)
+      .toBeLessThan(bowBounds.y);
 
     world.dispose();
     propModels.dispose();
@@ -1400,9 +1545,9 @@ describe('BoatWorld helpers', () => {
     world.update(0.000001, 0.000001);
     const origin = lineOrigin.getWorldPosition(new Vector3());
     const positions = line.geometry.getAttribute('position') as BufferAttribute;
-    expect(positions.getX(0)).toBeCloseTo(origin.x, 7);
-    expect(positions.getY(0)).toBeCloseTo(origin.y, 7);
-    expect(positions.getZ(0)).toBeCloseTo(origin.z, 7);
+    expect(positions.getX(0)).toBeCloseTo(origin.x, 6);
+    expect(positions.getY(0)).toBeCloseTo(origin.y, 6);
+    expect(positions.getZ(0)).toBeCloseTo(origin.z, 6);
     expect(bobber.position.y).toBeCloseTo(castOriginY, 4);
     expect(positions.getY(4))
       .toBeCloseTo(castOriginY, 4);

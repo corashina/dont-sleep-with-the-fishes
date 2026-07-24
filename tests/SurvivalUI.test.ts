@@ -172,6 +172,39 @@ describe('SurvivalUI', () => {
     expect(mount.textContent).not.toContain('WATER');
   });
 
+  it('keeps tooltip nodes stable across anchor frames and updates their semantic content in place', () => {
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    const anchor = {
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      remainingUses: null,
+      x: 90,
+      y: 180,
+      visible: true,
+      depleted: false,
+    } as const;
+    ui.setAnchors([anchor]);
+
+    const button = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-tools"]')!;
+    const tooltip = button.querySelector<HTMLElement>('[role="tooltip"]')!;
+    const initialNodes = [...tooltip.childNodes];
+    expect(tooltip.textContent).toBe('Fishing rod ⚡');
+
+    ui.setAnchors([{ ...anchor, x: 91, y: 181 }]);
+    expect(button.querySelector('[role="tooltip"]')).toBe(tooltip);
+    expect([...tooltip.childNodes]).toEqual(initialNodes);
+
+    ui.setAnchors([{ ...anchor, action: null }]);
+    expect(button.querySelector('[role="tooltip"]')).toBe(tooltip);
+    expect([...tooltip.childNodes]).toEqual(initialNodes);
+    expect(tooltip.textContent).toBe('Fishing rod');
+    expect(button.getAttribute('aria-label')).toBe('Fishing rod');
+    expect(button.getAttribute('aria-description')).toContain('Cast from the bow');
+  });
+
   it('chooses only broken repairable instance targets with a discriminated option', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

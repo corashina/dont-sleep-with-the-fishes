@@ -166,6 +166,13 @@ interface PendingFishingFade {
   readonly finish: () => void;
 }
 
+interface AnchorTooltipNodes {
+  readonly tooltip: HTMLElement;
+  readonly label: Text;
+  readonly separator: Text;
+  readonly energy: HTMLElement;
+}
+
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
@@ -226,6 +233,7 @@ export class SurvivalUI {
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
+  private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
   private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly actionReasons = new Map<DayActionId, string | null>();
@@ -819,9 +827,16 @@ export class SurvivalUI {
     const tooltip = document.createElement('span');
     tooltip.className = 'boat-tooltip';
     tooltip.role = 'tooltip';
+    const label = document.createTextNode('');
+    const separator = document.createTextNode('');
+    const energy = document.createElement('span');
+    energy.className = 'boat-tooltip__energy';
+    energy.setAttribute('aria-hidden', 'true');
+    tooltip.append(label, separator, energy);
     button.append(tooltip);
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
+    this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
     return button;
   }
 
@@ -853,15 +868,13 @@ export class SurvivalUI {
     const visibleLabel = anchor.toolId === 'fishingRod' ? 'Fishing rod' : itemLabel;
     const energyCost = action?.energyCost ?? 0;
     const energyIndicator = '⚡'.repeat(energyCost);
-    const tooltip = requireElement<HTMLElement>(button, '[role="tooltip"]');
-    tooltip.replaceChildren(document.createTextNode(visibleLabel));
-    if (energyIndicator !== '') {
-      tooltip.append(document.createTextNode(' '));
-      const indicator = document.createElement('span');
-      indicator.className = 'boat-tooltip__energy';
-      indicator.setAttribute('aria-hidden', 'true');
-      indicator.textContent = energyIndicator;
-      tooltip.append(indicator);
+    const tooltipNodes = this.anchorTooltipNodes.get(button);
+    if (tooltipNodes === undefined) throw new Error('Anchor tooltip nodes are missing');
+    if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
+    const separator = energyIndicator === '' ? '' : ' ';
+    if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
+    if (tooltipNodes.energy.textContent !== energyIndicator) {
+      tooltipNodes.energy.textContent = energyIndicator;
     }
     const spokenCost = spokenEnergyCost(energyCost);
     button.dataset.action = anchor.action ?? '';

@@ -219,7 +219,7 @@ const FISHING_CAST_MAX_X = 2.7;
 const FISHING_CAST_MIN_Z = -8.5;
 const FISHING_CAST_MAX_Z = -4.8;
 const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 });
-const FISHING_ROD_LEAN = MathUtils.degToRad(22);
+const FISHING_ROD_LEAN = MathUtils.degToRad(-22);
 const FISHING_TARGET_SIZE = 52;
 const EVENT_ITEM_USE_DURATION = .65;
 
@@ -619,8 +619,8 @@ export class BoatWorld {
     const rodBounds = localBoundsOf(this.rod);
     this.fishingLineOrigin.position.set(
       (rodBounds.min.x + rodBounds.max.x) / 2,
-      rodBounds.max.y,
-      (rodBounds.min.z + rodBounds.max.z) / 2,
+      (rodBounds.min.y + rodBounds.max.y) / 2,
+      rodBounds.max.z,
     );
     this.rod.add(this.fishingLineOrigin);
     this.rodPivot.add(this.rod);
