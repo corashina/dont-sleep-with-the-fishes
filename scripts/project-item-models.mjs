@@ -111,6 +111,68 @@ for (let index = 0; index < 4; index += 1) {
   ringAngle += WHITE_ARC;
 }
 
+const NET_GRID_STOPS = [0.12, 0.36, 0.62, 0.86];
+
+function foldedNetLayer(layer, {
+  center, width, depth, angle, rise, skew,
+}) {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const foldedPoint = (u, v) => {
+    const localZ = (v - 0.5) * depth;
+    const taper = 0.80 + (1 - v) * 0.20;
+    const irregularity = 0.022 * Math.sin((u * 3 + v * 2 + layer * 0.37) * Math.PI);
+    const localX = (u - 0.5) * width * taper + skew * (v - 0.5) + irregularity;
+    const distance = Math.min(1, Math.hypot((u - 0.5) * 1.45, (v - 0.5) * 1.25));
+    const height = center[1]
+      + rise * (1 - distance)
+      + 0.014 * Math.sin((u + v + layer * 0.23) * Math.PI * 2);
+    return [
+      center[0] + localX * cosine - localZ * sine,
+      Math.max(0.018, height),
+      center[2] + localX * sine + localZ * cosine,
+    ];
+  };
+
+  return [
+    ...NET_GRID_STOPS.map((u, index) => ({
+      ...tubePathPart(
+        `fold-${layer}-warp-${index + 1}`,
+        NET_GRID_STOPS.map((v) => foldedPoint(u, v)),
+        0.010,
+        index % 2 === 0 ? NET_BROWN : NET_DARK,
+      ),
+      role: 'folded-mesh',
+      foldLayer: layer,
+    })),
+    ...NET_GRID_STOPS.map((v, index) => ({
+      ...tubePathPart(
+        `fold-${layer}-weft-${index + 1}`,
+        NET_GRID_STOPS.map((u) => foldedPoint(u, v)),
+        0.010,
+        index % 2 === 0 ? NET_DARK : NET_BROWN,
+      ),
+      role: 'folded-mesh',
+      foldLayer: layer,
+    })),
+  ];
+}
+
+const foldedNetLayers = [
+  ...foldedNetLayer(1, {
+    center: [-0.08, 0.045, 0.01], width: 0.82, depth: 0.56,
+    angle: -0.14, rise: 0.07, skew: 0.10,
+  }),
+  ...foldedNetLayer(2, {
+    center: [0.11, 0.115, -0.04], width: 0.60, depth: 0.43,
+    angle: 0.38, rise: 0.08, skew: -0.08,
+  }),
+  ...foldedNetLayer(3, {
+    center: [-0.15, 0.175, 0.09], width: 0.48, depth: 0.34,
+    angle: -0.48, rise: 0.07, skew: 0.06,
+  }),
+];
+
 export const PROJECT_ITEM_RECIPES = Object.freeze({
   map: {
     parts: [
@@ -155,33 +217,34 @@ export const PROJECT_ITEM_RECIPES = Object.freeze({
   },
   fishingNet: {
     parts: [
-      ...[-0.24, -0.14, -0.04, 0.06, 0.16, 0.24].map((x, index) =>
-        tubePathPart(`warp-${index + 1}`, [
-          [x, 0.02, -0.27], [x + 0.025, 0.09, -0.09],
-          [x - 0.018, 0.05, 0.09], [x, 0.12, 0.27],
-        ], 0.012, NET_BROWN)),
-      ...[-0.23, -0.14, -0.05, 0.05, 0.14, 0.23].map((z, index) =>
-        tubePathPart(`weft-${index + 1}`, [
-          [-0.27, 0.04, z], [-0.09, 0.10, z - 0.02],
-          [0.09, 0.05, z + 0.02], [0.27, 0.11, z],
-        ], 0.012, NET_BROWN)),
-      tubePathPart('edge-north', [
-        [-0.28, 0.04, -0.28], [0, 0.08, -0.30], [0.28, 0.04, -0.28],
-      ], 0.022, NET_DARK, 8),
-      tubePathPart('edge-east', [
-        [0.28, 0.04, -0.28], [0.30, 0.10, 0], [0.28, 0.12, 0.28],
-      ], 0.022, NET_DARK, 8),
-      tubePathPart('edge-south', [
-        [0.28, 0.12, 0.28], [0, 0.16, 0.30], [-0.28, 0.12, 0.28],
-      ], 0.022, NET_DARK, 8),
-      tubePathPart('edge-west', [
-        [-0.28, 0.12, 0.28], [-0.30, 0.08, 0], [-0.28, 0.04, -0.28],
-      ], 0.022, NET_DARK, 8),
+      ...foldedNetLayers,
+      {
+        ...tubePathPart('gather-left', [
+          [-0.42, 0.055, -0.18], [-0.31, 0.10, -0.03], [-0.23, 0.16, 0.10],
+          [-0.17, 0.22, 0.12], [-0.11, 0.235, 0.08],
+        ], 0.020, NET_DARK, 8),
+        role: 'gather-line',
+      },
+      {
+        ...tubePathPart('gather-right', [
+          [0.37, 0.045, -0.19], [0.30, 0.11, -0.06], [0.24, 0.17, 0.05],
+          [0.17, 0.215, 0.10], [0.09, 0.23, 0.08],
+        ], 0.020, NET_DARK, 8),
+        role: 'gather-line',
+      },
+      {
+        ...tubePathPart('loose-edge-coil', [
+          [-0.34, 0.045, 0.19], [-0.42, 0.055, 0.25], [-0.39, 0.07, 0.34],
+          [-0.28, 0.085, 0.37], [-0.18, 0.10, 0.32], [-0.20, 0.12, 0.24],
+          [-0.29, 0.13, 0.22], [-0.33, 0.15, 0.28], [-0.27, 0.17, 0.31],
+        ], 0.023, NET_DARK, 8),
+        role: 'loose-edge',
+      },
       ...[
-        [-0.24, 0.05, -0.23], [0, 0.09, -0.14], [0.16, 0.08, -0.05],
-        [-0.14, 0.10, 0.05], [0.06, 0.12, 0.14], [0.24, 0.13, 0.23],
+        [-0.11, 0.235, 0.08], [0.09, 0.23, 0.08],
+        [-0.22, 0.15, -0.01], [0.17, 0.16, 0.00],
       ].map((translation, index) =>
-        part(`knot-${index + 1}`, 'cylinder', [0.035, 0.028, 0.035],
+        part(`bundle-knot-${index + 1}`, 'cylinder', [0.045, 0.032, 0.045],
           translation, NET_DARK, IDENTITY, 8)),
     ],
   },
