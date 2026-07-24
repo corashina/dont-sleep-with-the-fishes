@@ -108,6 +108,13 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-survival-top] [data-action="endDay"]')).not.toBeNull();
     expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*top:\s*20px[^}]*right:\s*24px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*right:\s*24px[^}]*bottom:\s*24px/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*min-width:\s*210px[^}]*min-height:\s*72px/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*#315c6f/s);
+    expect(mainStyles).toMatch(/\.event-caption\s*\{[^}]*top:[^;}]+;[^}]*bottom:\s*auto/s);
+    expect(mainStyles).toMatch(/\.event-caption h2\s*\{[^}]*var\(--ink-yellow\)/s);
+    expect(mainStyles).toMatch(/\.event-caption\[data-danger="safe"\] h2\s*\{[^}]*var\(--ink-green\)/s);
+    expect(mainStyles).toMatch(/\.event-caption\[data-danger="dangerous"\] h2\s*\{[^}]*var\(--ink-red-bright\)/s);
+    expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18[^}]*pointer-events:\s*auto/s);
     expect(mainStyles).toMatch(/\.survival-meters\s*\{[^}]*top:\s*18px[^}]*left:\s*22px/s);
     ui.dispose();
   });
@@ -188,13 +195,22 @@ describe('SurvivalUI', () => {
       { id: 'umbrella-2', itemType: 'umbrella', toolId: null, action: null, remainingUses: null, x: 240, y: 180, visible: true, depleted: false },
     ]);
     const selected = vi.fn();
+    const endureEvent = vi.fn();
     ui.onEventItem = selected;
+    ui.onEndure = endureEvent;
 
+    ui.beginEventPresentation();
+    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(true);
     const reveal = ui.showEventReveal(testEvent(['bucket']));
     await vi.runAllTimersAsync();
     await reveal;
     expect(mount.querySelector('[data-event]')).toBeNull();
-    expect(mount.querySelector('[data-event-caption]')?.textContent).toContain('A shadow moves beneath the boat.');
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A shadow');
+    expect(caption.querySelector('[data-event-danger]')).toBeNull();
+    expect(caption.querySelector('[data-event-reveal]')).toBeNull();
+    expect(caption.dataset.danger).toBe('dangerous');
+    expect(caption.getAttribute('aria-label')).toBe('Dangerous event: A shadow');
 
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
     const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
@@ -213,7 +229,31 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-endure]')?.hidden).toBe(true);
 
     ui.setEventSelection(new Map());
-    expect(mount.querySelector<HTMLButtonElement>('[data-endure]')?.hidden).toBe(false);
+    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
+    expect(endure.hidden).toBe(false);
+    expect(endure.tabIndex).toBe(0);
+    endure.focus();
+    endure.click();
+    expect(endureEvent).toHaveBeenCalledOnce();
+
+    ui.clearEventPresentation();
+    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(false);
+  });
+
+  it.each([
+    ['safe', 'Safe event: A shadow'],
+    ['uncertain', 'Uncertain event: A shadow'],
+    ['dangerous', 'Dangerous event: A shadow'],
+  ] as const)('announces %s event risk without visible risk copy', async (danger, accessibleName) => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.beginEventPresentation();
+    await ui.showEventReveal({ ...testEvent(), danger });
+
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.dataset.danger).toBe(danger);
+    expect(caption.getAttribute('aria-label')).toBe(accessibleName);
+    expect(caption.textContent.trim()).toBe('A shadow');
   });
 
   it('opens the marker through a callback and browses completed pages newest first', () => {

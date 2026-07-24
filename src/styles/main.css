@@ -612,7 +612,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .event-caption {
   position: absolute;
   left: 50%;
-  bottom: 56px;
+  top: clamp(86px, 12vh, 132px);
+  bottom: auto;
   z-index: 17;
   display: grid;
   justify-items: center;
@@ -641,28 +642,21 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .event-caption h2 {
   margin: 0;
-  color: var(--ink-bone);
+  color: var(--ink-yellow);
   font: 900 clamp(1.55rem, 3vw, 2.65rem)/1 Impact, 'Arial Black', sans-serif;
   letter-spacing: .035em;
   text-transform: uppercase;
 }
-.event-caption p { margin: 0; }
-.event-caption__danger {
-  color: var(--ink-yellow);
-  font-size: .64rem;
-  font-weight: 900;
-  letter-spacing: .18em;
-}
-.event-caption[data-danger="dangerous"] .event-caption__danger,
 .event-caption[data-danger="dangerous"] h2 { color: var(--ink-red-bright); }
-.event-caption[data-danger="safe"] .event-caption__danger { color: var(--ink-green); }
+.event-caption[data-danger="safe"] h2 { color: var(--ink-green); }
 .event-endure {
   position: absolute;
-  right: 28px;
-  bottom: 32px;
+  right: 24px;
+  bottom: 24px;
   z-index: 18;
-  min-width: 142px;
-  min-height: 48px;
+  min-width: 164px;
+  min-height: 58px;
+  pointer-events: auto;
 }
 .outcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .repair-targets {
@@ -876,10 +870,11 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   right: 24px;
   bottom: 24px;
   top: auto;
-  min-width: 164px;
-  min-height: 58px;
-  padding: 10px 28px;
+  min-width: 210px;
+  min-height: 72px;
+  padding: 14px 34px;
   color: var(--ink-bone);
+  background: linear-gradient(174deg, #47798a, #315c6f 54%, #244550);
 }
 .journal-overlay {
   place-content: center;
