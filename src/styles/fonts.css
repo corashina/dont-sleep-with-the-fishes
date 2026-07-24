@@ -1,0 +1,59 @@
+@font-face {
+  font-family: 'Bowlby One SC';
+  src: url('../assets/fonts/bowlby-one-sc-latin-400-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alegreya Sans';
+  src: url('../assets/fonts/alegreya-sans-latin-400-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alegreya Sans';
+  src: url('../assets/fonts/alegreya-sans-latin-700-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../assets/fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+:root {
+  --font-display: 'Bowlby One SC', Impact, 'Arial Black', sans-serif;
+  --font-narrative: 'Alegreya Sans', 'Trebuchet MS', 'Arial Narrow', system-ui, sans-serif;
+  --font-context: 'Alegreya Sans', 'Trebuchet MS', 'Arial Narrow', system-ui, sans-serif;
+  --font-numeral: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+}
+
+.ui-role-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.ui-role-narrative {
+  font-family: var(--font-narrative);
+  font-weight: 400;
+}
+
+.ui-role-context {
+  font-family: var(--font-context);
+  font-weight: 700;
+}
+
+.ui-role-numeral {
+  font-family: var(--font-numeral);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
