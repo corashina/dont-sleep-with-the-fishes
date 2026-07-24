@@ -50,6 +50,21 @@ const overriddenFixtureRecipes = {
   },
 } as const;
 
+async function readGlbJson(path: string): Promise<{
+  materials?: {
+    name?: string;
+    pbrMetallicRoughness?: {
+      baseColorFactor?: number[];
+      metallicFactor?: number;
+      roughnessFactor?: number;
+    };
+  }[];
+}> {
+  const glb = await readFile(path);
+  const jsonChunkLength = glb.readUInt32LE(12);
+  expect(glb.toString('ascii', 16, 20)).toBe('JSON');
+  return JSON.parse(glb.toString('utf8', 20, 20 + jsonChunkLength));
+}
 
 describe('Quaternius item model builder', () => {
   let root: string;
@@ -85,12 +100,24 @@ describe('Quaternius item model builder', () => {
     expect(red?.getMetallicFactor()).toBe(0.85);
     expect(red?.getRoughnessFactor()).toBe(0.42);
     expect(blue?.getBaseColorFactor()).toEqual([0, 0, 1, 1]);
-    expect(blue?.getMetallicFactor()).toBe(0);
+    expect(blue?.getMetallicFactor()).toBe(1);
     expect(blue?.getRoughnessFactor()).toBe(1);
     for (const primitive of document.getRoot().listMeshes()[0]!.listPrimitives()) {
       expect(Array.from(primitive.getAttribute('NORMAL')!.getArray()!))
         .toEqual(Array(primitive.getAttribute('NORMAL')!.getCount()).fill([0, 0, 1]).flat());
     }
+
+    const json = await readGlbJson(join(outputRoot, 'fixture.glb'));
+    const redJson = json.materials?.find(({ name }) => name === 'red')?.pbrMetallicRoughness;
+    const blueJson = json.materials?.find(({ name }) => name === 'blue')?.pbrMetallicRoughness;
+    expect(redJson).toMatchObject({
+      baseColorFactor: [0.1329, 0.1714, 0.2051, 1],
+      metallicFactor: 0.85,
+      roughnessFactor: 0.42,
+    });
+    expect(blueJson).toEqual({
+      baseColorFactor: [0, 0, 1, 1],
+    });
   });
 
   it('rejects material override keys missing from the parsed MTL', async () => {
@@ -114,6 +141,40 @@ describe('Quaternius item model builder', () => {
     })).rejects.toThrow(/fixture.*missing/i);
   });
 
+  it.each([
+    ['baseColorFactor length', { baseColorFactor: [0, 0, 0], metallicFactor: 0, roughnessFactor: 1 }],
+    ['baseColorFactor finite', { baseColorFactor: [0, 0, Number.NaN, 1], metallicFactor: 0, roughnessFactor: 1 }],
+    ['baseColorFactor range', { baseColorFactor: [0, 0, 1.1, 1], metallicFactor: 0, roughnessFactor: 1 }],
+    ['metallicFactor finite', { baseColorFactor: [0, 0, 0, 1], metallicFactor: Number.NaN, roughnessFactor: 1 }],
+    ['metallicFactor range', { baseColorFactor: [0, 0, 0, 1], metallicFactor: -0.1, roughnessFactor: 1 }],
+    ['roughnessFactor finite', { baseColorFactor: [0, 0, 0, 1], metallicFactor: 0, roughnessFactor: Infinity }],
+    ['roughnessFactor range', { baseColorFactor: [0, 0, 0, 1], metallicFactor: 0, roughnessFactor: 1.1 }],
+  ])('rejects invalid reusable %s overrides', async (_label, override) => {
+    await writeFixture();
+
+    await expect(buildQuaterniusItemModels({
+      sourceRoot,
+      outputRoot,
+      recipes: {
+        fixture: {
+          ...fixtureRecipes.fixture,
+          materialOverrides: { red: override as never },
+        },
+      },
+    })).rejects.toThrow(/fixture.*red.*factor/i);
+  });
+
+  it('regenerates legacy non-overridden Quaternius models byte-for-byte', async () => {
+    await buildQuaterniusItemModels({
+      sourceRoot: resolve('third_party/quaternius-items'),
+      outputRoot,
+    });
+
+    for (const id of ['compass', 'flareGun']) {
+      expect(await readFile(join(outputRoot, `${id}.glb`)))
+        .toEqual(await readFile(resolve('src/assets/models/items', `${id}.glb`)));
+    }
+  });
 
 
   it('builds the approved three sources with stable triangle counts', async () => {

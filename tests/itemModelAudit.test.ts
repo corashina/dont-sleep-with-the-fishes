@@ -203,7 +203,7 @@ describe('item model audit CLI', () => {
 
   it('rejects a synthetic forbidden ledger row for a project-authored model', async () => {
     const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
-    await writeFile(ledgerPath, `${ledger}\n| map | \`map.glb\` | Map / Project team | project | \`project-item-models@2:map\` | project | 264 | 264 | synthetic forbidden audit fixture | 2026-07-15 |\n`);
+    await writeFile(ledgerPath, `${ledger}\n| map | \`map.glb\` | Map / Project team | project | \`project-item-models@2:map\` | project | 360 | 360 | synthetic forbidden audit fixture | 2026-07-15 |\n`);
 
     const result = spawnSync(
       process.execPath,

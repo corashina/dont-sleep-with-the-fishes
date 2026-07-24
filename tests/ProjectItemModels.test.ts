@@ -69,10 +69,18 @@ describe('project-authored item model builder', () => {
     expect(mapNames).toEqual(expect.arrayContaining([
       'chart-sheet', 'landmass-west', 'landmass-east', 'route',
       'compass-north', 'compass-east', 'compass-south', 'compass-west',
+      'fold-ridge-vertical', 'fold-ridge-horizontal',
     ]));
     expect(PROJECT_ITEM_RECIPES.map.parts.filter(({ name }) =>
       name.startsWith('grid-'),
     ).length).toBeGreaterThanOrEqual(8);
+    const foldRidges = PROJECT_ITEM_RECIPES.map.parts.filter(
+      (part): part is TubePathAuthoredPart => part.name.startsWith('fold-ridge-'),
+    );
+    expect(foldRidges).toHaveLength(2);
+    expect(foldRidges.every(({ points, radius }) =>
+      points.length >= 5 && radius <= 0.01,
+    )).toBe(true);
   });
 
   it('authors a closed purple umbrella and narrow fitted ring bands', () => {
@@ -82,6 +90,16 @@ describe('project-authored item model builder', () => {
     expect(umbrella.map(({ name }) => name)).toEqual(expect.arrayContaining([
       'fastening-strap', 'shaft', 'metal-tip', 'curved-handle',
     ]));
+    const ribs = umbrella.filter(
+      (part): part is TubePathAuthoredPart => /^rib-\d+$/.test(part.name),
+    );
+    expect(ribs).toHaveLength(8);
+    expect(ribs.every(({ points, radius }) =>
+      points.length >= 4 && radius <= 0.015,
+    )).toBe(true);
+    expect(ribs.every(({ color }) =>
+      color[0] < 0.5 && color[1] < 0.6 && color[2] < 0.7,
+    )).toBe(true);
 
     const arcs = PROJECT_ITEM_RECIPES.swimRing.parts.filter(
       (part): part is TorusArcAuthoredPart => part.shape === 'torusArc',
