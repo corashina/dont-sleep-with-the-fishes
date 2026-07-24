@@ -5,13 +5,13 @@ import {
   Mesh,
   MeshStandardMaterial,
   Raycaster,
-  Texture,
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createLifeboat } from '../src/world/Lifeboat';
+import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 
-function disposeBuild(root: ReturnType<typeof createLifeboat>['root'], textures: readonly Texture[]): void {
+function disposeBuild(root: ReturnType<typeof createLifeboat>['root']): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   root.traverse((object) => {
@@ -22,33 +22,39 @@ function disposeBuild(root: ReturnType<typeof createLifeboat>['root'], textures:
   });
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());
-  textures.forEach((texture) => texture.dispose());
 }
 
 describe('survival lifeboat builder', () => {
 
-  it('provides named storage, repair, paddle, and fitting objects without fishing placeholders', () => {
-    const build = createLifeboat();
+  it('builds named dark-timber structure without survival-only repair tools', () => {
+    const assets = createTestLifeboatAssets();
+    const build = createLifeboat(assets);
     expect(build.root.name).toBe('lifeboat');
     expect(build.storageRoot.name).toBe('lifeboat-storage');
     expect(build.root.getObjectByName('damaged-plank-patch')).toBeDefined();
-    expect(build.root.getObjectByName('hull-repair-tools')).toBeDefined();
-    expect(build.root.getObjectByName('repair-tool-plank')).toBeDefined();
-    expect(build.root.getObjectByName('repair-tool-hammer')).toBeDefined();
+    expect(build.root.getObjectByName('hull-repair-tools')).toBeUndefined();
     expect(build.root.getObjectByName('fishing-line')).toBeUndefined();
     expect(build.root.getObjectByName('fishing-catch')).toBeUndefined();
     expect(build.root.getObjectByName('paddle-port')).toBeDefined();
     expect(build.root.getObjectByName('paddle-starboard')).toBeDefined();
-    expect(build.root.getObjectByName('survival-gunwale')).toBeDefined();
-    expect(build.root.getObjectByName('survival-floor')).toBeDefined();
-    expect(build.root.getObjectByName('survival-ribs')?.children).toHaveLength(3);
+    expect(build.root.getObjectByName('lifeboat-hull-planks')).toBeDefined();
+    expect(build.root.getObjectByName('lifeboat-floorboards')?.children.length)
+      .toBeGreaterThanOrEqual(8);
+    expect(build.root.getObjectByName('survival-benches')?.children).toHaveLength(3);
+    expect(build.root.getObjectByName('survival-ribs')?.children.length)
+      .toBeGreaterThanOrEqual(6);
     expect(build.root.getObjectByName('survival-fittings')?.children.length)
-      .toBeGreaterThanOrEqual(10);
-    disposeBuild(build.root, build.textures);
+      .toBeGreaterThanOrEqual(16);
+    expect(build.root.getObjectByName('lifeboat-wear-details')).toBeDefined();
+    const timber = build.root.getObjectByName('lifeboat-floorboard-4') as Mesh;
+    expect((timber.material as MeshStandardMaterial).map).toBe(assets.color);
+    disposeBuild(build.root);
+    assets.dispose();
   });
 
   it('overlaps the floor beneath every side-wall segment and excludes water from the seam', () => {
-    const build = createLifeboat();
+    const assets = createTestLifeboatAssets();
+    const build = createLifeboat(assets);
     const floor = build.root.getObjectByName('survival-floor') as Mesh;
     const segments: Mesh[] = [];
     build.root.traverse((object) => {
@@ -103,7 +109,22 @@ describe('survival lifeboat builder', () => {
     expect(Math.max(Math.abs(floorBounds.min.z), Math.abs(floorBounds.max.z)) + margin)
       .toBeLessThanOrEqual(build.waterExclusion.halfLength);
 
-    disposeBuild(build.root, build.textures);
+    disposeBuild(build.root);
+    assets.dispose();
   });
 
+  it('keeps authored gameplay bounds unchanged', () => {
+    const assets = createTestLifeboatAssets();
+    const build = createLifeboat(assets);
+    expect(build.acceptanceBox.min.toArray()).toEqual([-1.35, -0.30, -2.72]);
+    expect(build.acceptanceBox.max.toArray()).toEqual([1.35, 1.00, 2.72]);
+    expect(build.waterExclusion).toEqual({
+      halfWidth: 1.60,
+      halfLength: 3.04,
+      taperStart: 1.05,
+      minimumLocalY: -0.38,
+    });
+    disposeBuild(build.root);
+    assets.dispose();
+  });
 });

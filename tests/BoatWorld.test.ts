@@ -123,7 +123,8 @@ describe('BoatWorld helpers', () => {
     );
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const prop = world.scene.getObjectByName('prop:medicalKit-1')!;
+    world.syncInventory(snapshot([savedItem('medicalKit')]));
+    const prop = world.scene.getObjectByName('boat-supply:medicalKit')!;
     const localPosition = prop.position.clone();
     const localQuaternion = prop.quaternion.clone();
     const initialPropWorldPosition = prop.getWorldPosition(new Vector3());
@@ -241,12 +242,13 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
+    world.syncInventory(snapshot(savedItems, { food: 3, bait: 2 }));
 
     for (let index = 1; index <= 80; index += 1) {
       world.update(index * 0.1, 0.1);
       const anchors = world.projectInteractionAnchors(1280, 720);
       const itemAnchors = anchors.filter(({ itemType }) => itemType !== null);
-      expect(itemAnchors).toHaveLength(savedItems.length);
+      expect(itemAnchors).toHaveLength(18);
       expect(itemAnchors.every(({ visible, x, y }) =>
         visible && Number.isFinite(x) && Number.isFinite(y)
         && x >= 0 && x <= 1280 && y >= 0 && y <= 720,
@@ -399,7 +401,10 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       [savedItem('medicalKit')],
     );
-    const propMesh = firstMesh(world.scene.getObjectByName('prop:medicalKit-1')!);
+    world.syncInventory(snapshot([savedItem('medicalKit')]));
+    const propMesh = firstMesh(
+      world.scene.getObjectByName('boat-supply:medicalKit:copy-1')!,
+    );
     const lifeboatMaterials = new Set<Material>();
     collectMeshResources(
       world.scene.getObjectByName('lifeboat')!,
@@ -570,9 +575,10 @@ describe('BoatWorld helpers', () => {
         createTestMoonTexture(),
         createItemInstances(),
       );
+      world.syncInventory(snapshot(createItemInstances(), { food: 3, bait: 2 }));
       const anchors = world.projectInteractionAnchors(1280, 720)
         .filter((anchor) => anchor.itemType !== null && anchor.visible);
-      expect(anchors).toHaveLength(21);
+      expect(anchors).toHaveLength(18);
       const tooClose: string[] = [];
       let minimumSpacing = Number.POSITIVE_INFINITY;
       for (let first = 0; first < anchors.length; first += 1) {
@@ -609,6 +615,7 @@ describe('BoatWorld helpers', () => {
         createTestMoonTexture(),
         createItemInstances(),
       );
+      world.syncInventory(snapshot(createItemInstances(), { food: 3, bait: 2 }));
       const actionable = world.projectInteractionAnchors(1280, 720)
         .filter((anchor) => anchor.visible && anchor.action !== null);
       expect(actionable).toEqual(expect.arrayContaining([
@@ -694,19 +701,38 @@ describe('BoatWorld helpers', () => {
     );
     const storage = world.scene.getObjectByName('lifeboat-storage')!;
 
-    expect(storage.children.map(({ name }) => name)).toEqual([
-      'prop:cannedFood-3',
-      'prop:harpoonGun-1',
-      'prop:ductTape-1',
-      'prop:scubaSet-1',
-    ]);
-    storage.children.forEach((prop, index) => {
-      const transform = boatStorageTransform(savedItems[index]!);
-      expect(prop.position.toArray()).toEqual(transform.position.toArray());
-      expect(prop.rotation.toArray().slice(0, 3)).toEqual(transform.rotation.toArray().slice(0, 3));
-      expect(prop.scale.toArray()).toEqual([transform.scale, transform.scale, transform.scale]);
-      expectTestModelTransform(prop);
-    });
+    expect(storage.children).toHaveLength(19);
+    expect(storage.getObjectByName('boat-supply:cannedFood:copy-1')).toBeDefined();
+    expect(storage.getObjectByName('boat-supply:harpoonGun:copy-1')).toBeDefined();
+    expect(storage.getObjectByName('boat-supply:ductTape:copy-1')).toBeDefined();
+    expect(storage.getObjectByName('boat-supply:scubaSet:copy-1')).toBeDefined();
+    expectTestModelTransform(storage.getObjectByName('boat-supply:harpoonGun:copy-1')!);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps every grouped supply position on the single forward platform', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+    );
+    const platform = world.scene.getObjectByName('survival-supply-platform')!;
+    const platformBounds = new Box3().setFromObject(platform, true);
+    const storage = world.scene.getObjectByName('lifeboat-storage')!;
+
+    expect(platform.children.filter(({ name }) => name.includes('-slat-'))).toHaveLength(9);
+    for (const group of storage.children) {
+      const worldPosition = group.getWorldPosition(new Vector3());
+      expect(worldPosition.x, group.name).toBeGreaterThanOrEqual(platformBounds.min.x);
+      expect(worldPosition.x, group.name).toBeLessThanOrEqual(platformBounds.max.x);
+      expect(worldPosition.z, group.name).toBeGreaterThanOrEqual(platformBounds.min.z);
+      expect(worldPosition.z, group.name).toBeLessThanOrEqual(platformBounds.max.z);
+    }
+
     world.dispose();
     propModels.dispose();
   });
@@ -740,14 +766,13 @@ describe('BoatWorld helpers', () => {
       inventory: inventory.snapshot(),
     }));
 
-    const foodOne = world.scene.getObjectByName('prop:cannedFood-1')!;
-    const foodTwo = world.scene.getObjectByName('prop:cannedFood-2')!;
-    const baitOne = world.scene.getObjectByName('prop:baitTin-1')!;
-    const baitTwo = world.scene.getObjectByName('prop:baitTin-2')!;
-    const bucket = world.scene.getObjectByName('prop:bucket-1')!;
+    const foodOne = world.scene.getObjectByName('boat-supply:cannedFood:copy-1')!;
+    const foodTwo = world.scene.getObjectByName('boat-supply:cannedFood:copy-2')!;
+    const baitOne = world.scene.getObjectByName('boat-supply:baitTin:copy-1')!;
+    const baitTwo = world.scene.getObjectByName('boat-supply:baitTin:copy-2')!;
+    const bucket = world.scene.getObjectByName('boat-supply:bucket:copy-1')!;
     const brokenMaterial = firstMesh(bucket).material as MeshStandardMaterial;
     expect([foodOne.visible, foodTwo.visible]).toEqual([true, false]);
-    expect([foodOne.userData.depleted, foodTwo.userData.depleted]).toEqual([false, false]);
     expect([baitOne.visible, baitTwo.visible]).toEqual([true, false]);
     expect(bucket.visible).toBe(true);
     inventory.repair('bucket-1');
@@ -758,8 +783,12 @@ describe('BoatWorld helpers', () => {
       recoveredBait: 1,
       inventory: inventory.snapshot(),
     }));
-    expect(foodTwo.visible).toBe(false);
-    expect(baitTwo.visible).toBe(false);
+    expect(foodTwo.visible).toBe(true);
+    expect([
+      baitOne.visible,
+      baitTwo.visible,
+      world.scene.getObjectByName('boat-supply:baitTin:copy-3')!.visible,
+    ]).toEqual([true, true, true]);
     expect(firstMesh(bucket).material).not.toBe(brokenMaterial);
     world.dispose();
     propModels.dispose();
@@ -779,8 +808,8 @@ describe('BoatWorld helpers', () => {
     inventory.break('bucket-1');
     world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
 
-    const first = world.scene.getObjectByName('prop:map-1')!;
-    const second = world.scene.getObjectByName('prop:bucket-1')!;
+    const first = world.scene.getObjectByName('boat-supply:map:copy-1')!;
+    const second = world.scene.getObjectByName('boat-supply:bucket:copy-1')!;
     const firstMaterial = firstMesh(first).material as MeshStandardMaterial;
     const secondMaterial = firstMesh(second).material as MeshStandardMaterial;
     const firstEmissive = firstMaterial.emissive.getHex();
@@ -812,9 +841,10 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
-    world.syncInventory(snapshot(savedItems));
-    const first = world.scene.getObjectByName('prop:cannedFood-1')!;
-    const second = world.scene.getObjectByName('prop:cannedFood-2')!;
+    world.syncInventory(snapshot(savedItems, { food: 2 }));
+    const group = world.scene.getObjectByName('boat-supply:cannedFood')!;
+    const first = world.scene.getObjectByName('boat-supply:cannedFood:copy-1')!;
+    const second = world.scene.getObjectByName('boat-supply:cannedFood:copy-2')!;
     const normalFirstColor = (firstMesh(first).material as MeshStandardMaterial).color.getHex();
     const normalSecondColor = (firstMesh(second).material as MeshStandardMaterial).color.getHex();
 
@@ -823,20 +853,20 @@ describe('BoatWorld helpers', () => {
     expect((firstMesh(second).material as MeshStandardMaterial).color.getHex()).not.toBe(normalSecondColor);
 
     world.setEventEligibleItems(new Set(['cannedFood-2']));
-    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).not.toBe(normalFirstColor);
+    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).toBe(normalFirstColor);
     expect((firstMesh(second).material as MeshStandardMaterial).color.getHex()).toBe(normalSecondColor);
+    const firstEmissive = (firstMesh(first).material as MeshStandardMaterial).emissive.getHex();
     world.setHighlightedItem('cannedFood-1');
-    expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).not.toBe(normalFirstColor);
+    expect((firstMesh(first).material as MeshStandardMaterial).emissive.getHex())
+      .not.toBe(firstEmissive);
 
-    const firstStart = first.position.clone();
-    const secondStart = second.position.clone();
+    const groupStart = group.position.clone();
     const use = world.playEventItemUse('cannedFood-2');
     world.update(.3, .3);
-    expect(first.position).toEqual(firstStart);
-    expect(second.position.y).toBeGreaterThan(secondStart.y);
+    expect(group.position.y).toBeGreaterThan(groupStart.y);
     world.update(1, 1);
     await use;
-    expect(second.position).toEqual(secondStart);
+    expect(group.position).toEqual(groupStart);
 
     world.setEventEligibleItems(null);
     expect((firstMesh(first).material as MeshStandardMaterial).color.getHex()).toBe(normalFirstColor);
@@ -854,7 +884,8 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
-    const prop = world.scene.getObjectByName('prop:bucket-1')!;
+    world.syncInventory(snapshot(savedItems));
+    const prop = world.scene.getObjectByName('boat-supply:bucket')!;
     const start = prop.position.clone();
     await world.playEventItemUse('bucket-2');
     const use = world.playEventItemUse('bucket-1');
@@ -877,6 +908,7 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
       savedItems,
     );
+    world.syncInventory(snapshot(savedItems));
 
     const anchors = world.projectInteractionAnchors(800, 600);
 
@@ -884,7 +916,12 @@ describe('BoatWorld helpers', () => {
     expect(anchors).toHaveLength(savedItems.length + 2);
     expect(anchors).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish' }),
-      expect.objectContaining({ id: 'flareGun-1', itemType: 'flareGun', toolId: null, action: null }),
+      expect.objectContaining({
+        id: 'supply:flareGun',
+        itemType: 'flareGun',
+        quantity: 1,
+        backingInstanceId: 'flareGun-1',
+      }),
       expect.objectContaining({ id: 'repair-tools', itemType: null, toolId: 'repairTools', action: 'repair' }),
     ]));
     expect(anchors.some(({ id }) => id === 'horizon' || id === 'rest')).toBe(false);
@@ -905,6 +942,40 @@ describe('BoatWorld helpers', () => {
     });
     expect(repair.hitArea!.width).toBeGreaterThanOrEqual(44);
     expect(repair.hitArea!.height).toBeGreaterThanOrEqual(44);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('publishes one food anchor with exact quantity and three visible copies', () => {
+    const savedItems = [
+      savedItem('cannedFood'),
+      savedItem('cannedFood', 2),
+      savedItem('cannedFood', 3),
+    ];
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems, { food: 5 }));
+
+    const food = world.projectInteractionAnchors(800, 600)
+      .filter(({ itemType }) => itemType === 'cannedFood');
+    expect(food).toHaveLength(1);
+    expect(food[0]).toMatchObject({
+      id: 'supply:cannedFood',
+      quantity: 5,
+      usableQuantity: 5,
+      brokenQuantity: 0,
+      backingInstanceId: 'cannedFood-1',
+    });
+    expect(world.scene.getObjectByName('boat-supply:cannedFood')?.children
+      .filter(({ visible }) => visible)).toHaveLength(3);
     world.dispose();
     propModels.dispose();
   });
@@ -942,7 +1013,8 @@ describe('BoatWorld helpers', () => {
 
     const pivot = world.scene.getObjectByName('fishing-rod-pivot')!;
     const rod = world.scene.getObjectByName('lifeboat-equipment:fishingRod')!;
-    expect(pivot.position.z).toBeLessThan(-2);
+    expect(pivot.position.x).toBeGreaterThan(1.2);
+    expect(pivot.position.z).toBeLessThan(-1.4);
     expect(rod.position.z).toBeLessThan(0);
     const tip = world.scene.getObjectByName('fishing-line-origin')!;
     expect(tip.getWorldPosition(new Vector3()).z)
@@ -966,14 +1038,19 @@ describe('BoatWorld helpers', () => {
     inventory.consumeInstance('energyBar-1');
     inventory.lose('map-1');
     world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(world.scene.getObjectByName('prop:bucket-1')?.visible).toBe(true);
-    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === 'bucket-1'))
-      .toMatchObject({ action: null, depleted: false });
-    expect(world.scene.getObjectByName('prop:energyBar-1')?.visible).toBe(false);
-    expect(world.scene.getObjectByName('prop:map-1')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('boat-supply:bucket')?.visible).toBe(true);
+    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === 'supply:bucket'))
+      .toMatchObject({
+        action: null,
+        quantity: 1,
+        usableQuantity: 0,
+        brokenQuantity: 1,
+      });
+    expect(world.scene.getObjectByName('boat-supply:energyBar')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('boat-supply:map')?.visible).toBe(false);
     inventory.repair('bucket-1');
     world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(world.scene.getObjectByName('prop:bucket-1')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('boat-supply:bucket')?.visible).toBe(true);
     world.dispose();
     propModels.dispose();
   });
@@ -1001,11 +1078,18 @@ describe('BoatWorld helpers', () => {
     const anchors = world.projectInteractionAnchors(800, 600);
 
     expect(anchors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ductTape-1', remainingUses: 1, depleted: false }),
-      expect.objectContaining({ id: 'baitTin-1', remainingUses: 1, depleted: false }),
-      expect.objectContaining({ id: 'baitTin-2', visible: false, depleted: false }),
-      expect.objectContaining({ id: 'flareGun-1', remainingUses: 1, depleted: false }),
-      expect.objectContaining({ id: 'flashlight-1', remainingUses: null, depleted: false }),
+      expect.objectContaining({
+        id: 'supply:ductTape', remainingUses: 1, quantity: 1,
+      }),
+      expect.objectContaining({
+        id: 'supply:baitTin', remainingUses: 1, quantity: 3,
+      }),
+      expect.objectContaining({
+        id: 'supply:flareGun', remainingUses: 1, backingInstanceId: 'flareGun-1',
+      }),
+      expect.objectContaining({
+        id: 'supply:flashlight', remainingUses: null, backingInstanceId: 'flashlight-1',
+      }),
     ]));
     world.dispose();
     propModels.dispose();

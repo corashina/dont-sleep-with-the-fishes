@@ -38,6 +38,7 @@ import { boatStorageTransform } from './BoatStorage';
 import { BoatDepositSmoke } from './BoatDepositSmoke';
 import { Environment } from './Environment';
 import { createLifeboat, type LifeboatBuild } from './Lifeboat';
+import { LifeboatAssets } from './LifeboatAssets';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
@@ -145,6 +146,7 @@ export class World {
     instances: readonly ItemInstance[] = createItemInstances(),
     random: () => number = Math.random,
     construction: WorldConstructionDependencies = {},
+    lifeboatAssets?: LifeboatAssets,
   ) {
     const rollback: (() => void)[] = [];
     this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy);
@@ -231,23 +233,33 @@ export class World {
         this.shipItemScales.set(instance.instanceId, transform.scale);
       });
 
-      const boatBuild = createLifeboat();
+      const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
+        new Texture(),
+        new Texture(),
+        new Texture(),
+      );
+      if (lifeboatAssets === undefined) {
+        for (const texture of [
+          resolvedLifeboatAssets.color,
+          resolvedLifeboatAssets.roughness,
+          resolvedLifeboatAssets.normal,
+        ]) {
+          this.ownedTextures.add(texture);
+          rollback.push(() => {
+            try {
+              texture.dispose();
+            } finally {
+              this.ownedTextures.delete(texture);
+            }
+          });
+        }
+      }
+      const boatBuild = createLifeboat(resolvedLifeboatAssets);
       this.lifeboat = boatBuild.root;
       this.lifeboat.position.copy(this.boatAnchor);
       this.boatStorage = boatBuild.storageRoot;
       this.lifeboatAcceptance = boatBuild.acceptanceBox;
       this.waterExclusion = boatBuild.waterExclusion;
-      boatBuild.textures.forEach((texture) => {
-        if (this.ownedTextures.has(texture)) return;
-        this.ownedTextures.add(texture);
-        rollback.push(() => {
-          try {
-            texture.dispose();
-          } finally {
-            this.ownedTextures.delete(texture);
-          }
-        });
-      });
       collectMeshResources(
         this.lifeboat,
         this.ownedGeometries,
