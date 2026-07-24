@@ -15,8 +15,9 @@ library, asset recipe, numeric token set, or shader prescription.
 
 ## Visual north star
 
-The intended identity combines **dark comedy** with **melancholic maritime
-isolation**. It should look composed and made by people: an illustrated,
+The intended identity combines a **darkly comic** sensibility—grounded in
+**dark comedy**—with **melancholic maritime isolation**. It should look
+composed and made by people: an illustrated,
 weathered sea world whose eccentric objects and theatrical moments remain
 believable enough to feel lonely when the horizon opens up.
 
