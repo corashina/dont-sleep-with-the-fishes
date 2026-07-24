@@ -802,7 +802,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   opacity: 0;
   transform: scaleY(0);
   transform-origin: center;
-  transition: opacity 650ms ease, transform 650ms ease-in;
+  transition: opacity 2500ms ease, transform 2500ms ease-in;
   pointer-events: none;
 }
 .sleep-cover.is-covered { opacity: 1; transform: scaleY(1); }

@@ -119,7 +119,7 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
   squall: 'SQUALL',
 };
 
-const SLEEP_TRANSITION_MS = 650;
+const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
 const REDUCED_TRANSITION_MS = 1;
@@ -154,7 +154,7 @@ export interface FishingResultView {
   readonly detail: string;
 }
 
-interface PendingFishingFade {
+interface PendingFade {
   readonly finish: () => void;
 }
 
@@ -252,7 +252,8 @@ export class SurvivalUI {
   private fishingReelIssued = false;
   private suppressFishingClick = false;
   private fishingAnnouncementVersion = 0;
-  private pendingFishingFade: PendingFishingFade | null = null;
+  private pendingFishingFade: PendingFade | null = null;
+  private pendingSleepTransition: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private eventSelectedInstanceId: ItemInstanceId | null = null;
@@ -556,9 +557,27 @@ export class SurvivalUI {
 
   setSleepCovered(covered: boolean): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
     const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_TRANSITION_MS;
-    return new Promise((resolve) => window.setTimeout(resolve, delay));
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        this.sleepCover.removeEventListener('transitionend', handleTransitionEnd);
+        if (this.pendingSleepTransition?.finish === finish) this.pendingSleepTransition = null;
+        resolve();
+      };
+      const handleTransitionEnd = (event: TransitionEvent): void => {
+        if (event.target === this.sleepCover && event.propertyName === 'opacity') finish();
+      };
+      this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
+      timer = window.setTimeout(finish, delay);
+      this.pendingSleepTransition = { finish };
+    });
   }
 
   setFishingState(state: FishingUiState): void {
@@ -743,6 +762,7 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.clearAnchorHighlight();
+    this.pendingSleepTransition?.finish();
     this.pendingFishingFade?.finish();
     this.fishingAnnouncementVersion += 1;
     if (this.fishingMode !== 'hidden') {
