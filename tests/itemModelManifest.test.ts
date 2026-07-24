@@ -18,6 +18,7 @@ const EXPECTED_MODEL_FILES = [
   'item-model-metadata.json',
 ].sort();
 const CC0_URL = 'https://creativecommons.org/publicdomain/zero/1.0/';
+const CC_BY_3_URL = 'https://creativecommons.org/licenses/by/3.0/';
 const THIRD_PARTY_SOURCES = {
   cannedFood: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can.glb', 'Kenney'],
   baitTin: ['https://kenney.nl/assets/food-kit', 'food-kit@2.0:Models/GLB format/can-small.glb', 'Kenney'],
@@ -29,7 +30,12 @@ const THIRD_PARTY_SOURCES = {
   bottledPaper: ['https://kenney.nl/assets/survival-kit', 'survival-kit@2.0:composite/bottledPaper', 'Kenney + project'],
   anchor: ['https://quaternius.com/packs/piratekit.html', 'quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj', 'Quaternius'],
   flashlight: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/flashlight', 'Kenney'],
-  fishingRod: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/fishingRod', 'Kenney'],
+  fishingRod: [
+    'https://poly.pizza/m/9gXWYDqB6vt',
+    'poly-pizza:b50b26a5-173d-4833-af8f-1f30f97d3e59',
+    'Justin Randall',
+    CC_BY_3_URL,
+  ],
   scubaSet: ['https://kenney.nl/assets/prototype-kit', 'prototype-kit@1.0:composite/scubaSet', 'Kenney'],
 } as const;
 const PROJECT_IDS = [
@@ -75,7 +81,7 @@ describe('item model manifest', () => {
     expect(LIFEBOAT_EQUIPMENT_IDS).toEqual(['fishingRod']);
     expect(Object.keys(LIFEBOAT_EQUIPMENT_MODEL_SPECS)).toEqual(['fishingRod']);
     expect(LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.url).toMatch(/fishingRod\.glb$/);
-    expect(LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.generatedMetadata.triangles).toBe(376);
+    expect(LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod.generatedMetadata.triangles).toBe(2_964);
   });
 
   it('authors a natural resting rotation for every runtime item', () => {
@@ -103,9 +109,9 @@ describe('item model manifest', () => {
   });
 
   it('distinguishes the exact third-party and project-authored provenance sets', () => {
-    for (const [id, [sourceUrl, sourceAssetId, creator]] of Object.entries(THIRD_PARTY_SOURCES)) {
+    for (const [id, [sourceUrl, sourceAssetId, creator, licenseUrl = CC0_URL]] of Object.entries(THIRD_PARTY_SOURCES)) {
       expect(runtimeModelSpec(id as RuntimeModelId).provenance).toEqual({
-        kind: 'thirdParty', sourceUrl, sourceAssetId, creator, licenseUrl: CC0_URL,
+        kind: 'thirdParty', sourceUrl, sourceAssetId, creator, licenseUrl,
       });
     }
     for (const id of PROJECT_IDS) {
@@ -131,7 +137,7 @@ describe('item model manifest', () => {
 
   it('embeds exactly one matching ledger row for each third-party model and none for project models', () => {
     const rows = runtimeLedgerRows();
-    for (const [id, [sourceUrl, sourceAssetId, creator]] of Object.entries(THIRD_PARTY_SOURCES)) {
+    for (const [id, [sourceUrl, sourceAssetId, creator, licenseUrl = CC0_URL]] of Object.entries(THIRD_PARTY_SOURCES)) {
       const matches = rows.filter((row) => row[0] === id);
       expect(matches).toHaveLength(1);
       const row = matches[0]!;
@@ -140,7 +146,7 @@ describe('item model manifest', () => {
       expect(row[3]).toBe(sourceUrl);
       expect(row[4]).toBe(`\`${sourceAssetId}\``);
       expect(row[2]!.slice(row[2]!.lastIndexOf(' / ') + 3)).toBe(creator);
-      expect(/^\[[^\]]+\]\(([^)]+)\)$/.exec(row[5]!)?.[1]).toBe(CC0_URL);
+      expect(/^\[[^\]]+\]\(([^)]+)\)$/.exec(row[5]!)?.[1]).toBe(licenseUrl);
     }
     for (const id of PROJECT_IDS) expect(rows.filter((row) => row[0] === id)).toHaveLength(0);
   });
@@ -148,13 +154,15 @@ describe('item model manifest', () => {
   it('contains no retired model or source identities', async () => {
     const sources = await Promise.all([
       'scripts/kenney-item-models.mjs',
+      'scripts/poly-pizza-fishing-rod.mjs',
       'scripts/fetch-item-models.ps1',
       'scripts/check-item-models.mjs',
       'src/world/itemModelManifest.ts',
       'THIRD_PARTY_ASSETS.md',
     ].map((path) => readFile(resolve(path), 'utf8')));
     const combined = sources.join('\n');
-    expect(combined).not.toMatch(/poly\.pizza|blaster-n|blaster-kit|waterJug/);
+    expect(combined).not.toMatch(/prototype-kit@1\.0:composite\/fishingRod|blaster-n|blaster-kit|waterJug/);
+    expect(combined).toMatch(/poly\.pizza\/m\/9gXWYDqB6vt/);
     expect(EXPECTED_MODEL_FILES.join('\n')).not.toMatch(/blaster-n|blaster-kit|waterJug/);
   });
 });

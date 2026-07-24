@@ -18,8 +18,10 @@ export type RuntimeModelProvenance<ModelId extends string = string> =
       readonly kind: 'thirdParty';
       readonly sourceUrl: string;
       readonly sourceAssetId: string;
-      readonly creator: 'Kenney' | 'Kenney + project' | 'Quaternius';
-      readonly licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/';
+      readonly creator: 'Kenney' | 'Kenney + project' | 'Quaternius' | 'Justin Randall';
+      readonly licenseUrl:
+        | 'https://creativecommons.org/publicdomain/zero/1.0/'
+        | 'https://creativecommons.org/licenses/by/3.0/';
     }
   | {
       readonly kind: 'project';

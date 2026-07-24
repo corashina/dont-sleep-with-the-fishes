@@ -6,6 +6,7 @@ import {
   BufferGeometry,
   Color,
   DirectionalLight,
+  DoubleSide,
   FogExp2,
   Group,
   Line,
@@ -14,12 +15,14 @@ import {
   MathUtils,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Plane,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
+  RingGeometry,
   Scene,
   SphereGeometry,
   Texture,
@@ -94,6 +97,11 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
 const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
+export const FISHING_PLAYER_SEAT = Object.freeze({
+  x: 0,
+  y: 1.38,
+  z: -1.42,
+});
 const INITIAL_BOAT_POSE: BoatPose = {
   y: 0,
   pitch: 0,
@@ -167,8 +175,9 @@ interface FishingVisuals {
   readonly bobber: Group;
   readonly splash: Group;
   readonly bubbles: Group;
-  readonly bubbleMaterials: readonly MeshStandardMaterial[];
+  readonly bubbleMaterials: readonly MeshBasicMaterial[];
   readonly ripples: Group;
+  readonly rippleMaterials: readonly MeshBasicMaterial[];
   readonly catchDisplay: Group;
 }
 
@@ -188,11 +197,20 @@ const FISHING_REDUCED_DURATION = Number.EPSILON;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
 const FISHING_CAST_MAX_X = 2.7;
-const FISHING_CAST_MIN_Z = -8.5;
+const FISHING_CAST_MIN_Z = -10.5;
 const FISHING_CAST_MAX_Z = -4.8;
 const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 });
 const FISHING_ROD_LEAN = MathUtils.degToRad(-22);
 const FISHING_TARGET_SIZE = 52;
+const FISHING_BUBBLE_OFFSETS = Object.freeze([
+  [-0.17, -0.03],
+  [0.11, -0.14],
+  [0.24, 0.06],
+  [-0.06, 0.19],
+  [-0.28, 0.14],
+  [0.04, 0.31],
+  [0.31, -0.18],
+] as const);
 
 function addOwnedFishingMesh(
   root: Group,
@@ -300,22 +318,24 @@ function createFishingVisuals(
 
   const bubbles = new Group();
   bubbles.name = 'fishing-bubbles';
-  const bubbleGeometry = new SphereGeometry(0.055, 6, 4);
+  const bubbleGeometry = new RingGeometry(0.043, 0.066, 18);
   geometries.add(bubbleGeometry);
-  const bubbleMaterials: MeshStandardMaterial[] = [];
-  for (let index = 0; index < 6; index += 1) {
-    const material = new MeshStandardMaterial({
-      color: 0xb7d9d6,
-      roughness: 0.3,
+  const bubbleMaterials: MeshBasicMaterial[] = [];
+  for (let index = 0; index < FISHING_BUBBLE_OFFSETS.length; index += 1) {
+    const material = new MeshBasicMaterial({
+      color: index % 2 === 0 ? 0xd9f4f1 : 0xbfe5e3,
       transparent: true,
-      opacity: 0.42,
-      flatShading: true,
+      opacity: 0,
+      depthWrite: false,
+      side: DoubleSide,
     });
     materials.add(material);
     bubbleMaterials.push(material);
     const bubble = new Mesh(bubbleGeometry, material);
-    bubble.castShadow = true;
-    bubble.receiveShadow = true;
+    bubble.name = `fishing-surface-bubble-${index}`;
+    bubble.rotation.x = -Math.PI / 2;
+    bubble.castShadow = false;
+    bubble.receiveShadow = false;
     bubbles.add(bubble);
   }
   bubbles.visible = false;
@@ -324,14 +344,15 @@ function createFishingVisuals(
   const ripples = new Group();
   ripples.name = 'fishing-ripples';
   const rippleGeometry = new TorusGeometry(0.24, 0.018, 5, 18);
-  const rippleMaterial = new MeshStandardMaterial({
-    color: 0xc5d9d3,
-    roughness: 0.48,
-    transparent: true,
-    opacity: 0.62,
-    flatShading: true,
-  });
-  for (let index = 0; index < 3; index += 1) {
+  const rippleMaterials: MeshBasicMaterial[] = [];
+  for (let index = 0; index < 2; index += 1) {
+    const rippleMaterial = new MeshBasicMaterial({
+      color: 0xcde8e4,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    rippleMaterials.push(rippleMaterial);
     const ripple = addOwnedFishingMesh(
       ripples,
       rippleGeometry,
@@ -339,9 +360,11 @@ function createFishingVisuals(
       geometries,
       materials,
     );
+    ripple.name = `fishing-bite-ripple-${index}`;
+    ripple.castShadow = false;
+    ripple.receiveShadow = false;
     ripple.rotation.x = Math.PI / 2;
     ripple.position.y = 0.025 + index * 0.008;
-    ripple.scale.setScalar(0.8 + index * 0.45);
   }
   ripples.visible = false;
   root.add(ripples);
@@ -361,6 +384,7 @@ function createFishingVisuals(
     bubbles,
     bubbleMaterials,
     ripples,
+    rippleMaterials,
     catchDisplay,
   };
 }
@@ -400,9 +424,14 @@ export class BoatWorld {
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
   private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.35);
-  private readonly bowCameraPosition = new Vector3(0, 1.38, -0.72);
-  private readonly bowCameraLookTarget = new Vector3(0, -0.45, -6.4);
-  private readonly bowCameraQuaternion = new Quaternion();
+  private readonly fishingCameraPosition = new Vector3(
+    FISHING_PLAYER_SEAT.x,
+    FISHING_PLAYER_SEAT.y,
+    FISHING_PLAYER_SEAT.z,
+  );
+  private readonly fishingCameraAngleOrigin = new Vector3(0, 1.38, -1.42);
+  private readonly fishingCameraLookTarget = new Vector3(0, -0.42, -7.4);
+  private readonly fishingCameraQuaternion = new Quaternion();
   private readonly fishingCameraStartPosition = new Vector3();
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
@@ -566,11 +595,11 @@ export class BoatWorld {
     this.baseCameraPosition.copy(camera.position);
     this.baseCameraQuaternion = camera.quaternion.clone();
     this.fishingMatrixScratch.lookAt(
-      this.bowCameraPosition,
-      this.bowCameraLookTarget,
+      this.fishingCameraAngleOrigin,
+      this.fishingCameraLookTarget,
       camera.up,
     );
-    this.bowCameraQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
+    this.fishingCameraQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
     this.baseRodPivotRotationX = this.rodPivot.rotation.x;
 
     this.fishingCatches = new FishingCatchLibrary();
@@ -1098,8 +1127,8 @@ export class BoatWorld {
 
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     if (this.fishingPhase === 'entering' || this.fishingPhase === 'returning') return;
-    this.camera.position.copy(this.bowCameraPosition);
-    this.camera.quaternion.copy(this.bowCameraQuaternion);
+    this.camera.position.copy(this.fishingCameraPosition);
+    this.camera.quaternion.copy(this.fishingCameraQuaternion);
     if (this.fishingPhase === 'ready') return;
 
     this.fishing.line.visible = true;
@@ -1121,16 +1150,16 @@ export class BoatWorld {
     switch (kind) {
       case 'enter':
         if (normalized === 1) {
-          this.camera.position.copy(this.bowCameraPosition);
-          this.camera.quaternion.copy(this.bowCameraQuaternion);
+          this.camera.position.copy(this.fishingCameraPosition);
+          this.camera.quaternion.copy(this.fishingCameraQuaternion);
         } else {
           this.camera.position.lerpVectors(
             this.fishingCameraStartPosition,
-            this.bowCameraPosition,
+            this.fishingCameraPosition,
             smootherStep(normalized),
           );
           this.camera.quaternion.copy(this.fishingCameraStartQuaternion)
-            .slerp(this.bowCameraQuaternion, smootherStep(normalized));
+            .slerp(this.fishingCameraQuaternion, smootherStep(normalized));
         }
         break;
       case 'return':
@@ -1275,41 +1304,40 @@ export class BoatWorld {
       for (let index = 0; index < bubbleCount; index += 1) {
         const bubble = this.fishing.bubbles.children[index]!;
         const material = this.fishing.bubbleMaterials[index]!;
-        const angle = index * Math.PI * 2 / bubbleCount;
-        const baseScale = 0.72 + (index % 3) * 0.18;
+        const offset = FISHING_BUBBLE_OFFSETS[index]!;
 
         if (this.reducedMotion.matches) {
-          const radius = 0.18 + (index % 2) * 0.04;
-          bubble.position.set(
-            Math.cos(angle) * radius,
-            0.04 + index * 0.02,
-            Math.sin(angle) * radius,
-          );
-          bubble.scale.setScalar(baseScale);
-          material.opacity = 0.3 + (index % 3) * 0.06;
+          bubble.position.set(offset[0], 0.022 + (index % 2) * 0.004, offset[1]);
+          bubble.scale.setScalar(0.9 + (index % 3) * 0.16);
+          material.opacity = 0.22 + (index % 2) * 0.05;
           continue;
         }
 
-        const cycle = (time * 0.55 + index / bubbleCount) % 1;
-        const fadeIn = Math.min(1, cycle / 0.18);
-        const fadeOut = Math.min(1, (1 - cycle) / 0.32);
-        const radius = 0.15 + cycle * 0.2;
+        const cycle = (time * 0.38 + index * 0.173) % 1;
+        const fadeIn = smootherStep(clamp(cycle / 0.18, 0, 1));
+        const fadeOut = 1 - smootherStep(clamp((cycle - 0.58) / 0.42, 0, 1));
+        const drift = time * 0.72 + index * 1.91;
         bubble.position.set(
-          Math.cos(angle) * radius,
-          0.025 + cycle * 0.34,
-          Math.sin(angle) * radius,
+          offset[0] + Math.sin(drift) * 0.012,
+          0.018 + cycle * 0.012,
+          offset[1] + Math.cos(drift * 0.83) * 0.012,
         );
-        bubble.scale.setScalar(baseScale * (0.78 + cycle * 0.34));
-        material.opacity = 0.72 * Math.min(fadeIn, fadeOut);
+        bubble.scale.setScalar((0.58 + cycle * 1.42) * (0.9 + (index % 3) * 0.08));
+        material.opacity = 0.46 * fadeIn * fadeOut;
       }
     }
-    const animateBiteEffects = !this.reducedMotion.matches;
     if (this.fishing.ripples.visible) {
       for (let index = 0; index < this.fishing.ripples.children.length; index += 1) {
         const ripple = this.fishing.ripples.children[index]!;
-        const scale = 0.75 + index * 0.45
-          + (animateBiteEffects ? (Math.sin(time * 2.8 + index) + 1) * 0.09 : 0.09);
-        ripple.scale.setScalar(scale);
+        const material = this.fishing.rippleMaterials[index]!;
+        if (this.reducedMotion.matches) {
+          ripple.scale.setScalar(0.9 + index * 0.52);
+          material.opacity = 0.13 - index * 0.025;
+          continue;
+        }
+        const cycle = (time * 0.24 + index * 0.5) % 1;
+        ripple.scale.setScalar(0.65 + cycle * 1.55);
+        material.opacity = Math.sin(Math.PI * cycle) * 0.24;
       }
     }
     if (this.fishing.splash.visible && this.activeFishingAnimation?.kind === 'cast') {

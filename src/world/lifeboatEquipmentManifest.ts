@@ -18,10 +18,10 @@ export const LIFEBOAT_EQUIPMENT_MODEL_SPECS: Readonly<
     },
     {
       kind: 'thirdParty',
-      sourceUrl: 'https://kenney.nl/assets/prototype-kit',
-      sourceAssetId: 'prototype-kit@1.0:composite/fishingRod',
-      creator: 'Kenney',
-      licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+      sourceUrl: 'https://poly.pizza/m/9gXWYDqB6vt',
+      sourceAssetId: 'poly-pizza:b50b26a5-173d-4833-af8f-1f30f97d3e59',
+      creator: 'Justin Randall',
+      licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
     },
   ),
 });

@@ -34,7 +34,6 @@ async function writeFixture(path: string, name: string): Promise<void> {
 
 const expectedTriangles = {
   ductTape: 192,
-  fishingRod: 376,
   baitTin: 154,
   medicalKit: 228,
   cannedFood: 156,
@@ -90,13 +89,6 @@ const expectedRecipes = {
     kind: 'direct', pack: 'prototype-kit', entry: 'Models/GLB format/shape-hollow-cylinder-detailed.glb',
     expectedTriangles: 192, scale: [1, 0.35, 1],
   },
-  fishingRod: {
-    kind: 'composite', expectedTriangles: 376, parts: [
-      { name: 'rod', pack: 'prototype-kit', entry: 'Models/GLB format/shape-cylinder-detailed.glb', translation: [0, 0, 0], scale: [0.018, 1.6, 0.018], color: [0.95, 0.25, 0.08, 1], rotation: [0, 0, 0, 1] },
-      { name: 'grip', pack: 'prototype-kit', entry: 'Models/GLB format/shape-cylinder-detailed.glb', translation: [0, -0.35, 0], scale: [0.04, 0.35, 0.04], color: [0.12, 0.12, 0.14, 1], rotation: [0, 0, 0, 1] },
-      { name: 'reel', pack: 'prototype-kit', entry: 'Models/GLB format/shape-hollow-cylinder-detailed.glb', translation: [0.05, -0.14, 0], scale: [0.08, 0.05, 0.08], color: [0.2, 0.24, 0.3, 1], rotation: [Math.SQRT1_2, 0, 0, Math.SQRT1_2] },
-    ],
-  },
   baitTin: {
     kind: 'direct', pack: 'food-kit', entry: 'Models/GLB format/can-small.glb',
     expectedTriangles: 154, scale: [1, 1, 1],
@@ -143,7 +135,7 @@ const expectedRecipes = {
 } as const;
 
 describe('Kenney item model catalog', () => {
-  it('pins three official CC0 packs and the exact nine deterministic recipes', () => {
+  it('pins three official CC0 packs and the exact eight deterministic recipes', () => {
     expect(Object.isFrozen(KENNEY_PACKS)).toBe(true);
     expect(Object.isFrozen(KENNEY_ITEM_RECIPES)).toBe(true);
     expect(KENNEY_PACKS).toEqual(expectedPacks);
@@ -168,7 +160,7 @@ describe('Kenney item model catalog', () => {
         expectedTriangles[id as keyof typeof expectedTriangles],
       );
     }
-    expect(Object.values(expectedTriangles).reduce((sum, value) => sum + value, 0)).toBe(2_390);
+    expect(Object.values(expectedTriangles).reduce((sum, value) => sum + value, 0)).toBe(2_014);
     expect(JSON.stringify({ packs: KENNEY_PACKS, recipes: KENNEY_ITEM_RECIPES }))
       .not.toMatch(/blaster-n|blaster-kit|waterJug/);
   });
