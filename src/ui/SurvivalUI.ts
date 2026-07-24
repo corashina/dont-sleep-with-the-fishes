@@ -143,9 +143,9 @@ function meterMarkup(meter: MeterDefinition): string {
     <div class="survival-meter survival-condition survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
       aria-label="${meter.label}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}">
       ${uiArtwork(METER_ARTWORK[meter.id], 'survival-condition__art')}
-      <span class="survival-meter__label">${meter.label}<span class="survival-meter__danger" data-meter-danger aria-hidden="true" hidden>${meter.dangerLabel}</span></span>
+      <span class="survival-meter__label ui-role-context">${meter.label}<span class="survival-meter__danger" data-meter-danger aria-hidden="true" hidden>${meter.dangerLabel}</span></span>
       <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
-      <span class="survival-meter__value" data-meter-value>0</span>
+      <span class="survival-meter__value ui-role-numeral" data-meter-value>0</span>
     </div>`;
 }
 
@@ -289,14 +289,14 @@ export class SurvivalUI {
         <div class="survival-top__status-row">
           <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
             ${uiArtwork('journal', 'journal-marker__art')}
-            <span class="journal-marker__unread" data-journal-unread hidden>NEW</span>
+            <span class="journal-marker__unread ui-role-context" data-journal-unread hidden>NEW</span>
           </button>
           <section class="survival-status" data-survival-status aria-label="Current survival day">
-            <strong data-day>DAY 1</strong>
-            <span class="survival-status__detail"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
+            <strong class="ui-role-numeral" data-day>DAY 1</strong>
+            <span class="survival-status__detail ui-role-context"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
           </section>
         </div>
-        <button type="button" class="end-day-button timber-action" data-action="endDay" aria-keyshortcuts="7">
+        <button type="button" class="end-day-button timber-action ui-role-context" data-action="endDay" aria-keyshortcuts="7">
           END DAY
         </button>
       </div>
@@ -312,61 +312,61 @@ export class SurvivalUI {
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
       <section class="survival-overlay fishing-result-overlay cinematic-overlay" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
         <div class="cinematic-overlay__content fishing-result-card">
-          <p class="eyebrow">FISHING RESULT</p>
-          <h2 id="fishing-result-title" data-fishing-result-title></h2>
-          <p class="fishing-result-detail" data-fishing-result-detail></p>
-          <button type="button" class="primary-action timber-action" data-fishing-result-continue>CONTINUE</button>
+          <p class="eyebrow ui-role-context">FISHING RESULT</p>
+          <h2 class="ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
+          <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
+          <button type="button" class="primary-action timber-action ui-role-context" data-fishing-result-continue>CONTINUE</button>
         </div>
       </section>
       <section class="survival-overlay repair-options-overlay cinematic-overlay" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
         <div class="cinematic-overlay__content">
-          <p class="eyebrow">DUCT TAPE</p>
-          <h2 data-repair-options-title tabindex="-1">Choose an item to repair</h2>
-          <p>One emergency repair restores one broken item.</p>
+          <p class="eyebrow ui-role-context">DUCT TAPE</p>
+          <h2 class="ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
+          <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
           <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="secondary-action timber-action" data-repair-cancel>CANCEL</button>
+          <button type="button" class="secondary-action timber-action ui-role-context" data-repair-cancel>CANCEL</button>
         </div>
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
-        <h2 data-event-title></h2>
+        <h2 class="ui-role-display" data-event-title></h2>
       </section>
-      <button type="button" class="event-endure timber-action" data-endure hidden>ENDURE</button>
+      <button type="button" class="event-endure timber-action ui-role-context" data-endure hidden>ENDURE</button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <div class="journal-book" data-journal-book>
           <div class="journal-book__cover" aria-hidden="true"></div>
           <div class="journal-book__rings" data-journal-rings aria-hidden="true"><i data-journal-ring></i><i data-journal-ring></i><i data-journal-ring></i></div>
           <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
           <article class="journal-page">
-            <p class="journal-page__weather" data-journal-weather></p>
-            <h2 data-journal-title tabindex="-1"></h2>
-            <div class="journal-page__story" data-journal-story>
+            <p class="journal-page__weather ui-role-context" data-journal-weather></p>
+            <h2 class="ui-role-display" data-journal-title tabindex="-1"></h2>
+            <div class="journal-page__story ui-role-narrative" data-journal-story>
               <section aria-labelledby="journal-day-label"><h3 id="journal-day-label">DAY</h3><p data-journal-day></p></section>
               <section aria-labelledby="journal-night-label"><h3 id="journal-night-label">NIGHT</h3><p data-journal-night></p></section>
             </div>
-            <nav class="journal-page__navigation" aria-label="Journal pages">
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
-              <span class="journal-page__folio" data-journal-page-count>PAGE 0 OF 0</span>
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next" data-journal-next aria-label="Next journal page">&rsaquo;</button>
+            <nav class="journal-page__navigation ui-role-context" aria-label="Journal pages">
+              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous ui-role-context" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
+              <span class="journal-page__folio ui-role-numeral" data-journal-page-count>PAGE 0 OF 0</span>
+              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next ui-role-context" data-journal-next aria-label="Next journal page">&rsaquo;</button>
             </nav>
-            <button type="button" class="journal-page__close-strip" data-journal-close>X  CLOSE JOURNAL</button>
+            <button type="button" class="journal-page__close-strip ui-role-context" data-journal-close>X  CLOSE JOURNAL</button>
           </article>
         </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <div class="cinematic-overlay__content">
-          <p class="eyebrow">PAUSED</p>
-          <h2>Hold Fast</h2>
-          <p>The sea will wait until you return.</p>
-          <button type="button" class="primary-action timber-action" data-resume>RESUME</button>
+          <p class="eyebrow ui-role-context">PAUSED</p>
+          <h2 class="ui-role-display">Hold Fast</h2>
+          <p class="ui-role-narrative">The sea will wait until you return.</p>
+          <button type="button" class="primary-action timber-action ui-role-context" data-resume>RESUME</button>
         </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
         <div class="cinematic-overlay__content">
-          <p class="eyebrow">JOURNEY ENDED</p>
-          <h2 data-ending-title tabindex="-1" role="alert"></h2>
-          <p data-ending-body></p>
-          <p class="ending-stats" data-ending-stats></p>
-          <button type="button" class="primary-action timber-action" data-restart>START FROM THE SHIP</button>
+          <p class="eyebrow ui-role-context">JOURNEY ENDED</p>
+          <h2 class="ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
+          <p class="ui-role-narrative" data-ending-body></p>
+          <p class="ending-stats ui-role-numeral" data-ending-stats></p>
+          <button type="button" class="primary-action timber-action ui-role-context" data-restart>START FROM THE SHIP</button>
         </div>
       </section>
     `;
@@ -840,12 +840,12 @@ export class SurvivalUI {
     button.className = 'boat-anchor';
     button.dataset.anchorId = anchor.id;
     const tooltip = document.createElement('span');
-    tooltip.className = 'boat-tooltip';
+    tooltip.className = 'boat-tooltip ui-role-context';
     tooltip.role = 'tooltip';
     const label = document.createTextNode('');
     const separator = document.createTextNode('');
     const energy = document.createElement('span');
-    energy.className = 'boat-tooltip__energy';
+    energy.className = 'boat-tooltip__energy ui-role-numeral';
     energy.setAttribute('aria-hidden', 'true');
     tooltip.append(label, separator, energy);
     button.append(tooltip);
@@ -1150,7 +1150,7 @@ export class SurvivalUI {
     this.repairTargets.replaceChildren(...targets.map((item) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'event-item repair-target';
+      button.className = 'event-item repair-target ui-role-context';
       button.dataset.repairTarget = item!.instanceId;
       button.textContent = `${ITEM_LABELS[item!.type]} — BROKEN`;
       button.setAttribute('aria-description', `Repair ${ITEM_LABELS[item!.type]} with Duct Tape.`);

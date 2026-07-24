@@ -98,6 +98,34 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
 }
 
 describe('SurvivalUI', () => {
+  it('assigns explicit roles across survival, projected context, journal, and pause', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    expect(mount.querySelector('[data-day]')?.classList)
+      .toContain('ui-role-numeral');
+    expect(mount.querySelector('[data-meter-value]')?.classList)
+      .toContain('ui-role-numeral');
+    expect(mount.querySelector('[data-meter] .survival-meter__label')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-anchor-id="repair-tools"] [role="tooltip"]')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-action="endDay"]')?.classList)
+      .toContain('ui-role-context');
+    expect(mount.querySelector('[data-journal] h2')?.classList)
+      .toContain('ui-role-display');
+    expect(mount.querySelector('.journal-page__story')?.classList)
+      .toContain('ui-role-narrative');
+    expect(mount.querySelector('.journal-page__folio')?.classList)
+      .toContain('ui-role-numeral');
+    expect(mount.querySelector('[data-pause] h2')?.classList)
+      .toContain('ui-role-display');
+    expect(mount.querySelector('[data-pause] p:not(.eyebrow)')?.classList)
+      .toContain('ui-role-narrative');
+
+    ui.dispose();
+  });
+
   it('keeps condition indicators unchanged and uses the approved survival perimeter layout', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
