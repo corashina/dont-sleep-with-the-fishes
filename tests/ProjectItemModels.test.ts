@@ -70,6 +70,26 @@ describe('project-authored item model builder', () => {
     expect(arcs.filter(({ role }) => role === 'orange-body')).toHaveLength(4);
   });
 
+  it('authors the harpoon gun as a modern speargun', () => {
+    const names = PROJECT_ITEM_RECIPES.harpoonGun.parts.map(({ name }) => name);
+    expect(names).toEqual(expect.arrayContaining([
+      'barrel', 'rail', 'grip', 'trigger', 'trigger-guard',
+      'spear-shaft', 'spear-head', 'rubber-band-left',
+      'rubber-band-right', 'line-spool', 'spool-line',
+    ]));
+    expect(names).not.toContain('stock');
+    expect(PROJECT_ITEM_RECIPES.harpoonGun.parts.filter(({ shape }) =>
+      shape === 'tubePath',
+    ).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('writes a detailed but bounded speargun GLB', async () => {
+    await buildProjectItemModels({ outputRoot });
+    const triangles = await countTriangles(join(outputRoot, 'harpoonGun.glb'), 'harpoonGun');
+    expect(triangles).toBeGreaterThanOrEqual(300);
+    expect(triangles).toBeLessThanOrEqual(1_500);
+  });
+
   it('writes self-contained bounded triangle GLBs', async () => {
     await buildProjectItemModels({ outputRoot });
     expect(await readdir(outputRoot)).toEqual(PROJECT_IDS.map((id) => `${id}.glb`).sort());
