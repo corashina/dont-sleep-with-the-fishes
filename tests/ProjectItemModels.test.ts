@@ -34,13 +34,36 @@ describe('project-authored item model builder', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('publishes the v2 nautical map and folded net recipes', () => {
+  it('publishes the v2 nautical map and an asymmetric gathered net bundle', () => {
     expect(PROJECT_ITEM_RECIPE_VERSION).toBe(2);
-    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.some(({ name }) => name === 'handle')).toBe(false);
-    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.some(({ shape }) => shape === 'tubePath')).toBe(true);
-    expect(PROJECT_ITEM_RECIPES.fishingNet.parts.every(({ color }) =>
+    const netParts = PROJECT_ITEM_RECIPES.fishingNet.parts;
+    const netPaths = netParts.filter(
+      (netPart): netPart is TubePathAuthoredPart => netPart.shape === 'tubePath',
+    );
+    expect(netParts.some(({ name }) => /handle|hoop|frame/i.test(name))).toBe(false);
+    expect(netParts.some(({ name }) => /^edge-(north|east|south|west)$/.test(name))).toBe(false);
+    expect(netParts.every(({ color }) =>
       color === undefined || color[0] < 0.25,
     )).toBe(true);
+
+    const foldCenters: number[] = [];
+    for (const layer of [1, 2, 3]) {
+      const layerPaths = netPaths.filter(({ name }) => name.startsWith(`fold-${layer}-`));
+      expect(layerPaths.filter(({ name }) => name.includes('-warp-')).length).toBeGreaterThanOrEqual(3);
+      expect(layerPaths.filter(({ name }) => name.includes('-weft-')).length).toBeGreaterThanOrEqual(3);
+      foldCenters.push(layerPaths
+        .flatMap(({ points }) => points)
+        .reduce((sum, point) => sum + point[0], 0)
+        / layerPaths.flatMap(({ points }) => points).length);
+    }
+    expect(new Set(foldCenters.map((center) => center.toFixed(2))).size).toBe(3);
+
+    const gatherPaths = netPaths.filter(({ name }) => name.startsWith('gather-'));
+    expect(gatherPaths).toHaveLength(2);
+    expect(gatherPaths.every(({ points }) => points.length >= 5)).toBe(true);
+    const looseCoil = netPaths.find(({ name }) => name === 'loose-edge-coil');
+    expect(looseCoil?.points.length).toBeGreaterThanOrEqual(8);
+    expect(looseCoil?.points.at(0)).not.toEqual(looseCoil?.points.at(-1));
 
     const mapNames = PROJECT_ITEM_RECIPES.map.parts.map(({ name }) => name);
     expect(mapNames).toEqual(expect.arrayContaining([
