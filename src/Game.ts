@@ -8,7 +8,6 @@ import {
 import type { GamePhase, PhaseContext } from './app/GamePhase';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
-import { createSceneRenderer } from './rendering/PostProcessingPipeline';
 import {
   DirectSceneRenderer,
   type SceneRenderer,
@@ -117,7 +116,7 @@ export class Game {
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
-      sceneRenderer = createSceneRenderer(renderer);
+      sceneRenderer = new DirectSceneRenderer(renderer);
       const camera = new PerspectiveCamera(
         GAME_CAMERA.fov,
         1,
