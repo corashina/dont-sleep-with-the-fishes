@@ -11,6 +11,7 @@ import {
   Line,
   LineBasicMaterial,
   Material,
+  MathUtils,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
@@ -214,9 +215,10 @@ const FISHING_REDUCED_DURATION = Number.EPSILON;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
 const FISHING_CAST_MAX_X = 2.7;
-const FISHING_CAST_MIN_Z = -7.4;
-const FISHING_CAST_MAX_Z = -3.7;
-const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -5.3 });
+const FISHING_CAST_MIN_Z = -8.5;
+const FISHING_CAST_MAX_Z = -4.8;
+const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 });
+const FISHING_ROD_LEAN = MathUtils.degToRad(22);
 const FISHING_TARGET_SIZE = 52;
 const EVENT_ITEM_USE_DURATION = .65;
 
@@ -234,6 +236,31 @@ function addOwnedFishingMesh(
   mesh.receiveShadow = true;
   root.add(mesh);
   return mesh;
+}
+
+function localBoundsOf(root: Object3D): Box3 {
+  root.updateWorldMatrix(true, true);
+  const inverseRoot = new Matrix4().copy(root.matrixWorld).invert();
+  const bounds = new Box3().makeEmpty();
+  const localMatrix = new Matrix4();
+  const point = new Vector3();
+
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry.computeBoundingBox();
+    const geometryBounds = object.geometry.boundingBox;
+    if (geometryBounds === null) return;
+    localMatrix.multiplyMatrices(inverseRoot, object.matrixWorld);
+    for (let corner = 0; corner < 8; corner += 1) {
+      point.set(
+        corner & 1 ? geometryBounds.max.x : geometryBounds.min.x,
+        corner & 2 ? geometryBounds.max.y : geometryBounds.min.y,
+        corner & 4 ? geometryBounds.max.z : geometryBounds.min.z,
+      ).applyMatrix4(localMatrix);
+      bounds.expandByPoint(point);
+    }
+  });
+  return bounds;
 }
 
 function createFishingVisuals(
@@ -456,8 +483,8 @@ export class BoatWorld {
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
   private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.35);
-  private readonly bowCameraPosition = new Vector3(0, 1.22, -1.62);
-  private readonly bowCameraLookTarget = new Vector3(0, -0.38, -5.65);
+  private readonly bowCameraPosition = new Vector3(0, 1.38, -0.72);
+  private readonly bowCameraLookTarget = new Vector3(0, -0.45, -6.4);
   private readonly bowCameraQuaternion = new Quaternion();
   private readonly fishingCameraStartPosition = new Vector3();
   private readonly fishingCameraStartQuaternion = new Quaternion();
@@ -583,12 +610,18 @@ export class BoatWorld {
     this.repairTools = repairTools;
 
     this.rodPivot.name = 'fishing-rod-pivot';
-    this.rodPivot.position.set(0.62, 0.56, -2.28);
+    this.rodPivot.position.set(0, 0.56, -2.28);
+    this.rodPivot.rotation.x = FISHING_ROD_LEAN;
     this.rod = propModels.createEquipment('fishingRod');
     this.rod.position.set(0, 0, -0.9);
     this.rod.rotation.x = -Math.PI / 2;
     this.fishingLineOrigin.name = 'fishing-line-origin';
-    this.fishingLineOrigin.position.set(0, 0.9, 0);
+    const rodBounds = localBoundsOf(this.rod);
+    this.fishingLineOrigin.position.set(
+      (rodBounds.min.x + rodBounds.max.x) / 2,
+      rodBounds.max.y,
+      (rodBounds.min.z + rodBounds.max.z) / 2,
+    );
     this.rod.add(this.fishingLineOrigin);
     this.rodPivot.add(this.rod);
     this.boat.add(this.rodPivot);
