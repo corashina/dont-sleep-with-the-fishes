@@ -22,6 +22,7 @@ interface ActionDefinition {
   label: string;
   shortcut: string;
   cost: string;
+  energyCost: number;
   effect: string;
   risk: 'safe' | 'uncertain' | 'dangerous';
 }
@@ -64,16 +65,23 @@ interface MeterDefinition {
 }
 
 const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', shortcut: '1', cost: '1 ENERGY', effect: 'Chance to gain food', risk: 'uncertain' },
-  { id: 'dive', label: 'DIVE', shortcut: '2', cost: '3 ENERGY', effect: 'May recover supplies; injury risk', risk: 'dangerous' },
-  { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', effect: 'HULL +25 (tape +15)', risk: 'safe' },
-  { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'REST', effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
-  { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', effect: 'Restore one broken item', risk: 'safe' },
-  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', effect: 'RESCUE +15', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', effect: 'ENERGY TO 3', risk: 'safe' },
+  { id: 'fish', label: 'FISH', shortcut: '1', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
+  { id: 'dive', label: 'DIVE', shortcut: '2', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
+  { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
+  { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
+  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
+  { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
+  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
+  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
 ];
+
+const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
+
+function spokenEnergyCost(cost: number): string | null {
+  if (cost <= 0) return null;
+  return `${ENERGY_WORDS[cost] ?? String(cost)} energy`;
+}
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
   const missingHull = Math.max(0, 100 - snapshot.hull);
@@ -158,6 +166,13 @@ interface PendingFade {
   readonly finish: () => void;
 }
 
+interface AnchorTooltipNodes {
+  readonly tooltip: HTMLElement;
+  readonly label: Text;
+  readonly separator: Text;
+  readonly energy: HTMLElement;
+}
+
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
@@ -187,7 +202,6 @@ export class SurvivalUI {
   private readonly eventTitle: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
-  private readonly fishingInstruction: HTMLElement;
   private readonly fishingLive: HTMLElement;
   private readonly fishingBiteTarget: HTMLButtonElement;
   private readonly fishingFade: HTMLElement;
@@ -217,6 +231,7 @@ export class SurvivalUI {
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
+  private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
   private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly actionReasons = new Map<DayActionId, string | null>();
@@ -289,12 +304,8 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert>
+      <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="fishing-reticle" data-fishing-reticle aria-hidden="true"></div>
-        <div class="fishing-instruction-panel">
-          <p class="fishing-instruction" data-fishing-instruction tabindex="-1"></p>
-          <p class="fishing-help">Click the water, or press Enter or Space.</p>
-        </div>
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
       </section>
@@ -376,7 +387,6 @@ export class SurvivalUI {
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
-    this.fishingInstruction = requireElement(this.root, '[data-fishing-instruction]');
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
     this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
     this.fishingFade = requireElement(this.root, '[data-fishing-fade]');
@@ -601,7 +611,6 @@ export class SurvivalUI {
     this.fishingLayer.dataset.mode = state.mode;
     if (messageChanged || modeChanged) {
       this.fishingMessage = state.message;
-      this.fishingInstruction.textContent = state.message;
       this.fishingLive.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
       if (state.mode === 'hidden') {
         this.fishingAnnouncementVersion += 1;
@@ -833,9 +842,16 @@ export class SurvivalUI {
     const tooltip = document.createElement('span');
     tooltip.className = 'boat-tooltip';
     tooltip.role = 'tooltip';
+    const label = document.createTextNode('');
+    const separator = document.createTextNode('');
+    const energy = document.createElement('span');
+    energy.className = 'boat-tooltip__energy';
+    energy.setAttribute('aria-hidden', 'true');
+    tooltip.append(label, separator, energy);
     button.append(tooltip);
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
+    this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
     return button;
   }
 
@@ -881,16 +897,26 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleText = anchor.itemType !== null
+    const visibleLabel = anchor.itemType !== null
       ? `${ITEM_LABELS[anchor.itemType]} ×${quantity}`
       : anchor.supplyGroupId === 'repairMaterial'
         ? `REPAIR MATERIAL ×${quantity}`
         : anchor.toolId === 'fishingRod'
-          ? 'Fishing rod ⚡'
+          ? 'Fishing rod'
           : anchor.toolId === 'repairTools'
-            ? 'REPAIR TOOLBOX ⚡⚡'
-            : text;
-    requireElement<HTMLElement>(button, '[role="tooltip"]').textContent = visibleText;
+            ? 'REPAIR TOOLBOX'
+            : itemLabel;
+    const energyCost = action?.energyCost ?? 0;
+    const energyIndicator = '⚡'.repeat(energyCost);
+    const tooltipNodes = this.anchorTooltipNodes.get(button);
+    if (tooltipNodes === undefined) throw new Error('Anchor tooltip nodes are missing');
+    if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
+    const separator = energyIndicator === '' ? '' : ' ';
+    if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
+    if (tooltipNodes.energy.textContent !== energyIndicator) {
+      tooltipNodes.energy.textContent = energyIndicator;
+    }
+    const spokenCost = spokenEnergyCost(energyCost);
     button.dataset.action = anchor.action ?? '';
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
@@ -900,7 +926,7 @@ export class SurvivalUI {
     else button.dataset.backingInstanceId = backingInstanceId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
-    button.setAttribute('aria-label', visibleText);
+    button.setAttribute('aria-label', spokenCost === null ? visibleLabel : `${visibleLabel}, ${spokenCost}`);
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
@@ -1102,7 +1128,7 @@ export class SurvivalUI {
     else if (layer === this.pauseLayer) this.resumeButton.focus();
     else if (layer === this.fishingLayer) {
       if (this.fishingMode === 'bite' && !this.fishingBiteTarget.hidden) this.fishingBiteTarget.focus();
-      else this.fishingInstruction.focus();
+      else this.fishingLayer.focus();
     }
   }
 
