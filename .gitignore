@@ -1,11 +1,12 @@
 node_modules/
 dist/
 coverage/
-.superpowers/
-.superpowers/sdd/
-docs/superpowers/
 .worktrees/
 *.log
+
+# Superpowers plugin-generated project artifacts
+/.superpowers/
+/docs/superpowers/
 
 # Local environment and tool state
 *.err
