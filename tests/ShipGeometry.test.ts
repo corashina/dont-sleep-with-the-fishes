@@ -1,4 +1,10 @@
-import { Box3, CylinderGeometry, Mesh, Vector3 } from 'three';
+import {
+  Box3,
+  CylinderGeometry,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three';
 import { describe, expect, it } from 'vitest';
 import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
@@ -11,6 +17,30 @@ import {
 import { createShipMaterials } from '../src/world/ShipMaterials';
 
 describe('freighter geometry', () => {
+  it('keeps every room roof free of image textures', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const roofs: Mesh[] = [];
+
+    build.root.traverse((object) => {
+      if (object instanceof Mesh && object.name.endsWith('-roof')) roofs.push(object);
+    });
+
+    expect(roofs).toHaveLength(3);
+    roofs.forEach((roof) => {
+      const material = roof.material;
+      expect(material, roof.name).toBeInstanceOf(MeshStandardMaterial);
+      const roofMaterial = material as MeshStandardMaterial;
+      expect(roofMaterial.map, roof.name).toBeNull();
+      expect(roofMaterial.roughnessMap, roof.name).toBeNull();
+      expect(roofMaterial.normalMap, roof.name).toBeNull();
+      expect(roofMaterial.bumpMap, roof.name).toBeNull();
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('uses unmapped painted steel for every storage-workroom exterior shell piece', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);

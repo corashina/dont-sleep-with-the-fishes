@@ -287,31 +287,18 @@ export function createShipMaterials(
     flatShading: true,
   });
   const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
-  const paintedSteel = assets
-    ? createAssetMaterial(
-      assets.steelColor,
-      assets.steelRoughness,
-      assets.steelNormal,
-      { color: 0xb8bec0, roughness: 0.88, metalness: 0.42, normalScale: 0.3 },
-    )
-    : createSurfaceMaterial(paintedPanelTextures, {
-      color: 0x8d9ba0,
-      roughness: 0.82,
-      metalness: 0.22,
-    });
-  const darkHull = assets
-    ? createAssetMaterial(
-      assets.steelColor,
-      assets.steelRoughness,
-      assets.steelNormal,
-      { color: 0x6d7477, roughness: 0.92, metalness: 0.5, normalScale: 0.24 },
-    )
-    : new MeshStandardMaterial({
-      color: 0x242e32,
-      roughness: 0.9,
-      metalness: 0.28,
-      flatShading: true,
-    });
+  const paintedSteel = new MeshStandardMaterial({
+    color: 0x8d9ba0,
+    roughness: 0.86,
+    metalness: 0.32,
+    flatShading: true,
+  });
+  const darkHull = new MeshStandardMaterial({
+    color: 0x242e32,
+    roughness: 0.9,
+    metalness: 0.28,
+    flatShading: true,
+  });
   const darkMetal = new MeshStandardMaterial({ color: 0x2f3435, roughness: 0.84, metalness: 0.55, flatShading: true });
   const exposedMetal = new MeshStandardMaterial({ color: 0x81796c, roughness: 0.68, metalness: 0.62, flatShading: true });
   const rust = new MeshStandardMaterial({ color: 0x7a3d28, roughness: 0.95, metalness: 0.08, flatShading: true });

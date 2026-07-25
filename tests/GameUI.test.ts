@@ -46,7 +46,7 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
-  it('composes the start screen into top copy and bottom evacuation action groups', () => {
+  it('centers a compact top stack and bottom evacuation action', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
     const start = mount.querySelector<HTMLElement>('[data-start]')!;
@@ -62,7 +62,10 @@ describe('GameUI', () => {
     expect(start.querySelector('.fine-print')).toBeNull();
     expect(start.textContent).not.toContain('Desktop keyboard and mouse required');
     expect(mainStyles).toMatch(/\.start-screen \[data-start-button\]\s*\{[^}]*min-width:\s*310px;[^}]*min-height:\s*74px;/s);
-    expect(mainStyles).toMatch(/\.poster-screen\.start-screen\s*\{[^}]*linear-gradient\(180deg,/s);
+    expect(mainStyles).toMatch(/\.poster-screen\.start-screen\s*\{[^}]*justify-items:\s*center;[^}]*linear-gradient\(180deg,[^}]*transparent 35% 82%[^}]*text-align:\s*center;/s);
+    expect(mainStyles).toMatch(/\.start-screen__top\s*\{[^}]*justify-items:\s*center;[^}]*gap:\s*8px;[^}]*width:\s*min\(720px,\s*84vw\);/s);
+    expect(mainStyles).toMatch(/\.start-screen__action\s*\{[^}]*justify-items:\s*center;[^}]*width:\s*100%;/s);
+    expect(mainStyles).toMatch(/\.start-screen \.controls\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
     ui.dispose();
   });
 
