@@ -6,9 +6,7 @@ $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
   'dont-sleep-ship-textures-' + [Guid]::NewGuid().ToString('N')
 )
 $downloadDirectory = Join-Path $temporaryRoot 'downloads'
-$metalDirectory = Join-Path $temporaryRoot 'metal'
 $stagingDirectory = Join-Path $temporaryRoot 'runtime'
-$metalArchive = Join-Path $downloadDirectory 'PaintedMetal007_1K-JPG.zip'
 $userAgent = 'dont-sleep-with-the-fishes/0.1 asset-pipeline'
 
 $woodSources = @(
@@ -32,10 +30,7 @@ $woodSources = @(
 $runtimeFiles = @(
   'deck-wood-color.webp',
   'deck-wood-normal.webp',
-  'deck-wood-roughness.webp',
-  'painted-steel-color.webp',
-  'painted-steel-normal.webp',
-  'painted-steel-roughness.webp'
+  'deck-wood-roughness.webp'
 )
 
 function Assert-ContainedPath {
@@ -53,19 +48,8 @@ function Assert-ContainedPath {
 try {
   New-Item -ItemType Directory -Force -Path (
     $downloadDirectory,
-    $metalDirectory,
     $stagingDirectory
   ) | Out-Null
-
-  Invoke-WebRequest `
-    -Uri 'https://ambientcg.com/get?file=PaintedMetal007_1K-JPG.zip' `
-    -OutFile $metalArchive `
-    -Headers @{ 'User-Agent' = $userAgent }
-  $metalArchiveHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $metalArchive).Hash
-  if ($metalArchiveHash -ne '1434C914DBBD7D88AFA8ACDA4977B6180CFA2281F0CBEC7900CA2EC49B22A35A') {
-    throw "SHA-256 mismatch for PaintedMetal007_1K-JPG.zip: $metalArchiveHash"
-  }
-  Expand-Archive -LiteralPath $metalArchive -DestinationPath $metalDirectory -Force
 
   foreach ($source in $woodSources) {
     $destination = Join-Path $downloadDirectory $source.Name
@@ -79,9 +63,6 @@ try {
   }
 
   & node (Join-Path $PSScriptRoot 'process-ship-textures.mjs') `
-    (Join-Path $metalDirectory 'PaintedMetal007_1K-JPG_Color.jpg') `
-    (Join-Path $metalDirectory 'PaintedMetal007_1K-JPG_Roughness.jpg') `
-    (Join-Path $metalDirectory 'PaintedMetal007_1K-JPG_NormalGL.jpg') `
     (Join-Path $downloadDirectory 'wood_floor_deck_diff_1k.jpg') `
     (Join-Path $downloadDirectory 'wood_floor_deck_rough_1k.jpg') `
     (Join-Path $downloadDirectory 'wood_floor_deck_nor_gl_1k.jpg') `

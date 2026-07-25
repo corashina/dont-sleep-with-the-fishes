@@ -66,9 +66,10 @@ function createCargoCrate(
   parent: Group,
   geometry: BoxGeometry,
   materials: ShipMaterials,
+  bodyMaterial: Material,
   size: readonly [number, number, number],
 ): void {
-  addBox(parent, geometry, materials.timber, 'crate-body', size, [0, size[1] / 2, 0]);
+  addBox(parent, geometry, bodyMaterial, 'crate-body', size, [0, size[1] / 2, 0]);
   ([-0.42, 0.42] as const).forEach((fraction, index) => {
     addBox(
       parent,
@@ -278,7 +279,16 @@ export function createShipFurniture(
     placementRoot.userData.furnitureId = placementSpec.id;
     placementRoot.userData.modelId = placementSpec.modelId;
     if (placementSpec.modelId === 'cargoCrate') {
-      createCargoCrate(placementRoot, geometry.box, materials, placementSpec.colliderSize);
+      const bodyMaterial = placementSpec.id === 'cargo-crate-aft-port'
+        ? materials.plainTimber
+        : materials.timber;
+      createCargoCrate(
+        placementRoot,
+        geometry.box,
+        materials,
+        bodyMaterial,
+        placementSpec.colliderSize,
+      );
     } else if (placementSpec.modelId === 'cargoRack') {
       createCargoRack(placementRoot, geometry.box, materials, placementSpec.colliderSize);
     } else {
