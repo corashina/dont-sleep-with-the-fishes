@@ -470,7 +470,7 @@ describe('freighter geometry', () => {
     materials.dispose();
   });
 
-  it('omits the paired deck artifacts and keeps the remaining weathering', () => {
+  it('keeps the lifeboat rail opening clear and marks its deck inset', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const meshNames: string[] = [];
@@ -482,7 +482,17 @@ describe('freighter geometry', () => {
     expect(meshNames.filter((name) => name.startsWith('rust-streak-deck-drain-')))
       .toEqual([]);
     expect(build.root.getObjectByName('rust-streak-lifeboat-rail-opening'))
-      .toBeInstanceOf(Mesh);
+      .toBeUndefined();
+    const emergencyBorder = build.root.getObjectByName('lifeboat-station-emergency-border');
+    expect(emergencyBorder).toBeInstanceOf(Mesh);
+    expect((emergencyBorder as Mesh).material).toBe(materials.emergencyStripe);
+    const station = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
+    const borderBounds = new Box3().setFromObject(emergencyBorder!);
+    expect(borderBounds.min.x).toBeCloseTo(station.bounds.minX + 0.1);
+    expect(borderBounds.max.x).toBeCloseTo(station.bounds.maxX - 0.1);
+    expect(borderBounds.min.z).toBeCloseTo(station.bounds.minZ + 0.1);
+    expect(borderBounds.max.z).toBeCloseTo(station.bounds.maxZ - 0.1);
+    expect(borderBounds.min.y).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + 0.008);
     expect(build.root.getObjectByName('rust-streak-port-stack-collar')).toBeInstanceOf(Mesh);
     expect(build.root.getObjectByName('rust-streak-starboard-stack-collar'))
       .toBeInstanceOf(Mesh);

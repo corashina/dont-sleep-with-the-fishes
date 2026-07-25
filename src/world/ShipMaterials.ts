@@ -22,6 +22,7 @@ export interface ShipMaterials {
   cargoFloor: MeshStandardMaterial;
   storageFloor: MeshStandardMaterial;
   lifeboatFloor: MeshStandardMaterial;
+  emergencyStripe: MeshStandardMaterial;
   paintedPanel: MeshStandardMaterial;
   paintedSteel: MeshStandardMaterial;
   darkHull: MeshStandardMaterial;
@@ -59,6 +60,10 @@ interface SurfaceTextureSet {
 }
 
 const TEXTURE_SIZE = 64;
+const EMERGENCY_STRIPE_COLORS = {
+  yellow: [196, 147, 35],
+  black: [24, 29, 29],
+} as const;
 const SURFACE_SPECS: Record<SurfaceKind, SurfaceSpec> = {
   warmWood: {
     color: [96, 66, 48],
@@ -198,6 +203,42 @@ function createSurfaceTextureSet(
   };
 }
 
+function createEmergencyStripeTexture(seed: number, anisotropy: number): DataTexture {
+  const bytes = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * 4);
+  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
+    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
+      const offset = (y * TEXTURE_SIZE + x) * 4;
+      const stripeColor = (x + y) % 32 < 16
+        ? EMERGENCY_STRIPE_COLORS.yellow
+        : EMERGENCY_STRIPE_COLORS.black;
+      const wear = centeredNoise(textureByte(seed, x, y, 12), 8);
+      const edgeScuff = (x + y) % 16 < 2 ? -12 : 0;
+      for (let channel = 0; channel < 3; channel += 1) {
+        bytes[offset + channel] = clampByte(stripeColor[channel]! + wear + edgeScuff);
+      }
+      bytes[offset + 3] = 255;
+    }
+  }
+  const texture = new DataTexture(
+    bytes,
+    TEXTURE_SIZE,
+    TEXTURE_SIZE,
+    RGBAFormat,
+    UnsignedByteType,
+  );
+  texture.name = 'emergencyStripe-color';
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.repeat.set(4, 6);
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = anisotropy;
+  texture.colorSpace = SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 function createSurfaceMaterial(
   textures: SurfaceTextureSet,
   options: { color?: number; roughness?: number; metalness?: number } = {},
@@ -246,6 +287,7 @@ export function createShipMaterials(
   const maritimeDeck = createSurfaceTextureSet(seed, 'maritimeDeck', anisotropy);
   const industrialFloor = createSurfaceTextureSet(seed, 'industrialFloor', anisotropy);
   const paintedPanelTextures = createSurfaceTextureSet(seed, 'paintedPanel', anisotropy);
+  const emergencyStripeTexture = createEmergencyStripeTexture(seed ^ 0xa54ff53a, anisotropy);
 
   const timber = (
     assets
@@ -271,7 +313,13 @@ export function createShipMaterials(
   const wheelhouseFloor = createFloorMaterial(0xebeae3);
   const cargoFloor = createFloorMaterial(0xd0d5d5);
   const storageFloor = createFloorMaterial(0xc8ccca, industrialFloor);
-  const lifeboatFloor = createFloorMaterial(0xd6d9d7);
+  const lifeboatFloor = createFloorMaterial(0xcbd1cf, industrialFloor);
+  const emergencyStripe = new MeshStandardMaterial({
+    color: 0xffffff,
+    map: emergencyStripeTexture,
+    roughness: 0.9,
+    metalness: 0.2,
+  });
   const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
   const paintedSteel = assets
     ? createAssetMaterial(
@@ -319,6 +367,7 @@ export function createShipMaterials(
     cargoFloor,
     storageFloor,
     lifeboatFloor,
+    emergencyStripe,
     paintedPanel,
     paintedSteel,
     darkHull,
@@ -344,6 +393,7 @@ export function createShipMaterials(
     paintedPanelTextures.color,
     paintedPanelTextures.roughness,
     paintedPanelTextures.bump,
+    emergencyStripeTexture,
   ] as const;
   let disposed = false;
 
@@ -354,6 +404,7 @@ export function createShipMaterials(
     cargoFloor,
     storageFloor,
     lifeboatFloor,
+    emergencyStripe,
     paintedPanel,
     paintedSteel,
     darkHull,

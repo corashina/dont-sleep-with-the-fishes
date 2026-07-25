@@ -276,6 +276,29 @@ function addFinishedFloors(
     rectangularFloorShape(lifeboat.minX, lifeboat.maxX, lifeboat.minZ, lifeboat.maxZ),
     materials.lifeboatFloor,
   );
+
+  const stripeOuterInset = 0.1;
+  const stripeWidth = 0.2;
+  const stripeShape = rectangularFloorShape(
+    lifeboat.minX + stripeOuterInset,
+    lifeboat.maxX - stripeOuterInset,
+    lifeboat.minZ + stripeOuterInset,
+    lifeboat.maxZ - stripeOuterInset,
+  );
+  stripeShape.holes.push(rectangularFloorHole(
+    lifeboat.minX + stripeOuterInset + stripeWidth,
+    lifeboat.maxX - stripeOuterInset - stripeWidth,
+    lifeboat.minZ + stripeOuterInset + stripeWidth,
+    lifeboat.maxZ - stripeOuterInset - stripeWidth,
+  ));
+  const stripe = addFloorSurface(
+    root,
+    geometries,
+    'lifeboat-station-emergency-border',
+    stripeShape,
+    materials.emergencyStripe,
+  );
+  stripe.position.y += 0.008;
 }
 
 function addRoundedPrism(
@@ -787,25 +810,6 @@ function addRails(
   addCurvedEndRail(root, geometries, shellColliders, arcColliders, materials, 'stern', minZ, layout);
 }
 
-function addWeathering(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  shellColliders: CollisionBox[],
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
-  addBlock(root, geometries, shellColliders, {
-    name: 'rust-streak-lifeboat-rail-opening',
-    size: [0.025, 0.68, 0.12],
-    position: [
-      layout.rail.innerFaceX + RAIL_COLLIDER_THICKNESS / 2 + RAIL_THICKNESS / 2,
-      FREIGHTER_DIMENSIONS.deckY + 0.34,
-      layout.rail.starboardOpening.centerZ,
-    ],
-    material: materials.rust,
-  });
-}
-
 export function createShipGeometry(
   materials: ShipMaterials,
   layout: ShipLayoutSpec = SHIP_LAYOUT,
@@ -850,7 +854,6 @@ export function createShipGeometry(
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
   addRails(root, geometries, shellColliders, arcColliders, materials, layout);
-  addWeathering(root, geometries, shellColliders, materials, layout);
 
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
   const beaconRoofY = FREIGHTER_DIMENSIONS.deckY + ROOM_WALL_HEIGHT + ROOM_ROOF_THICKNESS;
