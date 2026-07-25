@@ -1,9 +1,10 @@
-import { Group } from 'three';
-import { describe, expect, it } from 'vitest';
+import { Group, Material, Mesh } from 'three';
+import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import { createTestPropModels } from './helpers/propModels';
+import { createContactDepthLayer } from '../src/world/ContactDepthLayer';
 
 const foodItems = [
   { instanceId: 'cannedFood-1', type: 'cannedFood' },
@@ -40,6 +41,52 @@ function snapshot(
 }
 
 describe('BoatSupplyDisplay', () => {
+  it('keeps a stable platform footprint synchronized with visible supply quantity', async () => {
+    const library = createTestPropModels();
+    const contact = createContactDepthLayer();
+    const display = new BoatSupplyDisplay(library, new Group(), foodItems, false, contact);
+    const footprint = contact.root.getObjectByName('contact:supply:cannedFood') as Mesh;
+
+    expect(footprint).toBeInstanceOf(Mesh);
+    expect(footprint.visible).toBe(false);
+    display.sync(snapshot({
+      food: 2,
+      savedItems: foodItems,
+      inventory: {
+        'cannedFood-1': { ...foodItems[0], condition: 'usable' },
+        'cannedFood-2': { ...foodItems[1], condition: 'usable' },
+      },
+    }));
+    expect(footprint.visible).toBe(true);
+    const basePosition = footprint.position.clone();
+    const pending = display.playEventItemUse('cannedFood-1');
+    display.update(0.3);
+    expect(footprint.position).toEqual(basePosition);
+    display.update(1);
+    await pending;
+
+    display.sync(snapshot({ food: 0, savedItems: foodItems }));
+    expect(footprint.visible).toBe(false);
+    display.dispose();
+    contact.dispose();
+    library.dispose();
+  });
+
+  it('borrows the contact layer without disposing it', () => {
+    const library = createTestPropModels();
+    const contact = createContactDepthLayer();
+    const display = new BoatSupplyDisplay(library, new Group(), foodItems, false, contact);
+    const footprint = contact.root.getObjectByName('contact:supply:cannedFood') as Mesh;
+    const materialDispose = vi.spyOn(footprint.material as Material, 'dispose');
+
+    display.dispose();
+    expect(materialDispose).not.toHaveBeenCalled();
+    contact.dispose();
+    contact.dispose();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    library.dispose();
+  });
+
   it.each([
     [0, 0],
     [1, 1],
