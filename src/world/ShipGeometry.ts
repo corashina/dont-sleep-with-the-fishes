@@ -13,6 +13,7 @@ import {
 } from 'three';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
+import type { ContactDepthLayer } from './ContactDepthLayer';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
 import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
@@ -501,6 +502,101 @@ function addRoomRoofs(
   });
 }
 
+function addFocalSuperstructureDetails(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+  contactDepth?: ContactDepthLayer,
+): void {
+  const deckY = FREIGHTER_DIMENSIONS.deckY;
+  const roofTopY = deckY + ROOM_WALL_HEIGHT + ROOM_ROOF_THICKNESS;
+  const crew = requiredZone(layout, 'crewCabin').bounds;
+  const crewLength = crew.maxZ - crew.minZ + ROOM_ROOF_OVERHANG * 2;
+  const crewCenterZ = (crew.minZ + crew.maxZ) / 2;
+  ([
+    ['port', crew.minX - ROOM_ROOF_OVERHANG + 0.05],
+    ['starboard', crew.maxX + ROOM_ROOF_OVERHANG - 0.05],
+  ] as const).forEach(([side, x]) => {
+    addBlock(root, geometries, [], {
+      name: `crew-cabin-roof-fascia-${side}`,
+      size: [0.1, 0.24, crewLength],
+      position: [x, roofTopY - 0.12, crewCenterZ],
+      material: materials.darkMetal,
+    });
+  });
+
+  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
+  const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
+  addBlock(root, geometries, [], {
+    name: 'wheelhouse-front-sill-band',
+    size: [wheelhouseWidth - 0.3, 0.09, 0.1],
+    position: [
+      (wheelhouse.minX + wheelhouse.maxX) / 2,
+      deckY + WINDOW_SILL_HEIGHT + 0.045,
+      wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.035,
+    ],
+    material: materials.darkMetal,
+  });
+  ([
+    ['port', wheelhouse.minX + 0.2],
+    ['starboard', wheelhouse.maxX - 0.2],
+  ] as const).forEach(([side, x]) => {
+    addBlock(root, geometries, [], {
+      name: `wheelhouse-header-bracket-${side}`,
+      size: [0.24, 0.4, 0.16],
+      position: [
+        x,
+        deckY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT - 0.12,
+        wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.06,
+      ],
+      material: materials.darkMetal,
+    });
+  });
+  for (let index = 0; index < 5; index += 1) {
+    addBlock(root, geometries, [], {
+      name: `wheelhouse-front-fastener-${index + 1}`,
+      size: [0.055, 0.055, 0.035],
+      position: [
+        wheelhouse.minX + 0.35 + (wheelhouseWidth - 0.7) * (index / 4),
+        deckY + WINDOW_SILL_HEIGHT + 0.12,
+        wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.09,
+      ],
+      material: materials.exposedMetal,
+    });
+  }
+  const repairPlate = addBlock(root, geometries, [], {
+    name: 'wheelhouse-repair-plate-port-aft',
+    size: [0.035, 0.68, 0.54],
+    position: [
+      wheelhouse.minX - WALL_THICKNESS / 2 - 0.02,
+      deckY + 1.25,
+      wheelhouse.minZ + 0.72,
+    ],
+    material: materials.rust,
+  });
+  repairPlate.rotation.z = -0.045;
+
+  contactDepth?.addSeam({
+    name: 'contact:crew-cabin-deck-seam',
+    position: [
+      (crew.minX + crew.maxX) / 2,
+      deckY + 0.018,
+      crew.minZ + WALL_THICKNESS / 2 + 0.02,
+    ],
+    scale: [crew.maxX - crew.minX - 0.45, 0.025, 0.055],
+  });
+  contactDepth?.addSeam({
+    name: 'contact:wheelhouse-fascia-overlap',
+    position: [
+      (wheelhouse.minX + wheelhouse.maxX) / 2,
+      roofTopY - ROOM_ROOF_THICKNESS - 0.015,
+      wheelhouse.maxZ + ROOM_ROOF_OVERHANG - 0.025,
+    ],
+    scale: [wheelhouseWidth - 0.3, 0.03, 0.05],
+  });
+}
+
 function addCylinder(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -713,6 +809,7 @@ function addWeathering(
 export function createShipGeometry(
   materials: ShipMaterials,
   layout: ShipLayoutSpec = SHIP_LAYOUT,
+  contactDepth?: ContactDepthLayer,
 ): ShipGeometryBuild {
   const root = new Group();
   root.name = 'coastal-freighter';
@@ -749,6 +846,7 @@ export function createShipGeometry(
   addWallSegments(root, geometries, shellColliders, materials, layout);
   addRoomCornerCaps(root, geometries, shellColliders, materials, layout);
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
+  addFocalSuperstructureDetails(root, geometries, materials, layout, contactDepth);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
   addRails(root, geometries, shellColliders, arcColliders, materials, layout);

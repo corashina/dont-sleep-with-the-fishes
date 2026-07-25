@@ -9,6 +9,7 @@ import {
   Vector3,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
+import type { ContactDepthLayer } from './ContactDepthLayer';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import {
   SHIP_LAYOUT,
@@ -116,6 +117,92 @@ function createCargoRack(
   }));
 }
 
+function addFocalFurnitureConstruction(
+  placementSpec: ShipFurniturePlacementSpec,
+  placementRoot: Group,
+  geometry: BoxGeometry,
+  materials: ShipMaterials,
+  contactDepth?: ContactDepthLayer,
+): void {
+  const [width, height, depth] = placementSpec.colliderSize;
+  if (placementSpec.id === 'cabin-desk-aft') {
+    addBox(
+      placementRoot,
+      geometry,
+      materials.darkMetal,
+      'construction:desk-edge-band',
+      [width * 0.9, 0.08, 0.07],
+      [0, height - 0.12, depth / 2 + 0.035],
+    );
+    ([
+      ['port', -1],
+      ['starboard', 1],
+    ] as const).forEach(([side, sign]) => {
+      addBox(
+        placementRoot,
+        geometry,
+        materials.darkMetal,
+        `construction:desk-floor-cleat-${side}`,
+        [0.13, 0.09, depth * 0.72],
+        [sign * (width / 2 - 0.16), 0.045, 0],
+      );
+      addBox(
+        placementRoot,
+        geometry,
+        materials.exposedMetal,
+        `construction:desk-bracket-${side}`,
+        [0.1, 0.3, 0.06],
+        [sign * (width / 2 - 0.12), height * 0.55, depth / 2 + 0.03],
+      );
+    });
+  } else if (placementSpec.id === 'cabin-bookcase-forward') {
+    ([
+      ['port', -1],
+      ['starboard', 1],
+    ] as const).forEach(([side, sign]) => addBox(
+      placementRoot,
+      geometry,
+      materials.exposedMetal,
+      `construction:bookcase-hinge-${side}`,
+      [0.08, 0.34, 0.055],
+      [sign * (width / 2 - 0.08), height * 0.54, depth / 2 + 0.03],
+    ));
+    addBox(
+      placementRoot,
+      geometry,
+      materials.darkMetal,
+      'construction:bookcase-wall-bracket',
+      [width * 0.55, 0.09, 0.1],
+      [0.06, height - 0.08, -depth / 2 - 0.03],
+    );
+    addBox(
+      placementRoot,
+      geometry,
+      materials.darkMetal,
+      'construction:bookcase-back-seam',
+      [0.055, height * 0.72, 0.045],
+      [-width * 0.18, height * 0.48, -depth / 2 - 0.025],
+    );
+  } else {
+    return;
+  }
+
+  contactDepth?.addFootprint({
+    name: `contact:${placementSpec.id}`,
+    position: [
+      placementSpec.position[0],
+      placementSpec.position[1] + 0.012,
+      placementSpec.position[2],
+    ],
+    scale: [
+      width * placementSpec.scale[0] * 0.9,
+      1,
+      depth * placementSpec.scale[2] * 0.86,
+    ],
+    rotation: [0, placementSpec.rotationY, 0],
+  });
+}
+
 function worldCollider(placementSpec: ShipFurniturePlacementSpec): ShipFurnitureCollider {
   const quarterTurn = Math.abs(Math.sin(placementSpec.rotationY)) > 0.5;
   const width = (quarterTurn ? placementSpec.colliderSize[2] : placementSpec.colliderSize[0])
@@ -173,6 +260,7 @@ export function createShipFurniture(
   materials: ShipMaterials,
   library: ShipFurnitureLibrary,
   layout: ShipLayoutSpec = SHIP_LAYOUT,
+  contactDepth?: ContactDepthLayer,
 ): ShipFurnitureBuild {
   const root = new Group();
   root.name = 'ship-furniture';
@@ -196,6 +284,13 @@ export function createShipFurniture(
     } else {
       placementRoot.add(library.clone(placementSpec.modelId));
     }
+    addFocalFurnitureConstruction(
+      placementSpec,
+      placementRoot,
+      geometry.box,
+      materials,
+      contactDepth,
+    );
     root.add(placementRoot);
     const collider = worldCollider(placementSpec);
     colliders.push(collider);
