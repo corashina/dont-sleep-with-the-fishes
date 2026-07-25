@@ -24,6 +24,7 @@ import {
   type BoatSupplyGroupId,
 } from '../world/BoatSupplyLayout';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
+import type { ContactDepthLayer } from '../world/ContactDepthLayer';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -200,6 +201,7 @@ export class BoatSupplyDisplay {
   private readonly ownedMaterials = new Set<Material>();
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
+  private readonly contactFootprintById = new Map<BoatSupplyGroupId, Mesh>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -212,6 +214,7 @@ export class BoatSupplyDisplay {
     parent: Group,
     savedItems: readonly ItemInstance[],
     private readonly reducedMotion = false,
+    contactDepth?: ContactDepthLayer,
   ) {
     const sortedItems = [...savedItems].sort(
       (first, second) => first.instanceId.localeCompare(second.instanceId),
@@ -232,6 +235,23 @@ export class BoatSupplyDisplay {
       parent.add(root);
       this.basePositionById.set(groupId, root.position.clone());
       this.baseQuaternionById.set(groupId, root.quaternion.clone());
+      if (contactDepth) {
+        const longGroup = groupId === 'fishingNet'
+          || groupId === 'harpoonGun'
+          || groupId === 'anchor'
+          || groupId === 'umbrella'
+          || groupId === 'scubaSet';
+        const footprint = contactDepth.addFootprint({
+          name: `contact:supply:${groupId}`,
+          position: [transform.position.x, -0.282, transform.position.z],
+          scale: groupId === 'repairMaterial'
+            ? [0.48, 1, 0.34]
+            : longGroup ? [0.44, 1, 0.28] : [0.32, 1, 0.24],
+          rotation: [0, transform.rotation.y, 0],
+        });
+        footprint.visible = false;
+        this.contactFootprintById.set(groupId, footprint);
+      }
 
       const poolSize = groupId === 'repairMaterial'
         || groupId === 'cannedFood'
@@ -419,6 +439,8 @@ export class BoatSupplyDisplay {
       brokenItems.map(({ instance }) => instance.instanceId),
     );
     record.root.visible = record.visibleCopies > 0;
+    const contactFootprint = this.contactFootprintById.get(groupId);
+    if (contactFootprint) contactFootprint.visible = record.visibleCopies > 0;
 
     const offsets = record.visibleCopies === 0
       ? []

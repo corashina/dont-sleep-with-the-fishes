@@ -50,6 +50,10 @@ import {
 } from '../ocean/WaveField';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
+import {
+  createContactDepthLayer,
+  type ContactDepthLayer,
+} from '../world/ContactDepthLayer';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatSupplyLayout';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -398,6 +402,7 @@ export class BoatWorld {
   private readonly motionRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
+  private readonly contactDepth: ContactDepthLayer;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
   private readonly distantVessel = new Group();
@@ -530,6 +535,8 @@ export class BoatWorld {
     this.boat = build.root;
     this.waterExclusion = build.waterExclusion;
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+    this.contactDepth = createContactDepthLayer();
+    this.boat.add(this.contactDepth.root);
 
     const platform = new Group();
     platform.name = 'survival-supply-platform';
@@ -550,6 +557,23 @@ export class BoatWorld {
       rail.position.set(x, -0.27, -1.05);
       platform.add(rail);
     }
+    this.contactDepth.addSeam({
+      name: 'contact:platform-rail-port',
+      position: [-1.22, -0.283, -1.05],
+      scale: [0.12, 0.018, 3.24],
+    });
+    this.contactDepth.addSeam({
+      name: 'contact:platform-rail-starboard',
+      position: [1.22, -0.283, -1.05],
+      scale: [0.12, 0.018, 3.24],
+    });
+    ([-0.675, -0.135, 0.405, 0.945] as const).forEach((x, index) => {
+      this.contactDepth.addSeam({
+        name: `contact:platform-slat-joint-${index + 1}`,
+        position: [x, -0.284, -1.05],
+        scale: [0.024, 0.014, 3.08],
+      });
+    });
     this.boat.add(platform);
     collectMeshResources(platform, this.ownedGeometries, this.ownedMaterials);
 
@@ -558,6 +582,7 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
       reducedMotion.matches,
+      this.contactDepth,
     );
 
     const repairTools = createRepairToolbox();
@@ -1029,6 +1054,7 @@ export class BoatWorld {
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
+      () => this.contactDepth.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),

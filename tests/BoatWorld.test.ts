@@ -766,6 +766,37 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('owns selective platform and supply contact depth exactly once', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('cannedFood')],
+    );
+    const contactRoot = world.scene.getObjectByName('contact-depth-layer') as Group;
+    const footprint = contactRoot?.getObjectByName('contact:supply:cannedFood') as Mesh;
+    const seam = contactRoot?.getObjectByName('contact:platform-rail-port') as Mesh;
+
+    expect(contactRoot).toBeInstanceOf(Group);
+    expect(footprint).toBeInstanceOf(Mesh);
+    expect(seam).toBeInstanceOf(Mesh);
+    expect(contactRoot.getObjectByName('contact:platform-rail-starboard')).toBeInstanceOf(Mesh);
+    expect(contactRoot.getObjectByName('contact:platform-slat-joint-3')).toBeInstanceOf(Mesh);
+
+    const footprintDispose = vi.spyOn(footprint.geometry, 'dispose');
+    const seamDispose = vi.spyOn(seam.geometry, 'dispose');
+    const materialDispose = vi.spyOn(footprint.material as Material, 'dispose');
+    world.dispose();
+    world.dispose();
+
+    expect(footprintDispose).toHaveBeenCalledOnce();
+    expect(seamDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
   it('synchronizes exact per-instance conditions without loose gains refilling props', () => {
     const savedItems = [
       savedItem('cannedFood'),
