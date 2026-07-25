@@ -11,9 +11,12 @@ import {
   SRGBColorSpace,
   Texture,
   UnsignedByteType,
+  Vector2,
 } from 'three';
+import type { ShipAssets } from './ShipAssets';
 
 export interface ShipMaterials {
+  timber: MeshStandardMaterial;
   crewFloor: MeshStandardMaterial;
   wheelhouseFloor: MeshStandardMaterial;
   cargoFloor: MeshStandardMaterial;
@@ -210,21 +213,91 @@ function createSurfaceMaterial(
   });
 }
 
-export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMaterials {
+function createAssetMaterial(
+  colorMap: Texture,
+  roughnessMap: Texture,
+  normalMap: Texture,
+  options: {
+    color?: number;
+    roughness?: number;
+    metalness?: number;
+    normalScale?: number;
+  } = {},
+): MeshStandardMaterial {
+  const normalScale = options.normalScale ?? 0.35;
+  return new MeshStandardMaterial({
+    color: options.color ?? 0xffffff,
+    map: colorMap,
+    roughness: options.roughness ?? 1,
+    roughnessMap,
+    normalMap,
+    normalScale: new Vector2(normalScale, normalScale),
+    metalness: options.metalness ?? 0,
+  });
+}
+
+export function createShipMaterials(
+  seed = 0x51f15e,
+  maxAnisotropy = 1,
+  assets?: ShipAssets,
+): ShipMaterials {
   const anisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   const warmWood = createSurfaceTextureSet(seed, 'warmWood', anisotropy);
   const maritimeDeck = createSurfaceTextureSet(seed, 'maritimeDeck', anisotropy);
   const industrialFloor = createSurfaceTextureSet(seed, 'industrialFloor', anisotropy);
   const paintedPanelTextures = createSurfaceTextureSet(seed, 'paintedPanel', anisotropy);
 
-  const crewFloor = createSurfaceMaterial(warmWood);
-  const wheelhouseFloor = createSurfaceMaterial(warmWood, { color: 0xe8ddd0 });
-  const cargoFloor = createSurfaceMaterial(maritimeDeck);
-  const storageFloor = createSurfaceMaterial(industrialFloor);
-  const lifeboatFloor = createSurfaceMaterial(maritimeDeck, { color: 0xd4d9d7 });
+  const timber = (
+    assets
+      ? createAssetMaterial(
+        assets.woodColor,
+        assets.woodRoughness,
+        assets.woodNormal,
+        { roughness: 0.96, normalScale: 0.42 },
+      )
+      : createSurfaceMaterial(warmWood)
+  );
+  const createFloorMaterial = (
+    color: number,
+    fallbackTextures: SurfaceTextureSet = maritimeDeck,
+  ): MeshStandardMaterial => (
+    createSurfaceMaterial(fallbackTextures, {
+      color,
+      roughness: 0.9,
+      metalness: 0.36,
+    })
+  );
+  const crewFloor = createFloorMaterial(0xe2e3df);
+  const wheelhouseFloor = createFloorMaterial(0xebeae3);
+  const cargoFloor = createFloorMaterial(0xd0d5d5);
+  const storageFloor = createFloorMaterial(0xc8ccca, industrialFloor);
+  const lifeboatFloor = createFloorMaterial(0xd6d9d7);
   const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
-  const paintedSteel = createSurfaceMaterial(paintedPanelTextures, { color: 0x8d9ba0, roughness: 0.82, metalness: 0.22 });
-  const darkHull = new MeshStandardMaterial({ color: 0x242e32, roughness: 0.9, metalness: 0.28, flatShading: true });
+  const paintedSteel = assets
+    ? createAssetMaterial(
+      assets.steelColor,
+      assets.steelRoughness,
+      assets.steelNormal,
+      { color: 0xb8bec0, roughness: 0.88, metalness: 0.42, normalScale: 0.3 },
+    )
+    : createSurfaceMaterial(paintedPanelTextures, {
+      color: 0x8d9ba0,
+      roughness: 0.82,
+      metalness: 0.22,
+    });
+  const darkHull = assets
+    ? createAssetMaterial(
+      assets.steelColor,
+      assets.steelRoughness,
+      assets.steelNormal,
+      { color: 0x6d7477, roughness: 0.92, metalness: 0.5, normalScale: 0.24 },
+    )
+    : new MeshStandardMaterial({
+      color: 0x242e32,
+      roughness: 0.9,
+      metalness: 0.28,
+      flatShading: true,
+    });
   const darkMetal = new MeshStandardMaterial({ color: 0x2f3435, roughness: 0.84, metalness: 0.55, flatShading: true });
   const exposedMetal = new MeshStandardMaterial({ color: 0x81796c, roughness: 0.68, metalness: 0.62, flatShading: true });
   const rust = new MeshStandardMaterial({ color: 0x7a3d28, roughness: 0.95, metalness: 0.08, flatShading: true });
@@ -240,6 +313,7 @@ export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMat
   });
 
   const ownedMaterials = new Set<Material>([
+    timber,
     crewFloor,
     wheelhouseFloor,
     cargoFloor,
@@ -274,6 +348,7 @@ export function createShipMaterials(seed = 0x51f15e, maxAnisotropy = 1): ShipMat
   let disposed = false;
 
   return {
+    timber,
     crewFloor,
     wheelhouseFloor,
     cargoFloor,

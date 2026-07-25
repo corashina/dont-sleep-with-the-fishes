@@ -4,6 +4,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
+import type { ShipAssets } from '../world/ShipAssets';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -16,6 +17,7 @@ export interface PhaseContext {
   maxTextureAnisotropy: number;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
+  shipAssets: ShipAssets;
 }
 
 export interface GamePhase {

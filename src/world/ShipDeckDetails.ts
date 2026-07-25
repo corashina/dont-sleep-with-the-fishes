@@ -52,7 +52,7 @@ function addPart(
 }
 
 function addBarrel(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
-  addPart(root, geometry.cylinder, materials.crewFloor, 'barrel-body', [0.9, 1.15, 0.9], [0, 0.575, 0]);
+  addPart(root, geometry.cylinder, materials.timber, 'barrel-body', [0.9, 1.15, 0.9], [0, 0.575, 0]);
   addPart(root, geometry.cylinder, materials.darkMetal, 'barrel-band-lower', [0.96, 0.09, 0.96], [0, 0.27, 0]);
   addPart(root, geometry.cylinder, materials.darkMetal, 'barrel-band-upper', [0.96, 0.09, 0.96], [0, 0.88, 0]);
 }
@@ -63,7 +63,7 @@ function addRopeCoil(root: Group, geometry: DetailGeometry, materials: ShipMater
 
 function addSpareTimber(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
   ([-0.2, 0, 0.2] as const).forEach((z, index) => {
-    addPart(root, geometry.box, materials.crewFloor, `spare-timber-${index + 1}`, [1.8, 0.22, 0.16], [0, 0.11, z]);
+    addPart(root, geometry.box, materials.timber, `spare-timber-${index + 1}`, [1.8, 0.22, 0.16], [0, 0.11, z]);
   });
 }
 

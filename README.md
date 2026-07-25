@@ -21,7 +21,7 @@ The scavenging phase takes place on a furnished single-level coastal freighter. 
 
 Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and bulky diving gear stays on large equipment racks. Dorothy contains exactly 17 collectible types and 20 physical pickups: Food appears three times, Bait twice, and every other scavenging collectible type once.
 
-The ship uses original procedural materials and geometry: varied wooden planks and panels, worn furniture, painted steel, rust details, railings, working-deck fittings, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
+The ship combines original procedural geometry with locally committed wood and painted-steel texture maps: subdued non-slip steel decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
 
 ## Dorothy supplies
 
@@ -100,9 +100,9 @@ Each journal page retells that day's fishing, daytime event, and nighttime event
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 
-## Asset policy
+## Texture sources
 
-Kenney remains the project's default: use Kenney as the default third-party asset store. The Quaternius exception is approved only for the committed `compass`, `flareGun`, and `anchor` runtime models, and the lifeboat's wood maps come from Poly Haven's CC0 Wood Planks texture. Downloaded assets must come from an individual free CC0 pack or asset, run through the local reproducible asset pipeline, and ship from the repository rather than a remote URL. All runtime item models and textures are committed locally with recorded provenance. Production never fetches models, textures, artwork, event data, or wiki content. [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) records pack versions, hashes, source entries, modifications, and license details.
+Dorothy's weathered structural steel was initially found at [ambientCG — Painted Metal 007](https://ambientcg.com/view?id=PaintedMetal007). Her timber fitting texture was initially found at [Poly Haven — Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck).
 
 ## Commands
 
@@ -124,7 +124,7 @@ bun run preview
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — category-compatible item profiles, anchor validation, and randomized assignment to authored surfaces.
-- `src/world/ShipMaterials` — deterministic procedural wood families, ship-surface materials, and owned-material disposal.
+- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed timber and painted-steel maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
 - `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.

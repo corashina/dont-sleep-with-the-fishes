@@ -67,7 +67,7 @@ function createCargoCrate(
   materials: ShipMaterials,
   size: readonly [number, number, number],
 ): void {
-  addBox(parent, geometry, materials.crewFloor, 'crate-body', size, [0, size[1] / 2, 0]);
+  addBox(parent, geometry, materials.timber, 'crate-body', size, [0, size[1] / 2, 0]);
   ([-0.42, 0.42] as const).forEach((fraction, index) => {
     addBox(
       parent,
@@ -99,7 +99,7 @@ function createCargoRack(
   addBox(
     parent,
     geometry,
-    materials.crewFloor,
+    materials.timber,
     'cargo-rack-top',
     [size[0], topHeight, size[2]],
     [0, size[1] - topHeight / 2, 0],

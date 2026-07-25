@@ -11,6 +11,7 @@ import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
+import type { ShipAssets } from './ShipAssets';
 
 export interface ShipBuild {
   root: Group;
@@ -163,11 +164,12 @@ function visibleProductionSurfaces(
 export function createShip(
   shipFurniture: ShipFurnitureLibrary,
   maxTextureAnisotropy: number,
+  shipAssets?: ShipAssets,
 ): ShipBuild {
   validateShipLayout(SHIP_LAYOUT);
   const root = new Group();
   root.name = 'sinking-ship';
-  const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy);
+  const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy, shipAssets);
   let geometry: ReturnType<typeof createShipGeometry> | undefined;
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
   let details: ReturnType<typeof createShipDeckDetails> | undefined;

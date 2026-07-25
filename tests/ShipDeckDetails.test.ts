@@ -45,13 +45,13 @@ describe('ship deck details', () => {
 
     expect(detail('barrel-1').children).toHaveLength(3);
     expect(mesh('barrel-body').geometry).toBeInstanceOf(CylinderGeometry);
-    expect(mesh('barrel-body').material).toBe(materials.crewFloor);
+    expect(mesh('barrel-body').material).toBe(materials.timber);
     expect(mesh('barrel-band-lower').material).toBe(materials.darkMetal);
     expect(mesh('rope-coil').geometry).toBeInstanceOf(TorusGeometry);
     expect(mesh('rope-coil').material).toBe(materials.rope);
     expect(build.root.getObjectByName('life-ring')).toBeUndefined();
     expect(detail('spareTimber-1').children).toHaveLength(3);
-    expect(mesh('spare-timber-1').material).toBe(materials.crewFloor);
+    expect(mesh('spare-timber-1').material).toBe(materials.timber);
     expect(build.root.getObjectByName('toolbox-body')).toBeUndefined();
     expect(build.root.getObjectByName('bollard-post')).toBeUndefined();
     expect(build.root.getObjectByName('cleat-centre')).toBeUndefined();
