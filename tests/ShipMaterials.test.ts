@@ -15,6 +15,25 @@ function createAssets(): ShipAssets {
 }
 
 describe('ship image materials', () => {
+  it('owns and disposes the unmapped painted-steel and timber variants once', () => {
+    const materials = createShipMaterials();
+    const plainMaterials = [materials.plainPaintedSteel, materials.plainTimber];
+
+    plainMaterials.forEach((material) => {
+      expect(material.map).toBeNull();
+      expect(material.roughnessMap).toBeNull();
+      expect(material.normalMap).toBeNull();
+      expect(material.bumpMap).toBeNull();
+      expect(materials.ownedMaterialsForTest()).toContain(material);
+    });
+    const disposals = plainMaterials.map((material) => vi.spyOn(material, 'dispose'));
+
+    materials.dispose();
+    materials.dispose();
+
+    disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+  });
+
   it('uses subtle non-slip metal maps on floors and keeps timber props wooden', () => {
     const assets = createAssets();
     const materials = createShipMaterials(0x51f15e, 4, assets);

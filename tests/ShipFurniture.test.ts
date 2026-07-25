@@ -15,6 +15,25 @@ const overlap = (
 
 describe('ship furniture', () => {
 
+  it('uses plain timber only for the aft-port cargo crate body', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+    const aftPortBody = build.root.getObjectByName('furniture:cargo-crate-aft-port')
+      ?.getObjectByName('crate-body');
+    const aftStarboardBody = build.root.getObjectByName('furniture:cargo-crate-aft-starboard')
+      ?.getObjectByName('crate-body');
+
+    expect(aftPortBody).toBeInstanceOf(Mesh);
+    expect((aftPortBody as Mesh).material).toBe(materials.plainTimber);
+    expect(aftStarboardBody).toBeInstanceOf(Mesh);
+    expect((aftStarboardBody as Mesh).material).toBe(materials.timber);
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
   it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();

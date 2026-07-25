@@ -22,6 +22,8 @@ export interface ShipMaterials {
   cargoFloor: MeshStandardMaterial;
   storageFloor: MeshStandardMaterial;
   lifeboatFloor: MeshStandardMaterial;
+  plainPaintedSteel: MeshStandardMaterial;
+  plainTimber: MeshStandardMaterial;
   paintedPanel: MeshStandardMaterial;
   paintedSteel: MeshStandardMaterial;
   darkHull: MeshStandardMaterial;
@@ -272,6 +274,18 @@ export function createShipMaterials(
   const cargoFloor = createFloorMaterial(0xd0d5d5);
   const storageFloor = createFloorMaterial(0xc8ccca, industrialFloor);
   const lifeboatFloor = createFloorMaterial(0xd6d9d7);
+  const plainPaintedSteel = new MeshStandardMaterial({
+    color: 0x77868b,
+    roughness: 0.9,
+    metalness: 0.24,
+    flatShading: true,
+  });
+  const plainTimber = new MeshStandardMaterial({
+    color: 0x60442f,
+    roughness: 0.96,
+    metalness: 0,
+    flatShading: true,
+  });
   const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
   const paintedSteel = assets
     ? createAssetMaterial(
@@ -319,6 +333,8 @@ export function createShipMaterials(
     cargoFloor,
     storageFloor,
     lifeboatFloor,
+    plainPaintedSteel,
+    plainTimber,
     paintedPanel,
     paintedSteel,
     darkHull,
@@ -354,6 +370,8 @@ export function createShipMaterials(
     cargoFloor,
     storageFloor,
     lifeboatFloor,
+    plainPaintedSteel,
+    plainTimber,
     paintedPanel,
     paintedSteel,
     darkHull,

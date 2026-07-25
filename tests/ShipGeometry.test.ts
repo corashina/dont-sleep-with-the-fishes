@@ -11,6 +11,26 @@ import {
 import { createShipMaterials } from '../src/world/ShipMaterials';
 
 describe('freighter geometry', () => {
+  it('uses unmapped painted steel for every storage-workroom exterior shell piece', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const storageExterior: Mesh[] = [];
+
+    build.root.traverse((object) => {
+      if (object instanceof Mesh && (
+        object.name.startsWith('storage-workroom-wall-')
+        || object.name.startsWith('storageWorkroom-corner-')
+        || object.name === 'storageWorkroom-roof'
+      )) storageExterior.push(object);
+    });
+
+    expect(storageExterior.length).toBeGreaterThan(0);
+    storageExterior.forEach((mesh) => expect(mesh.material).toBe(materials.plainPaintedSteel));
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   interface PointXZ {
     x: number;
     z: number;
