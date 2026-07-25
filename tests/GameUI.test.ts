@@ -46,6 +46,26 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
+  it('composes the start screen into top copy and bottom evacuation action groups', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const start = mount.querySelector<HTMLElement>('[data-start]')!;
+    const top = start.querySelector<HTMLElement>('.start-screen__top');
+    const action = start.querySelector<HTMLElement>('.start-screen__action');
+
+    expect(top?.querySelector('.kicker')).not.toBeNull();
+    expect(top?.querySelector('h1')).not.toBeNull();
+    expect(top?.querySelector('.lead')).not.toBeNull();
+    expect(top?.querySelector('.controls')).not.toBeNull();
+    expect(action?.querySelector('[data-start-button]')).not.toBeNull();
+    expect(action?.querySelector('[data-pointer-lock-error]')).not.toBeNull();
+    expect(start.querySelector('.fine-print')).toBeNull();
+    expect(start.textContent).not.toContain('Desktop keyboard and mouse required');
+    expect(mainStyles).toMatch(/\.start-screen \[data-start-button\]\s*\{[^}]*min-width:\s*310px;[^}]*min-height:\s*74px;/s);
+    expect(mainStyles).toMatch(/\.poster-screen\.start-screen\s*\{[^}]*linear-gradient\(180deg,/s);
+    ui.dispose();
+  });
+
   it('shows a distinct failure layer before revealing the result', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -78,6 +98,10 @@ describe('GameUI', () => {
       .map((circle) => circle.dataset.itemType)).toEqual([
       'scubaSet', 'scubaSet', 'scubaSet',
     ]);
+    expect(mount.querySelectorAll('[data-weight-circle] [data-item-artwork="scubaSet"]')).toHaveLength(3);
+    expect(mainStyles).toMatch(/\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*96px\);[^}]*gap:\s*13px;/s);
+    expect(mainStyles).toMatch(/\.weight-circle\s*\{[^}]*width:\s*96px;[^}]*height:\s*96px;[^}]*border-width:\s*5px;/s);
+    expect(mainStyles).toMatch(/\.weight-circle__art\s*\{[^}]*width:\s*92%;[^}]*height:\s*92%;/s);
 
     ui.render(snapshot({ carriedWeight: 0, carriedItems: [] }), getSinkingState(0, 120));
     expect(mount.querySelectorAll('.weight-circle.is-filled')).toHaveLength(0);
