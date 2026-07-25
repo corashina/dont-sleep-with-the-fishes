@@ -28,7 +28,6 @@ describe('ship image materials', () => {
       materials.crewFloor,
       materials.wheelhouseFloor,
       materials.cargoFloor,
-      materials.lifeboatFloor,
     ]) {
       expect(material.map?.name).toBe('maritimeDeck-color');
       expect(material.roughnessMap?.name).toBe('maritimeDeck-roughness');
@@ -41,6 +40,12 @@ describe('ship image materials', () => {
     expect(materials.storageFloor.bumpMap?.name).toBe('industrialFloor-bump');
     expect(materials.storageFloor.normalMap).toBeNull();
     expect(materials.storageFloor.metalness).toBeCloseTo(0.36);
+    expect(materials.lifeboatFloor.map?.name).toBe('industrialFloor-color');
+    expect(materials.lifeboatFloor.roughnessMap?.name).toBe('industrialFloor-roughness');
+    expect(materials.lifeboatFloor.bumpMap?.name).toBe('industrialFloor-bump');
+    expect(materials.lifeboatFloor.color.getHex()).toBe(0xcbd1cf);
+    expect(materials.emergencyStripe.map?.name).toBe('emergencyStripe-color');
+    expect(materials.emergencyStripe.map?.wrapS).toBe(materials.emergencyStripe.map?.wrapT);
 
     for (const material of [materials.paintedSteel, materials.darkHull]) {
       expect(material.map).toBe(assets.steelColor);
