@@ -11,6 +11,29 @@ state, distinguishes cross-phase systems from phase-specific defects, and
 recommends focused design slices rather than selecting an implementation in
 advance.
 
+## Remediation status
+
+**Reviewed:** 2026-07-25
+
+The dated findings below remain the original audit evidence. Use this table as
+the current implementation status:
+
+| Recommended slice | Status | Current evidence |
+| --- | --- | --- |
+| UI role slice | Complete | Startup, scavenging, survival, journal, and overlay copy use the shared display, narrative, contextual, and numeral roles with local font assets. |
+| Routine interaction composition | Complete | Fishing results and repair choices are compact dialogs projected from the rod and repair toolbox, with deterministic fallback, viewport flipping/clamping, modal focus, and reduced-motion treatment. |
+| Freighter construction | Complete for the approved focal slice | The crew-cabin/wheelhouse exterior and cabin desk/bookcase cluster now carry layered fascia, sills, brackets, fasteners, cleats, hinges, seams, and an asymmetric repair plate without changing colliders or authored placement. |
+| Contact depth | Complete for the approved selective layer | Shared local seam/footprint geometry seats the approved freighter details and lifeboat supply platform; there is no screen-space AO or broad-surface treatment. |
+| Local surface story | Pending | The focal freighter slice still needs causally placed handled-edge, drainage, salt, and repair wear judged at gameplay distance. |
+| Motion language | Pending | Paper, timber, handled-item, and camera cues still need a shared mass-aware keyed-beat vocabulary under normal and reduced motion. |
+| Print retune | Pending | Calm baseline and danger/storm deltas still need effect-off/CSS-only/complete-frame comparison after the underlying scene work. |
+| Bounded polish | Pending | The start control legend still lacks supporting authored marks, and journal paging still uses generic chevron glyphs. |
+
+Automated verification on this review passed 72 test files / 876 tests and the
+production build. The scavenging start composition was re-observed locally at
+1280×720 and 1920×1080; active pointer-lock states remained browser-blocked, so
+their evidence classification below is unchanged.
+
 Live observation used the connected Chrome browser because the in-app browser
 backend was unavailable in this environment. The game was served from the
 isolated worktree with `npm.cmd run dev -- --host 127.0.0.1`.
