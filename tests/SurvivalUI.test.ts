@@ -145,7 +145,8 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*right:\s*24px[^}]*bottom:\s*24px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*min-width:\s*260px[^}]*min-height:\s*74px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*#914f42/s);
-    expect(mainStyles).toMatch(/\.boat-tooltip\s*\{[^}]*max-width:\s*min\(340px,\s*calc\(100vw - 32px\)\)[^}]*padding:\s*14px 18px[^}]*font-size:\s*1rem[^}]*line-height:\s*1\.4/s);
+    expect(mainStyles).toMatch(/\.end-day-button:disabled,\s*\.end-day-button\[aria-disabled="true"\]\s*\{[^}]*opacity:\s*\.52[^}]*filter:\s*saturate\(\.55\)[^}]*cursor:\s*not-allowed/s);
+    expect(mainStyles).toMatch(/\.boat-tooltip\s*\{[^}]*max-width:\s*min\(340px,\s*calc\(100vw - 32px\)\)[^}]*padding:\s*14px 18px[^}]*font-family:\s*var\(--font-context\)[^}]*font-size:\s*1rem[^}]*font-weight:\s*700[^}]*line-height:\s*1\.4/s);
     expect(mainStyles).toMatch(/\.event-caption\s*\{[^}]*top:[^;}]+;[^}]*bottom:\s*auto/s);
     expect(mainStyles).toMatch(/\.event-caption h2\s*\{[^}]*var\(--ink-yellow\)/s);
     expect(mainStyles).toMatch(/\.event-caption\[data-danger="safe"\] h2\s*\{[^}]*var\(--ink-green\)/s);
