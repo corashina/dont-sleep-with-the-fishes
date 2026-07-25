@@ -15,7 +15,11 @@ See the [visual style guide](docs/VISUAL_STYLE_GUIDE.md) for the durable
 direction and the [current visual audit](docs/VISUAL_AUDIT.md) for prioritized
 recommendations.
 
-The 3D world uses original procedural geometry and shaders. Its shared cloudless atmosphere combines grounded maritime scattering, a locally committed original gibbous-moon texture, weather-aware celestial light, fog, lighting, and synchronized ocean reflections without external sky art.
+The 3D world combines authored procedural geometry with curated, locally
+committed models and shaders. Its shared cloudless atmosphere combines grounded
+maritime scattering, a locally committed original gibbous-moon texture,
+weather-aware celestial light, fog, lighting, and synchronized ocean
+reflections without external sky art.
 
 The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
 
@@ -100,7 +104,18 @@ Each journal page retells that day's fishing, daytime event, and nighttime event
 
 Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 
-## Texture sources
+## Asset sources
+
+[Poly Pizza](https://poly.pizza/) is the default site for finding and importing
+item models. Prefer **Poly by Google** models when they suit the object, license,
+visual direction, and runtime budget; semantic fit and quality still take
+precedence over creator priority. All collectible models, the fixed fishing
+rod, Kay Lousberg's lantern, and Quaternius's ceiling light are pinned Poly
+Pizza assets. Run `bun run models:fetch:items` to download, hash-check, process,
+audit, and atomically publish the complete set.
+
+Source pages, licenses, resource IDs, hashes, and processing records are listed
+in [the asset ledger](src/assets/ATTRIBUTION.md).
 
 Dorothy's timber fitting texture was initially found at [Poly Haven — Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck). Her structural steel uses untextured authored materials.
 

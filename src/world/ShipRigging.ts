@@ -72,7 +72,7 @@ function addStay(
     `stay:${spec.id}`,
     [0, highY / 2, anchorZ / 2],
     [0.035, length, 0.035],
-    Math.atan2(anchorZ, highY),
+    Math.atan2(-anchorZ, highY),
   );
 }
 

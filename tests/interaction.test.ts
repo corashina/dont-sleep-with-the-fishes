@@ -13,6 +13,7 @@ import {
 import { CarryController } from '../src/interaction/CarryController';
 import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
 import type { ItemInstance } from '../src/game/ItemState';
+import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
@@ -168,7 +169,8 @@ describe('InteractionSystem', () => {
     const result = interaction.update([], lifeboat, new Group(), new Map());
 
     expect(result).toEqual({ target: 'deposit', targetItem: null });
-    expect(mesh.material).not.toBe(material);
+    expect(mesh.material).toBe(material);
+    expect(lifeboat.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     interaction.dispose();
     expect(mesh.material).toBe(material);
   });
@@ -253,7 +255,8 @@ describe('InteractionSystem', () => {
     expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'item', targetItem: item('flareGun-1', 'flareGun'),
     });
-    expect(firstMesh.material).not.toBe(firstMaterial);
+    expect(firstMesh.material).toBe(firstMaterial);
+    expect(first.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     first.position.x = 2;
     second.position.x = 0;
@@ -261,16 +264,19 @@ describe('InteractionSystem', () => {
       target: 'item', targetItem: item('ductTape-1', 'ductTape'),
     });
     expect(firstMesh.material).toBe(firstMaterial);
-    expect(secondMesh.material).not.toBe(secondMaterial);
+    expect(first.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(secondMesh.material).toBe(secondMaterial);
+    expect(second.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     second.position.z = -4;
     expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'none', targetItem: null,
     });
     expect(secondMesh.material).toBe(secondMaterial);
+    expect(second.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
   });
 
-  it('isolates highlighting from shared materials and restores resources on dispose', () => {
+  it('keeps shared materials intact and disposes outline resources once', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const sharedMaterial = new MeshStandardMaterial({
       emissive: 0x123456,
@@ -297,11 +303,15 @@ describe('InteractionSystem', () => {
       ['baitTin-1', item('baitTin-1', 'baitTin')],
     ] as const));
 
-    const highlightMaterial = aimedMesh.material as MeshStandardMaterial;
-    let highlightDisposals = 0;
-    highlightMaterial.addEventListener('dispose', () => { highlightDisposals += 1; });
-    expect(highlightMaterial).not.toBe(sharedMaterial);
-    expect(highlightMaterial.emissive.getHex()).toBe(0x8b7650);
+    const outline = aimedItem.getObjectByName(HOVER_OUTLINE_NAME) as Mesh;
+    let geometryDisposals = 0;
+    let materialDisposals = 0;
+    outline.geometry.addEventListener('dispose', () => { geometryDisposals += 1; });
+    (outline.material as MeshStandardMaterial).addEventListener(
+      'dispose',
+      () => { materialDisposals += 1; },
+    );
+    expect(aimedMesh.material).toBe(sharedMaterial);
     expect(otherMesh.material).toBe(sharedMaterial);
     expect(sharedMaterial.emissive.getHex()).toBe(0x123456);
     expect(sharedMaterial.emissiveIntensity).toBe(0.2);
@@ -310,7 +320,9 @@ describe('InteractionSystem', () => {
     interaction.dispose();
 
     expect(aimedMesh.material).toBe(sharedMaterial);
-    expect(highlightDisposals).toBe(1);
+    expect(aimedItem.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(geometryDisposals).toBe(1);
+    expect(materialDisposals).toBe(1);
   });
 });
 

@@ -25,6 +25,7 @@ import {
 } from '../world/BoatSupplyLayout';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ContactDepthLayer } from '../world/ContactDepthLayer';
+import { HoverOutline } from '../rendering/HoverOutline';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -121,7 +122,7 @@ function mutedMaterial(material: Material): Material {
   return clone;
 }
 
-function setHighlighted(root: Object3D, highlighted: boolean): void {
+function setEmissiveHighlighted(root: Object3D, highlighted: boolean): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
     const material = object.material;
@@ -206,6 +207,7 @@ export class BoatSupplyDisplay {
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
   private highlightedGroupId: BoatSupplyGroupId | null = null;
+  private readonly hoverOutline = new HoverOutline();
   private activeAnimation: ActiveAnimation | null = null;
   private disposed = false;
 
@@ -315,9 +317,7 @@ export class BoatSupplyDisplay {
 
   setHighlighted(anchorId: string | null): void {
     if (this.disposed) return;
-    if (this.highlightedGroupId !== null) {
-      setHighlighted(this.recordsById.get(this.highlightedGroupId)!.root, false);
-    }
+    this.hoverOutline.setTarget(null);
     this.highlightedGroupId = null;
     if (anchorId === null) return;
     const rawGroupId = anchorId.startsWith('supply:')
@@ -327,7 +327,7 @@ export class BoatSupplyDisplay {
     const groupId = rawGroupId as BoatSupplyGroupId;
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return;
-    setHighlighted(record.root, true);
+    this.hoverOutline.setTarget(record.root);
     this.highlightedGroupId = groupId;
   }
 
@@ -392,6 +392,7 @@ export class BoatSupplyDisplay {
   dispose(): void {
     if (this.disposed) return;
     this.setHighlighted(null);
+    this.hoverOutline.dispose();
     this.cancelActiveAnimation();
     this.disposed = true;
     for (const record of this.recordsById.values()) record.root.removeFromParent();
@@ -479,7 +480,7 @@ export class BoatSupplyDisplay {
   }
 
   private applyCopyMaterials(groupId: BoatSupplyGroupId, copy: CopyBinding): void {
-    setHighlighted(copy.root, false);
+    setEmissiveHighlighted(copy.root, false);
     let groupEligible = false;
     if (this.eventEligibleItemIds !== null) {
       for (const id of this.eventEligibleItemIds) {
@@ -501,7 +502,7 @@ export class BoatSupplyDisplay {
       this.eventSelectedItemId === copy.instanceId
       || this.eventEligibleItemIds?.has(copy.instanceId) === true
     );
-    if (highlighted) setHighlighted(copy.root, true);
+    if (highlighted) setEmissiveHighlighted(copy.root, true);
   }
 
   private cancelActiveAnimation(): void {

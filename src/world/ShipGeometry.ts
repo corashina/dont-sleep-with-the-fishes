@@ -281,13 +281,13 @@ function addFinishedFloors(
   const stripeWidth = 0.2;
   const stripeShape = rectangularFloorShape(
     lifeboat.minX + stripeOuterInset,
-    lifeboat.maxX - stripeOuterInset,
+    lifeboat.maxX,
     lifeboat.minZ + stripeOuterInset,
     lifeboat.maxZ - stripeOuterInset,
   );
   stripeShape.holes.push(rectangularFloorHole(
     lifeboat.minX + stripeOuterInset + stripeWidth,
-    lifeboat.maxX - stripeOuterInset - stripeWidth,
+    lifeboat.maxX - stripeWidth,
     lifeboat.minZ + stripeOuterInset + stripeWidth,
     lifeboat.maxZ - stripeOuterInset - stripeWidth,
   ));
