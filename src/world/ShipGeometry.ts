@@ -433,7 +433,9 @@ function addWallSegments(
       addBlock(root, geometries, shellColliders, {
         name,
         ...segmentTransform(segment, height, wallBottomY + height / 2),
-        material: segment.zoneId === 'crewCabin' ? materials.paintedPanel : materials.paintedSteel,
+        material: segment.zoneId === 'crewCabin'
+          ? materials.paintedPanel
+          : materials.plainPaintedSteel,
         collider: true,
       });
       return;
@@ -483,7 +485,7 @@ function addRoomCornerCaps(
   layout.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
     const height = roomWallHeight(zone.id);
     const material = zone.id === 'storageWorkroom'
-      ? materials.paintedSteel
+      ? materials.plainPaintedSteel
       : materials.paintedPanel;
     zone.polygon.forEach(([x, z], index) => {
       addBlock(root, geometries, shellColliders, {
@@ -520,7 +522,9 @@ function addRoomRoofs(
         wallTopY + ROOM_ROOF_THICKNESS / 2,
         (zone.bounds.minZ + zone.bounds.maxZ) / 2,
       ],
-      material: materials.paintedSteel,
+      material: zone.id === 'storageWorkroom'
+        ? materials.plainPaintedSteel
+        : materials.paintedSteel,
     });
   });
 }

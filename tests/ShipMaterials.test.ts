@@ -8,14 +8,35 @@ function createAssets(): ShipAssets {
     new Texture(),
     new Texture(),
     new Texture(),
-    new Texture(),
-    new Texture(),
-    new Texture(),
   );
 }
 
 describe('ship image materials', () => {
-  it('uses subtle non-slip metal maps on floors and keeps timber props wooden', () => {
+  it('owns and disposes every untextured steel and timber variant once', () => {
+    const materials = createShipMaterials();
+    const plainMaterials = [
+      materials.plainPaintedSteel,
+      materials.plainTimber,
+      materials.paintedSteel,
+      materials.darkHull,
+    ];
+
+    plainMaterials.forEach((material) => {
+      expect(material.map).toBeNull();
+      expect(material.roughnessMap).toBeNull();
+      expect(material.normalMap).toBeNull();
+      expect(material.bumpMap).toBeNull();
+      expect(materials.ownedMaterialsForTest()).toContain(material);
+    });
+    const disposals = plainMaterials.map((material) => vi.spyOn(material, 'dispose'));
+
+    materials.dispose();
+    materials.dispose();
+
+    disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+  });
+
+  it('uses procedural floor maps and wood maps while keeping all steel image-free', () => {
     const assets = createAssets();
     const materials = createShipMaterials(0x51f15e, 4, assets);
 
@@ -47,11 +68,15 @@ describe('ship image materials', () => {
     expect(materials.emergencyStripe.map?.name).toBe('emergencyStripe-color');
     expect(materials.emergencyStripe.map?.wrapS).toBe(materials.emergencyStripe.map?.wrapT);
 
-    for (const material of [materials.paintedSteel, materials.darkHull]) {
-      expect(material.map).toBe(assets.steelColor);
-      expect(material.roughnessMap).toBe(assets.steelRoughness);
-      expect(material.normalMap).toBe(assets.steelNormal);
-      expect(material.metalness).toBeGreaterThanOrEqual(0.4);
+    for (const material of [
+      materials.plainPaintedSteel,
+      materials.paintedSteel,
+      materials.darkHull,
+    ]) {
+      expect(material.map).toBeNull();
+      expect(material.roughnessMap).toBeNull();
+      expect(material.normalMap).toBeNull();
+      expect(material.bumpMap).toBeNull();
     }
 
     materials.dispose();
@@ -61,9 +86,6 @@ describe('ship image materials', () => {
   it('leaves app-owned image maps alive when disposing ship materials', () => {
     const assets = createAssets();
     const textures = [
-      assets.steelColor,
-      assets.steelRoughness,
-      assets.steelNormal,
       assets.woodColor,
       assets.woodRoughness,
       assets.woodNormal,

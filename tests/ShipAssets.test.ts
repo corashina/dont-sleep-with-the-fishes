@@ -13,8 +13,8 @@ import {
 } from '../src/world/ShipAssets';
 
 describe('ShipAssets', () => {
-  it('loads, configures, and disposes all six local maps once', async () => {
-    const textures = Array.from({ length: 6 }, () => new Texture());
+  it('loads, configures, and disposes the three local wood maps once', async () => {
+    const textures = Array.from({ length: 3 }, () => new Texture());
     const disposals = textures.map((texture) => vi.spyOn(texture, 'dispose'));
     const pending = [...textures];
     const loader = { loadAsync: vi.fn(async () => pending.shift()!) };
@@ -22,12 +22,9 @@ describe('ShipAssets', () => {
     const assets = await ShipAssets.load(loader);
     assets.configure(16);
 
-    expect(loader.loadAsync).toHaveBeenCalledTimes(6);
-    expect(assets.steelColor.colorSpace).toBe(SRGBColorSpace);
+    expect(loader.loadAsync).toHaveBeenCalledTimes(3);
     expect(assets.woodColor.colorSpace).toBe(SRGBColorSpace);
     for (const texture of [
-      assets.steelRoughness,
-      assets.steelNormal,
       assets.woodRoughness,
       assets.woodNormal,
     ]) {
@@ -42,7 +39,6 @@ describe('ShipAssets', () => {
       expect(texture.generateMipmaps).toBe(true);
       expect(texture.version).toBeGreaterThan(0);
     }
-    expect(assets.steelColor.repeat.toArray()).toEqual([3, 3]);
     expect(assets.woodColor.repeat.toArray()).toEqual([2, 8]);
 
     assets.dispose();
@@ -51,13 +47,13 @@ describe('ShipAssets', () => {
   });
 
   it('disposes fulfilled siblings and wraps the first load failure', async () => {
-    const fulfilled = Array.from({ length: 5 }, () => new Texture());
+    const fulfilled = Array.from({ length: 2 }, () => new Texture());
     const disposals = fulfilled.map((texture) => vi.spyOn(texture, 'dispose'));
-    const failure = new Error('steel normal missing');
+    const failure = new Error('wood normal missing');
     let fulfilledIndex = 0;
     const loader = {
       loadAsync: vi.fn(async (url: string) => {
-        if (url.includes('painted-steel-normal')) throw failure;
+        if (url.includes('deck-wood-normal')) throw failure;
         return fulfilled[fulfilledIndex++]!;
       }),
     };
@@ -70,10 +66,7 @@ describe('ShipAssets', () => {
   });
 
   it('creates test-owned assets from supplied textures', () => {
-    const textures = Array.from({ length: 6 }, () => new Texture()) as [
-      Texture,
-      Texture,
-      Texture,
+    const textures = Array.from({ length: 3 }, () => new Texture()) as [
       Texture,
       Texture,
       Texture,
@@ -81,9 +74,6 @@ describe('ShipAssets', () => {
     const assets = ShipAssets.fromTextures(...textures);
 
     expect([
-      assets.steelColor,
-      assets.steelRoughness,
-      assets.steelNormal,
       assets.woodColor,
       assets.woodRoughness,
       assets.woodNormal,

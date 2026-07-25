@@ -21,7 +21,7 @@ The scavenging phase takes place on a furnished single-level coastal freighter. 
 
 Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and bulky diving gear stays on large equipment racks. Dorothy contains exactly 17 collectible types and 20 physical pickups: Food appears three times, Bait twice, and every other scavenging collectible type once.
 
-The ship combines original procedural geometry with locally committed wood and painted-steel texture maps: subdued non-slip steel decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
+The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials: subdued non-slip decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
 
 ## Dorothy supplies
 
@@ -102,7 +102,7 @@ Rescue is variable rather than tied to a fixed day. Progress and elapsed days in
 
 ## Texture sources
 
-Dorothy's weathered structural steel was initially found at [ambientCG — Painted Metal 007](https://ambientcg.com/view?id=PaintedMetal007). Her timber fitting texture was initially found at [Poly Haven — Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck).
+Dorothy's timber fitting texture was initially found at [Poly Haven — Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck). Her structural steel uses untextured authored materials.
 
 ## Commands
 
@@ -124,7 +124,7 @@ bun run preview
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — category-compatible item profiles, anchor validation, and randomized assignment to authored surfaces.
-- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed timber and painted-steel maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
+- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed timber maps, untextured steel, procedural secondary surfaces, ship materials, and explicit texture ownership.
 - `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.

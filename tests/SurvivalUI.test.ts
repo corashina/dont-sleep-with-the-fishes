@@ -134,10 +134,19 @@ describe('SurvivalUI', () => {
       .toEqual(['health', 'hunger', 'energy', 'hull']);
     expect(mount.querySelector('[data-survival-top] [data-journal-open]')).not.toBeNull();
     expect(mount.querySelector('[data-survival-top] [data-action="endDay"]')).not.toBeNull();
+    ui.render(new SurvivalSession([], { seed: 1 }).snapshot(), () => null);
+    expect(
+      mount.querySelector('[data-meter="hunger"] [data-meter-value]')?.textContent,
+    ).toBe('100');
+    expect(
+      mount.querySelector('[data-meter="hull"] [data-meter-value]')?.textContent,
+    ).toBe('100');
     expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*top:\s*20px[^}]*right:\s*24px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*right:\s*24px[^}]*bottom:\s*24px/s);
-    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*min-width:\s*210px[^}]*min-height:\s*72px/s);
-    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*#315c6f/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*min-width:\s*260px[^}]*min-height:\s*74px/s);
+    expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*#914f42/s);
+    expect(mainStyles).toMatch(/\.end-day-button:disabled,\s*\.end-day-button\[aria-disabled="true"\]\s*\{[^}]*opacity:\s*\.52[^}]*filter:\s*saturate\(\.55\)[^}]*cursor:\s*not-allowed/s);
+    expect(mainStyles).toMatch(/\.boat-tooltip\s*\{[^}]*max-width:\s*min\(340px,\s*calc\(100vw - 32px\)\)[^}]*padding:\s*14px 18px[^}]*font-family:\s*var\(--font-context\)[^}]*font-size:\s*1rem[^}]*font-weight:\s*700[^}]*line-height:\s*1\.4/s);
     expect(mainStyles).toMatch(/\.event-caption\s*\{[^}]*top:[^;}]+;[^}]*bottom:\s*auto/s);
     expect(mainStyles).toMatch(/\.event-caption h2\s*\{[^}]*var\(--ink-yellow\)/s);
     expect(mainStyles).toMatch(/\.event-caption\[data-danger="safe"\] h2\s*\{[^}]*var\(--ink-green\)/s);
@@ -936,7 +945,9 @@ describe('SurvivalUI', () => {
     cover.dispatchEvent(transitionEnd);
     await opening;
     expect(cover.classList).not.toContain('is-covered');
-    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2500ms ease,\s*transform 2500ms ease-in/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*opacity:\s*0[^}]*transition:\s*opacity 2500ms ease-in-out[^}]*pointer-events:\s*none/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\.is-covered\s*\{[^}]*opacity:\s*1/s);
+    expect(mainStyles).not.toMatch(/\.sleep-cover\s*\{[^}]*transform:\s*scaleY/s);
     vi.useRealTimers();
   });
 
@@ -1045,9 +1056,9 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-weather]')?.textContent).toContain('CALM');
     expect(mount.querySelector('[data-phase]')?.textContent).toContain('DAYLIGHT');
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
-    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
+    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('3');
-    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
+    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelectorAll('[data-action]:not([data-action=""])')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
