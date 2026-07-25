@@ -3,9 +3,6 @@ import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 
 const [
-  steelColorSource,
-  steelRoughnessSource,
-  steelNormalSource,
   woodColorSource,
   woodRoughnessSource,
   woodNormalSource,
@@ -13,26 +10,19 @@ const [
 ] = process.argv.slice(2);
 
 if (
-  !steelColorSource
-  || !steelRoughnessSource
-  || !steelNormalSource
-  || !woodColorSource
+  !woodColorSource
   || !woodRoughnessSource
   || !woodNormalSource
   || !outputDirectory
 ) {
   throw new Error(
     'Usage: node scripts/process-ship-textures.mjs '
-    + '<steel-color> <steel-roughness> <steel-normal-gl> '
     + '<wood-color> <wood-roughness> <wood-normal-gl> <output-directory>',
   );
 }
 
 const outputRoot = resolve(outputDirectory);
 for (const source of [
-  steelColorSource,
-  steelRoughnessSource,
-  steelNormalSource,
   woodColorSource,
   woodRoughnessSource,
   woodNormalSource,
@@ -59,13 +49,6 @@ async function writeDataMap(source, destination) {
 }
 
 await Promise.all([
-  writeColor(
-    steelColorSource,
-    `${outputRoot}/painted-steel-color.webp`,
-    { brightness: 0.72, saturation: 0.48 },
-  ),
-  writeDataMap(steelRoughnessSource, `${outputRoot}/painted-steel-roughness.webp`),
-  writeDataMap(steelNormalSource, `${outputRoot}/painted-steel-normal.webp`),
   writeColor(
     woodColorSource,
     `${outputRoot}/deck-wood-color.webp`,

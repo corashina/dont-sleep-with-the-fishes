@@ -6,8 +6,5 @@ export function createTestShipAssets(): ShipAssets {
     new Texture(),
     new Texture(),
     new Texture(),
-    new Texture(),
-    new Texture(),
-    new Texture(),
   );
 }

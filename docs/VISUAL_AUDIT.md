@@ -124,7 +124,7 @@ multiplayer, or persistent progression.
 - **Impact:** The freighter reads as weather-colored more than weather-lived-in, weakening both melancholic human history and the dark-comic specificity of its props.
 - **Recommendation:** Choose a few repeatedly seen interaction zones and author restrained, causally placed wear there first. Compare their visibility at gameplay distance before expanding the vocabulary, and keep material classes distinct rather than adding universal dirt.
 - **Dependencies:** Seeded texture determinism, texture memory and ownership, anisotropy limits, authored item placement, collision clarity, and current palette contrast must remain intact.
-- **Verify:** Scavenging start plus active close views of one wood, painted-steel, exposed-metal, rope/canvas, and repair area at 1280×720 and 1920×1080.
+- **Verify:** Scavenging start plus active close views of one wood, flat-painted steel, exposed-metal, rope/canvas, and repair area at 1280×720 and 1920×1080.
 
 ### High-impact — Print treatment competes with the underlying image
 

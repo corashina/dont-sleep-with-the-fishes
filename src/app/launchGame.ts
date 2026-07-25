@@ -227,7 +227,7 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       kind: 'error',
       kicker: 'SHIP UNAVAILABLE',
       title: 'Unable to prepare Dorothy',
-      lead: 'Required local steel and wood textures could not be loaded.',
+      lead: 'Required local wood textures could not be loaded.',
       detail: error.message,
     });
     return;

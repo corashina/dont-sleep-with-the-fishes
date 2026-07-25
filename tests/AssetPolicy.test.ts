@@ -9,9 +9,8 @@ const activeAssetFiles = [
 ];
 
 describe('asset documentation', () => {
-  it('records the initial ship texture pages without imposing a store policy', async () => {
+  it('records the retained ship wood texture page without a removed steel source', async () => {
     const contents = await Promise.all(activeAssetFiles.map((path) => readFile(path, 'utf8')));
-    expect(contents[0]).toContain('https://ambientcg.com/view?id=PaintedMetal007');
     expect(contents[0]).toContain('https://polyhaven.com/a/wood_floor_deck');
     for (const content of contents) {
       expect(content).not.toMatch(/## (Asset policy|Third-party assets)/i);
