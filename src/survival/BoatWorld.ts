@@ -62,6 +62,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../world/SceneResources';
+import { alignDirectionalLightWithSun } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
@@ -635,8 +636,8 @@ export class BoatWorld {
     this.boat.add(this.bowAnchor);
 
     this.ocean = new OceanRenderer();
-    this.key.position.set(-5, 8, 4);
     this.key.target.position.set(0, 0, -3);
+    alignDirectionalLightWithSun(this.key, 12);
     this.key.castShadow = true;
 
     this.buildDistantVessel();

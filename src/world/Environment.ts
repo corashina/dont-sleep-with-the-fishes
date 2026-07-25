@@ -12,6 +12,7 @@ import {
   Vector3,
 } from 'three';
 import type { SinkingState } from '../game/sinking';
+import { alignDirectionalLightWithSun } from './celestialLight';
 import { Skybox } from './Skybox';
 import type { SkyPalette, SkyState } from './skyPalette';
 
@@ -92,7 +93,7 @@ export class Environment {
       atmosphere.keyLightColor,
       atmosphere.keyLightIntensity,
     );
-    this.keyLight.position.set(-12, 18, 8);
+    alignDirectionalLightWithSun(this.keyLight, 24);
     this.keyLight.castShadow = true;
     const shadow = this.keyLight.shadow;
     const shadowCamera = shadow.camera;
