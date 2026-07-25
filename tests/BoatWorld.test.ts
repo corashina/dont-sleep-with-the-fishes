@@ -3,6 +3,7 @@ import {
   Box3,
   BufferAttribute,
   BufferGeometry,
+  DirectionalLight,
   FogExp2,
   Group,
   Line,
@@ -34,6 +35,7 @@ import { BoatWorld, FISHING_PLAYER_SEAT } from '../src/survival/BoatWorld';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { boatStorageTransform } from '../src/world/BoatStorage';
+import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -140,6 +142,30 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('aligns the survival key light with the visible sun', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const keyLight = world.scene.children.find(
+      (child): child is DirectionalLight => child instanceof DirectionalLight,
+    );
+    const expectedDirection = new Vector3(...SUN_DIRECTION).normalize();
+    const actualDirection = keyLight?.position.clone()
+      .sub(keyLight.target.position)
+      .normalize();
+
+    expect(actualDirection?.x).toBeCloseTo(expectedDirection.x, 12);
+    expect(actualDirection?.y).toBeCloseTo(expectedDirection.y, 12);
+    expect(actualDirection?.z).toBeCloseTo(expectedDirection.z, 12);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('matches scavenging buoyancy for the boat, player viewpoint, and saved items', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();

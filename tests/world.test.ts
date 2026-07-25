@@ -30,6 +30,7 @@ import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { boatStorageTransform } from '../src/world/BoatStorage';
+import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
@@ -116,6 +117,24 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('aligns the scavenging key light with the visible sun', () => {
+    const scene = new Scene();
+    const environment = new Environment(scene, createTestMoonTexture(), () => 0.5);
+    const keyLight = scene.children.find(
+      (child): child is DirectionalLight => child instanceof DirectionalLight,
+    );
+    const expectedDirection = new Vector3(...SUN_DIRECTION).normalize();
+    const actualDirection = keyLight?.position.clone()
+      .sub(keyLight.target.position)
+      .normalize();
+
+    expect(actualDirection?.x).toBeCloseTo(expectedDirection.x, 12);
+    expect(actualDirection?.y).toBeCloseTo(expectedDirection.y, 12);
+    expect(actualDirection?.z).toBeCloseTo(expectedDirection.z, 12);
+
+    environment.dispose();
+  });
+
   it('integrates the shared furniture library, anisotropy, owned surfaces, and exact start', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
