@@ -921,6 +921,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font-size: 1rem;
   letter-spacing: .08em;
 }
+.end-day-button:disabled,
+.end-day-button[aria-disabled="true"] {
+  opacity: .52;
+  filter: saturate(.55);
+  cursor: not-allowed;
+}
 .journal-overlay {
   place-content: center;
   justify-items: center;
