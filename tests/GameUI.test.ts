@@ -210,6 +210,12 @@ describe('GameUI', () => {
     expect(mainStyles).toMatch(/\.poster-screen\.has-compatibility-error \.illustrated-warning\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s);
   });
 
+  it('contains transformed poster content without a horizontal scrollbar', () => {
+    expect(mainStyles).toMatch(
+      /\.screen__content\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
+    );
+  });
+
   it('removes button listeners and its DOM root exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
