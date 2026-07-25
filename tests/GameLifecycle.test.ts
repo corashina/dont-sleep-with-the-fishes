@@ -83,7 +83,7 @@ describe('ScavengePhase lifecycle integration', () => {
       .normalize();
 
     expect(TITLE_CAMERA_POSITION).toEqual([33, 11.5, -4]);
-    expect(TITLE_CAMERA_TARGET).toEqual([0, 5.5, -3]);
+    expect(TITLE_CAMERA_TARGET).toEqual([0, 5.5, 2]);
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     expect(camera.getWorldDirection(new Vector3()).distanceTo(expectedDirection)).toBeLessThan(1e-10);
 
