@@ -72,10 +72,7 @@ export interface ShipLaneSpec {
   readonly bounds: Rect2;
 }
 
-export type ShipDeckDetailKind =
-  | 'barrel'
-  | 'ropeCoil'
-  | 'spareTimber';
+export type ShipDeckDetailKind = 'barrel';
 
 export interface ShipDeckDetailSpec {
   readonly id: string;
@@ -272,29 +269,22 @@ const doors: readonly ShipDoorSpec[] = [
 
 export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number>> = {
   barrel: 6,
-  ropeCoil: 4,
-  spareTimber: 2,
 };
 
 export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
   Record<ShipDeckDetailKind, readonly [number, number]>
 > = {
   barrel: [0.96, 0.96],
-  ropeCoil: [1.32, 1.32],
-  spareTimber: [1.8, 0.56],
 };
 
 export const SHIP_DECK_DETAIL_MIN_GAP = 1;
 
 const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
   barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-1.8, 4.4], [1.9, -7.3]],
-  ropeCoil: [[-6.85, 13], [6.85, 10.1], [-6.85, -9], [6.85, -12.9]],
-  spareTimber: [[2.8, 12.8], [-2.8, -13.9]],
 };
 
 const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, number]>> = {
   barrel: [0.9, 1.15, 0.9],
-  spareTimber: [1.8, 0.35, 0.55],
 };
 
 const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailPositions) as ShipDeckDetailKind[]).flatMap((kind) =>

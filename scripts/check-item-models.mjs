@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { POLY_PIZZA_MODEL_SOURCES } from './poly-pizza-models.mjs';
 
 export const MODEL_LIMIT = 3_000;
 export const LIBRARY_LIMIT = 40_000;
@@ -13,101 +14,15 @@ export const COLLECTIBLE_ITEM_IDS = [
   'energyBar',
 ];
 export const EQUIPMENT_MODEL_IDS = ['fishingRod'];
-export const MODEL_IDS = [...COLLECTIBLE_ITEM_IDS, ...EQUIPMENT_MODEL_IDS];
-const PROJECT_ITEM_IDS = [
-  'map', 'spyglass', 'fishingNet', 'umbrella', 'swimRing', 'harpoonGun', 'energyBar',
+export const PRACTICAL_LIGHT_MODEL_IDS = ['lantern', 'ceilingLight'];
+export const MODEL_IDS = [
+  ...COLLECTIBLE_ITEM_IDS,
+  ...EQUIPMENT_MODEL_IDS,
+  ...PRACTICAL_LIGHT_MODEL_IDS,
 ];
-
 const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
-
-const CC0_LEDGER_CELL = '[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)';
-const CC_BY_3_LEDGER_CELL = '[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)';
-const FOOD_SHA256 = 'CDAD90853682499B94C9FDA2F87678B24BFD8F3264E0ED323F6B6A27FD7C6F6F';
-const SURVIVAL_SHA256 = 'C3586341B5932C87EB43D75D915434F47DAED168B17ED36A03E8CA9977C7443E';
-const PROTOTYPE_SHA256 = '213B522FB12BCC9B9AC66C4F7581F7C74623293272212E40A70C39936AD3DA95';
-const DOWNLOADED = '2026-07-15';
-const QUATERNIUS_SURVIVAL_SHA256 = 'DB7E41CE2B2F872480E3C24236FDB5CE64AD05071C436B6C47BC455CD3540EB5';
-const QUATERNIUS_PIRATE_KIT_SHA256 = 'ED201326D2F80CFAC4E3CDC7DB34152078AE35F98D77AA14ED7416A931276D36';
-const QUATERNIUS_DOWNLOADED = '2026-07-17';
-const POLY_PIZZA_FISHING_ROD_SHA256 = 'B51A2E1A642E0DF431B2C8992EB251F88F83B294282F7591319433A76EA396A7';
-const POLY_PIZZA_DOWNLOADED = '2026-07-24';
-
-const LEDGER_REQUIREMENTS = {
-  cannedFood: [
-    'cannedFood', '`cannedFood.glb`', 'Can / Kenney', 'https://kenney.nl/assets/food-kit',
-    '`food-kit@2.0:Models/GLB format/can.glb`', CC0_LEDGER_CELL, '156', '156',
-    `Food Kit 2.0 archive SHA-256 \`${FOOD_SHA256}\`; direct build from \`Models/GLB format/can.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  baitTin: [
-    'baitTin', '`baitTin.glb`', 'Small can / Kenney', 'https://kenney.nl/assets/food-kit',
-    '`food-kit@2.0:Models/GLB format/can-small.glb`', CC0_LEDGER_CELL, '154', '154',
-    `Food Kit 2.0 archive SHA-256 \`${FOOD_SHA256}\`; direct build from \`Models/GLB format/can-small.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  ductTape: [
-    'ductTape', '`ductTape.glb`', 'Hollow cylinder detailed / Kenney', 'https://kenney.nl/assets/prototype-kit',
-    '`prototype-kit@1.0:Models/GLB format/shape-hollow-cylinder-detailed.glb`', CC0_LEDGER_CELL, '192', '192',
-    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; direct build from \`Models/GLB format/shape-hollow-cylinder-detailed.glb\`; source node scale multiplied by \`[1, 0.35, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  compass: [
-    'compass', '`compass.glb`', 'Open compass / Quaternius', 'https://quaternius.com/packs/survival.html',
-    '`quaternius-survival-pack@2020-09:OBJ/Compass_Open.obj`', CC0_LEDGER_CELL, '656', '656',
-    `Survival Pack September 2020 archive SHA-256 \`${QUATERNIUS_SURVIVAL_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
-    QUATERNIUS_DOWNLOADED,
-  ],
-  flareGun: [
-    'flareGun', '`flareGun.glb`', 'Flare gun / Quaternius', 'https://quaternius.com/packs/survival.html',
-    '`quaternius-survival-pack@2020-09:OBJ/FlareGun.obj`', CC0_LEDGER_CELL, '540', '540',
-    `Survival Pack September 2020 archive SHA-256 \`${QUATERNIUS_SURVIVAL_SHA256}\`; restricted OBJ parsing; MTL base-color transfer; fan triangulation; prune, dedup, unpartition, and embedded resources.`,
-    QUATERNIUS_DOWNLOADED,
-  ],
-  anchor: [
-    'anchor', '`anchor.glb`', 'Anchor / Quaternius', 'https://quaternius.com/packs/piratekit.html',
-    '`quaternius-pirate-kit@2023-11:OBJ/Prop_Anchor.obj`', CC0_LEDGER_CELL, '544', '544',
-    `Pirate Kit November 2023 archive SHA-256 \`${QUATERNIUS_PIRATE_KIT_SHA256}\`; restricted OBJ parsing; MTL transfer with project steel PBR override (base color #66737d, metallic 0.85, roughness 0.42); fan triangulation; prune, dedup, unpartition, and embedded resources.`,
-    QUATERNIUS_DOWNLOADED,
-  ],
-  medicalKit: [
-    'medicalKit', '`medicalKit.glb`', 'Medical kit composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
-    '`prototype-kit@1.0:composite/medicalKit`', CC0_LEDGER_CELL, '228', '228',
-    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 228. Parts: \`Models/GLB format/shape-cube-rounded.glb\` case T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[1, 0.7, 0.3]\`, RGBA \`[0.85, 0.08, 0.06, 1]\`; \`Models/GLB format/shape-cube-half.glb\` cross-vertical T \`[0, 0.15, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.12, 0.8, 0.04]\`, RGBA \`[1, 1, 1, 1]\`; \`Models/GLB format/shape-cube-half.glb\` cross-horizontal T \`[0, 0.29, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.4, 0.24, 0.04]\`, RGBA \`[1, 1, 1, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  bucket: [
-    'bucket', '`bucket.glb`', 'Bucket / Kenney', 'https://kenney.nl/assets/survival-kit',
-    '`survival-kit@2.0:Models/GLB format/bucket.glb`', CC0_LEDGER_CELL, '68', '68',
-    `Survival Kit 2.0 archive SHA-256 \`${SURVIVAL_SHA256}\`; direct build from \`Models/GLB format/bucket.glb\`; source node scale multiplied by \`[1, 1, 1]\`; prune, deduplicate, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  bottledPaper: [
-    'bottledPaper', '`bottledPaper.glb`', 'Bottled paper composite / Kenney + project', 'https://kenney.nl/assets/survival-kit',
-    '`survival-kit@2.0:composite/bottledPaper`', CC0_LEDGER_CELL, '188', '188',
-    `Survival Kit 2.0 archive SHA-256 \`${SURVIVAL_SHA256}\` input \`Models/GLB format/bottle.glb\` (96 triangles), part \`bottle\` T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[1, 1, 1]\`, RGBA \`[1, 1, 1, 1]\`; Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\` input \`Models/GLB format/shape-cylinder-detailed.glb\` (92 triangles), part \`rolled-note\` T \`[0, 0.02, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.12, 0.52, 0.12]\`, RGBA \`[0.80, 0.73, 0.55, 1]\`; project-authored composition, replacement base colors, prune, unpartition, and embedded resources.`,
-    DOWNLOADED,
-  ],
-  flashlight: [
-    'flashlight', '`flashlight.glb`', 'Flashlight composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
-    '`prototype-kit@1.0:composite/flashlight`', CC0_LEDGER_CELL, '340', '340',
-    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 340. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` body T \`[0, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.9, 0.18]\`, RGBA \`[0.12, 0.16, 0.18, 1]\`; \`Models/GLB format/shape-cylinder.glb\` head T \`[0, 0.9, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.28, 0.25, 0.28]\`, RGBA \`[0.95, 0.32, 0.08, 1]\`; \`Models/GLB format/shape-hollow-cylinder-detailed.glb\` lens-ring T \`[0, 1.15, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.3, 0.1, 0.3]\`, RGBA \`[0.9, 0.95, 1, 1]\`; \`Models/GLB format/shape-cube-half.glb\` switch T \`[0, 0.65, 0.17]\`, R \`[0, 0, 0, 1]\`, S \`[0.08, 0.12, 0.06]\`, RGBA \`[0.95, 0.32, 0.08, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-  fishingRod: [
-    'fishingRod', '`fishingRod.glb`', 'Fishing rod / Justin Randall', 'https://poly.pizza/m/9gXWYDqB6vt',
-    '`poly-pizza:b50b26a5-173d-4833-af8f-1f30f97d3e59`', CC_BY_3_LEDGER_CELL, '14860', '2964',
-    `Source GLB SHA-256 \`${POLY_PIZZA_FISHING_ROD_SHA256}\`; downloaded from the model's official Poly Pizza static asset. Removed split source normals, welded coincident positions, simplified each material primitive with meshoptimizer ratio 0.16 and error limit 0.012, regenerated flat normals, pruned unused data, unpartitioned buffers, renamed the scene and root node, and embedded all resources in the committed GLB. Kenney Survival Kit 2.0 was checked first but contains no standalone fishing rod.`,
-    POLY_PIZZA_DOWNLOADED,
-  ],
-  scubaSet: [
-    'scubaSet', '`scubaSet.glb`', 'Scuba set composite / Kenney', 'https://kenney.nl/assets/prototype-kit',
-    '`prototype-kit@1.0:composite/scubaSet`', CC0_LEDGER_CELL, '688', '688',
-    `Prototype Kit 1.0 archive SHA-256 \`${PROTOTYPE_SHA256}\`; source triangle sum 688. Parts: \`Models/GLB format/shape-cylinder-detailed.glb\` tank-left T \`[-0.18, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.24, 1, 0.24]\`, RGBA \`[0.95, 0.35, 0.08, 1]\`; \`Models/GLB format/shape-cylinder-detailed.glb\` tank-right T \`[0.18, 0, 0]\`, R \`[0, 0, 0, 1]\`, S \`[0.24, 1, 0.24]\`, RGBA \`[0.95, 0.35, 0.08, 1]\`; \`Models/GLB format/shape-cube-rounded.glb\` harness T \`[0, 0.12, 0.15]\`, R \`[0, 0, 0, 1]\`, S \`[0.5, 0.72, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` loop-left T \`[-0.22, 0.58, 0.13]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.52, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` loop-right T \`[0.22, 0.58, 0.13]\`, R \`[0, 0, 0, 1]\`, S \`[0.18, 0.52, 0.16]\`, RGBA \`[0.08, 0.12, 0.16, 1]\`; \`Models/GLB format/shape-hollow-cylinder-half-detailed.glb\` regulator T \`[0, 1.05, 0.18]\`, R \`[0, 0, 0, 1]\`, S \`[0.14, 0.12, 0.14]\`, RGBA \`[0.12, 0.18, 0.22, 1]\`; prune, unpartition, and embed resources in the committed GLB.`,
-    DOWNLOADED,
-  ],
-};
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -368,15 +283,32 @@ function parseLedgerRow(row) {
   return row.slice(1, -1).split('|').map((cell) => cell.trim());
 }
 
-function verifyLedgerRow(ledger, itemId) {
+function verifyLedgerRow(ledger, itemId, measurement) {
   const rows = ledger.split(/\r?\n/).filter((line) => line.startsWith(`| ${itemId} |`));
   if (rows.length !== 1) {
-    throw new Error(`THIRD_PARTY_ASSETS.md: expected one ${itemId} row, received ${rows.length}`);
+    throw new Error(`ATTRIBUTION.md: expected one ${itemId} row, received ${rows.length}`);
   }
   const actual = parseLedgerRow(rows[0]);
-  const expected = LEDGER_REQUIREMENTS[itemId];
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`THIRD_PARTY_ASSETS.md: ${itemId} row does not match the expected record`);
+  const source = POLY_PIZZA_MODEL_SOURCES[itemId];
+  const licenseCell = `[${source.license}](${source.licenseUrl})`;
+  const expectedCore = [
+    itemId,
+    `\`${itemId}.glb\``,
+    `${source.title} / ${source.creator}`,
+    source.pageUrl,
+    `\`${source.sourceAssetId}\``,
+    licenseCell,
+    String(source.sourceTriangles),
+    String(measurement.triangles),
+  ];
+  if (
+    actual.length !== 10
+    || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expectedCore)
+    || !actual[8].includes(source.sha256)
+    || !actual[8].includes('official Poly Pizza static GLB')
+    || actual[9] !== '2026-07-25'
+  ) {
+    throw new Error(`ATTRIBUTION.md: ${itemId} row does not match the expected record`);
   }
 }
 
@@ -397,7 +329,7 @@ function sameNumbers(first, second) {
 function parseArguments(args) {
   let assetsOnly = false;
   let modelsDir = resolve('src', 'assets', 'models', 'items');
-  let ledgerPath = resolve('THIRD_PARTY_ASSETS.md');
+  let ledgerPath = resolve('src', 'assets', 'ATTRIBUTION.md');
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--assets-only') {
@@ -514,11 +446,8 @@ async function main() {
   if (!assetsOnly) {
     try {
       const ledger = await readFile(ledgerPath, 'utf8');
-      for (const itemId of Object.keys(LEDGER_REQUIREMENTS)) verifyLedgerRow(ledger, itemId);
-      for (const itemId of PROJECT_ITEM_IDS) {
-        if (ledger.split(/\r?\n/).some((line) => line.startsWith(`| ${itemId} |`))) {
-          throw new Error(`THIRD_PARTY_ASSETS.md: project-authored ${itemId} must not have a ledger row`);
-        }
+      for (const itemId of MODEL_IDS) {
+        if (measurements[itemId]) verifyLedgerRow(ledger, itemId, measurements[itemId]);
       }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));

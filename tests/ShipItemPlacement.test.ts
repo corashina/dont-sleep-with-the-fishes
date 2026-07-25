@@ -237,7 +237,7 @@ describe('ship item placement', () => {
     expect(fitted.scale).toBeGreaterThanOrEqual(0.75);
 
     expect(() => assignShipItems(cannedFood, [surface('too-small', ['provisions'], 0, {
-      footprint: { width: 0.29, depth: 0.35 },
+      footprint: { width: SHIP_ITEM_PROFILES.cannedFood.width * 0.74, depth: 0.35 },
       clearanceHeight: 0.42,
     })])).toThrow('Unable to place ship item: cannedFood-1');
   });
@@ -246,7 +246,7 @@ describe('ship item placement', () => {
     const bucket = createItemInstances().filter(({ type }) => type === 'bucket').slice(0, 1);
     const topShelf = surface('top-shelf', ['deckGear'], 0, {
       position: new Vector3(0, 4.007, 0),
-      footprint: { width: 0.6, depth: 0.6 },
+      footprint: { width: 0.72, depth: 0.7 },
       clearanceHeight: 1,
       standingPoints: [new Vector3(0, 2.22, -0.82)],
     });

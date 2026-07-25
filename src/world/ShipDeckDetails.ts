@@ -1,11 +1,9 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,
   Material,
   Mesh,
-  TorusGeometry,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
 import type { ShipDeckDetailKind, ShipDeckDetailSpec } from './ShipLayout';
@@ -18,17 +16,13 @@ export interface ShipDeckDetailsBuild {
 }
 
 interface DetailGeometry {
-  readonly box: BoxGeometry;
   readonly cylinder: CylinderGeometry;
-  readonly torus: TorusGeometry;
   readonly owned: ReadonlySet<BufferGeometry>;
 }
 
 function createDetailGeometry(): DetailGeometry {
-  const box = new BoxGeometry(1, 1, 1);
   const cylinder = new CylinderGeometry(0.5, 0.5, 1, 12);
-  const torus = new TorusGeometry(0.5, 0.1, 10, 24);
-  return { box, cylinder, torus, owned: new Set([box, cylinder, torus]) };
+  return { cylinder, owned: new Set([cylinder]) };
 }
 
 function addPart(
@@ -57,27 +51,13 @@ function addBarrel(root: Group, geometry: DetailGeometry, materials: ShipMateria
   addPart(root, geometry.cylinder, materials.darkMetal, 'barrel-band-upper', [0.96, 0.09, 0.96], [0, 0.88, 0]);
 }
 
-function addRopeCoil(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
-  addPart(root, geometry.torus, materials.rope, 'rope-coil', [1.1, 1.1, 0.55], [0, 0.07, 0], [Math.PI / 2, 0, 0]);
-}
-
-function addSpareTimber(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
-  ([-0.2, 0, 0.2] as const).forEach((z, index) => {
-    addPart(root, geometry.box, materials.timber, `spare-timber-${index + 1}`, [1.8, 0.22, 0.16], [0, 0.11, z]);
-  });
-}
-
 function addDetailParts(
-  kind: ShipDeckDetailKind,
+  _kind: ShipDeckDetailKind,
   root: Group,
   geometry: DetailGeometry,
   materials: ShipMaterials,
 ): void {
-  switch (kind) {
-    case 'barrel': addBarrel(root, geometry, materials); break;
-    case 'ropeCoil': addRopeCoil(root, geometry, materials); break;
-    case 'spareTimber': addSpareTimber(root, geometry, materials); break;
-  }
+  addBarrel(root, geometry, materials);
 }
 
 function toCollider(spec: ShipDeckDetailSpec): CollisionBox | undefined {

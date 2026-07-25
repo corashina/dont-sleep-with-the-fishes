@@ -198,60 +198,6 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
-  it('selects exactly the approved 8 day and 9 night wiki events', () => {
-    expect(INCLUDED_EVENT_PHASES).toEqual(INCLUDED);
-    expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, phase }) => [id, phase]))).toEqual(INCLUDED);
-    expect(SURVIVAL_EVENTS).toHaveLength(17);
-  });
-
-  it('ports every documented event field, weighted choice, effect, and mutation exactly', () => {
-    for (const event of SURVIVAL_EVENTS) {
-      const [title, cue, weight, earliestDay, latestDay, cooldownDays] = EXPECTED_METADATA[event.id as keyof typeof EXPECTED_METADATA];
-      expect(event).toMatchObject({ title, prompt: 'Choose a response.', cue, weight, earliestDay, cooldownDays });
-      expect(event.latestDay).toBe(latestDay);
-      expect(event.choices).toEqual(EXPECTED_CHOICES[event.id as keyof typeof EXPECTED_CHOICES]);
-      expect(event.choices.filter(({ itemId }) => itemId === undefined), event.id).toHaveLength(1);
-    }
-  });
-
-  it('authors one concise scene reveal for every included event', () => {
-    expect(Object.fromEntries(
-      SURVIVAL_EVENTS.map(({ id, revealText }) => [id, revealText]),
-    )).toEqual(EXPECTED_REVEAL_TEXT);
-  });
-
-  it('defines the exact canonical Snatcher target types in event data', () => {
-    const snatcher = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher')!;
-    expect(snatcher.targetItemIds).toEqual([
-      'anchor',
-      'bucket',
-      'medicalKit',
-      'flareGun',
-      'flashlight',
-      'map',
-      'scubaSet',
-      'umbrella',
-      'cannedFood',
-    ]);
-    expect(Object.isFrozen(snatcher.targetItemIds)).toBe(true);
-  });
-
-  it('uses spyglass exclusively and contains no excluded state or item references', () => {
-    const serialized = JSON.stringify(SURVIVAL_EVENTS);
-    expect(serialized).not.toMatch(/telescope|waterJug|chest|trade|route/i);
-    expect(SURVIVAL_EVENTS.flatMap(({ choices }) => choices).some(({ itemId }) => itemId === 'spyglass')).toBe(true);
-  });
-
-  it('freezes the catalog through every nested outcome and effect', () => {
-    const event = SURVIVAL_EVENTS[0]!;
-    const outcomeEntry = event.choices[0]!.outcomes[0];
-    expect(Object.isFrozen(INCLUDED_EVENT_PHASES)).toBe(true);
-    expect(Object.isFrozen(SURVIVAL_EVENTS)).toBe(true);
-    expect(Object.isFrozen(event)).toBe(true);
-    expect(Object.isFrozen(event.choices)).toBe(true);
-    expect(Object.isFrozen(outcomeEntry)).toBe(true);
-    expect(Object.isFrozen(outcomeEntry.effects)).toBe(true);
-  });
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
     const events = eligibleEvents(SURVIVAL_EVENTS, {

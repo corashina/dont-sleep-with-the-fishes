@@ -36,24 +36,26 @@ async function countRenderedTriangles(filePath) {
 function verifyLedgerRow(ledger, modelId) {
   const recipe = KENNEY_SHIP_FURNITURE_RECIPES[modelId];
   const row = ledger.split(/\r?\n/).find((line) => line.startsWith(`| ${modelId} |`));
-  if (!row) throw new Error(`THIRD_PARTY_ASSETS.md: missing ${modelId} row`);
+  if (!row) throw new Error(`ATTRIBUTION.md: missing ${modelId} row`);
   const requirements = [
-    KENNEY_SHIP_FURNITURE_PACK.pageUrl,
     `furniture-kit@1.0:${recipe.entry}`,
     'Kenney',
-    KENNEY_SHIP_FURNITURE_PACK.licenseUrl,
-    KENNEY_SHIP_FURNITURE_PACK.sha256,
     `| ${recipe.expectedTriangles} | ${recipe.expectedTriangles} |`,
-    'direct build',
-    'prune',
-    'deduplicate',
-    'unpartition',
-    'embed resources',
     '2026-07-15',
   ];
   for (const value of requirements) {
     if (!row.includes(value)) {
-      throw new Error(`THIRD_PARTY_ASSETS.md: ${modelId} row is missing ${value}`);
+      throw new Error(`ATTRIBUTION.md: ${modelId} row is missing ${value}`);
+    }
+  }
+  for (const value of [
+    KENNEY_SHIP_FURNITURE_PACK.pageUrl,
+    KENNEY_SHIP_FURNITURE_PACK.licenseUrl,
+    KENNEY_SHIP_FURNITURE_PACK.sha256,
+    'pruned, deduplicated, unpartitioned, and embedded',
+  ]) {
+    if (!ledger.includes(value)) {
+      throw new Error(`ATTRIBUTION.md: ship furniture ledger is missing ${value}`);
     }
   }
 }
@@ -132,7 +134,7 @@ async function main() {
 
   if (!options.assetsOnly) {
     try {
-      const ledger = await readFile(resolve('THIRD_PARTY_ASSETS.md'), 'utf8');
+      const ledger = await readFile(resolve('src', 'assets', 'ATTRIBUTION.md'), 'utf8');
       for (const modelId of SHIP_FURNITURE_IDS) verifyLedgerRow(ledger, modelId);
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));

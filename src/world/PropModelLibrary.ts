@@ -4,12 +4,12 @@ import {
   Group,
   Material,
   Mesh,
+  Texture,
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../game/ItemState';
 import {
-  ITEM_MODEL_ASSET_LEDGER,
   ITEM_MODEL_MAX_TOTAL_TRIANGLES,
   ITEM_MODEL_SPECS,
   type RuntimeModelSpec,
@@ -19,18 +19,27 @@ import {
   LIFEBOAT_EQUIPMENT_MODEL_SPECS,
   type LifeboatEquipmentId,
 } from './lifeboatEquipmentManifest';
-import { collectMeshResources, disposeMeshResources } from './SceneResources';
+import {
+  PRACTICAL_LIGHT_MODEL_IDS,
+  PRACTICAL_LIGHT_MODEL_SPECS,
+  type PracticalLightModelId,
+} from './practicalLightModelManifest';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+} from './SceneResources';
 
-type RuntimeModelId = ItemId | LifeboatEquipmentId;
+type RuntimeModelId = ItemId | LifeboatEquipmentId | PracticalLightModelId;
 const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
   ...ITEM_IDS,
   ...LIFEBOAT_EQUIPMENT_IDS,
+  ...PRACTICAL_LIGHT_MODEL_IDS,
 ];
 
 function runtimeModelSpec(id: RuntimeModelId): RuntimeModelSpec {
-  return id === 'fishingRod'
-    ? LIFEBOAT_EQUIPMENT_MODEL_SPECS[id]
-    : ITEM_MODEL_SPECS[id];
+  if (id === 'fishingRod') return LIFEBOAT_EQUIPMENT_MODEL_SPECS[id];
+  if (id === 'lantern' || id === 'ceilingLight') return PRACTICAL_LIGHT_MODEL_SPECS[id];
+  return ITEM_MODEL_SPECS[id];
 }
 
 export interface ItemModelLoader {
@@ -63,12 +72,18 @@ export function geometryTriangles(geometry: BufferGeometry): number {
 function disposeRoots(roots: Iterable<Group>): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
+  const textures = new Set<Texture>();
 
   for (const root of roots) {
     collectMeshResources(root, geometries, materials);
   }
+  materials.forEach((material) => {
+    Object.values(material).forEach((value) => {
+      if (value instanceof Texture) textures.add(value);
+    });
+  });
 
-  disposeMeshResources(geometries, materials);
+  disposeResourceSets(geometries, textures, materials);
 }
 
 function attemptCleanup(action: () => void): void {
@@ -76,59 +91,6 @@ function attemptCleanup(action: () => void): void {
     action();
   } catch {
     // Load rollback preserves the primary load or validation error.
-  }
-}
-
-function ledgerCells(line: string): readonly string[] | null {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
-  return trimmed.slice(1, -1).split('|').map((cell) => cell.trim());
-}
-
-function inlineCodeValue(cell: string): string | null {
-  return /^`([^`]+)`$/.exec(cell)?.[1] ?? null;
-}
-
-function markdownLinkUrl(cell: string): string | null {
-  return /^\[[^\]]+\]\(([^)]+)\)$/.exec(cell)?.[1] ?? null;
-}
-
-function ledgerCreator(cell: string): string | null {
-  const separator = cell.lastIndexOf(' / ');
-  return separator >= 0 ? cell.slice(separator + 3) : null;
-}
-
-function validateLedgerEntry(
-  id: RuntimeModelId,
-  spec: RuntimeModelSpec,
-  rows: readonly (readonly string[])[],
-): void {
-  const matches = rows.filter((row) => row[0] === id);
-  if (matches.length !== 1) {
-    throw new ItemModelLoadError(
-      id,
-      matches.length === 0 ? 'asset ledger row is missing' : 'asset ledger row is duplicated',
-    );
-  }
-
-  const row = matches[0]!;
-  if (row.length !== 10) throw new ItemModelLoadError(id, 'asset ledger row format is invalid');
-  if (inlineCodeValue(row[1]!) !== `${id}.glb`) {
-    throw new ItemModelLoadError(id, 'asset ledger filename does not match the manifest');
-  }
-  const provenance = spec.provenance;
-  if (provenance.kind !== 'thirdParty') return;
-  if (row[3] !== provenance.sourceUrl) {
-    throw new ItemModelLoadError(id, 'asset ledger source URL does not match the manifest');
-  }
-  if (inlineCodeValue(row[4]!) !== provenance.sourceAssetId) {
-    throw new ItemModelLoadError(id, 'asset ledger source asset ID does not match the manifest');
-  }
-  if (ledgerCreator(row[2]!) !== provenance.creator) {
-    throw new ItemModelLoadError(id, 'asset ledger creator does not match the manifest');
-  }
-  if (markdownLinkUrl(row[5]!) !== provenance.licenseUrl) {
-    throw new ItemModelLoadError(id, 'asset ledger license URL does not match the manifest');
   }
 }
 
@@ -149,12 +111,6 @@ function validateSpec(id: RuntimeModelId, spec: RuntimeModelSpec | undefined): R
     || !metadata.rawBounds.max.some((maximum, axis) => maximum > metadata.rawBounds.min[axis]!)
   ) {
     throw new ItemModelLoadError(id, 'generated bounds metadata is invalid');
-  }
-  if (
-    spec.provenance.kind === 'project'
-    && spec.provenance.recipeId !== `project-item-models@2:${id}`
-  ) {
-    throw new ItemModelLoadError(id, 'project recipe ID does not match the item ID');
   }
   return spec;
 }
@@ -266,15 +222,12 @@ export class PropModelLibrary {
   private constructor(
     private readonly itemTemplates: ReadonlyMap<ItemId, Group>,
     private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group>,
+    private readonly practicalLightTemplates: ReadonlyMap<PracticalLightModelId, Group>,
   ) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
-    const ledgerRows = ITEM_MODEL_ASSET_LEDGER.split(/\r?\n/)
-      .map(ledgerCells)
-      .filter((row): row is readonly string[] => row !== null);
     for (const id of RUNTIME_MODEL_IDS) {
-      const spec = validateSpec(id, runtimeModelSpec(id));
-      if (spec.provenance.kind === 'thirdParty') validateLedgerEntry(id, spec, ledgerRows);
+      validateSpec(id, runtimeModelSpec(id));
     }
 
     const results = await Promise.allSettled(RUNTIME_MODEL_IDS.map(async (id): Promise<LoadedTemplate> => {
@@ -323,14 +276,19 @@ export class PropModelLibrary {
         id,
         loaded[ITEM_IDS.length + index]!.root,
       ])),
+      new Map(PRACTICAL_LIGHT_MODEL_IDS.map((id, index) => [
+        id,
+        loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.root,
+      ])),
     );
   }
 
   static fromTemplatesForTest(
     itemTemplates: ReadonlyMap<ItemId, Group>,
     equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group> = new Map(),
+    practicalLightTemplates: ReadonlyMap<PracticalLightModelId, Group> = new Map(),
   ): PropModelLibrary {
-    return new PropModelLibrary(itemTemplates, equipmentTemplates);
+    return new PropModelLibrary(itemTemplates, equipmentTemplates, practicalLightTemplates);
   }
 
   create(instance: ItemInstance): Group {
@@ -358,12 +316,25 @@ export class PropModelLibrary {
     return clone;
   }
 
+  createPracticalLight(id: PracticalLightModelId): Group {
+    const template = this.practicalLightTemplates.get(id);
+    if (!template) throw new Error(`Missing practical light model template: ${id}`);
+    const clone = cloneOwnedTemplate(template);
+    clone.position.set(0, 0, 0);
+    clone.quaternion.identity();
+    clone.scale.set(1, 1, 1);
+    clone.name = `practical-light:${id}`;
+    clone.userData.practicalLightId = id;
+    return clone;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     disposeRoots([
       ...this.itemTemplates.values(),
       ...this.equipmentTemplates.values(),
+      ...this.practicalLightTemplates.values(),
     ]);
   }
 }

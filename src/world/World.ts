@@ -151,7 +151,7 @@ export class World {
     shipAssets?: ShipAssets,
   ) {
     const rollback: (() => void)[] = [];
-    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets);
+    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets, propModels);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
     this.ship.position.y = -FREIGHTER_DRAFT;

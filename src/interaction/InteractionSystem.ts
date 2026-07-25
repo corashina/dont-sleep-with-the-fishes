@@ -1,7 +1,4 @@
 import {
-  Material,
-  Mesh,
-  MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   Raycaster,
@@ -13,6 +10,7 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
+import { HoverOutline } from '../rendering/HoverOutline';
 
 export type RayTarget = 'none' | 'item' | 'deposit';
 
@@ -87,9 +85,7 @@ export interface InteractionTarget {
 export class InteractionSystem {
   private readonly raycaster = new Raycaster();
   private readonly center = new Vector2(0, 0);
-  private highlighted: Object3D | null = null;
-  private readonly originalMaterials = new Map<Mesh, Material | Material[]>();
-  private readonly highlightMaterials = new Set<MeshStandardMaterial>();
+  private readonly hoverOutline = new HoverOutline();
 
   constructor(private readonly camera: PerspectiveCamera) {
     this.raycaster.far = 3.2;
@@ -121,60 +117,21 @@ export class InteractionSystem {
         }
       }
     }
-    this.setHighlight(tagged);
+    const targetItem = tagged?.userData.instanceId
+      ? instances.get(tagged.userData.instanceId as ItemInstanceId) ?? null
+      : null;
+    this.hoverOutline.setTarget(targetItem === null ? null : tagged);
 
     if (!tagged) return { target: 'none', targetItem: null };
     if (tagged.name === 'lifeboat' || tagged.userData.boatDepositTarget === true) {
       return { target: 'deposit', targetItem: null };
     }
-    const targetItem = instances.get(tagged.userData.instanceId as ItemInstanceId) ?? null;
     return targetItem
       ? { target: 'item', targetItem }
       : { target: 'none', targetItem: null };
   }
 
   dispose(): void {
-    this.setHighlight(null);
-  }
-
-  private setHighlight(next: Object3D | null): void {
-    if (next === this.highlighted) return;
-    this.clearHighlight();
-    this.highlighted = next;
-    if (!next) return;
-
-    const clonesByOriginal = new Map<MeshStandardMaterial, MeshStandardMaterial>();
-    next.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      const originals = object.material;
-      const materials = Array.isArray(originals) ? originals : [originals];
-      let changed = false;
-      const highlighted = materials.map((material) => {
-        if (!(material instanceof MeshStandardMaterial)) return material;
-        changed = true;
-        let clone = clonesByOriginal.get(material);
-        if (!clone) {
-          clone = material.clone();
-          clone.emissive.setHex(0x8b7650);
-          clone.emissiveIntensity = 0.45;
-          clonesByOriginal.set(material, clone);
-          this.highlightMaterials.add(clone);
-        }
-        return clone;
-      });
-      if (!changed) return;
-      this.originalMaterials.set(object, originals);
-      object.material = Array.isArray(originals) ? highlighted : highlighted[0]!;
-    });
-  }
-
-  private clearHighlight(): void {
-    this.originalMaterials.forEach((material, mesh) => {
-      mesh.material = material;
-    });
-    this.originalMaterials.clear();
-    this.highlightMaterials.forEach((material) => material.dispose());
-    this.highlightMaterials.clear();
-    this.highlighted = null;
+    this.hoverOutline.dispose();
   }
 }

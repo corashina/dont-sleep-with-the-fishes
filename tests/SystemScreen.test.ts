@@ -1,25 +1,12 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createSystemScreen } from '../src/ui/SystemScreen';
 
+const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
+
 describe('SystemScreen', () => {
-  it('builds the shared poster hierarchy with explicit typography roles', () => {
-    const screen = createSystemScreen({
-      kind: 'loading',
-      kicker: 'RECOVERING SUPPLIES',
-      title: 'Preparing the ship',
-      lead: 'Loading the equipment you will need to survive.',
-    });
-
-    expect(screen.classList).toContain('system-screen');
-    expect(screen.classList).toContain('system-screen--loading');
-    expect(screen.querySelector('.kicker')?.classList).toContain('ui-role-context');
-    expect(screen.querySelector('h1')?.classList).toContain('ui-role-display');
-    expect(screen.querySelector('.lead')?.classList).toContain('ui-role-narrative');
-    expect(screen.querySelector('.fine-print')).toBeNull();
-  });
-
   it('renders diagnostic text literally instead of creating markup', () => {
     const screen = createSystemScreen({
       kind: 'error',

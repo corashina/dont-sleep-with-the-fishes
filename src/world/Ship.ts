@@ -10,6 +10,8 @@ import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
+import type { PropModelLibrary } from './PropModelLibrary';
+import { createShipRoomLights } from './ShipRoomLights';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
 import type { ShipAssets } from './ShipAssets';
@@ -166,6 +168,7 @@ export function createShip(
   shipFurniture: ShipFurnitureLibrary,
   maxTextureAnisotropy: number,
   shipAssets?: ShipAssets,
+  propModels?: PropModelLibrary,
 ): ShipBuild {
   validateShipLayout(SHIP_LAYOUT);
   const root = new Group();
@@ -176,12 +179,14 @@ export function createShip(
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
   let details: ReturnType<typeof createShipDeckDetails> | undefined;
   let rigging: ReturnType<typeof createShipRigging> | undefined;
+  let roomLights: ReturnType<typeof createShipRoomLights> | undefined;
   let smoke: ShipSmoke | undefined;
   try {
     geometry = createShipGeometry(materials, SHIP_LAYOUT, contactDepth);
     furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT, contactDepth);
     details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
     rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
+    roomLights = createShipRoomLights(propModels?.createPracticalLight('ceilingLight'));
     const structuralColliders = [
       ...geometry.shellColliders,
       ...details.colliders,
@@ -198,12 +203,14 @@ export function createShip(
       furniture.root,
       details.root,
       rigging.root,
+      roomLights.root,
       contactDepth.root,
       smoke.points,
     );
     root.add(geometry.root);
   } catch (error) {
     smoke?.dispose();
+    roomLights?.dispose();
     rigging?.disposeGeometry();
     details?.disposeGeometry();
     furniture?.disposeGeometry();
@@ -217,6 +224,7 @@ export function createShip(
   const assembledFurniture = furniture;
   const assembledDetails = details;
   const assembledRigging = rigging;
+  const assembledRoomLights = roomLights;
   const assembledSmoke = smoke;
   const colliders = [
     ...assembledGeometry.shellColliders,
@@ -251,6 +259,7 @@ export function createShip(
       disposed = true;
       assembledSmoke.dispose();
       assembledRigging.disposeGeometry();
+      assembledRoomLights.dispose();
       assembledDetails.disposeGeometry();
       assembledFurniture.disposeGeometry();
       assembledGeometry.disposeGeometry();

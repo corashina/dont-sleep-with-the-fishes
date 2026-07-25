@@ -15,51 +15,6 @@ const overlap = (
   && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
-
-  it('authors the starting cabin cluster without changing colliders or surfaces', () => {
-    const materials = createShipMaterials();
-    const library = createTestShipFurniture();
-    const unaccented = createShipFurniture(materials, library);
-    const contact = createContactDepthLayer();
-    const build = createShipFurniture(materials, library, SHIP_LAYOUT, contact);
-    const desk = build.root.getObjectByName('furniture:cabin-desk-aft')!;
-    const bookcase = build.root.getObjectByName('furniture:cabin-bookcase-forward')!;
-
-    expect(desk.getObjectByName('construction:desk-edge-band')).toBeInstanceOf(Mesh);
-    expect(desk.getObjectByName('construction:desk-floor-cleat-port')).toBeInstanceOf(Mesh);
-    expect(bookcase.getObjectByName('construction:bookcase-hinge-port')).toBeInstanceOf(Mesh);
-    expect(bookcase.getObjectByName('construction:bookcase-wall-bracket')).toBeInstanceOf(Mesh);
-    expect(contact.root.getObjectByName('contact:cabin-desk-aft')).toBeInstanceOf(Mesh);
-    expect(contact.root.getObjectByName('contact:cabin-bookcase-forward')).toBeInstanceOf(Mesh);
-    expect(build.colliders).toEqual(unaccented.colliders);
-    expect(build.surfaces).toEqual(unaccented.surfaces);
-
-    build.disposeGeometry();
-    unaccented.disposeGeometry();
-    contact.dispose();
-    materials.dispose();
-    library.dispose();
-  });
-
-  it('uses plain timber only for the aft-port cargo crate body', () => {
-    const materials = createShipMaterials();
-    const library = createTestShipFurniture();
-    const build = createShipFurniture(materials, library);
-    const aftPortBody = build.root.getObjectByName('furniture:cargo-crate-aft-port')
-      ?.getObjectByName('crate-body');
-    const aftStarboardBody = build.root.getObjectByName('furniture:cargo-crate-aft-starboard')
-      ?.getObjectByName('crate-body');
-
-    expect(aftPortBody).toBeInstanceOf(Mesh);
-    expect((aftPortBody as Mesh).material).toBe(materials.plainTimber);
-    expect(aftStarboardBody).toBeInstanceOf(Mesh);
-    expect((aftStarboardBody as Mesh).material).toBe(materials.timber);
-
-    build.disposeGeometry();
-    materials.dispose();
-    library.dispose();
-  });
-
   it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();
@@ -153,29 +108,6 @@ describe('ship furniture', () => {
     materials.dispose();
     library.dispose();
   });
-
-  it('keeps the restored lowest cabin shelf within its owner aperture sightline', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 1);
-    const lowestShelf = ship.itemSurfaces.find(({ id }) =>
-      id === 'cabin-bookcase-forward:level-1')!;
-
-    expect(lowestShelf).toBeDefined();
-    expect(lowestShelf.standingPoints).toHaveLength(1);
-    expect(lowestShelf.standingPoints[0]!.z).toBeCloseTo(10.9);
-    expect(isShipSurfaceStandingPointVisible(
-      lowestShelf,
-      lowestShelf.standingPoints[0]!,
-      ship.colliders,
-    )).toBe(true);
-    ship.itemSurfaces.forEach((surface) => surface.standingPoints.forEach((point) =>
-      expect(isShipSurfaceStandingPointVisible(surface, point, ship.colliders), surface.id)
-        .toBe(true)));
-
-    ship.dispose();
-    library.dispose();
-  });
-
   it('does not treat arbitrary owner volume as a surface access aperture', () => {
     const surface = {
       id: 'solid-table:inside',

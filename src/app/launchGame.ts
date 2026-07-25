@@ -177,6 +177,17 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       });
       return;
     }
+    if (error.itemId === 'lantern' || error.itemId === 'ceilingLight') {
+      const label = error.itemId === 'lantern' ? 'lifeboat lantern' : 'ship lighting';
+      renderSystemScreen(mount, {
+        kind: 'error',
+        kicker: 'LIGHTING UNAVAILABLE',
+        title: `Unable to prepare the ${label}`,
+        lead: 'A required practical light model could not be loaded.',
+        detail: error.message,
+      });
+      return;
+    }
 
     const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
     renderSystemScreen(mount, {

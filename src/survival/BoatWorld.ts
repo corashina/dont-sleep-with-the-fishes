@@ -75,6 +75,10 @@ import { BoatSpray } from './BoatSpray';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import type { FishingCatchId } from './fishingCatalog';
+import {
+  createSurvivalLantern,
+  type SurvivalLantern,
+} from './SurvivalLantern';
 import type {
   PresentationCue,
   SurvivalSnapshot,
@@ -404,6 +408,7 @@ export class BoatWorld {
   private readonly cameraRig = new Group();
   private readonly boat: Group;
   private readonly contactDepth: ContactDepthLayer;
+  private readonly lantern: SurvivalLantern;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
   private readonly distantVessel = new Group();
@@ -538,6 +543,8 @@ export class BoatWorld {
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
     this.contactDepth = createContactDepthLayer();
     this.boat.add(this.contactDepth.root);
+    this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
+    this.boat.add(this.lantern.root);
 
     const platform = new Group();
     platform.name = 'survival-supply-platform';
@@ -1056,6 +1063,7 @@ export class BoatWorld {
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
       () => this.contactDepth.dispose(),
+      () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),
@@ -1451,6 +1459,7 @@ export class BoatWorld {
     this.ambient.intensity = atmosphere.ambientLightIntensity;
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity;
+    this.lantern.light.intensity = this.phase === 'night' ? 4.2 : 2.8;
     if (this.scene.background instanceof Color) {
       this.scene.background.copy(atmosphere.horizonColor);
     } else {

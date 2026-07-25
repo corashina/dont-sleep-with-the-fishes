@@ -8,7 +8,7 @@ $stagedRoot = Join-Path $modelsRoot ".items-stage-$swapId"
 $backupRoot = Join-Path $modelsRoot ".items-backup-$swapId"
 $osTempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $tempRoot = Join-Path $osTempRoot "dont-sleep-item-models-$([guid]::NewGuid().ToString('N'))"
-$itemIds = @(
+$modelIds = @(
   'cannedFood'
   'baitTin'
   'ductTape'
@@ -28,11 +28,23 @@ $itemIds = @(
   'harpoonGun'
   'energyBar'
   'fishingRod'
+  'lantern'
+  'ceilingLight'
 )
-$expectedFiles = @($itemIds | ForEach-Object { "$_.glb" }) + @('item-model-metadata.json')
+$expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) + @('item-model-metadata.json')
 
 . (Join-Path $PSScriptRoot 'item-model-publication.ps1')
-. (Join-Path $PSScriptRoot 'kenney-item-sources.ps1')
+
+function Assert-FileSha256 {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Expected
+  )
+  $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  if (-not $actual.Equals($Expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Source SHA-256 mismatch for $Path`: expected $Expected, received $actual"
+  }
+}
 
 try {
   New-Item -ItemType Directory -Force -Path $modelsRoot | Out-Null
@@ -41,66 +53,40 @@ try {
   New-Item -ItemType Directory -Path $stagedRoot | Out-Null
   New-Item -ItemType Directory -Path $tempRoot | Out-Null
   $tempRoot = (Resolve-Path -LiteralPath $tempRoot).Path
-  $archivesRoot = Join-Path $tempRoot 'archives'
-  $sourceRoot = Join-Path $tempRoot 'sources'
-  $kenneyBuildRoot = Join-Path $tempRoot 'kenney-build'
-  $polyPizzaBuildRoot = Join-Path $tempRoot 'poly-pizza-build'
-  $quaterniusBuildRoot = Join-Path $tempRoot 'quaternius-build'
-  $projectBuildRoot = Join-Path $tempRoot 'project-build'
-  $quaterniusSourceRoot = Join-Path $repositoryRoot 'third_party\quaternius-items'
-  New-Item -ItemType Directory -Path $archivesRoot | Out-Null
+  $sourceRoot = Join-Path $tempRoot 'poly-pizza-sources'
+  $buildRoot = Join-Path $tempRoot 'poly-pizza-build'
   New-Item -ItemType Directory -Path $sourceRoot | Out-Null
 
   Push-Location $repositoryRoot
   try {
-    $packJson = & node scripts/kenney-item-models.mjs --packs
-    if ($LASTEXITCODE -ne 0) { throw 'Pinned Kenney pack descriptor query failed' }
+    $sourceJson = & node scripts/poly-pizza-models.mjs --sources
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned Poly Pizza descriptor query failed' }
   } finally {
     Pop-Location
   }
-  $packs = $packJson | ConvertFrom-Json
+  $sources = $sourceJson | ConvertFrom-Json
 
-  foreach ($packProperty in $packs.PSObject.Properties) {
-    $packSlug = $packProperty.Name
-    $pack = $packProperty.Value
-    $archivePath = Join-Path $archivesRoot "$packSlug-$($pack.version).zip"
-    Invoke-WebRequest -UseBasicParsing -Uri $pack.archiveUrl -OutFile $archivePath
-    Assert-FileSha256 -Path $archivePath -Expected $pack.sha256
-    Expand-ApprovedArchiveEntries `
-      -ArchivePath $archivePath `
-      -DestinationRoot (Join-Path $sourceRoot $packSlug) `
-      -Entries @($pack.requiredEntries)
+  foreach ($sourceProperty in $sources.PSObject.Properties) {
+    $id = $sourceProperty.Name
+    $source = $sourceProperty.Value
+    $sourcePath = Join-Path $sourceRoot "$id.glb"
+    Invoke-WebRequest -UseBasicParsing -Uri $source.downloadUrl -OutFile $sourcePath
+    Assert-FileSha256 -Path $sourcePath -Expected $source.sha256
   }
 
   Push-Location $repositoryRoot
   try {
-    $polyPizzaSourceJson = & node scripts/poly-pizza-fishing-rod.mjs --source
-    if ($LASTEXITCODE -ne 0) { throw 'Pinned Poly Pizza fishing rod descriptor query failed' }
-    $polyPizzaSource = $polyPizzaSourceJson | ConvertFrom-Json
-    $fishingRodSourcePath = Join-Path $tempRoot 'poly-pizza-fishing-rod.glb'
-    Invoke-WebRequest -UseBasicParsing -Uri $polyPizzaSource.downloadUrl -OutFile $fishingRodSourcePath
-    Assert-FileSha256 -Path $fishingRodSourcePath -Expected $polyPizzaSource.sha256
-    & node scripts/poly-pizza-fishing-rod.mjs `
-      $fishingRodSourcePath `
-      (Join-Path $polyPizzaBuildRoot 'fishingRod.glb')
-    if ($LASTEXITCODE -ne 0) { throw 'Poly Pizza fishing rod build failed' }
-    & node scripts/kenney-item-models.mjs $sourceRoot $kenneyBuildRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Kenney item model build failed' }
-    & node scripts/project-item-models.mjs $projectBuildRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Project item model build failed' }
-    & node scripts/quaternius-item-models.mjs $quaterniusSourceRoot $quaterniusBuildRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Quaternius item model build failed' }
+    & node scripts/poly-pizza-models.mjs $sourceRoot $buildRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Poly Pizza model build failed' }
   } finally {
     Pop-Location
   }
 
-  Copy-UniqueModelBuildOutputs `
-    -BuildRoots @($kenneyBuildRoot, $polyPizzaBuildRoot, $quaterniusBuildRoot, $projectBuildRoot) `
-    -DestinationRoot $stagedRoot
+  Copy-UniqueModelBuildOutputs -BuildRoots @($buildRoot) -DestinationRoot $stagedRoot
 
   Push-Location $repositoryRoot
   try {
-    & node scripts/item-model-metadata.mjs $stagedRoot @itemIds
+    & node scripts/item-model-metadata.mjs $stagedRoot @modelIds
     if ($LASTEXITCODE -ne 0) { throw 'Item model metadata build failed' }
   } finally {
     Pop-Location
@@ -119,12 +105,19 @@ try {
     Pop-Location
   }
 
-  Publish-ItemModelDirectory -ModelsRoot $modelsRoot -OutputRoot $outputRoot -StagedRoot $stagedRoot -BackupRoot $backupRoot
+  Publish-ItemModelDirectory `
+    -ModelsRoot $modelsRoot `
+    -OutputRoot $outputRoot `
+    -StagedRoot $stagedRoot `
+    -BackupRoot $backupRoot
 } finally {
   Remove-GuardedSwapDirectory -ModelsRoot $modelsRoot -Path $stagedRoot -Prefix '.items-stage-'
   if (Test-Path -LiteralPath $tempRoot) {
     $resolvedTempRoot = (Resolve-Path -LiteralPath $tempRoot).Path
-    $tempPrefix = $osTempRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $tempPrefix = $osTempRoot.TrimEnd(
+      [System.IO.Path]::DirectorySeparatorChar,
+      [System.IO.Path]::AltDirectorySeparatorChar
+    ) + [System.IO.Path]::DirectorySeparatorChar
     if (-not $resolvedTempRoot.StartsWith($tempPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
       throw "Refusing to clean non-temporary path: $resolvedTempRoot"
     }
