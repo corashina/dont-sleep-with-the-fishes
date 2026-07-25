@@ -423,7 +423,7 @@ export class BoatWorld {
   private readonly originalCameraQuaternion: Quaternion;
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
-  private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.35);
+  private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.55);
   private readonly fishingCameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
     FISHING_PLAYER_SEAT.y,
@@ -590,7 +590,7 @@ export class BoatWorld {
     this.cameraRig.name = 'boat-camera-rig';
     this.motionRig.add(this.boat, this.cameraRig);
     this.cameraRig.add(camera);
-    camera.position.set(0, 0.88, 2.35);
+    camera.position.set(0, 0.88, 1.72);
     camera.lookAt(this.baseCameraLookTarget);
     this.baseCameraPosition.copy(camera.position);
     this.baseCameraQuaternion = camera.quaternion.clone();

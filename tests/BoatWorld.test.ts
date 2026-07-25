@@ -298,6 +298,15 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const base = camera.quaternion.clone();
+    expect(camera.position.toArray()).toEqual([0, 0.88, 1.72]);
+    const expectedBaseQuaternion = new Quaternion().setFromRotationMatrix(
+      new Matrix4().lookAt(
+        new Vector3(0, 0.88, 1.72),
+        new Vector3(0, -0.18, -1.55),
+        camera.up,
+      ),
+    );
+    expect(camera.quaternion.toArray()).toEqual(expectedBaseQuaternion.toArray());
     expect(world).not.toHaveProperty('setPointer');
     for (let index = 1; index <= 12; index += 1) {
       world.update(index * 0.1, 0.1);
