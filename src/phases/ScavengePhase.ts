@@ -32,7 +32,7 @@ import { commitBoatDeposit } from './scavengeDeposit';
 
 const RUN_SECONDS = 120;
 export const TITLE_CAMERA_POSITION = [33, 11.5, -4] as const;
-export const TITLE_CAMERA_TARGET = [0, 5.5, -3] as const;
+export const TITLE_CAMERA_TARGET = [0, 5.5, 2] as const;
 const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
 
 export class ScavengePhase implements GamePhase {
