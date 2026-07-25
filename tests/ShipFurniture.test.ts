@@ -1,6 +1,7 @@
 import { Euler, Material, Mesh, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT, analyzeShipNavigation } from '../src/world/ShipLayout';
+import { createContactDepthLayer } from '../src/world/ContactDepthLayer';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShip, isShipSurfaceStandingPointVisible } from '../src/world/Ship';
 import { createShipMaterials } from '../src/world/ShipMaterials';
@@ -14,6 +15,31 @@ const overlap = (
   && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
+
+  it('authors the starting cabin cluster without changing colliders or surfaces', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const unaccented = createShipFurniture(materials, library);
+    const contact = createContactDepthLayer();
+    const build = createShipFurniture(materials, library, SHIP_LAYOUT, contact);
+    const desk = build.root.getObjectByName('furniture:cabin-desk-aft')!;
+    const bookcase = build.root.getObjectByName('furniture:cabin-bookcase-forward')!;
+
+    expect(desk.getObjectByName('construction:desk-edge-band')).toBeInstanceOf(Mesh);
+    expect(desk.getObjectByName('construction:desk-floor-cleat-port')).toBeInstanceOf(Mesh);
+    expect(bookcase.getObjectByName('construction:bookcase-hinge-port')).toBeInstanceOf(Mesh);
+    expect(bookcase.getObjectByName('construction:bookcase-wall-bracket')).toBeInstanceOf(Mesh);
+    expect(contact.root.getObjectByName('contact:cabin-desk-aft')).toBeInstanceOf(Mesh);
+    expect(contact.root.getObjectByName('contact:cabin-bookcase-forward')).toBeInstanceOf(Mesh);
+    expect(build.colliders).toEqual(unaccented.colliders);
+    expect(build.surfaces).toEqual(unaccented.surfaces);
+
+    build.disposeGeometry();
+    unaccented.disposeGeometry();
+    contact.dispose();
+    materials.dispose();
+    library.dispose();
+  });
 
   it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();

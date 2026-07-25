@@ -2,6 +2,7 @@ import { Group, Vector3 } from 'three';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
+import { createContactDepthLayer } from './ContactDepthLayer';
 import { createShipDeckDetails } from './ShipDeckDetails';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -170,14 +171,15 @@ export function createShip(
   const root = new Group();
   root.name = 'sinking-ship';
   const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy, shipAssets);
+  const contactDepth = createContactDepthLayer();
   let geometry: ReturnType<typeof createShipGeometry> | undefined;
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
   let details: ReturnType<typeof createShipDeckDetails> | undefined;
   let rigging: ReturnType<typeof createShipRigging> | undefined;
   let smoke: ShipSmoke | undefined;
   try {
-    geometry = createShipGeometry(materials);
-    furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT);
+    geometry = createShipGeometry(materials, SHIP_LAYOUT, contactDepth);
+    furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT, contactDepth);
     details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
     rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
     const structuralColliders = [
@@ -192,7 +194,13 @@ export function createShip(
     );
     smoke = new ShipSmoke(geometry.stackOutlets);
     smoke.points.name = 'freighter-smoke';
-    geometry.root.add(furniture.root, details.root, rigging.root, smoke.points);
+    geometry.root.add(
+      furniture.root,
+      details.root,
+      rigging.root,
+      contactDepth.root,
+      smoke.points,
+    );
     root.add(geometry.root);
   } catch (error) {
     smoke?.dispose();
@@ -200,6 +208,7 @@ export function createShip(
     details?.disposeGeometry();
     furniture?.disposeGeometry();
     geometry?.disposeGeometry();
+    contactDepth.dispose();
     materials.dispose();
     throw error;
   }
@@ -245,6 +254,7 @@ export function createShip(
       assembledDetails.disposeGeometry();
       assembledFurniture.disposeGeometry();
       assembledGeometry.disposeGeometry();
+      contactDepth.dispose();
       materials.dispose();
     },
   };

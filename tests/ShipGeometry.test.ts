@@ -1,6 +1,7 @@
 import { Box3, CylinderGeometry, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
+import { createContactDepthLayer } from '../src/world/ContactDepthLayer';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
@@ -123,6 +124,34 @@ describe('freighter geometry', () => {
     && z >= box.minZ && z <= box.maxZ
     && Math.abs(box.minY - FREIGHTER_DIMENSIONS.deckY) < 1e-8
     && Math.abs(box.maxY - (FREIGHTER_DIMENSIONS.deckY + layout.rail.height)) < 1e-8);
+
+  it('adds focal cabin construction and local contacts without changing collision', () => {
+    const materials = createShipMaterials();
+    const unaccented = createShipGeometry(materials);
+    const contact = createContactDepthLayer();
+    const build = createShipGeometry(materials, SHIP_LAYOUT, contact);
+    const expected = [
+      'crew-cabin-roof-fascia-port',
+      'crew-cabin-roof-fascia-starboard',
+      'wheelhouse-front-sill-band',
+      'wheelhouse-header-bracket-port',
+      'wheelhouse-header-bracket-starboard',
+      'wheelhouse-repair-plate-port-aft',
+    ];
+
+    expected.forEach((name) =>
+      expect(build.root.getObjectByName(name), name).toBeInstanceOf(Mesh));
+    expect(build.shellColliders).toEqual(unaccented.shellColliders);
+    expect(contact.root.getObjectByName('contact:crew-cabin-deck-seam'))
+      .toBeInstanceOf(Mesh);
+    expect(contact.root.getObjectByName('contact:wheelhouse-fascia-overlap'))
+      .toBeInstanceOf(Mesh);
+
+    build.disposeGeometry();
+    unaccented.disposeGeometry();
+    contact.dispose();
+    materials.dispose();
+  });
 
   it('builds the approved single-level freighter shell and named zones', () => {
     const materials = createShipMaterials();
