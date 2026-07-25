@@ -253,6 +253,29 @@ describe('SurvivalUI', () => {
     ui.render(state, () => null);
     ui.setAnchors([{ id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false }]);
     mount.querySelector<HTMLButtonElement>('[data-action="repairItem"]')!.click();
+    const dialog = mount.querySelector<HTMLElement>('[data-repair-options]')!;
+    expect(dialog.classList).toContain('routine-dialog');
+    expect(dialog.classList).not.toContain('survival-overlay');
+    expect(dialog.classList).not.toContain('cinematic-overlay');
+    expect(dialog.dataset.anchorState).toBe('fallback');
+    ui.setAnchors([
+      { id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
+      {
+        id: 'repair-tools',
+        itemType: null,
+        toolId: 'repairTools',
+        action: 'repair',
+        remainingUses: null,
+        x: 900,
+        y: 420,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 72, height: 64, depth: 2 },
+      },
+    ]);
+    expect(mount.querySelector('[data-repair-options]')).toBe(dialog);
+    expect(dialog.dataset.anchorState).toBe('projected');
+    expect(dialog.dataset.placement).toBe('left');
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
     targets[0]!.click();
@@ -557,11 +580,11 @@ describe('SurvivalUI', () => {
     );
   });
 
-  it('wraps every survival cinematic overlay in one bounded content region', () => {
+  it('wraps the remaining major cinematic overlays in one bounded content region', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    for (const selector of ['[data-repair-options]', '[data-pause]', '[data-ending]']) {
+    for (const selector of ['[data-pause]', '[data-ending]']) {
       const overlay = mount.querySelector<HTMLElement>(selector)!;
       expect(overlay.children).toHaveLength(1);
       expect(overlay.firstElementChild?.classList).toContain('cinematic-overlay__content');
@@ -1092,16 +1115,35 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
-  it('shows a modal fishing result and emits one Continue intent', () => {
+  it('shows a projected routine fishing result and emits one Continue intent', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const onContinue = vi.fn();
     ui.onFishingResultContinue = onContinue;
+    ui.setAnchors([{
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      remainingUses: null,
+      x: 980,
+      y: 420,
+      visible: true,
+      depleted: false,
+      hitArea: { width: 100, height: 60, depth: 2 },
+    }]);
 
     ui.showFishingResult({ title: 'COD', detail: '+1 FOOD' });
 
     const dialog = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    expect(dialog.classList).toContain('routine-dialog');
+    expect(dialog.classList).not.toContain('survival-overlay');
+    expect(dialog.classList).not.toContain('cinematic-overlay');
+    expect(dialog.dataset.anchorState).toBe('projected');
+    expect(dialog.dataset.placement).toBe('left');
+    expect(dialog.style.getPropertyValue('--routine-x')).toMatch(/px$/);
+    expect(dialog.style.getPropertyValue('--routine-y')).toMatch(/px$/);
     expect(dialog.classList.contains('is-visible')).toBe(true);
     expect(dialog.querySelector('[data-fishing-result-title]')?.textContent).toBe('COD');
     expect(dialog.querySelector('[data-fishing-result-detail]')?.textContent).toBe('+1 FOOD');
@@ -1110,6 +1152,41 @@ describe('SurvivalUI', () => {
     button.click();
     button.click();
     expect(onContinue).toHaveBeenCalledOnce();
+
+    ui.setAnchors([{
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      remainingUses: null,
+      x: 120,
+      y: 120,
+      visible: true,
+      depleted: false,
+      hitArea: { width: 80, height: 50, depth: 2 },
+    }]);
+    expect(mount.querySelector('[data-fishing-result]')).toBe(dialog);
+    expect(dialog.dataset.placement).toBe('right');
+    expect(dialog.dataset.verticalPlacement).toBe('below');
+
+    ui.setAnchors([{
+      id: 'fishing-tools',
+      itemType: null,
+      toolId: 'fishingRod',
+      action: 'fish',
+      remainingUses: null,
+      x: 500,
+      y: window.innerHeight - 28,
+      visible: true,
+      depleted: false,
+      hitArea: { width: 80, height: 50, depth: 2 },
+    }]);
+    expect(dialog.dataset.verticalPlacement).toBe('above');
+    expect(parseInt(dialog.style.getPropertyValue('--routine-x'), 10)).toBeGreaterThanOrEqual(20);
+    expect(parseInt(dialog.style.getPropertyValue('--routine-y'), 10)).toBeGreaterThanOrEqual(20);
+    expect(mainStyles).toMatch(
+      /prefers-reduced-motion:[\s\S]*\.routine-dialog__card,[\s\S]*transform:\s*translate\(var\(--routine-x/s,
+    );
 
     ui.hideFishingResult();
     expect(dialog.classList.contains('is-visible')).toBe(false);

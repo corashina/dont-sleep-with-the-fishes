@@ -131,6 +131,33 @@ const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
 const REDUCED_TRANSITION_MS = 1;
+const ROUTINE_DIALOG_MARGIN = 20;
+const ROUTINE_DIALOG_GAP = 22;
+
+interface RoutineDialogPlacement {
+  readonly anchorId: string;
+  readonly fallbackX: number;
+  readonly fallbackY: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDialogPlacement>> = {
+  fishing: {
+    anchorId: 'fishing-tools',
+    fallbackX: 0.7,
+    fallbackY: 0.55,
+    width: 360,
+    height: 250,
+  },
+  repair: {
+    anchorId: 'repair-tools',
+    fallbackX: 0.32,
+    fallbackY: 0.6,
+    width: 430,
+    height: 360,
+  },
+};
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -310,16 +337,16 @@ export class SurvivalUI {
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="survival-overlay fishing-result-overlay cinematic-overlay" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
-        <div class="cinematic-overlay__content fishing-result-card">
+      <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
+        <div class="routine-dialog__card fishing-result-card">
           <p class="eyebrow ui-role-context">FISHING RESULT</p>
           <h2 class="ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
           <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
           <button type="button" class="primary-action timber-action ui-role-context" data-fishing-result-continue>CONTINUE</button>
         </div>
       </section>
-      <section class="survival-overlay repair-options-overlay cinematic-overlay" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
-        <div class="cinematic-overlay__content">
+      <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
+        <div class="routine-dialog__card">
           <p class="eyebrow ui-role-context">DUCT TAPE</p>
           <h2 class="ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
           <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
@@ -486,6 +513,7 @@ export class SurvivalUI {
       this.anchors.delete(id);
     });
     if (highlightInvalidated) this.publishAnchorHighlight();
+    this.positionOpenRoutineDialogs();
     this.syncCommandState();
   }
 
@@ -1092,6 +1120,11 @@ export class SurvivalUI {
 
   private showLayer(layer: HTMLElement): void {
     this.clearAnchorHighlight();
+    if (layer === this.fishingResultLayer) {
+      this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.fishing);
+    } else if (layer === this.repairOptionsLayer) {
+      this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
+    }
     layer.classList.add('is-visible');
     this.syncBackgroundInteraction();
   }
@@ -1099,6 +1132,82 @@ export class SurvivalUI {
   private hideLayer(layer: HTMLElement): void {
     layer.classList.remove('is-visible');
     this.syncBackgroundInteraction();
+  }
+
+  private positionOpenRoutineDialogs(): void {
+    if (this.fishingResultLayer.classList.contains('is-visible')) {
+      this.positionRoutineDialog(this.fishingResultLayer, ROUTINE_DIALOG_PLACEMENTS.fishing);
+    }
+    if (this.repairOptionsLayer.classList.contains('is-visible')) {
+      this.positionRoutineDialog(this.repairOptionsLayer, ROUTINE_DIALOG_PLACEMENTS.repair);
+    }
+  }
+
+  private positionRoutineDialog(
+    layer: HTMLElement,
+    placement: RoutineDialogPlacement,
+  ): void {
+    const rootBounds = this.root.getBoundingClientRect();
+    const viewportWidth = Math.max(
+      1,
+      rootBounds.width || this.root.clientWidth || window.innerWidth,
+    );
+    const viewportHeight = Math.max(
+      1,
+      rootBounds.height || this.root.clientHeight || window.innerHeight,
+    );
+    const maximumWidth = Math.max(1, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
+    const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
+    const cardWidth = Math.min(placement.width, maximumWidth);
+    const cardHeight = Math.min(placement.height, maximumHeight);
+    const projectedAnchor = this.anchors.get(placement.anchorId);
+    const isProjected = projectedAnchor?.visible === true;
+    const hitArea = isProjected
+      ? projectedAnchor.hitArea ?? { width: 54, height: 54, depth: 0 }
+      : { width: 0, height: 0, depth: 0 };
+    const anchorX = isProjected
+      ? projectedAnchor.x
+      : viewportWidth * placement.fallbackX;
+    const anchorY = isProjected
+      ? projectedAnchor.y
+      : viewportHeight * placement.fallbackY;
+
+    const rightX = anchorX + hitArea.width / 2 + ROUTINE_DIALOG_GAP;
+    const leftX = anchorX - hitArea.width / 2 - ROUTINE_DIALOG_GAP - cardWidth;
+    const fitsRight = rightX + cardWidth <= viewportWidth - ROUTINE_DIALOG_MARGIN;
+    const fitsLeft = leftX >= ROUTINE_DIALOG_MARGIN;
+    const horizontalPlacement = fitsRight || !fitsLeft ? 'right' : 'left';
+    const unclampedX = horizontalPlacement === 'right' ? rightX : leftX;
+
+    const centeredY = anchorY - cardHeight / 2;
+    const belowY = anchorY + hitArea.height / 2 + ROUTINE_DIALOG_GAP;
+    const aboveY = anchorY - hitArea.height / 2 - ROUTINE_DIALOG_GAP - cardHeight;
+    const fitsCentered = centeredY >= ROUTINE_DIALOG_MARGIN
+      && centeredY + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
+    const fitsBelow = belowY + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
+    const fitsAbove = aboveY >= ROUTINE_DIALOG_MARGIN;
+    const verticalPlacement = fitsCentered
+      ? 'center'
+      : fitsBelow ? 'below'
+        : fitsAbove ? 'above' : anchorY < viewportHeight / 2 ? 'below' : 'above';
+    const unclampedY = verticalPlacement === 'center'
+      ? centeredY
+      : verticalPlacement === 'below' ? belowY : aboveY;
+
+    const x = Math.min(
+      viewportWidth - ROUTINE_DIALOG_MARGIN - cardWidth,
+      Math.max(ROUTINE_DIALOG_MARGIN, unclampedX),
+    );
+    const y = Math.min(
+      viewportHeight - ROUTINE_DIALOG_MARGIN - cardHeight,
+      Math.max(ROUTINE_DIALOG_MARGIN, unclampedY),
+    );
+    layer.style.setProperty('--routine-x', `${Math.round(x)}px`);
+    layer.style.setProperty('--routine-y', `${Math.round(y)}px`);
+    layer.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
+    layer.dataset.placement = horizontalPlacement;
+    layer.dataset.verticalPlacement = verticalPlacement;
+    layer.dataset.anchorState = isProjected ? 'projected' : 'fallback';
   }
 
   private overlayOpen(): boolean {
