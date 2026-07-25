@@ -5,6 +5,7 @@ import type { PropModelLibrary } from '../src/world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
 import type { LifeboatAssets } from '../src/world/LifeboatAssets';
+import type { ShipAssets } from '../src/world/ShipAssets';
 
 const constructionMocks = vi.hoisted(() => ({
   WebGLRenderer: vi.fn(),
@@ -55,6 +56,7 @@ describe('Game construction rollback', () => {
         {} as ShipFurnitureLibrary,
         {} as SkyAssets,
         {} as LifeboatAssets,
+        {} as ShipAssets,
       );
     } catch (error) {
       thrown = error;

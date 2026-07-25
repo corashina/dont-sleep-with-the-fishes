@@ -82,6 +82,7 @@ export class ScavengePhase implements GamePhase {
       Math.random,
       {},
       context.lifeboatAssets,
+      context.shipAssets,
     );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,

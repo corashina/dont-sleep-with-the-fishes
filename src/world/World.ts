@@ -43,6 +43,7 @@ import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
+import type { ShipAssets } from './ShipAssets';
 import { assignShipItems } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
@@ -147,9 +148,10 @@ export class World {
     random: () => number = Math.random,
     construction: WorldConstructionDependencies = {},
     lifeboatAssets?: LifeboatAssets,
+    shipAssets?: ShipAssets,
   ) {
     const rollback: (() => void)[] = [];
-    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy);
+    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
     this.ship.position.y = -FREIGHTER_DRAFT;

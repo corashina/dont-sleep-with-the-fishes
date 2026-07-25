@@ -11,6 +11,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
+import type { ShipAssets } from '../world/ShipAssets';
 import { BoatWorld } from './BoatWorld';
 import { survivalEventById } from './events';
 import type {
@@ -105,6 +106,7 @@ function testContext(
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
+    shipAssets: {} as ShipAssets,
   };
 }
 

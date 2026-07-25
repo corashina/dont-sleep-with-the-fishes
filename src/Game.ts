@@ -20,6 +20,7 @@ import { runCleanupSteps } from './world/SceneResources';
 import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
 import type { SkyAssets } from './world/SkyAssets';
 import { LifeboatAssets } from './world/LifeboatAssets';
+import { ShipAssets } from './world/ShipAssets';
 
 export interface GameFactories {
   createScavenge(
@@ -63,6 +64,7 @@ export interface GameTestOptions {
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
+  shipAssets?: ShipAssets;
   clock?: GameClock;
   createSeed?: () => number;
   mount?: HTMLElement;
@@ -89,6 +91,7 @@ export class Game {
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
+  private shipAssets!: ShipAssets;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -109,6 +112,7 @@ export class Game {
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
+    shipAssets: ShipAssets,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -142,6 +146,7 @@ export class Game {
         shipFurniture,
         skyAssets,
         lifeboatAssets,
+        shipAssets,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -199,6 +204,14 @@ export class Game {
         new Texture(),
         new Texture(),
       ),
+      options.shipAssets ?? ShipAssets.fromTextures(
+        new Texture(),
+        new Texture(),
+        new Texture(),
+        new Texture(),
+        new Texture(),
+        new Texture(),
+      ),
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -234,6 +247,7 @@ export class Game {
       () => this.shipFurniture.dispose(),
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
+      () => this.shipAssets.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -251,6 +265,7 @@ export class Game {
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
+    shipAssets: ShipAssets,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -262,6 +277,7 @@ export class Game {
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
+    this.shipAssets = shipAssets;
     this.factories = factories;
     this.createSeed = createSeed;
     const maxTextureAnisotropy = Math.max(
@@ -269,6 +285,7 @@ export class Game {
       renderer.capabilities.getMaxAnisotropy(),
     );
     this.lifeboatAssets.configure(maxTextureAnisotropy);
+    this.shipAssets.configure(maxTextureAnisotropy);
     this.context = {
       mount,
       renderer,
@@ -280,6 +297,7 @@ export class Game {
       maxTextureAnisotropy,
       skyAssets,
       lifeboatAssets,
+      shipAssets,
     };
     this.activePhase = null;
     this.performanceStats = null;

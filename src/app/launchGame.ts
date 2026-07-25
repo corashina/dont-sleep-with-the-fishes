@@ -17,6 +17,10 @@ import {
   LifeboatAssets,
 } from '../world/LifeboatAssets';
 import { SkyAssetLoadError, SkyAssets } from '../world/SkyAssets';
+import {
+  ShipAssetLoadError,
+  ShipAssets,
+} from '../world/ShipAssets';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -28,12 +32,14 @@ export interface LaunchDependencies {
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
+  loadShipAssets(): Promise<ShipAssets>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
+    shipAssets: ShipAssets,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -42,8 +48,16 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
-  createGame: (mount, models, shipFurniture, skyAssets, lifeboatAssets) => (
-    new Game(mount, models, shipFurniture, skyAssets, lifeboatAssets)
+  loadShipAssets: () => ShipAssets.load(),
+  createGame: (
+    mount,
+    models,
+    shipFurniture,
+    skyAssets,
+    lifeboatAssets,
+    shipAssets,
+  ) => (
+    new Game(mount, models, shipFurniture, skyAssets, lifeboatAssets, shipAssets)
   ),
 };
 
@@ -52,18 +66,21 @@ interface LoadedGameAssets {
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
+  shipAssets: ShipAssets;
 }
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
 ): Promise<LoadedGameAssets> {
-  const [models, shipFurniture, skyAssets, lifeboatAssets] = await Promise.allSettled([
-    dependencies.loadModels(),
-    dependencies.loadShipFurniture(),
-    dependencies.loadSkyAssets(),
-    dependencies.loadLifeboatAssets(),
-  ]);
-  const results = [models, shipFurniture, skyAssets, lifeboatAssets] as const;
+  const [models, shipFurniture, skyAssets, lifeboatAssets, shipAssets] =
+    await Promise.allSettled([
+      dependencies.loadModels(),
+      dependencies.loadShipFurniture(),
+      dependencies.loadSkyAssets(),
+      dependencies.loadLifeboatAssets(),
+      dependencies.loadShipAssets(),
+    ]);
+  const results = [models, shipFurniture, skyAssets, lifeboatAssets, shipAssets] as const;
   const firstFailure = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
@@ -83,6 +100,7 @@ async function loadGameAssets(
     || shipFurniture.status !== 'fulfilled'
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
+    || shipAssets.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
@@ -91,6 +109,7 @@ async function loadGameAssets(
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
+    shipAssets: shipAssets.value,
   };
 }
 
@@ -104,7 +123,11 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
       try {
         assets.skyAssets.dispose();
       } finally {
-        assets.lifeboatAssets.dispose();
+        try {
+          assets.lifeboatAssets.dispose();
+        } finally {
+          assets.shipAssets.dispose();
+        }
       }
     }
   }
@@ -199,6 +222,17 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
     return;
   }
 
+  if (error instanceof ShipAssetLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'SHIP UNAVAILABLE',
+      title: 'Unable to prepare Dorothy',
+      lead: 'Required local steel and wood textures could not be loaded.',
+      detail: error.message,
+    });
+    return;
+  }
+
   renderWebGlFailure(mount, error);
 }
 
@@ -244,6 +278,7 @@ export function launchGame(
         unownedAssets.shipFurniture,
         unownedAssets.skyAssets,
         unownedAssets.lifeboatAssets,
+        unownedAssets.shipAssets,
       );
       game = createdGame;
       unownedAssets = null;
