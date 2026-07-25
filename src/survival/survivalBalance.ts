@@ -1,5 +1,5 @@
 export const SURVIVAL_BALANCE = {
-  start: { health: 100, hunger: 20, energy: 3, hull: 75 },
+  start: { health: 100, hunger: 0, energy: 3, hull: 100 },
   dawn: { hungerIncrease: 18, starvationDamage: 15, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
