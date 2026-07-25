@@ -267,7 +267,7 @@ describe('SurvivalSession daytime actions', () => {
     savedItems.length = 0;
     const state = session.snapshot();
     expect(state).toMatchObject({
-      state: 'day', day: 1, health: 100, hunger: 20, energy: 3, hull: 75, food: 1,
+      state: 'day', day: 1, health: 100, hunger: 0, energy: 3, hull: 100, food: 1,
     });
     expect(state.inventory['cannedFood-1']).toEqual({
       instanceId: 'cannedFood-1', type: 'cannedFood', condition: 'usable',

@@ -134,6 +134,13 @@ describe('SurvivalUI', () => {
       .toEqual(['health', 'hunger', 'energy', 'hull']);
     expect(mount.querySelector('[data-survival-top] [data-journal-open]')).not.toBeNull();
     expect(mount.querySelector('[data-survival-top] [data-action="endDay"]')).not.toBeNull();
+    ui.render(new SurvivalSession([], { seed: 1 }).snapshot(), () => null);
+    expect(
+      mount.querySelector('[data-meter="hunger"] [data-meter-value]')?.textContent,
+    ).toBe('100');
+    expect(
+      mount.querySelector('[data-meter="hull"] [data-meter-value]')?.textContent,
+    ).toBe('100');
     expect(mainStyles).toMatch(/\.survival-top\s*\{[^}]*top:\s*20px[^}]*right:\s*24px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*right:\s*24px[^}]*bottom:\s*24px/s);
     expect(mainStyles).toMatch(/\.end-day-button\s*\{[^}]*min-width:\s*210px[^}]*min-height:\s*72px/s);
@@ -1022,9 +1029,9 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-weather]')?.textContent).toContain('CALM');
     expect(mount.querySelector('[data-phase]')?.textContent).toContain('DAYLIGHT');
     expect(mount.querySelector('[data-meter="health"]')?.getAttribute('aria-valuenow')).toBe('100');
-    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('80');
+    expect(mount.querySelector('[data-meter="hunger"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelector('[data-meter="energy"]')?.getAttribute('aria-valuenow')).toBe('3');
-    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('75');
+    expect(mount.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuenow')).toBe('100');
     expect(mount.querySelectorAll('[data-action]:not([data-action=""])')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-anchor-id]')).toHaveLength(6);
     expect(mount.querySelectorAll('[data-hotspot]')).toHaveLength(0);
