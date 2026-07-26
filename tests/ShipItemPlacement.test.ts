@@ -93,8 +93,8 @@ describe('ship item placement', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     try {
-      expect(ship.itemSurfaces).toHaveLength(32);
-      expect(ship.itemSurfaces.find(({ id }) => id === 'cabin-bookcase-forward:level-1')
+      expect(ship.itemSurfaces).toHaveLength(28);
+      expect(ship.itemSurfaces.find(({ id }) => id === 'cabin-bookcase-forward:shelf-left')
         ?.standingPoints.length).toBeGreaterThan(0);
       const assignments = assignShipItems(
         createItemInstances(),
@@ -280,7 +280,7 @@ describe('ship item placement', () => {
     const ship = createShip(library, 8);
     const byId = new Map(ship.itemSurfaces.map((candidate) => [candidate.id, candidate]));
     try {
-      expect(ship.itemSurfaces).toHaveLength(32);
+      expect(ship.itemSurfaces).toHaveLength(28);
       for (let seed = 0; seed < 64; seed += 1) {
         const instances = createItemInstances();
         const assignments = assignShipItems(
@@ -353,4 +353,23 @@ describe('ship item placement', () => {
       ).containsBox(actual), id).toBe(true);
     }
   });
+
+  it.each([Number.NaN, -1, 1])(
+    'guards an invalid random sample of %s while placing the production catalog',
+    (sample) => {
+      const library = createTestShipFurniture();
+      const ship = createShip(library, 8);
+      try {
+        expect(assignShipItems(
+          createItemInstances(),
+          ship.itemSurfaces,
+          () => sample,
+          ship.colliders,
+        ).size).toBe(21);
+      } finally {
+        ship.dispose();
+        library.dispose();
+      }
+    },
+  );
 });

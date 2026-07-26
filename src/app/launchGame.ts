@@ -21,6 +21,7 @@ import {
   ShipAssetLoadError,
   ShipAssets,
 } from '../world/ShipAssets';
+import { ShipItemPlacementError } from '../world/ShipItemPlacement';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -162,6 +163,19 @@ function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
     title: 'Unable to launch',
     lead: 'This demo needs WebGL 2 in a current desktop browser.',
     detail: errorMessage(error),
+  });
+}
+
+function renderShipPlacementFailure(
+  mount: HTMLElement,
+  error: ShipItemPlacementError,
+): void {
+  renderSystemScreen(mount, {
+    kind: 'error',
+    kicker: 'SHIP SETUP FAILED',
+    title: 'Unable to prepare Dorothy',
+    lead: 'A supply item could not be placed safely aboard the ship.',
+    detail: error.message,
   });
 }
 
@@ -309,7 +323,13 @@ export function launchGame(
     } catch (error) {
       disposeCurrentOwnership();
 
-      if (!cancelled && mount.isConnected) renderWebGlFailure(mount, error);
+      if (!cancelled && mount.isConnected) {
+        if (error instanceof ShipItemPlacementError) {
+          renderShipPlacementFailure(mount, error);
+        } else {
+          renderWebGlFailure(mount, error);
+        }
+      }
       return null;
     }
   })();

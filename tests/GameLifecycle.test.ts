@@ -749,6 +749,38 @@ describe('ScavengePhase lifecycle integration', () => {
     },
   );
 
+  it('drops an item into world state immediately', () => {
+    const instance = { instanceId: 'flashlight-1', type: 'flashlight' } as const;
+    const point = new Vector3(2, 2.22, -3);
+    const releaseActive = vi.fn().mockReturnValue(instance);
+    const dropCarried = vi.fn().mockReturnValue(instance);
+    const dropItem = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      session: { dropCarried },
+      carry: { releaseActive },
+      world: { dropItem },
+    });
+
+    (phase as unknown as {
+      performAction: (action: {
+        type: 'drop';
+        item: ItemInstance;
+        point: Vector3;
+        prompt: string;
+      }) => void;
+    }).performAction({
+      type: 'drop',
+      item: instance,
+      point,
+      prompt: 'LEFT CLICK — DROP FLASHLIGHT',
+    });
+
+    expect(releaseActive).toHaveBeenCalledOnce();
+    expect(dropCarried).toHaveBeenCalledOnce();
+    expect(dropItem).toHaveBeenCalledWith(instance.instanceId, point);
+  });
+
   it('handles capacity rejection without mutating gameplay or world state', () => {
     const session = { pickUp: vi.fn(), evacuate: vi.fn() };
     const carry = { pickUp: vi.fn(), releaseAll: vi.fn(), drop: vi.fn() };

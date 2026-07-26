@@ -165,3 +165,24 @@ function Publish-ShipFurnitureDirectory {
     -BackupPrefix '.ship-backup-' `
     -MoveDirectory $MoveDirectory
 }
+
+function Publish-FishingModelDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string]$ModelsRoot,
+    [Parameter(Mandatory = $true)][string]$OutputRoot,
+    [Parameter(Mandatory = $true)][string]$StagedRoot,
+    [Parameter(Mandatory = $true)][string]$BackupRoot,
+    [scriptblock]$MoveDirectory = {
+      param([string]$Source, [string]$Destination)
+      Move-Item -LiteralPath $Source -Destination $Destination
+    }
+  )
+  Publish-ModelDirectory `
+    -ModelsRoot $ModelsRoot `
+    -OutputRoot $OutputRoot `
+    -StagedRoot $StagedRoot `
+    -BackupRoot $BackupRoot `
+    -StagePrefix '.fishing-stage-' `
+    -BackupPrefix '.fishing-backup-' `
+    -MoveDirectory $MoveDirectory
+}

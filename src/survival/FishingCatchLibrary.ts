@@ -11,15 +11,24 @@ import {
   MeshStandardMaterial,
   Object3D,
   SphereGeometry,
+  Texture,
   Vector3,
 } from 'three';
-import { disposeResourceSets } from '../world/SceneResources';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+} from '../world/SceneResources';
 import {
   FISHING_CATCHES,
   type FishingAppearance,
   type FishingCatchId,
   type FishingModelFamily,
 } from './fishingCatalog';
+import {
+  fishingCatchModelSpec,
+  type FishingCatchModelSpec,
+} from './fishingModelManifest';
 
 interface FamilyTemplate {
   readonly root: Group;
@@ -34,17 +43,6 @@ interface TemplateBuildContext {
   readonly body: MeshStandardMaterial;
   readonly accent: MeshStandardMaterial;
 }
-
-const FAMILY_ORDER: readonly FishingModelFamily[] = [
-  'ordinaryFish',
-  'flatfish',
-  'crab',
-  'squid',
-  'swordfish',
-  'seaweed',
-  'boot',
-  'bottle',
-];
 
 function createMaterial(color: number): MeshStandardMaterial {
   return new MeshStandardMaterial({
@@ -333,47 +331,183 @@ function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance
 }
 
 export class FishingCatchLibrary {
-  private readonly geometries = new Set<BufferGeometry>();
-  private readonly materials = new Set<Material>();
-  private readonly templates = new Map<FishingModelFamily, FamilyTemplate>();
-  private active: Group | null = null;
+  private active: ActiveCatch | null = null;
+  private requestId = 0;
   private disposed = false;
 
-  constructor() {
-    for (const family of FAMILY_ORDER) {
-      this.templates.set(family, buildFamily(family, this.geometries, this.materials));
-    }
-  }
+  constructor(private readonly loader: FishingCatchModelLoader = new GltfFishingCatchModelLoader()) {}
 
-  prepare(catchId: FishingCatchId): Object3D {
+  async prepare(catchId: FishingCatchId): Promise<Object3D | null> {
     if (this.disposed) throw new Error('Fishing catch library is disposed.');
     const definition = FISHING_CATCHES.find(({ id }) => id === catchId);
     if (!definition) throw new Error(`Unknown fishing catch: ${catchId}`);
-    for (const template of this.templates.values()) template.root.visible = false;
-    const template = this.templates.get(definition.family);
-    if (!template) throw new Error(`Missing fishing catch family: ${definition.family}`);
-    applyAppearance(template, definition.appearance);
-    template.root.userData.fishingCatchId = catchId;
-    template.root.visible = true;
-    this.active = template.root;
-    return template.root;
+    this.releaseActive();
+    const requestId = ++this.requestId;
+    const spec = fishingCatchModelSpec(catchId);
+
+    let active: ActiveCatch | null = null;
+    if (spec) {
+      try {
+        const root = await this.loader.load(spec.url);
+        active = prepareLoadedCatch(root, catchId, spec);
+      } catch {
+        if (!this.isCurrent(requestId)) return null;
+      }
+    }
+    if (!this.isCurrent(requestId)) {
+      if (active) disposeActiveCatch(active);
+      return null;
+    }
+
+    active ??= prepareProceduralCatch(
+      definition.family,
+      definition.appearance,
+      catchId,
+    );
+    this.active = active;
+    return active.root;
   }
 
   hide(): void {
     if (this.disposed) return;
-    for (const template of this.templates.values()) template.root.visible = false;
-    this.active = null;
+    this.requestId += 1;
+    this.releaseActive();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.active = null;
-    for (const template of this.templates.values()) {
-      template.root.visible = false;
-      template.root.removeFromParent();
-    }
-    this.templates.clear();
-    disposeResourceSets(this.geometries, this.materials);
+    this.requestId += 1;
+    this.releaseActive();
   }
+
+  private isCurrent(requestId: number): boolean {
+    return !this.disposed && requestId === this.requestId;
+  }
+
+  private releaseActive(): void {
+    if (!this.active) return;
+    disposeActiveCatch(this.active);
+    this.active = null;
+  }
+}
+
+export interface FishingCatchModelLoader {
+  load(url: string): Promise<Object3D>;
+}
+
+class GltfFishingCatchModelLoader implements FishingCatchModelLoader {
+  private readonly loader = new GLTFLoader();
+
+  async load(url: string): Promise<Object3D> {
+    return (await this.loader.loadAsync(url)).scene;
+  }
+}
+
+interface ActiveCatch {
+  readonly root: Group;
+  readonly geometries: Set<BufferGeometry>;
+  readonly materials: Set<Material>;
+  readonly textures: Set<Texture>;
+}
+
+function collectTextures(materials: Iterable<Material>): Set<Texture> {
+  const textures = new Set<Texture>();
+  for (const material of materials) {
+    for (const value of Object.values(material)) {
+      if (value instanceof Texture) textures.add(value);
+    }
+  }
+  return textures;
+}
+
+function collectActiveCatch(root: Group): ActiveCatch {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  collectMeshResources(root, geometries, materials);
+  return { root, geometries, materials, textures: collectTextures(materials) };
+}
+
+function triangleCount(root: Object3D): number {
+  let triangles = 0;
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const position = object.geometry.getAttribute('position');
+    if (!position) throw new Error('Fishing model has no position data.');
+    triangles += (object.geometry.index?.count ?? position.count) / 3;
+  });
+  return triangles;
+}
+
+function prepareLoadedCatch(
+  sourceRoot: Object3D,
+  catchId: FishingCatchId,
+  spec: FishingCatchModelSpec,
+): ActiveCatch {
+  const root = new Group();
+  root.name = `fishing-catch:${catchId}:model`;
+  root.userData.fishingCatchId = catchId;
+  root.userData.fishingModelSource = 'poly-pizza';
+  root.add(sourceRoot);
+
+  const active = collectActiveCatch(root);
+  const triangles = triangleCount(root);
+  if (active.geometries.size === 0 || triangles <= 0 || triangles > spec.maxTriangles) {
+    disposeActiveCatch(active);
+    throw new Error(`Fishing model ${catchId} failed its geometry budget.`);
+  }
+
+  sourceRoot.rotation.set(...spec.rotation);
+  root.updateMatrixWorld(true);
+  const bounds = new Box3().setFromObject(root, true);
+  const size = bounds.getSize(new Vector3());
+  const center = bounds.getCenter(new Vector3());
+  if (![size.x, size.y, size.z].every((dimension) => Number.isFinite(dimension) && dimension > 0)) {
+    disposeActiveCatch(active);
+    throw new Error(`Fishing model ${catchId} has invalid bounds.`);
+  }
+  sourceRoot.position.sub(center);
+  root.scale.setScalar(spec.targetLength / size.x);
+
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!(material instanceof MeshStandardMaterial)) continue;
+      material.flatShading = true;
+      material.roughness = Math.max(material.roughness, 0.72);
+      material.metalness = Math.min(material.metalness, 0.05);
+      material.needsUpdate = true;
+    }
+  });
+  root.updateMatrixWorld(true);
+  return active;
+}
+
+function prepareProceduralCatch(
+  family: FishingModelFamily,
+  appearance: FishingAppearance,
+  catchId: FishingCatchId,
+): ActiveCatch {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  const template = buildFamily(family, geometries, materials);
+  applyAppearance(template, appearance);
+  template.root.userData.fishingCatchId = catchId;
+  template.root.userData.fishingModelSource = 'procedural';
+  template.root.visible = true;
+  return {
+    root: template.root,
+    geometries,
+    materials,
+    textures: new Set<Texture>(),
+  };
+}
+
+function disposeActiveCatch(active: ActiveCatch): void {
+  active.root.visible = false;
+  active.root.removeFromParent();
+  disposeResourceSets(active.textures, active.geometries, active.materials);
 }

@@ -11,6 +11,14 @@ export interface PolyPizzaModelSource {
   readonly licenseUrl: string;
   readonly sha256: string;
   readonly sourceTriangles: number;
+  readonly downloadedOn: string;
+  readonly nodeName?: string;
+  readonly removeNodeNames?: readonly string[];
+  readonly translation?: readonly [number, number, number];
+  readonly rotation?: readonly [number, number, number, number];
+  readonly scale?: readonly [number, number, number];
+  readonly components?: readonly PolyPizzaModelSource[];
+  readonly maxTriangles?: number;
   readonly simplifyRatio?: number;
   readonly simplifyError?: number;
 }
@@ -21,6 +29,7 @@ export const POLY_PIZZA_MODEL_IDS: readonly string[];
 export interface BuildPolyPizzaModelOptions {
   readonly id: string;
   readonly sourcePath: string;
+  readonly componentSourcePaths?: Readonly<Record<string, string>>;
   readonly outputPath: string;
   readonly descriptor?: PolyPizzaModelSource;
   readonly verifySource?: boolean;

@@ -29,9 +29,41 @@ export interface MovementAxes {
   z: number;
 }
 
+export interface SegmentBoxInterval {
+  readonly minimum: number;
+  readonly maximum: number;
+}
+
 export const PLAYER_BODY_HEIGHT = 1.5;
 export const MAX_JUMPABLE_SUPPORT_HEIGHT = 0.6;
 const SUPPORT_EPSILON = 1e-6;
+
+export function segmentBoxInterval(
+  start: LocalPlayerPosition,
+  end: LocalPlayerPosition,
+  box: CollisionBox,
+): SegmentBoxInterval | undefined {
+  let minimum = 0;
+  let maximum = 1;
+  for (const [startValue, delta, min, max] of [
+    [start.x, end.x - start.x, box.minX, box.maxX],
+    [start.y, end.y - start.y, box.minY, box.maxY],
+    [start.z, end.z - start.z, box.minZ, box.maxZ],
+  ] as const) {
+    if (Math.abs(delta) < 1e-9) {
+      if (startValue < min || startValue > max) return undefined;
+      continue;
+    }
+    const first = (min - startValue) / delta;
+    const second = (max - startValue) / delta;
+    minimum = Math.max(minimum, Math.min(first, second));
+    maximum = Math.min(maximum, Math.max(first, second));
+    if (minimum > maximum) return undefined;
+  }
+  return maximum > 1e-6 && minimum < 1 - 1e-6
+    ? { minimum, maximum }
+    : undefined;
+}
 
 function circleOverlapsFootprint(
   position: Pick<LocalPlayerPosition, 'x' | 'z'>,

@@ -7,10 +7,16 @@ import {
   KENNEY_SHIP_FURNITURE_PACK,
   KENNEY_SHIP_FURNITURE_RECIPES,
 } from './kenney-ship-furniture.mjs';
+import {
+  POLY_PIZZA_SHIP_FURNITURE_SOURCES,
+} from './poly-pizza-ship-furniture.mjs';
 
 export const MODEL_LIMIT = 1_000;
 export const LIBRARY_LIMIT = 8_000;
-export const SHIP_FURNITURE_IDS = Object.keys(KENNEY_SHIP_FURNITURE_RECIPES);
+export const SHIP_FURNITURE_IDS = [
+  ...Object.keys(KENNEY_SHIP_FURNITURE_RECIPES),
+  ...Object.keys(POLY_PIZZA_SHIP_FURNITURE_SOURCES),
+];
 
 async function countRenderedTriangles(filePath) {
   await countTriangles(filePath);
@@ -37,6 +43,32 @@ function verifyLedgerRow(ledger, modelId) {
   const recipe = KENNEY_SHIP_FURNITURE_RECIPES[modelId];
   const row = ledger.split(/\r?\n/).find((line) => line.startsWith(`| ${modelId} |`));
   if (!row) throw new Error(`ATTRIBUTION.md: missing ${modelId} row`);
+  const polySource = POLY_PIZZA_SHIP_FURNITURE_SOURCES[modelId];
+  if (polySource) {
+    const requirements = [
+      polySource.sourceAssetId,
+      polySource.creator,
+      `| ${polySource.sourceTriangles} | ${polySource.sourceTriangles} |`,
+      polySource.downloadedOn,
+    ];
+    for (const value of requirements) {
+      if (!row.includes(value)) {
+        throw new Error(`ATTRIBUTION.md: ${modelId} row is missing ${value}`);
+      }
+    }
+    for (const value of [
+      polySource.pageUrl,
+      polySource.licenseUrl,
+      polySource.sha256,
+      'pruned, deduplicated, unpartitioned, renamed, and embedded',
+    ]) {
+      if (!ledger.includes(value)) {
+        throw new Error(`ATTRIBUTION.md: ship furniture ledger is missing ${value}`);
+      }
+    }
+    return;
+  }
+  if (!recipe) throw new Error(`missing ship furniture recipe: ${modelId}`);
   const requirements = [
     `furniture-kit@1.0:${recipe.entry}`,
     'Kenney',
@@ -118,7 +150,11 @@ async function main() {
       if (triangles > MODEL_LIMIT) {
         throw new Error(`${filePath}: ${triangles} triangles exceeds ${MODEL_LIMIT}`);
       }
-      const expectedTriangles = KENNEY_SHIP_FURNITURE_RECIPES[modelId].expectedTriangles;
+      const expectedTriangles = KENNEY_SHIP_FURNITURE_RECIPES[modelId]?.expectedTriangles
+        ?? POLY_PIZZA_SHIP_FURNITURE_SOURCES[modelId]?.sourceTriangles;
+      if (expectedTriangles === undefined) {
+        throw new Error(`${modelId}: missing expected triangle count`);
+      }
       if (triangles !== expectedTriangles) {
         throw new Error(
           `${filePath}: expected ${expectedTriangles} triangles, received ${triangles}`,

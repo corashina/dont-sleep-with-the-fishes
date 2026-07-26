@@ -4,19 +4,26 @@ import {
   PLAYER_LAYOUT_RADIUS,
   SHIP_DECK_DETAIL_COUNTS,
   SHIP_LAYOUT,
+  SHIP_ROOM_WALL_THICKNESS,
   analyzeShipNavigation,
+  detailVisualRect,
+  furnitureRect,
   validateShipLayout,
 } from '../src/world/ShipLayout';
 
 describe('scavenging ship layout', () => {
   it('assigns deck detail colliders to every retained barrel', () => {
+    expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
+      barrel: 2,
+      cargoBox: 3,
+    });
     expect(Object.fromEntries([
       'barrel',
     ].map((kind) => [
       kind,
       SHIP_LAYOUT.details.filter((detail) => detail.kind === kind && detail.colliderSize).length,
     ]))).toEqual({
-      barrel: 6,
+      barrel: 2,
     });
   });
   it('requires reachable targets across both rounded end decks', () => {
@@ -38,6 +45,41 @@ describe('scavenging ship layout', () => {
     expect(result.minimumPrimaryClearance).toBeGreaterThanOrEqual(2.2);
     expect(result.minimumSecondaryClearance).toBeGreaterThanOrEqual(1.4);
     expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
+  });
+
+  it('aligns crates and boxes exactly against exterior wall faces', () => {
+    const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
+    const halfWall = SHIP_ROOM_WALL_THICKNESS / 2;
+    const fixtureRect = (id: string) => furnitureRect(
+      SHIP_LAYOUT.furniture.find((fixture) => fixture.id === id)!,
+    );
+
+    expect(fixtureRect('cargo-crate-forward-port').minX)
+      .toBeCloseTo(crew.minX + halfWall);
+    expect(fixtureRect('cargo-crate-forward-port').maxZ)
+      .toBeCloseTo(crew.minZ - halfWall);
+    expect(fixtureRect('cargo-crate-forward-starboard').maxX)
+      .toBeCloseTo(crew.maxX - halfWall);
+    expect(fixtureRect('cargo-crate-forward-starboard').maxZ)
+      .toBeCloseTo(crew.minZ - halfWall);
+    expect(fixtureRect('cargo-crate-aft-port').minX)
+      .toBeCloseTo(storage.minX + halfWall);
+    expect(fixtureRect('cargo-crate-aft-port').minZ)
+      .toBeCloseTo(storage.maxZ + halfWall);
+    expect(fixtureRect('cargo-crate-aft-starboard').maxX)
+      .toBeCloseTo(storage.maxX - halfWall);
+    expect(fixtureRect('cargo-crate-aft-starboard').minZ)
+      .toBeCloseTo(storage.maxZ + halfWall);
+
+    const boxRect = (id: string) => detailVisualRect(
+      SHIP_LAYOUT.details.find((detail) => detail.id === id)!,
+    );
+    expect(boxRect('cargoBox-1').maxX).toBeCloseTo(crew.minX - halfWall);
+    expect(boxRect('cargoBox-2').minX).toBeCloseTo(storage.maxX + halfWall);
+    expect(boxRect('cargoBox-3').maxX).toBeCloseTo(storage.minX - halfWall);
+    SHIP_LAYOUT.details.filter(({ kind }) => kind === 'cargoBox')
+      .forEach(({ rotationY }) => expect(rotationY).toBe(0));
   });
 
   it('rejects invalid detail and mast obstacles by authored id', () => {
@@ -118,7 +160,7 @@ describe('scavenging ship layout', () => {
       details: SHIP_LAYOUT.details.map((detail) => {
         if (detail.id !== 'barrel-1') return detail;
         const { colliderSize: _colliderSize, ...nonCollidingDetail } = detail;
-        return { ...nonCollidingDetail, position: [-4.1, 2.22, 3.8] as const };
+        return { ...nonCollidingDetail, position: [-3.815, 2.22, 4.315] as const };
       }),
     };
     expect(() => validateShipLayout(crateOverlap))
@@ -129,7 +171,7 @@ describe('scavenging ship layout', () => {
       details: SHIP_LAYOUT.details.map((detail) => {
         if (detail.id !== 'barrel-1') return detail;
         const { colliderSize: _colliderSize, ...nonCollidingDetail } = detail;
-        return { ...nonCollidingDetail, position: [-3.6, 2.22, -5.25] as const };
+        return { ...nonCollidingDetail, position: [-3.915, 2.22, -6.165] as const };
       }),
     };
     expect(() => validateShipLayout(accessOverlap))
@@ -140,7 +182,7 @@ describe('scavenging ship layout', () => {
     const crowdedDetails = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'barrel-2'
-        ? { ...detail, position: [-6, 2.22, 16.3] as const }
+        ? { ...detail, position: [-1.8, 2.22, 5.8] as const }
         : detail),
     };
 

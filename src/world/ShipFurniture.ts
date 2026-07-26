@@ -9,7 +9,6 @@ import {
   Vector3,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
-import type { ContactDepthLayer } from './ContactDepthLayer';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import {
   SHIP_LAYOUT,
@@ -19,6 +18,7 @@ import {
 } from './ShipLayout';
 import type { ShipItemSurface } from './ShipItemPlacement';
 import type { ShipMaterials } from './ShipMaterials';
+import { SHIP_FURNITURE_MODEL_SPECS } from './shipFurnitureManifest';
 
 export interface ShipFurnitureCollider extends CollisionBox {
   readonly furnitureId: string;
@@ -64,30 +64,17 @@ function addBox(
 
 function createCargoCrate(
   parent: Group,
-  geometry: BoxGeometry,
-  materials: ShipMaterials,
-  bodyMaterial: Material,
+  library: ShipFurnitureLibrary,
   size: readonly [number, number, number],
 ): void {
-  addBox(parent, geometry, bodyMaterial, 'crate-body', size, [0, size[1] / 2, 0]);
-  ([-0.42, 0.42] as const).forEach((fraction, index) => {
-    addBox(
-      parent,
-      geometry,
-      materials.darkMetal,
-      `crate-band-x-${index + 1}`,
-      [0.08, size[1] + 0.04, size[2] + 0.04],
-      [size[0] * fraction, size[1] / 2, 0],
-    );
-    addBox(
-      parent,
-      geometry,
-      materials.darkMetal,
-      `crate-band-z-${index + 1}`,
-      [size[0] + 0.04, size[1] + 0.04, 0.08],
-      [0, size[1] / 2, size[2] * fraction],
-    );
-  });
+  const model = library.clone('cargoCrate');
+  const canonicalSize = SHIP_FURNITURE_MODEL_SPECS.cargoCrate.canonicalSize;
+  model.scale.set(
+    size[0] / canonicalSize[0],
+    size[1] / canonicalSize[1],
+    size[2] / canonicalSize[2],
+  );
+  parent.add(model);
 }
 
 function createCargoRack(
@@ -118,12 +105,30 @@ function createCargoRack(
   }));
 }
 
+function createOpenShelf(
+  parent: Group,
+  library: ShipFurnitureLibrary,
+  placementSpec: ShipFurniturePlacementSpec,
+): void {
+  const shelfHeight = SHIP_FURNITURE_MODEL_SPECS.bookcaseOpen.canonicalSize[1];
+  const surface = placementSpec.surfaces[0];
+  if (surface === undefined) return;
+  const shelf = library.clone('bookcaseOpen');
+  shelf.name = 'open-shelf';
+  shelf.position.set(
+    0,
+    surface.localPosition[1] - shelfHeight,
+    surface.localPosition[2],
+  );
+  shelf.rotation.y = Math.PI / 2;
+  parent.add(shelf);
+}
+
 function addFocalFurnitureConstruction(
   placementSpec: ShipFurniturePlacementSpec,
   placementRoot: Group,
   geometry: BoxGeometry,
   materials: ShipMaterials,
-  contactDepth?: ContactDepthLayer,
 ): void {
   const [width, height, depth] = placementSpec.colliderSize;
   if (placementSpec.id === 'cabin-desk-aft') {
@@ -156,52 +161,10 @@ function addFocalFurnitureConstruction(
         [sign * (width / 2 - 0.12), height * 0.55, depth / 2 + 0.03],
       );
     });
-  } else if (placementSpec.id === 'cabin-bookcase-forward') {
-    ([
-      ['port', -1],
-      ['starboard', 1],
-    ] as const).forEach(([side, sign]) => addBox(
-      placementRoot,
-      geometry,
-      materials.exposedMetal,
-      `construction:bookcase-hinge-${side}`,
-      [0.08, 0.34, 0.055],
-      [sign * (width / 2 - 0.08), height * 0.54, depth / 2 + 0.03],
-    ));
-    addBox(
-      placementRoot,
-      geometry,
-      materials.darkMetal,
-      'construction:bookcase-wall-bracket',
-      [width * 0.55, 0.09, 0.1],
-      [0.06, height - 0.08, -depth / 2 - 0.03],
-    );
-    addBox(
-      placementRoot,
-      geometry,
-      materials.darkMetal,
-      'construction:bookcase-back-seam',
-      [0.055, height * 0.72, 0.045],
-      [-width * 0.18, height * 0.48, -depth / 2 - 0.025],
-    );
   } else {
     return;
   }
 
-  contactDepth?.addFootprint({
-    name: `contact:${placementSpec.id}`,
-    position: [
-      placementSpec.position[0],
-      placementSpec.position[1] + 0.012,
-      placementSpec.position[2],
-    ],
-    scale: [
-      width * placementSpec.scale[0] * 0.9,
-      1,
-      depth * placementSpec.scale[2] * 0.86,
-    ],
-    rotation: [0, placementSpec.rotationY, 0],
-  });
 }
 
 function worldCollider(placementSpec: ShipFurniturePlacementSpec): ShipFurnitureCollider {
@@ -261,7 +224,6 @@ export function createShipFurniture(
   materials: ShipMaterials,
   library: ShipFurnitureLibrary,
   layout: ShipLayoutSpec = SHIP_LAYOUT,
-  contactDepth?: ContactDepthLayer,
 ): ShipFurnitureBuild {
   const root = new Group();
   root.name = 'ship-furniture';
@@ -279,18 +241,15 @@ export function createShipFurniture(
     placementRoot.userData.furnitureId = placementSpec.id;
     placementRoot.userData.modelId = placementSpec.modelId;
     if (placementSpec.modelId === 'cargoCrate') {
-      const bodyMaterial = placementSpec.id === 'cargo-crate-aft-port'
-        ? materials.plainTimber
-        : materials.timber;
       createCargoCrate(
         placementRoot,
-        geometry.box,
-        materials,
-        bodyMaterial,
+        library,
         placementSpec.colliderSize,
       );
     } else if (placementSpec.modelId === 'cargoRack') {
       createCargoRack(placementRoot, geometry.box, materials, placementSpec.colliderSize);
+    } else if (placementSpec.modelId === 'bookcaseOpen') {
+      createOpenShelf(placementRoot, library, placementSpec);
     } else {
       placementRoot.add(library.clone(placementSpec.modelId));
     }
@@ -299,7 +258,6 @@ export function createShipFurniture(
       placementRoot,
       geometry.box,
       materials,
-      contactDepth,
     );
     root.add(placementRoot);
     const collider = worldCollider(placementSpec);

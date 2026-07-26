@@ -28,7 +28,7 @@ export class BoatDepositSmoke {
   private active = false;
   private disposed = false;
 
-  constructor() {
+  constructor(name = 'lifeboat-deposit-smoke') {
     for (let index = 0; index < PARTICLE_COUNT; index += 1) {
       const offset = index * 3;
       const angle = index * 2.399963229728653;
@@ -55,7 +55,7 @@ export class BoatDepositSmoke {
       transparent: true,
     });
     this.points = new Points(geometry, material);
-    this.points.name = 'lifeboat-deposit-smoke';
+    this.points.name = name;
     this.points.frustumCulled = false;
     this.points.visible = false;
   }

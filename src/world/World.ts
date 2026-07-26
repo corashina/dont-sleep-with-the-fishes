@@ -7,13 +7,14 @@ import {
   Material,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
+  Quaternion,
   Scene,
   Texture,
   Vector3,
 } from 'three';
 import {
   createItemInstances,
+  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -39,12 +40,13 @@ import { BoatDepositSmoke } from './BoatDepositSmoke';
 import { Environment } from './Environment';
 import { createLifeboat, type LifeboatBuild } from './Lifeboat';
 import { LifeboatAssets } from './LifeboatAssets';
+import { ITEM_MODEL_SPECS } from './itemModelManifest';
 import { createProp } from './PropFactory';
 import type { PropModelLibrary } from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import type { ShipAssets } from './ShipAssets';
-import { assignShipItems } from './ShipItemPlacement';
+import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
 
@@ -81,6 +83,28 @@ function sampleDefaultWave(
   return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
 }
 
+const MODEL_AXES = [
+  new Vector3(1, 0, 0),
+  new Vector3(0, 1, 0),
+  new Vector3(0, 0, 1),
+] as const;
+const DECK_UP = new Vector3(0, 1, 0);
+
+function floorRestingQuaternion(itemId: ItemId, output: Quaternion): Quaternion {
+  const size = ITEM_MODEL_SPECS[itemId].normalizedSize;
+  let upAxisIndex = 0;
+  let lengthAxisIndex = 0;
+  for (let axis = 1; axis < 3; axis += 1) {
+    if (size[axis]! < size[upAxisIndex]!) upAxisIndex = axis;
+    if (size[axis]! > size[lengthAxisIndex]!) lengthAxisIndex = axis;
+  }
+  if (lengthAxisIndex === upAxisIndex) lengthAxisIndex = (upAxisIndex + 1) % 3;
+  output.setFromUnitVectors(MODEL_AXES[upAxisIndex]!, DECK_UP);
+  const lengthDirection = MODEL_AXES[lengthAxisIndex]!.clone().applyQuaternion(output);
+  const yaw = -Math.atan2(lengthDirection.x, lengthDirection.z);
+  return output.premultiply(new Quaternion().setFromAxisAngle(DECK_UP, yaw));
+}
+
 const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 38, width: 13 };
 const FREIGHTER_BUOYANCY_DAMPING = 2.4;
 const FREIGHTER_DRAFT = 0.76;
@@ -91,15 +115,18 @@ export class World {
   readonly boatDepositTarget!: Mesh<BoxGeometry, MeshBasicMaterial>;
   readonly itemObjects = new Map<ItemInstanceId, Group>();
   readonly colliders: CollisionBox[];
+  readonly interactionOccluders: readonly CollisionBox[];
   readonly arcColliders: CollisionArc[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
   readonly playerNavigationBounds: PlayerNavigationBounds;
+  readonly deckY = FREIGHTER_DIMENSIONS.deckY;
   readonly lifeboatAcceptance: Box3;
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
   private readonly boatStorage: Group;
   private readonly boatDepositSmoke!: BoatDepositSmoke;
+  private readonly groundDropSmoke!: BoatDepositSmoke;
   private readonly buoyancy: BoatBuoyancy;
   private readonly freighterBuoyancy = new BoatBuoyancy(
     sampleDefaultWave,
@@ -109,6 +136,8 @@ export class World {
   private readonly shipBuild: ShipBuild;
   private readonly boatAnchor: Vector3;
   private readonly shipItemScales = new Map<ItemInstanceId, number>();
+  private readonly itemDropPosition = new Vector3();
+  private readonly itemDropRotation = new Quaternion();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
@@ -151,11 +180,12 @@ export class World {
     shipAssets?: ShipAssets,
   ) {
     const rollback: (() => void)[] = [];
-    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets, propModels);
+    this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
     this.ship.position.y = -FREIGHTER_DRAFT;
     this.colliders = this.shipBuild.colliders;
+    this.interactionOccluders = this.shipBuild.interactionOccluders;
     this.arcColliders = this.shipBuild.arcColliders;
     this.playerStart = this.shipBuild.playerStart.clone();
     this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
@@ -234,6 +264,12 @@ export class World {
         this.itemObjects.set(instance.instanceId, prop);
         this.shipItemScales.set(instance.instanceId, transform.scale);
       });
+      this.groundDropSmoke = new BoatDepositSmoke('ground-drop-smoke');
+      this.ship.add(this.groundDropSmoke.points);
+      rollback.push(() => {
+        this.groundDropSmoke.points.removeFromParent();
+        this.groundDropSmoke.dispose();
+      });
 
       const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
         new Texture(),
@@ -293,7 +329,7 @@ export class World {
       scene.add(this.ocean.mesh);
       rollback.push(() => scene.remove(this.ocean.mesh));
       construction.checkpoint?.('ocean');
-      this.environment = new Environment(scene, moonTexture, random);
+      this.environment = new Environment(scene, moonTexture);
       rollback.push(() => this.environment.dispose());
       construction.checkpoint?.('environment');
       this.buoyancy = new BoatBuoyancy(sampleDefaultWave, undefined, sampleDefaultWaveInto);
@@ -350,6 +386,7 @@ export class World {
     );
     this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
     this.boatDepositSmoke.update(delta, reducedMotion);
+    this.groundDropSmoke.update(delta, reducedMotion);
 
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,
@@ -367,10 +404,7 @@ export class World {
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.environment.update(
       delta,
-      sinking,
       cameraPosition,
-      this.lifeboat.position,
-      reducedMotion,
     );
     const atmosphere = this.environment.atmosphere;
     this.oceanAtmosphere.fogColor.copy(atmosphere.fogColor);
@@ -402,11 +436,6 @@ export class World {
         this.waterExclusion.minimumLocalY,
       ),
     ]);
-    const beacon = this.ship.getObjectByName('alarm-beacon');
-    if (beacon instanceof Mesh && beacon.material instanceof MeshStandardMaterial) {
-      const pulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * sinking.alarmRate);
-      beacon.material.emissiveIntensity = 0.25 + pulse * 1.35;
-    }
   }
 
   saveItem(instance: ItemInstance): void {
@@ -444,14 +473,47 @@ export class World {
     item.scale.setScalar(this.shipItemScales.get(instanceId) ?? 1);
   }
 
+  dropItem(instanceId: ItemInstanceId, worldPoint: Vector3): void {
+    const item = this.itemObjects.get(instanceId);
+    if (!item) return;
+    const itemType = item.userData.itemType as ItemId;
+    this.itemDropPosition.copy(worldPoint);
+    this.ship.worldToLocal(this.itemDropPosition);
+    this.ship.add(item);
+    const scale = this.shipItemScales.get(instanceId) ?? 1;
+    item.quaternion.copy(floorRestingQuaternion(itemType, this.itemDropRotation));
+    item.scale.setScalar(scale);
+    const bounds = shipItemTransformBounds(itemType, {
+      position: new Vector3(),
+      rotation: item.rotation,
+      scale,
+    });
+    item.position.set(
+      this.itemDropPosition.x,
+      this.deckY - bounds.min.y,
+      this.itemDropPosition.z,
+    );
+    this.groundDropSmoke.points.position.set(
+      this.itemDropPosition.x,
+      this.deckY + 0.02,
+      this.itemDropPosition.z,
+    );
+    this.groundDropSmoke.trigger();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
       () => this.ocean.dispose(),
       () => this.environment.dispose(),
-      () => this.scene.remove(this.ship, this.lifeboat, this.ocean.mesh),
+      () => this.scene.remove(
+        this.ship,
+        this.lifeboat,
+        this.ocean.mesh,
+      ),
       () => this.boatDepositSmoke.dispose(),
+      () => this.groundDropSmoke.dispose(),
       () => this.shipBuild.dispose(),
       () => disposeResourceSets(
         this.ownedGeometries,

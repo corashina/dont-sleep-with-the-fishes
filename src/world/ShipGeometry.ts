@@ -1,20 +1,26 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
   CylinderGeometry,
   ExtrudeGeometry,
   Group,
   Material,
   Mesh,
   Path,
+  RingGeometry,
   Shape,
   ShapeGeometry,
   Vector3,
 } from 'three';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
-import type { ContactDepthLayer } from './ContactDepthLayer';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
+import {
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  SHIP_ROOM_WALL_HEIGHT,
+  SHIP_ROOM_WALL_THICKNESS,
+} from './ShipLayout';
 import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
 
@@ -39,7 +45,7 @@ export interface ShipGeometryBuild {
 
 const HALF_WIDTH = FREIGHTER_DIMENSIONS.width / 2;
 const HALF_LENGTH = FREIGHTER_DIMENSIONS.length / 2;
-const ROOM_WALL_HEIGHT = 3.4;
+const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
 
 const HULL_HEIGHT = 1.1;
 const HULL_TOP_Y = 1.86;
@@ -50,16 +56,23 @@ const DECK_LENGTH = 42;
 const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const END_CAP_DEPTH = 4.2;
-const WALL_THICKNESS = 0.22;
+const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
+const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_PILLAR_WIDTH = 0.28;
 const WINDOW_GLASS_THICKNESS = 0.035;
+const PORTHOLE_CENTER_HEIGHT = 2.08;
+const PORTHOLE_OPENING_RADIUS = 0.48;
+const PORTHOLE_GLASS_RADIUS = 0.46;
+const PORTHOLE_GASKET_OUTER_RADIUS = 0.51;
+const PORTHOLE_FRAME_OUTER_RADIUS = 0.66;
+const PORTHOLE_BOLT_RADIUS = 0.045;
+const PORTHOLE_BOLT_ORBIT = 0.575;
+const PORTHOLE_SEGMENTS = 24;
 const MACHINERY_VISUAL_HEIGHT = 1.15;
 const MACHINERY_COLLIDER_HEIGHT = 2.4;
-const ROOM_CORNER_SIZE = 0.24;
 const ROOM_ROOF_THICKNESS = 0.24;
-const ROOM_ROOF_OVERHANG = 0.175;
 const STACK_X = 1.35;
 const STACK_OUTLET_Y = 7.1;
 const STACK_RADIUS = 0.58;
@@ -362,6 +375,27 @@ interface WallSegmentSpec {
   readonly max: number;
 }
 
+type PortholeZoneId = 'crewCabin' | 'storageWorkroom';
+type PortholeEdge = 'aft' | 'forward';
+
+interface PortholeSpec {
+  readonly zoneId: PortholeZoneId;
+  readonly edge: PortholeEdge;
+  readonly index: 1 | 2;
+  readonly centerX: number;
+}
+
+const PORTHOLE_SPECS: readonly PortholeSpec[] = [
+  { zoneId: 'crewCabin', edge: 'aft', index: 1, centerX: -1.75 },
+  { zoneId: 'crewCabin', edge: 'aft', index: 2, centerX: 1.75 },
+  { zoneId: 'crewCabin', edge: 'forward', index: 1, centerX: -1.75 },
+  { zoneId: 'crewCabin', edge: 'forward', index: 2, centerX: 1.75 },
+  { zoneId: 'storageWorkroom', edge: 'aft', index: 1, centerX: -1.8 },
+  { zoneId: 'storageWorkroom', edge: 'aft', index: 2, centerX: 1.8 },
+  { zoneId: 'storageWorkroom', edge: 'forward', index: 1, centerX: -1.8 },
+  { zoneId: 'storageWorkroom', edge: 'forward', index: 2, centerX: 1.8 },
+];
+
 function subtractDoorIntervals(
   min: number,
   max: number,
@@ -388,10 +422,10 @@ function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
     const bounds = requiredZone(layout, zoneId).bounds;
     const doors = layout.doors.filter((door) => door.zoneId === zoneId);
     const edges = [
-      { edge: 'port' as const, orientation: 'z' as const, fixed: bounds.minX, min: bounds.minZ, max: bounds.maxZ, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'port'), axis: 1 as const },
-      { edge: 'starboard' as const, orientation: 'z' as const, fixed: bounds.maxX, min: bounds.minZ, max: bounds.maxZ, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'starboard'), axis: 1 as const },
-      { edge: 'aft' as const, orientation: 'x' as const, fixed: bounds.minZ, min: bounds.minX, max: bounds.maxX, doors: doors.filter((door) => door.orientation === 'aft'), axis: 0 as const },
-      { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX, max: bounds.maxX, doors: [] as ShipDoorSpec[], axis: 0 as const },
+      { edge: 'port' as const, orientation: 'z' as const, fixed: bounds.minX, min: bounds.minZ - WALL_HALF_THICKNESS, max: bounds.maxZ + WALL_HALF_THICKNESS, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'port'), axis: 1 as const },
+      { edge: 'starboard' as const, orientation: 'z' as const, fixed: bounds.maxX, min: bounds.minZ - WALL_HALF_THICKNESS, max: bounds.maxZ + WALL_HALF_THICKNESS, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'starboard'), axis: 1 as const },
+      { edge: 'aft' as const, orientation: 'x' as const, fixed: bounds.minZ, min: bounds.minX + WALL_HALF_THICKNESS, max: bounds.maxX - WALL_HALF_THICKNESS, doors: doors.filter((door) => door.orientation === 'aft'), axis: 0 as const },
+      { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX + WALL_HALF_THICKNESS, max: bounds.maxX - WALL_HALF_THICKNESS, doors: [] as ShipDoorSpec[], axis: 0 as const },
     ];
     edges.forEach((edge) => subtractDoorIntervals(edge.min, edge.max, edge.doors, edge.axis)
       .forEach((segment) => result.push({ zoneId, edge: edge.edge, orientation: edge.orientation, fixed: edge.fixed, ...segment })));
@@ -416,6 +450,167 @@ function roomWallHeight(_zoneId: ShipZoneId): number {
   return ROOM_WALL_HEIGHT;
 }
 
+function portholesForSegment(segment: WallSegmentSpec): readonly PortholeSpec[] {
+  if (segment.orientation !== 'x' || segment.zoneId === 'wheelhouse') return [];
+  return PORTHOLE_SPECS.filter((porthole) =>
+    porthole.zoneId === segment.zoneId
+    && porthole.edge === segment.edge
+    && porthole.centerX - PORTHOLE_OPENING_RADIUS >= segment.min
+    && porthole.centerX + PORTHOLE_OPENING_RADIUS <= segment.max);
+}
+
+function addPortholeWallPanel(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  name: string,
+  segment: WallSegmentSpec,
+  portholes: readonly PortholeSpec[],
+  wallBottomY: number,
+  material: Material,
+): void {
+  const height = roomWallHeight(segment.zoneId);
+  const renderHeight = height - 0.00002;
+  const length = segment.max - segment.min;
+  const renderLength = length - 0.00002;
+  const horizontalCenter = (segment.min + segment.max) / 2;
+  const shape = new Shape();
+  shape.moveTo(-renderLength / 2, -renderHeight / 2);
+  shape.lineTo(renderLength / 2, -renderHeight / 2);
+  shape.lineTo(renderLength / 2, renderHeight / 2);
+  shape.lineTo(-renderLength / 2, renderHeight / 2);
+  shape.closePath();
+  portholes.forEach((porthole) => {
+    const opening = new Path();
+    opening.absarc(
+      porthole.centerX - horizontalCenter,
+      PORTHOLE_CENTER_HEIGHT - height / 2,
+      PORTHOLE_OPENING_RADIUS,
+      0,
+      Math.PI * 2,
+      true,
+    );
+    shape.holes.push(opening);
+  });
+
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: WALL_THICKNESS,
+    bevelEnabled: false,
+    curveSegments: PORTHOLE_SEGMENTS,
+    steps: 1,
+  });
+  geometry.translate(0, 0, -WALL_HALF_THICKNESS);
+  const mesh = new Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.set(
+    horizontalCenter,
+    wallBottomY + height / 2,
+    segment.fixed,
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  root.add(mesh);
+  geometries.add(geometry);
+}
+
+function addPortholeDetails(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  const glassGeometry = new CircleGeometry(PORTHOLE_GLASS_RADIUS, PORTHOLE_SEGMENTS);
+  const gasketGeometry = new RingGeometry(
+    PORTHOLE_GLASS_RADIUS,
+    PORTHOLE_GASKET_OUTER_RADIUS,
+    PORTHOLE_SEGMENTS,
+  );
+  const frameGeometry = new RingGeometry(
+    PORTHOLE_GASKET_OUTER_RADIUS,
+    PORTHOLE_FRAME_OUTER_RADIUS,
+    PORTHOLE_SEGMENTS,
+  );
+  const boltGeometry = new CircleGeometry(PORTHOLE_BOLT_RADIUS, 8);
+  const linerGeometry = new CylinderGeometry(
+    PORTHOLE_OPENING_RADIUS,
+    PORTHOLE_OPENING_RADIUS,
+    WALL_THICKNESS + 0.018,
+    PORTHOLE_SEGMENTS,
+    1,
+    true,
+  );
+  [
+    glassGeometry,
+    gasketGeometry,
+    frameGeometry,
+    boltGeometry,
+    linerGeometry,
+  ].forEach((geometry) => geometries.add(geometry));
+
+  PORTHOLE_SPECS.forEach((spec) => {
+    const bounds = requiredZone(layout, spec.zoneId).bounds;
+    const wallZ = spec.edge === 'aft' ? bounds.minZ : bounds.maxZ;
+    const outwardDirection = spec.edge === 'aft' ? -1 : 1;
+    const group = new Group();
+    group.name = `porthole:${spec.zoneId}:${spec.edge}:${spec.index}`;
+    group.position.set(
+      spec.centerX,
+      FREIGHTER_DIMENSIONS.deckY + PORTHOLE_CENTER_HEIGHT,
+      wallZ,
+    );
+
+    const liner = new Mesh(linerGeometry, materials.darkMetal);
+    liner.name = `${group.name}:liner`;
+    liner.rotation.x = Math.PI / 2;
+    liner.castShadow = true;
+    liner.receiveShadow = true;
+    group.add(liner);
+
+    ([
+      ['outer', outwardDirection],
+      ['inner', -outwardDirection],
+    ] as const).forEach(([face, direction]) => {
+      const faceZ = direction * (WALL_HALF_THICKNESS + 0.012);
+      const rotationY = direction > 0 ? 0 : Math.PI;
+      const glass = new Mesh(glassGeometry, materials.glass);
+      glass.name = `${group.name}:${face}:glass`;
+      glass.position.z = direction * (WALL_HALF_THICKNESS + 0.006);
+      glass.rotation.y = rotationY;
+      glass.castShadow = false;
+      group.add(glass);
+
+      const gasket = new Mesh(gasketGeometry, materials.darkMetal);
+      gasket.name = `${group.name}:${face}:gasket`;
+      gasket.position.z = faceZ;
+      gasket.rotation.y = rotationY;
+      gasket.receiveShadow = true;
+      group.add(gasket);
+
+      const frame = new Mesh(frameGeometry, materials.exposedMetal);
+      frame.name = `${group.name}:${face}:frame`;
+      frame.position.z = direction * (WALL_HALF_THICKNESS + 0.018);
+      frame.rotation.y = rotationY;
+      frame.castShadow = true;
+      frame.receiveShadow = true;
+      group.add(frame);
+
+      for (let boltIndex = 0; boltIndex < 8; boltIndex += 1) {
+        const angle = boltIndex / 8 * Math.PI * 2 + Math.PI / 8;
+        const bolt = new Mesh(boltGeometry, materials.darkMetal);
+        bolt.name = `${group.name}:${face}:bolt-${boltIndex + 1}`;
+        bolt.position.set(
+          Math.cos(angle) * PORTHOLE_BOLT_ORBIT,
+          Math.sin(angle) * PORTHOLE_BOLT_ORBIT,
+          direction * (WALL_HALF_THICKNESS + 0.022),
+        );
+        bolt.rotation.y = rotationY;
+        bolt.castShadow = true;
+        group.add(bolt);
+      }
+    });
+    root.add(group);
+  });
+}
+
 function addWallSegments(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -430,14 +625,30 @@ function addWallSegments(
     const name = `${prefix}-wall-${segment.edge}-${index}`;
     if (segment.zoneId !== 'wheelhouse') {
       const height = roomWallHeight(segment.zoneId);
-      addBlock(root, geometries, shellColliders, {
-        name,
-        ...segmentTransform(segment, height, wallBottomY + height / 2),
-        material: segment.zoneId === 'crewCabin'
-          ? materials.paintedPanel
-          : materials.plainPaintedSteel,
-        collider: true,
-      });
+      const material = segment.zoneId === 'crewCabin'
+        ? materials.paintedPanel
+        : materials.plainPaintedSteel;
+      const portholes = portholesForSegment(segment);
+      if (portholes.length > 0) {
+        const wall = segmentTransform(segment, height, wallBottomY + height / 2);
+        shellColliders.push(toCollisionBox(wall.position, wall.size));
+        addPortholeWallPanel(
+          root,
+          geometries,
+          name,
+          segment,
+          portholes,
+          wallBottomY,
+          material,
+        );
+      } else {
+        addBlock(root, geometries, shellColliders, {
+          name,
+          ...segmentTransform(segment, height, wallBottomY + height / 2),
+          material,
+          collider: true,
+        });
+      }
       return;
     }
     const full = segmentTransform(segment, ROOM_WALL_HEIGHT, wallBottomY + ROOM_WALL_HEIGHT / 2);
@@ -453,19 +664,24 @@ function addWallSegments(
       ...segmentTransform(segment, WINDOW_HEADER_HEIGHT, wallBottomY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2),
       material: materials.paintedPanel,
     });
-    addBlock(root, geometries, shellColliders, {
-      name: `${name}-window-0`,
-      ...segmentTransform(segment, windowHeight, wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2, WINDOW_GLASS_THICKNESS),
-      material: materials.glass,
-    });
+    if (segment.edge !== 'forward') {
+      addBlock(root, geometries, shellColliders, {
+        name: `${name}-window-0`,
+        ...segmentTransform(segment, windowHeight, wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2, WINDOW_GLASS_THICKNESS),
+        material: materials.glass,
+      });
+    }
   });
 
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const width = wheelhouse.maxX - wheelhouse.minX;
-  const windowWidth = (width - WINDOW_PILLAR_WIDTH * 4) / 3;
+  const innerMinX = wheelhouse.minX + WALL_HALF_THICKNESS;
+  const innerMaxX = wheelhouse.maxX - WALL_HALF_THICKNESS;
+  const innerWidth = innerMaxX - innerMinX;
+  const windowWidth = (innerWidth - WINDOW_PILLAR_WIDTH * 4) / 3;
   const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
   for (let pillar = 0; pillar < 4; pillar += 1) {
-    const x = wheelhouse.minX + WINDOW_PILLAR_WIDTH / 2 + pillar * (windowWidth + WINDOW_PILLAR_WIDTH);
+    const x = innerMinX + WINDOW_PILLAR_WIDTH / 2
+      + pillar * (windowWidth + WINDOW_PILLAR_WIDTH);
     addBlock(root, geometries, shellColliders, {
       name: `wheelhouse-front-pillar-${pillar}`,
       size: [WINDOW_PILLAR_WIDTH, windowHeight, WALL_THICKNESS],
@@ -473,30 +689,19 @@ function addWallSegments(
       material: materials.paintedSteel,
     });
   }
-}
-
-function addRoomCornerCaps(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  shellColliders: CollisionBox[],
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
-  layout.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
-    const height = roomWallHeight(zone.id);
-    const material = zone.id === 'storageWorkroom'
-      ? materials.plainPaintedSteel
-      : materials.paintedPanel;
-    zone.polygon.forEach(([x, z], index) => {
-      addBlock(root, geometries, shellColliders, {
-        name: `${zone.id}-corner-${index}`,
-        size: [ROOM_CORNER_SIZE, height, ROOM_CORNER_SIZE],
-        position: [x, FREIGHTER_DIMENSIONS.deckY + height / 2, z],
-        material,
-        collider: true,
-      });
+  for (let pane = 0; pane < 3; pane += 1) {
+    addBlock(root, geometries, shellColliders, {
+      name: `wheelhouse-front-window-${pane}`,
+      size: [windowWidth, windowHeight, WINDOW_GLASS_THICKNESS],
+      position: [
+        innerMinX + WINDOW_PILLAR_WIDTH + windowWidth / 2
+          + pane * (windowWidth + WINDOW_PILLAR_WIDTH),
+        wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2,
+        wheelhouse.maxZ,
+      ],
+      material: materials.glass,
     });
-  });
+  }
 }
 
 function addRoomRoofs(
@@ -513,9 +718,9 @@ function addRoomRoofs(
     addBlock(root, geometries, shellColliders, {
       name: `${zone.id}-roof`,
       size: [
-        width + ROOM_ROOF_OVERHANG * 2,
+        width + WALL_THICKNESS,
         ROOM_ROOF_THICKNESS,
-        length + ROOM_ROOF_OVERHANG * 2,
+        length + WALL_THICKNESS,
       ],
       position: [
         (zone.bounds.minX + zone.bounds.maxX) / 2,
@@ -534,25 +739,8 @@ function addFocalSuperstructureDetails(
   geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
-  contactDepth?: ContactDepthLayer,
 ): void {
   const deckY = FREIGHTER_DIMENSIONS.deckY;
-  const roofTopY = deckY + ROOM_WALL_HEIGHT + ROOM_ROOF_THICKNESS;
-  const crew = requiredZone(layout, 'crewCabin').bounds;
-  const crewLength = crew.maxZ - crew.minZ + ROOM_ROOF_OVERHANG * 2;
-  const crewCenterZ = (crew.minZ + crew.maxZ) / 2;
-  ([
-    ['port', crew.minX - ROOM_ROOF_OVERHANG + 0.05],
-    ['starboard', crew.maxX + ROOM_ROOF_OVERHANG - 0.05],
-  ] as const).forEach(([side, x]) => {
-    addBlock(root, geometries, [], {
-      name: `crew-cabin-roof-fascia-${side}`,
-      size: [0.1, 0.24, crewLength],
-      position: [x, roofTopY - 0.12, crewCenterZ],
-      material: materials.darkMetal,
-    });
-  });
-
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
   const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
   addBlock(root, geometries, [], {
@@ -561,7 +749,7 @@ function addFocalSuperstructureDetails(
     position: [
       (wheelhouse.minX + wheelhouse.maxX) / 2,
       deckY + WINDOW_SILL_HEIGHT + 0.045,
-      wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.035,
+      wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.05,
     ],
     material: materials.darkMetal,
   });
@@ -575,7 +763,7 @@ function addFocalSuperstructureDetails(
       position: [
         x,
         deckY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT - 0.12,
-        wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.06,
+        wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.08,
       ],
       material: materials.darkMetal,
     });
@@ -587,41 +775,11 @@ function addFocalSuperstructureDetails(
       position: [
         wheelhouse.minX + 0.35 + (wheelhouseWidth - 0.7) * (index / 4),
         deckY + WINDOW_SILL_HEIGHT + 0.12,
-        wheelhouse.maxZ + WALL_THICKNESS / 2 + 0.09,
+        wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.0175,
       ],
       material: materials.exposedMetal,
     });
   }
-  const repairPlate = addBlock(root, geometries, [], {
-    name: 'wheelhouse-repair-plate-port-aft',
-    size: [0.035, 0.68, 0.54],
-    position: [
-      wheelhouse.minX - WALL_THICKNESS / 2 - 0.02,
-      deckY + 1.25,
-      wheelhouse.minZ + 0.72,
-    ],
-    material: materials.rust,
-  });
-  repairPlate.rotation.z = -0.045;
-
-  contactDepth?.addSeam({
-    name: 'contact:crew-cabin-deck-seam',
-    position: [
-      (crew.minX + crew.maxX) / 2,
-      deckY + 0.018,
-      crew.minZ + WALL_THICKNESS / 2 + 0.02,
-    ],
-    scale: [crew.maxX - crew.minX - 0.45, 0.025, 0.055],
-  });
-  contactDepth?.addSeam({
-    name: 'contact:wheelhouse-fascia-overlap',
-    position: [
-      (wheelhouse.minX + wheelhouse.maxX) / 2,
-      roofTopY - ROOM_ROOF_THICKNESS - 0.015,
-      wheelhouse.maxZ + ROOM_ROOF_OVERHANG - 0.025,
-    ],
-    scale: [wheelhouseWidth - 0.3, 0.03, 0.05],
-  });
 }
 
 function addCylinder(
@@ -667,8 +825,9 @@ function addMachineryAndStacks(
     [machineryWidth, MACHINERY_COLLIDER_HEIGHT, machineryLength],
   ));
   const stackBaseY = FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT;
-  const stackHeight = STACK_OUTLET_Y - stackBaseY;
-  const stackCenterY = stackBaseY + stackHeight / 2;
+  const stackShaftBaseY = stackBaseY + STACK_COLLAR_HEIGHT;
+  const stackHeight = STACK_OUTLET_Y - stackShaftBaseY;
+  const stackCenterY = stackShaftBaseY + stackHeight / 2;
   const stackOutlets = [
     new Vector3(-STACK_X, STACK_OUTLET_Y, machineryZ),
     new Vector3(STACK_X, STACK_OUTLET_Y, machineryZ),
@@ -685,12 +844,6 @@ function addMachineryAndStacks(
       stackBaseY + STACK_COLLAR_HEIGHT / 2,
       outlet.z,
     ], materials.exposedMetal);
-    addBlock(root, geometries, shellColliders, {
-      name: `rust-streak-${side}-stack-collar`,
-      size: [0.18, 0.7, 0.035],
-      position: [outlet.x, stackBaseY - 0.2, machineryZ + STACK_RADIUS],
-      material: materials.rust,
-    });
   });
   return stackOutlets;
 }
@@ -817,7 +970,6 @@ function addRails(
 export function createShipGeometry(
   materials: ShipMaterials,
   layout: ShipLayoutSpec = SHIP_LAYOUT,
-  contactDepth?: ContactDepthLayer,
 ): ShipGeometryBuild {
   const root = new Group();
   root.name = 'coastal-freighter';
@@ -852,20 +1004,12 @@ export function createShipGeometry(
   addFinishedFloors(root, geometries, materials, layout);
 
   addWallSegments(root, geometries, shellColliders, materials, layout);
-  addRoomCornerCaps(root, geometries, shellColliders, materials, layout);
+  addPortholeDetails(root, geometries, materials, layout);
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
-  addFocalSuperstructureDetails(root, geometries, materials, layout, contactDepth);
+  addFocalSuperstructureDetails(root, geometries, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
   addRails(root, geometries, shellColliders, arcColliders, materials, layout);
-
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const beaconRoofY = FREIGHTER_DIMENSIONS.deckY + ROOM_WALL_HEIGHT + ROOM_ROOF_THICKNESS;
-  addCylinder(root, geometries, 'alarm-beacon', 0.22, 0.5, [
-    (wheelhouse.minX + wheelhouse.maxX) / 2,
-    beaconRoofY + 0.25,
-    (wheelhouse.minZ + wheelhouse.maxZ) / 2,
-  ], materials.beacon);
 
   const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
     zone.id,

@@ -156,13 +156,13 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('bucket', 'Use Bucket', 'bucket',
       outcome(50, 'You gain one food.', effects([add('food', 1)])),
       outcome(50, 'The bucket breaks.', effects(undefined, [breakItem('bucket')]))),
-    choice('spyglass', 'Use Spyglass', 'spyglass',
+    choice('spyglass', 'Use Binoculars', 'spyglass',
       outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', effects([add('food', 1)]))),
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
   ]),
   {
     ...event('snatcher', 'Snatcher', 'impact', 28, 8, 45, [
-      choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The spyglass breaks.', effects(undefined, [breakItem('spyglass')]))),
+      choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The binoculars break.', effects(undefined, [breakItem('spyglass')]))),
       choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
       choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
       choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('harpoonGun')]))),
@@ -259,7 +259,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ]),
   event('man-in-the-fog', 'Man in the Fog', 'darkness', 18, 6, 40, [
     choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'Danger increases.', effects([subtract('rescueProgress', 5)]))),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', effects([subtract('rescueProgress', 5)]))),
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(70, 'The figure attacks.', effects([subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)])),
       outcome(35, 'Danger increases.', effects([subtract('rescueProgress', 10)]))),
@@ -274,7 +274,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ]),
   event('eerie-melody', 'Eerie Melody', 'darkness', 19, 13, 30, [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'The bucket breaks.', effects([set('energy', 1)], [breakItem('bucket')]))),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)]))),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)]))),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', effects([subtract('hull', { min: 40, max: 60 }), set('energy', 1)]))),
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', effects(undefined, [consume('ductTape')]))),
     choice('sleep', 'Sleep', undefined,
@@ -283,8 +283,8 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ]),
   event('face-on-the-moon', 'Face on the Moon', 'darkness', 5, 17, 50, [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', effects([set('energy', 2)]))),
-    choice('spyglass', 'Use Spyglass', 'spyglass',
-      outcome(60, 'The spyglass breaks.', effects([set('energy', 1)], [breakItem('spyglass')])),
+    choice('spyglass', 'Use Binoculars', 'spyglass',
+      outcome(60, 'The binoculars break.', effects([set('energy', 1)], [breakItem('spyglass')])),
       outcome(40, 'Danger increases.', effects([subtract('rescueProgress', 5)]))),
     choice('sleep', 'Sleep', undefined,
       outcome(100, 'You wake exhausted.', effects([set('energy', 0)])),

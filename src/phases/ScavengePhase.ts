@@ -1,4 +1,4 @@
-import { Scene, Vector3 } from 'three';
+import { Box3, Scene, Vector3 } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
 import {
   advanceTerminalPresentation,
@@ -11,6 +11,7 @@ import {
   type ScavengeResult,
 } from '../game/ScavengeSession';
 import {
+  ITEM_LABELS,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -26,7 +27,12 @@ import {
 import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { PlayerController } from '../player/PlayerController';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
-import { GameUI, type ScavengePresentation } from '../ui/GameUI';
+import { projectScreenBounds } from '../rendering/projectScreenBounds';
+import {
+  GameUI,
+  type ScavengeItemTooltip,
+  type ScavengePresentation,
+} from '../ui/GameUI';
 import { World } from '../world/World';
 import { commitBoatDeposit } from './scavengeDeposit';
 
@@ -62,6 +68,10 @@ export class ScavengePhase implements GamePhase {
     remainingSeconds: 0,
   };
   private contextAction: ContextAction = { type: 'none', prompt: '' };
+  private itemTooltip: ScavengeItemTooltip | null = null;
+  private readonly itemTooltipBounds = new Box3();
+  private viewportWidth = 1;
+  private viewportHeight = 1;
 
   constructor(
     private readonly context: PhaseContext,
@@ -98,7 +108,15 @@ export class ScavengePhase implements GamePhase {
       () => this.session.penalize(5),
       this.world.arcColliders,
     );
-    this.interaction = new InteractionSystem(context.camera);
+    this.interaction = new InteractionSystem(context.camera, {
+      root: this.world.ship,
+      colliders: this.world.interactionOccluders,
+      dropFloor: {
+        y: this.world.deckY,
+        bounds: this.world.playerNavigationBounds.safe,
+        colliders: this.world.colliders,
+      },
+    });
     this.carry = new CarryController(this.scene, context.camera);
 
     this.ui.onStart = () => {
@@ -172,7 +190,9 @@ export class ScavengePhase implements GamePhase {
     const next = this.session.snapshot();
     this.ui.render(next, sinking);
     const stillActive = next.status === 'running' && this.input.pointerLocked && !document.hidden;
-    this.ui.setPrompt(stillActive ? this.contextAction.prompt : '');
+    const visibleItemTooltip = stillActive ? this.itemTooltip : null;
+    this.ui.setPrompt(visibleItemTooltip === null && stillActive ? this.contextAction.prompt : '');
+    this.ui.setItemTooltip?.(visibleItemTooltip);
 
     const previousTerminalPhase = this.terminalPresentation.phase;
     this.terminalPresentation = advanceTerminalPresentation(
@@ -197,6 +217,8 @@ export class ScavengePhase implements GamePhase {
 
   resize(width: number, height: number): void {
     if (this.disposed || width <= 0 || height <= 0) return;
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.context.camera.aspect = width / height;
     this.context.camera.updateProjectionMatrix();
   }
@@ -226,6 +248,7 @@ export class ScavengePhase implements GamePhase {
   }
 
   private updateInteraction(): void {
+    this.itemTooltip = null;
     const snapshot = this.session.snapshot();
     const availableItems = [];
     const instances = new Map<ItemInstanceId, ItemInstance>();
@@ -256,6 +279,29 @@ export class ScavengePhase implements GamePhase {
         remainingCapacity: 3 - snapshot.carriedWeight,
         nearEvacuation: distanceToEvacuation <= 1.7,
       });
+    if (target.target === 'item' && target.targetItem !== null) {
+      const object = this.world.itemObjects.get(target.targetItem.instanceId);
+      if (object !== undefined) {
+        this.itemTooltipBounds.setFromObject(object, true);
+        const projected = projectScreenBounds(
+          this.itemTooltipBounds,
+          this.context.camera,
+          this.viewportWidth,
+          this.viewportHeight,
+        );
+        if (projected.visible) {
+          const placement = projected.y - projected.height / 2 >= 96 ? 'above' : 'below';
+          this.itemTooltip = {
+            text: ITEM_LABELS[target.targetItem.type],
+            x: projected.x,
+            y: placement === 'above'
+              ? projected.y - projected.height / 2
+              : projected.y + projected.height / 2,
+            placement,
+          };
+        }
+      }
+    }
     if (this.input.consumeInteract()) this.performAction(this.contextAction);
   }
 
@@ -268,7 +314,9 @@ export class ScavengePhase implements GamePhase {
     } else if (action.type === 'depositBundle') {
       commitBoatDeposit(this.session, this.carry, this.world);
     } else if (action.type === 'drop') {
-      this.carry.drop();
+      const released = this.carry.releaseActive();
+      if (!released || !this.session.dropCarried()) return;
+      this.world.dropItem(released.instanceId, action.point);
     } else if (action.type === 'evacuate') {
       this.session.evacuate();
     } else if (action.type === 'capacityFull') {

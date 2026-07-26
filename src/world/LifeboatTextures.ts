@@ -7,7 +7,6 @@ export interface LifeboatMaterials {
   readonly cutWood: MeshStandardMaterial;
   readonly rescueTrim: MeshStandardMaterial;
   readonly rope: MeshStandardMaterial;
-  readonly waterline: MeshStandardMaterial;
 }
 
 export function createLifeboatMaterials(assets: LifeboatAssets): LifeboatMaterials {
@@ -44,12 +43,6 @@ export function createLifeboatMaterials(assets: LifeboatAssets): LifeboatMateria
     rope: new MeshStandardMaterial({
       color: 0x4a3826,
       roughness: 1,
-      metalness: 0,
-      flatShading: true,
-    }),
-    waterline: new MeshStandardMaterial({
-      color: 0x263c3e,
-      roughness: 0.96,
       metalness: 0,
       flatShading: true,
     }),

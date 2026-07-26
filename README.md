@@ -29,9 +29,9 @@ The ship combines original procedural geometry with locally committed wood maps 
 
 ## Dorothy supplies
 
-The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Spyglass, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, and Harpoon Gun. Scuba Gear and Anchor each weigh three points.
+The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, and Harpoon Gun. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Spyglass, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
@@ -130,6 +130,10 @@ bun run preview
 ```
 
 `bun run build` type-checks the project and writes the static production site to `dist/`. Deploy that directory to any static host.
+
+For ambient-occlusion inspection, append `?ao=debug` to show the raw item AO
+buffer or `?ao=off` for an unoccluded comparison. Reload after changing modes.
+While the game is open, press `O` to cycle composite, raw AO, and AO-off modes.
 
 ## Architecture
 

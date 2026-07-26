@@ -24,8 +24,7 @@ interface LampPlacement {
 
 const CEILING_Y = 5.56;
 const LAMP_PLACEMENTS: readonly LampPlacement[] = [
-  { name: 'crew-cabin-aft', x: -0.48, z: 7.15 },
-  { name: 'crew-cabin-forward', x: 0.42, z: 10.45 },
+  { name: 'crew-cabin', x: 0, z: 8.7 },
   { name: 'wheelhouse', x: -0.36, z: 15.3 },
   { name: 'storage-workroom', x: 0.38, z: -10.7 },
 ];

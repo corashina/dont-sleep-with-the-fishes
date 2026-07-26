@@ -38,7 +38,7 @@ export type RuntimeModelPresentation = Pick<
 type Presentation = RuntimeModelPresentation;
 const presentation = {
   cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
-  baitTin: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0.12, 0] },
+  baitTin: { targetLongestDimension: 0.36, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
   ductTape: { targetLongestDimension: 0.55, rotation: [0, 0, 0], offset: [0, 0, 0] },
   compass: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
   map: { targetLongestDimension: 0.62, rotation: [0, 0, 0], offset: [0, 0, 0] },
@@ -52,14 +52,17 @@ const presentation = {
   bottledPaper: { targetLongestDimension: 0.62, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
   umbrella: { targetLongestDimension: 0.90, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
   swimRing: { targetLongestDimension: 0.70, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, Math.PI / 2], offset: [0, 0.19, 0] },
-  harpoonGun: { targetLongestDimension: 1.00, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  harpoonGun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
   energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
 } as const satisfies Readonly<Record<ItemId, Presentation>>;
 
 const generatedMetadata = generatedMetadataJson as unknown as Readonly<
   Record<string, GeneratedRuntimeModelMetadata>
 >;
+const modelTriangleLimits: Readonly<Partial<Record<ItemId, number>>> = Object.freeze({
+  fishingNet: 9_000,
+});
 const BOUNDS_EPSILON = 1e-9;
 
 function generatedNormalization(id: string, authored: RuntimeModelPresentation) {
@@ -100,7 +103,7 @@ export function createRuntimeModelSpec(
     url: new URL(`../assets/models/items/${id}.glb`, import.meta.url).href,
     ...authored,
     ...generatedNormalization(id, authored),
-    maxTriangles: 3_000,
+    maxTriangles: modelTriangleLimits[id as ItemId] ?? 3_000,
     generatedMetadata: generatedMetadata[id]!,
   });
 }

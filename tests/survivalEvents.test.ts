@@ -106,11 +106,11 @@ const EXPECTED_CHOICES = {
   'school-of-fish': [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(60, 'You gain three food.', [add('food', 3)]), outcome(40, 'You gain two food and the net breaks.', [add('food', 2)], [item('break', 'fishingNet')])),
     choice('bucket', 'Use Bucket', 'bucket', outcome(50, 'You gain one food.', [add('food', 1)]), outcome(50, 'The bucket breaks.', [], [item('break', 'bucket')])),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', [add('food', 1)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', [add('food', 1)])),
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
   ],
   snatcher: [
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The spyglass breaks.', [], [item('break', 'spyglass')])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The binoculars break.', [], [item('break', 'spyglass')])),
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', [], [item('lose', 'swimRing')])),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', [], [target()])),
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'harpoonGun')])),
@@ -174,7 +174,7 @@ const EXPECTED_CHOICES = {
   ],
   'man-in-the-fog': [
     choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5)])),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [subtract('rescueProgress', 10)])),
     choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [subtract('rescueProgress', 5), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [subtract('rescueProgress', 5), subtract('health', 20), set('energy', 2)])),
   ],
@@ -185,14 +185,14 @@ const EXPECTED_CHOICES = {
   ],
   'eerie-melody': [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'The bucket breaks.', [set('energy', 1)], [item('break', 'bucket')])),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(1, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', [subtract('hull', { min: 40, max: 60 }), set('energy', 1)])),
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', [], [item('consume', 'ductTape')])),
     choice('sleep', 'Sleep', undefined, outcome(60, 'You wake exhausted.', [set('energy', 0)]), outcome(40, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50), set('energy', 1)])),
   ],
   'face-on-the-moon': [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', [set('energy', 2)])),
-    choice('spyglass', 'Use Spyglass', 'spyglass', outcome(60, 'The spyglass breaks.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'The binoculars break.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5)])),
     choice('sleep', 'Sleep', undefined, outcome(100, 'You wake exhausted.', [set('energy', 0)]), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
   ],
 } as const;

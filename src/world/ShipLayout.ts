@@ -2,6 +2,8 @@ import type { ShipItemCategory } from './ShipItemPlacement';
 
 export const PLAYER_LAYOUT_RADIUS = 0.35;
 export const FREIGHTER_DIMENSIONS = { width: 16, length: 44, deckY: 2.22 } as const;
+export const SHIP_ROOM_WALL_HEIGHT = 3.4;
+export const SHIP_ROOM_WALL_THICKNESS = 0.22;
 
 export type ShipZoneId =
   | 'crewCabin' | 'wheelhouse' | 'cargoDeck'
@@ -9,8 +11,8 @@ export type ShipZoneId =
 export type ClearanceClass = 'primary' | 'secondary';
 export type ShipFurnitureAssetId =
   | 'bedBunk' | 'desk' | 'chairDesk' | 'bookcaseOpen'
-  | 'bookcaseClosedDoors' | 'table' | 'sideTableDrawers';
-export type ShipFurnitureKind = ShipFurnitureAssetId | 'cargoCrate' | 'cargoRack';
+  | 'bookcaseClosedDoors' | 'cargoCrate' | 'table' | 'sideTableDrawers';
+export type ShipFurnitureKind = ShipFurnitureAssetId | 'cargoRack';
 
 export interface Rect2 {
   readonly minX: number; readonly maxX: number;
@@ -72,7 +74,7 @@ export interface ShipLaneSpec {
   readonly bounds: Rect2;
 }
 
-export type ShipDeckDetailKind = 'barrel';
+export type ShipDeckDetailKind = 'barrel' | 'cargoBox';
 
 export interface ShipDeckDetailSpec {
   readonly id: string;
@@ -268,30 +270,64 @@ const doors: readonly ShipDoorSpec[] = [
 ];
 
 export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number>> = {
-  barrel: 6,
+  barrel: 2,
+  cargoBox: 3,
 };
 
 export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
   Record<ShipDeckDetailKind, readonly [number, number]>
 > = {
-  barrel: [0.96, 0.96],
+  barrel: [1.13, 1.13],
+  cargoBox: [0.623579, 0.633173],
 };
 
 export const SHIP_DECK_DETAIL_MIN_GAP = 1;
 
-const detailPositions: Readonly<Record<ShipDeckDetailKind, readonly (readonly [number, number])[]>> = {
-  barrel: [[-6, 18.2], [6, 18.2], [-6, -18.2], [6, -18.2], [-1.8, 4.4], [1.9, -7.3]],
+interface DetailTransform {
+  readonly position: readonly [number, number];
+  readonly rotationY: number;
+  readonly scale: readonly [number, number, number];
+}
+
+function boxAgainstSideWall(
+  wallCenterX: number,
+  outwardDirection: -1 | 1,
+  z: number,
+  scale: readonly [number, number, number],
+): DetailTransform {
+  const [unscaledWidth] = SHIP_DECK_DETAIL_VISUAL_SIZES.cargoBox;
+  const projectedWidth = unscaledWidth * scale[0];
+  return {
+    position: [
+      wallCenterX + outwardDirection * (SHIP_ROOM_WALL_THICKNESS / 2 + projectedWidth / 2),
+      z,
+    ],
+    rotationY: 0,
+    scale,
+  };
+}
+
+const detailTransforms: Readonly<Record<ShipDeckDetailKind, readonly DetailTransform[]>> = {
+  barrel: [
+    { position: [-1.8, 4.4], rotationY: 0, scale: [1, 1, 1] },
+    { position: [1.9, -7.3], rotationY: 0, scale: [1, 1, 1] },
+  ],
+  cargoBox: [
+    boxAgainstSideWall(crewBounds.minX, -1, 10.2, [0.9, 0.9, 0.9]),
+    boxAgainstSideWall(storageBounds.maxX, 1, -8.85, [1, 1, 1]),
+    boxAgainstSideWall(storageBounds.minX, -1, -8.85, [0.82, 0.82, 0.82]),
+  ],
 };
 
 const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, number]>> = {
-  barrel: [0.9, 1.15, 0.9],
+  barrel: [1.13, 1.15, 1.13],
 };
 
-const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailPositions) as ShipDeckDetailKind[]).flatMap((kind) =>
-  detailPositions[kind].map(([x, z], index) => ({
+const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailTransforms) as ShipDeckDetailKind[]).flatMap((kind) =>
+  detailTransforms[kind].map(({ position: [x, z], rotationY, scale }, index) => ({
     id: `${kind}-${index + 1}`, kind, position: [x, FREIGHTER_DIMENSIONS.deckY, z],
-    rotationY: 0,
-    scale: [1, 1, 1],
+    rotationY,
+    scale,
     visualSize: SHIP_DECK_DETAIL_VISUAL_SIZES[kind],
     colliderSize: colliders[kind],
   })));
@@ -361,15 +397,15 @@ function bookcaseSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
 ): readonly ShipItemSurfaceSpec[] {
-  const heights = [0.273, 0.778, 1.283, 1.787] as const;
-  return heights.map((height, levelIndex) => itemSurface(
+  const wallMidpointHeight = SHIP_ROOM_WALL_HEIGHT / 2;
+  return ([-0.21, 0.21] as const).map((x, slotIndex) => itemSurface(
     furnitureId,
-    `level-${levelIndex + 1}`,
+    `shelf-${slotIndex === 0 ? 'left' : 'right'}`,
     categories,
-    [0, height, -0.08],
-    { width: 0.7, depth: 0.35 },
-    levelIndex < 3 ? 0.43 : 0.82,
-    [[0, 0, levelIndex === 0 ? -1.15 : -0.85]],
+    [x, wallMidpointHeight, -0.08],
+    { width: 0.34, depth: 0.35 },
+    0.82,
+    [[x, 0, -0.85]],
   ));
 }
 
@@ -436,10 +472,26 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   placement('workbench-starboard', 'table', 'storageWorkroom', [2.8, 2.22, -12.72], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', WORKROOM_ITEM_CATEGORIES)),
   placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -8.35], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', WORKROOM_ITEM_CATEGORIES)),
   ...([
-    ['cargo-crate-forward-port', -3.6, 3.8],
-    ['cargo-crate-forward-starboard', 3.6, 3.8],
-    ['cargo-crate-aft-port', -3.6, -6.4],
-    ['cargo-crate-aft-starboard', 3.6, -6.4],
+    [
+      'cargo-crate-forward-port',
+      crewBounds.minX + SHIP_ROOM_WALL_THICKNESS / 2 + 1.35 / 2,
+      crewBounds.minZ - SHIP_ROOM_WALL_THICKNESS / 2 - 1.15 / 2,
+    ],
+    [
+      'cargo-crate-forward-starboard',
+      crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS / 2 - 1.35 / 2,
+      crewBounds.minZ - SHIP_ROOM_WALL_THICKNESS / 2 - 1.15 / 2,
+    ],
+    [
+      'cargo-crate-aft-port',
+      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS / 2 + 1.35 / 2,
+      storageBounds.maxZ + SHIP_ROOM_WALL_THICKNESS / 2 + 1.15 / 2,
+    ],
+    [
+      'cargo-crate-aft-starboard',
+      storageBounds.maxX - SHIP_ROOM_WALL_THICKNESS / 2 - 1.35 / 2,
+      storageBounds.maxZ + SHIP_ROOM_WALL_THICKNESS / 2 + 1.15 / 2,
+    ],
   ] as const).map(([id, x, z]) => placement(
     id, 'cargoCrate', 'cargoDeck', [x, 2.22, z], 0, [1.35, 1.05, 1.15],
     [itemSurface(id, 'top', CARGO_ITEM_CATEGORIES, [0, 1.05, 0], { width: 1.05, depth: 0.85 }, 0.95, [[0, 0, -1.15], [0, 0, 1.15]])],

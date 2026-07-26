@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, PerspectiveCamera, Vector3 } from 'three';
+import {
+  Box3,
+  BoxGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Vector3,
+} from 'three';
 import {
   ACTION_FOR_ITEM,
   projectBoatAnchor,
   projectBoatBounds,
+  projectBoatObjectBounds,
 } from '../src/survival/BoatInteraction';
 
 describe('BoatInteraction', () => {
@@ -48,6 +57,35 @@ describe('BoatInteraction', () => {
     expect(projected.width).toBeGreaterThanOrEqual(44);
     expect(projected.height).toBeGreaterThanOrEqual(44);
     expect(projected.depth).toBeCloseTo(2);
+  });
+
+  it('keeps object bounds stable when the boat and camera move through waves together', () => {
+    const rig = new Group();
+    const camera = new PerspectiveCamera(65, 2, 0.1, 100);
+    camera.position.set(0, 0, 2);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    const item = new Mesh(
+      new BoxGeometry(0.4, 0.3, 0.2),
+      new MeshBasicMaterial(),
+    );
+    item.position.set(-0.5, 0.2, 0);
+    rig.add(camera, item);
+
+    const settled = projectBoatObjectBounds(item, camera, 1000, 500);
+    rig.position.set(3, 1.2, -4);
+    rig.rotation.set(0.28, 0, -0.22);
+    const ridingWave = projectBoatObjectBounds(item, camera, 1000, 500);
+
+    expect(ridingWave.visible).toBe(true);
+    expect(ridingWave.x).toBeCloseTo(settled.x);
+    expect(ridingWave.y).toBeCloseTo(settled.y);
+    expect(ridingWave.width).toBeCloseTo(settled.width);
+    expect(ridingWave.height).toBeCloseTo(settled.height);
+    expect(ridingWave.depth).toBeCloseTo(settled.depth);
+
+    item.geometry.dispose();
+    item.material.dispose();
   });
 
 

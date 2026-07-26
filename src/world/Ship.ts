@@ -1,8 +1,12 @@
 import { Group, Vector3 } from 'three';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
-import type { CollisionArc, CollisionBox } from '../player/collisions';
+import {
+  segmentBoxInterval,
+  type CollisionArc,
+  type CollisionBox,
+} from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
-import { createContactDepthLayer } from './ContactDepthLayer';
+import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import { createShipDeckDetails } from './ShipDeckDetails';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -10,8 +14,6 @@ import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
-import type { PropModelLibrary } from './PropModelLibrary';
-import { createShipRoomLights } from './ShipRoomLights';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
 import type { ShipAssets } from './ShipAssets';
@@ -19,6 +21,7 @@ import type { ShipAssets } from './ShipAssets';
 export interface ShipBuild {
   root: Group;
   colliders: CollisionBox[];
+  interactionOccluders: readonly CollisionBox[];
   arcColliders: CollisionArc[];
   itemSurfaces: ShipItemSurface[];
   furnitureColliderById: ReadonlyMap<string, CollisionBox>;
@@ -35,11 +38,6 @@ export interface ShipBuild {
   };
   updateEffects(delta: number, sinkingProgress: number, reducedMotion: boolean): void;
   dispose(): void;
-}
-
-interface SegmentBoxInterval {
-  readonly minimum: number;
-  readonly maximum: number;
 }
 
 const SURFACE_EPSILON = 1e-6;
@@ -73,33 +71,6 @@ function matchesAuthoredOpenShelfSurface(surface: ShipItemSurface): boolean {
     && nearlyEqual(surface.rotation.y, authored.localRotation[1] + owner.rotationY)
     && nearlyEqual(surface.rotation.z, authored.localRotation[2])
     && surface.fallback === authored.fallback;
-}
-
-function segmentBoxInterval(
-  start: Vector3,
-  end: Vector3,
-  box: CollisionBox,
-): SegmentBoxInterval | undefined {
-  let minimum = 0;
-  let maximum = 1;
-  for (const [startValue, delta, min, max] of [
-    [start.x, end.x - start.x, box.minX, box.maxX],
-    [start.y, end.y - start.y, box.minY, box.maxY],
-    [start.z, end.z - start.z, box.minZ, box.maxZ],
-  ] as const) {
-    if (Math.abs(delta) < 1e-9) {
-      if (startValue < min || startValue > max) return undefined;
-      continue;
-    }
-    const first = (min - startValue) / delta;
-    const second = (max - startValue) / delta;
-    minimum = Math.max(minimum, Math.min(first, second));
-    maximum = Math.min(maximum, Math.max(first, second));
-    if (minimum > maximum) return undefined;
-  }
-  return maximum > 1e-6 && minimum < 1 - 1e-6
-    ? { minimum, maximum }
-    : undefined;
 }
 
 function ownerApertureAllowsRay(
@@ -168,25 +139,21 @@ export function createShip(
   shipFurniture: ShipFurnitureLibrary,
   maxTextureAnisotropy: number,
   shipAssets?: ShipAssets,
-  propModels?: PropModelLibrary,
 ): ShipBuild {
   validateShipLayout(SHIP_LAYOUT);
   const root = new Group();
   root.name = 'sinking-ship';
   const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy, shipAssets);
-  const contactDepth = createContactDepthLayer();
   let geometry: ReturnType<typeof createShipGeometry> | undefined;
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
   let details: ReturnType<typeof createShipDeckDetails> | undefined;
   let rigging: ReturnType<typeof createShipRigging> | undefined;
-  let roomLights: ReturnType<typeof createShipRoomLights> | undefined;
   let smoke: ShipSmoke | undefined;
   try {
-    geometry = createShipGeometry(materials, SHIP_LAYOUT, contactDepth);
-    furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT, contactDepth);
-    details = createShipDeckDetails(materials, SHIP_LAYOUT.details);
+    geometry = createShipGeometry(materials, SHIP_LAYOUT);
+    furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT);
+    details = createShipDeckDetails(shipFurniture, SHIP_LAYOUT.details);
     rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
-    roomLights = createShipRoomLights(propModels?.createPracticalLight('ceilingLight'));
     const structuralColliders = [
       ...geometry.shellColliders,
       ...details.colliders,
@@ -203,19 +170,16 @@ export function createShip(
       furniture.root,
       details.root,
       rigging.root,
-      roomLights.root,
-      contactDepth.root,
       smoke.points,
     );
     root.add(geometry.root);
+    enableItemAmbientOcclusionOccluder(root);
   } catch (error) {
     smoke?.dispose();
-    roomLights?.dispose();
     rigging?.disposeGeometry();
     details?.disposeGeometry();
     furniture?.disposeGeometry();
     geometry?.disposeGeometry();
-    contactDepth.dispose();
     materials.dispose();
     throw error;
   }
@@ -224,7 +188,6 @@ export function createShip(
   const assembledFurniture = furniture;
   const assembledDetails = details;
   const assembledRigging = rigging;
-  const assembledRoomLights = roomLights;
   const assembledSmoke = smoke;
   const colliders = [
     ...assembledGeometry.shellColliders,
@@ -238,6 +201,7 @@ export function createShip(
   return {
     root,
     colliders,
+    interactionOccluders: assembledGeometry.shellColliders,
     arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
@@ -259,11 +223,9 @@ export function createShip(
       disposed = true;
       assembledSmoke.dispose();
       assembledRigging.disposeGeometry();
-      assembledRoomLights.dispose();
       assembledDetails.disposeGeometry();
       assembledFurniture.disposeGeometry();
       assembledGeometry.disposeGeometry();
-      contactDepth.dispose();
       materials.dispose();
     },
   };
