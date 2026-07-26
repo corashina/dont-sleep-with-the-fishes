@@ -28,6 +28,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from './SceneResources';
+import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 
 type RuntimeModelId = ItemId | LifeboatEquipmentId | PracticalLightModelId;
 const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
@@ -295,6 +296,10 @@ export class PropModelLibrary {
     const template = this.itemTemplates.get(instance.type);
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
     const clone = cloneOwnedTemplate(template);
+    clone.traverse((object) => {
+      if (object instanceof Mesh) object.castShadow = false;
+    });
+    enableItemAmbientOcclusion(clone);
     clone.position.set(0, 0, 0);
     clone.quaternion.identity();
     clone.scale.set(1, 1, 1);

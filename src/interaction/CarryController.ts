@@ -76,6 +76,15 @@ export class CarryController {
     return Object.freeze(this.carried.splice(0).map(({ instance }) => instance));
   }
 
+  releaseActive(): ItemInstance | null {
+    if (this.flight !== null) return null;
+    const released = this.carried.pop();
+    if (!released) return null;
+    this.scene.attach(released.object);
+    this.reflowCarried();
+    return released.instance;
+  }
+
   drop(): ItemInstanceId | null {
     return this.launch(1.2);
   }

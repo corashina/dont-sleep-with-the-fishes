@@ -1,11 +1,14 @@
 /// <reference types="vite/client" />
 
 export const SHIP_FURNITURE_MODEL_IDS = [
+  'barrel',
   'bedBunk',
   'desk',
   'chairDesk',
   'bookcaseOpen',
   'bookcaseClosedDoors',
+  'cargoCrate',
+  'cargoBox',
   'table',
   'sideTableDrawers',
 ] as const;
@@ -30,6 +33,13 @@ const sharedLimits = {
 } as const;
 
 export const SHIP_FURNITURE_MODEL_SPECS = {
+  barrel: {
+    url: new URL('../assets/models/ship/barrel.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.15,
+    canonicalSize: [1.129507, 1.15, 1.129507],
+    ...sharedLimits,
+  },
   bedBunk: {
     url: new URL('../assets/models/ship/bedBunk.glb', import.meta.url).href,
     scaleAxis: 'z',
@@ -53,9 +63,9 @@ export const SHIP_FURNITURE_MODEL_SPECS = {
   },
   bookcaseOpen: {
     url: new URL('../assets/models/ship/bookcaseOpen.glb', import.meta.url).href,
-    scaleAxis: 'y',
-    targetAxisLength: 1.85,
-    canonicalSize: [0.841, 1.85, 0.526],
+    scaleAxis: 'z',
+    targetAxisLength: 0.841,
+    canonicalSize: [0.310193, 0.289421, 0.841],
     ...sharedLimits,
   },
   bookcaseClosedDoors: {
@@ -63,6 +73,20 @@ export const SHIP_FURNITURE_MODEL_SPECS = {
     scaleAxis: 'y',
     targetAxisLength: 1.85,
     canonicalSize: [0.871, 1.85, 0.544],
+    ...sharedLimits,
+  },
+  cargoCrate: {
+    url: new URL('../assets/models/ship/cargoCrate.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.05,
+    canonicalSize: [1.05, 1.05, 1.05],
+    ...sharedLimits,
+  },
+  cargoBox: {
+    url: new URL('../assets/models/ship/cargoBox.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 0.55,
+    canonicalSize: [0.623579, 0.55, 0.633173],
     ...sharedLimits,
   },
   table: {

@@ -22,19 +22,22 @@ describe('Poly Pizza item models', () => {
 
     for (const [id, source] of Object.entries(POLY_PIZZA_MODEL_SOURCES)) {
       expect(source.id).toBe(id);
-      expect(source.pageUrl).toMatch(/^https:\/\/poly\.pizza\/m\//);
-      expect(source.downloadUrl).toMatch(/^https:\/\/static\.poly\.pizza\/.+\.glb$/);
-      expect(source.sourceAssetId).toBe(`poly-pizza:${source.resourceId}`);
-      expect(source.sha256).toMatch(/^[A-F0-9]{64}$/);
-      expect(source.sourceTriangles).toBeGreaterThan(0);
-      expect(['CC0 1.0', 'CC-BY 3.0']).toContain(source.license);
+      for (const pinnedSource of [source, ...(source.components ?? [])]) {
+        expect(pinnedSource.pageUrl).toMatch(/^https:\/\/poly\.pizza\/m\//);
+        expect(pinnedSource.downloadUrl).toMatch(/^https:\/\/static\.poly\.pizza\/.+\.glb$/);
+        expect(pinnedSource.sourceAssetId).toBe(`poly-pizza:${pinnedSource.resourceId}`);
+        expect(pinnedSource.sha256).toMatch(/^[A-F0-9]{64}$/);
+        expect(pinnedSource.sourceTriangles).toBeGreaterThan(0);
+        expect(pinnedSource.downloadedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(['CC0 1.0', 'CC-BY 3.0']).toContain(pinnedSource.license);
+      }
     }
   });
 
   it('prioritizes Poly by Google where suitable and pins the requested lights', () => {
     const googleModels = Object.values(POLY_PIZZA_MODEL_SOURCES)
       .filter((source) => source.creator === 'Poly by Google');
-    expect(googleModels.length).toBeGreaterThanOrEqual(10);
+    expect(googleModels.length).toBeGreaterThanOrEqual(8);
     expect(POLY_PIZZA_MODEL_SOURCES.lantern).toMatchObject({
       creator: 'Kay Lousberg',
       publicId: 'CtHBJ1ufeW',
@@ -43,6 +46,28 @@ describe('Poly Pizza item models', () => {
       creator: 'Quaternius',
       publicId: 'JT44JUXU2d',
     });
+    expect(POLY_PIZZA_MODEL_SOURCES.baitTin).toMatchObject({
+      creator: 'Kay Lousberg',
+      publicId: 'ubNPKDn2yH',
+      nodeName: 'jar_D_small',
+    });
+  });
+
+  it('pins the functionally selected survival item models', () => {
+    expect(POLY_PIZZA_MODEL_SOURCES.cannedFood!.publicId).toBe('onPuYPx0q7');
+    expect(POLY_PIZZA_MODEL_SOURCES.fishingNet!.publicId).toBe('6xRmXaU-L7e');
+    expect(POLY_PIZZA_MODEL_SOURCES.fishingNet!.maxTriangles).toBe(9_000);
+    expect(POLY_PIZZA_MODEL_SOURCES.fishingNet!.simplifyRatio).toBeUndefined();
+    expect(POLY_PIZZA_MODEL_SOURCES.scubaSet!).toMatchObject({
+      publicId: '4GhtCNARi8c',
+      components: [{ publicId: '4YCjSY3U6H' }],
+    });
+    expect(POLY_PIZZA_MODEL_SOURCES.ductTape!.publicId).toBe('dLlslRdbHfs');
+    expect(POLY_PIZZA_MODEL_SOURCES.umbrella!.publicId).toBe('ez4MoDQFgXz');
+    expect(POLY_PIZZA_MODEL_SOURCES.swimRing!.removeNodeNames).toEqual(['Rectangle_sweep']);
+    expect(POLY_PIZZA_MODEL_SOURCES.flashlight!.publicId).toBe('8t1DZLLvofk');
+    expect(POLY_PIZZA_MODEL_SOURCES.harpoonGun!.publicId).toBe('neEjwx9bBJ');
+    expect(POLY_PIZZA_MODEL_SOURCES.bottledPaper!.publicId).toBe('arIYNl9gMyr');
   });
 
   it('rejects source bytes that do not match a pinned model', async () => {

@@ -34,7 +34,6 @@ export interface ShipMaterials {
   rope: MeshStandardMaterial;
   glass: MeshPhysicalMaterial;
   emergency: MeshStandardMaterial;
-  beacon: MeshStandardMaterial;
   canvas: MeshStandardMaterial;
   ownedMaterialsForTest(): readonly Material[];
   ownedTexturesForTest(): readonly Texture[];
@@ -353,7 +352,6 @@ export function createShipMaterials(
   const rope = new MeshStandardMaterial({ color: 0x3d3022, roughness: 1, metalness: 0, flatShading: true });
   const glass = new MeshPhysicalMaterial({ color: 0x6d8790, roughness: 0.18, transmission: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
   const emergency = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
-  const beacon = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
   const canvas = new MeshStandardMaterial({
     color: 0xc7ad7a,
     roughness: 0.96,
@@ -380,7 +378,6 @@ export function createShipMaterials(
     rope,
     glass,
     emergency,
-    beacon,
     canvas,
   ]);
   const ownedTextures = [
@@ -419,7 +416,6 @@ export function createShipMaterials(
     rope,
     glass,
     emergency,
-    beacon,
     canvas,
     ownedMaterialsForTest: () => [...ownedMaterials],
     ownedTexturesForTest: () => [...ownedTextures],

@@ -83,13 +83,30 @@ describe('chooseContextAction', () => {
 
   it('offers an exactly labelled drop while carrying away from the lifeboat', () => {
     const flashlight = item('flashlight-1', 'flashlight');
+    const dropPoint = new Vector3(1, 2.22, -2);
     expect(chooseContextAction({
       target: 'none',
       targetItem: null,
+      dropPoint,
       carriedItem: flashlight,
       remainingCapacity: 2,
       nearEvacuation: false,
-    })).toEqual({ type: 'drop', item: flashlight, prompt: 'LEFT CLICK — DROP FLASHLIGHT' });
+    })).toEqual({
+      type: 'drop',
+      item: flashlight,
+      point: dropPoint,
+      prompt: 'LEFT CLICK — DROP FLASHLIGHT',
+    });
+  });
+
+  it('does not drop unless the crosshair reaches the floor', () => {
+    expect(chooseContextAction({
+      target: 'none',
+      targetItem: null,
+      carriedItem: item('flashlight-1', 'flashlight'),
+      remainingCapacity: 2,
+      nearEvacuation: false,
+    })).toEqual({ type: 'none', prompt: '' });
   });
 
   it('returns the exact no-action result when no context applies', () => {
@@ -117,6 +134,56 @@ describe('chooseContextAction', () => {
 });
 
 describe('InteractionSystem', () => {
+  it('returns the aimed deck point when it is inside interaction range', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const ship = new Group();
+    ship.position.set(3, -1, -4);
+    ship.rotation.set(0.1, 0.4, 0.05);
+    ship.updateWorldMatrix(true, true);
+    const expectedPoint = ship.localToWorld(new Vector3(1, 2.22, -1));
+    camera.position.copy(ship.localToWorld(new Vector3(0, 3.72, 0)));
+    camera.lookAt(expectedPoint);
+    const interaction = new InteractionSystem(camera, {
+      root: ship,
+      colliders: [],
+      dropFloor: {
+        y: 2.22,
+        bounds: { minX: -7, maxX: 7, minZ: -20, maxZ: 20 },
+        colliders: [],
+      },
+    });
+    const lifeboat = new Group();
+    lifeboat.position.set(20, 20, 20);
+    const depositTarget = new Group();
+    depositTarget.position.set(20, 20, 20);
+
+    const result = interaction.update([], lifeboat, depositTarget, new Map());
+
+    expect(result.target).toBe('none');
+    expect(result.targetItem).toBeNull();
+    expect(result.dropPoint?.distanceTo(expectedPoint)).toBeLessThan(1e-10);
+  });
+
+  it('does not return a deck point beyond interaction range', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const ship = new Group();
+    const expectedPoint = new Vector3(0, 2.22, -4);
+    camera.position.set(0, 3.72, 0);
+    camera.lookAt(expectedPoint);
+    const interaction = new InteractionSystem(camera, {
+      root: ship,
+      colliders: [],
+      dropFloor: {
+        y: 2.22,
+        bounds: { minX: -7, maxX: 7, minZ: -20, maxZ: 20 },
+        colliders: [],
+      },
+    });
+
+    expect(interaction.update([], new Group(), new Group(), new Map()))
+      .toEqual({ target: 'none', targetItem: null });
+  });
+
   it('raycasts current parent transforms and resolves a tagged item ancestor', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const ship = new Group();
@@ -228,6 +295,47 @@ describe('InteractionSystem', () => {
     expect(result).toEqual({ target: 'item', targetItem: flareGun });
   });
 
+  it('does not target or highlight an item through a ship wall', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const ship = new Group();
+    ship.position.set(3, 2, -4);
+    ship.rotation.set(0.1, 0.4, 0.05);
+    const hiddenItem = new Group();
+    hiddenItem.position.z = -2;
+    hiddenItem.userData.instanceId = 'flareGun-1';
+    hiddenItem.add(new Mesh(
+      new BoxGeometry(0.5, 0.5, 0.5),
+      new MeshStandardMaterial(),
+    ));
+    ship.add(hiddenItem);
+    ship.updateWorldMatrix(true, true);
+    camera.position.copy(ship.localToWorld(new Vector3()));
+    camera.lookAt(ship.localToWorld(new Vector3(0, 0, -2)));
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.x = 10;
+    const flareGun = item('flareGun-1', 'flareGun');
+    const interaction = new InteractionSystem(camera, {
+      root: ship,
+      colliders: [{
+        minX: -1,
+        maxX: 1,
+        minY: -1,
+        maxY: 1,
+        minZ: -1.1,
+        maxZ: -0.9,
+      }],
+    });
+
+    expect(interaction.update(
+      [hiddenItem],
+      lifeboat,
+      new Group(),
+      new Map([[flareGun.instanceId, flareGun]]),
+    )).toEqual({ target: 'none', targetItem: null });
+    expect(hiddenItem.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+  });
+
   it('switches highlighted targets and clears one beyond ray range', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const first = new Group();
@@ -276,7 +384,7 @@ describe('InteractionSystem', () => {
     expect(second.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
   });
 
-  it('keeps shared materials intact and disposes outline resources once', () => {
+  it('keeps shared materials intact and removes the outline marker once', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const sharedMaterial = new MeshStandardMaterial({
       emissive: 0x123456,
@@ -303,14 +411,9 @@ describe('InteractionSystem', () => {
       ['baitTin-1', item('baitTin-1', 'baitTin')],
     ] as const));
 
-    const outline = aimedItem.getObjectByName(HOVER_OUTLINE_NAME) as Mesh;
-    let geometryDisposals = 0;
-    let materialDisposals = 0;
-    outline.geometry.addEventListener('dispose', () => { geometryDisposals += 1; });
-    (outline.material as MeshStandardMaterial).addEventListener(
-      'dispose',
-      () => { materialDisposals += 1; },
-    );
+    const outline = aimedItem.getObjectByName(HOVER_OUTLINE_NAME)!;
+    let removals = 0;
+    outline.addEventListener('removed', () => { removals += 1; });
     expect(aimedMesh.material).toBe(sharedMaterial);
     expect(otherMesh.material).toBe(sharedMaterial);
     expect(sharedMaterial.emissive.getHex()).toBe(0x123456);
@@ -321,12 +424,32 @@ describe('InteractionSystem', () => {
 
     expect(aimedMesh.material).toBe(sharedMaterial);
     expect(aimedItem.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(geometryDisposals).toBe(1);
-    expect(materialDisposals).toBe(1);
+    expect(removals).toBe(1);
   });
 });
 
 describe('CarryController', () => {
+  it('releases the active item immediately without starting a flight', () => {
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    camera.position.set(3, 4, -2);
+    scene.add(camera);
+    const carriedObject = new Group();
+    scene.add(carriedObject);
+    const carry = new CarryController(scene, camera);
+    const instance = item('flashlight-1', 'flashlight');
+
+    carry.pickUp(instance, carriedObject);
+    const heldWorldPosition = carriedObject.getWorldPosition(new Vector3());
+
+    expect(carry.releaseActive()).toEqual(instance);
+    expect(carriedObject.parent).toBe(scene);
+    expect(carriedObject.getWorldPosition(new Vector3()).distanceTo(heldWorldPosition))
+      .toBeLessThan(1e-10);
+    expect(carry.flightActive).toBe(false);
+    expect(carry.busy).toBe(false);
+  });
+
   it('releases the full carried bundle without starting a flight', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();

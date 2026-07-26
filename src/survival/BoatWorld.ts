@@ -50,10 +50,6 @@ import {
 } from '../ocean/WaveField';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
-import {
-  createContactDepthLayer,
-  type ContactDepthLayer,
-} from '../world/ContactDepthLayer';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatSupplyLayout';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -67,7 +63,7 @@ import { Skybox } from '../world/Skybox';
 import type { SkyPalette } from '../world/skyPalette';
 import {
   ACTION_FOR_ITEM,
-  projectBoatBounds,
+  projectBoatObjectBounds,
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
@@ -237,29 +233,52 @@ function addOwnedFishingMesh(
   return mesh;
 }
 
-function localBoundsOf(root: Object3D): Box3 {
+function localTipOf(root: Object3D): Vector3 {
   root.updateWorldMatrix(true, true);
   const inverseRoot = new Matrix4().copy(root.matrixWorld).invert();
-  const bounds = new Box3().makeEmpty();
   const localMatrix = new Matrix4();
   const point = new Vector3();
+  let minimumZ = Number.POSITIVE_INFINITY;
+  let maximumZ = Number.NEGATIVE_INFINITY;
 
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
-    object.geometry.computeBoundingBox();
-    const geometryBounds = object.geometry.boundingBox;
-    if (geometryBounds === null) return;
+    const positions = object.geometry.getAttribute('position');
+    if (positions === undefined) return;
     localMatrix.multiplyMatrices(inverseRoot, object.matrixWorld);
-    for (let corner = 0; corner < 8; corner += 1) {
-      point.set(
-        corner & 1 ? geometryBounds.max.x : geometryBounds.min.x,
-        corner & 2 ? geometryBounds.max.y : geometryBounds.min.y,
-        corner & 4 ? geometryBounds.max.z : geometryBounds.min.z,
-      ).applyMatrix4(localMatrix);
-      bounds.expandByPoint(point);
+    for (let index = 0; index < positions.count; index += 1) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(localMatrix);
+      minimumZ = Math.min(minimumZ, point.z);
+      maximumZ = Math.max(maximumZ, point.z);
     }
   });
-  return bounds;
+
+  if (!Number.isFinite(minimumZ) || !Number.isFinite(maximumZ)) {
+    throw new Error('Fishing rod model has no position data.');
+  }
+
+  const tipDepth = Math.max((maximumZ - minimumZ) * 0.00001, 1e-7);
+  const tip = new Vector3();
+  let tipVertexCount = 0;
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const positions = object.geometry.getAttribute('position');
+    if (positions === undefined) return;
+    localMatrix.multiplyMatrices(inverseRoot, object.matrixWorld);
+    for (let index = 0; index < positions.count; index += 1) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(localMatrix);
+      if (point.z < maximumZ - tipDepth) continue;
+      tip.x += point.x;
+      tip.y += point.y;
+      tipVertexCount += 1;
+    }
+  });
+
+  if (tipVertexCount === 0) throw new Error('Fishing rod model has no tip vertices.');
+  tip.x /= tipVertexCount;
+  tip.y /= tipVertexCount;
+  tip.z = maximumZ;
+  return tip;
 }
 
 function createFishingVisuals(
@@ -407,7 +426,6 @@ export class BoatWorld {
   private readonly motionRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
-  private readonly contactDepth: ContactDepthLayer;
   private readonly lantern: SurvivalLantern;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
@@ -448,10 +466,8 @@ export class BoatWorld {
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly repairTools: Object3D;
-  private readonly repairToolsBounds = new Box3();
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
-  private readonly rodBounds = new Box3();
   private readonly fishingLineOrigin = new Object3D();
   private readonly fishingCatches: FishingCatchLibrary;
   private readonly fishing: FishingVisuals;
@@ -541,8 +557,6 @@ export class BoatWorld {
     this.boat = build.root;
     this.waterExclusion = build.waterExclusion;
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
-    this.contactDepth = createContactDepthLayer();
-    this.boat.add(this.contactDepth.root);
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
 
@@ -565,23 +579,6 @@ export class BoatWorld {
       rail.position.set(x, -0.27, -1.05);
       platform.add(rail);
     }
-    this.contactDepth.addSeam({
-      name: 'contact:platform-rail-port',
-      position: [-1.22, -0.283, -1.05],
-      scale: [0.12, 0.018, 3.24],
-    });
-    this.contactDepth.addSeam({
-      name: 'contact:platform-rail-starboard',
-      position: [1.22, -0.283, -1.05],
-      scale: [0.12, 0.018, 3.24],
-    });
-    ([-0.675, -0.135, 0.405, 0.945] as const).forEach((x, index) => {
-      this.contactDepth.addSeam({
-        name: `contact:platform-slat-joint-${index + 1}`,
-        position: [x, -0.284, -1.05],
-        scale: [0.024, 0.014, 3.08],
-      });
-    });
     this.boat.add(platform);
     collectMeshResources(platform, this.ownedGeometries, this.ownedMaterials);
 
@@ -590,12 +587,11 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
       reducedMotion.matches,
-      this.contactDepth,
     );
 
     const repairTools = createRepairToolbox();
-    repairTools.position.set(-0.48, -0.31, -0.72);
-    repairTools.rotation.y = 0.12;
+    repairTools.position.set(-1.05, 0.225, 0.78);
+    repairTools.rotation.y = -Math.PI / 2;
     repairTools.scale.setScalar(0.72);
     this.boat.add(repairTools);
     collectMeshResources(repairTools, this.ownedGeometries, this.ownedMaterials);
@@ -608,12 +604,7 @@ export class BoatWorld {
     this.rod.position.set(0, 0, -0.9);
     this.rod.rotation.x = -Math.PI / 2;
     this.fishingLineOrigin.name = 'fishing-line-origin';
-    const rodBounds = localBoundsOf(this.rod);
-    this.fishingLineOrigin.position.set(
-      (rodBounds.min.x + rodBounds.max.x) / 2,
-      (rodBounds.min.y + rodBounds.max.y) / 2,
-      rodBounds.max.z,
-    );
+    this.fishingLineOrigin.position.copy(localTipOf(this.rod));
     this.rod.add(this.fishingLineOrigin);
     this.rodPivot.add(this.rod);
     this.boat.add(this.rodPivot);
@@ -705,17 +696,14 @@ export class BoatWorld {
     const itemAnchors = this.supplyDisplay.records()
       .filter((record) => record.visibleCopies > 0)
       .map((record) => {
-      const projection = projectBoatBounds(
-        new Box3().setFromObject(record.root, true),
+      const projection = projectBoatObjectBounds(
+        record.root,
         this.camera,
         width,
         height,
       );
       const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
       const itemType = record.groupId === 'repairMaterial' ? null : record.groupId;
-      const layoutIndex = BOAT_SUPPLY_GROUP_IDS.indexOf(record.groupId);
-      const column = layoutIndex % 6;
-      const row = Math.floor(layoutIndex / 6);
       return {
         id: `supply:${record.groupId}`,
         itemType,
@@ -725,8 +713,6 @@ export class BoatWorld {
           ? ACTION_FOR_ITEM[itemType] ?? null
           : null,
         ...point,
-        x: width / 2 + (column - 2.5) * 54,
-        y: height * 0.58 + (row - 1) * 54,
         visible: record.visibleCopies > 0 && record.root.visible && point.visible,
         depleted: false,
         remainingUses: itemType === null || record.usableQuantity === 0
@@ -743,8 +729,8 @@ export class BoatWorld {
         },
       } satisfies BoatInteractionAnchor;
       });
-    const fishingProjection = projectBoatBounds(
-      this.rodBounds.setFromObject(this.rodPivot, true),
+    const fishingProjection = projectBoatObjectBounds(
+      this.rodPivot,
       this.camera,
       width,
       height,
@@ -774,8 +760,8 @@ export class BoatWorld {
         depth: fishingDepth,
       },
     } satisfies BoatInteractionAnchor;
-    const repairProjection = projectBoatBounds(
-      this.repairToolsBounds.setFromObject(this.repairTools, true),
+    const repairProjection = projectBoatObjectBounds(
+      this.repairTools,
       this.camera,
       width,
       height,
@@ -917,15 +903,17 @@ export class BoatWorld {
     return result;
   }
 
-  playFishingReel(catchId: FishingCatchId): Promise<void> {
+  async playFishingReel(catchId: FishingCatchId): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.hasFishingCast) this.setFishingCastPoint(CENTERED_FISHING_CAST);
-    this.activeFishingCatch = this.fishingCatches.prepare(catchId);
+    const fishingCatch = await this.fishingCatches.prepare(catchId);
+    if (!fishingCatch || this.disposed) return;
+    this.activeFishingCatch = fishingCatch;
     this.activeFishingCatch.position.set(0, 0, 0);
     this.activeFishingCatch.rotation.set(0, 0, 0);
     this.fishing.catchDisplay.add(this.activeFishingCatch);
     this.fishingPhase = 'reeling';
-    return this.startFishingAnimation(
+    await this.startFishingAnimation(
       'reel',
       this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_REEL_DURATION,
     );
@@ -1062,7 +1050,6 @@ export class BoatWorld {
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
-      () => this.contactDepth.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),

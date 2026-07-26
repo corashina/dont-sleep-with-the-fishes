@@ -26,6 +26,10 @@ const BIN_CHUNK = 0x004e4942;
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
+function modelTriangleLimit(itemId) {
+  return POLY_PIZZA_MODEL_SOURCES[itemId]?.maxTriangles ?? MODEL_LIMIT;
+}
+
 function dataUriByteLength(uri) {
   const separator = uri.indexOf(',');
   if (separator < 0) return 0;
@@ -290,23 +294,27 @@ function verifyLedgerRow(ledger, itemId, measurement) {
   }
   const actual = parseLedgerRow(rows[0]);
   const source = POLY_PIZZA_MODEL_SOURCES[itemId];
-  const licenseCell = `[${source.license}](${source.licenseUrl})`;
+  const allSources = [source, ...(source.components ?? [])];
+  const joinSources = (value) => allSources.map(value).join('<br>');
+  const licenseCell = joinSources(
+    (entry) => `[${entry.license}](${entry.licenseUrl})`,
+  );
   const expectedCore = [
     itemId,
     `\`${itemId}.glb\``,
-    `${source.title} / ${source.creator}`,
-    source.pageUrl,
-    `\`${source.sourceAssetId}\``,
+    joinSources((entry) => `${entry.title} / ${entry.creator}`),
+    joinSources((entry) => entry.pageUrl),
+    joinSources((entry) => `\`${entry.sourceAssetId}\``),
     licenseCell,
-    String(source.sourceTriangles),
+    String(allSources.reduce((total, entry) => total + entry.sourceTriangles, 0)),
     String(measurement.triangles),
   ];
   if (
     actual.length !== 10
     || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expectedCore)
-    || !actual[8].includes(source.sha256)
+    || !allSources.every((entry) => actual[8].includes(entry.sha256))
     || !actual[8].includes('official Poly Pizza static GLB')
-    || actual[9] !== '2026-07-25'
+    || actual[9] !== source.downloadedOn
   ) {
     throw new Error(`ATTRIBUTION.md: ${itemId} row does not match the expected record`);
   }
@@ -412,11 +420,12 @@ async function main() {
       const measurement = await inspectModel(filePath);
       measurements[itemId] = measurement;
       const { triangles } = measurement;
-      console.log(`${itemId}.glb: ${triangles} / ${MODEL_LIMIT} triangles`);
+      const triangleLimit = modelTriangleLimit(itemId);
+      console.log(`${itemId}.glb: ${triangles} / ${triangleLimit} triangles`);
       if (triangles === 0) throw new Error(`${filePath}: contains zero triangles`);
       total += triangles;
-      if (triangles > MODEL_LIMIT) {
-        throw new Error(`${filePath}: ${triangles} triangles exceeds ${MODEL_LIMIT}`);
+      if (triangles > triangleLimit) {
+        throw new Error(`${filePath}: ${triangles} triangles exceeds ${triangleLimit}`);
       }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));

@@ -1,13 +1,9 @@
 import {
-  BufferGeometry,
-  CylinderGeometry,
   Group,
-  Material,
-  Mesh,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
 import type { ShipDeckDetailKind, ShipDeckDetailSpec } from './ShipLayout';
-import type { ShipMaterials } from './ShipMaterials';
+import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 
 export interface ShipDeckDetailsBuild {
   readonly root: Group;
@@ -15,49 +11,12 @@ export interface ShipDeckDetailsBuild {
   disposeGeometry(): void;
 }
 
-interface DetailGeometry {
-  readonly cylinder: CylinderGeometry;
-  readonly owned: ReadonlySet<BufferGeometry>;
-}
-
-function createDetailGeometry(): DetailGeometry {
-  const cylinder = new CylinderGeometry(0.5, 0.5, 1, 12);
-  return { cylinder, owned: new Set([cylinder]) };
-}
-
-function addPart(
-  parent: Group,
-  geometry: BufferGeometry,
-  material: Material,
-  name: string,
-  size: readonly [number, number, number],
-  position: readonly [number, number, number],
-  rotation: readonly [number, number, number] = [0, 0, 0],
-): Mesh {
-  const mesh = new Mesh(geometry, material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.scale.set(...size);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function addBarrel(root: Group, geometry: DetailGeometry, materials: ShipMaterials): void {
-  addPart(root, geometry.cylinder, materials.timber, 'barrel-body', [0.9, 1.15, 0.9], [0, 0.575, 0]);
-  addPart(root, geometry.cylinder, materials.darkMetal, 'barrel-band-lower', [0.96, 0.09, 0.96], [0, 0.27, 0]);
-  addPart(root, geometry.cylinder, materials.darkMetal, 'barrel-band-upper', [0.96, 0.09, 0.96], [0, 0.88, 0]);
-}
-
 function addDetailParts(
-  _kind: ShipDeckDetailKind,
+  kind: ShipDeckDetailKind,
   root: Group,
-  geometry: DetailGeometry,
-  materials: ShipMaterials,
+  library: ShipFurnitureLibrary,
 ): void {
-  addBarrel(root, geometry, materials);
+  root.add(library.clone(kind === 'barrel' ? 'barrel' : 'cargoBox'));
 }
 
 function toCollider(spec: ShipDeckDetailSpec): CollisionBox | undefined {
@@ -82,12 +41,11 @@ function toCollider(spec: ShipDeckDetailSpec): CollisionBox | undefined {
 }
 
 export function createShipDeckDetails(
-  materials: ShipMaterials,
+  library: ShipFurnitureLibrary,
   specs: readonly ShipDeckDetailSpec[],
 ): ShipDeckDetailsBuild {
   const root = new Group();
   root.name = 'ship-deck-details';
-  const geometry = createDetailGeometry();
   const colliders: CollisionBox[] = [];
 
   specs.forEach((spec) => {
@@ -97,7 +55,7 @@ export function createShipDeckDetails(
     detailRoot.rotation.y = spec.rotationY;
     detailRoot.scale.set(...spec.scale);
     detailRoot.userData.detailKind = spec.kind;
-    addDetailParts(spec.kind, detailRoot, geometry, materials);
+    addDetailParts(spec.kind, detailRoot, library);
     root.add(detailRoot);
     const collider = toCollider(spec);
     if (collider) colliders.push(collider);
@@ -110,7 +68,6 @@ export function createShipDeckDetails(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
-      geometry.owned.forEach((ownedGeometry) => ownedGeometry.dispose());
     },
   };
 }

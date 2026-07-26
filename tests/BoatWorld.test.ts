@@ -167,6 +167,26 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('places the repair toolbox on the left end of the lantern bench', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const lantern = world.scene.getObjectByName('survival-lantern')!;
+    const repairTools = world.scene.getObjectByName('repair-toolbox')!;
+
+    expect(repairTools.position.toArray()).toEqual([-1.05, 0.225, 0.78]);
+    expect(repairTools.position.x).toBe(-lantern.position.x);
+    expect(repairTools.position.z).toBe(lantern.position.z);
+    expect(repairTools.rotation.y).toBe(-Math.PI / 2);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -409,6 +429,60 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps projected item and tool anchors steady while riding waves', () => {
+    const savedItems = [savedItem('bucket')];
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(
+      camera,
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems));
+    world.update(0.5, 1 / 60);
+    const settled = new Map(
+      world.projectInteractionAnchors(800, 600).map((anchor) => [anchor.id, anchor]),
+    );
+
+    world.update(8, 0.5);
+    const ridingWave = new Map(
+      world.projectInteractionAnchors(800, 600).map((anchor) => [anchor.id, anchor]),
+    );
+
+    for (const id of ['supply:bucket', 'fishing-tools', 'repair-tools']) {
+      expect(ridingWave.get(id)?.x, id).toBeCloseTo(settled.get(id)!.x);
+      expect(ridingWave.get(id)?.y, id).toBeCloseTo(settled.get(id)!.y);
+      expect(ridingWave.get(id)?.hitArea?.width, id)
+        .toBeCloseTo(settled.get(id)!.hitArea!.width);
+      expect(ridingWave.get(id)?.hitArea?.height, id)
+        .toBeCloseTo(settled.get(id)!.hitArea!.height);
+    }
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('anchors the fishing line to the rod geometry tip instead of its bounds center', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const lineOrigin = world.scene.getObjectByName('fishing-line-origin')!;
+
+    expect(lineOrigin.position.x).toBeCloseTo(0.353055, 5);
+    expect(lineOrigin.position.y).toBeCloseTo(-0.236377, 5);
+    expect(lineOrigin.position.z).toBeCloseTo(0.258526, 5);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('settles the active fishing handle and preserves bow view when presentation is cleared', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
@@ -440,7 +514,7 @@ describe('BoatWorld helpers', () => {
       (world) => world.playFishingCast(world.centeredFishingCast()),
       (world) => { world.showFishingWaiting(world.centeredFishingCast()); },
       (world) => { world.showFishingBite(world.centeredFishingCast()); },
-      (world) => world.playFishingReel('cod'),
+      (world) => world.playFishingReel('flounder'),
       (world) => world.playFishingMiss(),
       (world) => world.exitFishingView(),
     ];
@@ -461,10 +535,10 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('disposes presentation and catch-library resources exactly once from every fishing stage', () => {
+  it('disposes presentation and catch-library resources exactly once from every fishing stage', async () => {
     const stages: ReadonlyArray<{
       readonly name: string;
-      readonly arrange: (world: BoatWorld) => void;
+      readonly arrange: (world: BoatWorld) => Promise<void> | void;
     }> = [
       { name: 'idle', arrange: () => {} },
       { name: 'entering', arrange: (world) => { void world.enterFishingView(); } },
@@ -478,7 +552,7 @@ describe('BoatWorld helpers', () => {
       { name: 'casting', arrange: (world) => { void world.playFishingCast(world.centeredFishingCast()); } },
       { name: 'waiting', arrange: (world) => { world.showFishingWaiting(world.centeredFishingCast()); } },
       { name: 'bite', arrange: (world) => { world.showFishingBite(world.centeredFishingCast()); } },
-      { name: 'reeling', arrange: (world) => { void world.playFishingReel('cod'); } },
+      { name: 'reeling', arrange: (world) => world.playFishingReel('flounder') },
       { name: 'missing', arrange: (world) => { void world.playFishingMiss(); } },
       { name: 'returning', arrange: (world) => { void world.exitFishingView(); } },
     ];
@@ -496,11 +570,11 @@ describe('BoatWorld helpers', () => {
         ownedGeometries: Set<BufferGeometry>;
         ownedMaterials: Set<Material>;
       };
-      internals.fishingCatches.prepare('cod');
-      const catchInternals = internals.fishingCatches as unknown as {
-        geometries: Set<BufferGeometry>;
-        materials: Set<Material>;
-      };
+      const preparedCatch = await internals.fishingCatches.prepare('flounder');
+      expect(preparedCatch).not.toBeNull();
+      const catchGeometries = new Set<BufferGeometry>();
+      const catchMaterials = new Set<Material>();
+      collectMeshResources(preparedCatch!, catchGeometries, catchMaterials);
       const line = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry, Material>;
       const pooledMeshes = [
         firstMesh(world.scene.getObjectByName('fishing-bobber')!),
@@ -516,8 +590,8 @@ describe('BoatWorld helpers', () => {
         line.material,
         ...pooledMeshes.flatMap(({ material }) => Array.isArray(material) ? material : [material]),
       ]);
-      const catchGeometry = catchInternals.geometries.values().next().value!;
-      const catchMaterial = catchInternals.materials.values().next().value!;
+      const catchGeometry = catchGeometries.values().next().value!;
+      const catchMaterial = catchMaterials.values().next().value!;
 
       presentationGeometries.forEach((geometry) => {
         expect(internals.ownedGeometries.has(geometry), stage.name).toBe(true);
@@ -526,11 +600,11 @@ describe('BoatWorld helpers', () => {
         expect(internals.ownedMaterials.has(material), stage.name).toBe(true);
       });
       expect(
-        [...catchInternals.geometries].some((geometry) => internals.ownedGeometries.has(geometry)),
+        [...catchGeometries].some((geometry) => internals.ownedGeometries.has(geometry)),
         stage.name,
       ).toBe(false);
       expect(
-        [...catchInternals.materials].some((material) => internals.ownedMaterials.has(material)),
+        [...catchMaterials].some((material) => internals.ownedMaterials.has(material)),
         stage.name,
       ).toBe(false);
 
@@ -541,9 +615,10 @@ describe('BoatWorld helpers', () => {
       const catchGeometryDispose = vi.spyOn(catchGeometry, 'dispose');
       const catchMaterialDispose = vi.spyOn(catchMaterial, 'dispose');
 
-      stage.arrange(world);
+      const pending = stage.arrange(world);
       world.dispose();
       world.dispose();
+      await pending;
 
       presentationDisposeSpies.forEach((dispose) => {
         expect(dispose, stage.name).toHaveBeenCalledOnce();

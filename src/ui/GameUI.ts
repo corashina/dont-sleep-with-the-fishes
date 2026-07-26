@@ -12,6 +12,13 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 
 export type ScavengePresentation = 'title' | 'playing';
 
+export interface ScavengeItemTooltip {
+  readonly text: string;
+  readonly x: number;
+  readonly y: number;
+  readonly placement: 'above' | 'below';
+}
+
 export class GameUI {
   onStart: () => void = () => undefined;
   onResume: () => void = () => undefined;
@@ -24,6 +31,7 @@ export class GameUI {
   private readonly resultLayer: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly prompt: HTMLElement;
+  private readonly itemTooltip: HTMLElement;
   private readonly carriedItems: HTMLElement;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
@@ -42,6 +50,7 @@ export class GameUI {
       <div class="hud illustrated-hud ui-role-context">
         <div class="crosshair" aria-hidden="true"></div>
         <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
+        <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
         <div class="carried" data-carried>
           <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
           <div class="timer-block pocket-watch">
@@ -105,6 +114,7 @@ export class GameUI {
     this.resultLayer = requireElement(this.root, '[data-result]');
     this.timer = requireElement(this.root, '[data-timer]');
     this.prompt = requireElement(this.root, '[data-prompt]');
+    this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
@@ -150,6 +160,20 @@ export class GameUI {
     if (this.prompt.textContent === text) return;
     this.prompt.textContent = text;
     this.prompt.classList.toggle('is-visible', text.length > 0);
+  }
+
+  setItemTooltip(tooltip: ScavengeItemTooltip | null): void {
+    const visible = tooltip !== null && tooltip.text.length > 0;
+    if (tooltip !== null) {
+      this.setPrompt('');
+      if (this.itemTooltip.textContent !== tooltip.text) {
+        this.itemTooltip.textContent = tooltip.text;
+      }
+      this.itemTooltip.style.left = `${tooltip.x}px`;
+      this.itemTooltip.style.top = `${tooltip.y}px`;
+      this.itemTooltip.dataset.placement = tooltip.placement;
+    }
+    this.itemTooltip.classList.toggle('is-visible', visible);
   }
 
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {

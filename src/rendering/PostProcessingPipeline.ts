@@ -11,6 +11,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { ItemAmbientOcclusionPass } from './ItemAmbientOcclusion';
 import { PrintShader } from './PrintShader';
 import { createInkFrameMask } from './inkFrameMask';
 import {
@@ -57,6 +58,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly inkFrame: ReturnType<typeof createInkFrameMask>;
   private readonly composer: EffectComposer;
   private readonly renderPass: RenderPass;
+  private readonly itemAmbientOcclusionPass: ItemAmbientOcclusionPass;
   private readonly printPass: ShaderPass;
   private readonly outputPass: OutputPass;
   private readonly uniforms: PrintUniforms;
@@ -69,6 +71,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     let target: WebGLRenderTarget | undefined;
     let composer!: EffectComposer;
     let renderPass!: RenderPass;
+    let itemAmbientOcclusionPass!: ItemAmbientOcclusionPass;
     let printPass!: ShaderPass;
     let outputPass!: OutputPass;
     try {
@@ -88,14 +91,17 @@ export class PostProcessingPipeline implements SceneRenderer {
 
       composer = new EffectComposer(renderer, target);
       renderPass = new RenderPass(new Scene(), new Camera());
+      itemAmbientOcclusionPass = new ItemAmbientOcclusionPass();
       printPass = new ShaderPass(PrintShader);
       outputPass = new OutputPass();
       composer.addPass(renderPass);
+      composer.addPass(itemAmbientOcclusionPass);
       composer.addPass(printPass);
       composer.addPass(outputPass);
 
       this.composer = composer;
       this.renderPass = renderPass;
+      this.itemAmbientOcclusionPass = itemAmbientOcclusionPass;
       this.printPass = printPass;
       this.outputPass = outputPass;
       this.uniforms = printPass.uniforms as PrintUniforms;
@@ -103,6 +109,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
       this.inkFrame.dispose();
+      itemAmbientOcclusionPass?.dispose();
       printPass?.dispose();
       outputPass?.dispose();
       if (composer === undefined) target?.dispose();
@@ -115,6 +122,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (this.disposed) return;
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
+    this.itemAmbientOcclusionPass.setContext(scene, camera);
     this.applyProfile(selectPostProcessingProfile(state), state);
     this.composer.render(0);
   }
@@ -148,6 +156,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (this.disposed) return;
     this.disposed = true;
     this.inkFrame.dispose();
+    this.itemAmbientOcclusionPass.dispose();
     this.printPass.dispose();
     this.outputPass.dispose();
     this.composer.dispose();

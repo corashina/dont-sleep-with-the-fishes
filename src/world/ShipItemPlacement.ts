@@ -43,6 +43,13 @@ export interface ShipItemTransform {
   readonly usedFallbackSurface: boolean;
 }
 
+export class ShipItemPlacementError extends Error {
+  constructor(readonly instanceId: ItemInstanceId) {
+    super(`Unable to place ship item: ${instanceId}`);
+    this.name = 'ShipItemPlacementError';
+  }
+}
+
 const ITEM_CATEGORIES = new Set<ShipItemCategory>([
   'provisions', 'navigation', 'workshop', 'deckGear',
 ]);
@@ -232,7 +239,11 @@ export function validateShipItemSurfaces(
 function shuffled<T>(values: readonly T[], random: () => number): T[] {
   const result = [...values];
   for (let index = result.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
+    const sample = random();
+    const unit = Number.isFinite(sample)
+      ? Math.min(Math.max(sample, 0), 1 - Number.EPSILON)
+      : 0;
+    const swapIndex = Math.floor(unit * (index + 1));
     [result[index], result[swapIndex]] = [result[swapIndex]!, result[index]!];
   }
   return result;
@@ -306,19 +317,28 @@ export function assignShipItems(
   );
   let deepestFailure: { readonly index: number; readonly instance: ItemInstance } | undefined;
 
-  const attempt = (includeFallback: boolean): Map<ItemInstanceId, ShipItemTransform> | undefined => {
+  const attempt = (
+    includeFallback: boolean,
+    randomize: boolean,
+  ): Map<ItemInstanceId, ShipItemTransform> | undefined => {
     const eligible = new Map<ItemInstanceId, ShipItemSurface[]>();
     for (const instance of instances) {
-      const regular = shuffled(surfaces.filter((candidate) => {
+      const regularCandidates = surfaces.filter((candidate) => {
         const fit = !candidate.fallback && surfaceFit(candidate, instance.type);
         return fit && surfaceFitAvoidsBlockers(candidate, instance.type, fit, blockers);
-      }), random);
-      const fallback = includeFallback
-        ? shuffled(surfaces.filter((candidate) => {
+      });
+      const fallbackCandidates = includeFallback
+        ? surfaces.filter((candidate) => {
           const fit = candidate.fallback && surfaceFit(candidate, instance.type);
           return fit && surfaceFitAvoidsBlockers(candidate, instance.type, fit, blockers);
-        }), random)
+        })
         : [];
+      const regular = randomize
+        ? shuffled(regularCandidates, random)
+        : regularCandidates.sort((left, right) => left.id.localeCompare(right.id));
+      const fallback = randomize
+        ? shuffled(fallbackCandidates, random)
+        : fallbackCandidates.sort((left, right) => left.id.localeCompare(right.id));
       eligible.set(instance.instanceId, [...regular, ...fallback]);
     }
 
@@ -369,12 +389,14 @@ export function assignShipItems(
     return place(0) ? assignments : undefined;
   };
 
-  const regular = attempt(false);
+  const regular = attempt(false, true);
   if (regular) return regular;
-  const fallback = attempt(true);
+  const fallback = attempt(true, true);
   if (fallback) return fallback;
+  const deterministicFallback = attempt(true, false);
+  if (deterministicFallback) return deterministicFallback;
   if (deepestFailure) {
-    throw new Error(`Unable to place ship item: ${deepestFailure.instance.instanceId}`);
+    throw new ShipItemPlacementError(deepestFailure.instance.instanceId);
   }
   return new Map();
 }

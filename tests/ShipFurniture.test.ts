@@ -1,7 +1,12 @@
-import { Euler, Material, Mesh, Vector3 } from 'three';
+import { Box3, Euler, Material, Mesh, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT, analyzeShipNavigation } from '../src/world/ShipLayout';
-import { createContactDepthLayer } from '../src/world/ContactDepthLayer';
+import {
+  PLAYER_LAYOUT_RADIUS,
+  SHIP_LAYOUT,
+  SHIP_ROOM_WALL_HEIGHT,
+  analyzeShipNavigation,
+} from '../src/world/ShipLayout';
+import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShip, isShipSurfaceStandingPointVisible } from '../src/world/Ship';
 import { createShipMaterials } from '../src/world/ShipMaterials';
@@ -15,11 +20,35 @@ const overlap = (
   && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
+  it('includes opaque furniture in AO depth while keeping glass transparent', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 1);
+    const table = ship.root.getObjectByName('furniture:chart-table-port')!;
+    let tableMesh: Mesh | undefined;
+    let glassMesh: Mesh | undefined;
+    table.traverse((object) => {
+      if (!tableMesh && object instanceof Mesh) tableMesh = object;
+    });
+    ship.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (materials.some((material) => material.transparent)) glassMesh ??= object;
+    });
+
+    expect(tableMesh).toBeDefined();
+    expect(tableMesh!.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+    expect(glassMesh).toBeDefined();
+    expect(glassMesh!.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
+
+    ship.dispose();
+    library.dispose();
+  });
+
   it('keeps furniture colliders disjoint from furniture, doors, primary lanes, and evacuation', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();
     const build = createShipFurniture(materials, library);
-    expect(build.surfaces).toHaveLength(32);
+    expect(build.surfaces).toHaveLength(28);
     const colliders = SHIP_LAYOUT.furniture.map((placement) => ({
       id: placement.id,
       box: build.colliders.find((box) => box.furnitureId === placement.id)!,
@@ -135,7 +164,7 @@ describe('ship furniture', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 1);
     const authored = ship.itemSurfaces.find(({ id }) =>
-      id === 'cabin-bookcase-forward:level-2')!;
+      id === 'cabin-bookcase-forward:shelf-left')!;
     const owner = ship.colliders.find((collider) =>
       (collider as typeof collider & { furnitureId?: string }).furnitureId === authored.furnitureId)!;
     const point = authored.standingPoints[0]!;
@@ -152,6 +181,69 @@ describe('ship furniture', () => {
     expect(isShipSurfaceStandingPointVisible(authored, point, [owner])).toBe(true);
     expect(isShipSurfaceStandingPointVisible(forged, point, [owner])).toBe(false);
     expect(isShipSurfaceStandingPointVisible(moved, point, [owner])).toBe(false);
+
+    ship.dispose();
+    library.dispose();
+  });
+
+  it('builds each open storage unit from one authored shelf instance', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+
+    for (const furnitureId of ['cabin-bookcase-forward', 'storage-shelf-forward']) {
+      const unit = build.root.getObjectByName(`furniture:${furnitureId}`)!;
+      const shelves = unit.children.filter(({ name }) => name === 'open-shelf');
+      expect(shelves).toHaveLength(1);
+      expect(shelves[0]!.rotation.y).toBeCloseTo(Math.PI / 2);
+      expect(shelves[0]!.position.y
+        + SHIP_FURNITURE_MODEL_SPECS.bookcaseOpen.canonicalSize[1])
+        .toBeCloseTo(SHIP_ROOM_WALL_HEIGHT / 2);
+      expect(SHIP_LAYOUT.furniture.find(({ id }) => id === furnitureId)!.surfaces
+        .every(({ localPosition }) =>
+          Math.abs(localPosition[1] - SHIP_ROOM_WALL_HEIGHT / 2) < 1e-6))
+        .toBe(true);
+    }
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
+  it('uses the shared barrel model for deck-detail instances', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 1);
+
+    for (const barrelId of ['barrel-1', 'barrel-2']) {
+      expect(ship.root.getObjectByName(`detail:${barrelId}`)!
+        .getObjectByName('ship-furniture:barrel')).toBeDefined();
+    }
+
+    ship.dispose();
+    library.dispose();
+  });
+
+  it('uses shared crate and box models for cargo dressing', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 1);
+
+    for (const crateId of [
+      'cargo-crate-forward-port',
+      'cargo-crate-forward-starboard',
+      'cargo-crate-aft-port',
+      'cargo-crate-aft-starboard',
+    ]) {
+      const crate = ship.root.getObjectByName(`furniture:${crateId}`)!;
+      expect(crate.getObjectByName('ship-furniture:cargoCrate')).toBeDefined();
+      const size = new Box3().setFromObject(crate).getSize(new Vector3());
+      expect(size.x).toBeCloseTo(1.35);
+      expect(size.y).toBeCloseTo(1.05);
+      expect(size.z).toBeCloseTo(1.15);
+    }
+    for (const boxId of ['cargoBox-1', 'cargoBox-2', 'cargoBox-3']) {
+      expect(ship.root.getObjectByName(`detail:${boxId}`)!
+        .getObjectByName('ship-furniture:cargoBox')).toBeDefined();
+    }
 
     ship.dispose();
     library.dispose();

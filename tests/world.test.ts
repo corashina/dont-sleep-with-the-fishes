@@ -35,11 +35,12 @@ import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { Environment } from '../src/world/Environment';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { createProp } from '../src/world/PropFactory';
 import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
-import { assignShipItems } from '../src/world/ShipItemPlacement';
+import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
@@ -118,26 +119,59 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
-  it('uses imported ceiling fixtures with localized shadow-casting room lights', () => {
+  it('places a dropped carried item on the deck and triggers local smoke immediately', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
-    const roomLights = scene.getObjectByName('ship-room-lights')!;
-    const fixtures = roomLights.children.filter(({ name }) => /^room-lamp:[^:]+$/.test(name));
+    const item = world.itemObjects.get('flashlight-1')!;
+    const expectedScale = item.scale.x;
+    const expectedLocal = new Vector3(2.4, world.deckY, -4.6);
+    const worldPoint = world.ship.localToWorld(expectedLocal.clone());
+    scene.attach(item);
+    item.position.set(0.4, 3.5, -1.1);
+    item.rotation.set(-0.15, 0.45, 0.08);
+    item.scale.setScalar(0.72);
+
+    world.dropItem('flashlight-1', worldPoint);
+
+    const smoke = world.ship.getObjectByName('ground-drop-smoke') as Points;
+    const restingBounds = shipItemTransformBounds('flashlight', {
+      position: item.position,
+      rotation: item.rotation,
+      scale: item.scale.x,
+    });
+    const restingSize = restingBounds.getSize(new Vector3());
+    expect(item.parent).toBe(world.ship);
+    expect(item.position.x).toBeCloseTo(expectedLocal.x);
+    expect(item.position.z).toBeCloseTo(expectedLocal.z);
+    expect(item.scale.x).toBe(expectedScale);
+    expect(restingBounds.min.y).toBeCloseTo(world.deckY);
+    expect(restingSize.y).toBeCloseTo(
+      Math.min(...ITEM_MODEL_SPECS.flashlight.normalizedSize) * expectedScale,
+    );
+    expect(item.rotation.x).not.toBeCloseTo(-0.15);
+    expect(item.rotation.y).not.toBeCloseTo(0.45);
+    expect(smoke.visible).toBe(true);
+    expect(smoke.position).toEqual(new Vector3(expectedLocal.x, world.deckY + 0.02, expectedLocal.z));
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('does not add ceiling fixtures or localized room lights to the scavenging ship', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const createPracticalLight = vi.spyOn(propModels, 'createPracticalLight');
+    const world = createTestWorld(scene, propModels);
     const spotLights: SpotLight[] = [];
-    roomLights.traverse((object) => {
+    world.ship.traverse((object) => {
       if (object instanceof SpotLight) spotLights.push(object);
     });
 
-    expect(fixtures).toHaveLength(4);
-    fixtures.forEach((fixture) => {
-      expect(fixture.children.some(({ name }) => name.endsWith(':model'))).toBe(true);
-    });
-    expect(spotLights).toHaveLength(4);
-    spotLights.forEach((light) => {
-      expect(light.castShadow).toBe(true);
-      expect(light.distance).toBe(7);
-    });
+    expect(scene.getObjectByName('ship-room-lights')).toBeUndefined();
+    expect(world.ship.getObjectByName('room-lamp:crew-cabin')).toBeUndefined();
+    expect(spotLights).toEqual([]);
+    expect(createPracticalLight).not.toHaveBeenCalled();
 
     world.dispose();
     propModels.dispose();
@@ -205,7 +239,7 @@ describe('world builders', () => {
             checkpoint: (stage: typeof failureStage) => {
               if (stage !== failureStage) return;
               const resources = new Set<BufferGeometry | Material>();
-              ['lifeboat', 'procedural-ocean', 'procedural-skybox', 'sea-spray']
+              ['lifeboat', 'procedural-ocean', 'procedural-skybox']
                 .forEach((name) => {
                   const object = scene.getObjectByName(name);
                   if (!object) return;
@@ -398,7 +432,6 @@ describe('world builders', () => {
     const moonTextureDispose = vi.spyOn(moonTexture, 'dispose');
     const world = createTestWorld(scene, propModels, moonTexture);
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
-    const spray = scene.getObjectByName('sea-spray') as Points;
     const sky = scene.getObjectByName('procedural-skybox') as Mesh;
     const skyGeometryDispose = vi.spyOn(sky.geometry, 'dispose');
     const skyMaterialDispose = vi.spyOn(sky.material as Material, 'dispose');
@@ -441,13 +474,13 @@ describe('world builders', () => {
     const geometryDisposals = observeDisposals([
       ...ownedTask6Geometries,
       ocean.geometry,
-      spray.geometry,
     ]);
     const ownedMaterialDisposals = observeDisposals([
       ...ownedTask6Materials,
       ocean.material as Material,
-      spray.material as Material,
     ]);
+    expect(scene.getObjectByName('sea-spray')).toBeUndefined();
+    expect(scene.getObjectByName('lifeboat-waterline-foam')).toBeUndefined();
     world.saveItem({ instanceId: 'flareGun-1', type: 'flareGun' });
     world.loseItem('ductTape-1');
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
@@ -459,7 +492,6 @@ describe('world builders', () => {
     expect(scene.getObjectByName('lifeboat')).toBeUndefined();
     expect(scene.getObjectByName('procedural-ocean')).toBeUndefined();
     expect(scene.getObjectByName('rain')).toBeUndefined();
-    expect(scene.getObjectByName('sea-spray')).toBeUndefined();
     expect(scene.getObjectByName('procedural-skybox')).toBeUndefined();
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
     expect(skyGeometryDispose).toHaveBeenCalledOnce();

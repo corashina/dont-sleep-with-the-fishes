@@ -47,7 +47,7 @@ const rawDefinitions = {
   compass: define('COMPASS', 1, 1, null, true, true, null, 'navigation'),
   map: define('MAP', 1, 1, null, true, true, null, 'navigation'),
   medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat', 'workshop'),
-  spyglass: define('SPYGLASS', 1, 1, null, true, true, null, 'navigation'),
+  spyglass: define('BINOCULARS', 1, 1, null, true, true, null, 'navigation'),
   fishingNet: define('FISHING NET', 2, 1, null, true, true, null, 'deckGear'),
   bucket: define('BUCKET', 2, 1, null, true, true, null, 'deckGear'),
   flareGun: define('FLARE GUN', 1, 1, 1, false, false, null, 'navigation'),

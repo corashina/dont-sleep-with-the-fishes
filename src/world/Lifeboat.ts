@@ -237,10 +237,6 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
   const wear = new Group();
   wear.name = 'lifeboat-wear-details';
   for (const sign of [-1, 1] as const) {
-    const strip = new Mesh(new BoxGeometry(0.235, 0.08, 4.65), materials.waterline);
-    strip.name = `lifeboat-waterline-${sign < 0 ? 'port' : 'starboard'}`;
-    strip.position.set(sign * 1.52, -0.27, 0.08);
-    wear.add(strip);
     for (const [index, z] of [-1.78, -0.34, 1.22].entries()) {
       const scuff = new Mesh(new BoxGeometry(0.245, 0.035, 0.34), materials.cutWood);
       scuff.name = `lifeboat-edge-wear-${sign}-${index}`;
@@ -273,6 +269,7 @@ function createPaddle(
   paddle.name = `paddle-${side}`;
   paddle.position.set(sign * 1.88, 0.22, 0.05);
   paddle.rotation.y = sign * 0.06;
+  paddle.rotation.z = Math.PI / 2;
   const shaft = new Mesh(
     new CylinderGeometry(0.035, 0.045, 2.95, 8),
     materials.cutWood,

@@ -17,6 +17,7 @@ import {
   ShipAssetLoadError,
   type ShipAssets,
 } from '../src/world/ShipAssets';
+import { ShipItemPlacementError } from '../src/world/ShipItemPlacement';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { createTestShipAssets } from './helpers/shipAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -396,6 +397,25 @@ describe('launchGame', () => {
     expect(mount.querySelector('.system-screen--error')).not.toBeNull();
     expect(mount.querySelector('.system-screen .fine-print')?.textContent)
       .toBe('renderer failed');
+  });
+
+  it('reports ship placement failures without claiming WebGL is unavailable', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        createGame: () => {
+          throw new ShipItemPlacementError('harpoonGun-1');
+        },
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('SHIP SETUP FAILED');
+    expect(mount.textContent).toContain('Unable to prepare Dorothy');
+    expect(mount.textContent).toContain('Unable to place ship item: harpoonGun-1');
+    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
   it('disposes unowned models after Game rolls back a failed initial resize', async () => {

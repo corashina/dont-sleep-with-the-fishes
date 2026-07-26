@@ -6,6 +6,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import {
   dedup,
+  mergeDocuments,
   normals,
   prune,
   simplify,
@@ -26,6 +27,13 @@ function source({
   license,
   sha256,
   sourceTriangles,
+  nodeName,
+  removeNodeNames,
+  translation,
+  rotation,
+  scale,
+  downloadedOn = '2026-07-25',
+  maxTriangles,
   simplifyRatio,
   simplifyError = 0.01,
 }) {
@@ -42,31 +50,46 @@ function source({
     licenseUrl: license === 'CC0 1.0' ? CC0 : CC_BY_3,
     sha256,
     sourceTriangles,
+    downloadedOn,
+    ...(nodeName === undefined ? {} : { nodeName }),
+    ...(removeNodeNames === undefined ? {} : { removeNodeNames: Object.freeze(removeNodeNames) }),
+    ...(translation === undefined ? {} : { translation: Object.freeze(translation) }),
+    ...(rotation === undefined ? {} : { rotation: Object.freeze(rotation) }),
+    ...(scale === undefined ? {} : { scale: Object.freeze(scale) }),
+    ...(maxTriangles === undefined ? {} : { maxTriangles }),
     ...(simplifyRatio === undefined ? {} : { simplifyRatio, simplifyError }),
+  });
+}
+
+function compositeSource(primary, components) {
+  return Object.freeze({
+    ...primary,
+    components: Object.freeze(components),
   });
 }
 
 export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
   cannedFood: source({
-    id: 'cannedFood', publicId: 'YnowJvWqxE',
-    resourceId: 'e16e13cf-fbc4-48c8-9927-ae34920a498e',
-    title: 'Can', creator: 'Quaternius', license: 'CC0 1.0',
-    sha256: '66EA638E8C12F1C9EFCA4F6081FF864E689C5499AE654ECC86C7940256EA21EE',
-    sourceTriangles: 428,
+    id: 'cannedFood', publicId: 'onPuYPx0q7',
+    resourceId: 'fd443036-3eca-46e4-8342-06fd48f93e8b',
+    title: 'tin can', creator: 'bobbeh', license: 'CC-BY 3.0',
+    sha256: '73EB054C04E778FE38F9AF2747AE7F9028710AA1527867FE02768A75F7E0F10A',
+    sourceTriangles: 700, downloadedOn: '2026-07-26',
   }),
   baitTin: source({
-    id: 'baitTin', publicId: '6Isq2Aqy4MR',
-    resourceId: '40d525c4-6aac-4a00-88df-c7610a73f608',
-    title: 'Earthworm', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: '0321710FEF059296263BCE630F69B5B1E325DB29BF137414C3FE83418496FC96',
-    sourceTriangles: 3_617, simplifyRatio: 0.78,
+    id: 'baitTin', publicId: 'ubNPKDn2yH',
+    resourceId: '1246c082-49d3-45b3-86b8-bd44e49c5384',
+    title: 'Jars', creator: 'Kay Lousberg', license: 'CC0 1.0',
+    sha256: '3DEC909E1FFE93ABE2D274ECF81875FFDB46B7AA3E5601CFE57853A984635A31',
+    sourceTriangles: 2_192, nodeName: 'jar_D_small',
   }),
   ductTape: source({
-    id: 'ductTape', publicId: 'fu49rGO7Ukc',
-    resourceId: '06934616-1393-451d-bdf6-2101a5e32703',
-    title: 'Tape', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: 'EB8D46316A7011F333F36486EBFD3961191878E44765E27D0585538166117B14',
-    sourceTriangles: 20_332, simplifyRatio: 0.05, simplifyError: 0.025,
+    id: 'ductTape', publicId: 'dLlslRdbHfs',
+    resourceId: '0db201fd-36aa-4c36-8047-ebec79f146b8',
+    title: 'Time Hotel 5.25 Painters Tape', creator: 'S. Paul Michael',
+    license: 'CC-BY 3.0',
+    sha256: '67CEDDF0FB84F8AC6F6B458BE6C8561B6649EEC43EA3E4C4C543B006219F4AC3',
+    sourceTriangles: 2_376, downloadedOn: '2026-07-26',
   }),
   compass: source({
     id: 'compass', publicId: 'LlnxQPETHh',
@@ -101,7 +124,7 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     resourceId: '9d291011-bf4c-4202-ad84-97bf9e964dae',
     title: 'Fishing net', creator: 'Poly by Google', license: 'CC-BY 3.0',
     sha256: '676BB90BE7356794BFE07D607C1BA1AF45F4C756BD94B400FEFBCF73C5582FB5',
-    sourceTriangles: 8_422, simplifyRatio: 0.025, simplifyError: 0.04,
+    sourceTriangles: 8_422, maxTriangles: 9_000,
   }),
   bucket: source({
     id: 'bucket', publicId: '5HPoa3eX0Jb',
@@ -117,13 +140,24 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sha256: '0CEB763BEF74624C710A278C3415F00469AF9CBFB954781787B42615138872EC',
     sourceTriangles: 540,
   }),
-  scubaSet: source({
-    id: 'scubaSet', publicId: '7igrHLjaQlW',
-    resourceId: 'efda7497-db5e-47e9-b317-8e8baeb1c616',
-    title: 'Scuba equipment', creator: 'Steren Giannini', license: 'CC-BY 3.0',
-    sha256: '510AA30856968B089D1814B43CD24F35B1444BF41E3E7D6EAA1DE9BED0B0255E',
-    sourceTriangles: 4_696, simplifyRatio: 0.6,
-  }),
+  scubaSet: compositeSource(source({
+    id: 'scubaSet', publicId: '4GhtCNARi8c',
+    resourceId: '432fff46-415f-417b-a8ce-92a52725b7c4',
+    title: 'Scuba tank', creator: 'Steren Giannini', license: 'CC-BY 3.0',
+    sha256: 'B2F25A9A79F7FA72BAA0D954AAD592DBBCFE975F6051B1E31E872D295FB8EC7D',
+    sourceTriangles: 292, downloadedOn: '2026-07-26',
+  }), [
+    source({
+      id: 'scubaGoggles', publicId: '4YCjSY3U6H',
+      resourceId: 'd9c725b3-b39a-49c9-bc51-1159c1a747db',
+      title: 'Ski Goggles', creator: 'iPoly3D', license: 'CC0 1.0',
+      sha256: 'B6B77A97AA72EF36815192BFD274FC0F79422F121BD7AE736EAFDDA349450CB9',
+      sourceTriangles: 636, downloadedOn: '2026-07-26',
+      translation: [0.25, -0.3, 0.18],
+      rotation: [0.7071067811865476, 0, 0, 0.7071067811865476],
+      scale: [0.22, 0.22, 0.22],
+    }),
+  ]),
   anchor: source({
     id: 'anchor', publicId: 'fjAwIosTQHy',
     resourceId: 'f1d42e89-af89-4276-9160-2a52c7f5368e',
@@ -132,39 +166,40 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sourceTriangles: 520,
   }),
   bottledPaper: source({
-    id: 'bottledPaper', publicId: '65Hf2EMEo4s',
-    resourceId: 'f2918f5c-1371-440d-9968-cdcba02cfd68',
-    title: 'Bottle of wine', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: '8C5726CAFA144B60D2977E47AF10596D6231D42E33065ECF0B4EA9D806EA8C9F',
-    sourceTriangles: 608,
+    id: 'bottledPaper', publicId: 'arIYNl9gMyr',
+    resourceId: 'ec54b417-3509-498c-9b09-75eef6db1363',
+    title: 'Scroll', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '9F9BC296790FD8B1E95E1B02BF3B92C73E488CF837F5C39E4A3CCFDC2A4A17C7',
+    sourceTriangles: 796, downloadedOn: '2026-07-26',
   }),
   umbrella: source({
-    id: 'umbrella', publicId: 'bMXCVfXHUX2',
-    resourceId: 'c8acd7d5-d438-48bd-9a6d-cae61f1e6501',
-    title: 'Closed umbrella', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: '5069DEADA0051CC34699C759EE671137D2857538275863EBFACC05A470ED3C5E',
-    sourceTriangles: 600,
+    id: 'umbrella', publicId: 'ez4MoDQFgXz',
+    resourceId: 'f5b5e5cb-5438-4f9b-bc62-ea23e1dd89e0',
+    title: 'Umbrella', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '6A67B136D4BEBCF982599085B8BA7ACE6DFF6BD43A1FDAB2FE6E184C7848A672',
+    sourceTriangles: 664, downloadedOn: '2026-07-26',
   }),
   swimRing: source({
     id: 'swimRing', publicId: '7n1vrlFN0GH',
     resourceId: '6b9eb5e5-a2d9-41b8-b6b1-4db908eadd46',
     title: 'Life preserver', creator: 'Poly by Google', license: 'CC-BY 3.0',
     sha256: 'C0BB0D093A4964064330193E8F5A75B0366A31ADD63AF16FD9B6B3D99E614791',
-    sourceTriangles: 3_744, simplifyRatio: 0.75,
+    sourceTriangles: 3_744, removeNodeNames: ['Rectangle_sweep'],
+    downloadedOn: '2026-07-26', simplifyRatio: 0.75,
   }),
   flashlight: source({
-    id: 'flashlight', publicId: '4fbaKPvM0Ss',
-    resourceId: '594e3e35-75f7-45dd-be13-cf98d731e862',
-    title: 'Flashlight', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: 'BD2D99BC1D6C3B435EE1342E402F26FA84AF02D2A29A56E65528CCC34FDEF05B',
-    sourceTriangles: 108,
+    id: 'flashlight', publicId: '8t1DZLLvofk',
+    resourceId: '82e1bb6b-c322-4663-ba6e-a44f146bcd41',
+    title: 'Flashlight', creator: 'Bruno Oliveira', license: 'CC-BY 3.0',
+    sha256: '4DFF38A60AA716D8E7EDD7828C5B3C4E4685DBC983B40E0D400399FBFEFB6C6E',
+    sourceTriangles: 508, downloadedOn: '2026-07-26',
   }),
   harpoonGun: source({
-    id: 'harpoonGun', publicId: '3zA9NtYBEi',
-    resourceId: '6a63e2ad-5260-4ace-9245-7bfffdfd9695',
-    title: 'Spear', creator: 'Quaternius', license: 'CC0 1.0',
-    sha256: '849DD95DB71CE13E52C2ECD53C118012B45A6EDF8B8F019F9F2EBB51BFA27BB1',
-    sourceTriangles: 3_200, simplifyRatio: 0.85,
+    id: 'harpoonGun', publicId: 'neEjwx9bBJ',
+    resourceId: 'da83f4f9-7a4e-4739-9033-79d688aa3b5e',
+    title: 'Rifle', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '44A923B9358CA07247F125521A85BCE03654AE802984F6333B876C75AE2D0507',
+    sourceTriangles: 1_534, downloadedOn: '2026-07-26',
   }),
   energyBar: source({
     id: 'energyBar', publicId: 'vJsJ1EIiOO',
@@ -225,26 +260,91 @@ function removeSplitNormals(document) {
   }
 }
 
-export async function buildPolyPizzaModel({
-  id,
-  sourcePath,
-  outputPath,
-  descriptor = POLY_PIZZA_MODEL_SOURCES[id],
-  verifySource = true,
-}) {
-  if (!descriptor) throw new Error(`${id}: missing Poly Pizza descriptor`);
+function selectSourceNode(document, nodeName, id) {
+  if (nodeName === undefined) return;
+  const root = document.getRoot();
+  const selected = root.listNodes().find((node) => node.getName() === nodeName);
+  if (!selected) throw new Error(`${id}: source node ${nodeName} is missing`);
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  if (!scene) throw new Error(`${id}: source scene is missing`);
+
+  selected.getParentNode()?.removeChild(selected);
+  scene.addChild(selected);
+  selected.setTranslation([0, 0, 0]);
+  root.listNodes().filter((node) => node !== selected).forEach((node) => node.dispose());
+}
+
+function removeSourceNodes(document, nodeNames = [], id) {
+  const root = document.getRoot();
+  for (const nodeName of nodeNames) {
+    const node = root.listNodes().find((candidate) => candidate.getName() === nodeName);
+    if (!node) throw new Error(`${id}: removable source node ${nodeName} is missing`);
+    node.dispose();
+  }
+}
+
+async function readVerifiedSource(sourcePath, descriptor, verifySource, label) {
   const bytes = await readFile(sourcePath);
   const sha256 = createHash('sha256').update(bytes).digest('hex').toUpperCase();
   if (verifySource && sha256 !== descriptor.sha256) {
-    throw new Error(`${id}: expected source SHA-256 ${descriptor.sha256}, received ${sha256}`);
+    throw new Error(
+      `${label}: expected source SHA-256 ${descriptor.sha256}, received ${sha256}`,
+    );
   }
 
   const document = await io.read(sourcePath);
   const sourceTriangles = countDocumentTriangles(document);
   if (verifySource && sourceTriangles !== descriptor.sourceTriangles) {
     throw new Error(
-      `${id}: expected ${descriptor.sourceTriangles} source triangles, received ${sourceTriangles}`,
+      `${label}: expected ${descriptor.sourceTriangles} source triangles, received ${sourceTriangles}`,
     );
+  }
+  selectSourceNode(document, descriptor.nodeName, label);
+  removeSourceNodes(document, descriptor.removeNodeNames, label);
+  return { document, sha256, sourceTriangles };
+}
+
+function mergeComponent(target, component, descriptor, id) {
+  const targetScene = target.getRoot().getDefaultScene() ?? target.getRoot().listScenes()[0];
+  const componentScene = component.getRoot().getDefaultScene()
+    ?? component.getRoot().listScenes()[0];
+  if (!targetScene || !componentScene) throw new Error(`${id}: source scene is missing`);
+
+  const propertyMap = mergeDocuments(target, component);
+  const mergedScene = propertyMap.get(componentScene);
+  if (!mergedScene) throw new Error(`${id}: failed to merge ${descriptor.id}`);
+
+  const componentRoot = target.createNode(descriptor.id);
+  mergedScene.listChildren().forEach((node) => componentRoot.addChild(node));
+  if (descriptor.translation) componentRoot.setTranslation(descriptor.translation);
+  if (descriptor.rotation) componentRoot.setRotation(descriptor.rotation);
+  if (descriptor.scale) componentRoot.setScale(descriptor.scale);
+  targetScene.addChild(componentRoot);
+  mergedScene.dispose();
+}
+
+export async function buildPolyPizzaModel({
+  id,
+  sourcePath,
+  componentSourcePaths = {},
+  outputPath,
+  descriptor = POLY_PIZZA_MODEL_SOURCES[id],
+  verifySource = true,
+}) {
+  if (!descriptor) throw new Error(`${id}: missing Poly Pizza descriptor`);
+  const primary = await readVerifiedSource(sourcePath, descriptor, verifySource, id);
+  const { document, sha256, sourceTriangles } = primary;
+
+  for (const componentDescriptor of descriptor.components ?? []) {
+    const componentPath = componentSourcePaths[componentDescriptor.id];
+    if (!componentPath) throw new Error(`${id}: missing source path for ${componentDescriptor.id}`);
+    const component = await readVerifiedSource(
+      componentPath,
+      componentDescriptor,
+      verifySource,
+      `${id}/${componentDescriptor.id}`,
+    );
+    mergeComponent(document, component.document, componentDescriptor, id);
   }
 
   if (descriptor.simplifyRatio !== undefined) {
@@ -271,8 +371,11 @@ export async function buildPolyPizzaModel({
   });
 
   const triangles = countDocumentTriangles(document);
-  if (triangles <= 0 || triangles > 3_000) {
-    throw new Error(`${id}: processed triangle count ${triangles} exceeds the 3,000 limit`);
+  const maxTriangles = descriptor.maxTriangles ?? 3_000;
+  if (triangles <= 0 || triangles > maxTriangles) {
+    throw new Error(
+      `${id}: processed triangle count ${triangles} exceeds the ${maxTriangles} limit`,
+    );
   }
 
   await mkdir(dirname(outputPath), { recursive: true });
@@ -292,6 +395,10 @@ export async function buildPolyPizzaModels({
       id,
       descriptor,
       sourcePath: join(sourceRoot, `${id}.glb`),
+      componentSourcePaths: Object.fromEntries((descriptor.components ?? []).map((component) => [
+        component.id,
+        join(sourceRoot, `${id}--${component.id}.glb`),
+      ])),
       outputPath: join(outputRoot, `${id}.glb`),
       verifySource,
     });
@@ -310,6 +417,18 @@ async function inspectPolyPizzaSources(sourceRoot) {
       triangles: countDocumentTriangles(document),
       expectedSha256: descriptor.sha256,
       expectedTriangles: descriptor.sourceTriangles,
+      components: await Promise.all((descriptor.components ?? []).map(async (component) => {
+        const componentPath = join(sourceRoot, `${id}--${component.id}.glb`);
+        const componentBytes = await readFile(componentPath);
+        const componentDocument = await io.read(componentPath);
+        return {
+          id: component.id,
+          sha256: createHash('sha256').update(componentBytes).digest('hex').toUpperCase(),
+          triangles: countDocumentTriangles(componentDocument),
+          expectedSha256: component.sha256,
+          expectedTriangles: component.sourceTriangles,
+        };
+      })),
     };
   }
   return result;

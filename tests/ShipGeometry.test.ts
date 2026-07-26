@@ -1,13 +1,13 @@
 import {
   Box3,
   CylinderGeometry,
+  ExtrudeGeometry,
   Mesh,
   MeshStandardMaterial,
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
-import { createContactDepthLayer } from '../src/world/ContactDepthLayer';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
@@ -87,6 +87,27 @@ describe('freighter geometry', () => {  interface PointXZ {
     return triangles;
   };
 
+  const overlappingVolume = (left: Mesh, right: Mesh): number => {
+    const leftBounds = new Box3().setFromObject(left);
+    const rightBounds = new Box3().setFromObject(right);
+    const overlapX = Math.max(
+      0,
+      Math.min(leftBounds.max.x, rightBounds.max.x)
+        - Math.max(leftBounds.min.x, rightBounds.min.x),
+    );
+    const overlapY = Math.max(
+      0,
+      Math.min(leftBounds.max.y, rightBounds.max.y)
+        - Math.max(leftBounds.min.y, rightBounds.min.y),
+    );
+    const overlapZ = Math.max(
+      0,
+      Math.min(leftBounds.max.z, rightBounds.max.z)
+        - Math.max(leftBounds.min.z, rightBounds.min.z),
+    );
+    return overlapX * overlapY * overlapZ;
+  };
+
   const playerY = FREIGHTER_DIMENSIONS.deckY + 1.5;
   const pointInCollider = (
     build: ReturnType<typeof createShipGeometry>,
@@ -146,6 +167,61 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
+  it('does not place an alarm cylinder on the wheelhouse roof', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+
+    expect(build.root.getObjectByName('alarm-beacon')).toBeUndefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('cuts paired framed round portholes into the transverse cabin walls', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const expected = [
+      { zoneId: 'crewCabin', edge: 'aft', index: 1, x: -1.75, z: 5 },
+      { zoneId: 'crewCabin', edge: 'aft', index: 2, x: 1.75, z: 5 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 1, x: -1.75, z: 12.4 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 2, x: 1.75, z: 12.4 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 1, x: -1.8, z: -13.4 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 2, x: 1.8, z: -13.4 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 1, x: -1.8, z: -8 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 2, x: 1.8, z: -8 },
+    ] as const;
+
+    expected.forEach(({ zoneId, edge, index, x, z }) => {
+      const porthole = build.root.getObjectByName(`porthole:${zoneId}:${edge}:${index}`)!;
+      expect(porthole.position.toArray()).toEqual([
+        x,
+        FREIGHTER_DIMENSIONS.deckY + 2.08,
+        z,
+      ]);
+      expect(porthole.children.filter(({ name }) => name.endsWith(':glass'))).toHaveLength(2);
+      expect(porthole.children.filter(({ name }) => name.endsWith(':frame'))).toHaveLength(2);
+      expect(porthole.children.filter(({ name }) => name.includes(':bolt-'))).toHaveLength(16);
+      expect(pointInCollider(build, porthole.position)).toBe(true);
+    });
+
+    const portholeWalls = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh
+      && object.geometry instanceof ExtrudeGeometry
+      && /^(crew-cabin|storage-workroom)-wall-(aft|forward)-/.test(object.name));
+    expect(portholeWalls).toHaveLength(4);
+    portholeWalls.forEach((wall) => {
+      const geometry = wall.geometry as ExtrudeGeometry;
+      const shapes = Array.isArray(geometry.parameters.shapes)
+        ? geometry.parameters.shapes
+        : [geometry.parameters.shapes];
+      expect(shapes).toHaveLength(1);
+      expect(shapes[0]!.holes).toHaveLength(2);
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it.each([
     new Vector3(-7.7, 2.72, 0),
     new Vector3(7.7, 2.72, 4),
@@ -181,18 +257,114 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('seals every enclosed-room corner visually and physically', () => {
+  it('builds flush enclosed-room corners without protruding cap colliders or mesh overlap', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
+    const wallHalfThickness = 0.11;
 
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
-      zone.polygon.forEach(([x, z], index) => {
-        const name = `${zone.id}-corner-${index}`;
-        const cap = build.root.getObjectByName(name);
-        expect(cap, name).toBeInstanceOf(Mesh);
-        expect(new Box3().setFromObject(cap!).containsPoint(new Vector3(x, playerY, z)), name)
-          .toBe(true);
-        expect(pointInCollider(build, new Vector3(x, playerY, z)), name).toBe(true);
+      const prefix = zone.id === 'crewCabin' ? 'crew-cabin'
+        : zone.id === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
+      const roof = build.root.getObjectByName(`${zone.id}-roof`)!;
+      const roofBounds = new Box3().setFromObject(roof);
+      expect(roofBounds.min.x, `${zone.id} roof minX`).toBeCloseTo(
+        zone.bounds.minX - wallHalfThickness,
+      );
+      expect(roofBounds.max.x, `${zone.id} roof maxX`).toBeCloseTo(
+        zone.bounds.maxX + wallHalfThickness,
+      );
+      expect(roofBounds.min.z, `${zone.id} roof minZ`).toBeCloseTo(
+        zone.bounds.minZ - wallHalfThickness,
+      );
+      expect(roofBounds.max.z, `${zone.id} roof maxZ`).toBeCloseTo(
+        zone.bounds.maxZ + wallHalfThickness,
+      );
+      const roomColliders = build.shellColliders.filter((box) =>
+        Math.abs(box.minY - FREIGHTER_DIMENSIONS.deckY) < 1e-8
+        && Math.abs(box.maxY - roofBounds.min.y) < 1e-8
+        && box.minX < zone.bounds.maxX + wallHalfThickness
+        && box.maxX > zone.bounds.minX - wallHalfThickness
+        && box.minZ < zone.bounds.maxZ + wallHalfThickness
+        && box.maxZ > zone.bounds.minZ - wallHalfThickness);
+      expect(roomColliders.length, `${zone.id} wall colliders`).toBeGreaterThan(0);
+      roomColliders.forEach((box) => {
+        expect(box.minX, `${zone.id} minX`).toBeGreaterThanOrEqual(
+          zone.bounds.minX - wallHalfThickness - 1e-8,
+        );
+        expect(box.maxX, `${zone.id} maxX`).toBeLessThanOrEqual(
+          zone.bounds.maxX + wallHalfThickness + 1e-8,
+        );
+        expect(box.minZ, `${zone.id} minZ`).toBeGreaterThanOrEqual(
+          zone.bounds.minZ - wallHalfThickness - 1e-8,
+        );
+        expect(box.maxZ, `${zone.id} maxZ`).toBeLessThanOrEqual(
+          zone.bounds.maxZ + wallHalfThickness + 1e-8,
+        );
+      });
+      expect(Math.min(...roomColliders.map(({ minX }) => minX))).toBeCloseTo(
+        zone.bounds.minX - wallHalfThickness,
+      );
+      expect(Math.max(...roomColliders.map(({ maxX }) => maxX))).toBeCloseTo(
+        zone.bounds.maxX + wallHalfThickness,
+      );
+      expect(Math.min(...roomColliders.map(({ minZ }) => minZ))).toBeCloseTo(
+        zone.bounds.minZ - wallHalfThickness,
+      );
+      expect(Math.max(...roomColliders.map(({ maxZ }) => maxZ))).toBeCloseTo(
+        zone.bounds.maxZ + wallHalfThickness,
+      );
+
+      const structuralMeshes = build.root.children.filter((object): object is Mesh =>
+        object instanceof Mesh
+        && (
+          object.name.startsWith(`${prefix}-wall-`)
+          || object.name === `${zone.id}-roof`
+          || (zone.id === 'wheelhouse'
+            && (
+              object.name.startsWith('wheelhouse-front-pillar-')
+              || object.name.startsWith('wheelhouse-front-window-')
+            ))
+        ));
+      structuralMeshes.forEach((left, index) => {
+        structuralMeshes.slice(index + 1).forEach((right) => {
+          expect(
+            overlappingVolume(left, right),
+            `${left.name} overlaps ${right.name}`,
+          ).toBeLessThan(1e-8);
+        });
+      });
+      zone.polygon.forEach((_, index) => {
+        expect(build.root.getObjectByName(`${zone.id}-corner-${index}`)).toBeUndefined();
+      });
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('keeps room roofs and chimney-housing parts flush without intersecting volumes', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const roofs = SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed)
+      .map(({ id }) => build.root.getObjectByName(`${id}-roof`) as Mesh);
+    const machineryParts = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh
+      && (
+        object.name === 'machinery-island'
+        || object.name.startsWith('smokestack-')
+        || object.name.startsWith('rust-streak-')
+      ));
+
+    roofs.forEach((left, index) => {
+      roofs.slice(index + 1).forEach((right) => {
+        expect(overlappingVolume(left, right), `${left.name} overlaps ${right.name}`)
+          .toBeLessThan(1e-8);
+      });
+    });
+    machineryParts.forEach((left, index) => {
+      machineryParts.slice(index + 1).forEach((right) => {
+        expect(overlappingVolume(left, right), `${left.name} overlaps ${right.name}`)
+          .toBeLessThan(1e-8);
       });
     });
 

@@ -72,6 +72,13 @@ try {
     $sourcePath = Join-Path $sourceRoot "$id.glb"
     Invoke-WebRequest -UseBasicParsing -Uri $source.downloadUrl -OutFile $sourcePath
     Assert-FileSha256 -Path $sourcePath -Expected $source.sha256
+
+    foreach ($component in @($source.components)) {
+      if ($null -eq $component) { continue }
+      $componentPath = Join-Path $sourceRoot "$id--$($component.id).glb"
+      Invoke-WebRequest -UseBasicParsing -Uri $component.downloadUrl -OutFile $componentPath
+      Assert-FileSha256 -Path $componentPath -Expected $component.sha256
+    }
   }
 
   Push-Location $repositoryRoot
