@@ -90,6 +90,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly maxTextureSize: number;
   private itemAmbientOcclusionMode: ItemAmbientOcclusionMode;
   private gradeEnabled: boolean;
+  private aoUnavailable = false;
   private aoHotkeyRegistered = false;
   private gradeHotkeyRegistered = false;
   private disposed = false;
@@ -156,6 +157,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.registerComparisonHotkeys();
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
+      this.removeComparisonHotkeys();
       itemAmbientOcclusionPass?.dispose();
       outlinePass?.dispose();
       printPass?.dispose();
@@ -204,18 +206,15 @@ export class PostProcessingPipeline implements SceneRenderer {
     } catch (error) {
       this.reportFallback(error);
       this.itemAmbientOcclusionPass.enabled = false;
+      this.aoUnavailable = true;
+      this.removeAmbientOcclusionHotkey();
     }
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    if (typeof window !== 'undefined') {
-      if (this.aoHotkeyRegistered) window.removeEventListener('keydown', this.handleAmbientOcclusionHotkey);
-      if (this.gradeHotkeyRegistered) window.removeEventListener('keydown', this.handleGradeHotkey);
-    }
-    this.aoHotkeyRegistered = false;
-    this.gradeHotkeyRegistered = false;
+    this.removeComparisonHotkeys();
     this.inkFrame.dispose();
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
@@ -235,7 +234,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   }
 
   private readonly handleAmbientOcclusionHotkey = (event: KeyboardEvent): void => {
-    if (!this.isComparisonHotkey(event, ITEM_AMBIENT_OCCLUSION_HOTKEY)) return;
+    if (this.aoUnavailable || !this.isComparisonHotkey(event, ITEM_AMBIENT_OCCLUSION_HOTKEY)) return;
     this.itemAmbientOcclusionMode = nextItemAmbientOcclusionMode(this.itemAmbientOcclusionMode);
     this.itemAmbientOcclusionPass?.setMode(this.itemAmbientOcclusionMode);
   };
@@ -249,6 +248,21 @@ export class PostProcessingPipeline implements SceneRenderer {
   private isComparisonHotkey(event: KeyboardEvent, code: string): boolean {
     return !this.disposed && event.code === code && !event.repeat
       && !event.altKey && !event.ctrlKey && !event.metaKey;
+  }
+
+  private removeComparisonHotkeys(): void {
+    this.removeAmbientOcclusionHotkey();
+    if (this.gradeHotkeyRegistered && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleGradeHotkey);
+    }
+    this.gradeHotkeyRegistered = false;
+  }
+
+  private removeAmbientOcclusionHotkey(): void {
+    if (this.aoHotkeyRegistered && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleAmbientOcclusionHotkey);
+    }
+    this.aoHotkeyRegistered = false;
   }
 
   private applyProfile(

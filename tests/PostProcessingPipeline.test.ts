@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DataTexture,
   PerspectiveCamera,
@@ -149,6 +149,10 @@ describe('post-processing pipeline', () => {
     postProcessingMocks.outputPasses.length = 0;
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('builds the consolidated pass order and retains hover targets', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     const composer = postProcessingMocks.composers[0]!;
@@ -194,6 +198,46 @@ describe('post-processing pipeline', () => {
     expect(() => pipeline.setVisualQuality('high')).not.toThrow();
     expect(reportAoFallback).toHaveBeenCalledWith(failure);
     expect(failingAoPass.enabled).toBe(false);
+  });
+
+  it('removes comparison listeners when initial sizing fails after registration', () => {
+    const keyboardTarget = Object.assign(new EventTarget(), { location: { search: '' } });
+    const removeEventListener = vi.spyOn(keyboardTarget, 'removeEventListener');
+    vi.stubGlobal('window', keyboardTarget);
+    const failure = new Error('pixel ratio unavailable');
+    const renderer = createRenderer();
+    renderer.getPixelRatio = vi.fn(() => { throw failure; });
+
+    expect(() => new PostProcessingPipeline(renderer, 'low')).toThrow(failure);
+
+    expect(removeEventListener).toHaveBeenCalledTimes(2);
+    expect(removeEventListener.mock.calls.map(([type]) => type).sort())
+      .toEqual(['keydown', 'keydown']);
+  });
+
+  it('keeps AO unavailable when KeyO is pressed after quality reconfiguration fails', () => {
+    const keyboardTarget = Object.assign(new EventTarget(), { location: { search: '' } });
+    vi.stubGlobal('window', keyboardTarget);
+    const failure = new Error('ao resize unavailable');
+    const failingAoPass = {
+      enabled: true,
+      dispose: vi.fn(),
+      setMode: vi.fn(),
+      setVisualQuality: vi.fn(() => { throw failure; }),
+    } as unknown as ItemAmbientOcclusionPass;
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => failingAoPass, vi.fn());
+    pipeline.setVisualQuality('high');
+    const keyO = new Event('keydown');
+    Object.defineProperties(keyO, {
+      code: { value: 'KeyO' }, repeat: { value: false }, altKey: { value: false },
+      ctrlKey: { value: false }, metaKey: { value: false },
+    });
+
+    keyboardTarget.dispatchEvent(keyO);
+
+    expect(failingAoPass.enabled).toBe(false);
+    expect(failingAoPass.setMode).not.toHaveBeenCalled();
+    pipeline.dispose();
   });
 
   it('falls back to direct rendering when pipeline construction fails', () => {
