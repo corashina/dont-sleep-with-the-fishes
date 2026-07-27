@@ -189,6 +189,12 @@ export interface FishingResultView {
   readonly detail: string;
 }
 
+export interface EventContextChoice {
+  readonly id: EventResponseId;
+  readonly label: string;
+  readonly unavailableReason: string | null;
+}
+
 interface PendingFade {
   readonly finish: () => void;
 }
@@ -203,6 +209,7 @@ interface AnchorTooltipNodes {
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
+  onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
@@ -227,6 +234,7 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
+  private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingLive: HTMLElement;
@@ -298,6 +306,7 @@ export class SurvivalUI {
   private pendingSleepTransition: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
+  private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
   private eventPresentationActive = false;
 
@@ -356,6 +365,7 @@ export class SurvivalUI {
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
+        <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
       <button type="button" class="event-endure timber-action ui-role-context" data-endure hidden>ENDURE</button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
@@ -412,6 +422,7 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
+    this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
@@ -551,11 +562,16 @@ export class SurvivalUI {
     return Promise.resolve();
   }
 
-  setEventSelection(eligible: ReadonlyMap<ItemInstanceId, EventResponseId>): void {
+  setEventSelection(
+    eligible: ReadonlyMap<ItemInstanceId, EventResponseId>,
+    contextualChoices: readonly EventContextChoice[] = [],
+  ): void {
     if (this.disposed) return;
     this.eventEligibility = new Map(eligible);
+    this.contextualEventChoices = [...contextualChoices];
     this.eventSelectedInstanceId = null;
-    this.endureButton.hidden = eligible.size > 0;
+    this.renderContextualEventChoices();
+    this.endureButton.hidden = eligible.size > 0 || contextualChoices.length > 0;
     this.syncCommandState();
   }
 
@@ -567,7 +583,10 @@ export class SurvivalUI {
 
   clearEventPresentation(): void {
     if (this.disposed) return;
+    const focusedContextualChoice = document.activeElement !== null
+      && this.eventChoices.contains(document.activeElement);
     this.eventEligibility = null;
+    this.contextualEventChoices = [];
     this.eventSelectedInstanceId = null;
     this.eventPresentationActive = false;
     this.eventCaption.classList.remove('is-visible');
@@ -575,8 +594,11 @@ export class SurvivalUI {
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    this.eventChoices.replaceChildren();
+    this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
     this.syncCommandState();
+    if (focusedContextualChoice) this.firstUsableAction()?.focus();
   }
 
   showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
@@ -820,6 +842,7 @@ export class SurvivalUI {
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
+    this.onEventChoice = () => undefined;
     this.onEndure = () => undefined;
     this.onRestart = () => undefined;
     this.onAnchorHighlight = () => undefined;
@@ -1057,7 +1080,33 @@ export class SurvivalUI {
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
+    this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
+      const unavailable = button.dataset.unavailableReason !== undefined;
+      button.disabled = this.busy;
+      button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
+    });
     this.endureButton.disabled = this.busy;
+  }
+
+  private renderContextualEventChoices(): void {
+    const choices = this.contextualEventChoices.map((choice) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'event-choice ui-role-context';
+      button.dataset.eventChoice = choice.id;
+      button.textContent = choice.label;
+      if (choice.unavailableReason !== null) {
+        button.dataset.unavailableReason = choice.unavailableReason;
+        button.setAttribute('aria-description', choice.unavailableReason);
+        const reason = document.createElement('span');
+        reason.className = 'event-choice__reason ui-role-narrative';
+        reason.textContent = choice.unavailableReason;
+        button.append(reason);
+      }
+      return button;
+    });
+    this.eventChoices.replaceChildren(...choices);
+    this.eventChoices.hidden = choices.length === 0;
   }
 
   private itemAnchorId(target: EventTarget | null): string | null {
@@ -1307,8 +1356,10 @@ export class SurvivalUI {
       )
       && this.isUsableCommand(button)
     ))
-      ?? (this.eventPresentationActive && this.isUsableCommand(this.endureButton)
-        ? this.endureButton
+      ?? (this.eventPresentationActive
+        ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
+          .find((button) => this.isUsableCommand(button))
+          ?? (this.isUsableCommand(this.endureButton) ? this.endureButton : null)
         : this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
   }
 
@@ -1384,6 +1435,42 @@ export class SurvivalUI {
     return false;
   }
 
+  private trapEventFocus(event: KeyboardEvent): boolean {
+    if (event.key !== 'Tab' || !this.eventPresentationActive) return false;
+    const controls = [
+      ...this.anchorButtons.values(),
+      ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
+      this.endureButton,
+    ].filter((element) => this.isFocusableCommand(element));
+    if (controls.length === 0) return false;
+    const first = controls[0]!;
+    const last = controls[controls.length - 1]!;
+    const active = document.activeElement;
+    const activeIsControl = active instanceof HTMLButtonElement && controls.includes(active);
+    if (event.shiftKey && (active === first || !activeIsControl)) {
+      event.preventDefault();
+      last.focus();
+      return true;
+    }
+    if (!event.shiftKey && (active === last || !activeIsControl)) {
+      event.preventDefault();
+      first.focus();
+      return true;
+    }
+    return false;
+  }
+
+  private activateEventChoice(button: HTMLButtonElement): void {
+    const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
+    if (
+      choiceId === undefined
+      || !this.eventPresentationActive
+      || this.busy
+      || button.getAttribute('aria-disabled') === 'true'
+    ) return;
+    this.onEventChoice(choiceId);
+  }
+
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -1427,6 +1514,11 @@ export class SurvivalUI {
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (button.getAttribute('aria-disabled') === 'true') {
       if (action !== undefined && !this.overlayOpen()) this.showUnavailableActionFeedback(action.id);
+      return;
+    }
+
+    if (button.hasAttribute('data-event-choice')) {
+      this.activateEventChoice(button);
       return;
     }
 
@@ -1479,6 +1571,7 @@ export class SurvivalUI {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
+    if (this.trapEventFocus(event)) return;
     if (event.key === 'Escape') {
       if (topmostModal === this.journalLayer) {
         event.preventDefault();
@@ -1499,6 +1592,19 @@ export class SurvivalUI {
         else if (this.fishingMode === 'bite') this.issueFishingReel();
       }
       return;
+    }
+    const target = event.target;
+    if (
+      this.eventPresentationActive
+      && target instanceof Element
+      && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
+    ) {
+      const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
+      if (choice !== null && this.eventChoices.contains(choice)) {
+        event.preventDefault();
+        this.activateEventChoice(choice);
+        return;
+      }
     }
     if (this.overlayOpen() || this.busy || this.eventPresentationActive) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);

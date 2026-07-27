@@ -97,7 +97,63 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
   };
 }
 
+function eventWithChoices(...choiceIds: readonly string[]): SurvivalEventDefinition {
+  return {
+    ...testEvent(),
+    choices: choiceIds.map((id) => ({
+      id,
+      label: id === 'retrieve' ? 'RETRIEVE' : 'LEAVE IT',
+      outcomes: [{ weight: 1, message: 'Nothing happens.', effects: {} }],
+    })) as unknown as SurvivalEventDefinition['choices'],
+  };
+}
+
+function labels(selector: string): string[] {
+  return [...document.querySelectorAll<HTMLElement>(selector)].map((element) => element.textContent!.trim());
+}
+
+function press(selector: string, key: string): void {
+  document.querySelector<HTMLButtonElement>(selector)!.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true }),
+  );
+}
+
+function openContextualEvent(ui: SurvivalUI): void {
+  ui.beginEventPresentation();
+  void ui.showEventReveal(eventWithChoices('retrieve', 'leave'));
+  ui.setEventSelection(new Map(), [
+    { id: 'retrieve', label: 'RETRIEVE', unavailableReason: null },
+    { id: 'leave', label: 'LEAVE IT', unavailableReason: null },
+  ]);
+}
+
 describe('SurvivalUI', () => {
+
+  it('shows authored contextual choices only after selection unlocks', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.beginEventPresentation();
+    void ui.showEventReveal(eventWithChoices('retrieve', 'leave'));
+    ui.setEventSelection(new Map(), [
+      { id: 'retrieve', label: 'RETRIEVE', unavailableReason: null },
+      { id: 'leave', label: 'LEAVE IT', unavailableReason: null },
+    ]);
+    expect(labels('[data-event-choice]')).toEqual(['RETRIEVE', 'LEAVE IT']);
+  });
+
+  it('activates a focused contextual choice with the keyboard', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    openContextualEvent(ui);
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    choice.focus();
+    press('[data-event-choice="retrieve"]', 'Enter');
+    expect(onEventChoice).toHaveBeenCalledWith('retrieve');
+  });
 
   it('chooses only broken repairable instance targets with a discriminated option', () => {
     const mount = document.createElement('main');
