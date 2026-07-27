@@ -197,6 +197,8 @@ export class ScavengePhase implements GamePhase {
       synchronizeElapsed();
       updateWorld(deltaSeconds);
       if (this.session.snapshot().status === 'running') {
+        const shake = Math.sin(this.elapsed * 37) * sinking.cameraShake;
+        this.player.updatePassive(deltaSeconds, shake);
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
       }
       this.input.consumeLook();

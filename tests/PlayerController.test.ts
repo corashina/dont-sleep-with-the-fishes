@@ -522,6 +522,24 @@ describe('PlayerController', () => {
     expectVector(controller.localPosition, start);
   });
 
+  it('keeps the player attached to the moving ship during a passive update', () => {
+    const ship = new Object3D();
+    const camera = new PerspectiveCamera();
+    const start = new Vector3(1, 3.7, 2);
+    const controller = new PlayerController(
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+
+    controller.updatePassive(0);
+    ship.position.set(4, -1, 7);
+    ship.rotation.set(0.15, Math.PI / 4, -0.08);
+    ship.updateMatrixWorld(true);
+    controller.updatePassive(0.016);
+
+    expectVector(camera.position, ship.localToWorld(start.clone()));
+    expectVector(controller.localPosition, start);
+  });
+
   it('reset restores the supplied local start and default view', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();
