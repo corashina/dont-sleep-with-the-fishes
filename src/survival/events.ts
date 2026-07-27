@@ -293,9 +293,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
 ]);
 
 const EVENT_RESOURCES: readonly EventResource[] = [
-  'health', 'hull', 'energy', 'food', 'bait', 'rescueProgress',
+  'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueProgress',
 ];
-const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'breakRandom', 'loseRandom', 'loseEventTarget'];
+const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
 type PlainRecord = Record<PropertyKey, unknown>;
 
@@ -362,8 +362,10 @@ function validateMutation(candidate: unknown, path: string): void {
   if (typeof kind !== 'string' || !ITEM_MUTATIONS.includes(kind)) {
     throw new Error(`${path} has an unknown mutation kind`);
   }
-  const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose';
-  const allowed = itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
+  const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose' || kind === 'gain';
+  const allowed = kind === 'gain'
+    ? ['kind', 'itemId', 'quantity', 'fallbackFood']
+    : itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
   assertExactKeys(candidate, path, `${kind} mutation`, allowed, allowed);
   const quantity = candidate.quantity;
   if (!Number.isInteger(quantity) || (quantity as number) < 1) {
@@ -376,6 +378,12 @@ function validateMutation(candidate: unknown, path: string): void {
   if (!itemSpecific) return;
   const itemId = candidate.itemId;
   if (!isItemId(itemId)) throw new Error(`${path} contains unknown item`);
+  if (kind === 'gain') {
+    if (quantity !== 1 || candidate.fallbackFood !== 1) {
+      throw new Error(`${path} has an invalid gain quantity or fallback food`);
+    }
+    return;
+  }
   if (kind === 'break' && !ITEM_DEFINITIONS[itemId].breakable) {
     throw new Error(`${path} cannot break ${itemId} because it is not breakable`);
   }
