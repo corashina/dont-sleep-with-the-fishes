@@ -4,7 +4,6 @@ export const PrintShader = {
   name: 'RestrainedPrintShader',
   uniforms: {
     tDiffuse: { value: null },
-    tInkFrame: { value: null },
     uPixelRatio: { value: 1 },
     uContrast: { value: 1 },
     uSaturation: { value: 1 },
@@ -15,7 +14,6 @@ export const PrintShader = {
     uHighlightTint: { value: new Color(0xffffff) },
     uHighlightTintStrength: { value: 0 },
     uPosterizationLevels: { value: 40 },
-    uInkFrameStrength: { value: 0 },
     uHalftoneStrength: { value: 0 },
     uHalftoneSizeCssPixels: { value: 5 },
   },
@@ -29,7 +27,6 @@ export const PrintShader = {
   `,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
-    uniform sampler2D tInkFrame;
     uniform float uPixelRatio;
     uniform float uContrast;
     uniform float uSaturation;
@@ -40,7 +37,6 @@ export const PrintShader = {
     uniform vec3 uHighlightTint;
     uniform float uHighlightTintStrength;
     uniform float uPosterizationLevels;
-    uniform float uInkFrameStrength;
     uniform float uHalftoneStrength;
     uniform float uHalftoneSizeCssPixels;
     varying vec2 vUv;
@@ -50,8 +46,6 @@ export const PrintShader = {
     }
 
     void main() {
-      vec2 centered = vUv - 0.5;
-      float edgeDistance = length(centered * vec2(1.0, 1.25));
       vec3 color = texture2D(tDiffuse, vUv).rgb;
 
       color = color / (vec3(1.0) + color * uHighlightCompression);
@@ -76,15 +70,12 @@ export const PrintShader = {
 
       float levels = max(32.0, uPosterizationLevels);
       color = floor(color * levels + 0.5) / levels;
-      float frameInk = texture2D(tInkFrame, vUv).r;
-      color *= 1.0 - frameInk * uInkFrameStrength;
 
       vec2 cssPixel = gl_FragCoord.xy / uPixelRatio;
       vec2 cell = fract(cssPixel / max(2.0, uHalftoneSizeCssPixels)) - 0.5;
       float dotInk = 1.0 - smoothstep(0.2, 0.42, length(cell));
       float midtone = smoothstep(0.1, 0.34, gray) * (1.0 - smoothstep(0.66, 0.92, gray));
-      float centerRelief = mix(0.35, 1.0, smoothstep(0.12, 0.58, edgeDistance));
-      color *= 1.0 - dotInk * midtone * centerRelief * uHalftoneStrength;
+      color *= 1.0 - dotInk * midtone * uHalftoneStrength;
 
       gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
     }

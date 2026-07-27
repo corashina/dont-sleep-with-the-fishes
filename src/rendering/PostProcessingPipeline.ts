@@ -20,7 +20,6 @@ import {
 } from './ItemAmbientOcclusion';
 import { sceneHoverOutlineTargets } from './HoverOutline';
 import { PrintShader } from './PrintShader';
-import { createInkFrameMask } from './inkFrameMask';
 import {
   DirectSceneRenderer,
   type SceneRenderer,
@@ -35,7 +34,6 @@ import type { VisualQuality } from './visualQuality';
 
 type PrintUniforms = {
   tDiffuse: { value: null };
-  tInkFrame: { value: ReturnType<typeof createInkFrameMask> | null };
   uPixelRatio: { value: number };
   uContrast: { value: number };
   uSaturation: { value: number };
@@ -46,7 +44,6 @@ type PrintUniforms = {
   uHighlightTint: { value: Color };
   uHighlightTintStrength: { value: number };
   uPosterizationLevels: { value: number };
-  uInkFrameStrength: { value: number };
   uHalftoneStrength: { value: number };
   uHalftoneSizeCssPixels: { value: number };
 };
@@ -63,7 +60,6 @@ const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
 const GRADE_HOTKEY = 'KeyP';
 
 export class PostProcessingPipeline implements SceneRenderer {
-  private readonly inkFrame: ReturnType<typeof createInkFrameMask>;
   private readonly composer: EffectComposer;
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
@@ -89,7 +85,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       console.warn('Ambient occlusion unavailable; continuing without it.', error);
     },
   ) {
-    this.inkFrame = createInkFrameMask();
     let target: WebGLRenderTarget | undefined;
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
@@ -148,7 +143,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.printPass = printPass;
       this.outputPass = outputPass;
       this.uniforms = printPass.uniforms as PrintUniforms;
-      this.uniforms.tInkFrame.value = this.inkFrame;
       this.applyProfile(GLOBAL_POST_PROCESSING_PROFILE);
       this.registerComparisonHotkeys();
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
@@ -160,7 +154,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       outputPass?.dispose();
       if (composer === undefined) target?.dispose();
       else composer.dispose();
-      this.inkFrame.dispose();
       throw error;
     }
   }
@@ -231,7 +224,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (this.disposed) return;
     this.disposed = true;
     this.removeComparisonHotkeys();
-    this.inkFrame.dispose();
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
     this.printPass.dispose();
@@ -304,7 +296,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     uniforms.uHighlightTint.value.setHex(clampPostProcessingValue(profile.highlightTint, 0, 0xffffff, 0xd8aa6d));
     uniforms.uHighlightTintStrength.value = clampPostProcessingValue(profile.highlightTintStrength, 0, 0.25, 0);
     uniforms.uPosterizationLevels.value = clampPostProcessingValue(profile.posterizationLevels, 32, 48, 40);
-    uniforms.uInkFrameStrength.value = clampPostProcessingValue(profile.inkFrameStrength, 0, 0.95, 0);
     uniforms.uHalftoneStrength.value = clampPostProcessingValue(profile.halftoneStrength, 0, 0.15, 0);
     uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(profile.halftoneSizeCssPixels, 3, 8, 5);
   }
