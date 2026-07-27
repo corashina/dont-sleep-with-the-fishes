@@ -13,7 +13,11 @@ import {
   ShapeGeometry,
   Vector3,
 } from 'three';
-import type { CollisionArc, CollisionBox } from '../player/collisions';
+import {
+  PLAYER_BODY_HEIGHT,
+  type CollisionArc,
+  type CollisionBox,
+} from '../player/collisions';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import {
   FREIGHTER_DIMENSIONS,
@@ -69,7 +73,7 @@ const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_PILLAR_WIDTH = 0.28;
 const WINDOW_GLASS_THICKNESS = 0.035;
-const PORTHOLE_CENTER_HEIGHT = 2.08;
+const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
 const PORTHOLE_GLASS_RADIUS = 0.46;
 const PORTHOLE_GASKET_OUTER_RADIUS = 0.51;
