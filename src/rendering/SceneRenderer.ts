@@ -23,7 +23,6 @@ export interface ScavengeVisualState {
   kind: 'scavenge';
   elapsedSeconds: number;
   sinkingProgress: number;
-  reducedMotion: boolean;
 }
 
 export interface SurvivalVisualState {
@@ -31,7 +30,6 @@ export interface SurvivalVisualState {
   elapsedSeconds: number;
   phase: 'day' | 'night';
   weather: WeatherId;
-  reducedMotion: boolean;
 }
 
 export type SceneVisualState = ScavengeVisualState | SurvivalVisualState;
