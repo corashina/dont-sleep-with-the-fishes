@@ -1293,18 +1293,16 @@ function addLadders(
   return Object.freeze(climbZones);
 }
 
-function furnitureLocalPoint(
+function furnitureSupportPoint(
   furniture: ShipFurniturePlacementSpec,
-  localX: number,
-  localZ: number,
+  supportX: number,
+  supportZ: number,
 ): readonly [number, number] {
-  const scaledX = localX * furniture.scale[0];
-  const scaledZ = localZ * furniture.scale[2];
   const cosine = Math.cos(furniture.rotationY);
   const sine = Math.sin(furniture.rotationY);
   return [
-    furniture.position[0] + scaledX * cosine + scaledZ * sine,
-    furniture.position[2] - scaledX * sine + scaledZ * cosine,
+    furniture.position[0] + supportX * cosine + supportZ * sine,
+    furniture.position[2] - supportX * sine + supportZ * cosine,
   ];
 }
 
@@ -1332,48 +1330,48 @@ function addWheelhouseInteriorDetails(
   let usesFallbackWallSupport = true;
 
   if (helmDesk) {
-    const helmSupportHalfWidth = helmDesk.colliderSize[0] / 2;
-    const helmSupportHalfDepth = helmDesk.colliderSize[2] / 2;
-    let logbookLocalX: number;
-    let logbookLocalZ: number;
-    let mugLocalX: number;
-    let mugLocalZ: number;
+    const helmSupportHalfWidth = helmDesk.colliderSize[0] * helmDesk.scale[0] / 2;
+    const helmSupportHalfDepth = helmDesk.colliderSize[2] * helmDesk.scale[2] / 2;
+    let logbookSupportX: number;
+    let logbookSupportZ: number;
+    let mugSupportX: number;
+    let mugSupportZ: number;
     if (helmDesk.surfaces.length === 0) {
-      logbookLocalX = -helmDesk.colliderSize[0] * 0.22;
-      mugLocalX = helmDesk.colliderSize[0] * 0.22;
-      logbookLocalZ = helmDesk.colliderSize[2] * 0.18;
-      mugLocalZ = helmDesk.colliderSize[2] * 0.18;
+      logbookSupportX = -helmSupportHalfWidth * 0.44;
+      mugSupportX = helmSupportHalfWidth * 0.44;
+      logbookSupportZ = helmSupportHalfDepth * 0.36;
+      mugSupportZ = helmSupportHalfDepth * 0.36;
     } else {
       const helmSurfaceMaxZ = Math.max(...helmDesk.surfaces.map((surface) =>
-        surface.localPosition[2] + surface.footprint.depth / 2));
-      logbookLocalX = helmDesk.surfaces[0]!.localPosition[0];
-      mugLocalX = helmDesk.surfaces.at(-1)!.localPosition[0];
-      logbookLocalZ = helmSurfaceMaxZ + 0.075;
-      mugLocalZ = helmSurfaceMaxZ + 0.07;
+        (surface.localPosition[2] + surface.footprint.depth / 2) * helmDesk.scale[2]));
+      logbookSupportX = helmDesk.surfaces[0]!.localPosition[0] * helmDesk.scale[0];
+      mugSupportX = helmDesk.surfaces.at(-1)!.localPosition[0] * helmDesk.scale[0];
+      logbookSupportZ = helmSurfaceMaxZ + 0.075;
+      mugSupportZ = helmSurfaceMaxZ + 0.07;
     }
     if (helmSupportHalfWidth >= 0.15) {
-      logbookLocalX = Math.max(
+      logbookSupportX = Math.max(
         -helmSupportHalfWidth + 0.15,
-        Math.min(helmSupportHalfWidth - 0.15, logbookLocalX),
+        Math.min(helmSupportHalfWidth - 0.15, logbookSupportX),
       );
     }
     if (helmSupportHalfWidth >= 0.11) {
-      mugLocalX = Math.max(
+      mugSupportX = Math.max(
         -helmSupportHalfWidth + 0.11,
-        Math.min(helmSupportHalfWidth - 0.11, mugLocalX),
+        Math.min(helmSupportHalfWidth - 0.11, mugSupportX),
       );
     }
     if (helmSupportHalfWidth >= 0.15
-      && Number.isFinite(logbookLocalZ)
-      && Number.isFinite(mugLocalZ)
-      && logbookLocalZ + 0.065 <= helmSupportHalfDepth
-      && mugLocalZ + 0.055 <= helmSupportHalfDepth) {
-      [logbookX, logbookZ] = furnitureLocalPoint(
+      && Number.isFinite(logbookSupportZ)
+      && Number.isFinite(mugSupportZ)
+      && logbookSupportZ + 0.065 <= helmSupportHalfDepth
+      && mugSupportZ + 0.055 <= helmSupportHalfDepth) {
+      [logbookX, logbookZ] = furnitureSupportPoint(
         helmDesk,
-        logbookLocalX,
-        logbookLocalZ,
+        logbookSupportX,
+        logbookSupportZ,
       );
-      [mugX, mugZ] = furnitureLocalPoint(helmDesk, mugLocalX, mugLocalZ);
+      [mugX, mugZ] = furnitureSupportPoint(helmDesk, mugSupportX, mugSupportZ);
       supportTop = helmDesk.position[1] + helmDesk.colliderSize[1] * helmDesk.scale[1];
       supportRotationY = helmDesk.rotationY;
       usesFallbackWallSupport = false;

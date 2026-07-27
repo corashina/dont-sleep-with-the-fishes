@@ -985,18 +985,56 @@ describe('freighter geometry', () => {  interface PointXZ {
       const bounds = new Box3().setFromObject(prop);
       expect(bounds.min.y, `${id} support`).toBeCloseTo(supportTop);
       expect(bounds.min.x).toBeGreaterThanOrEqual(
-        helm.position[0] - helm.colliderSize[0] / 2,
+        helm.position[0] - helm.colliderSize[0] * helm.scale[0] / 2,
       );
       expect(bounds.max.x).toBeLessThanOrEqual(
-        helm.position[0] + helm.colliderSize[0] / 2,
+        helm.position[0] + helm.colliderSize[0] * helm.scale[0] / 2,
       );
       expect(bounds.min.z).toBeGreaterThanOrEqual(
-        helm.position[2] - helm.colliderSize[2] / 2,
+        helm.position[2] - helm.colliderSize[2] * helm.scale[2] / 2,
       );
       expect(bounds.max.z).toBeLessThanOrEqual(
-        helm.position[2] + helm.colliderSize[2] / 2,
+        helm.position[2] + helm.colliderSize[2] * helm.scale[2] / 2,
       );
       expect(prop.getObjectByName(`captain-detail:${id}:fallback-support`)).toBeUndefined();
+    });
+
+    build!.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('falls back safely when a valid scaled helm is too small in width and depth', () => {
+    const layout: ShipLayoutSpec = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((fixture) =>
+        fixture.id === 'helm-desk-forward'
+          ? { ...fixture, scale: [0.1, 1, 0.1] as const, surfaces: [] }
+          : fixture),
+    };
+    expect(() => validateShipLayout(layout)).not.toThrow();
+    const materials = createShipMaterials();
+    let build: ReturnType<typeof createShipGeometry> | undefined;
+    expect(() => {
+      build = createShipGeometry(materials, layout);
+    }).not.toThrow();
+    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
+    const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+    const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
+    ['logbook', 'mug'].forEach((id) => {
+      const prop = details.getObjectByName(`captain-detail:${id}`)!;
+      expect(prop.getObjectByName(`captain-detail:${id}:fallback-support`), id)
+        .toBeDefined();
+      expect(prop.position.z, `${id} wall anchor`).toBeGreaterThan(wheelhouse.maxZ - 0.6);
+      expect(Math.abs(prop.position.x - centerX), `${id} central path`).toBeGreaterThan(1.1);
+    });
+    details.traverse((object) => {
+      expect([
+        ...object.position.toArray(),
+        object.rotation.x,
+        object.rotation.y,
+        object.rotation.z,
+        ...object.scale.toArray(),
+      ].every(Number.isFinite), object.name).toBe(true);
     });
 
     build!.disposeGeometry();
