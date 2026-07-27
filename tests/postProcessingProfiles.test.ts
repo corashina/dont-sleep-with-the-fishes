@@ -9,9 +9,11 @@ describe('global post-processing profile', () => {
       .toBeLessThanOrEqual(48);
   });
 
-  it('lifts dark detail without turning the grade into a flat wash', () => {
-    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeGreaterThanOrEqual(0.018);
-    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.05);
+  it('keeps deep shadows readable without flattening the full image', () => {
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeGreaterThanOrEqual(0.045);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.065);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.contrast).toBeLessThanOrEqual(1.1);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowTintStrength).toBeLessThanOrEqual(0.04);
   });
 
   it('contains no scene identity, grain, vignette, or edge-mask settings', () => {

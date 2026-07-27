@@ -14,12 +14,12 @@ export interface PostProcessingProfile {
 
 export const GLOBAL_POST_PROCESSING_PROFILE =
   Object.freeze<PostProcessingProfile>({
-    contrast: 1.12,
+    contrast: 1.08,
     saturation: 1.10,
     highlightCompression: 0.16,
-    shadowLift: 0.02,
+    shadowLift: 0.055,
     shadowTint: 0x123039,
-    shadowTintStrength: 0.06,
+    shadowTintStrength: 0.025,
     highlightTint: 0xd8aa6d,
     highlightTintStrength: 0.035,
     posterizationLevels: 48,
