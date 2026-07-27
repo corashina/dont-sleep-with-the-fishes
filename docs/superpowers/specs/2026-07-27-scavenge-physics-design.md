@@ -88,6 +88,12 @@ The clock will not allocate in its update path.
 Its public API will accept plain transform data and return plain barrel pose
 data. Three.js objects and gameplay sessions will not enter this module.
 
+Rapier 0.19.3's body `translation()` and `rotation()` getters necessarily
+allocate wrapper objects and provide no caller-owned output form. The
+simulation may call each getter once after all accepted substeps of an active
+rendered update. It must not call them inside the substep loop, and all
+project-owned update data remains preallocated.
+
 `dispose()` will be idempotent. It will free the Rapier world exactly once;
 freeing the world releases its bodies and colliders.
 
@@ -179,8 +185,10 @@ For each active scavenging frame:
 5. Across accepted substeps, the previous submitted freighter pose is
    interpolated toward the current rendered pose. Each interpolated transform
    is submitted with Rapier's next-kinematic-position API before stepping.
-6. After the final step, `ScavengePhysics` copies the dynamic body's translation
-   and rotation into reusable plain pose output.
+6. After the final step, `ScavengePhysics` calls Rapier's translation and
+   rotation getters once each, then copies those wrapper values into reusable
+   plain pose output. These two third-party wrapper allocations are the sole
+   update-path exception.
 7. `World` copies that pose to the barrel visual.
 
 The interpolation prevents a long render frame from applying the whole ship

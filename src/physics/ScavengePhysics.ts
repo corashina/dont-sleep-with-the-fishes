@@ -203,6 +203,8 @@ export class ScavengePhysics implements ScavengePhysicsController {
     rotation: { x: 0, y: 0, z: 0, w: 1 },
   };
   private readonly spawnWorld: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly zeroVelocity: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private recoveryCount = 0;
   private disposed = false;
 
   private readonly stepPhysics = (
@@ -227,10 +229,10 @@ export class ScavengePhysics implements ScavengePhysicsController {
     this.shipBody.setNextKinematicRotation(this.currentShipPose.rotation);
     this.world.timestep = stepSeconds;
     this.world.step();
-    this.validateAndCopyBarrel();
   };
 
   constructor(runtime: PhysicsRuntime, config: ScavengePhysicsConfig) {
+    const configuredCuboids = config.colliders.map(collisionBoxToCuboid);
     this.safeBounds = config.safeBounds;
     this.deckY = config.deckY;
     copyVector(this.previousShipPose.translation, config.initialShipPose.translation);
@@ -257,8 +259,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
       { x: config.shipWidth / 2, y: DECK_THICKNESS / 2, z: config.shipLength / 2 },
       runtime,
     );
-    config.colliders.forEach((box) => {
-      const cuboid = collisionBoxToCuboid(box);
+    configuredCuboids.forEach((cuboid) => {
       this.addCuboid(cuboid.center, cuboid.halfExtents, runtime);
     });
     this.addContainmentBarriers(config.safeBounds, config.deckY, runtime);
@@ -284,9 +285,14 @@ export class ScavengePhysics implements ScavengePhysicsController {
     if (!active || this.disposed) return;
     copyVector(this.targetShipPose.translation, shipPose.translation);
     copyNormalizedQuaternion(this.targetShipPose.rotation, shipPose.rotation);
-    this.clock.advance(deltaSeconds, this.stepPhysics);
+    const stepCount = this.clock.advance(deltaSeconds, this.stepPhysics);
+    if (stepCount > 0) this.validateAndCopyBarrel();
     copyVector(this.previousShipPose.translation, this.targetShipPose.translation);
     copyNormalizedQuaternion(this.previousShipPose.rotation, this.targetShipPose.rotation);
+  }
+
+  get recoveryCountForTest(): number {
+    return this.recoveryCount;
   }
 
   setBarrelPoseForTest(pose: PhysicsPose): void {
@@ -353,8 +359,8 @@ export class ScavengePhysics implements ScavengePhysicsController {
   }
 
   private validateAndCopyBarrel(): void {
-    let translation = this.barrelBody.translation();
-    let rotation = this.barrelBody.rotation();
+    const translation = this.barrelBody.translation();
+    const rotation = this.barrelBody.rotation();
     let recover = !isFinitePose(translation, rotation);
     if (!recover) {
       worldToLocal(this.barrelLocalPositionForTest, translation, this.currentShipPose);
@@ -368,11 +374,13 @@ export class ScavengePhysics implements ScavengePhysicsController {
       localToWorld(this.spawnWorld, BARREL_SPAWN_LOCAL, this.currentShipPose);
       this.barrelBody.setTranslation(this.spawnWorld, true);
       this.barrelBody.setRotation(this.currentShipPose.rotation, true);
-      this.barrelBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      this.barrelBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-      translation = this.barrelBody.translation();
-      rotation = this.barrelBody.rotation();
+      this.barrelBody.setLinvel(this.zeroVelocity, true);
+      this.barrelBody.setAngvel(this.zeroVelocity, true);
+      this.recoveryCount += 1;
       copyVector(this.barrelLocalPositionForTest, BARREL_SPAWN_LOCAL);
+      copyVector(this.barrelPose.translation, this.spawnWorld);
+      copyNormalizedQuaternion(this.barrelPose.rotation, this.currentShipPose.rotation);
+      return;
     }
     copyVector(this.barrelPose.translation, translation);
     copyNormalizedQuaternion(this.barrelPose.rotation, rotation);

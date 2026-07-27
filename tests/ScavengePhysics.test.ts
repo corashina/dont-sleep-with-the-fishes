@@ -40,6 +40,23 @@ describe('ScavengePhysics', () => {
     })).toThrow('Physics collider must have finite positive extents');
   });
 
+  it('rejects invalid configured colliders before creating a world', () => {
+    const createWorld = vi.spyOn(runtime, 'createWorld');
+    expect(() => new ScavengePhysics(runtime, {
+      ...config(),
+      colliders: [{
+        minX: 1,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+        minZ: 0,
+        maxZ: 1,
+      }],
+    })).toThrow('Physics collider must have finite positive extents');
+    expect(createWorld).not.toHaveBeenCalled();
+    createWorld.mockRestore();
+  });
+
   it('rests on a stationary level deck repeatably', () => {
     const create = () => new ScavengePhysics(runtime, {
       colliders: [],
@@ -89,6 +106,29 @@ describe('ScavengePhysics', () => {
     createWorld.mockRestore();
   });
 
+  it('reads the Rapier pose once after all accepted substeps', () => {
+    const physics = new ScavengePhysics(runtime, config());
+    const internals = physics as unknown as {
+      barrelBody: {
+        translation(): { x: number; y: number; z: number };
+        rotation(): { x: number; y: number; z: number; w: number };
+      };
+      world: { step(): void };
+    };
+    const translation = vi.spyOn(internals.barrelBody, 'translation');
+    const rotation = vi.spyOn(internals.barrelBody, 'rotation');
+    const step = vi.spyOn(internals.world, 'step');
+    physics.update(identityPose(), 1 / 20, true);
+    expect(step).toHaveBeenCalledTimes(3);
+    expect(translation).toHaveBeenCalledOnce();
+    expect(rotation).toHaveBeenCalledOnce();
+    expect(translation.mock.invocationCallOrder[0]!)
+      .toBeGreaterThan(step.mock.invocationCallOrder[2]!);
+    expect(rotation.mock.invocationCallOrder[0]!)
+      .toBeGreaterThan(step.mock.invocationCallOrder[2]!);
+    physics.dispose();
+  });
+
   it.each([
     ['escaped', { translation: { x: 20, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
     ['non-finite', { translation: { x: Number.NaN, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
@@ -100,6 +140,7 @@ describe('ScavengePhysics', () => {
     expect(physics.barrelPose.translation.x).toBeCloseTo(6);
     expect(physics.barrelPose.translation.y).toBeCloseTo(2.795);
     expect(physics.barrelPose.translation.z).toBeCloseTo(-6);
+    expect(physics.recoveryCountForTest).toBe(1);
     const barrelBody = (physics as unknown as {
       barrelBody: {
         linvel(): { x: number; y: number; z: number };
@@ -118,6 +159,8 @@ describe('ScavengePhysics', () => {
     ['maxZ', { x: 0, y: 2.22 + 0.55, z: 12 - 0.54 }, { x: 0, y: 0, z: 8 }],
   ] as const)('contains the barrel at %s', (boundary, translation, velocity) => {
     const physics = new ScavengePhysics(runtime, config());
+    const recoveryCount = physics.recoveryCountForTest;
+    expect(recoveryCount).toBe(0);
     physics.setBarrelPoseForTest({
       translation,
       rotation: { x: 0, y: 0, z: 0, w: 1 },
@@ -131,6 +174,7 @@ describe('ScavengePhysics', () => {
       if (boundary === 'minZ') expect(local.z).toBeGreaterThanOrEqual(-12);
       if (boundary === 'maxZ') expect(local.z).toBeLessThanOrEqual(12);
     }
+    expect(physics.recoveryCountForTest).toBe(recoveryCount);
     physics.dispose();
   });
 });
