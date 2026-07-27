@@ -1,6 +1,5 @@
 import {
   Camera,
-  Color,
   PerspectiveCamera,
   Scene,
   Vector2,
@@ -11,7 +10,6 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
@@ -19,17 +17,11 @@ import {
   type ItemAmbientOcclusionMode,
 } from './ItemAmbientOcclusion';
 import { sceneHoverOutlineTargets } from './HoverOutline';
-import { PrintShader } from './PrintShader';
 import {
   DirectSceneRenderer,
   type SceneRenderer,
   type SceneVisualState,
 } from './SceneRenderer';
-import {
-  clampPostProcessingValue,
-  GLOBAL_POST_PROCESSING_PROFILE,
-  type PostProcessingProfile,
-} from './postProcessingProfiles';
 import type { VisualQuality } from './visualQuality';
 import {
   clampPostProcessingSetting,
@@ -37,22 +29,6 @@ import {
   type PostProcessingControlState,
   type PostProcessingNumericSetting,
 } from './postProcessingControls';
-
-type PrintUniforms = {
-  tDiffuse: { value: null };
-  uPixelRatio: { value: number };
-  uContrast: { value: number };
-  uSaturation: { value: number };
-  uHighlightCompression: { value: number };
-  uShadowLift: { value: number };
-  uShadowTint: { value: Color };
-  uShadowTintStrength: { value: number };
-  uHighlightTint: { value: Color };
-  uHighlightTintStrength: { value: number };
-  uPosterizationLevels: { value: number };
-  uHalftoneStrength: { value: number };
-  uHalftoneSizeCssPixels: { value: number };
-};
 
 type AmbientOcclusionFactory = (
   mode: ItemAmbientOcclusionMode,
@@ -71,7 +47,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       ambientOcclusionAvailable:
         !this.aoUnavailable && this.itemAmbientOcclusionPass !== null,
     }),
-    setGradeEnabled: (enabled: boolean) => this.setGradeEnabled(enabled),
     setAmbientOcclusionMode: (mode: ItemAmbientOcclusionMode) =>
       this.setAmbientOcclusionMode(mode),
     setNumeric: (setting: PostProcessingNumericSetting, value: number) =>
@@ -81,9 +56,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
   private readonly outlinePass: OutlinePass;
-  private readonly printPass: ShaderPass;
   private readonly outputPass: OutputPass;
-  private readonly uniforms: PrintUniforms;
   private readonly size: Vector2;
   private readonly maxTextureSize: number;
   private readonly controlState: PostProcessingControlState;
@@ -100,24 +73,14 @@ export class PostProcessingPipeline implements SceneRenderer {
     },
   ) {
     this.controlState = {
-      gradeEnabled: true,
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite',
-      contrast: GLOBAL_POST_PROCESSING_PROFILE.contrast,
-      saturation: GLOBAL_POST_PROCESSING_PROFILE.saturation,
-      highlightCompression: GLOBAL_POST_PROCESSING_PROFILE.highlightCompression,
-      shadowLift: GLOBAL_POST_PROCESSING_PROFILE.shadowLift,
-      shadowTintStrength: GLOBAL_POST_PROCESSING_PROFILE.shadowTintStrength,
-      highlightTintStrength: GLOBAL_POST_PROCESSING_PROFILE.highlightTintStrength,
-      posterizationLevels: GLOBAL_POST_PROCESSING_PROFILE.posterizationLevels,
-      halftoneStrength: GLOBAL_POST_PROCESSING_PROFILE.halftoneStrength,
       ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
       ambientOcclusionRadius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
     };
     let target: WebGLRenderTarget | undefined;
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
-    let printPass: ShaderPass | undefined;
     let outputPass: OutputPass | undefined;
     let itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null = null;
     try {
@@ -127,7 +90,7 @@ export class PostProcessingPipeline implements SceneRenderer {
         ? reportedMaxTextureSize : FALLBACK_MAX_TEXTURE_SIZE;
       renderer.getSize(this.size);
       target = new WebGLRenderTarget(Math.max(1, this.size.x), Math.max(1, this.size.y));
-      target.texture.name = 'illustrated-post-composer';
+      target.texture.name = 'ambient-occlusion-composer';
       target.samples = 0;
       composer = new EffectComposer(renderer, target);
       this.renderPass = new RenderPass(new Scene(), new Camera());
@@ -147,9 +110,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       outlinePass.edgeThickness = 4;
       outlinePass.edgeGlow = 0;
       outlinePass.downSampleRatio = 2;
-      printPass = new ShaderPass(PrintShader);
       outputPass = new OutputPass();
-      printPass.enabled = this.controlState.gradeEnabled;
 
       composer.addPass(this.renderPass);
       if (itemAmbientOcclusionPass !== null) {
@@ -166,21 +127,16 @@ export class PostProcessingPipeline implements SceneRenderer {
         }
       }
       composer.addPass(outlinePass);
-      composer.addPass(printPass);
       composer.addPass(outputPass);
 
       this.composer = composer;
       this.itemAmbientOcclusionPass = itemAmbientOcclusionPass;
       this.outlinePass = outlinePass;
-      this.printPass = printPass;
       this.outputPass = outputPass;
-      this.uniforms = printPass.uniforms as PrintUniforms;
-      this.applyProfile(GLOBAL_POST_PROCESSING_PROFILE);
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
       itemAmbientOcclusionPass?.dispose();
       outlinePass?.dispose();
-      printPass?.dispose();
       outputPass?.dispose();
       if (composer === undefined) target?.dispose();
       else composer.dispose();
@@ -235,7 +191,6 @@ export class PostProcessingPipeline implements SceneRenderer {
         this.composer.passes.splice(1, 0, activeAmbientOcclusionPass);
       }
     }
-    this.uniforms.uPixelRatio.value = pixelRatio;
   }
 
   setVisualQuality(value: VisualQuality): void {
@@ -255,15 +210,8 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.disposed = true;
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
-    this.printPass.dispose();
     this.outputPass.dispose();
     this.composer.dispose();
-  }
-
-  private setGradeEnabled(enabled: boolean): void {
-    if (this.disposed) return;
-    this.controlState.gradeEnabled = enabled;
-    this.printPass.enabled = enabled;
   }
 
   private setAmbientOcclusionMode(mode: ItemAmbientOcclusionMode): void {
@@ -280,30 +228,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     const clamped = clampPostProcessingSetting(setting, value);
     this.controlState[setting] = clamped;
     switch (setting) {
-      case 'contrast':
-        this.uniforms.uContrast.value = clamped;
-        break;
-      case 'saturation':
-        this.uniforms.uSaturation.value = clamped;
-        break;
-      case 'highlightCompression':
-        this.uniforms.uHighlightCompression.value = clamped;
-        break;
-      case 'shadowLift':
-        this.uniforms.uShadowLift.value = clamped;
-        break;
-      case 'shadowTintStrength':
-        this.uniforms.uShadowTintStrength.value = clamped;
-        break;
-      case 'highlightTintStrength':
-        this.uniforms.uHighlightTintStrength.value = clamped;
-        break;
-      case 'posterizationLevels':
-        this.uniforms.uPosterizationLevels.value = clamped;
-        break;
-      case 'halftoneStrength':
-        this.uniforms.uHalftoneStrength.value = clamped;
-        break;
       case 'ambientOcclusionIntensity':
         if (!this.aoUnavailable) {
           this.itemAmbientOcclusionPass?.setIntensity(clamped);
@@ -329,34 +253,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.reportFallback(error);
   }
 
-  private applyProfile(profile: Readonly<PostProcessingProfile>): void {
-    this.setNumeric('contrast', profile.contrast);
-    this.setNumeric('saturation', profile.saturation);
-    this.setNumeric('highlightCompression', profile.highlightCompression);
-    this.setNumeric('shadowLift', profile.shadowLift);
-    this.uniforms.uShadowTint.value.setHex(clampPostProcessingValue(
-      profile.shadowTint,
-      0,
-      0xffffff,
-      0x123039,
-    ));
-    this.setNumeric('shadowTintStrength', profile.shadowTintStrength);
-    this.uniforms.uHighlightTint.value.setHex(clampPostProcessingValue(
-      profile.highlightTint,
-      0,
-      0xffffff,
-      0xd8aa6d,
-    ));
-    this.setNumeric('highlightTintStrength', profile.highlightTintStrength);
-    this.setNumeric('posterizationLevels', profile.posterizationLevels);
-    this.setNumeric('halftoneStrength', profile.halftoneStrength);
-    this.uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(
-      profile.halftoneSizeCssPixels,
-      3,
-      8,
-      5,
-    );
-  }
 }
 
 export function createSceneRenderer(

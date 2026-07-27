@@ -29,24 +29,20 @@ export class PostProcessingConsole {
         data-post-processing-toggle
         aria-expanded="false"
         aria-controls="${PANEL_ID}"
-      >POST FX <kbd>\`</kbd></button>
+      >AO <kbd>\`</kbd></button>
       <section
         id="${PANEL_ID}"
         class="post-processing-console__panel"
         data-post-processing-panel
-        aria-label="Post-processing console"
+        aria-label="Ambient occlusion console"
         hidden
       >
         <header>
-          <strong>POST FX CONSOLE</strong>
-          <button type="button" data-post-processing-close aria-label="Close post-processing console">×</button>
+          <strong>AMBIENT OCCLUSION</strong>
+          <button type="button" data-post-processing-close aria-label="Close ambient occlusion console">×</button>
         </header>
-        <label class="post-processing-console__switch">
-          <input type="checkbox" data-post-processing-grade>
-          <span>Color grade enabled</span>
-        </label>
         <label class="post-processing-console__select">
-          <span>Ambient occlusion</span>
+          <span>Display</span>
           <select data-post-processing-ao-mode>
             <option value="composite">COMPOSITE</option>
             <option value="debug">DEBUG BUFFER</option>
@@ -58,9 +54,7 @@ export class PostProcessingConsole {
     `;
     this.panel = this.requireElement('[data-post-processing-panel]');
     this.toggleButton = this.requireElement('[data-post-processing-toggle]');
-    const grade = this.requireElement<HTMLInputElement>('[data-post-processing-grade]');
     const aoMode = this.requireElement<HTMLSelectElement>('[data-post-processing-ao-mode]');
-    grade.checked = state.gradeEnabled;
     aoMode.value = state.ambientOcclusionMode;
     aoMode.disabled = !state.ambientOcclusionAvailable;
     this.buildSliders(state);
@@ -87,7 +81,6 @@ export class PostProcessingConsole {
     for (const definition of POST_PROCESSING_SLIDERS) {
       const label = document.createElement('label');
       label.className = 'post-processing-console__slider';
-      label.dataset.group = definition.group;
       const value = state[definition.key];
       label.innerHTML = `
         <span>${definition.label}</span>
@@ -101,10 +94,7 @@ export class PostProcessingConsole {
           data-post-processing-setting="${definition.key}"
         >
       `;
-      if (
-        definition.group === 'ambient-occlusion'
-        && !state.ambientOcclusionAvailable
-      ) {
+      if (!state.ambientOcclusionAvailable) {
         label.querySelector('input')!.disabled = true;
       }
       host.append(label);
@@ -132,10 +122,6 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
-    if (target instanceof HTMLInputElement && target.matches('[data-post-processing-grade]')) {
-      this.controls.setGradeEnabled(target.checked);
-      return;
-    }
     if (target instanceof HTMLSelectElement && target.matches('[data-post-processing-ao-mode]')) {
       const mode = target.value as ItemAmbientOcclusionMode;
       if (mode === 'composite' || mode === 'debug' || mode === 'off') {

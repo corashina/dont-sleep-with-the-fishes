@@ -10,7 +10,6 @@ import {
   PostProcessingPipeline,
   createSceneRenderer,
 } from '../src/rendering/PostProcessingPipeline';
-import { PrintShader } from '../src/rendering/PrintShader';
 import type { ItemAmbientOcclusionPass } from '../src/rendering/ItemAmbientOcclusion';
 
 type MockFunction = ReturnType<typeof vi.fn>;
@@ -32,8 +31,6 @@ interface PassLike {
 }
 
 interface PassMock {
-  uniforms?: Record<string, { value: unknown }>;
-  enabled?: boolean;
   dispose: MockFunction;
 }
 
@@ -62,7 +59,6 @@ const postProcessingMocks = vi.hoisted((): {
     setSize: MockFunction;
     dispose: MockFunction;
   }>;
-  printPasses: PassMock[];
   outputPasses: PassMock[];
   aoSizeFailure: Error | null;
   aoConstructionModes: string[];
@@ -70,7 +66,6 @@ const postProcessingMocks = vi.hoisted((): {
   composers: [],
   aoPasses: [],
   outlinePasses: [],
-  printPasses: [],
   outputPasses: [],
   aoSizeFailure: null,
   aoConstructionModes: [],
@@ -159,22 +154,6 @@ vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
   },
 }));
 
-vi.mock('three/addons/postprocessing/ShaderPass.js', () => ({
-  ShaderPass: class {
-    readonly uniforms: Record<string, { value: unknown }>;
-    readonly dispose = vi.fn();
-    constructor(shader: typeof PrintShader) {
-      this.uniforms = Object.fromEntries(Object.entries(shader.uniforms).map(([name, uniform]) => {
-        const value: unknown = uniform.value;
-        const clone = typeof value === 'object' && value !== null && 'clone' in value
-          ? value.clone : null;
-        return [name, { value: typeof clone === 'function' ? clone.call(value) : value }];
-      }));
-      postProcessingMocks.printPasses.push(this);
-    }
-  },
-}));
-
 vi.mock('three/addons/postprocessing/OutputPass.js', () => ({
   OutputPass: class {
     readonly dispose = vi.fn();
@@ -196,7 +175,6 @@ describe('post-processing pipeline', () => {
     postProcessingMocks.composers.length = 0;
     postProcessingMocks.aoPasses.length = 0;
     postProcessingMocks.outlinePasses.length = 0;
-    postProcessingMocks.printPasses.length = 0;
     postProcessingMocks.outputPasses.length = 0;
     postProcessingMocks.aoSizeFailure = null;
     postProcessingMocks.aoConstructionModes.length = 0;
@@ -210,7 +188,7 @@ describe('post-processing pipeline', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     const composer = postProcessingMocks.composers[0]!;
     expect(composer.addPass.mock.calls.map(([pass]) => pass.constructor.name)).toEqual([
-      'RenderPass', 'ItemAmbientOcclusionPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+      'RenderPass', 'ItemAmbientOcclusionPass', 'OutlinePass', 'OutputPass',
     ]);
     const scene = new Scene();
     const camera = new PerspectiveCamera();
@@ -223,100 +201,29 @@ describe('post-processing pipeline', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     pipeline.setVisualQuality('high');
     expect(postProcessingMocks.aoPasses[0]?.setVisualQuality).toHaveBeenCalledWith('high');
-    expect(postProcessingMocks.printPasses).toHaveLength(1);
     expect(postProcessingMocks.composers).toHaveLength(1);
   });
 
-  it('samples scene color once and omits chromatic aberration', () => {
-    expect(PrintShader.fragmentShader.match(/texture2D\(tDiffuse/g)).toHaveLength(1);
-    expect(PrintShader.fragmentShader).not.toContain('uChromaticAberration');
-  });
-
-  it('enforces the posterization floor in the shader before quantizing color', () => {
-    expect(PrintShader.fragmentShader).toContain(
-      'float levels = max(32.0, uPosterizationLevels);',
-    );
-    expect(PrintShader.fragmentShader).toContain(
-      'color = floor(color * levels + 0.5) / levels;',
-    );
-  });
-
-  it('removes grain and vignette from the print shader', () => {
-    expect(PrintShader.uniforms).not.toHaveProperty('uGrainStrength');
-    expect(PrintShader.uniforms).not.toHaveProperty('uGrainTime');
-    expect(PrintShader.uniforms).not.toHaveProperty('uVignetteStrength');
-    expect(PrintShader.fragmentShader).not.toContain('grain');
-    expect(PrintShader.fragmentShader).not.toContain('vignette');
-  });
-
-  it('opens shadows without adding white to absolute black', () => {
-    expect(PrintShader.fragmentShader).toContain(
-      'vec3 openedShadows = sqrt(max(color, vec3(0.0)));',
-    );
-    expect(PrintShader.fragmentShader).not.toContain(
-      'color += vec3(uShadowLift * liftWeight);',
-    );
-  });
-
-  it('passes one global grade to the shader regardless of scene state', () => {
-    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
-    pipeline.render(new Scene(), new PerspectiveCamera(), {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
-    });
-    const uniforms = postProcessingMocks.printPasses[0]!.uniforms!;
-    const scavengeGrade = {
-      contrast: uniforms.uContrast?.value,
-      saturation: uniforms.uSaturation?.value,
-      posterization: uniforms.uPosterizationLevels?.value,
-      shadowLift: uniforms.uShadowLift?.value,
-    };
-
-    pipeline.render(new Scene(), new PerspectiveCamera(), {
-      kind: 'survival',
-      elapsedSeconds: 60,
-      phase: 'night',
-      weather: 'squall',
-    });
-    expect({
-      contrast: uniforms.uContrast?.value,
-      saturation: uniforms.uSaturation?.value,
-      posterization: uniforms.uPosterizationLevels?.value,
-      shadowLift: uniforms.uShadowLift?.value,
-    }).toEqual(scavengeGrade);
-    expect(scavengeGrade).toEqual({
-      contrast: 1.08,
-      saturation: 1.1,
-      posterization: 48,
-      shadowLift: 0.12,
-    });
-  });
-
-  it('exposes grade, AO mode, and numeric controls for the corner console', () => {
+  it('exposes only AO mode and numeric controls for the corner console', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     const controls = pipeline.postProcessingControls;
 
-    controls.setGradeEnabled(false);
     controls.setAmbientOcclusionMode('debug');
-    controls.setNumeric('contrast', 1.17);
     controls.setNumeric('ambientOcclusionIntensity', 0.4);
     controls.setNumeric('ambientOcclusionRadius', 0.18);
 
-    expect(postProcessingMocks.printPasses[0]?.enabled).toBe(false);
     expect(postProcessingMocks.aoPasses[0]?.setMode).toHaveBeenCalledWith('debug');
-    expect(postProcessingMocks.printPasses[0]?.uniforms?.uContrast?.value).toBe(1.17);
     expect(postProcessingMocks.aoPasses[0]?.setIntensity).toHaveBeenCalledWith(0.4);
     expect(postProcessingMocks.aoPasses[0]?.setRadius).toHaveBeenCalledWith(0.18);
     expect(controls.getState()).toMatchObject({
-      gradeEnabled: false,
       ambientOcclusionMode: 'debug',
-      contrast: 1.17,
       ambientOcclusionIntensity: 0.4,
       ambientOcclusionRadius: 0.18,
     });
     pipeline.dispose();
   });
 
-  it('does not use URL parameters to disable grade or AO', () => {
+  it('does not use URL parameters to disable AO', () => {
     const keyboardTarget = Object.assign(new EventTarget(), {
       location: { search: '?ao=off&grade=off' },
     });
@@ -325,16 +232,15 @@ describe('post-processing pipeline', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
 
     expect(postProcessingMocks.aoConstructionModes).toEqual(['composite']);
-    expect(postProcessingMocks.printPasses[0]?.enabled).toBe(true);
     pipeline.dispose();
   });
 
-  it('keeps grade and outline when AO construction fails', () => {
+  it('keeps outline rendering when AO construction fails', () => {
     const failure = new Error('ao unavailable');
     const reportAoFallback = vi.fn();
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => { throw failure; }, reportAoFallback);
     expect(reportAoFallback).toHaveBeenCalledWith(failure);
-    expect(postProcessingMocks.composers[0]?.addPass).toHaveBeenCalledTimes(4);
+    expect(postProcessingMocks.composers[0]?.addPass).toHaveBeenCalledTimes(3);
     pipeline.dispose();
   });
 
@@ -353,7 +259,7 @@ describe('post-processing pipeline', () => {
 
     expect(reportAoFallback).toHaveBeenCalledWith(failure);
     expect(composer.passes.map((pass) => pass.constructor.name)).toEqual([
-      'RenderPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+      'RenderPass', 'OutlinePass', 'OutputPass',
     ]);
     expect(postProcessingMocks.aoPasses[0]?.dispose).toHaveBeenCalledOnce();
     expect(() => pipeline.render(
@@ -382,7 +288,7 @@ describe('post-processing pipeline', () => {
 
     expect(reportAoFallback).toHaveBeenCalledWith(failure);
     expect(composer.passes.map((pass) => pass.constructor.name)).toEqual([
-      'RenderPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+      'RenderPass', 'OutlinePass', 'OutputPass',
     ]);
     expect(postProcessingMocks.outlinePasses[0]?.setSize)
       .toHaveBeenLastCalledWith(640, 360);
@@ -477,18 +383,11 @@ describe('post-processing pipeline', () => {
   it('uses a standard 8-bit composer target and disposes it once', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     const composer = postProcessingMocks.composers[0]!;
-    expect(composer.target.texture.name).toBe('illustrated-post-composer');
+    expect(composer.target.texture.name).toBe('ambient-occlusion-composer');
     expect(composer.target.samples).toBe(0);
     pipeline.dispose();
     pipeline.dispose();
     expect(composer.target.dispose).toHaveBeenCalledOnce();
   });
 
-  it('has no pixelated edge mask or edge-weighted halftone', () => {
-    expect(PrintShader.uniforms).not.toHaveProperty('tInkFrame');
-    expect(PrintShader.uniforms).not.toHaveProperty('uInkFrameStrength');
-    expect(PrintShader.fragmentShader).not.toContain('frameInk');
-    expect(PrintShader.fragmentShader).not.toContain('edgeDistance');
-    expect(PrintShader.fragmentShader).not.toContain('centerRelief');
-  });
 });
