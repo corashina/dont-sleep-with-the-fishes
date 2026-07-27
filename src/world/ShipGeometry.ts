@@ -20,6 +20,7 @@ import {
   SHIP_LAYOUT,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
+  deckHatchRect,
 } from './ShipLayout';
 import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
@@ -56,8 +57,9 @@ const HULL_BOTTOM_TAPER = { widthScale: 0.72, lengthScale: 0.95 } as const;
 const DECK_THICKNESS = 0.28;
 const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
-const UPPER_HULL_HEIGHT = STRUCTURAL_DECK_TOP_Y - HULL_TOP_Y;
+const UPPER_HULL_HEIGHT = 0.9;
 const WATERLINE_HEIGHT = 0.14;
+const WATERLINE_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_HEIGHT + 0.03;
 const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WINDOW_SILL_HEIGHT = 0.82;
@@ -775,13 +777,15 @@ function addFocalSuperstructureDetails(
   const deckY = FREIGHTER_DIMENSIONS.deckY;
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
   const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
+  const renderedFrontWallCenterZ = wheelhouse.maxZ - WALL_HALF_THICKNESS;
+  const renderedFrontWallOuterFaceZ = renderedFrontWallCenterZ + WALL_HALF_THICKNESS;
   addBlock(root, geometries, [], {
     name: 'wheelhouse-front-sill-band',
     size: [wheelhouseWidth - 0.3, 0.09, 0.1],
     position: [
       (wheelhouse.minX + wheelhouse.maxX) / 2,
       deckY + WINDOW_SILL_HEIGHT + 0.045,
-      wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.05,
+      renderedFrontWallOuterFaceZ + 0.05,
     ],
     material: materials.darkMetal,
   });
@@ -795,7 +799,7 @@ function addFocalSuperstructureDetails(
       position: [
         x,
         deckY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT - 0.12,
-        wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.08,
+        renderedFrontWallOuterFaceZ + 0.08,
       ],
       material: materials.darkMetal,
     });
@@ -807,7 +811,7 @@ function addFocalSuperstructureDetails(
       position: [
         wheelhouse.minX + 0.35 + (wheelhouseWidth - 0.7) * (index / 4),
         deckY + WINDOW_SILL_HEIGHT + 0.12,
-        wheelhouse.maxZ + WALL_HALF_THICKNESS + 0.0175,
+        renderedFrontWallOuterFaceZ + 0.0175,
       ],
       material: materials.exposedMetal,
     });
@@ -854,19 +858,40 @@ function addExteriorConstructionDetails(
     material: materials.waterline,
   });
 
-  addBlock(root, geometries, shellColliders, {
-    name: 'deck-hatch',
-    size: [1.45, 0.18, 1.8],
-    position: [3.8, FINISHED_FLOOR_Y + 0.09, -7],
+  const hatch = layout.deckHatch;
+  const hatchBounds = deckHatchRect(hatch);
+  addRotatedBlock(root, geometries, shellColliders, {
+    name: hatch.id,
+    size: hatch.size,
+    position: [
+      hatch.position[0],
+      hatch.position[1] + hatch.size[1] / 2,
+      hatch.position[2],
+    ],
     material: materials.darkMetal,
-    collider: true,
+  }, hatch.rotationY);
+  shellColliders.push({
+    minX: hatchBounds.minX,
+    maxX: hatchBounds.maxX,
+    minY: hatch.position[1],
+    maxY: hatch.position[1] + hatch.colliderSize[1],
+    minZ: hatchBounds.minZ,
+    maxZ: hatchBounds.maxZ,
   });
-  addBlock(root, geometries, shellColliders, {
+  addRotatedBlock(root, geometries, shellColliders, {
     name: 'deck-hatch-timber-panel',
-    size: [1.18, 0.04, 1.5],
-    position: [3.8, FINISHED_FLOOR_Y + 0.2, -7],
+    size: [
+      Math.max(0.1, hatch.size[0] - 0.27),
+      0.04,
+      Math.max(0.1, hatch.size[2] - 0.3),
+    ],
+    position: [
+      hatch.position[0],
+      hatch.position[1] + hatch.size[1] + 0.02,
+      hatch.position[2],
+    ],
     material: materials.plainTimber,
-  });
+  }, hatch.rotationY);
 
   const hawseGeometry = new RingGeometry(0.24, 0.38, 16);
   geometries.add(hawseGeometry);
@@ -1126,8 +1151,8 @@ export function createShipGeometry(
     geometries,
     shellColliders,
     'upper-hull',
-    FREIGHTER_DIMENSIONS.width,
-    FREIGHTER_DIMENSIONS.length,
+    FREIGHTER_DIMENSIONS.width + 0.04,
+    FREIGHTER_DIMENSIONS.length + 0.04,
     UPPER_HULL_HEIGHT,
     STRUCTURAL_DECK_TOP_Y,
     materials.upperHull,
@@ -1141,7 +1166,7 @@ export function createShipGeometry(
     FREIGHTER_DIMENSIONS.width + 0.08,
     FREIGHTER_DIMENSIONS.length + 0.08,
     WATERLINE_HEIGHT,
-    HULL_TOP_Y + WATERLINE_HEIGHT / 2,
+    WATERLINE_TOP_Y,
     materials.waterline,
     false,
   );

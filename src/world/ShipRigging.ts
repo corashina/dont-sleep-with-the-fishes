@@ -1,9 +1,11 @@
 import {
+  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
   Mesh,
+  Vector3,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
 import {
@@ -24,17 +26,149 @@ export interface ShipRiggingBuild {
 function createSailGeometry(spec: ShipSailSpec): BufferGeometry {
   const zMid = spec.clewZ * 0.5;
   const yMid = spec.footY + (spec.topY - spec.footY) * 0.48;
+  const leechY = spec.footY + (spec.topY - spec.footY) * 0.55;
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute([
     0, spec.topY, 0,
     0, spec.footY, 0,
     spec.billow, yMid, zMid,
+    spec.billow * 0.42, leechY, spec.clewZ * 0.78,
     0, spec.footY, spec.clewZ,
   ], 3));
-  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.setIndex([0, 1, 2, 0, 2, 3, 1, 4, 2, 2, 4, 3]);
   geometry.computeVertexNormals();
   geometry.name = `sail-geometry:${spec.id}`;
   return geometry;
+}
+
+function addRodBetween(
+  root: Group | Mesh,
+  geometry: CylinderGeometry,
+  material: ShipMaterials['rope'],
+  name: string,
+  start: readonly [number, number, number],
+  end: readonly [number, number, number],
+  radius: number,
+): Mesh {
+  const startPoint = new Vector3(...start);
+  const endPoint = new Vector3(...end);
+  const direction = endPoint.clone().sub(startPoint);
+  const length = direction.length();
+  const part = new Mesh(geometry, material);
+  part.name = name;
+  part.position.copy(startPoint).add(endPoint).multiplyScalar(0.5);
+  part.scale.set(radius, length, radius);
+  part.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
+  part.castShadow = true;
+  part.receiveShadow = true;
+  root.add(part);
+  return part;
+}
+
+function addAttachmentBlock(
+  root: Group,
+  geometry: BoxGeometry,
+  materials: ShipMaterials,
+  mastSpec: ShipMastSpec,
+  side: 'port' | 'starboard',
+  x: number,
+): void {
+  const block = new Mesh(geometry, materials.exposedMetal);
+  block.name = `shroud-attachment:${mastSpec.id}:${side}`;
+  block.position.set(x, 0.1, 0);
+  block.scale.set(0.34, 0.2, 0.42);
+  block.castShadow = true;
+  block.receiveShadow = true;
+  root.add(block);
+}
+
+function createCornerPatchGeometry(
+  spec: ShipSailSpec,
+  corner: 'tack' | 'clew',
+): BufferGeometry {
+  const height = spec.topY - spec.footY;
+  const edgeOffset = 0.016;
+  const geometry = new BufferGeometry();
+  const positions = corner === 'tack'
+    ? [
+        edgeOffset, spec.footY, 0,
+        edgeOffset, spec.footY + height * 0.16, 0,
+        edgeOffset, spec.footY, spec.clewZ * 0.14,
+      ]
+    : [
+        edgeOffset, spec.footY, spec.clewZ,
+        edgeOffset, spec.footY, spec.clewZ * 0.82,
+        spec.billow * 0.12 + edgeOffset, spec.footY + height * 0.14, spec.clewZ * 0.88,
+      ];
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex([0, 1, 2]);
+  geometry.computeVertexNormals();
+  geometry.name = `sail-corner-patch-geometry:${spec.id}:${corner}`;
+  return geometry;
+}
+
+function addSailEdgeDetails(
+  root: Mesh,
+  cylinder: CylinderGeometry,
+  materials: ShipMaterials,
+  sailSpec: ShipSailSpec,
+  ownedGeometries: Set<BufferGeometry>,
+): void {
+  const height = sailSpec.topY - sailSpec.footY;
+  const top: readonly [number, number, number] = [0, sailSpec.topY, 0];
+  const tack: readonly [number, number, number] = [0, sailSpec.footY, 0];
+  const shoulder: readonly [number, number, number] = [
+    sailSpec.billow * 0.42,
+    sailSpec.footY + height * 0.55,
+    sailSpec.clewZ * 0.78,
+  ];
+  const clew: readonly [number, number, number] = [0, sailSpec.footY, sailSpec.clewZ];
+  ([
+    ['luff', top, tack],
+    ['foot', tack, clew],
+    ['leech-1', top, shoulder],
+    ['leech-2', shoulder, clew],
+  ] as const).forEach(([name, start, end]) => addRodBetween(
+    root,
+    cylinder,
+    materials.canvasEdge,
+    `sail-hem:${sailSpec.id}:${name}`,
+    start,
+    end,
+    0.018,
+  ));
+
+  ([0.34, 0.66] as const).forEach((fraction, index) => {
+    const seamStart: readonly [number, number, number] = [
+      0.01,
+      sailSpec.footY + height * fraction,
+      0,
+    ];
+    const seamEnd: readonly [number, number, number] = [
+      sailSpec.billow * (0.65 - fraction * 0.25),
+      sailSpec.footY + height * fraction,
+      sailSpec.clewZ * (0.78 - fraction * 0.3),
+    ];
+    addRodBetween(
+      root,
+      cylinder,
+      materials.canvasEdge,
+      `sail-panel-seam:${sailSpec.id}:${index + 1}`,
+      seamStart,
+      seamEnd,
+      0.011,
+    );
+  });
+
+  (['tack', 'clew'] as const).forEach((corner) => {
+    const patchGeometry = createCornerPatchGeometry(sailSpec, corner);
+    ownedGeometries.add(patchGeometry);
+    const patch = new Mesh(patchGeometry, materials.canvasEdge);
+    patch.name = `sail-corner-patch:${sailSpec.id}:${corner}`;
+    patch.castShadow = true;
+    patch.receiveShadow = true;
+    root.add(patch);
+  });
 }
 
 function addCylinder(
@@ -98,7 +232,8 @@ export function createShipRigging(
   const root = new Group();
   root.name = 'ship-rigging';
   const cylinder = new CylinderGeometry(0.5, 0.5, 1, 12);
-  const ownedGeometries = new Set<BufferGeometry>([cylinder]);
+  const attachmentBox = new BoxGeometry(1, 1, 1);
+  const ownedGeometries = new Set<BufferGeometry>([cylinder, attachmentBox]);
   const colliders: CollisionBox[] = [];
   const sails: Mesh[] = [];
   const neutralRotations: number[] = [];
@@ -127,6 +262,21 @@ export function createShipRigging(
     );
     addStay(mast, cylinder, materials, mastSpec, 'fore', mastSpec.foreStayAnchorZ);
     addStay(mast, cylinder, materials, mastSpec, 'aft', mastSpec.aftStayAnchorZ);
+    ([
+      ['port', -mastSpec.shroudAnchorX],
+      ['starboard', mastSpec.shroudAnchorX],
+    ] as const).forEach(([side, anchorX]) => {
+      addRodBetween(
+        mast,
+        cylinder,
+        materials.rope,
+        `shroud:${mastSpec.id}:${side}`,
+        [0, mastSpec.height * 0.72, 0],
+        [anchorX, 0.2, 0],
+        0.032,
+      );
+      addAttachmentBlock(mast, attachmentBox, materials, mastSpec, side, anchorX);
+    });
 
     const boomSail = mastSpec.sails.find(({ kind }) => kind === 'boom');
     if (boomSail) {
@@ -149,6 +299,7 @@ export function createShipRigging(
       sail.castShadow = true;
       sail.receiveShadow = true;
       mast.add(sail);
+      addSailEdgeDetails(sail, cylinder, materials, sailSpec, ownedGeometries);
 
       addCylinder(
         mast,

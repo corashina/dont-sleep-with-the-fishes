@@ -86,6 +86,14 @@ export interface ShipDeckDetailSpec {
   readonly colliderSize?: readonly [number, number, number];
 }
 
+export interface ShipDeckHatchSpec {
+  readonly id: 'deck-hatch';
+  readonly position: readonly [number, number, number];
+  readonly rotationY: number;
+  readonly size: readonly [number, number, number];
+  readonly colliderSize: readonly [number, number, number];
+}
+
 export type ShipSailId = 'mainsail' | 'staysail';
 
 export interface ShipSailSpec {
@@ -105,6 +113,7 @@ export interface ShipMastSpec {
   readonly boomLength: number;
   readonly foreStayAnchorZ: number;
   readonly aftStayAnchorZ: number;
+  readonly shroudAnchorX: number;
   readonly sails: readonly ShipSailSpec[];
 }
 
@@ -145,6 +154,7 @@ export interface ShipLayoutSpec {
   readonly lanes: readonly ShipLaneSpec[];
   readonly furniture: readonly ShipFurniturePlacementSpec[];
   readonly details: readonly ShipDeckDetailSpec[];
+  readonly deckHatch: ShipDeckHatchSpec;
   readonly rigging: ShipRiggingSpec;
   readonly targets: readonly ShipNavigationTargetSpec[];
   readonly rail: {
@@ -668,6 +678,13 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   ],
   furniture,
   details,
+  deckHatch: {
+    id: 'deck-hatch',
+    position: [3.8, FREIGHTER_DIMENSIONS.deckY, -7],
+    rotationY: 0,
+    size: [1.45, 0.18, 1.8],
+    colliderSize: [1.45, 0.18, 1.8],
+  },
   rigging: { masts: [{
     id: 'mainmast',
     position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
@@ -676,6 +693,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
     boomLength: 7.5,
     foreStayAnchorZ: 6.2,
     aftStayAnchorZ: -8,
+    shroudAnchorX: 3.4,
     sails: [
       { id: 'mainsail', kind: 'boom', topY: 10.8, footY: 5.35, clewZ: -7.5, billow: 0.32 },
       { id: 'staysail', kind: 'stay', topY: 10.2, footY: 5.35, clewZ: 5.5, billow: 0.22 },
@@ -744,6 +762,19 @@ export function detailRect(spec: ShipDeckDetailSpec): Rect2 {
 
 export function detailVisualRect(spec: ShipDeckDetailSpec): Rect2 {
   return detailFootprintRect(spec, spec.visualSize[0], spec.visualSize[1]);
+}
+
+export function deckHatchRect(spec: ShipDeckHatchSpec): Rect2 {
+  const cosine = Math.abs(Math.cos(spec.rotationY));
+  const sine = Math.abs(Math.sin(spec.rotationY));
+  const width = spec.colliderSize[0] * cosine + spec.colliderSize[2] * sine;
+  const depth = spec.colliderSize[0] * sine + spec.colliderSize[2] * cosine;
+  return rect(
+    spec.position[0] - width / 2,
+    spec.position[0] + width / 2,
+    spec.position[2] - depth / 2,
+    spec.position[2] + depth / 2,
+  );
 }
 
 function rectangleGap(left: Rect2, right: Rect2): number {
@@ -899,6 +930,7 @@ function activeObstacles(layout: ShipLayoutSpec): Rect2[] {
     ...wallRectangles(layout),
     ...layout.furniture.map(furnitureRect),
     ...layout.details.filter(({ colliderSize }) => colliderSize).map(detailRect),
+    deckHatchRect(layout.deckHatch),
     ...layout.rigging.masts.map(mastRect),
     layout.machineryClosure,
     rect(-innerX - RAIL_THICKNESS, -innerX, hullBounds.minZ, hullBounds.maxZ),
@@ -1021,6 +1053,12 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       throw new Error(`Zone ${zone.id} has an invalid furniture policy`);
     }
   });
+  const crewCabin = layout.zones.find(({ id }) => id === 'crewCabin');
+  const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse');
+  if (!crewCabin || !wheelhouse
+    || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
+    throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
+  }
   layout.doors.forEach((door) => {
     if (!finiteTuple(door.center) || !validRect(door.approach)) {
       throw new Error(`Door ${door.id} must use finite rectangle coordinates`);
@@ -1105,12 +1143,24 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     }
     return [{ id: spec.id, bounds }];
   });
+  const hatch = layout.deckHatch;
+  if (hatch.id !== 'deck-hatch' || !finiteTuple(hatch.position)
+    || !Number.isFinite(hatch.rotationY) || hatch.size.some((value) => !positive(value))
+    || hatch.colliderSize.some((value) => !positive(value))) {
+    throw new Error('Deck hatch must have finite transforms and positive dimensions');
+  }
+  const hatchBounds = deckHatchRect(hatch);
+  if (!validRect(hatchBounds)
+    || rectCorners(hatchBounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
+    throw new Error('Deck hatch collider crosses the cargoDeck hull polygon');
+  }
   if (layout.rigging.masts.length !== 1 || layout.rigging.masts[0]?.id !== 'mainmast') {
     throw new Error('Layout must define exactly one mainmast');
   }
   const mastBounds = layout.rigging.masts.map((spec) => {
     if (!finiteTuple(spec.position) || !positive(spec.height) || !positive(spec.baseDiameter)
-      || !positive(spec.boomLength) || !Number.isFinite(spec.foreStayAnchorZ)
+      || !positive(spec.boomLength) || !positive(spec.shroudAnchorX)
+      || !Number.isFinite(spec.foreStayAnchorZ)
       || !Number.isFinite(spec.aftStayAnchorZ) || spec.foreStayAnchorZ === 0
       || spec.aftStayAnchorZ === 0 || spec.foreStayAnchorZ === spec.aftStayAnchorZ) {
       throw new Error(`Mast ${spec.id} has invalid dimensions or stay anchors`);
@@ -1122,6 +1172,10 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     }
     assertUnique(`sail on mast ${spec.id}`, spec.sails.map(({ id }) => id));
     spec.sails.forEach((sail) => {
+      const requiredKind = sail.id === 'mainsail' ? 'boom' : 'stay';
+      if (sail.kind !== requiredKind) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} must use ${requiredKind} rig kind`);
+      }
       if (!Number.isFinite(sail.topY) || !Number.isFinite(sail.footY)
         || !Number.isFinite(sail.clewZ) || !Number.isFinite(sail.billow)
         || sail.topY <= sail.footY || sail.clewZ === 0 || !positive(sail.billow)) {
@@ -1129,6 +1183,9 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
       if (sail.footY < SHIP_SAIL_CLOTH_MIN_Y) {
         throw new Error(`Mast ${spec.id} sail ${sail.id} violates cloth clearance`);
+      }
+      if (sail.topY > spec.height - SHIP_SAIL_TOP_OFFSET) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} exceeds mast height bounds`);
       }
     });
     const bounds = mastRect(spec);
@@ -1138,6 +1195,15 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     if (!pointInPolygon([0, spec.foreStayAnchorZ], cargoZone.polygon)
       || !pointInPolygon([0, spec.aftStayAnchorZ], cargoZone.polygon)) {
       throw new Error(`Mast ${spec.id} stay anchors must lie inside the cargoDeck hull polygon`);
+    }
+    if (!pointInPolygon(
+      [spec.position[0] - spec.shroudAnchorX, spec.position[2]],
+      cargoZone.polygon,
+    ) || !pointInPolygon(
+      [spec.position[0] + spec.shroudAnchorX, spec.position[2]],
+      cargoZone.polygon,
+    )) {
+      throw new Error(`Mast ${spec.id} shroud anchors must lie inside the cargoDeck hull polygon`);
     }
     return { id: spec.id, bounds };
   });
@@ -1244,7 +1310,11 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
     });
   });
-  const authoredObstacles = [...detailBounds, ...mastBounds];
+  const authoredObstacles = [
+    ...detailBounds,
+    { id: hatch.id, bounds: hatchBounds },
+    ...mastBounds,
+  ];
   authoredObstacles.forEach((obstacle, index) => {
     layout.lanes.filter(({ className }) => className === 'primary').forEach((lane) => {
       if (overlaps(obstacle.bounds, lane.bounds)) {
@@ -1267,6 +1337,13 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
         throw new Error(`${obstacle.id} overlaps ${furnitureObstacle.spec.id}`);
       }
     });
+    if (obstacle.id === hatch.id) {
+      accessBounds.forEach((access) => {
+        if (overlaps(obstacle.bounds, access.bounds)) {
+          throw new Error(`${obstacle.id} overlaps item access ${access.id}`);
+        }
+      });
+    }
     authoredObstacles.slice(index + 1).forEach((other) => {
       if (overlaps(obstacle.bounds, other.bounds)) {
         throw new Error(`${obstacle.id} overlaps ${other.id}`);

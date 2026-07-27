@@ -13,9 +13,40 @@ describe('ship rigging', () => {
       expect(rigging.root.getObjectByName('boom:mainmast')).toBeDefined();
       expect(rigging.root.getObjectByName('stay:mainmast:fore')).toBeDefined();
       expect(rigging.root.getObjectByName('stay:mainmast:aft')).toBeDefined();
+      expect(rigging.root.getObjectByName('shroud:mainmast:port')).toBeDefined();
+      expect(rigging.root.getObjectByName('shroud:mainmast:starboard')).toBeDefined();
+      expect(rigging.root.getObjectByName('shroud-attachment:mainmast:port')).toBeDefined();
+      expect(rigging.root.getObjectByName('shroud-attachment:mainmast:starboard')).toBeDefined();
       expect(rigging.root.getObjectByName('sail:mainsail')).toBeInstanceOf(Mesh);
       expect(rigging.root.getObjectByName('sail:staysail')).toBeInstanceOf(Mesh);
       expect(rigging.colliders).toHaveLength(1);
+    } finally {
+      rigging.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('adds canvas-edge hems, panel seams, and corner patches to each sail', () => {
+    const materials = createShipMaterials();
+    const rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
+    try {
+      for (const id of ['mainsail', 'staysail']) {
+        const sail = rigging.root.getObjectByName(`sail:${id}`) as Mesh;
+        expect(sail.geometry.getAttribute('position').count).toBeGreaterThanOrEqual(5);
+        ['luff', 'foot', 'leech-1', 'leech-2'].forEach((edge) => {
+          const hem = rigging.root.getObjectByName(`sail-hem:${id}:${edge}`) as Mesh;
+          expect(hem.material, `${id}:${edge}`).toBe(materials.canvasEdge);
+          expect(hem.parent, `${id}:${edge}:parent`).toBe(sail);
+        });
+        for (let index = 1; index <= 2; index += 1) {
+          const seam = rigging.root.getObjectByName(`sail-panel-seam:${id}:${index}`) as Mesh;
+          expect(seam.material, `${id}:seam-${index}`).toBe(materials.canvasEdge);
+        }
+        ['tack', 'clew'].forEach((corner) => {
+          const patch = rigging.root.getObjectByName(`sail-corner-patch:${id}:${corner}`) as Mesh;
+          expect(patch.material, `${id}:${corner}`).toBe(materials.canvasEdge);
+        });
+      }
     } finally {
       rigging.disposeGeometry();
       materials.dispose();
@@ -76,7 +107,8 @@ describe('ship rigging', () => {
     try {
       rigging.disposeGeometry();
       rigging.disposeGeometry();
-      expect([...disposeCounts.values()]).toEqual([1, 1, 1]);
+      expect(disposeCounts.size).toBeGreaterThan(3);
+      expect([...disposeCounts.values()].every((count) => count === 1)).toBe(true);
     } finally {
       rigging.disposeGeometry();
       materials.dispose();

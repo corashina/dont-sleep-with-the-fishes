@@ -43,6 +43,82 @@ describe('scavenging ship layout', () => {
     ).toBe(true);
   });
 
+  it('rejects a forward-room gap that is not exactly 3.5 metres', () => {
+    const changedGap = {
+      ...SHIP_LAYOUT,
+      zones: SHIP_LAYOUT.zones.map((zone) => zone.id === 'wheelhouse'
+        ? { ...zone, bounds: { ...zone.bounds, minZ: zone.bounds.minZ + 0.1 } }
+        : zone),
+    };
+
+    expect(() => validateShipLayout(changedGap)).toThrow(/room gap.*3\.5/i);
+  });
+
+  it.each([
+    ['mainsail', 'stay'],
+    ['staysail', 'boom'],
+  ] as const)('rejects the %s when paired with the wrong rig kind', (id, kind) => {
+    const mismatchedSail = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
+          ...mast,
+          sails: mast.sails.map((sail) => sail.id === id ? { ...sail, kind } : sail),
+        })),
+      },
+    };
+
+    expect(() => validateShipLayout(mismatchedSail)).toThrow(
+      new RegExp(`${id}.*${id === 'mainsail' ? 'boom' : 'stay'}`, 'i'),
+    );
+  });
+
+  it('rejects sail cloth above the authored mast-height bound', () => {
+    const overHeightSail = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
+          ...mast,
+          sails: mast.sails.map((sail) => sail.id === 'mainsail'
+            ? { ...sail, topY: mast.height }
+            : sail),
+        })),
+      },
+    };
+
+    expect(() => validateShipLayout(overHeightSail)).toThrow(/mainsail.*mast height/i);
+  });
+
+  it('owns the deck hatch transform and collision footprint in layout data', () => {
+    expect(SHIP_LAYOUT.deckHatch).toEqual({
+      id: 'deck-hatch',
+      position: [3.8, 2.22, -7],
+      rotationY: 0,
+      size: [1.45, 0.18, 1.8],
+      colliderSize: [1.45, 0.18, 1.8],
+    });
+  });
+
+  it('rejects a deck hatch that conflicts with a primary lane or item access', () => {
+    const laneConflict = {
+      ...SHIP_LAYOUT,
+      deckHatch: {
+        ...SHIP_LAYOUT.deckHatch,
+        position: [0, 2.22, -7] as const,
+      },
+    };
+    expect(() => validateShipLayout(laneConflict)).toThrow(/deck-hatch.*primary lane/i);
+
+    const accessConflict = {
+      ...SHIP_LAYOUT,
+      deckHatch: {
+        ...SHIP_LAYOUT.deckHatch,
+        position: [-5.1, 2.22, 0.9] as const,
+      },
+    };
+    expect(() => validateShipLayout(accessConflict)).toThrow(/deck-hatch.*item access/i);
+  });
+
   it('assigns deck detail colliders to every retained barrel', () => {
     expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
       barrel: 2,
