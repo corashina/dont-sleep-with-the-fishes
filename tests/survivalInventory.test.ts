@@ -28,6 +28,21 @@ describe('survival foundations', () => {
     ]);
   });
 
+  it('gains an absent item and reuses a consumed or lost stable slot', () => {
+    const inventory = new SurvivalInventoryState([]);
+    expect(inventory.gain('energyBar')).toBe('energyBar-1');
+    inventory.consume('energyBar');
+    expect(inventory.gain('energyBar')).toBe('energyBar-1');
+    expect(inventory.snapshot()['energyBar-1']?.condition).toBe('usable');
+  });
+
+  it('does not gain over a usable or broken item', () => {
+    const inventory = new SurvivalInventoryState(saved('bucket'));
+    expect(inventory.gain('bucket')).toBeNull();
+    inventory.break('bucket-1');
+    expect(inventory.gain('bucket')).toBeNull();
+  });
+
   it('consumes duplicate resources deterministically by instance number', () => {
     const inventory = new SurvivalInventoryState(saved('cannedFood', 'cannedFood', 'cannedFood'));
     expect(inventory.consume('cannedFood', 2)).toEqual(['cannedFood-1', 'cannedFood-2']);

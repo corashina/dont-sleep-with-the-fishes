@@ -96,7 +96,57 @@ function itemResponse(itemId: ItemId, number = 1): EventResponse {
   };
 }
 
+function itemlessEvent(
+  effects: SurvivalEventDefinition['choices'][number]['outcomes'][number]['effects'],
+): SurvivalEventDefinition {
+  return {
+    id: 'test-itemless-choice',
+    phase: 'night',
+    title: 'Itemless Choice',
+    revealText: 'Choose without an item.',
+    prompt: 'Choose.',
+    danger: 'uncertain',
+    cue: 'none',
+    weight: 1,
+    earliestDay: 1,
+    cooldownDays: 0,
+    choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{ weight: 1, message: 'Handled.', effects }] }],
+  };
+}
+
+function choiceResponse(choiceId: string): EventResponse {
+  return { kind: 'choice', choiceId };
+}
+
 describe('SurvivalSession daytime actions', () => {
+  it('resolves a named itemless event choice', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
+    (session as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
+      itemlessEvent({ resources: [{ resource: 'repairMaterial', operation: 'add', value: 1 }] });
+
+    expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({ accepted: true, code: 'event-resolved' });
+    expect(session.snapshot().repairMaterial).toBe(1);
+  });
+
+  it('gains an event item and falls back to food when its stable slot is occupied', () => {
+    const gained = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
+    (gained as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
+      itemlessEvent({
+        items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }],
+      });
+
+    expect(gained.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
+    expect(gained.snapshot().inventory['energyBar-1']?.condition).toBe('usable');
+
+    const fallback = new SurvivalSession(saved('energyBar'), { seed: 1, initialEventId: 'shower-night' });
+    (fallback as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
+      itemlessEvent({
+        items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }],
+      });
+
+    expect(fallback.resolveEvent(choiceResponse('sleep')).deltas).toEqual({ food: 1 });
+  });
+
   it('rejects a mismatched or stale exact instance without mutation or random draws', () => {
     const random = { next: vi.fn(() => 0) };
     const session = new SurvivalSession(saved('anchor', 'map'), {

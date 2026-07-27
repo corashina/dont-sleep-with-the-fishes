@@ -57,7 +57,7 @@ export type BeginFishingResult =
     };
 
 export type EventResource =
-  | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'rescueProgress';
+  | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'repairMaterial' | 'rescueProgress';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
   readonly resource: EventResource;
@@ -65,11 +65,8 @@ export interface ResourceEffect {
   readonly value: IntegerValue;
 }
 export type EventInventoryMutation =
-  | {
-    readonly kind: 'consume' | 'break' | 'lose';
-    readonly itemId: ItemId;
-    readonly quantity: number;
-  }
+  | { readonly kind: 'consume' | 'break' | 'lose'; readonly itemId: ItemId; readonly quantity: number }
+  | { readonly kind: 'gain'; readonly itemId: ItemId; readonly quantity: 1; readonly fallbackFood: 1 }
   | { readonly kind: 'breakRandom' | 'loseRandom'; readonly quantity: number }
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface WeightedEventOutcome {
@@ -88,6 +85,11 @@ export interface EventChoiceDefinition {
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
+export interface EventChoiceRequirement {
+  readonly resource: EventResource;
+  readonly minimum: number;
+}
+
 export type EventResponseId = string;
 export type EventResponse =
   | {
@@ -95,6 +97,7 @@ export type EventResponse =
       readonly choiceId: EventResponseId;
       readonly instanceId: ItemInstanceId;
     }
+  | { readonly kind: 'choice'; readonly choiceId: EventResponseId }
   | { readonly kind: 'endure' };
 
 export interface SurvivalEventDefinition {

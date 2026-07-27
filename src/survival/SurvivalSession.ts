@@ -316,6 +316,14 @@ export class SurvivalSession {
       return this.resolveEventChoice('sleep', null, null);
     }
 
+    if (response.kind === 'choice') {
+      const choice = this.pendingEvent.choices.find(({ id }) => id === response.choiceId);
+      if (choice?.itemId !== undefined) {
+        return this.reject('choice-unavailable', 'That response is not available for this event.');
+      }
+      return this.resolveEventChoice(response.choiceId, null, null);
+    }
+
     const item = this.inventory.snapshot()[response.instanceId];
     const choice = this.pendingEvent.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId === undefined) {
@@ -866,6 +874,13 @@ export class SurvivalSession {
       ? selectedInstanceId
       : null;
     switch (mutation.kind) {
+      case 'gain': {
+        kind = 'gain';
+        const gained = this.inventory.gain(mutation.itemId);
+        instanceIds = gained === null ? [] : [gained];
+        if (gained === null) this.applyDeltas({ food: mutation.fallbackFood });
+        break;
+      }
       case 'consume':
         kind = 'consume';
         instanceIds = this.inventory.consumePreferred(
