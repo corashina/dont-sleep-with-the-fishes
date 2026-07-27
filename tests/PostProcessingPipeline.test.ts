@@ -34,6 +34,7 @@ interface PassLike {
 
 interface PassMock {
   uniforms?: Record<string, { value: unknown }>;
+  enabled?: boolean;
   dispose: MockFunction;
 }
 
@@ -63,6 +64,7 @@ const postProcessingMocks = vi.hoisted((): {
   printPasses: PassMock[];
   outputPasses: PassMock[];
   aoSizeFailure: Error | null;
+  aoConstructionModes: string[];
 } => ({
   composers: [],
   aoPasses: [],
@@ -70,6 +72,7 @@ const postProcessingMocks = vi.hoisted((): {
   printPasses: [],
   outputPasses: [],
   aoSizeFailure: null,
+  aoConstructionModes: [],
 }));
 
 vi.mock('three/addons/postprocessing/EffectComposer.js', () => ({
@@ -133,7 +136,6 @@ vi.mock('three/addons/postprocessing/OutlinePass.js', () => ({
 }));
 
 vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
-  resolveItemAmbientOcclusionMode: () => 'composite',
   nextItemAmbientOcclusionMode: () => 'debug',
   ITEM_AMBIENT_OCCLUSION_HOTKEY: 'KeyO',
   ItemAmbientOcclusionPass: class {
@@ -147,7 +149,10 @@ vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
     });
     readonly setVisualQuality = vi.fn();
     readonly dispose = vi.fn();
-    constructor() { postProcessingMocks.aoPasses.push(this); }
+    constructor(mode: string) {
+      postProcessingMocks.aoConstructionModes.push(mode);
+      postProcessingMocks.aoPasses.push(this);
+    }
   },
 }));
 
@@ -191,6 +196,7 @@ describe('post-processing pipeline', () => {
     postProcessingMocks.printPasses.length = 0;
     postProcessingMocks.outputPasses.length = 0;
     postProcessingMocks.aoSizeFailure = null;
+    postProcessingMocks.aoConstructionModes.length = 0;
   });
 
   afterEach(() => {
@@ -232,14 +238,58 @@ describe('post-processing pipeline', () => {
     );
   });
 
-  it('passes the safe scavenge posterization and shadow-detail bounds to the shader', () => {
+  it('removes grain and vignette from the print shader', () => {
+    expect(PrintShader.uniforms).not.toHaveProperty('uGrainStrength');
+    expect(PrintShader.uniforms).not.toHaveProperty('uGrainTime');
+    expect(PrintShader.uniforms).not.toHaveProperty('uVignetteStrength');
+    expect(PrintShader.fragmentShader).not.toContain('grain');
+    expect(PrintShader.fragmentShader).not.toContain('vignette');
+  });
+
+  it('passes one global grade to the shader regardless of scene state', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     pipeline.render(new Scene(), new PerspectiveCamera(), {
       kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     });
     const uniforms = postProcessingMocks.printPasses[0]!.uniforms!;
-    expect(uniforms.uPosterizationLevels?.value).toBe(48);
-    expect(uniforms.uShadowLift?.value).toBe(0.02);
+    const scavengeGrade = {
+      contrast: uniforms.uContrast?.value,
+      saturation: uniforms.uSaturation?.value,
+      posterization: uniforms.uPosterizationLevels?.value,
+      shadowLift: uniforms.uShadowLift?.value,
+    };
+
+    pipeline.render(new Scene(), new PerspectiveCamera(), {
+      kind: 'survival',
+      elapsedSeconds: 60,
+      phase: 'night',
+      weather: 'squall',
+    });
+    expect({
+      contrast: uniforms.uContrast?.value,
+      saturation: uniforms.uSaturation?.value,
+      posterization: uniforms.uPosterizationLevels?.value,
+      shadowLift: uniforms.uShadowLift?.value,
+    }).toEqual(scavengeGrade);
+    expect(scavengeGrade).toEqual({
+      contrast: 1.12,
+      saturation: 1.1,
+      posterization: 48,
+      shadowLift: 0.02,
+    });
+  });
+
+  it('does not use URL parameters to disable grade or AO', () => {
+    const keyboardTarget = Object.assign(new EventTarget(), {
+      location: { search: '?ao=off&grade=off' },
+    });
+    vi.stubGlobal('window', keyboardTarget);
+
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+
+    expect(postProcessingMocks.aoConstructionModes).toEqual(['composite']);
+    expect(postProcessingMocks.printPasses[0]?.enabled).toBe(true);
+    pipeline.dispose();
   });
 
   it('keeps grade and outline when AO construction fails', () => {

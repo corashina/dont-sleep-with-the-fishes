@@ -38,12 +38,6 @@ export function nextItemAmbientOcclusionMode(
   return 'composite';
 }
 
-export function resolveItemAmbientOcclusionMode(search: string): ItemAmbientOcclusionMode {
-  const requested = new URLSearchParams(search).get('ao');
-  if (requested === 'debug' || requested === 'off') return requested;
-  return 'composite';
-}
-
 function hasTransparentMaterial(mesh: Mesh): boolean {
   if (Array.isArray(mesh.material)) {
     return mesh.material.some((material) => material.transparent);

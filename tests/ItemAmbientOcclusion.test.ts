@@ -14,7 +14,6 @@ import {
   ITEM_AMBIENT_OCCLUSION_LAYER,
   ItemAmbientOcclusionPass,
   nextItemAmbientOcclusionMode,
-  resolveItemAmbientOcclusionMode,
 } from '../src/rendering/ItemAmbientOcclusion';
 import type { ItemId } from '../src/game/ItemState';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
@@ -120,11 +119,6 @@ describe('item ambient occlusion', () => {
   });
 
   it('supports composite, raw-buffer, and disabled comparison modes', () => {
-    expect(resolveItemAmbientOcclusionMode('')).toBe('composite');
-    expect(resolveItemAmbientOcclusionMode('?ao=debug')).toBe('debug');
-    expect(resolveItemAmbientOcclusionMode('?ao=off')).toBe('off');
-    expect(resolveItemAmbientOcclusionMode('?ao=unknown')).toBe('composite');
-
     const pass = new ItemAmbientOcclusionPass('debug');
     expect(pass.enabled).toBe(true);
     expect(pass.output).toBe(ItemAmbientOcclusionPass.OUTPUT.AO);
