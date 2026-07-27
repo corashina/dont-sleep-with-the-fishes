@@ -1012,6 +1012,23 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(openingCoamings).toHaveLength(2);
       expect(openingRails).toHaveLength(2);
 
+      const railingParts = [...coamings, ...posts, ...topRails];
+      railingParts.forEach((leftPart, index) => {
+        railingParts.slice(index + 1).forEach((rightPart) => {
+          expect(
+            overlappingVolume(leftPart, rightPart),
+            `${leftPart.name} overlaps ${rightPart.name}`,
+          ).toBeLessThan(1e-8);
+        });
+      });
+      const coamingTopY = new Box3().setFromObject(coamings[0]!).max.y;
+      const topRailBottomY = new Box3().setFromObject(topRails[0]!).min.y;
+      posts.forEach((post) => {
+        const bounds = new Box3().setFromObject(post);
+        expect(bounds.min.y, `${post.name} starts above its coaming`).toBeCloseTo(coamingTopY);
+        expect(bounds.max.y, `${post.name} penetrates its top rail`).toBeCloseTo(topRailBottomY);
+      });
+
       const left = new Box3().setFromObject(openingCoamings[0]!);
       const right = new Box3().setFromObject(openingCoamings[1]!);
       const gapMin = Math.min(left.max.x, right.max.x);
