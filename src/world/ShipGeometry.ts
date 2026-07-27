@@ -432,8 +432,8 @@ function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
     const edges = [
       { edge: 'port' as const, orientation: 'z' as const, fixed: bounds.minX, min: bounds.minZ, max: bounds.maxZ, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'port'), axis: 1 as const },
       { edge: 'starboard' as const, orientation: 'z' as const, fixed: bounds.maxX, min: bounds.minZ, max: bounds.maxZ, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'starboard'), axis: 1 as const },
-      { edge: 'aft' as const, orientation: 'x' as const, fixed: bounds.minZ, min: bounds.minX + WALL_HALF_THICKNESS, max: bounds.maxX - WALL_HALF_THICKNESS, doors: doors.filter((door) => door.orientation === 'aft'), axis: 0 as const },
-      { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX + WALL_HALF_THICKNESS, max: bounds.maxX - WALL_HALF_THICKNESS, doors: [] as ShipDoorSpec[], axis: 0 as const },
+      { edge: 'aft' as const, orientation: 'x' as const, fixed: bounds.minZ, min: bounds.minX + WALL_THICKNESS, max: bounds.maxX - WALL_THICKNESS, doors: doors.filter((door) => door.orientation === 'aft'), axis: 0 as const },
+      { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX + WALL_THICKNESS, max: bounds.maxX - WALL_THICKNESS, doors: [] as ShipDoorSpec[], axis: 0 as const },
     ];
     edges.forEach((edge) => subtractDoorIntervals(edge.min, edge.max, edge.doors, edge.axis)
       .forEach((segment) => result.push({ zoneId, edge: edge.edge, orientation: edge.orientation, fixed: edge.fixed, ...segment })));
@@ -449,9 +449,14 @@ function segmentTransform(
 ): Pick<BlockOptions, 'size' | 'position'> {
   const length = segment.max - segment.min;
   const center = (segment.min + segment.max) / 2;
+  const fixed = segment.fixed + (
+    segment.edge === 'port' || segment.edge === 'aft'
+      ? WALL_HALF_THICKNESS
+      : -WALL_HALF_THICKNESS
+  );
   return segment.orientation === 'z'
-    ? { size: [thickness, height, length], position: [segment.fixed, centerY, center] }
-    : { size: [length, height, thickness], position: [center, centerY, segment.fixed] };
+    ? { size: [thickness, height, length], position: [fixed, centerY, center] }
+    : { size: [length, height, thickness], position: [center, centerY, fixed] };
 }
 
 function segmentColliderTransform(
@@ -459,14 +464,7 @@ function segmentColliderTransform(
   height: number,
   centerY: number,
 ): Pick<BlockOptions, 'size' | 'position'> {
-  const render = segmentTransform(segment, height, centerY);
-  const position = [...render.position] as [number, number, number];
-  if (segment.orientation === 'z') {
-    position[0] += segment.edge === 'port' ? WALL_HALF_THICKNESS : -WALL_HALF_THICKNESS;
-  } else {
-    position[2] += segment.edge === 'aft' ? WALL_HALF_THICKNESS : -WALL_HALF_THICKNESS;
-  }
-  return { size: render.size, position };
+  return segmentTransform(segment, height, centerY);
 }
 
 function roomWallHeight(_zoneId: ShipZoneId): number {
@@ -527,7 +525,7 @@ function addPortholeWallPanel(
   mesh.position.set(
     horizontalCenter,
     wallBottomY + height / 2,
-    segment.fixed,
+    segmentTransform(segment, height, wallBottomY + height / 2).position[2],
   );
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -571,7 +569,9 @@ function addPortholeDetails(
 
   PORTHOLE_SPECS.forEach((spec) => {
     const bounds = requiredZone(layout, spec.zoneId).bounds;
-    const wallZ = spec.edge === 'aft' ? bounds.minZ : bounds.maxZ;
+    const wallZ = spec.edge === 'aft'
+      ? bounds.minZ + WALL_HALF_THICKNESS
+      : bounds.maxZ - WALL_HALF_THICKNESS;
     const outwardDirection = spec.edge === 'aft' ? -1 : 1;
     const group = new Group();
     group.name = `porthole:${spec.zoneId}:${spec.edge}:${spec.index}`;
@@ -702,8 +702,8 @@ function addWallSegments(
   });
 
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const innerMinX = wheelhouse.minX + WALL_HALF_THICKNESS;
-  const innerMaxX = wheelhouse.maxX - WALL_HALF_THICKNESS;
+  const innerMinX = wheelhouse.minX + WALL_THICKNESS;
+  const innerMaxX = wheelhouse.maxX - WALL_THICKNESS;
   const innerWidth = innerMaxX - innerMinX;
   const windowWidth = (innerWidth - WINDOW_PILLAR_WIDTH * 4) / 3;
   const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
@@ -713,7 +713,11 @@ function addWallSegments(
     addBlock(root, geometries, shellColliders, {
       name: `wheelhouse-front-pillar-${pillar}`,
       size: [WINDOW_PILLAR_WIDTH, windowHeight, WALL_THICKNESS],
-      position: [x, wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2, wheelhouse.maxZ],
+      position: [
+        x,
+        wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2,
+        wheelhouse.maxZ - WALL_HALF_THICKNESS,
+      ],
       material: materials.paintedSteel,
     });
   }
@@ -725,7 +729,7 @@ function addWallSegments(
         innerMinX + WINDOW_PILLAR_WIDTH + windowWidth / 2
           + pane * (windowWidth + WINDOW_PILLAR_WIDTH),
         wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2,
-        wheelhouse.maxZ,
+        wheelhouse.maxZ - WALL_HALF_THICKNESS,
       ],
       material: materials.glass,
     });
