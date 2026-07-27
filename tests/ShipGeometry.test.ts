@@ -172,6 +172,64 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('builds a 20 by 55 layered hull with timber deck', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const deck = build.root.getObjectByName('floor-cargoDeck') as Mesh;
+      const upperHull = build.root.getObjectByName('upper-hull') as Mesh;
+      const waterline = build.root.getObjectByName('waterline-band') as Mesh;
+      const size = new Box3().setFromObject(build.root).getSize(new Vector3());
+      expect(size.x).toBeGreaterThanOrEqual(20);
+      expect(size.z).toBeGreaterThanOrEqual(55);
+      expect(deck.material).toBe(materials.timberFloor);
+      expect(upperHull.material).toBe(materials.upperHull);
+      expect(waterline.material).toBe(materials.waterline);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('keeps the approved passage physically empty', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+      const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+      expect(wheelhouse.minZ - crew.maxZ).toBeCloseTo(3.5);
+      for (const collider of build.shellColliders) {
+        const occupiesPassage = collider.maxZ > crew.maxZ
+          && collider.minZ < wheelhouse.minZ
+          && collider.minX < 1.1
+          && collider.maxX > -1.1;
+        expect(occupiesPassage).toBe(false);
+      }
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('adds authored exterior construction details', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      [
+        'bow-stem',
+        'stern-transom',
+        'deck-hatch',
+        'anchor-hawse-port',
+        'anchor-hawse-starboard',
+      ].forEach((name) => expect(build.root.getObjectByName(name), name).toBeDefined());
+      const ribs = build.root.children.filter(({ name }) => name.startsWith('upper-hull-rib-'));
+      expect(ribs).toHaveLength(8);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('keeps both loop doorways and the lifeboat rail opening clear', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -204,14 +262,14 @@ describe('freighter geometry', () => {  interface PointXZ {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const expected = [
-      { zoneId: 'crewCabin', edge: 'aft', index: 1, x: -1.75, z: 5 },
-      { zoneId: 'crewCabin', edge: 'aft', index: 2, x: 1.75, z: 5 },
-      { zoneId: 'crewCabin', edge: 'forward', index: 1, x: -1.75, z: 12.4 },
-      { zoneId: 'crewCabin', edge: 'forward', index: 2, x: 1.75, z: 12.4 },
-      { zoneId: 'storageWorkroom', edge: 'aft', index: 1, x: -1.8, z: -13.4 },
-      { zoneId: 'storageWorkroom', edge: 'aft', index: 2, x: 1.8, z: -13.4 },
-      { zoneId: 'storageWorkroom', edge: 'forward', index: 1, x: -1.8, z: -8 },
-      { zoneId: 'storageWorkroom', edge: 'forward', index: 2, x: 1.8, z: -8 },
+      { zoneId: 'crewCabin', edge: 'aft', index: 1, x: -2.2, z: 4.5 },
+      { zoneId: 'crewCabin', edge: 'aft', index: 2, x: 2.2, z: 4.5 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 1, x: -2.2, z: 13.5 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 2, x: 2.2, z: 13.5 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 1, x: -2.2, z: -17.4 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 2, x: 2.2, z: -17.4 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 1, x: -2.2, z: -10.65 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 2, x: 2.2, z: -10.65 },
     ] as const;
 
     expected.forEach(({ zoneId, edge, index, x, z }) => {
@@ -246,8 +304,8 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each([
-    new Vector3(-7.7, 2.72, 0),
-    new Vector3(7.7, 2.72, 4),
+    new Vector3(-9.575, 2.72, 0),
+    new Vector3(9.575, 2.72, 4),
   ])('blocks passage through the waist-height outer rail at %s', (point) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -283,58 +341,56 @@ describe('freighter geometry', () => {  interface PointXZ {
   it('builds flush enclosed-room corners without protruding cap colliders or mesh overlap', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const wallHalfThickness = 0.11;
-
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
       const prefix = zone.id === 'crewCabin' ? 'crew-cabin'
         : zone.id === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
       const roof = build.root.getObjectByName(`${zone.id}-roof`)!;
       const roofBounds = new Box3().setFromObject(roof);
       expect(roofBounds.min.x, `${zone.id} roof minX`).toBeCloseTo(
-        zone.bounds.minX - wallHalfThickness,
+        zone.bounds.minX,
       );
       expect(roofBounds.max.x, `${zone.id} roof maxX`).toBeCloseTo(
-        zone.bounds.maxX + wallHalfThickness,
+        zone.bounds.maxX,
       );
       expect(roofBounds.min.z, `${zone.id} roof minZ`).toBeCloseTo(
-        zone.bounds.minZ - wallHalfThickness,
+        zone.bounds.minZ,
       );
       expect(roofBounds.max.z, `${zone.id} roof maxZ`).toBeCloseTo(
-        zone.bounds.maxZ + wallHalfThickness,
+        zone.bounds.maxZ,
       );
       const roomColliders = build.shellColliders.filter((box) =>
         Math.abs(box.minY - FREIGHTER_DIMENSIONS.deckY) < 1e-8
         && Math.abs(box.maxY - roofBounds.min.y) < 1e-8
-        && box.minX < zone.bounds.maxX + wallHalfThickness
-        && box.maxX > zone.bounds.minX - wallHalfThickness
-        && box.minZ < zone.bounds.maxZ + wallHalfThickness
-        && box.maxZ > zone.bounds.minZ - wallHalfThickness);
+        && box.minX < zone.bounds.maxX
+        && box.maxX > zone.bounds.minX
+        && box.minZ < zone.bounds.maxZ
+        && box.maxZ > zone.bounds.minZ);
       expect(roomColliders.length, `${zone.id} wall colliders`).toBeGreaterThan(0);
       roomColliders.forEach((box) => {
         expect(box.minX, `${zone.id} minX`).toBeGreaterThanOrEqual(
-          zone.bounds.minX - wallHalfThickness - 1e-8,
+          zone.bounds.minX - 1e-8,
         );
         expect(box.maxX, `${zone.id} maxX`).toBeLessThanOrEqual(
-          zone.bounds.maxX + wallHalfThickness + 1e-8,
+          zone.bounds.maxX + 1e-8,
         );
         expect(box.minZ, `${zone.id} minZ`).toBeGreaterThanOrEqual(
-          zone.bounds.minZ - wallHalfThickness - 1e-8,
+          zone.bounds.minZ - 1e-8,
         );
         expect(box.maxZ, `${zone.id} maxZ`).toBeLessThanOrEqual(
-          zone.bounds.maxZ + wallHalfThickness + 1e-8,
+          zone.bounds.maxZ + 1e-8,
         );
       });
       expect(Math.min(...roomColliders.map(({ minX }) => minX))).toBeCloseTo(
-        zone.bounds.minX - wallHalfThickness,
+        zone.bounds.minX,
       );
       expect(Math.max(...roomColliders.map(({ maxX }) => maxX))).toBeCloseTo(
-        zone.bounds.maxX + wallHalfThickness,
+        zone.bounds.maxX,
       );
       expect(Math.min(...roomColliders.map(({ minZ }) => minZ))).toBeCloseTo(
-        zone.bounds.minZ - wallHalfThickness,
+        zone.bounds.minZ,
       );
       expect(Math.max(...roomColliders.map(({ maxZ }) => maxZ))).toBeCloseTo(
-        zone.bounds.maxZ + wallHalfThickness,
+        zone.bounds.maxZ,
       );
 
       const structuralMeshes = build.root.children.filter((object): object is Mesh =>
@@ -404,9 +460,9 @@ describe('freighter geometry', () => {  interface PointXZ {
     expect(build.arcColliders).toEqual([
       {
         centerX: 0,
-        centerZ: cargo.maxZ - 4.2,
+        centerZ: cargo.maxZ - 5.2,
         radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
-        radiusZ: 4.2,
+        radiusZ: 5.2,
         end: 'bow',
         thickness: 0.25,
         minY: FREIGHTER_DIMENSIONS.deckY,
@@ -414,9 +470,9 @@ describe('freighter geometry', () => {  interface PointXZ {
       },
       {
         centerX: 0,
-        centerZ: cargo.minZ + 4.2,
+        centerZ: cargo.minZ + 5.2,
         radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
-        radiusZ: 4.2,
+        radiusZ: 5.2,
         end: 'stern',
         thickness: 0.25,
         minY: FREIGHTER_DIMENSIONS.deckY,
@@ -492,22 +548,22 @@ describe('freighter geometry', () => {  interface PointXZ {
       new Box3(),
     );
     const size = bounds.getSize(new Vector3());
-    expect(size.x).toBeGreaterThan(15.4);
-    expect(size.x).toBeLessThan(15.7);
+    expect(size.x).toBeGreaterThan(19.4);
+    expect(size.x).toBeLessThan(19.8);
     expect(size.y).toBeCloseTo(0.14);
-    expect(size.z).toBeGreaterThan(4.1);
-    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(21.5);
-    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(21.7);
+    expect(size.z).toBeGreaterThan(5.1);
+    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(27);
+    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(27.2);
     const arc = build.arcColliders.find((candidate) => candidate.end === end);
     expect(arc).toBeDefined();
     const blocked = resolveArcMovement(
-      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 19.2 },
-      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 22 },
+      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 24 },
+      { x: 0, y: FREIGHTER_DIMENSIONS.deckY + 0.5, z: direction * 28 },
       0.35,
       arc!,
     );
-    expect(Math.abs(blocked.z)).toBeGreaterThan(19);
-    expect(Math.abs(blocked.z)).toBeLessThan(21.2);
+    expect(Math.abs(blocked.z)).toBeGreaterThan(25);
+    expect(Math.abs(blocked.z)).toBeLessThan(26.8);
     const lifeboatGap = resolveLocalMovement(
       { x: 7.1, y: 3.72, z: 0 },
       { x: 8.1, y: 3.72, z: 0 },
