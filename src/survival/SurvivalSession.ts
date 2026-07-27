@@ -362,6 +362,7 @@ export class SurvivalSession {
     const before = this.resourceValues();
     const resolved = resolveWeightedOutcome(choice, this.random);
     const inventoryMutations: JournalInventoryMutation[] = [];
+    let fallbackFoodGranted = false;
     for (const effect of resolved.effects.resources ?? []) {
       inventoryMutations.push(...this.applyEventResource(
         effect,
@@ -376,6 +377,7 @@ export class SurvivalSession {
         selectedInstanceId,
         attemptedItemId,
       );
+      if (mutation.kind === 'gain' && concrete === null) fallbackFoodGranted = true;
       if (concrete !== null) inventoryMutations.push(concrete);
     }
 
@@ -394,7 +396,9 @@ export class SurvivalSession {
     const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
-      message: resolved.message,
+      message: fallbackFoodGranted
+        ? 'The item slot is occupied, so you receive one food instead.'
+        : resolved.message,
       deltas,
       cue,
     };

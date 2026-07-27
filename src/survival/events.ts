@@ -314,10 +314,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 12, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
-        outcome(45, 'You recover two food.', effects([add('food', 2)])),
-        outcome(25, 'You recover two bait.', effects([add('bait', 2)])),
-        outcome(20, 'You recover repair timber.', effects([add('repairMaterial', 2)])),
-        outcome(10, 'You recover an energy bar.', effects(undefined, [gain('energyBar')])),
+        outcome(45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
+        outcome(25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
+        outcome(20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
+        outcome(10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
@@ -335,7 +335,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(500, 'A fish has landed aboard.', effects([add('food', 1)])),
       outcome(50, 'There is nothing there.'),
     ),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'You leave the sound alone.')),
+    contextualChoice('sleep', 'Ignore', outcome(1, 'You leave the sound alone.')),
   ]),
   event('mystery-chest', 'Mystery Chest', 'impact', 45, 6, 33, [
     contextualChoice('open', 'Open the Chest',
@@ -346,7 +346,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(16, 'The chest holds repair timber.', effects([add('repairMaterial', 2)])),
       outcome(30, 'The chest bites back.', effects([subtract('health', 25)])),
     ),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'The chest slips back under the water.')),
+    contextualChoice('sleep', 'Leave', outcome(1, 'The chest slips back under the water.')),
   ]),
   event('midnight-tour', 'Midnight Tour', 'sighting', 18, 7, 30, [
     contextualChoice('visit', 'Visit the Island',
@@ -356,7 +356,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(150, 'You find one bait.', effects([add('bait', 1)])),
       outcome(36, 'Something drops from the rocks.', effects([subtract('health', 35)])),
     ),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'The island disappears into the dark.')),
+    contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.')),
   ], 40),
   event('night-trader', 'Night Trader', 'sighting', 14, 10, 35, [
     {
@@ -369,7 +369,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     },
     choice('map', 'Map for Compass', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]))),
     choice('umbrella', 'Umbrella for Medkit', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]))),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'The trader rows on into the night.')),
+    contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.')),
   ]),
   event('handyman', 'Handyman', 'repair', 12, 20, 50, [
     choice('spyglass', 'Spyglass for Flashlight', 'spyglass', outcome(1, 'The handyman gives you a flashlight.', effects(undefined, [lose('spyglass'), gain('flashlight')]))),
@@ -382,6 +382,11 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]))),
     choice('ductTape', 'Duct Tape for Energy Bar', 'ductTape', outcome(1, 'The handyman gives you an energy bar.', effects(undefined, [consume('ductTape'), gain('energyBar')]))),
     choice('energyBar', 'Energy Bar for Duct Tape', 'energyBar', outcome(1, 'The handyman gives you duct tape.', effects(undefined, [consume('energyBar'), gain('ductTape')]))),
+    contextualChoice('touch', 'Touch the Hand', outcome(
+      1,
+      'The hand closes around you.',
+      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 70)]),
+    )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.')),
   ]),
   event('other-people', 'Other People', 'sighting', 10, 15, 20, [

@@ -157,6 +157,48 @@ describe('SurvivalUI', () => {
     expect(onEventChoice).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['pointer', 'keyboard'] as const)(
+    'shows a distinct selected keyed response for %s activation',
+    async (input) => {
+      vi.useFakeTimers();
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      openContextualEvent(ui);
+      ui.onEventChoice = (choiceId) => {
+        ui.setBusy(true);
+        void ui.playEventChoiceBeat(choiceId);
+      };
+      const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+
+      if (input === 'pointer') choice.click();
+      else {
+        choice.focus();
+        press('[data-event-choice="retrieve"]', 'Enter');
+      }
+
+      expect(choice.dataset.eventState).toBe('selected');
+      expect(choice.getAttribute('aria-pressed')).toBe('true');
+      expect(choice.getAttribute('aria-disabled')).toBe('true');
+      await vi.runAllTimersAsync();
+    },
+  );
+
+  it('settles and clears an active contextual press beat during lifecycle cleanup', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+
+    const beat = ui.playEventChoiceBeat('retrieve');
+    ui.clearEventPresentation();
+    await beat;
+
+    expect(mount.querySelector('[data-event-choice]')).toBeNull();
+    expect(mount.querySelector<HTMLElement>('[data-event-choices]')?.hidden).toBe(true);
+  });
+
   it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
