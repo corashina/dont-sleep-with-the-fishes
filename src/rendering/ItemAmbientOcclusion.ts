@@ -11,8 +11,8 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import type { VisualQuality } from './visualQuality';
 
 export const ITEM_AMBIENT_OCCLUSION_LAYER = 1;
-export const ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY = 0.65;
-export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.24;
+export const ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY = 1;
+export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.5;
 
 export type ItemAmbientOcclusionMode = 'composite' | 'debug' | 'off';
 

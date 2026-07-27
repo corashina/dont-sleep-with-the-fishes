@@ -87,8 +87,8 @@ describe('item ambient occlusion', () => {
     expect(pass.camera).toBe(camera);
     expect(pass.gtaoRenderTarget.width).toBe(321);
     expect(pass.gtaoRenderTarget.height).toBe(181);
-    expect(pass.blendIntensity).toBe(0.65);
-    expect(pass.gtaoMaterial.uniforms.radius!.value).toBe(0.24);
+    expect(pass.blendIntensity).toBe(1);
+    expect(pass.gtaoMaterial.uniforms.radius!.value).toBe(0.5);
     expect(pass.gtaoMaterial.defines.SCREEN_SPACE_RADIUS).toBe(1);
 
     pass.dispose();
