@@ -117,6 +117,15 @@ export class PlayerController {
       return;
     }
 
+    this.integrate(delta, input.consumeJump(), cameraShake);
+  }
+
+  updatePassive(delta: number, cameraShake = 0): void {
+    this.movement.set(0, 0, 0);
+    this.integrate(delta, false, cameraShake);
+  }
+
+  private integrate(delta: number, jumpRequested: boolean, cameraShake: number): void {
     const currentSupport = findSupportEyeHeight(
       this.localPosition,
       0.35,
@@ -125,7 +134,7 @@ export class PlayerController {
     );
     const grounded = this.localPosition.y <= currentSupport + GROUND_EPSILON
       && this.verticalVelocity <= 0;
-    if (input.consumeJump() && grounded) this.verticalVelocity = JUMP_SPEED;
+    if (jumpRequested && grounded) this.verticalVelocity = JUMP_SPEED;
 
     const nextY = this.localPosition.y
       + this.verticalVelocity * delta
