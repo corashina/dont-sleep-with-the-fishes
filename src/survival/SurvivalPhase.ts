@@ -110,6 +110,7 @@ function testContext(
     lifeboatAssets: {} as LifeboatAssets,
     shipAssets: {} as ShipAssets,
     physicsRuntime: {} as PhysicsRuntime,
+    physicsMode: 'enabled',
   };
 }
 

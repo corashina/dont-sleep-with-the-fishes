@@ -1,4 +1,4 @@
-import RAPIER from '@dimforge/rapier3d-deterministic-compat';
+import type RAPIER from '@dimforge/rapier3d-deterministic-compat';
 
 export interface PhysicsVector3 {
   readonly x: number;
@@ -22,11 +22,12 @@ export class PhysicsRuntime {
 }
 
 export async function loadPhysicsRuntime(
-  initialize: () => Promise<unknown> = () => RAPIER.init(),
+  initialize?: () => Promise<unknown>,
 ): Promise<PhysicsRuntime> {
   try {
-    await initialize();
-    return new PhysicsRuntime(RAPIER);
+    const rapier = (await import('@dimforge/rapier3d-deterministic-compat')).default;
+    await (initialize ?? (() => rapier.init()))();
+    return new PhysicsRuntime(rapier);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     throw new PhysicsLoadError(message, { cause });
