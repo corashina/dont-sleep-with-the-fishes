@@ -825,18 +825,31 @@ export class SurvivalPhase implements GamePhase {
       this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
-    let snapshot = this.renderSnapshot(false, false);
+    const terminal = this.session.snapshot();
     this.ui.showFeedback?.(outcome);
-    if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
-    else this.clearEventPresentation();
-    if (isTerminal(snapshot.state)) {
+    if (isTerminal(terminal.state)) {
+      const snapshot = this.renderSnapshot(false, false);
+      if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
+      else this.clearEventPresentation();
       this.eventPresentation = 'idle';
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
       return;
     }
-    if (eventState === 'nightEvent') snapshot = await this.runDawn(generation);
+
+    await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.clearEventPresentation();
+    const snapshot = eventState === 'nightEvent'
+      ? await this.runDawn(generation)
+      : this.renderSnapshot(false, false);
+    if (!this.isContinuationActive(generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
     this.eventPresentation = 'idle';
     this.setBusy(false);
     this.presentTerminalOnce(snapshot);
