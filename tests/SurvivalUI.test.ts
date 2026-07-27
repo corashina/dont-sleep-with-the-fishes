@@ -213,8 +213,10 @@ describe('SurvivalUI', () => {
     expect(settled).toBe(true);
 
     const pending = ui.holdEventOutcome();
+    expect(vi.getTimerCount()).toBe(1);
     ui.dispose();
     await pending;
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('reduces an event outcome hold to one millisecond', async () => {
@@ -229,6 +231,29 @@ describe('SurvivalUI', () => {
     await vi.advanceTimersByTimeAsync(1);
     await hold;
     expect(settled).toBe(true);
+    ui.dispose();
+  });
+
+  it('supersedes an event outcome hold without leaving its timer active', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    let firstSettled = false;
+    const first = ui.holdEventOutcome().then(() => { firstSettled = true; });
+    expect(vi.getTimerCount()).toBe(1);
+    let replacementSettled = false;
+    const replacement = ui.holdEventOutcome().then(() => { replacementSettled = true; });
+
+    await Promise.resolve();
+    expect(firstSettled).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(replacementSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await replacement;
+    expect(replacementSettled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
     ui.dispose();
   });
 
