@@ -1275,7 +1275,11 @@ function addLadders(
       const y = bottomFloorY + Math.min(index * ladderSpec.rungSpacing, ladderHeight);
       addBlock(ladder, geometries, [], {
         name: `${ladder.name}:rung:${index}`,
-        size: [ladderSpec.width, LADDER_RUNG_HEIGHT, LADDER_RUNG_DEPTH],
+        size: [
+          ladderSpec.width - LADDER_RAIL_WIDTH,
+          LADDER_RUNG_HEIGHT,
+          LADDER_RUNG_DEPTH,
+        ],
         position: [0, y, 0],
         material: materials.timber,
       });
@@ -1382,45 +1386,6 @@ function addWheelhouseInteriorDetails(
   details.name = 'wheelhouse-interior-details';
   root.add(details);
 
-  const helm = new Group();
-  helm.name = 'captain-detail:helm-wheel';
-  helm.position.set(centerX, deckY + 1.9, interiorFrontZ);
-  details.add(helm);
-  const wheelGeometry = new RingGeometry(0.39, 0.48, 16);
-  geometries.add(wheelGeometry);
-  const wheel = new Mesh(wheelGeometry, materials.darkMetal);
-  wheel.name = `${helm.name}:rim`;
-  wheel.castShadow = true;
-  helm.add(wheel);
-  for (let index = 0; index < 6; index += 1) {
-    const spoke = addBlock(helm, geometries, [], {
-      name: `${helm.name}:spoke-${index + 1}`,
-      size: [0.82, 0.045, 0.045],
-      position: [0, 0, -0.006],
-      material: materials.exposedMetal,
-    });
-    spoke.rotation.z = index * Math.PI / 3;
-  }
-  addCylinder(helm, geometries, `${helm.name}:hub`, 0.09, 0.11, [0, 0, -0.035],
-    materials.exposedMetal).rotation.x = Math.PI / 2;
-
-  const compass = new Group();
-  compass.name = 'captain-detail:compass';
-  compass.position.set(centerX - wheelhouseWidth * 0.116, deckY + 2.26, interiorFrontZ);
-  details.add(compass);
-  const compassGeometry = new RingGeometry(0.14, 0.22, 12);
-  geometries.add(compassGeometry);
-  const compassRim = new Mesh(compassGeometry, materials.exposedMetal);
-  compassRim.name = `${compass.name}:rim`;
-  compass.add(compassRim);
-  const needle = addBlock(compass, geometries, [], {
-    name: `${compass.name}:needle`,
-    size: [0.045, 0.27, 0.025],
-    position: [0, 0, 0.012],
-    material: materials.emergency,
-  });
-  needle.rotation.z = -0.34;
-
   const chart = new Group();
   chart.name = 'captain-detail:chart';
   chart.position.set(wheelhouse.minX + wheelhouseWidth * 0.173, deckY + 1.96, interiorAftZ);
@@ -1446,25 +1411,6 @@ function addWheelhouseInteriorDetails(
     });
     course.rotation.z = 0.65 + index * 0.22;
   });
-
-  const lamp = new Group();
-  lamp.name = 'captain-detail:lamp';
-  lamp.position.set(
-    centerX + wheelhouseWidth * 0.247,
-    deckY + ROOM_WALL_HEIGHT - 0.76,
-    centerZ + (wheelhouse.maxZ - wheelhouse.minZ) * 0.22,
-  );
-  details.add(lamp);
-  addBlock(lamp, geometries, [], {
-    name: `${lamp.name}:hanger`,
-    size: [0.04, 0.48, 0.04],
-    position: [0, 0.24, 0],
-    material: materials.darkMetal,
-  });
-  addCylinder(lamp, geometries, `${lamp.name}:shade`, 0.22, 0.25, [0, -0.08, 0],
-    materials.emergency);
-  addCylinder(lamp, geometries, `${lamp.name}:cage`, 0.12, 0.2, [0, -0.26, 0],
-    materials.exposedMetal);
 
   const logbook = new Group();
   logbook.name = 'captain-detail:logbook';
