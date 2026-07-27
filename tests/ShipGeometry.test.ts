@@ -828,15 +828,12 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('adds restrained noninteractive captain-room dressing', () => {
+  it('keeps captain-room window glazing clear of mounted clutter and omits the lamp', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const details = build.root.getObjectByName('wheelhouse-interior-details')!;
     [
-      'helm-wheel',
-      'compass',
       'chart',
-      'lamp',
       'logbook',
       'mug',
       'coat',
@@ -846,6 +843,9 @@ describe('freighter geometry', () => {  interface PointXZ {
       const detail = details.getObjectByName(`captain-detail:${id}`)!;
       expect(detail, id).toBeDefined();
       expect(detail.userData.interactive, id).not.toBe(true);
+    });
+    ['helm-wheel', 'compass', 'lamp'].forEach((id) => {
+      expect(details.getObjectByName(`captain-detail:${id}`), id).toBeUndefined();
     });
 
     build.disposeGeometry();
@@ -890,11 +890,8 @@ describe('freighter geometry', () => {  interface PointXZ {
     const baseline = createShipGeometry(materials);
     const modified = createShipGeometry(materials, layout);
 
-    const baselineHelm = baseline.root.getObjectByName('captain-detail:helm-wheel')!;
-    const modifiedHelm = modified.root.getObjectByName('captain-detail:helm-wheel')!;
     const baselinePanel = baseline.root.getObjectByName('captain-detail:repaired-panel')!;
     const modifiedPanel = modified.root.getObjectByName('captain-detail:repaired-panel')!;
-    expect(modifiedHelm.position.x - baselineHelm.position.x).toBeCloseTo(shiftX);
     expect(modifiedPanel.position.x - baselinePanel.position.x).toBeCloseTo(shiftX);
 
     ['logbook', 'mug'].forEach((id) => {
@@ -1078,15 +1075,12 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('seats wall dressing on wheelhouse panels outside door approaches', () => {
+  it('seats remaining wall dressing on solid wheelhouse panels outside door approaches', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
     const details = build.root.getObjectByName('wheelhouse-interior-details')!;
-    const frontZ = wheelhouse.maxZ - SHIP_ROOM_WALL_THICKNESS - 0.015;
     const aftZ = wheelhouse.minZ + SHIP_ROOM_WALL_THICKNESS + 0.015;
-    expect(details.getObjectByName('captain-detail:helm-wheel')!.position.z).toBeCloseTo(frontZ);
-    expect(details.getObjectByName('captain-detail:compass')!.position.z).toBeCloseTo(frontZ);
     ['chart', 'coat', 'key-hooks'].forEach((id) => {
       expect(details.getObjectByName(`captain-detail:${id}`)!.position.z, id)
         .toBeCloseTo(aftZ);
@@ -1256,6 +1250,11 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(rungs.every(({ material }) => material === materials.timber)).toBe(true);
       expect(sideRails).toHaveLength(2);
       expect(sideRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
+      rungs.forEach((rung) => {
+        sideRails.forEach((rail) => {
+          expect(overlappingVolume(rung, rail), `${rung.name} overlaps ${rail.name}`).toBe(0);
+        });
+      });
       expect(brackets.length).toBeGreaterThanOrEqual(4);
       expect(brackets.every(({ material }) => material === materials.exposedMetal)).toBe(true);
       build.root.updateMatrixWorld(true);
