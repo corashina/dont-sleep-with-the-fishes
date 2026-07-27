@@ -21,6 +21,7 @@ import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
 import type { SkyAssets } from './world/SkyAssets';
 import { LifeboatAssets } from './world/LifeboatAssets';
 import { ShipAssets } from './world/ShipAssets';
+import type { PhysicsRuntime } from './physics/PhysicsRuntime';
 
 export interface GameFactories {
   createScavenge(
@@ -65,6 +66,7 @@ export interface GameTestOptions {
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
   shipAssets?: ShipAssets;
+  physicsRuntime: PhysicsRuntime;
   clock?: GameClock;
   createSeed?: () => number;
   mount?: HTMLElement;
@@ -113,6 +115,7 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    physicsRuntime: PhysicsRuntime,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -145,6 +148,7 @@ export class Game {
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        physicsRuntime,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -205,6 +209,7 @@ export class Game {
         new Texture(),
         new Texture(),
       ),
+      options.physicsRuntime,
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -258,6 +263,7 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    physicsRuntime: PhysicsRuntime,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -292,6 +298,7 @@ export class Game {
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        physicsRuntime,
       };
       this.activePhase = null;
       this.performanceStats = null;

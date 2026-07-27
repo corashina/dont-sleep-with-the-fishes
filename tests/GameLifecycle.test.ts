@@ -24,8 +24,11 @@ import {
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
+import { testPhysicsRuntime } from './helpers/physics';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
+
+const physicsRuntime = await testPhysicsRuntime();
 
 vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/world/ShipItemPlacement')>();
@@ -69,6 +72,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels,
       shipFurniture,
       skyAssets,
+      physicsRuntime,
       maxTextureAnisotropy: 1,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
@@ -232,7 +236,7 @@ describe('ScavengePhase lifecycle integration', () => {
         contexts.push(context);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets, sceneRenderer });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime, sceneRenderer });
 
     complete({ savedItems: [], elapsedSeconds: 2 });
 
@@ -259,6 +263,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels: createTestPropModels(),
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
+      physicsRuntime,
     });
 
     expect(received[0]!.camera).toMatchObject({
@@ -288,7 +293,14 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const game = Game.forTest({
       createScavenge: () => gamePhase(), createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
 
     expect(() => game.dispose()).toThrow(failure);
     expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
@@ -307,12 +319,15 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalSkyAssets: unknown[] = [];
     const scavengeFurniture: unknown[] = [];
     const survivalFurniture: unknown[] = [];
+    const scavengePhysics: unknown[] = [];
+    const survivalPhysics: unknown[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
       createScavenge: (context, onComplete) => {
         scavengeModels.push(context.propModels);
         scavengeSkyAssets.push(context.skyAssets);
         scavengeFurniture.push(context.shipFurniture);
+        scavengePhysics.push(context.physicsRuntime);
         complete = onComplete;
         return gamePhase();
       },
@@ -320,9 +335,10 @@ describe('ScavengePhase lifecycle integration', () => {
         survivalModels.push(context.propModels);
         survivalSkyAssets.push(context.skyAssets);
         survivalFurniture.push(context.shipFurniture);
+        survivalPhysics.push(context.physicsRuntime);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
 
     game.start();
     complete({ savedItems: [], elapsedSeconds: 3 });
@@ -337,6 +353,8 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(survivalSkyAssets).toEqual([skyAssets]);
     expect(scavengeFurniture).toEqual([shipFurniture, shipFurniture]);
     expect(survivalFurniture).toEqual([shipFurniture]);
+    expect(scavengePhysics).toEqual([physicsRuntime, physicsRuntime]);
+    expect(survivalPhysics).toEqual([physicsRuntime]);
     expect(disposePropModels).not.toHaveBeenCalled();
     expect(disposeShipFurniture).not.toHaveBeenCalled();
     expect(disposeSkyAssets).not.toHaveBeenCalled();
@@ -356,7 +374,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
 
     game.dispose();
     game.dispose();
@@ -409,7 +427,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -481,7 +506,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -527,6 +559,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels,
       shipFurniture,
       skyAssets,
+      physicsRuntime,
       maxTextureAnisotropy: 1,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
