@@ -18,11 +18,18 @@ type MockFunction = ReturnType<typeof vi.fn>;
 
 interface ComposerMock {
   target: WebGLRenderTarget;
+  passes: PassLike[];
   addPass: MockFunction;
+  removePass: MockFunction;
   render: MockFunction;
   setPixelRatio: MockFunction;
   setSize: MockFunction;
   dispose: MockFunction;
+}
+
+interface PassLike {
+  constructor: { name: string };
+  setSize?: (width: number, height: number) => void;
 }
 
 interface PassMock {
@@ -36,6 +43,7 @@ const postProcessingMocks = vi.hoisted((): {
     enabled: boolean;
     setContext: MockFunction;
     setMode: MockFunction;
+    setSize: MockFunction;
     setVisualQuality: MockFunction;
     dispose: MockFunction;
   }>;
@@ -54,16 +62,46 @@ const postProcessingMocks = vi.hoisted((): {
   }>;
   printPasses: PassMock[];
   outputPasses: PassMock[];
-} => ({ composers: [], aoPasses: [], outlinePasses: [], printPasses: [], outputPasses: [] }));
+  aoSizeFailure: Error | null;
+} => ({
+  composers: [],
+  aoPasses: [],
+  outlinePasses: [],
+  printPasses: [],
+  outputPasses: [],
+  aoSizeFailure: null,
+}));
 
 vi.mock('three/addons/postprocessing/EffectComposer.js', () => ({
   EffectComposer: class {
-    readonly addPass = vi.fn();
+    readonly passes: PassLike[] = [];
+    private width: number;
+    private height: number;
+    private pixelRatio = 1;
+    readonly addPass = vi.fn((pass: PassLike) => {
+      this.passes.push(pass);
+      pass.setSize?.(this.width * this.pixelRatio, this.height * this.pixelRatio);
+    });
+    readonly removePass = vi.fn((pass: PassLike) => {
+      const index = this.passes.indexOf(pass);
+      if (index !== -1) this.passes.splice(index, 1);
+    });
     readonly render = vi.fn();
-    readonly setPixelRatio = vi.fn();
-    readonly setSize = vi.fn();
+    readonly setPixelRatio = vi.fn((pixelRatio: number) => {
+      this.pixelRatio = pixelRatio;
+      this.setSize(this.width, this.height);
+    });
+    readonly setSize = vi.fn((width: number, height: number) => {
+      this.width = width;
+      this.height = height;
+      for (const pass of this.passes) {
+        pass.setSize?.(width * this.pixelRatio, height * this.pixelRatio);
+      }
+    });
     readonly dispose: MockFunction;
     constructor(_renderer: WebGLRenderer, readonly target: WebGLRenderTarget) {
+      this.width = target.width;
+      this.height = target.height;
       vi.spyOn(target, 'dispose');
       this.dispose = vi.fn(() => target.dispose());
       postProcessingMocks.composers.push(this);
@@ -102,6 +140,11 @@ vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
     enabled = true;
     readonly setContext = vi.fn();
     readonly setMode = vi.fn();
+    readonly setSize = vi.fn(() => {
+      if (postProcessingMocks.aoSizeFailure !== null) {
+        throw postProcessingMocks.aoSizeFailure;
+      }
+    });
     readonly setVisualQuality = vi.fn();
     readonly dispose = vi.fn();
     constructor() { postProcessingMocks.aoPasses.push(this); }
@@ -147,6 +190,7 @@ describe('post-processing pipeline', () => {
     postProcessingMocks.outlinePasses.length = 0;
     postProcessingMocks.printPasses.length = 0;
     postProcessingMocks.outputPasses.length = 0;
+    postProcessingMocks.aoSizeFailure = null;
   });
 
   afterEach(() => {
@@ -179,6 +223,15 @@ describe('post-processing pipeline', () => {
     expect(PrintShader.fragmentShader).not.toContain('uChromaticAberration');
   });
 
+  it('enforces the posterization floor in the shader before quantizing color', () => {
+    expect(PrintShader.fragmentShader).toContain(
+      'float levels = max(32.0, uPosterizationLevels);',
+    );
+    expect(PrintShader.fragmentShader).toContain(
+      'color = floor(color * levels + 0.5) / levels;',
+    );
+  });
+
   it('passes the safe scavenge posterization and shadow-detail bounds to the shader', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     pipeline.render(new Scene(), new PerspectiveCamera(), {
@@ -198,16 +251,96 @@ describe('post-processing pipeline', () => {
     pipeline.dispose();
   });
 
+  it('keeps the composer pass chain when AO initial pass sizing fails', () => {
+    const failure = new Error('ao initial sizing unavailable');
+    const reportAoFallback = vi.fn();
+    postProcessingMocks.aoSizeFailure = failure;
+
+    const pipeline = new PostProcessingPipeline(
+      createRenderer(),
+      'low',
+      undefined,
+      reportAoFallback,
+    );
+    const composer = postProcessingMocks.composers[0]!;
+
+    expect(reportAoFallback).toHaveBeenCalledWith(failure);
+    expect(composer.passes.map((pass) => pass.constructor.name)).toEqual([
+      'RenderPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+    ]);
+    expect(postProcessingMocks.aoPasses[0]?.dispose).toHaveBeenCalledOnce();
+    expect(() => pipeline.render(
+      new Scene(),
+      new PerspectiveCamera(),
+      { kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0 },
+    )).not.toThrow();
+
+    pipeline.dispose();
+    expect(postProcessingMocks.aoPasses[0]?.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('retires AO after a later sizing failure and keeps the other passes resizable', () => {
+    const failure = new Error('ao runtime sizing unavailable');
+    const reportAoFallback = vi.fn();
+    const pipeline = new PostProcessingPipeline(
+      createRenderer(),
+      'low',
+      undefined,
+      reportAoFallback,
+    );
+    const composer = postProcessingMocks.composers[0]!;
+    postProcessingMocks.aoSizeFailure = failure;
+
+    expect(() => pipeline.resize(640, 360, 1)).not.toThrow();
+
+    expect(reportAoFallback).toHaveBeenCalledWith(failure);
+    expect(composer.passes.map((pass) => pass.constructor.name)).toEqual([
+      'RenderPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+    ]);
+    expect(postProcessingMocks.outlinePasses[0]?.setSize)
+      .toHaveBeenLastCalledWith(640, 360);
+    expect(postProcessingMocks.aoPasses[0]?.dispose).toHaveBeenCalledOnce();
+
+    pipeline.dispose();
+    expect(postProcessingMocks.aoPasses[0]?.dispose).toHaveBeenCalledOnce();
+  });
+
   it('disables AO but keeps rendering when quality reconfiguration fails', () => {
     const failure = new Error('ao resize unavailable');
     const reportAoFallback = vi.fn();
     const failingAoPass = {
-      enabled: true, setVisualQuality: vi.fn(() => { throw failure; }),
+      enabled: true,
+      dispose: vi.fn(),
+      setSize: vi.fn(),
+      setVisualQuality: vi.fn(() => { throw failure; }),
     } as unknown as ItemAmbientOcclusionPass;
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => failingAoPass, reportAoFallback);
     expect(() => pipeline.setVisualQuality('high')).not.toThrow();
     expect(reportAoFallback).toHaveBeenCalledWith(failure);
     expect(failingAoPass.enabled).toBe(false);
+    expect(failingAoPass.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('does not reconfigure AO again after a quality failure retires it', () => {
+    const failure = new Error('ao resize unavailable');
+    const failingAoPass = {
+      enabled: true,
+      dispose: vi.fn(),
+      setSize: vi.fn(),
+      setVisualQuality: vi.fn(() => { throw failure; }),
+    } as unknown as ItemAmbientOcclusionPass;
+    const pipeline = new PostProcessingPipeline(
+      createRenderer(),
+      'low',
+      () => failingAoPass,
+      vi.fn(),
+    );
+
+    pipeline.setVisualQuality('high');
+    pipeline.setVisualQuality('low');
+
+    expect(failingAoPass.setVisualQuality).toHaveBeenCalledOnce();
+    expect(failingAoPass.dispose).toHaveBeenCalledOnce();
   });
 
   it('removes comparison listeners when initial sizing fails after registration', () => {
@@ -233,6 +366,7 @@ describe('post-processing pipeline', () => {
       enabled: true,
       dispose: vi.fn(),
       setMode: vi.fn(),
+      setSize: vi.fn(),
       setVisualQuality: vi.fn(() => { throw failure; }),
     } as unknown as ItemAmbientOcclusionPass;
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => failingAoPass, vi.fn());
