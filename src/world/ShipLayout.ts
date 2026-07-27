@@ -156,7 +156,6 @@ export interface ShipBalconySpec {
   readonly ladderId: 'crew-ladder' | 'storage-ladder';
   readonly edge: ShipTransverseEdge;
   readonly coamingHeight: number;
-  readonly railHeight: number;
   readonly openingWidth: number;
 }
 
@@ -716,7 +715,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       ladderId: 'crew-ladder',
       edge: 'aft',
       coamingHeight: 0.12,
-      railHeight: 1.05,
       openingWidth: 1.5,
     },
     {
@@ -725,7 +723,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       ladderId: 'storage-ladder',
       edge: 'forward',
       coamingHeight: 0.12,
-      railHeight: 1.05,
       openingWidth: 1.5,
     },
   ],
@@ -1149,8 +1146,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   });
   const balconyLadderIds = new Set<string>();
   layout.balconies.forEach((balcony) => {
-    if (!positive(balcony.coamingHeight) || !positive(balcony.railHeight)
-      || !positive(balcony.openingWidth)) {
+    if (!positive(balcony.coamingHeight) || !positive(balcony.openingWidth)) {
       throw new Error(`Balcony ${balcony.id} must have positive finite dimensions`);
     }
     if (balcony.zoneId !== 'crewCabin' && balcony.zoneId !== 'storageWorkroom') {
