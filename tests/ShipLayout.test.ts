@@ -10,8 +10,39 @@ import {
   furnitureRect,
   validateShipLayout,
 } from '../src/world/ShipLayout';
+import type { ShipZoneId } from '../src/world/ShipLayout';
 
 describe('scavenging ship layout', () => {
+  it('defines the approved enlarged single-level plan', () => {
+    expect(FREIGHTER_DIMENSIONS).toEqual({ width: 20, length: 55, deckY: 2.22 });
+
+    const zone = (id: ShipZoneId) =>
+      SHIP_LAYOUT.zones.find((candidate) => candidate.id === id)!.bounds;
+    const crew = zone('crewCabin');
+    const wheelhouse = zone('wheelhouse');
+    const storage = zone('storageWorkroom');
+
+    expect(crew.maxX - crew.minX).toBeCloseTo(11.5);
+    expect(storage.maxX - storage.minX).toBeCloseTo(11.5);
+    expect(wheelhouse.maxX - wheelhouse.minX).toBeCloseTo(11);
+    expect(wheelhouse.minZ - crew.maxZ).toBeCloseTo(3.5);
+    expect(FREIGHTER_DIMENSIONS.deckY).toBe(2.22);
+  });
+
+  it('uses one central mast outside the clear forward-room passage', () => {
+    expect(SHIP_LAYOUT.rigging.masts).toHaveLength(1);
+    const mast = SHIP_LAYOUT.rigging.masts[0]!;
+    expect(mast.id).toBe('mainmast');
+    expect(mast.position).toEqual([0, FREIGHTER_DIMENSIONS.deckY, 0]);
+    expect(mast.sails.map(({ id }) => id)).toEqual(['mainsail', 'staysail']);
+
+    const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+    const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+    expect(
+      mast.position[2] <= crew.maxZ || mast.position[2] >= wheelhouse.minZ,
+    ).toBe(true);
+  });
+
   it('assigns deck detail colliders to every retained barrel', () => {
     expect(SHIP_DECK_DETAIL_COUNTS).toEqual({
       barrel: 2,
@@ -100,38 +131,43 @@ describe('scavenging ship layout', () => {
     const zeroHeightMast = {
       ...SHIP_LAYOUT,
       rigging: {
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'foremast'
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
           ? { ...mast, height: 0 }
           : mast),
       },
     };
-    expect(() => validateShipLayout(zeroHeightMast)).toThrow(/foremast/i);
+    expect(() => validateShipLayout(zeroHeightMast)).toThrow(/mainmast/i);
 
     const evacuationMast = {
       ...SHIP_LAYOUT,
       rigging: {
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'aft-mast'
-          ? { ...mast, position: [7.1, 2.22, 0] as const }
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
+          ? { ...mast, position: [8.9, 2.22, 0] as const }
           : mast),
       },
     };
-    expect(() => validateShipLayout(evacuationMast)).toThrow(/aft-mast/i);
+    expect(() => validateShipLayout(evacuationMast)).toThrow(/mainmast/i);
   });
 
   it.each([
-    ['a sail top at the minimum clearance', 5.45],
-    ['a negative derived cloth length just above the minimum clearance', 5.455],
-  ])('rejects %s', (_case, height) => {
+    ['a sail foot below the minimum cloth clearance', 5.2],
+    ['a sail foot just below the minimum cloth clearance', 5.205],
+  ])('rejects %s', (_case, footY) => {
     const invalidMast = {
       ...SHIP_LAYOUT,
       rigging: {
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'foremast'
-          ? { ...mast, height }
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
+          ? {
+            ...mast,
+            sails: mast.sails.map((sail) => sail.id === 'mainsail'
+              ? { ...sail, footY }
+              : sail),
+          }
           : mast),
       },
     };
 
-    expect(() => validateShipLayout(invalidMast)).toThrow(/foremast.*cloth clearance/i);
+    expect(() => validateShipLayout(invalidMast)).toThrow(/mainmast.*mainsail.*cloth clearance/i);
   });
 
   it('rejects non-colliding visual details over searchable furniture and item access', () => {
@@ -160,7 +196,7 @@ describe('scavenging ship layout', () => {
       details: SHIP_LAYOUT.details.map((detail) => {
         if (detail.id !== 'barrel-1') return detail;
         const { colliderSize: _colliderSize, ...nonCollidingDetail } = detail;
-        return { ...nonCollidingDetail, position: [-3.815, 2.22, 4.315] as const };
+        return { ...nonCollidingDetail, position: [-4.4, 2.22, 3.825] as const };
       }),
     };
     expect(() => validateShipLayout(crateOverlap))
@@ -171,7 +207,7 @@ describe('scavenging ship layout', () => {
       details: SHIP_LAYOUT.details.map((detail) => {
         if (detail.id !== 'barrel-1') return detail;
         const { colliderSize: _colliderSize, ...nonCollidingDetail } = detail;
-        return { ...nonCollidingDetail, position: [-3.915, 2.22, -6.165] as const };
+        return { ...nonCollidingDetail, position: [-4.4, 2.22, -8.815] as const };
       }),
     };
     expect(() => validateShipLayout(accessOverlap))
@@ -182,7 +218,7 @@ describe('scavenging ship layout', () => {
     const crowdedDetails = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'barrel-2'
-        ? { ...detail, position: [-1.8, 2.22, 5.8] as const }
+        ? { ...detail, position: [-2.5, 2.22, 4] as const }
         : detail),
     };
 
@@ -193,11 +229,11 @@ describe('scavenging ship layout', () => {
   it('measures lane bounds instead of trusting a declared clearance', () => {
     const narrowed = {
       ...SHIP_LAYOUT,
-      lanes: SHIP_LAYOUT.lanes.map((lane) => lane.id === 'cargo-longitudinal'
+      lanes: SHIP_LAYOUT.lanes.map((lane) => lane.id === 'cargo-aft-longitudinal'
         ? { ...lane, bounds: { ...lane.bounds, maxX: 0.9 } }
         : lane),
     };
-    expect(() => validateShipLayout(narrowed)).toThrow(/cargo-longitudinal.*measured.*1\.9/i);
+    expect(() => validateShipLayout(narrowed)).toThrow(/cargo-aft-longitudinal.*measured.*2/i);
   });
 
   it('applies placement scale when checking furniture footprints', () => {
@@ -205,7 +241,7 @@ describe('scavenging ship layout', () => {
       ...SHIP_LAYOUT,
       furniture: [{
         id: 'scaled-furniture', modelId: 'desk' as const, zoneId: 'crewCabin' as const,
-        position: [-3.5, 2.22, 7.4] as const, rotationY: 0 as const,
+        position: [-4.7, 2.22, 7.4] as const, rotationY: 0 as const,
         colliderSize: [1, 1, 1] as const, scale: [2, 1, 1] as const, surfaces: [],
       }],
     };
@@ -232,7 +268,7 @@ describe('scavenging ship layout', () => {
     const crossingLocker = {
       ...SHIP_LAYOUT,
       furniture: SHIP_LAYOUT.furniture.map((placement) => placement.id === 'cabin-bookcase-forward'
-        ? { ...placement, position: [-4.4, 2.22, 11.8] as const, rotationY: 1.5707963267948966 as const }
+        ? { ...placement, position: [-5.6, 2.22, 13.2] as const, rotationY: 1.5707963267948966 as const }
         : placement),
     };
     expect(() => validateShipLayout(crossingLocker))
@@ -299,7 +335,7 @@ describe('scavenging ship layout', () => {
         : zone),
       furniture: [{
         id: 'fixture-table', modelId: 'table' as const, zoneId: 'storageWorkroom' as const,
-        position: [0, 2.22, -9] as const, rotationY: 0 as const,
+        position: [0, 2.22, -12] as const, rotationY: 0 as const,
         colliderSize: [1, 1, 1] as const, scale: [2, 1, 1] as const,
         surfaces: [{
           id: surfaceId,
@@ -315,7 +351,7 @@ describe('scavenging ship layout', () => {
       }],
       targets: [...SHIP_LAYOUT.targets, {
         id: `${surfaceId}-standing-0`,
-        position: [0, -13] as const,
+        position: [0, -12] as const,
         kind: 'surface' as const,
       }],
     };
@@ -325,7 +361,7 @@ describe('scavenging ship layout', () => {
     expect(result.minimumSecondaryClearance).toBeCloseTo(1.4);
     expect(result.secondaryAccessRectangles).toEqual([{
       id: `${surfaceId}-access-0`,
-      bounds: { minX: -0.35, maxX: 2.35, minZ: -9.35, maxZ: -8.65 },
+      bounds: { minX: -0.35, maxX: 2.35, minZ: -12.35, maxZ: -11.65 },
     }]);
     expect(() => validateShipLayout(fixture)).not.toThrow();
   });
