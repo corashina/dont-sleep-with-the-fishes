@@ -44,6 +44,7 @@ import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemP
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
+import { skyPaletteFor } from '../src/world/skyPalette';
 import { World } from '../src/world/World';
 import {
   createTestPropModels,
@@ -69,6 +70,19 @@ const expectTestModelTransform = (root: Object3D): void => {
   });
   expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
 };
+
+describe('sky palettes', () => {
+  it.each([
+    ['calm', 'day', 0.0108],
+    ['calm', 'night', 0.0189],
+    ['overcast', 'day', 0.0171],
+    ['overcast', 'night', 0.0216],
+    ['squall', 'day', 0.027],
+    ['squall', 'night', 0.0306],
+  ] as const)('reduces %s %s base fog by ten percent', (weather, phase, expected) => {
+    expect(skyPaletteFor({ weather, phase, severity: 0 }).fogDensity).toBeCloseTo(expected, 5);
+  });
+});
 
 interface RenderResources {
   geometries: Set<BufferGeometry>;

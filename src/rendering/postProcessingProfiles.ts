@@ -34,69 +34,74 @@ function profile(value: PostProcessingProfile): Readonly<PostProcessingProfile> 
 
 const PROFILES = {
   scavenge: profile({
-    id: 'scavenge', contrast: 1.06, saturation: 0.92, highlightCompression: 0.16,
+    id: 'scavenge', contrast: 1.12, saturation: 1.10, highlightCompression: 0.16,
     shadowLift: 0,
-    shadowTint: 0x123039, shadowTintStrength: 0.08,
+    shadowTint: 0x123039, shadowTintStrength: 0.06,
     highlightTint: 0xd8aa6d, highlightTintStrength: 0.035,
     posterizationLevels: 12, inkFrameStrength: 0.42,
     halftoneStrength: 0.075, halftoneSizeCssPixels: 4.5,
     vignetteStrength: 0.22, chromaticAberrationCssPixels: 0.45, grainStrength: 0.022,
   }),
   'survival-day-calm': profile({
-    id: 'survival-day-calm', contrast: 1.04, saturation: 0.93, highlightCompression: 0.14,
+    id: 'survival-day-calm', contrast: 1.10, saturation: 1.08, highlightCompression: 0.14,
     shadowLift: 0,
-    shadowTint: 0x18343a, shadowTintStrength: 0.06,
+    shadowTint: 0x18343a, shadowTintStrength: 0.04,
     highlightTint: 0xe0b879, highlightTintStrength: 0.045,
     posterizationLevels: 10, inkFrameStrength: 0.72,
     halftoneStrength: 0.055, halftoneSizeCssPixels: 5,
     vignetteStrength: 0.18, chromaticAberrationCssPixels: 0.3, grainStrength: 0.018,
   }),
   'survival-day-overcast': profile({
-    id: 'survival-day-overcast', contrast: 1.05, saturation: 0.9, highlightCompression: 0.15,
+    id: 'survival-day-overcast', contrast: 1.11, saturation: 1.06, highlightCompression: 0.15,
     shadowLift: 0.005,
-    shadowTint: 0x17343c, shadowTintStrength: 0.085,
+    shadowTint: 0x17343c, shadowTintStrength: 0.065,
     highlightTint: 0xc8ad7c, highlightTintStrength: 0.03,
     posterizationLevels: 9, inkFrameStrength: 0.76,
     halftoneStrength: 0.06, halftoneSizeCssPixels: 5,
     vignetteStrength: 0.21, chromaticAberrationCssPixels: 0.38, grainStrength: 0.023,
   }),
   'survival-day-squall': profile({
-    id: 'survival-day-squall', contrast: 1.08, saturation: 0.86, highlightCompression: 0.18,
+    id: 'survival-day-squall', contrast: 1.14, saturation: 1.04, highlightCompression: 0.18,
     shadowLift: 0.008,
-    shadowTint: 0x0d2832, shadowTintStrength: 0.12,
+    shadowTint: 0x0d2832, shadowTintStrength: 0.10,
     highlightTint: 0xb39c77, highlightTintStrength: 0.02,
     posterizationLevels: 8, inkFrameStrength: 0.82,
     halftoneStrength: 0.045, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.29, chromaticAberrationCssPixels: 0.55, grainStrength: 0.035,
   }),
   'survival-night-calm': profile({
-    id: 'survival-night-calm', contrast: 1.03, saturation: 0.88, highlightCompression: 0.1,
+    id: 'survival-night-calm', contrast: 1.08, saturation: 1.06, highlightCompression: 0.1,
     shadowLift: 0.025,
-    shadowTint: 0x153442, shadowTintStrength: 0.1,
+    shadowTint: 0x153442, shadowTintStrength: 0.08,
     highlightTint: 0xb9a477, highlightTintStrength: 0.025,
     posterizationLevels: 8, inkFrameStrength: 0.78,
     halftoneStrength: 0.035, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.24, chromaticAberrationCssPixels: 0.35, grainStrength: 0.024,
   }),
   'survival-night-overcast': profile({
-    id: 'survival-night-overcast', contrast: 1.04, saturation: 0.85, highlightCompression: 0.11,
+    id: 'survival-night-overcast', contrast: 1.10, saturation: 1.04, highlightCompression: 0.11,
     shadowLift: 0.03,
-    shadowTint: 0x102e3b, shadowTintStrength: 0.12,
+    shadowTint: 0x102e3b, shadowTintStrength: 0.10,
     highlightTint: 0xa89777, highlightTintStrength: 0.018,
     posterizationLevels: 7, inkFrameStrength: 0.82,
     halftoneStrength: 0.03, halftoneSizeCssPixels: 5.5,
     vignetteStrength: 0.27, chromaticAberrationCssPixels: 0.42, grainStrength: 0.029,
   }),
   'survival-night-squall': profile({
-    id: 'survival-night-squall', contrast: 1.06, saturation: 0.82, highlightCompression: 0.13,
+    id: 'survival-night-squall', contrast: 1.12, saturation: 1.02, highlightCompression: 0.13,
     shadowLift: 0.035,
-    shadowTint: 0x0b2531, shadowTintStrength: 0.14,
+    shadowTint: 0x0b2531, shadowTintStrength: 0.12,
     highlightTint: 0x97886f, highlightTintStrength: 0.012,
     posterizationLevels: 6, inkFrameStrength: 0.88,
     halftoneStrength: 0.025, halftoneSizeCssPixels: 6,
     vignetteStrength: 0.31, chromaticAberrationCssPixels: 0.6, grainStrength: 0.04,
   }),
 } as const;
+
+export function postProcessingProfilesForTest():
+readonly Readonly<PostProcessingProfile>[] {
+  return Object.values(PROFILES);
+}
 
 const SURVIVAL_PROFILES = {
   day: {
