@@ -51,6 +51,32 @@ describe('EventPresentationLayer', () => {
     layer.dispose();
   });
 
+  it('restores every staged tableau to its authored base transform on clear', () => {
+    const layer = createLayer();
+    const prop = layer.root.getObjectByName('event-prop:drifting-loot')!;
+    const basePosition = prop.position.clone();
+    const baseQuaternion = prop.quaternion.clone();
+
+    layer.stage('drifting-loot');
+    layer.update(12, 1 / 60);
+    expect(prop.position.equals(basePosition)).toBe(false);
+
+    layer.clear();
+
+    expect(prop.position.equals(basePosition)).toBe(true);
+    expect(prop.quaternion.equals(baseQuaternion)).toBe(true);
+    layer.dispose();
+  });
+
+  it('includes the approved identifying components in focused placeholder tableaus', () => {
+    const layer = createLayer();
+
+    expect(layer.root.getObjectByName('bottle-retrieval-line')).toBeDefined();
+    expect(layer.root.getObjectByName('stern-fish-splash')).toBeDefined();
+    expect(layer.root.getObjectByName('trader-cloaked-silhouette')).toBeDefined();
+    layer.dispose();
+  });
+
   it('disposes every owned geometry and material exactly once', () => {
     const layer = createLayer();
     const resources = collect(layer.root);

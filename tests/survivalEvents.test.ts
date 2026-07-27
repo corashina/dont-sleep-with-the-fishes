@@ -216,6 +216,39 @@ describe('survival events', () => {
     ]);
   });
 
+  it('encodes the authored Drifting Loot cost, Handyman response, and fallback labels', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+    const retrieve = event('drifting-loot').choices.find(({ id }) => id === 'retrieve')!;
+    expect(retrieve.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
+    expect(retrieve.outcomes.every(({ effects }) => (
+      effects.resources?.some((effect) => (
+        effect.resource === 'energy'
+        && effect.operation === 'subtract'
+        && effect.value === 3
+      )) === true
+    ))).toBe(true);
+
+    expect(event('handyman').choices.find(({ id }) => id === 'touch')).toMatchObject({
+      label: 'Touch the Hand',
+      outcomes: [{
+        effects: {
+          resources: [
+            { resource: 'hull', operation: 'subtract', value: { min: 30, max: 60 } },
+            { resource: 'health', operation: 'subtract', value: 70 },
+          ],
+        },
+      }],
+    });
+    expect([
+      ['check-the-back', 'Ignore'],
+      ['mystery-chest', 'Leave'],
+      ['midnight-tour', 'Sail On'],
+      ['night-trader', 'Refuse'],
+    ].map(([eventId, label]) => (
+      event(eventId!).choices.find(({ id }) => id === 'sleep')?.label === label
+    ))).toEqual([true, true, true, true]);
+  });
+
   it('blocks one-time, absent-item, and rescue-progress events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,

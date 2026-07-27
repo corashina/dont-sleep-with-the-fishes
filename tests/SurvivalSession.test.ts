@@ -156,6 +156,22 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toEqual(before);
   });
 
+  it('charges the full Drifting Loot retrieval cost on success', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1041,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 3 },
+      initialEventId: 'drifting-loot',
+    });
+
+    expect(session.resolveEvent(choiceResponse('retrieve'))).toMatchObject({
+      accepted: true,
+      message: 'You recover two food.',
+      deltas: { energy: -3, food: 2 },
+    });
+    expect(session.snapshot()).toMatchObject({ energy: 0, food: 2 });
+  });
+
   it('trades both Handyman directions with their correct input mutation', () => {
     const spyglass = new SurvivalSession(saved('spyglass'), {
       seed: 105, random: sequenceRandom([0]), initial: { day: 20 }, initialEventId: 'handyman',
@@ -171,6 +187,27 @@ describe('SurvivalSession daytime actions', () => {
     expect(flashlight.resolveEvent(itemResponse('flashlight'))).toMatchObject({ accepted: true, deltas: {} });
     expect(flashlight.snapshot().inventory).toMatchObject({
       'flashlight-1': { condition: 'lost' }, 'spyglass-1': { condition: 'usable' },
+    });
+  });
+
+  it.each([
+    [0, -30],
+    [0.999999, -60],
+  ] as const)('resolves Touch the Hand with bounded hull damage at roll %s', (roll, hullDelta) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1061,
+      random: sequenceRandom([0, roll]),
+      initial: { day: 20 },
+      initialEventId: 'handyman',
+    });
+
+    expect(session.resolveEvent(choiceResponse('touch'))).toMatchObject({
+      accepted: true,
+      deltas: { hull: hullDelta, health: -70 },
+    });
+    expect(session.snapshot()).toMatchObject({
+      hull: 100 + hullDelta,
+      health: 30,
     });
   });
 
@@ -234,7 +271,10 @@ describe('SurvivalSession daytime actions', () => {
         items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }],
       });
 
-    expect(fallback.resolveEvent(choiceResponse('sleep')).deltas).toEqual({ food: 1 });
+    expect(fallback.resolveEvent(choiceResponse('sleep'))).toMatchObject({
+      deltas: { food: 1 },
+      message: 'The item slot is occupied, so you receive one food instead.',
+    });
   });
 
   it('rejects a mismatched or stale exact instance without mutation or random draws', () => {

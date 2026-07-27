@@ -1013,6 +1013,64 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
+  it('opens Drifting Loot after a resource-neutral day action and pays its successful cost', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'cannedFood-1', type: 'cannedFood' }],
+      {
+        seed: 202,
+        random: sequenceRandom([0.999999, 0]),
+        initial: { day: 3, hunger: 35, energy: 3 },
+      },
+    );
+    const setEventSelection = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      setBusy: vi.fn(),
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection,
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      showFeedback: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+    phase.start();
+
+    phase.handleAction('eat');
+    await flushPromises();
+    await flushPromises();
+
+    expect(session.snapshot()).toMatchObject({
+      state: 'dayEvent',
+      pendingEventId: 'drifting-loot',
+      energy: 3,
+    });
+    expect(setEventSelection).toHaveBeenCalled();
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    expect(session.snapshot()).toMatchObject({
+      state: 'day',
+      pendingEventId: null,
+      energy: 0,
+      food: 2,
+    });
+  });
+
   it('stages a committed night event under cover before revealing choices', async () => {
     const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
     let current = snapshot();
@@ -1142,6 +1200,102 @@ describe('SurvivalPhase orchestration', () => {
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  it('finishes the contextual press beat before resolving and reacting', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot')!;
+    let current = snapshot({
+      state: 'dayEvent',
+      pendingEventId: event.id,
+      energy: 3,
+    });
+    const calls: string[] = [];
+    const beat = deferred();
+    const resolveEvent = vi.fn(() => {
+      calls.push('resolve');
+      current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
+      return accepted({ code: 'event-resolved', cue: 'none', deltas: { energy: -3 } });
+    });
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => {
+        calls.push('press');
+        return beat.promise;
+      }),
+      setBusy: vi.fn(),
+      showFeedback: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current), resolveEvent },
+      world: {
+        revealEvent: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => {
+          calls.push('react');
+          return Promise.resolve();
+        }),
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+    phase.start();
+    await flushPromises();
+
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    expect(calls).toEqual(['press']);
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    beat.resolve();
+    await flushPromises();
+    expect(calls.slice(0, 3)).toEqual(['press', 'resolve', 'react']);
+  });
+
+  it('does not resolve after disposal cancels a pending contextual press beat', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot')!;
+    const beat = deferred();
+    const resolveEvent = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => beat.promise),
+      setBusy: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dayEvent',
+          pendingEventId: event.id,
+          energy: 3,
+        })),
+        resolveEvent,
+      },
+      world: { revealEvent: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
+      ui,
+    });
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+
+    phase.dispose();
+    beat.resolve();
+    await flushPromises();
+
+    expect(resolveEvent).not.toHaveBeenCalled();
   });
 
   it('explains unmet resource requirements in contextual choice view models', async () => {

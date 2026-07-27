@@ -272,10 +272,8 @@ export class SurvivalPhase implements GamePhase {
       void this.runEndDay(outcome);
       return;
     }
-    if ((outcome.deltas.energy ?? 0) < 0) {
-      const day = this.session.snapshot().day;
-      if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
-    }
+    const day = this.session.snapshot().day;
+    if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     void this.runDayAction(outcome);
   }
 
@@ -780,8 +778,11 @@ export class SurvivalPhase implements GamePhase {
     const pending = this.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
-    this.eventPresentation = 'resolving';
+    this.eventPresentation = 'using';
     this.setBusy(true);
+    await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {

@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferGeometry,
-  Color,
   ConeGeometry,
   CylinderGeometry,
   Group,
@@ -135,6 +134,14 @@ function bottleTableau(materials: MaritimeMaterials): Group {
   addMesh(root, 'bottle-neck', new CylinderGeometry(0.07, 0.105, 0.24, 7), materials.glass, [0, 0.42, 0]);
   addMesh(root, 'bottle-cork', new CylinderGeometry(0.068, 0.068, 0.11, 7), materials.rope, [0, 0.57, 0]);
   addMesh(root, 'bottle-paper', new BoxGeometry(0.17, 0.28, 0.025), materials.paper, [0.015, 0.02, 0]);
+  addMesh(
+    root,
+    'bottle-retrieval-line',
+    new CylinderGeometry(0.012, 0.016, 1.35, 5),
+    materials.rope,
+    [0.72, 0.05, 0.02],
+    [0, 0, Math.PI / 2 - 0.08],
+  );
   root.rotation.z = Math.PI / 2 + 0.13;
   return root;
 }
@@ -161,6 +168,15 @@ function fishTableau(materials: MaritimeMaterials, enormous = false): Group {
   if (enormous) {
     addMesh(root, 'fish-eye-second', new SphereGeometry(0.07 * scale, 7, 5), materials.eye, [-0.40 * scale, 0.11 * scale, -0.31 * scale]);
     addMesh(root, 'fish-jaw', new BoxGeometry(0.95 * scale, 0.10 * scale, 0.50 * scale), materials.fish, [-0.42 * scale, -0.35 * scale, 0], [0, 0, -0.08]);
+  } else {
+    addMesh(
+      root,
+      'stern-fish-splash',
+      new TorusGeometry(0.52, 0.055, 5, 10, Math.PI * 1.35),
+      materials.glass,
+      [0.05, -0.24, 0],
+      [Math.PI / 2, 0.22, 0.1],
+    );
   }
   return root;
 }
@@ -197,6 +213,8 @@ function traderTableau(materials: MaritimeMaterials): Group {
   }
   addMesh(root, 'trader-case', new BoxGeometry(0.62, 0.4, 0.2), materials.wood, [0.38, 0.37, -0.15], [-0.42, 0.08, 0]);
   addMesh(root, 'trader-oar', new BoxGeometry(1.8, 0.055, 0.10), materials.wood, [0.1, 0.22, 0.52], [0, 0.25, -0.05]);
+  addMesh(root, 'trader-cloaked-silhouette', new ConeGeometry(0.34, 1.05, 6), materials.vessel, [-0.26, 0.75, -0.03], [0, 0.08, -0.04]);
+  addMesh(root, 'trader-cloaked-head', new SphereGeometry(0.19, 7, 5), materials.fishDark, [-0.26, 1.28, -0.03]);
   return root;
 }
 
@@ -262,7 +280,6 @@ export class EventPresentationLayer {
   private readonly ownedMaterials = new Set<Material>();
   private readonly positionScratch = new Vector3();
   private readonly quaternionScratch = new Quaternion();
-  private readonly reactionColorScratch = new Color();
   private readonly waveSample: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -328,7 +345,6 @@ export class EventPresentationLayer {
     this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
       (value) => typeof value === 'number' && value < 0,
     ) ? 1 : -1;
-    this.reactionColorScratch.setHex(this.reactionDirection > 0 ? 0x5c745e : 0x765044);
     return this.startAnimation('react', eventId);
   }
 
@@ -340,6 +356,7 @@ export class EventPresentationLayer {
     for (const id of TABLEAU_EVENT_IDS) {
       const tableau = this.tableaus.get(id)!;
       tableau.heldReactionTilt = 0;
+      this.resetTableauPose(tableau);
       tableau.root.visible = id === 'other-people' && this.rescueProgress !== null;
     }
   }
