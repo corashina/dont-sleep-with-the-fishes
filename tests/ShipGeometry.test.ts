@@ -214,6 +214,41 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('extends the underwater hull through a deep chine to a narrow keel', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const hull = build.root.getObjectByName('main-hull-body') as Mesh;
+      const positions = hull.geometry.getAttribute('position');
+      const widthsByLocalY = new Map<number, { minX: number; maxX: number }>();
+      for (let index = 0; index < positions.count; index += 1) {
+        const y = Math.round(positions.getY(index) * 1000) / 1000;
+        const bounds = widthsByLocalY.get(y) ?? {
+          minX: Number.POSITIVE_INFINITY,
+          maxX: Number.NEGATIVE_INFINITY,
+        };
+        bounds.minX = Math.min(bounds.minX, positions.getX(index));
+        bounds.maxX = Math.max(bounds.maxX, positions.getX(index));
+        widthsByLocalY.set(y, bounds);
+      }
+      const profile = [...widthsByLocalY.entries()]
+        .sort(([firstY], [secondY]) => secondY - firstY);
+
+      expect(profile).toHaveLength(3);
+      expect(profile[0]![1].maxX - profile[0]![1].minX).toBeCloseTo(20);
+      expect(profile[1]![1].maxX - profile[1]![1].minX).toBeGreaterThan(13);
+      expect(profile[1]![1].maxX - profile[1]![1].minX).toBeLessThan(16);
+      expect(profile[2]![1].maxX - profile[2]![1].minX).toBeLessThan(3.5);
+      expect(profile[0]![0] - profile[2]![0]).toBeGreaterThanOrEqual(4.5);
+      expect(build.waterExclusion.minimumLocalY).toBeCloseTo(
+        hull.position.y + profile[2]![0],
+      );
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('keeps the painted upper hull below the timber deck surface', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
