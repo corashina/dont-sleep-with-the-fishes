@@ -6,6 +6,9 @@ import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
 import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 import type { ShipAssets } from '../src/world/ShipAssets';
+import { testPhysicsRuntime } from './helpers/physics';
+
+const physicsRuntime = await testPhysicsRuntime();
 
 const constructionMocks = vi.hoisted(() => ({
   WebGLRenderer: vi.fn(),
@@ -61,6 +64,7 @@ describe('Game construction rollback', () => {
         {} as SkyAssets,
         {} as LifeboatAssets,
         {} as ShipAssets,
+        physicsRuntime,
       );
     } catch (error) {
       thrown = error;

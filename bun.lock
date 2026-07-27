@@ -5,6 +5,7 @@
     "": {
       "name": "dont-sleep-with-the-fishes",
       "dependencies": {
+        "@dimforge/rapier3d-deterministic-compat": "0.19.3",
         "three": "^0.180.0",
       },
       "devDependencies": {
@@ -48,6 +49,8 @@
     "@dabh/diagnostics": ["@dabh/diagnostics@2.0.8", "", { "dependencies": { "@so-ric/colorspace": "^1.1.6", "enabled": "2.0.x", "kuler": "^2.0.0" } }, "sha512-R4MSXTVnuMzGD7bzHdW2ZhhdPC/igELENcq5IjEverBvq5hn1SXCWcsi6eSsdWP0/Ur+SItRRjAktmdoX/8R/Q=="],
 
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
+
+    "@dimforge/rapier3d-deterministic-compat": ["@dimforge/rapier3d-deterministic-compat@0.19.3", "", {}, "sha512-peuD6Cq4ePNW+awx9zzB20nUJ6qNWuf1brPk2bU8o1eV8LDgBqcZ/jz3w8Stuy7KVIhWZCeVkGheiGDIWvjE8Q=="],
 
     "@donmccurdy/caporal": ["@donmccurdy/caporal@0.0.10", "", { "dependencies": { "@types/glob": "^8.1.0", "@types/lodash": "^4.14.197", "@types/node": "20.5.6", "@types/table": "5.0.0", "@types/wrap-ansi": "^8.0.1", "chalk": "3.0.0", "glob": "^10.3.3", "lodash": "^4.17.21", "table": "5.4.6", "winston": "3.10.0", "wrap-ansi": "^8.1.0" } }, "sha512-VdaJjOqYFYcDTM5We2x8cL+B+U9UFQvq0iW2ypqEGX31SDf2oYFjEg7INEJorBwJJnFNXV8jXoYGzJyLeYl1EQ=="],
 

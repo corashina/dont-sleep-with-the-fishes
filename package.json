@@ -24,6 +24,7 @@
     "models:check": "bun run models:check:items && bun run models:check:ship && bun run models:check:fishing && bun run textures:check:lifeboat && bun run textures:check:ship"
   },
   "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.19.3",
     "three": "^0.180.0"
   },
   "devDependencies": {

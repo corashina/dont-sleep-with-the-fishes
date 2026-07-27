@@ -22,6 +22,15 @@ import {
   ShipAssets,
 } from '../world/ShipAssets';
 import { ShipItemPlacementError } from '../world/ShipItemPlacement';
+import {
+  loadPhysicsRuntime,
+  PhysicsLoadError,
+  type PhysicsRuntime,
+} from '../physics/PhysicsRuntime';
+import {
+  configuredPhysicsMode,
+  type PhysicsMode,
+} from '../physics/PhysicsOptions';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -34,6 +43,7 @@ export interface LaunchDependencies {
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
   loadShipAssets(): Promise<ShipAssets>;
+  loadPhysicsRuntime(): Promise<PhysicsRuntime>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
@@ -41,6 +51,8 @@ export interface LaunchDependencies {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    physicsRuntime: PhysicsRuntime | null,
+    physicsMode: PhysicsMode,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -50,6 +62,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
+  loadPhysicsRuntime,
   createGame: (
     mount,
     models,
@@ -57,8 +70,19 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    physicsRuntime,
+    physicsMode,
   ) => (
-    new Game(mount, models, shipFurniture, skyAssets, lifeboatAssets, shipAssets)
+    new Game(
+      mount,
+      models,
+      shipFurniture,
+      skyAssets,
+      lifeboatAssets,
+      shipAssets,
+      physicsRuntime,
+      physicsMode,
+    )
   ),
 };
 
@@ -68,25 +92,45 @@ interface LoadedGameAssets {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
+  physicsRuntime: PhysicsRuntime | null;
 }
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
+  physicsMode: PhysicsMode,
 ): Promise<LoadedGameAssets> {
-  const [models, shipFurniture, skyAssets, lifeboatAssets, shipAssets] =
+  const physicsRuntimePromise = physicsMode === 'off'
+    ? Promise.resolve(null)
+    : dependencies.loadPhysicsRuntime();
+  const [
+    models,
+    shipFurniture,
+    skyAssets,
+    lifeboatAssets,
+    shipAssets,
+    physicsRuntime,
+  ] =
     await Promise.allSettled([
       dependencies.loadModels(),
       dependencies.loadShipFurniture(),
       dependencies.loadSkyAssets(),
       dependencies.loadLifeboatAssets(),
       dependencies.loadShipAssets(),
+      physicsRuntimePromise,
     ]);
-  const results = [models, shipFurniture, skyAssets, lifeboatAssets, shipAssets] as const;
+  const assetResults = [
+    models,
+    shipFurniture,
+    skyAssets,
+    lifeboatAssets,
+    shipAssets,
+  ] as const;
+  const results = [...assetResults, physicsRuntime] as const;
   const firstFailure = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (firstFailure) {
-    for (const result of results) {
+    for (const result of assetResults) {
       if (result.status !== 'fulfilled') continue;
       try {
         result.value.dispose();
@@ -102,6 +146,7 @@ async function loadGameAssets(
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
     || shipAssets.status !== 'fulfilled'
+    || physicsRuntime.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
@@ -111,6 +156,7 @@ async function loadGameAssets(
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
     shipAssets: shipAssets.value,
+    physicsRuntime: physicsRuntime.value,
   };
 }
 
@@ -180,6 +226,17 @@ function renderShipPlacementFailure(
 }
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
+  if (error instanceof PhysicsLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'PHYSICS UNAVAILABLE',
+      title: 'Unable to prepare the moving deck',
+      lead: 'The ship simulation could not be initialized.',
+      detail: error.message,
+    });
+    return;
+  }
+
   if (error instanceof ItemModelLoadError) {
     if (error.itemId === 'fishingRod') {
       renderSystemScreen(mount, {
@@ -264,6 +321,7 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
 export function launchGame(
   mount: HTMLElement,
   dependencies: LaunchDependencies = PRODUCTION_DEPENDENCIES,
+  physicsMode: PhysicsMode = configuredPhysicsMode(),
 ): LaunchHandle {
   let cancelled = false;
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
@@ -284,7 +342,7 @@ export function launchGame(
 
   const completion = (async (): Promise<Game | null> => {
     try {
-      unownedAssets = await loadGameAssets(dependencies);
+      unownedAssets = await loadGameAssets(dependencies, physicsMode);
     } catch (error) {
       if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
       return null;
@@ -304,6 +362,8 @@ export function launchGame(
         unownedAssets.skyAssets,
         unownedAssets.lifeboatAssets,
         unownedAssets.shipAssets,
+        unownedAssets.physicsRuntime,
+        physicsMode,
       );
       game = createdGame;
       unownedAssets = null;

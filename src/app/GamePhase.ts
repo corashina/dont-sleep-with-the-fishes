@@ -6,6 +6,8 @@ import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { ShipAssets } from '../world/ShipAssets';
+import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
+import type { PhysicsMode } from '../physics/PhysicsOptions';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -19,6 +21,8 @@ export interface PhaseContext {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
+  physicsRuntime: PhysicsRuntime | null;
+  physicsMode: PhysicsMode;
 }
 
 export interface GamePhase {

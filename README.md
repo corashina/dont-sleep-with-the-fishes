@@ -135,6 +135,14 @@ For ambient-occlusion inspection, append `?ao=debug` to show the raw item AO
 buffer or `?ao=off` for an unoccluded comparison. Reload after changing modes.
 While the game is open, press `O` to cycle composite, raw AO, and AO-off modes.
 
+Scavenging physics is controlled in `src/physics/PhysicsOptions.ts`.
+`SCAVENGE_PHYSICS_DEBUG_MESHES` renders the kinematic deck, barriers, authored
+collision boxes, and dynamic barrel colliders as a wireframe overlay and is
+off by default. `SCAVENGE_PHYSICS_ENABLED` is the master switch; disabling it
+keeps both authored barrels fixed to the ship and skips the Rapier chunk
+download, initialization, world construction, simulation, debug rendering,
+and cleanup.
+
 ## Architecture
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
