@@ -15,7 +15,7 @@ export const PrintShader = {
     uShadowTintStrength: { value: 0 },
     uHighlightTint: { value: new Color(0xffffff) },
     uHighlightTintStrength: { value: 0 },
-    uPosterizationLevels: { value: 12 },
+    uPosterizationLevels: { value: 40 },
     uInkFrameStrength: { value: 0 },
     uHalftoneStrength: { value: 0 },
     uHalftoneSizeCssPixels: { value: 5 },
@@ -88,7 +88,7 @@ export const PrintShader = {
         highlightWeight * uHighlightTintStrength
       );
 
-      float levels = max(2.0, uPosterizationLevels);
+      float levels = max(32.0, uPosterizationLevels);
       color = floor(color * levels + 0.5) / levels;
       float frameInk = texture2D(tInkFrame, vUv).r;
       color *= 1.0 - frameInk * uInkFrameStrength;
