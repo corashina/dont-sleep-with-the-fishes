@@ -91,6 +91,7 @@ export class SurvivalSession {
   private pendingEventTargetId: ItemInstanceId | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
+  private readonly appearanceCounts = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalEventRecord | null = null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
@@ -316,6 +317,14 @@ export class SurvivalSession {
       return this.resolveEventChoice('sleep', null, null);
     }
 
+    if (response.kind === 'choice') {
+      const choice = this.pendingEvent.choices.find(({ id }) => id === response.choiceId);
+      if (choice?.itemId !== undefined) {
+        return this.reject('choice-unavailable', 'That response is not available for this event.');
+      }
+      return this.resolveEventChoice(response.choiceId, null, null);
+    }
+
     const item = this.inventory.snapshot()[response.instanceId];
     const choice = this.pendingEvent.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId === undefined) {
@@ -342,6 +351,9 @@ export class SurvivalSession {
     if (choice === undefined) {
       return this.reject('choice-unavailable', 'That response is not available for this event.');
     }
+    if (!this.meetsChoiceRequirements(choice.requirements)) {
+      return this.reject('requirements-unmet', 'You do not have the resources for that response.');
+    }
 
     const mutationExclusions = new Set<ItemInstanceId>();
     const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
@@ -350,6 +362,7 @@ export class SurvivalSession {
     const before = this.resourceValues();
     const resolved = resolveWeightedOutcome(choice, this.random);
     const inventoryMutations: JournalInventoryMutation[] = [];
+    let fallbackFoodGranted = false;
     for (const effect of resolved.effects.resources ?? []) {
       inventoryMutations.push(...this.applyEventResource(
         effect,
@@ -364,6 +377,7 @@ export class SurvivalSession {
         selectedInstanceId,
         attemptedItemId,
       );
+      if (mutation.kind === 'gain' && concrete === null) fallbackFoodGranted = true;
       if (concrete !== null) inventoryMutations.push(concrete);
     }
 
@@ -371,6 +385,7 @@ export class SurvivalSession {
     else this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
+    this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
     this.pendingEvent = null;
     this.pendingEventId = null;
     this.pendingEventTargetId = null;
@@ -381,7 +396,9 @@ export class SurvivalSession {
     const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
-      message: resolved.message,
+      message: fallbackFoodGranted
+        ? 'The item slot is occupied, so you receive one food instead.'
+        : resolved.message,
       deltas,
       cue,
     };
@@ -670,6 +687,9 @@ export class SurvivalSession {
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
       targetableItemIds: this.targetableItemIds(),
+      appearanceCounts: this.appearanceCounts,
+      inventoryItemIds: this.targetableItemIds(),
+      rescueProgress: this.rescueProgress,
     });
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -789,6 +809,12 @@ export class SurvivalSession {
     ));
   }
 
+  private meetsChoiceRequirements(
+    requirements: SurvivalEventDefinition['choices'][number]['requirements'],
+  ): boolean {
+    return requirements?.every(({ resource, minimum }) => this.resourceValues()[resource] >= minimum) ?? true;
+  }
+
   private usableEventItemInstanceId(id: ItemId): ItemInstanceId | null {
     return Object.values(this.inventory.snapshot())
       .filter((item) => item?.type === id && item.condition === 'usable')
@@ -866,6 +892,13 @@ export class SurvivalSession {
       ? selectedInstanceId
       : null;
     switch (mutation.kind) {
+      case 'gain': {
+        kind = 'gain';
+        const gained = this.inventory.gain(mutation.itemId);
+        instanceIds = gained === null ? [] : [gained];
+        if (gained === null) this.applyDeltas({ food: mutation.fallbackFood });
+        break;
+      }
       case 'consume':
         kind = 'consume';
         instanceIds = this.inventory.consumePreferred(

@@ -19,7 +19,7 @@ describe('BoatDepositSmoke', () => {
     expect(triggered.age).toBe(0);
     expect(triggered.opacity).toBeGreaterThan(0);
 
-    smoke.update(0.25, false);
+    smoke.update(0.25);
     const moving = smoke.snapshotForTest();
     expect(moving.age).toBeCloseTo(0.1);
     expect(moving.maximumRise).toBeGreaterThan(0);
@@ -27,29 +27,29 @@ describe('BoatDepositSmoke', () => {
     expect(smoke.points.geometry.getAttribute('position')).toBe(position);
   });
 
-  it('fades without moving particles when reduced motion is active', () => {
+  it('moves particles while the puff fades', () => {
     const smoke = new BoatDepositSmoke();
     smoke.trigger();
 
-    smoke.update(0.4, true);
+    smoke.update(0.4);
 
     expect(smoke.snapshotForTest()).toMatchObject({
       active: true,
       age: 0.1,
-      maximumRise: 0,
     });
+    expect(smoke.snapshotForTest().maximumRise).toBeGreaterThan(0);
   });
 
   it('restarts the same puff and hides it after its fixed lifetime', () => {
     const smoke = new BoatDepositSmoke();
     smoke.trigger();
-    smoke.update(0.1, false);
-    smoke.update(0.1, false);
+    smoke.update(0.1);
+    smoke.update(0.1);
     expect(smoke.snapshotForTest().age).toBeCloseTo(0.2);
 
     smoke.trigger();
     expect(smoke.snapshotForTest()).toMatchObject({ active: true, age: 0 });
-    for (let step = 0; step < 10; step += 1) smoke.update(0.1, false);
+    for (let step = 0; step < 10; step += 1) smoke.update(0.1);
 
     expect(smoke.snapshotForTest()).toEqual({
       active: false,

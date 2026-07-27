@@ -71,7 +71,7 @@ export class BoatDepositSmoke {
     this.points.geometry.getAttribute('position').needsUpdate = true;
   }
 
-  update(delta: number, reducedMotion: boolean): void {
+  update(delta: number): void {
     if (!this.active || this.disposed) return;
     const step = Number.isFinite(delta) ? Math.max(0, Math.min(delta, 0.1)) : 0;
     this.age = Math.min(LIFETIME, this.age + step);
@@ -84,7 +84,7 @@ export class BoatDepositSmoke {
       return;
     }
 
-    const motionTime = reducedMotion ? 0 : this.age;
+    const motionTime = this.age;
     for (let index = 0; index < this.positions.length; index += 1) {
       this.positions[index] = this.initialPositions[index]! + this.velocities[index]! * motionTime;
     }

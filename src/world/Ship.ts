@@ -36,7 +36,7 @@ export interface ShipBuild {
     minimumLocalY: number;
     heightProfile: WaterExclusionHeightProfile;
   };
-  updateEffects(delta: number, sinkingProgress: number, reducedMotion: boolean): void;
+  updateEffects(delta: number, sinkingProgress: number): void;
   dispose(): void;
 }
 
@@ -237,10 +237,10 @@ export function createShip(
       },
     },
     waterExclusion: assembledGeometry.waterExclusion,
-    updateEffects: (delta, progress, reducedMotion) => {
+    updateEffects: (delta, progress) => {
       if (disposed) return;
-      assembledSmoke.update(delta, progress, reducedMotion);
-      assembledRigging.update(delta, reducedMotion);
+      assembledSmoke.update(delta, progress);
+      assembledRigging.update(delta);
     },
     dispose: () => {
       if (disposed) return;

@@ -199,11 +199,82 @@ const EXPECTED_CHOICES = {
 
 describe('survival events', () => {
 
+  it('contains the approved non-story expansion', () => {
+    expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
+      'drifting-loot', 'drifting-bottle', 'check-the-back', 'mystery-chest',
+      'midnight-tour', 'night-trader', 'handyman', 'other-people',
+    ]));
+  });
+
+  it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
+    const bottle = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle');
+
+    expect(bottle?.choices.map(({ id, itemId }) => ({ id, itemId }))).toEqual([
+      { id: 'fishingNet', itemId: 'fishingNet' },
+      { id: 'swimRing', itemId: 'swimRing' },
+      { id: 'sleep', itemId: undefined },
+    ]);
+  });
+
+  it('encodes the authored Drifting Loot cost, Handyman response, and fallback labels', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+    const retrieve = event('drifting-loot').choices.find(({ id }) => id === 'retrieve')!;
+    expect(retrieve.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
+    expect(retrieve.outcomes.every(({ effects }) => (
+      effects.resources?.some((effect) => (
+        effect.resource === 'energy'
+        && effect.operation === 'subtract'
+        && effect.value === 3
+      )) === true
+    ))).toBe(true);
+
+    expect(event('handyman').choices.find(({ id }) => id === 'touch')).toMatchObject({
+      label: 'Touch the Hand',
+      outcomes: [{
+        effects: {
+          resources: [
+            { resource: 'hull', operation: 'subtract', value: { min: 30, max: 60 } },
+            { resource: 'health', operation: 'subtract', value: 70 },
+          ],
+        },
+      }],
+    });
+    expect([
+      ['check-the-back', 'Ignore'],
+      ['mystery-chest', 'Leave'],
+      ['midnight-tour', 'Sail On'],
+      ['night-trader', 'Refuse'],
+    ].map(([eventId, label]) => (
+      event(eventId!).choices.find(({ id }) => id === 'sleep')?.label === label
+    ))).toEqual([true, true, true, true]);
+  });
+
+  it('blocks one-time, absent-item, and rescue-progress events', () => {
+    const base = {
+      phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
+      lastSeenDay: new Map<string, number>(), targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueProgress: 0,
+    };
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...base,
+      inventoryItemIds: new Set(['bottledPaper']),
+    }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...base,
+      rescueProgress: 14,
+    }).some(({ id }) => id === 'other-people')).toBe(false);
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...base,
+      appearanceCounts: new Map([['drifting-bottle', 1]]),
+    }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
+  });
+
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
     const events = eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
       targetableItemIds: new Set(['anchor']),
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
     expect(events.every((event) => event.phase === 'day' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
@@ -212,6 +283,7 @@ describe('survival events', () => {
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
@@ -219,6 +291,7 @@ describe('survival events', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
 
     expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');

@@ -11,7 +11,6 @@ export interface PhaseContext {
   renderer: WebGLRenderer;
   sceneRenderer: SceneRenderer;
   camera: PerspectiveCamera;
-  reducedMotion: MediaQueryList;
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   maxTextureAnisotropy: number;

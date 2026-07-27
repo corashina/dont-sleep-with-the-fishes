@@ -71,7 +71,7 @@ describe('ship rigging', () => {
     }
   });
 
-  it('animates both sails and restores their neutral rotations for reduced motion', () => {
+  it('animates both sails', () => {
     const materials = createShipMaterials();
     const rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
     try {
@@ -79,13 +79,9 @@ describe('ship rigging', () => {
         rigging.root.getObjectByName(`sail:${id}`) as Mesh);
       const neutralRotations = sails.map((sail) => sail.rotation.z);
 
-      rigging.update(0.1, false);
+      rigging.update(0.1);
       sails.forEach((sail, index) =>
         expect(sail.rotation.z).not.toBe(neutralRotations[index]));
-
-      rigging.update(0.1, true);
-      sails.forEach((sail, index) =>
-        expect(sail.rotation.z).toBe(neutralRotations[index]));
     } finally {
       rigging.disposeGeometry();
       materials.dispose();

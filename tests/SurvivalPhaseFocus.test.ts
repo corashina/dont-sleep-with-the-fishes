@@ -58,7 +58,23 @@ describe('SurvivalPhase focus synchronization', () => {
       play: () => Promise.resolve(),
       dispose: () => undefined,
     };
-    const phase = SurvivalPhase.forTest({ session, world, ui });
+    const requestDayEvent = vi.fn(() => ({
+      accepted: false,
+      code: 'day-event-used',
+      message: 'No daytime event remains.',
+      deltas: {},
+      cue: 'none' as const,
+    }));
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: () => session.snapshot(),
+        availableReason: (action, option) => session.availableReason(action, option),
+        perform: (action, option) => session.perform(action, option),
+        requestDayEvent,
+      },
+      world,
+      ui,
+    });
     phase.start();
 
     const eat = mount.querySelector<HTMLButtonElement>('[data-anchor-id="cannedFood-1"]')!;
@@ -70,6 +86,7 @@ describe('SurvivalPhase focus synchronization', () => {
 
     expect(eat.isConnected && !eat.hidden).toBe(false);
     expect(document.activeElement).toBe(mount.querySelector('[data-action="endDay"]'));
+    expect(requestDayEvent).toHaveBeenCalledOnce();
     phase.dispose();
   });
 
@@ -326,7 +343,7 @@ describe('SurvivalPhase focus synchronization', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     const session = new SurvivalSession([], {
       seed: 4,
       random: sequenceRandom([0.5, 0]),

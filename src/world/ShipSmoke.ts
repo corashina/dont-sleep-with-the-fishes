@@ -75,18 +75,17 @@ export class ShipSmoke {
     this.points.frustumCulled = false;
   }
 
-  update(delta: number, sinkingProgress: number, reducedMotion: boolean): void {
+  update(delta: number, sinkingProgress: number): void {
     const step = Math.max(0, Math.min(delta, 0.1));
     const progress = Math.max(0, Math.min(sinkingProgress, 1));
 
     this.updateActivePuffs(step, progress);
 
-    const spawnInterval = (REGULAR_SPAWN_BASE - progress * SINKING_SPAWN_REDUCTION)
-      * (reducedMotion ? 1.9 : 1);
+    const spawnInterval = REGULAR_SPAWN_BASE - progress * SINKING_SPAWN_REDUCTION;
     this.spawnAccumulator += step;
     while (this.spawnAccumulator >= spawnInterval) {
       this.spawnAccumulator -= spawnInterval;
-      this.spawn(progress, reducedMotion);
+      this.spawn(progress);
     }
 
     this.points.geometry.getAttribute('position').needsUpdate = true;
@@ -142,7 +141,7 @@ export class ShipSmoke {
     }
   }
 
-  private spawn(sinkingProgress: number, reducedMotion: boolean): void {
+  private spawn(sinkingProgress: number): void {
     const index = this.active.indexOf(0);
     if (index === -1) return;
 
@@ -150,12 +149,12 @@ export class ShipSmoke {
     this.nextSource = (this.nextSource + 1) % this.outlets.length;
     const source = this.outlets[sourceIndex]!;
     const positionOffset = index * 3;
-    const horizontalScale = reducedMotion ? 0.3 : 1;
+    const horizontalScale = 1;
 
     this.active[index] = 1;
     this.sources[index] = sourceIndex;
     this.ages[index] = 0;
-    this.lifetimes[index] = (2.2 + this.random() * 1.1) * (reducedMotion ? 0.85 : 1);
+    this.lifetimes[index] = 2.2 + this.random() * 1.1;
     this.positions[positionOffset] = source.x;
     this.positions[positionOffset + 1] = source.y;
     this.positions[positionOffset + 2] = source.z;
