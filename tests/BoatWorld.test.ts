@@ -144,6 +144,63 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('forwards event staging and keeps the cargo vessel held for natural rescue', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      { matches: true } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('drifting-bottle');
+    expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(true);
+    const reveal = world.revealEvent('drifting-bottle');
+    world.update(1, 1 / 60);
+    await reveal;
+    world.clearEvent();
+    expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(false);
+
+    const rescue = world.play('rescue');
+    world.skipSequence();
+    await rescue;
+    expect(world.scene.getObjectByName('event-prop:other-people')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('shows a newly gained supply without allocating a model during inventory sync', () => {
+    const propModels = createTestPropModels();
+    const create = vi.spyOn(propModels, 'create');
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      { matches: false } as MediaQueryList,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const createdAtConstruction = create.mock.calls.length;
+    const gained = savedItem('energyBar');
+
+    world.syncInventory(snapshot([], {
+      inventory: {
+        [gained.instanceId]: { ...gained, condition: 'usable' as const },
+      },
+    }));
+
+    expect(create).toHaveBeenCalledTimes(createdAtConstruction);
+    expect(world.scene.getObjectByName('boat-supply:energyBar:copy-1')?.visible).toBe(true);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'supply:energyBar',
+        backingInstanceId: 'energyBar-1',
+      }),
+    ]));
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('uses the imported lantern model with a restrained shadow-casting light', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
