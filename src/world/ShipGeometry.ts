@@ -53,7 +53,8 @@ const HALF_LENGTH = FREIGHTER_DIMENSIONS.length / 2;
 const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
 
 const DECK_WIDTH = FREIGHTER_DIMENSIONS.width - 0.5;
-const DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 2;
+const DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 0.8;
+const DECK_HALF_WIDTH = DECK_WIDTH / 2;
 const END_CAP_DEPTH = 5.2;
 const HULL_HEIGHT = 4.6;
 const HULL_TOP_Y = 1.98;
@@ -105,7 +106,7 @@ const RAIL_COLLIDER_THICKNESS = 0.25;
 const RAIL_TOP_THICKNESS = 0.14;
 const RAIL_POST_WIDTH = 0.12;
 const RAIL_POST_SPACING = 2.4;
-const RAIL_END_DEPTH = END_CAP_DEPTH;
+const RAIL_END_DEPTH = END_CAP_DEPTH + RAIL_COLLIDER_THICKNESS / 2;
 const RAIL_END_SEGMENTS = 12;
 
 interface BlockOptions {
@@ -228,10 +229,9 @@ function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
 }
 
 function cargoFloorShape(layout: ShipLayoutSpec): Shape {
-  const cargo = requiredZone(layout, 'cargoDeck').bounds;
   const station = requiredZone(layout, 'lifeboatStation').bounds;
-  const radius = (cargo.maxX - cargo.minX) / 2;
-  const straightHalfLength = (cargo.maxZ - cargo.minZ) / 2 - END_CAP_DEPTH;
+  const radius = DECK_HALF_WIDTH;
+  const straightHalfLength = DECK_LENGTH / 2 - END_CAP_DEPTH;
   const shape = new Shape();
   shape.moveTo(-radius, -straightHalfLength);
   shape.absellipse(0, -straightHalfLength, radius, END_CAP_DEPTH, Math.PI, Math.PI * 2, false, 0);
@@ -313,7 +313,7 @@ function addFinishedFloors(
     root,
     geometries,
     'floor-lifeboatStation',
-    rectangularFloorShape(lifeboat.minX, lifeboat.maxX, lifeboat.minZ, lifeboat.maxZ),
+    rectangularFloorShape(lifeboat.minX, DECK_HALF_WIDTH, lifeboat.minZ, lifeboat.maxZ),
     materials.timberFloor,
   );
 
@@ -321,13 +321,13 @@ function addFinishedFloors(
   const stripeWidth = 0.2;
   const stripeShape = rectangularFloorShape(
     lifeboat.minX + stripeOuterInset,
-    lifeboat.maxX,
+    DECK_HALF_WIDTH,
     lifeboat.minZ + stripeOuterInset,
     lifeboat.maxZ - stripeOuterInset,
   );
   stripeShape.holes.push(rectangularFloorHole(
     lifeboat.minX + stripeOuterInset + stripeWidth,
-    lifeboat.maxX - stripeWidth,
+    DECK_HALF_WIDTH - stripeWidth,
     lifeboat.minZ + stripeOuterInset + stripeWidth,
     lifeboat.maxZ - stripeOuterInset - stripeWidth,
   ));
@@ -1129,8 +1129,8 @@ function addRails(
   layout: ShipLayoutSpec,
 ): void {
   const cargo = requiredZone(layout, 'cargoDeck').bounds;
-  const minZ = cargo.minZ + RAIL_END_DEPTH;
-  const maxZ = cargo.maxZ - RAIL_END_DEPTH;
+  const minZ = cargo.minZ + END_CAP_DEPTH;
+  const maxZ = cargo.maxZ - END_CAP_DEPTH;
   const opening = layout.rail.starboardOpening;
   const gapMinZ = opening.centerZ - opening.width / 2;
   const gapMaxZ = opening.centerZ + opening.width / 2;

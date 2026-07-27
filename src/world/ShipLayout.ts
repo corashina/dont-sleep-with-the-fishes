@@ -702,7 +702,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   targets: navigationTargets(doors, furniture),
   rail: {
     height: 1.05,
-    innerFaceX: 9.575,
+    innerFaceX: 9.75,
     starboardOpening: { centerZ: 0, width: 4 },
   },
   machineryClosure: rect(-3.6, 3.6, -22.5, -18.2),

@@ -265,6 +265,47 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('joins the finished deck and lifeboat stripe cleanly to the white rail edge', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const timberDeckBounds = new Box3().setFromObject(
+        build.root.getObjectByName('timber-deck')!,
+      );
+      const cargoFloorBounds = new Box3().setFromObject(
+        build.root.getObjectByName('floor-cargoDeck')!,
+      );
+      const stationFloorBounds = new Box3().setFromObject(
+        build.root.getObjectByName('floor-lifeboatStation')!,
+      );
+      const stripeBounds = new Box3().setFromObject(
+        build.root.getObjectByName('lifeboat-station-emergency-border')!,
+      );
+
+      expect(cargoFloorBounds.min.x).toBeCloseTo(timberDeckBounds.min.x);
+      expect(cargoFloorBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
+      expect(cargoFloorBounds.min.z).toBeCloseTo(timberDeckBounds.min.z);
+      expect(cargoFloorBounds.max.z).toBeCloseTo(timberDeckBounds.max.z);
+      expect(stationFloorBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
+      expect(stripeBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
+
+      const portRails = build.root.children.filter(({ name }) => name.startsWith('rail-port-'));
+      const starboardRails = build.root.children.filter(({ name }) =>
+        name.startsWith('rail-starboard-'));
+      portRails.forEach((rail) => expect(
+        new Box3().setFromObject(rail).max.x,
+        rail.name,
+      ).toBeLessThanOrEqual(timberDeckBounds.min.x));
+      starboardRails.forEach((rail) => expect(
+        new Box3().setFromObject(rail).min.x,
+        rail.name,
+      ).toBeGreaterThanOrEqual(timberDeckBounds.max.x));
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('renders room panels as textured weathered warm white', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
@@ -499,8 +540,8 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each([
-    new Vector3(-9.575, 2.72, 0),
-    new Vector3(9.575, 2.72, 4),
+    new Vector3(-9.75, 2.72, 0),
+    new Vector3(9.75, 2.72, 4),
   ])('blocks passage through the waist-height outer rail at %s', (point) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -660,7 +701,7 @@ describe('freighter geometry', () => {  interface PointXZ {
         centerX: 0,
         centerZ: cargo.maxZ - 5.2,
         radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
-        radiusZ: 5.2,
+        radiusZ: 5.325,
         end: 'bow',
         thickness: 0.25,
         minY: FREIGHTER_DIMENSIONS.deckY,
@@ -670,7 +711,7 @@ describe('freighter geometry', () => {  interface PointXZ {
         centerX: 0,
         centerZ: cargo.minZ + 5.2,
         radiusX: SHIP_LAYOUT.rail.innerFaceX + 0.125,
-        radiusZ: 5.2,
+        radiusZ: 5.325,
         end: 'stern',
         thickness: 0.25,
         minY: FREIGHTER_DIMENSIONS.deckY,
@@ -746,12 +787,12 @@ describe('freighter geometry', () => {  interface PointXZ {
       new Box3(),
     );
     const size = bounds.getSize(new Vector3());
-    expect(size.x).toBeGreaterThan(19.4);
-    expect(size.x).toBeLessThan(19.8);
+    expect(size.x).toBeGreaterThan(19.8);
+    expect(size.x).toBeLessThan(20.1);
     expect(size.y).toBeCloseTo(0.14);
     expect(size.z).toBeGreaterThan(5.1);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(27);
-    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(27.2);
+    expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeLessThan(27.4);
     const arc = build.arcColliders.find((candidate) => candidate.end === end);
     expect(arc).toBeDefined();
     const blocked = resolveArcMovement(
