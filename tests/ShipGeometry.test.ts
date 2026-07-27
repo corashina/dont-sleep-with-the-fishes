@@ -196,7 +196,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(upperHull.material).toBe(materials.upperHull);
       expect(waterline.material).toBe(materials.waterline);
       const upperHullBounds = new Box3().setFromObject(upperHull);
-      expect(upperHullBounds.max.y).toBeCloseTo(2.18);
+      expect(upperHullBounds.max.y).toBeCloseTo(2.15);
       expect(upperHullBounds.max.y - upperHullBounds.min.y).toBeGreaterThanOrEqual(0.8);
       expect(new Box3().setFromObject(waterline).max.y).toBeLessThanOrEqual(
         upperHullBounds.min.y + 0.05,
@@ -204,6 +204,22 @@ describe('freighter geometry', () => {  interface PointXZ {
       const lowerHullBounds = new Box3().setFromObject(lowerHull);
       expect(upperHullBounds.max.x).toBeGreaterThan(lowerHullBounds.max.x);
       expect(upperHullBounds.max.z).toBeGreaterThan(lowerHullBounds.max.z);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('keeps the painted upper hull below the timber deck surface', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const upperHull = build.root.getObjectByName('upper-hull') as Mesh;
+      const timberDeck = build.root.getObjectByName('timber-deck') as Mesh;
+      const upperHullTop = new Box3().setFromObject(upperHull).max.y;
+      const timberDeckTop = new Box3().setFromObject(timberDeck).max.y;
+
+      expect(upperHullTop).toBeLessThanOrEqual(timberDeckTop - 0.02);
     } finally {
       build.disposeGeometry();
       materials.dispose();
