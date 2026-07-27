@@ -271,10 +271,10 @@ describe('post-processing pipeline', () => {
       shadowLift: uniforms.uShadowLift?.value,
     }).toEqual(scavengeGrade);
     expect(scavengeGrade).toEqual({
-      contrast: 1.12,
+      contrast: 1.08,
       saturation: 1.1,
       posterization: 48,
-      shadowLift: 0.02,
+      shadowLift: 0.055,
     });
   });
 
