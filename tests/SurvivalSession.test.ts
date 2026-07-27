@@ -121,10 +121,11 @@ function choiceResponse(choiceId: string): EventResponse {
 describe('SurvivalSession daytime actions', () => {
 
   it('resolves the expanded contextual encounters deterministically', () => {
-    const bottle = new SurvivalSession(saved(), {
+    const bottle = new SurvivalSession(saved('swimRing'), {
       seed: 101, random: sequenceRandom([0]), initial: { day: 2 }, initialEventId: 'drifting-bottle',
     });
-    expect(bottle.resolveEvent(choiceResponse('retrieve'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(bottle.resolveEvent(itemResponse('swimRing'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(bottle.snapshot().inventory['swimRing-1']).toMatchObject({ condition: 'usable' });
     expect(bottle.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
 
     const chest = new SurvivalSession(saved(), {
