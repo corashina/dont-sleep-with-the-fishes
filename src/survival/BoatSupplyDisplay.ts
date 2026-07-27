@@ -13,6 +13,7 @@ import {
   Vector3,
 } from 'three';
 import {
+  ITEM_IDS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -85,6 +86,7 @@ interface ActiveAnimation {
 }
 
 const EVENT_ITEM_USE_DURATION = 0.65;
+const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
 
 function visibleCopyCount(quantity: number): 0 | 1 | 2 | 3 {
   return Math.min(3, Math.max(0, Math.floor(quantity))) as 0 | 1 | 2 | 3;
@@ -217,10 +219,19 @@ export class BoatSupplyDisplay {
     savedItems: readonly ItemInstance[],
     private readonly reducedMotion = false,
   ) {
-    const sortedItems = [...savedItems].sort(
+    const sortedItems = [
+      ...savedItems,
+      ...ITEM_IDS
+        .filter((itemId) => !AGGREGATE_ITEM_IDS.has(itemId))
+        .map((type) => ({
+          instanceId: `${type}-1` as ItemInstanceId,
+          type,
+        })),
+    ].sort(
       (first, second) => first.instanceId.localeCompare(second.instanceId),
     );
     for (const item of sortedItems) {
+      if (this.groupByInstanceId.has(item.instanceId)) continue;
       const siblings = this.instancesByType.get(item.type) ?? [];
       this.instancesByType.set(item.type, [...siblings, item]);
       this.groupByInstanceId.set(item.instanceId, item.type);
@@ -240,7 +251,7 @@ export class BoatSupplyDisplay {
         || groupId === 'cannedFood'
         || groupId === 'baitTin'
         ? 3
-        : Math.min(3, this.instancesByType.get(groupId)?.length ?? 0);
+        : 1;
       const copies: CopyBinding[] = [];
       for (let index = 0; index < poolSize; index += 1) {
         const instance = groupId === 'repairMaterial'
@@ -287,6 +298,10 @@ export class BoatSupplyDisplay {
   sync(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.currentSnapshot = snapshot;
+    for (const item of Object.values(snapshot.inventory)) {
+      if (item === undefined) continue;
+      this.groupByInstanceId.set(item.instanceId, item.type);
+    }
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) this.syncGroup(groupId, snapshot);
     if (
       this.highlightedGroupId !== null
@@ -388,12 +403,14 @@ export class BoatSupplyDisplay {
     const record = this.recordsById.get(groupId)!;
     const activeItems = groupId === 'repairMaterial'
       ? []
-      : (this.instancesByType.get(groupId) ?? [])
+      : Object.values(snapshot.inventory)
+        .filter((instance) => instance?.type === groupId)
+        .filter((instance) => instance?.condition === 'usable' || instance?.condition === 'broken')
+        .sort((first, second) => first!.instanceId.localeCompare(second!.instanceId))
         .map((instance) => ({
-          instance,
-          condition: snapshot.inventory[instance.instanceId]?.condition ?? 'lost',
-        }))
-        .filter(({ condition }) => condition === 'usable' || condition === 'broken');
+          instance: instance!,
+          condition: instance!.condition,
+        }));
     const usableItems = activeItems.filter(({ condition }) => condition === 'usable');
     const brokenItems = activeItems.filter(({ condition }) => condition === 'broken');
     const quantity = groupId === 'cannedFood'

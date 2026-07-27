@@ -69,6 +69,7 @@ import {
 } from './BoatInteraction';
 import { BoatSpray } from './BoatSpray';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import type { FishingCatchId } from './fishingCatalog';
 import {
@@ -76,6 +77,7 @@ import {
   type SurvivalLantern,
 } from './SurvivalLantern';
 import type {
+  ActionOutcome,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -429,13 +431,6 @@ export class BoatWorld {
   private readonly lantern: SurvivalLantern;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
-  private readonly distantVessel = new Group();
-  private readonly vesselMaterial = new MeshStandardMaterial({
-    color: 0x172126,
-    roughness: 1,
-    transparent: true,
-    opacity: 0,
-  });
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
@@ -465,6 +460,7 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly eventPresentation: EventPresentationLayer;
   private readonly repairTools: Object3D;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
@@ -628,6 +624,7 @@ export class BoatWorld {
 
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
+    this.eventPresentation = new EventPresentationLayer(reducedMotion.matches);
 
     this.bowAnchor.name = 'survival-bow-motion-anchor';
     this.bowAnchor.position.set(0, 0.1, -2.75);
@@ -638,7 +635,6 @@ export class BoatWorld {
     alignDirectionalLightWithSun(this.key, 12);
     this.key.castShadow = true;
 
-    this.buildDistantVessel();
     this.scene.add(
       this.motionRig,
       this.ocean.mesh,
@@ -646,10 +642,9 @@ export class BoatWorld {
       this.ambient,
       this.key,
       this.key.target,
-      this.distantVessel,
+      this.eventPresentation.root,
       this.fishing.root,
     );
-    collectMeshResources(this.distantVessel, this.ownedGeometries, this.ownedMaterials);
     this.applyBasePresentation();
   }
 
@@ -687,6 +682,28 @@ export class BoatWorld {
     return this.disposed
       ? Promise.resolve()
       : this.supplyDisplay.playEventItemUse(instanceId);
+  }
+
+  stageEvent(eventId: string): void {
+    if (this.disposed) return;
+    this.eventPresentation.stage(eventId);
+  }
+
+  revealEvent(eventId: string): Promise<void> {
+    return this.disposed
+      ? Promise.resolve()
+      : this.eventPresentation.reveal(eventId);
+  }
+
+  reactToEventOutcome(eventId: string, outcome: ActionOutcome): Promise<void> {
+    return this.disposed
+      ? Promise.resolve()
+      : this.eventPresentation.react(eventId, outcome);
+  }
+
+  clearEvent(): void {
+    if (this.disposed) return;
+    this.eventPresentation.clear();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1014,6 +1031,7 @@ export class BoatWorld {
     }
 
     this.advanceFishingPresentation(delta);
+    this.eventPresentation.update(time, delta);
     this.supplyDisplay.update(delta);
     this.updateFishingWave(time);
     this.updateFishingEffects(time);
@@ -1050,6 +1068,7 @@ export class BoatWorld {
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
+      () => this.eventPresentation.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
@@ -1063,7 +1082,6 @@ export class BoatWorld {
         this.ambient,
         this.key,
         this.key.target,
-        this.distantVessel,
         this.fishing.root,
       ),
       () => this.camera.removeFromParent(),
@@ -1076,18 +1094,6 @@ export class BoatWorld {
         this.ownedTextures,
       ),
     ]);
-  }
-
-  private buildDistantVessel(): void {
-    this.distantVessel.name = 'distant-rescue-vessel';
-    this.distantVessel.position.set(-9, 1.25, -48);
-    const hull = new Mesh(new BoxGeometry(8.5, 1.05, 1.2), this.vesselMaterial);
-    const cabin = new Mesh(new BoxGeometry(2.2, 1.15, 0.86), this.vesselMaterial);
-    const mast = new Mesh(new BoxGeometry(0.12, 3.2, 0.12), this.vesselMaterial);
-    cabin.position.set(1.2, 0.85, 0);
-    mast.position.set(-0.7, 1.75, 0);
-    this.distantVessel.add(hull, cabin, mast);
-    this.distantVessel.visible = false;
   }
 
   private applyBasePresentation(): void {
@@ -1104,8 +1110,7 @@ export class BoatWorld {
     this.camera.position.copy(this.baseCameraPosition);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
-    this.distantVessel.visible = false;
-    this.vesselMaterial.opacity = 0;
+    this.eventPresentation.setRescueCue(null);
   }
 
   private startFishingAnimation(
@@ -1505,8 +1510,6 @@ export class BoatWorld {
         this.key.intensity *= 1 - eased * 0.72;
         break;
       case 'sighting':
-        this.distantVessel.visible = progress > 0.08;
-        this.vesselMaterial.opacity = 0.16 + eased * 0.38;
         break;
       case 'nightfall':
         this.ambient.intensity *= 1 - eased * 0.72;
@@ -1517,8 +1520,7 @@ export class BoatWorld {
         this.key.intensity *= 0.3 + eased * 0.7;
         break;
       case 'rescue':
-        this.distantVessel.visible = true;
-        this.vesselMaterial.opacity = 0.25 + eased * 0.75;
+        this.eventPresentation.setRescueCue(eased);
         if (!reduced) this.camera.rotateY(-0.12 * eased);
         break;
       case 'death':

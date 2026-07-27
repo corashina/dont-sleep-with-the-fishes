@@ -1,0 +1,496 @@
+import {
+  BoxGeometry,
+  BufferGeometry,
+  Color,
+  ConeGeometry,
+  CylinderGeometry,
+  Group,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  Quaternion,
+  SphereGeometry,
+  TorusGeometry,
+  Vector3,
+} from 'three';
+import {
+  DEFAULT_WAVES,
+  sampleWaveFieldInto,
+  type WaveSample,
+} from '../ocean/WaveField';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+} from '../world/SceneResources';
+import type { ActionOutcome } from './survivalTypes';
+
+interface ActiveEventAnimation {
+  readonly kind: 'reveal' | 'react';
+  readonly eventId: string;
+  elapsed: number;
+  readonly duration: number;
+  readonly resolve: () => void;
+}
+
+interface EventTableau {
+  readonly eventId: string;
+  readonly root: Group;
+  readonly basePosition: Vector3;
+  readonly baseQuaternion: Quaternion;
+  readonly revealOffset: Vector3;
+  heldReactionTilt: number;
+}
+
+interface MaritimeMaterials {
+  readonly wood: MeshStandardMaterial;
+  readonly darkWood: MeshStandardMaterial;
+  readonly rope: MeshStandardMaterial;
+  readonly metal: MeshStandardMaterial;
+  readonly glass: MeshStandardMaterial;
+  readonly paper: MeshStandardMaterial;
+  readonly fish: MeshStandardMaterial;
+  readonly fishDark: MeshStandardMaterial;
+  readonly eye: MeshStandardMaterial;
+  readonly earth: MeshStandardMaterial;
+  readonly foliage: MeshStandardMaterial;
+  readonly vessel: MeshStandardMaterial;
+}
+
+type VectorTuple = readonly [number, number, number];
+
+const TABLEAU_EVENT_IDS = [
+  'drifting-bottle',
+  'drifting-loot',
+  'check-the-back',
+  'mystery-chest',
+  'midnight-tour',
+  'night-trader',
+  'handyman',
+  'other-people',
+  'death-stare',
+] as const;
+
+const REVEAL_DURATION = 0.9;
+const REACTION_DURATION = 0.7;
+
+function createMaterial(
+  color: number,
+  roughness: number,
+  options: {
+    readonly metalness?: number;
+    readonly transparent?: boolean;
+    readonly opacity?: number;
+    readonly emissive?: number;
+  } = {},
+): MeshStandardMaterial {
+  return new MeshStandardMaterial({
+    color,
+    roughness,
+    metalness: options.metalness ?? 0,
+    transparent: options.transparent ?? false,
+    opacity: options.opacity ?? 1,
+    emissive: options.emissive ?? 0x000000,
+    flatShading: true,
+  });
+}
+
+function createMaterials(): MaritimeMaterials {
+  return {
+    wood: createMaterial(0x6a4932, 0.94),
+    darkWood: createMaterial(0x3d2d25, 0.98),
+    rope: createMaterial(0x59462f, 1),
+    metal: createMaterial(0x526064, 0.78, { metalness: 0.34 }),
+    glass: createMaterial(0x557d7b, 0.42, { transparent: true, opacity: 0.62 }),
+    paper: createMaterial(0xb7a782, 0.96),
+    fish: createMaterial(0x42686e, 0.88),
+    fishDark: createMaterial(0x1d343b, 0.94),
+    eye: createMaterial(0xc9aa68, 0.48, { emissive: 0x302008 }),
+    earth: createMaterial(0x403a31, 1),
+    foliage: createMaterial(0x344f42, 0.96),
+    vessel: createMaterial(0x222d31, 0.9, { metalness: 0.12 }),
+  };
+}
+
+function addMesh(
+  parent: Group,
+  name: string,
+  geometry: BufferGeometry,
+  material: Material,
+  position: VectorTuple = [0, 0, 0],
+  rotation: VectorTuple = [0, 0, 0],
+  scale: VectorTuple = [1, 1, 1],
+): Mesh {
+  const mesh = new Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.set(...position);
+  mesh.rotation.set(...rotation);
+  mesh.scale.set(...scale);
+  parent.add(mesh);
+  return mesh;
+}
+
+function bottleTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'bottle-body', new CylinderGeometry(0.13, 0.17, 0.62, 7), materials.glass);
+  addMesh(root, 'bottle-neck', new CylinderGeometry(0.07, 0.105, 0.24, 7), materials.glass, [0, 0.42, 0]);
+  addMesh(root, 'bottle-cork', new CylinderGeometry(0.068, 0.068, 0.11, 7), materials.rope, [0, 0.57, 0]);
+  addMesh(root, 'bottle-paper', new BoxGeometry(0.17, 0.28, 0.025), materials.paper, [0.015, 0.02, 0]);
+  root.rotation.z = Math.PI / 2 + 0.13;
+  return root;
+}
+
+function lootTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'loot-barrel', new CylinderGeometry(0.34, 0.30, 0.72, 9), materials.wood, [-0.22, 0, 0], [0, 0, Math.PI / 2]);
+  for (const x of [-0.49, 0.05]) {
+    addMesh(root, `loot-barrel-band:${x}`, new TorusGeometry(0.325, 0.025, 5, 9), materials.metal, [x, 0, 0], [0, Math.PI / 2, 0]);
+  }
+  addMesh(root, 'loot-crate', new BoxGeometry(0.58, 0.48, 0.54), materials.darkWood, [0.46, 0.02, 0.06], [0.03, 0.2, -0.06]);
+  addMesh(root, 'loot-crate-lashing', new TorusGeometry(0.30, 0.025, 5, 10), materials.rope, [0.46, 0.02, 0.06], [Math.PI / 2, 0.2, 0]);
+  return root;
+}
+
+function fishTableau(materials: MaritimeMaterials, enormous = false): Group {
+  const root = new Group();
+  const scale = enormous ? 2.25 : 0.9;
+  addMesh(root, 'fish-body', new SphereGeometry(0.55, 8, 5), enormous ? materials.fishDark : materials.fish, [0, 0, 0], [0, 0.08, 0], [1.25 * scale, 0.68 * scale, 0.55 * scale]);
+  addMesh(root, 'fish-tail-top', new ConeGeometry(0.28 * scale, 0.58 * scale, 4), materials.fishDark, [0.84 * scale, 0.18 * scale, 0], [0, 0, -Math.PI / 2]);
+  addMesh(root, 'fish-tail-bottom', new ConeGeometry(0.24 * scale, 0.5 * scale, 4), materials.fishDark, [0.82 * scale, -0.2 * scale, 0], [0, 0, -Math.PI / 2]);
+  addMesh(root, 'fish-fin', new ConeGeometry(0.16 * scale, 0.42 * scale, 4), materials.fishDark, [-0.05 * scale, 0.36 * scale, 0], [0, 0, 0.08]);
+  addMesh(root, 'fish-eye', new SphereGeometry(0.09 * scale, 7, 5), materials.eye, [-0.45 * scale, 0.12 * scale, 0.28 * scale]);
+  if (enormous) {
+    addMesh(root, 'fish-eye-second', new SphereGeometry(0.07 * scale, 7, 5), materials.eye, [-0.40 * scale, 0.11 * scale, -0.31 * scale]);
+    addMesh(root, 'fish-jaw', new BoxGeometry(0.95 * scale, 0.10 * scale, 0.50 * scale), materials.fish, [-0.42 * scale, -0.35 * scale, 0], [0, 0, -0.08]);
+  }
+  return root;
+}
+
+function chestTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'chest-box', new BoxGeometry(0.92, 0.5, 0.64), materials.darkWood);
+  addMesh(root, 'chest-lid', new CylinderGeometry(0.32, 0.32, 0.92, 6, 1, false, 0, Math.PI), materials.wood, [0, 0.28, 0], [0, 0, Math.PI / 2]);
+  for (const x of [-0.32, 0.32]) {
+    addMesh(root, `chest-strap:${x}`, new TorusGeometry(0.34, 0.025, 5, 10, Math.PI), materials.metal, [x, 0.28, 0], [0, Math.PI / 2, 0]);
+  }
+  addMesh(root, 'chest-lock', new BoxGeometry(0.16, 0.20, 0.07), materials.metal, [0, 0.04, 0.355]);
+  root.rotation.y = -0.18;
+  return root;
+}
+
+function islandTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'island-rock', new ConeGeometry(2.8, 1.1, 7), materials.earth, [0, -0.25, 0], [0, 0.2, 0], [1, 1, 0.72]);
+  addMesh(root, 'island-shelf', new BoxGeometry(2.1, 0.25, 1.35), materials.darkWood, [0.35, 0.22, -0.06], [0.02, -0.12, 0.02]);
+  addMesh(root, 'island-tree-trunk', new CylinderGeometry(0.11, 0.17, 1.55, 6), materials.wood, [-0.5, 1.08, 0.02], [0.08, 0, -0.18]);
+  for (let index = 0; index < 5; index += 1) {
+    addMesh(root, `island-frond:${index}`, new ConeGeometry(0.23, 1.15, 4), materials.foliage, [-0.63, 1.82, 0], [0.25, index * 1.25, Math.PI / 2]);
+  }
+  return root;
+}
+
+function traderTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'trader-skiff-hull', new BoxGeometry(1.65, 0.35, 0.72), materials.darkWood, [0, -0.08, 0], [0, -0.12, 0], [1, 1, 0.82]);
+  addMesh(root, 'trader-skiff-prow', new ConeGeometry(0.38, 0.75, 4), materials.wood, [-1.12, -0.02, 0], [0, 0, Math.PI / 2]);
+  for (const x of [-0.48, 0.15]) {
+    addMesh(root, `trader-skiff-rib:${x}`, new BoxGeometry(0.08, 0.26, 0.82), materials.rope, [x, 0.12, 0]);
+  }
+  addMesh(root, 'trader-case', new BoxGeometry(0.62, 0.4, 0.2), materials.wood, [0.38, 0.37, -0.15], [-0.42, 0.08, 0]);
+  addMesh(root, 'trader-oar', new BoxGeometry(1.8, 0.055, 0.10), materials.wood, [0.1, 0.22, 0.52], [0, 0.25, -0.05]);
+  return root;
+}
+
+function handTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'hand-palm', new BoxGeometry(0.55, 0.22, 0.72), materials.paper, [0, 0.16, 0], [0.06, -0.16, 0.02]);
+  for (let index = 0; index < 4; index += 1) {
+    addMesh(root, `hand-finger:${index}`, new CylinderGeometry(0.055, 0.07, 0.58 + index * 0.035, 6), materials.paper, [-0.24 + index * 0.16, 0.57, -0.08 + Math.abs(index - 1.5) * 0.03], [0.05, 0, -0.08 + index * 0.035]);
+  }
+  addMesh(root, 'hand-cuff', new CylinderGeometry(0.28, 0.34, 0.48, 7), materials.vessel, [0, -0.22, 0], [0, 0, 0.04], [1, 1, 0.82]);
+  return root;
+}
+
+function cargoVesselTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  addMesh(root, 'cargo-vessel-hull', new BoxGeometry(8.5, 1.05, 1.3), materials.vessel, [0, 0, 0], [0, 0.04, 0]);
+  addMesh(root, 'cargo-vessel-bow', new ConeGeometry(0.68, 1.7, 4), materials.vessel, [-5.05, 0, 0], [0, 0, Math.PI / 2], [1, 1, 1.2]);
+  addMesh(root, 'cargo-vessel-deck', new BoxGeometry(5.4, 0.24, 1.02), materials.metal, [0.55, 0.66, 0]);
+  addMesh(root, 'cargo-vessel-cabin', new BoxGeometry(1.65, 1.25, 0.92), materials.paper, [2.15, 1.25, 0]);
+  addMesh(root, 'cargo-vessel-wheelhouse', new BoxGeometry(1.05, 0.48, 1.02), materials.vessel, [2.14, 2.06, 0]);
+  addMesh(root, 'cargo-vessel-mast', new CylinderGeometry(0.07, 0.09, 3.4, 6), materials.metal, [-0.78, 2.05, 0], [0, 0, 0.04]);
+  for (const x of [-2.1, -1.2, -0.3, 0.6]) {
+    addMesh(root, `cargo-vessel-crate:${x}`, new BoxGeometry(0.72, 0.62, 0.78), materials.wood, [x, 1.02, 0], [0, x * 0.025, 0]);
+  }
+  return root;
+}
+
+function createTableau(
+  eventId: string,
+  content: Group,
+  position: VectorTuple,
+  revealOffset: VectorTuple,
+): EventTableau {
+  const root = new Group();
+  root.name = `event-prop:${eventId}`;
+  root.position.set(...position);
+  root.add(content);
+  root.visible = false;
+  return {
+    eventId,
+    root,
+    basePosition: root.position.clone(),
+    baseQuaternion: root.quaternion.clone(),
+    revealOffset: new Vector3(...revealOffset),
+    heldReactionTilt: 0,
+  };
+}
+
+function smoothstep(value: number): number {
+  return value * value * (3 - 2 * value);
+}
+
+function keyedRevealProgress(progress: number): number {
+  if (progress < 0.16) return -0.06 * Math.sin((progress / 0.16) * Math.PI);
+  if (progress < 0.82) return smoothstep((progress - 0.16) / 0.66) * 1.06;
+  return 1.06 + (1 - 1.06) * smoothstep((progress - 0.82) / 0.18);
+}
+
+export class EventPresentationLayer {
+  readonly root = new Group();
+  private readonly tableaus = new Map<string, EventTableau>();
+  private readonly ownedGeometries = new Set<BufferGeometry>();
+  private readonly ownedMaterials = new Set<Material>();
+  private readonly positionScratch = new Vector3();
+  private readonly quaternionScratch = new Quaternion();
+  private readonly reactionColorScratch = new Color();
+  private readonly waveSample: WaveSample = {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normal: { x: 0, y: 1, z: 0 },
+  };
+  private activeAnimation: ActiveEventAnimation | null = null;
+  private stagedEventId: string | null = null;
+  private held = false;
+  private rescueProgress: number | null = null;
+  private reactionDirection = 1;
+  private disposed = false;
+
+  constructor(private readonly reducedMotion = false) {
+    this.root.name = 'event-presentation-layer';
+    const materials = createMaterials();
+    const tableaus = [
+      createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
+      createTableau('drifting-loot', lootTableau(materials), [-3.0, 0.02, -4.2], [-1.1, -0.35, 0.3]),
+      createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
+      createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
+      createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
+      createTableau('night-trader', traderTableau(materials), [4.4, 0.02, -7.2], [1.6, -0.38, -0.5]),
+      createTableau('handyman', handTableau(materials), [-3.8, 0.05, -5.4], [-0.9, -0.52, 0.25]),
+      createTableau('other-people', cargoVesselTableau(materials), [-9, 1.25, -48], [-5.2, -0.75, -1.5]),
+      createTableau('death-stare', fishTableau(materials, true), [0, -0.8, -7.4], [0, -2.3, -1.4]),
+    ];
+    for (const tableau of tableaus) {
+      this.tableaus.set(tableau.eventId, tableau);
+      this.root.add(tableau.root);
+    }
+    collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+  }
+
+  stage(eventId: string): void {
+    if (this.disposed) return;
+    this.cancelActiveAnimation();
+    this.stagedEventId = this.tableaus.has(eventId) ? eventId : null;
+    this.held = false;
+    for (const id of TABLEAU_EVENT_IDS) {
+      const tableau = this.tableaus.get(id)!;
+      tableau.heldReactionTilt = 0;
+      tableau.root.visible = id === this.stagedEventId || (
+        id === 'other-people' && this.rescueProgress !== null
+      );
+      this.resetTableauPose(tableau);
+      this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
+    }
+  }
+
+  reveal(eventId: string): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (this.stagedEventId !== eventId) this.stage(eventId);
+    if (this.stagedEventId === null) return Promise.resolve();
+    return this.startAnimation('reveal', eventId);
+  }
+
+  react(eventId: string, outcome: ActionOutcome): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (this.stagedEventId !== eventId) this.stage(eventId);
+    if (this.stagedEventId === null) return Promise.resolve();
+    this.held = true;
+    this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
+      (value) => typeof value === 'number' && value < 0,
+    ) ? 1 : -1;
+    this.reactionColorScratch.setHex(this.reactionDirection > 0 ? 0x5c745e : 0x765044);
+    return this.startAnimation('react', eventId);
+  }
+
+  clear(): void {
+    if (this.disposed) return;
+    this.cancelActiveAnimation();
+    this.stagedEventId = null;
+    this.held = false;
+    for (const id of TABLEAU_EVENT_IDS) {
+      const tableau = this.tableaus.get(id)!;
+      tableau.heldReactionTilt = 0;
+      tableau.root.visible = id === 'other-people' && this.rescueProgress !== null;
+    }
+  }
+
+  setRescueCue(progress: number | null): void {
+    if (this.disposed) return;
+    this.rescueProgress = progress === null ? null : Math.min(1, Math.max(0, progress));
+    const cargo = this.tableaus.get('other-people')!;
+    cargo.root.visible = this.stagedEventId === 'other-people' || this.rescueProgress !== null;
+    if (this.stagedEventId !== 'other-people' && this.rescueProgress !== null) {
+      this.resetTableauPose(cargo);
+      this.applyRevealPose(cargo, this.rescueProgress, 0);
+    }
+  }
+
+  update(time: number, delta: number): void {
+    if (this.disposed || delta < 0) return;
+    const staged = this.stagedEventId === null
+      ? null
+      : this.tableaus.get(this.stagedEventId)!;
+    const cargo = this.tableaus.get('other-people')!;
+
+    if (staged !== null) this.applyWavePose(staged, time);
+    if (this.rescueProgress !== null && staged !== cargo) this.applyWavePose(cargo, time);
+
+    const animation = this.activeAnimation;
+    if (animation === null) {
+      if (staged !== null) {
+        this.applyRevealPose(staged, this.held ? 1 : 0, staged.heldReactionTilt);
+      }
+      if (this.rescueProgress !== null && staged !== cargo) {
+        this.applyRevealPose(cargo, this.rescueProgress, 0);
+      }
+      return;
+    }
+
+    animation.elapsed = Math.min(
+      animation.duration,
+      animation.elapsed + Math.max(0, delta),
+    );
+    const progress = animation.elapsed / animation.duration;
+    const tableau = this.tableaus.get(animation.eventId)!;
+    if (animation.kind === 'reveal') {
+      this.applyRevealPose(tableau, progress, 0);
+    } else {
+      this.applyReactionPose(tableau, progress);
+    }
+    if (progress < 1) return;
+    this.activeAnimation = null;
+    this.held = true;
+    tableau.heldReactionTilt = animation.kind === 'react'
+      ? this.reactionDirection * 0.035
+      : 0;
+    this.applyRevealPose(tableau, 1, tableau.heldReactionTilt);
+    animation.resolve();
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.cancelActiveAnimation();
+    this.disposed = true;
+    this.root.removeFromParent();
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+  }
+
+  private startAnimation(
+    kind: ActiveEventAnimation['kind'],
+    eventId: string,
+  ): Promise<void> {
+    this.cancelActiveAnimation();
+    const duration = this.reducedMotion
+      ? Number.EPSILON
+      : kind === 'reveal'
+        ? REVEAL_DURATION
+        : REACTION_DURATION;
+    return new Promise((resolve) => {
+      this.activeAnimation = { kind, eventId, elapsed: 0, duration, resolve };
+      const tableau = this.tableaus.get(eventId)!;
+      this.resetTableauPose(tableau);
+      if (this.reducedMotion) {
+        if (kind === 'reveal') this.applyRevealPose(tableau, 1, 0);
+        else this.applyReactionPose(tableau, 1);
+      } else if (kind === 'reveal') {
+        this.applyRevealPose(tableau, 0, 0);
+      }
+    });
+  }
+
+  private applyWavePose(tableau: EventTableau, time: number): void {
+    sampleWaveFieldInto(
+      this.waveSample,
+      DEFAULT_WAVES,
+      time,
+      tableau.basePosition.x,
+      tableau.basePosition.z,
+      1,
+    );
+    tableau.root.position.copy(tableau.basePosition);
+    tableau.root.position.x += this.waveSample.displacementX * 0.12;
+    tableau.root.position.y += this.waveSample.height * 0.34;
+    tableau.root.position.z += this.waveSample.displacementZ * 0.12;
+    tableau.root.quaternion.copy(tableau.baseQuaternion);
+    this.positionScratch.set(
+      this.waveSample.normal.z * 0.12,
+      0,
+      -this.waveSample.normal.x * 0.12,
+    );
+    tableau.root.rotation.x += this.positionScratch.x;
+    tableau.root.rotation.z += this.positionScratch.z;
+  }
+
+  private resetTableauPose(tableau: EventTableau): void {
+    tableau.root.position.copy(tableau.basePosition);
+    tableau.root.quaternion.copy(tableau.baseQuaternion);
+  }
+
+  private applyRevealPose(
+    tableau: EventTableau,
+    progress: number,
+    heldTilt: number,
+  ): void {
+    const travel = keyedRevealProgress(Math.min(1, Math.max(0, progress)));
+    this.positionScratch.copy(tableau.revealOffset).multiplyScalar(1 - travel);
+    tableau.root.position.add(this.positionScratch);
+    this.quaternionScratch.setFromAxisAngle(
+      tableau.root.up,
+      (1 - travel) * 0.12 + heldTilt,
+    );
+    tableau.root.quaternion.multiply(this.quaternionScratch);
+  }
+
+  private applyReactionPose(tableau: EventTableau, progress: number): void {
+    const eased = smoothstep(Math.min(1, Math.max(0, progress)));
+    const impact = Math.sin(Math.PI * eased);
+    const settle = Math.sin(Math.PI * 2 * eased) * (1 - eased);
+    this.positionScratch.set(
+      this.reactionDirection * impact * 0.18,
+      impact * 0.22,
+      -impact * 0.08,
+    );
+    tableau.root.position.add(this.positionScratch);
+    this.quaternionScratch.setFromAxisAngle(
+      tableau.root.up,
+      this.reactionDirection * (impact * 0.12 + settle * 0.05),
+    );
+    tableau.root.quaternion.multiply(this.quaternionScratch);
+  }
+
+  private cancelActiveAnimation(): void {
+    const animation = this.activeAnimation;
+    this.activeAnimation = null;
+    animation?.resolve();
+  }
+}
