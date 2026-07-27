@@ -2,6 +2,7 @@ import type { LocalPlayerPosition } from './collisions';
 
 const CLIMB_SPEED = 2.4;
 const ENTRY_EPSILON = 0.08;
+const MOVEMENT_INTENT_EPSILON = 1e-8;
 
 export interface LadderEntryArea {
   readonly minX: number;
@@ -52,7 +53,7 @@ function movingToward(
   directionX: number,
   directionZ: number,
 ): boolean {
-  return movement[0] * directionX + movement[1] * directionZ > 0;
+  return movement[0] * directionX + movement[1] * directionZ > MOVEMENT_INTENT_EPSILON;
 }
 
 function atHeight(position: LocalPlayerPosition, eyeY: number): boolean {
