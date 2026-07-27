@@ -471,19 +471,19 @@ function placement(
 const furniture: readonly ShipFurniturePlacementSpec[] = [
   placement('cabin-bunk-port', 'bedBunk', 'crewCabin', [-4.85, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
   placement('cabin-bunk-starboard', 'bedBunk', 'crewCabin', [4.85, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
-  placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, 5.05], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
-  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 13.15], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES)),
+  placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, 5.2], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
+  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 13.08], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES)),
   placement('cabin-food-cabinet', 'sideTableDrawers', 'crewCabin', [-4.9, 2.22, 12.5], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('cabin-food-cabinet', CABIN_ITEM_CATEGORIES, 0.9)),
   placement('cabin-side-cabinet', 'sideTableDrawers', 'crewCabin', [4.9, 2.22, 12.5], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('cabin-side-cabinet', CABIN_ITEM_CATEGORIES)),
   placement('helm-desk-forward', 'desk', 'wheelhouse', [0, 2.22, 21.35], 0, [1.7, 0.89, 0.908], deskSurfaces('helm-desk-forward', WHEELHOUSE_ITEM_CATEGORIES)),
-  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [-3.7, 2.22, 17.45], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 0.9, PI_OVER_TWO)),
-  placement('chart-cabinet-port', 'sideTableDrawers', 'wheelhouse', [-3.2, 2.22, 21.55], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-cabinet-port', WHEELHOUSE_ITEM_CATEGORIES)),
+  placement('chart-table-port', 'sideTableDrawers', 'wheelhouse', [-3.7, 2.22, 17.5], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 0.9, PI_OVER_TWO)),
+  placement('chart-cabinet-port', 'sideTableDrawers', 'wheelhouse', [-3.2, 2.22, 21.5], 0, [1.043, 0.75, 0.434], sideTableSurfaces('chart-cabinet-port', WHEELHOUSE_ITEM_CATEGORIES)),
   placement('instrument-cabinet-starboard-aft', 'sideTableDrawers', 'wheelhouse', [4.65, 2.22, 17.75], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-aft', WHEELHOUSE_ITEM_CATEGORIES)),
   placement('instrument-cabinet-starboard-center', 'sideTableDrawers', 'wheelhouse', [4.65, 2.22, 19.35], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-center', WHEELHOUSE_ITEM_CATEGORIES)),
   placement('instrument-cabinet-starboard-forward', 'sideTableDrawers', 'wheelhouse', [4.65, 2.22, 20.85], PI_OVER_TWO, [1.043, 0.75, 0.434], sideTableSurfaces('instrument-cabinet-starboard-forward', WHEELHOUSE_ITEM_CATEGORIES)),
   placement('workbench-port', 'table', 'storageWorkroom', [-3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', WORKROOM_ITEM_CATEGORIES)),
   placement('workbench-starboard', 'table', 'storageWorkroom', [3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', WORKROOM_ITEM_CATEGORIES)),
-  placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', WORKROOM_ITEM_CATEGORIES)),
+  placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11.075], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', WORKROOM_ITEM_CATEGORIES)),
   ...([
     [
       'cargo-crate-forward-port',
@@ -507,7 +507,17 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     ],
   ] as const).map(([id, x, z]) => placement(
     id, 'cargoCrate', 'cargoDeck', [x, 2.22, z], 0, [1.35, 1.05, 1.15],
-    [itemSurface(id, 'top', CARGO_ITEM_CATEGORIES, [0, 1.05, 0], { width: 1.05, depth: 0.85 }, 0.95, [[0, 0, -1.15], [0, 0, 1.15]])],
+    [itemSurface(
+      id,
+      'top',
+      CARGO_ITEM_CATEGORIES,
+      [0, 1.05, 0],
+      { width: 1.05, depth: 0.85 },
+      0.95,
+      id.startsWith('cargo-crate-forward')
+        ? [[x < 0 ? -1.15 : 1.15, 0, 0], [0, 0, 1.15]]
+        : [[0, 0, -1.15], [0, 0, 1.15]],
+    )],
   )),
   placement('cargo-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-port', CARGO_ITEM_CATEGORIES)),
   placement('cargo-rack-starboard', 'cargoRack', 'cargoDeck', [4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-starboard', CARGO_ITEM_CATEGORIES)),

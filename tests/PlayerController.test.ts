@@ -3,6 +3,7 @@ import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
 import type { MovementAxes } from '../src/player/collisions';
 import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createTestShip } from './helpers/shipFurniture';
 
 const TEST_NAVIGATION_BOUNDS: PlayerNavigationBounds = {
@@ -47,6 +48,11 @@ function expectVector(actual: Vector3, expected: Vector3): void {
 
 function expectRotation(actual: Quaternion, expected: Quaternion): void {
   expect(Math.abs(actual.dot(expected))).toBeCloseTo(1, 8);
+}
+
+function navigationTarget(id: string): Vector3 {
+  const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
+  return new Vector3(position[0], FREIGHTER_DIMENSIONS.deckY + 1.5, position[1]);
 }
 
 describe('PlayerController', () => {
@@ -274,7 +280,7 @@ describe('PlayerController', () => {
     );
 
     controller.update(0, input.asControllerInput());
-    expect(controller.localPosition.z).toBeCloseTo(8.8);
+    expectVector(controller.localPosition, shipBuild.playerStart);
     const resolvedStart = controller.localPosition.clone();
 
     input.movement = { x: 0, z: 1 };
@@ -305,11 +311,11 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['forward port exterior', new Vector3(-4.5, 3.72, 14.5)],
-    ['forward starboard exterior', new Vector3(4.5, 3.72, 14.5)],
-    ['aft port exterior', new Vector3(-4.1, 3.72, -15.9)],
-    ['storage room', new Vector3(0, 3.72, -9.2)],
-    ['lifeboat approach', new Vector3(7.1, 3.72, 0)],
+    ['forward port exterior', navigationTarget('port-loop-forward')],
+    ['forward starboard exterior', navigationTarget('starboard-loop-forward')],
+    ['aft port exterior', navigationTarget('port-loop-aft')],
+    ['storage room', navigationTarget('storage-shelf-forward:shelf-left-standing-0')],
+    ['lifeboat approach', navigationTarget('evacuation')],
   ])('keeps the freighter %s inside the playable bounds', (_label, position) => {
     const shipBuild = createTestShip();
     const onFall = vi.fn();

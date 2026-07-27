@@ -12,7 +12,7 @@ import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
-import { SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
@@ -135,12 +135,22 @@ function visibleProductionSurfaces(
   });
 }
 
+function requiredTarget(id: string): readonly [number, number] {
+  const target = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id);
+  if (!target) throw new Error(`Ship assembly requires navigation target ${id}`);
+  return target.position;
+}
+
 export function createShip(
   shipFurniture: ShipFurnitureLibrary,
   maxTextureAnisotropy: number,
   shipAssets?: ShipAssets,
 ): ShipBuild {
   validateShipLayout(SHIP_LAYOUT);
+  const [startX, startZ] = requiredTarget('start');
+  const [evacuationX, evacuationZ] = requiredTarget('evacuation');
+  const halfWidth = FREIGHTER_DIMENSIONS.width / 2;
+  const halfLength = FREIGHTER_DIMENSIONS.length / 2;
   const root = new Group();
   root.name = 'sinking-ship';
   const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy, shipAssets);
@@ -205,12 +215,26 @@ export function createShip(
     arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
-    playerStart: new Vector3(0, 3.72, 8.8),
-    evacuationPoint: new Vector3(7.1, 3.72, 0),
-    lifeboatAnchor: new Vector3(10.75, 0.35, 0),
+    playerStart: new Vector3(startX, FREIGHTER_DIMENSIONS.deckY + 1.5, startZ),
+    evacuationPoint: new Vector3(
+      evacuationX,
+      FREIGHTER_DIMENSIONS.deckY + 1.5,
+      evacuationZ,
+    ),
+    lifeboatAnchor: new Vector3(halfWidth + 2.75, 0.35, evacuationZ),
     playerNavigationBounds: {
-      safe: { minX: -7.65, maxX: 7.65, minZ: -21.2, maxZ: 21.2 },
-      fall: { minX: -8.8, maxX: 8.8, minZ: -22.8, maxZ: 22.8 },
+      safe: {
+        minX: -halfWidth + 0.35,
+        maxX: halfWidth - 0.35,
+        minZ: -halfLength + 0.8,
+        maxZ: halfLength - 0.8,
+      },
+      fall: {
+        minX: -halfWidth - 0.8,
+        maxX: halfWidth + 0.8,
+        minZ: -halfLength - 0.8,
+        maxZ: halfLength + 0.8,
+      },
     },
     waterExclusion: assembledGeometry.waterExclusion,
     updateEffects: (delta, progress, reducedMotion) => {

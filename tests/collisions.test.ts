@@ -20,6 +20,25 @@ const PLAYER_Y = FREIGHTER_DIMENSIONS.deckY + 1.5;
 const RAIL_SAMPLE_Y = FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height / 2;
 const EXTERIOR_ROUTE_X = SHIP_LAYOUT.rail.innerFaceX - PLAYER_LAYOUT_RADIUS - 0.025;
 
+const layoutTarget = (id: string): Vector3 => {
+  const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
+  return new Vector3(position[0], PLAYER_Y, position[1]);
+};
+
+const furniturePoint = (id: string, y: number): Vector3 => {
+  const position = SHIP_LAYOUT.furniture.find((candidate) => candidate.id === id)!.position;
+  return new Vector3(position[0], y, position[2]);
+};
+
+const laneCenter = (id: string): Vector3 => {
+  const bounds = SHIP_LAYOUT.lanes.find((candidate) => candidate.id === id)!.bounds;
+  return new Vector3(
+    (bounds.minX + bounds.maxX) / 2,
+    PLAYER_Y,
+    (bounds.minZ + bounds.maxZ) / 2,
+  );
+};
+
 const arc = (end: CollisionArc['end']): CollisionArc => ({
   centerX: 0,
   centerZ: end === 'bow' ? 14 : -14,
@@ -249,14 +268,16 @@ describe('player movement helpers', () => {
 
   it('allows a standing player through the production midship rail opening', () => {
     const ship = createTestShip();
+    const currentX = SHIP_LAYOUT.rail.innerFaceX - 1.1;
+    const desiredX = SHIP_LAYOUT.rail.innerFaceX + 0.2;
     try {
       const result = resolveLocalMovement(
-        { x: 7.1, y: PLAYER_Y, z: 0 },
-        { x: 8.1, y: PLAYER_Y, z: 0 },
+        { x: currentX, y: PLAYER_Y, z: SHIP_LAYOUT.rail.starboardOpening.centerZ },
+        { x: desiredX, y: PLAYER_Y, z: SHIP_LAYOUT.rail.starboardOpening.centerZ },
         PLAYER_LAYOUT_RADIUS,
         ship.colliders,
       );
-      expect(result.x).toBeCloseTo(8.1);
+      expect(result.x).toBeCloseTo(desiredX);
     } finally {
       ship.dispose();
     }
@@ -264,14 +285,18 @@ describe('player movement helpers', () => {
 
   it('blocks a standing player at the adjacent production waist rail', () => {
     const ship = createTestShip();
+    const currentX = SHIP_LAYOUT.rail.innerFaceX - 1.1;
+    const desiredX = SHIP_LAYOUT.rail.innerFaceX + 0.2;
+    const railZ = SHIP_LAYOUT.rail.starboardOpening.centerZ
+      + SHIP_LAYOUT.rail.starboardOpening.width / 2 + 2;
     try {
       const result = resolveLocalMovement(
-        { x: 7.1, y: PLAYER_Y, z: 4 },
-        { x: 8.1, y: PLAYER_Y, z: 4 },
+        { x: currentX, y: PLAYER_Y, z: railZ },
+        { x: desiredX, y: PLAYER_Y, z: railZ },
         PLAYER_LAYOUT_RADIUS,
         ship.colliders,
       );
-      expect(result.x).toBeLessThan(7.7);
+      expect(result.x).toBeLessThan(SHIP_LAYOUT.rail.innerFaceX);
     } finally {
       ship.dispose();
     }
@@ -280,9 +305,16 @@ describe('player movement helpers', () => {
   it.each([
     ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
     ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
-    ['wheelhouse console', new Vector3(0, 2.72, 16.6)],
-    ['storage workbench', new Vector3(-2.8, 2.72, -12.72)],
-    ['stern machinery', new Vector3(0, 3.72, -16.2)],
+    ['wheelhouse console', furniturePoint('helm-desk-forward', 2.72)],
+    ['storage workbench', furniturePoint('workbench-port', 2.72)],
+    [
+      'stern machinery',
+      new Vector3(
+        (SHIP_LAYOUT.machineryClosure.minX + SHIP_LAYOUT.machineryClosure.maxX) / 2,
+        PLAYER_Y,
+        (SHIP_LAYOUT.machineryClosure.minZ + SHIP_LAYOUT.machineryClosure.maxZ) / 2,
+      ),
+    ],
   ])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {
@@ -294,11 +326,12 @@ describe('player movement helpers', () => {
 
   it('keeps the assembled shell and furniture clear of the approved loop by player radius', () => {
     const ship = createTestShip();
-    const loopCenters = [-10, -8.2, -6.5, -4, 0, 2, 5.2, 8.2, 10.4, 12]
-      .flatMap((z) => [
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, z),
-        new Vector3(EXTERIOR_ROUTE_X, PLAYER_Y, z),
-      ]);
+    const loopCenters = [
+      'port-loop-forward',
+      'port-loop-aft',
+      'starboard-loop-forward',
+      'starboard-loop-aft',
+    ].map(layoutTarget);
     try {
       loopCenters.forEach((point) => expect(
         ship.colliders.every((box) => !playerOverlaps(point, 0.35, box)),
@@ -327,34 +360,34 @@ describe('player movement helpers', () => {
 
   it('traverses storage, exterior, cabin, and wheelhouse as connected rooms', () => {
     const ship = createTestShip();
-    const storagePort = layoutDoor('storage-port-door');
-    const cabinPort = layoutDoor('cabin-port-door');
-    const wheelhouseAft = layoutDoor('wheelhouse-aft-door');
-    const wheelhousePort = layoutDoor('wheelhouse-port-door');
-    const storageZ = storagePort.center[1];
-    const cabinZ = cabinPort.center[1] - cabinPort.width / 2 + PLAYER_LAYOUT_RADIUS + 0.15;
-    const wheelhouseAftZ = wheelhouseAft.center[1];
     try {
-      followPath(new Vector3(0, PLAYER_Y, storageZ), [
-        new Vector3(storagePort.center[0] + 0.55, PLAYER_Y, storageZ),
-        new Vector3(storagePort.center[0] - 0.55, PLAYER_Y, storageZ),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, storageZ),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, cabinZ),
-        new Vector3(cabinPort.center[0] - 0.55, PLAYER_Y, cabinZ),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, cabinZ),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 7.5),
-        new Vector3(0, PLAYER_Y, 7.5),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, 7.5),
-        new Vector3(cabinPort.center[0] + 0.55, PLAYER_Y, cabinZ),
-        new Vector3(cabinPort.center[0] - 0.55, PLAYER_Y, cabinZ),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, cabinZ),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, wheelhouseAftZ - 0.5),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAftZ - 0.5),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAftZ),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAftZ + 0.55),
-        new Vector3(-1.5, PLAYER_Y, wheelhouseAftZ + 0.55),
-        new Vector3(-1.5, PLAYER_Y, wheelhousePort.center[1]),
+      followPath(layoutTarget('storage-port-door-inside'), [
+        layoutTarget('storage-port-door-outside'),
+        layoutTarget('port-loop-aft'),
+        layoutTarget('port-loop-forward'),
+        layoutTarget('cabin-port-door-outside'),
+        layoutTarget('cabin-port-door-inside'),
+        layoutTarget('start'),
+        layoutTarget('cabin-port-door-inside'),
+        layoutTarget('cabin-port-door-outside'),
+        layoutTarget('port-loop-forward'),
+        layoutTarget('wheelhouse-aft-door-outside'),
+        layoutTarget('wheelhouse-aft-door-inside'),
+        layoutTarget('wheelhouse-port-door-inside'),
       ], ship.colliders);
+    } finally {
+      ship.dispose();
+    }
+  });
+
+  it('crosses the clear crew-cabin to wheelhouse passage longitudinally', () => {
+    const ship = createTestShip();
+    try {
+      followPath(
+        new Vector3(0, PLAYER_Y, 14.1),
+        [new Vector3(0, PLAYER_Y, 16.4)],
+        ship.colliders,
+      );
     } finally {
       ship.dispose();
     }
@@ -362,39 +395,29 @@ describe('player movement helpers', () => {
 
   it('enters one wheelhouse door, exits the second, and closes the exterior circuit', () => {
     const ship = createTestShip();
-    const target = (id: string): Vector3 => {
-      const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
-      return new Vector3(position[0], PLAYER_Y, position[1]);
-    };
-    const wheelhouseAft = layoutDoor('wheelhouse-aft-door');
-    const wheelhousePort = layoutDoor('wheelhouse-port-door');
-    const storagePort = layoutDoor('storage-port-door');
-    const storageStarboard = layoutDoor('storage-starboard-door');
-    const storageDetourZ = storagePort.center[1] - 0.45;
-    const start = new Vector3(EXTERIOR_ROUTE_X, PLAYER_Y, wheelhouseAft.center[1] - 0.5);
+    const start = layoutTarget('starboard-loop-forward');
     try {
       const end = followPath(start, [
-        target('bow-starboard'),
-        target('bow-center'),
-        target('bow-port'),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, wheelhouseAft.center[1] - 0.5),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1] - 0.5),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1]),
-        new Vector3(wheelhouseAft.center[0], PLAYER_Y, wheelhouseAft.center[1] + 0.55),
-        new Vector3(-1.5, PLAYER_Y, wheelhouseAft.center[1] + 0.55),
-        new Vector3(-1.5, PLAYER_Y, wheelhousePort.center[1]),
-        new Vector3(wheelhousePort.center[0] + 0.55, PLAYER_Y, wheelhousePort.center[1]),
-        new Vector3(wheelhousePort.center[0] - 0.55, PLAYER_Y, wheelhousePort.center[1]),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, wheelhousePort.center[1]),
-        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, storagePort.center[1]),
-        new Vector3(storagePort.center[0] - 0.55, PLAYER_Y, storagePort.center[1]),
-        new Vector3(storagePort.center[0] + 0.55, PLAYER_Y, storagePort.center[1]),
-        new Vector3(storagePort.center[0] + 0.55, PLAYER_Y, storageDetourZ),
-        new Vector3(0, PLAYER_Y, storageDetourZ),
-        new Vector3(storageStarboard.center[0] - 0.55, PLAYER_Y, storageDetourZ),
-        new Vector3(storageStarboard.center[0] - 0.55, PLAYER_Y, storageStarboard.center[1]),
-        new Vector3(storageStarboard.center[0] + 0.55, PLAYER_Y, storageStarboard.center[1]),
-        new Vector3(EXTERIOR_ROUTE_X, PLAYER_Y, storageStarboard.center[1]),
+        layoutTarget('bow-starboard'),
+        layoutTarget('bow-center'),
+        layoutTarget('bow-port'),
+        layoutTarget('port-loop-forward'),
+        layoutTarget('wheelhouse-port-door-outside'),
+        layoutTarget('wheelhouse-port-door-inside'),
+        layoutTarget('wheelhouse-aft-door-inside'),
+        layoutTarget('wheelhouse-aft-door-outside'),
+        new Vector3(
+          -EXTERIOR_ROUTE_X,
+          PLAYER_Y,
+          laneCenter('forward-room-passage').z,
+        ),
+        layoutTarget('port-loop-forward'),
+        layoutTarget('port-loop-aft'),
+        layoutTarget('storage-port-door-outside'),
+        layoutTarget('storage-port-door-inside'),
+        layoutTarget('storage-starboard-door-inside'),
+        layoutTarget('storage-starboard-door-outside'),
+        layoutTarget('starboard-loop-aft'),
         start,
       ], ship.colliders);
       expect(end.distanceTo(start)).toBeLessThan(0.02);
@@ -404,9 +427,24 @@ describe('player movement helpers', () => {
   });
 
   it.each([
-    ['starboard side window', new Vector3(3.2, 3.72, 13), new Vector3(5.2, 3.72, 13), 'x'],
-    ['port forward window', new Vector3(-3.2, 3.72, 13), new Vector3(-5.2, 3.72, 13), 'x'],
-    ['front window', new Vector3(0, 3.72, 16.5), new Vector3(0, 3.72, 18.2), 'z'],
+    [
+      'starboard side window',
+      new Vector3(4.7, PLAYER_Y, 18),
+      new Vector3(5.8, PLAYER_Y, 18),
+      'x',
+    ],
+    [
+      'port forward window',
+      new Vector3(-5, PLAYER_Y, 12),
+      new Vector3(-6.1, PLAYER_Y, 12),
+      'x',
+    ],
+    [
+      'front window',
+      new Vector3(1.5, PLAYER_Y, 21.2),
+      new Vector3(1.5, PLAYER_Y, 22.5),
+      'z',
+    ],
   ] as const)('blocks radius movement through the %s', (_label, current, desired, axis) => {
     const ship = createTestShip();
     try {
@@ -419,20 +457,32 @@ describe('player movement helpers', () => {
 
   it('reaches all approved bow and stern deck targets with player-radius collision', () => {
     const ship = createTestShip();
-    const target = (id: string): Vector3 => {
-      const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
-      return new Vector3(position[0], PLAYER_Y, position[1]);
-    };
     try {
-      followPath(new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, 12), [
-        target('bow-port'),
-        target('bow-center'),
-        target('bow-starboard'),
+      followPath(layoutTarget('port-loop-forward'), [
+        layoutTarget('wheelhouse-port-door-outside'),
+        new Vector3(
+          layoutTarget('wheelhouse-port-door-outside').x,
+          PLAYER_Y,
+          SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds.maxZ
+            + PLAYER_LAYOUT_RADIUS + 0.1,
+        ),
+        laneCenter('bow-port-approach'),
+        layoutTarget('bow-port'),
+        layoutTarget('bow-center'),
+        layoutTarget('bow-starboard'),
       ], ship.colliders);
-      followPath(new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, -12), [
-        target('stern-port'),
-        target('stern-center'),
-        target('stern-starboard'),
+      followPath(layoutTarget('port-loop-aft'), [
+        layoutTarget('storage-port-door-outside'),
+        new Vector3(
+          -EXTERIOR_ROUTE_X,
+          PLAYER_Y,
+          SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds.minZ
+            - PLAYER_LAYOUT_RADIUS,
+        ),
+        laneCenter('stern-port-approach'),
+        layoutTarget('stern-port'),
+        layoutTarget('stern-center'),
+        layoutTarget('stern-starboard'),
       ], ship.colliders);
     } finally {
       ship.dispose();
