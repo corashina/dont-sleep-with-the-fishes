@@ -91,6 +91,7 @@ export class SurvivalSession {
   private pendingEventTargetId: ItemInstanceId | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
+  private readonly appearanceCounts = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalEventRecord | null = null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
@@ -350,6 +351,9 @@ export class SurvivalSession {
     if (choice === undefined) {
       return this.reject('choice-unavailable', 'That response is not available for this event.');
     }
+    if (!this.meetsChoiceRequirements(choice.requirements)) {
+      return this.reject('requirements-unmet', 'You do not have the resources for that response.');
+    }
 
     const mutationExclusions = new Set<ItemInstanceId>();
     const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
@@ -379,6 +383,7 @@ export class SurvivalSession {
     else this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
+    this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
     this.pendingEvent = null;
     this.pendingEventId = null;
     this.pendingEventTargetId = null;
@@ -678,6 +683,9 @@ export class SurvivalSession {
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
       targetableItemIds: this.targetableItemIds(),
+      appearanceCounts: this.appearanceCounts,
+      inventoryItemIds: this.targetableItemIds(),
+      rescueProgress: this.rescueProgress,
     });
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -795,6 +803,12 @@ export class SurvivalSession {
     return event.choices.some((choice) => (
       choice.itemId !== undefined && this.canUseEventItem(choice.itemId)
     ));
+  }
+
+  private meetsChoiceRequirements(
+    requirements: SurvivalEventDefinition['choices'][number]['requirements'],
+  ): boolean {
+    return requirements?.every(({ resource, minimum }) => this.resourceValues()[resource] >= minimum) ?? true;
   }
 
   private usableEventItemInstanceId(id: ItemId): ItemInstanceId | null {

@@ -119,6 +119,95 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession daytime actions', () => {
+
+  it('resolves the expanded contextual encounters deterministically', () => {
+    const bottle = new SurvivalSession(saved(), {
+      seed: 101, random: sequenceRandom([0]), initial: { day: 2 }, initialEventId: 'drifting-bottle',
+    });
+    expect(bottle.resolveEvent(choiceResponse('retrieve'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(bottle.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
+
+    const chest = new SurvivalSession(saved(), {
+      seed: 102, random: sequenceRandom([0.99]), initial: { day: 6 }, initialEventId: 'mystery-chest',
+    });
+    expect(chest.resolveEvent(choiceResponse('open'))).toMatchObject({
+      accepted: true, message: 'The chest bites back.', deltas: { health: -25 },
+    });
+    expect(chest.snapshot().health).toBe(75);
+
+    const island = new SurvivalSession(saved(), {
+      seed: 103, random: sequenceRandom([0.5]), initial: { day: 7 }, initialEventId: 'midnight-tour',
+    });
+    expect(island.resolveEvent(choiceResponse('visit'))).toMatchObject({
+      accepted: true, message: 'You find one bait.', deltas: { bait: 1 },
+    });
+    expect(island.snapshot()).toMatchObject({ bait: 1, inventory: {} });
+  });
+
+  it('enforces contextual requirements without mutating the session', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 104, random: sequenceRandom([0]), initial: { day: 3, energy: 2 }, initialEventId: 'drifting-loot',
+    });
+    const before = session.snapshot();
+    expect(session.resolveEvent(choiceResponse('retrieve'))).toMatchObject({
+      accepted: false, code: 'requirements-unmet', deltas: {},
+    });
+    expect(session.snapshot()).toEqual(before);
+  });
+
+  it('trades both Handyman directions with their correct input mutation', () => {
+    const spyglass = new SurvivalSession(saved('spyglass'), {
+      seed: 105, random: sequenceRandom([0]), initial: { day: 20 }, initialEventId: 'handyman',
+    });
+    expect(spyglass.resolveEvent(itemResponse('spyglass'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(spyglass.snapshot().inventory).toMatchObject({
+      'spyglass-1': { condition: 'lost' }, 'flashlight-1': { condition: 'usable' },
+    });
+
+    const flashlight = new SurvivalSession(saved('flashlight'), {
+      seed: 106, random: sequenceRandom([0]), initial: { day: 20 }, initialEventId: 'handyman',
+    });
+    expect(flashlight.resolveEvent(itemResponse('flashlight'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(flashlight.snapshot().inventory).toMatchObject({
+      'flashlight-1': { condition: 'lost' }, 'spyglass-1': { condition: 'usable' },
+    });
+  });
+
+  it('executes Night Trader resource and Other People signal choices deterministically', () => {
+    const trader = new SurvivalSession(saved('cannedFood'), {
+      seed: 107, random: sequenceRandom([0]), initial: { day: 10 }, initialEventId: 'night-trader',
+    });
+    expect(trader.resolveEvent(choiceResponse('food'))).toMatchObject({ accepted: true, deltas: { food: -1 } });
+    expect(trader.snapshot()).toMatchObject({ food: 0, inventory: { 'ductTape-1': { condition: 'usable' } } });
+
+    const seen = new SurvivalSession(saved('flashlight'), {
+      seed: 108, random: sequenceRandom([0.39]), initial: { day: 15, rescueProgress: 15 }, initialEventId: 'other-people',
+    });
+    expect(seen.resolveEvent(itemResponse('flashlight'))).toMatchObject({ accepted: true, cue: 'rescue' });
+    expect(seen.snapshot()).toMatchObject({ state: 'rescued', inventory: { 'flashlight-1': { condition: 'usable' } } });
+
+    const missed = new SurvivalSession(saved('flashlight'), {
+      seed: 109, random: sequenceRandom([0.4]), initial: { day: 15, rescueProgress: 15 }, initialEventId: 'other-people',
+    });
+    expect(missed.resolveEvent(itemResponse('flashlight'))).toMatchObject({ accepted: true, message: 'The other boat disappears into the dark.' });
+    expect(missed.snapshot()).toMatchObject({ state: 'nightEvent', inventory: { 'flashlight-1': { condition: 'usable' } } });
+
+    const flare = new SurvivalSession(saved('flareGun'), {
+      seed: 110, random: sequenceRandom([0]), initial: { day: 15, rescueProgress: 15 }, initialEventId: 'other-people',
+    });
+    expect(flare.resolveEvent(itemResponse('flareGun'))).toMatchObject({ accepted: true, cue: 'rescue' });
+    expect(flare.snapshot().inventory['flareGun-1']?.condition).toBe('consumed');
+  });
+
+  it('retains Death Stare outcomes alongside the expansion', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 111, random: sequenceRandom([0]), initial: { day: 9 }, initialEventId: 'death-stare',
+    });
+    expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({
+      accepted: true, message: 'Nothing happens.', deltas: {},
+    });
+    expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, state: 'day' });
+  });
   it('resolves a named itemless event choice', () => {
     const session = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
     (session as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
