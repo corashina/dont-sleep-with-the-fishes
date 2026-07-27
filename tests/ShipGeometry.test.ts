@@ -149,7 +149,30 @@ describe('freighter geometry', () => {  interface PointXZ {
     x >= box.minX && x <= box.maxX
     && z >= box.minZ && z <= box.maxZ
     && Math.abs(box.minY - FREIGHTER_DIMENSIONS.deckY) < 1e-8
-    && Math.abs(box.maxY - (FREIGHTER_DIMENSIONS.deckY + layout.rail.height)) < 1e-8);it('keeps both loop doorways and the lifeboat rail opening clear', () => {
+    && Math.abs(box.maxY - (FREIGHTER_DIMENSIONS.deckY + layout.rail.height)) < 1e-8);
+
+  it('separates white structure, timber floors, lower hull, and canvas', () => {
+    const materials = createShipMaterials();
+    try {
+      expect(materials.upperHull.color.getHex()).toBe(0xd8dedb);
+      expect(materials.paintedSteel.color.getHex()).toBe(0xd5dbd8);
+      expect(materials.plainPaintedSteel.color.getHex()).toBe(0xcbd2cf);
+      expect(materials.darkHull.color.getHex()).toBe(0x172b38);
+      expect(materials.waterline.color.getHex()).toBe(0x243f4c);
+      expect(materials.canvas.color.getHex()).toBe(0xb9cad0);
+      expect(materials.canvasEdge.color.getHex()).toBe(0x647b82);
+      expect(materials.timberFloor.metalness).toBe(0);
+      expect(materials.crewFloor).toBe(materials.timberFloor);
+      expect(materials.wheelhouseFloor).toBe(materials.timberFloor);
+      expect(materials.cargoFloor).toBe(materials.timberFloor);
+      expect(materials.storageFloor).toBe(materials.timberFloor);
+      expect(materials.lifeboatFloor).not.toBe(materials.timberFloor);
+    } finally {
+      materials.dispose();
+    }
+  });
+
+  it('keeps both loop doorways and the lifeboat rail opening clear', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const clearPoints = [
