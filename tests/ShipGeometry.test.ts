@@ -7,7 +7,11 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { resolveArcMovement, resolveLocalMovement } from '../src/player/collisions';
+import {
+  PLAYER_BODY_HEIGHT,
+  resolveArcMovement,
+  resolveLocalMovement,
+} from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
@@ -431,7 +435,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       const porthole = build.root.getObjectByName(`porthole:${zoneId}:${edge}:${index}`)!;
       expect(porthole.position.toArray()).toEqual([
         x,
-        FREIGHTER_DIMENSIONS.deckY + 2.08,
+        FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT,
         z,
       ]);
       expect(porthole.children.filter(({ name }) => name.endsWith(':glass'))).toHaveLength(2);
