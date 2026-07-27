@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase } from '../src/app/GamePhase';
 import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
+import { testPhysicsRuntime } from './helpers/physics';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
@@ -11,9 +12,10 @@ import { createTestSkyAssets } from './helpers/skyAssets';
 type Assert<T extends true> = T;
 type PhaseAssetContextIsRequired = Assert<
   {} extends Pick<import('../src/app/GamePhase').PhaseContext,
-  'shipFurniture' | 'maxTextureAnisotropy'> ? false : true
+  'shipFurniture' | 'maxTextureAnisotropy' | 'physicsRuntime'> ? false : true
 >;
 const phaseAssetContextIsRequired: PhaseAssetContextIsRequired = true;
+const physicsRuntime = await testPhysicsRuntime();
 
 function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   return {
@@ -27,12 +29,16 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
 }
 
 function testOptions(
-  overrides: Omit<GameTestOptions, 'propModels' | 'shipFurniture' | 'skyAssets'> = {},
+  overrides: Omit<
+    GameTestOptions,
+    'propModels' | 'shipFurniture' | 'skyAssets' | 'physicsRuntime'
+  > = {},
 ): GameTestOptions {
   return {
     propModels: createTestPropModels(),
     shipFurniture: createTestShipFurniture(),
     skyAssets: createTestSkyAssets(),
+    physicsRuntime,
     ...overrides,
   };
 }
@@ -299,7 +305,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge: () => active,
       createSurvival: () => phase(),
-    }, { propModels, shipFurniture, skyAssets });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
     const renderer = (game as unknown as {
       renderer: { dispose: () => void; domElement: HTMLCanvasElement };
     }).renderer;
@@ -360,6 +366,7 @@ describe('Game director', () => {
       propModels,
       shipFurniture,
       skyAssets,
+      physicsRuntime,
       mount,
       renderer,
     } as unknown as GameTestOptions)).toThrow(resizeError);

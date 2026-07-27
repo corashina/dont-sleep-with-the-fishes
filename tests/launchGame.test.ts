@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
+import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
 import {
   ShipFurnitureLoadError,
@@ -19,9 +20,12 @@ import {
 } from '../src/world/ShipAssets';
 import { ShipItemPlacementError } from '../src/world/ShipItemPlacement';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
+import { testPhysicsRuntime } from './helpers/physics';
 import { createTestShipAssets } from './helpers/shipAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
+
+const physicsRuntime = await testPhysicsRuntime();
 
 interface Deferred<T> {
   readonly promise: Promise<T>;
@@ -55,6 +59,7 @@ function dependencies(
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
     loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
     loadShipAssets: () => Promise.resolve(createTestShipAssets()),
+    loadPhysicsRuntime: () => Promise.resolve(physicsRuntime),
     createGame: vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() })),
     ...overrides,
   };
@@ -119,16 +124,18 @@ describe('launchGame', () => {
       skyAssets,
       lifeboatAssets,
       shipAssets,
+      physicsRuntime,
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
 
-  it('waits for models, furniture, sky, lifeboat, and ship assets before creating the game', async () => {
+  it('waits for models, furniture, sky, lifeboat, ship, and physics before creating the game', async () => {
     const modelLoad = deferred<PropModelLibrary>();
     const furnitureLoad = deferred<ShipFurnitureLibrary>();
     const skyLoad = deferred<SkyAssets>();
     const lifeboatLoad = deferred<LifeboatAssets>();
     const shipLoad = deferred<ReturnType<typeof createTestShipAssets>>();
+    const physicsLoad = deferred<typeof physicsRuntime>();
     const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
     const shipFurniture = createTestShipFurniture();
     const skyAssets = createTestSkyAssets();
@@ -144,6 +151,7 @@ describe('launchGame', () => {
         loadSkyAssets: () => skyLoad.promise,
         loadLifeboatAssets: () => lifeboatLoad.promise,
         loadShipAssets: () => shipLoad.promise,
+        loadPhysicsRuntime: () => physicsLoad.promise,
         createGame,
       },
     ));
@@ -165,6 +173,10 @@ describe('launchGame', () => {
     expect(createGame).not.toHaveBeenCalled();
 
     shipLoad.resolve(shipAssets);
+    await Promise.resolve();
+    expect(createGame).not.toHaveBeenCalled();
+
+    physicsLoad.resolve(physicsRuntime);
     await expect(handle.completion).resolves.toBe(game as unknown as Game);
     expect(createGame).toHaveBeenCalledWith(
       mount,
@@ -173,7 +185,27 @@ describe('launchGame', () => {
       skyAssets,
       lifeboatAssets,
       shipAssets,
+      physicsRuntime,
     );
+  });
+
+  it('reports physics preload failure and disposes fulfilled assets', async () => {
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        loadPhysicsRuntime: () => Promise.reject(
+          new PhysicsLoadError('WASM unavailable'),
+        ),
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(models.dispose).toHaveBeenCalledOnce();
+    expect(mount.textContent).toContain('PHYSICS UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare the moving deck');
+    expect(mount.textContent).toContain('WASM unavailable');
   });
 
   it('disposes fulfilled siblings and names a furniture preload failure', async () => {
@@ -444,6 +476,7 @@ describe('launchGame', () => {
       loadedSkyAssets: SkyAssets,
       loadedLifeboatAssets: LifeboatAssets,
       loadedShipAssets: ShipAssets,
+      loadedPhysicsRuntime: typeof physicsRuntime,
     ) => Game.forTest({
       createScavenge: () => ({
         start: vi.fn(),
@@ -459,6 +492,7 @@ describe('launchGame', () => {
       skyAssets: loadedSkyAssets,
       lifeboatAssets: loadedLifeboatAssets,
       shipAssets: loadedShipAssets,
+      physicsRuntime: loadedPhysicsRuntime,
       mount: gameMount,
       renderer,
     } as unknown as GameTestOptions);
