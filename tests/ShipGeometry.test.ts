@@ -984,7 +984,7 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each(SHIP_LAYOUT.balconies)(
-    'builds $id with white coamings and posts, dark rails, and a centered opening',
+    'builds $id from uniform dark-steel members with a centered opening',
     (balcony) => {
       const materials = createShipMaterials();
       const build = createShipGeometry(materials);
@@ -1003,16 +1003,21 @@ describe('freighter geometry', () => {  interface PointXZ {
         name.startsWith(`${prefix}top-rail:${openingEdge}:`));
 
       expect(coamings).toHaveLength(5);
-      expect(coamings.every(({ material }) =>
-        material === materials.paintedPanel || material === materials.paintedSteel)).toBe(true);
+      expect(coamings.every(({ material }) => material === materials.darkMetal)).toBe(true);
       expect(posts.length).toBeGreaterThanOrEqual(10);
-      expect(posts.every(({ material }) => material === materials.paintedSteel)).toBe(true);
+      expect(posts.every(({ material }) => material === materials.darkMetal)).toBe(true);
       expect(topRails).toHaveLength(5);
       expect(topRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
       expect(openingCoamings).toHaveLength(2);
       expect(openingRails).toHaveLength(2);
 
       const railingParts = [...coamings, ...posts, ...topRails];
+      railingParts.forEach((part) => {
+        const dimensions = new Box3().setFromObject(part).getSize(new Vector3()).toArray()
+          .sort((leftDimension, rightDimension) => leftDimension - rightDimension);
+        expect(dimensions[0], `${part.name} has mismatched member thickness`).toBeCloseTo(0.12);
+        expect(dimensions[1], `${part.name} has mismatched member thickness`).toBeCloseTo(0.12);
+      });
       railingParts.forEach((leftPart, index) => {
         railingParts.slice(index + 1).forEach((rightPart) => {
           expect(

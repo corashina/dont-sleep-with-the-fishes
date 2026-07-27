@@ -119,9 +119,7 @@ const STACK_COLLAR_RADIUS = 0.72;
 const STACK_COLLAR_HEIGHT = 0.22;
 
 const BALCONY_DECK_THICKNESS = 0.1;
-const BALCONY_EDGE_THICKNESS = 0.14;
-const BALCONY_RAIL_POST_WIDTH = 0.12;
-const BALCONY_TOP_RAIL_THICKNESS = 0.12;
+const BALCONY_RAIL_MEMBER_THICKNESS = 0.12;
 const BALCONY_RAIL_POST_SPACING = 2.2;
 
 const LADDER_RAIL_WIDTH = 0.08;
@@ -1014,12 +1012,12 @@ function balconyRuns(
   const length = bounds.maxZ - bounds.minZ;
   const centerZ = (bounds.minZ + bounds.maxZ) / 2;
   const openingZ = balcony.edge === 'aft'
-    ? bounds.minZ + BALCONY_EDGE_THICKNESS / 2
-    : bounds.maxZ - BALCONY_EDGE_THICKNESS / 2;
+    ? bounds.minZ + BALCONY_RAIL_MEMBER_THICKNESS / 2
+    : bounds.maxZ - BALCONY_RAIL_MEMBER_THICKNESS / 2;
   const oppositeEdge: ShipTransverseEdge = balcony.edge === 'aft' ? 'forward' : 'aft';
   const oppositeZ = balcony.edge === 'aft'
-    ? bounds.maxZ - BALCONY_EDGE_THICKNESS / 2
-    : bounds.minZ + BALCONY_EDGE_THICKNESS / 2;
+    ? bounds.maxZ - BALCONY_RAIL_MEMBER_THICKNESS / 2
+    : bounds.minZ + BALCONY_RAIL_MEMBER_THICKNESS / 2;
   const openingHalfWidth = balcony.openingWidth / 2;
   const leftWidth = -openingHalfWidth - bounds.minX;
   const rightWidth = bounds.maxX - openingHalfWidth;
@@ -1028,31 +1026,37 @@ function balconyRuns(
     {
       edge: 'port',
       index: 0,
-      size: [BALCONY_EDGE_THICKNESS, length - BALCONY_EDGE_THICKNESS * 2],
-      position: [bounds.minX + BALCONY_EDGE_THICKNESS / 2, centerZ],
+      size: [
+        BALCONY_RAIL_MEMBER_THICKNESS,
+        length - BALCONY_RAIL_MEMBER_THICKNESS * 2,
+      ],
+      position: [bounds.minX + BALCONY_RAIL_MEMBER_THICKNESS / 2, centerZ],
     },
     {
       edge: 'starboard',
       index: 0,
-      size: [BALCONY_EDGE_THICKNESS, length - BALCONY_EDGE_THICKNESS * 2],
-      position: [bounds.maxX - BALCONY_EDGE_THICKNESS / 2, centerZ],
+      size: [
+        BALCONY_RAIL_MEMBER_THICKNESS,
+        length - BALCONY_RAIL_MEMBER_THICKNESS * 2,
+      ],
+      position: [bounds.maxX - BALCONY_RAIL_MEMBER_THICKNESS / 2, centerZ],
     },
     {
       edge: oppositeEdge,
       index: 0,
-      size: [width, BALCONY_EDGE_THICKNESS],
+      size: [width, BALCONY_RAIL_MEMBER_THICKNESS],
       position: [(bounds.minX + bounds.maxX) / 2, oppositeZ],
     },
     {
       edge: balcony.edge,
       index: 0,
-      size: [leftWidth, BALCONY_EDGE_THICKNESS],
+      size: [leftWidth, BALCONY_RAIL_MEMBER_THICKNESS],
       position: [bounds.minX + leftWidth / 2, openingZ],
     },
     {
       edge: balcony.edge,
       index: 1,
-      size: [rightWidth, BALCONY_EDGE_THICKNESS],
+      size: [rightWidth, BALCONY_RAIL_MEMBER_THICKNESS],
       position: [openingHalfWidth + rightWidth / 2, openingZ],
     },
   ];
@@ -1083,8 +1087,8 @@ function addBalconyPosts(
       const z = run.position[1] + (alongX ? 0 : length * amount);
       const sharedCorner = positions.find((position) =>
         position.alongX !== alongX
-        && Math.abs(position.x - x) <= BALCONY_EDGE_THICKNESS
-        && Math.abs(position.z - z) <= BALCONY_EDGE_THICKNESS);
+        && Math.abs(position.x - x) <= BALCONY_RAIL_MEMBER_THICKNESS
+        && Math.abs(position.z - z) <= BALCONY_RAIL_MEMBER_THICKNESS);
       if (sharedCorner) {
         sharedCorner.x = alongX ? sharedCorner.x : x;
         sharedCorner.z = alongX ? z : sharedCorner.z;
@@ -1097,21 +1101,21 @@ function addBalconyPosts(
   });
 
   const postHeight =
-    balcony.railHeight - balcony.coamingHeight - BALCONY_TOP_RAIL_THICKNESS;
+    balcony.railHeight - balcony.coamingHeight - BALCONY_RAIL_MEMBER_THICKNESS;
   positions.forEach((position, index) => {
     addBlock(root, geometries, shellColliders, {
       name: `balcony:${balcony.id}:post:${position.edge}:${index}`,
       size: [
-        BALCONY_RAIL_POST_WIDTH,
+        BALCONY_RAIL_MEMBER_THICKNESS,
         postHeight,
-        BALCONY_RAIL_POST_WIDTH,
+        BALCONY_RAIL_MEMBER_THICKNESS,
       ],
       position: [
         position.x,
         deckTopY + balcony.coamingHeight + postHeight / 2,
         position.z,
       ],
-      material: materials.paintedSteel,
+      material: materials.darkMetal,
     });
   });
 }
@@ -1149,14 +1153,14 @@ function addRoofBalconies(
           deckTopY + balcony.coamingHeight / 2,
           run.position[1],
         ],
-        material: materials.paintedPanel,
+        material: materials.darkMetal,
       });
       addBlock(root, geometries, shellColliders, {
         name: `balcony:${balcony.id}:top-rail:${run.edge}:${run.index}`,
-        size: [run.size[0], BALCONY_TOP_RAIL_THICKNESS, run.size[1]],
+        size: [run.size[0], BALCONY_RAIL_MEMBER_THICKNESS, run.size[1]],
         position: [
           run.position[0],
-          deckTopY + balcony.railHeight - BALCONY_TOP_RAIL_THICKNESS / 2,
+          deckTopY + balcony.railHeight - BALCONY_RAIL_MEMBER_THICKNESS / 2,
           run.position[1],
         ],
         material: materials.darkMetal,
