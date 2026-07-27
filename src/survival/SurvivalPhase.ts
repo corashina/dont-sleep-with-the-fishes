@@ -729,7 +729,7 @@ export class SurvivalPhase implements GamePhase {
     if (outcome.code === 'quiet-night') {
       await (this.ui.holdSleep?.() ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
-      snapshot = await this.runDawn();
+      snapshot = await this.runDawn(generation);
       if (!this.isContinuationActive(generation)) return;
       await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
@@ -819,7 +819,10 @@ export class SurvivalPhase implements GamePhase {
     generation: number,
   ): Promise<void> {
     this.setBusy(true);
-    await (this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve());
+    await Promise.all([
+      this.world.play?.(outcome.cue) ?? Promise.resolve(),
+      this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve(),
+    ]);
     if (!this.isContinuationActive(generation)) return;
     let snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
@@ -831,7 +834,7 @@ export class SurvivalPhase implements GamePhase {
       this.presentTerminalOnce(snapshot);
       return;
     }
-    if (eventState === 'nightEvent') snapshot = await this.runDawn();
+    if (eventState === 'nightEvent') snapshot = await this.runDawn(generation);
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'idle';
     this.setBusy(false);
@@ -839,10 +842,10 @@ export class SurvivalPhase implements GamePhase {
     this.ui.restoreCommandFocus?.();
   }
 
-  private async runDawn(): Promise<SurvivalSnapshot> {
+  private async runDawn(generation: number): Promise<SurvivalSnapshot> {
     const dawn = this.session.beginDawn?.();
     if (dawn?.accepted) await (this.world.play?.(dawn.cue) ?? Promise.resolve());
-    if (this.disposed) return this.session.snapshot();
+    if (!this.isContinuationActive(generation)) return this.session.snapshot();
     return this.renderSnapshot(false, false);
   }
 
