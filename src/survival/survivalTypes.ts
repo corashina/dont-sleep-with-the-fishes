@@ -82,6 +82,7 @@ export interface EventChoiceDefinition {
   readonly id: string;
   readonly label: string;
   readonly itemId?: ItemId;
+  readonly requirements?: readonly EventChoiceRequirement[];
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
@@ -111,6 +112,9 @@ export interface SurvivalEventDefinition {
   latestDay?: number;
   weight: number;
   cooldownDays: number;
+  maximumAppearances?: number;
+  absentItemIds?: readonly ItemId[];
+  minimumRescueProgress?: number;
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
