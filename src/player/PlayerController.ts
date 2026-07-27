@@ -178,7 +178,7 @@ export class PlayerController {
   reset(start: Vector3): void {
     this.localPosition.copy(start);
     this.safePosition.copy(start);
-    this.floorEyeHeight = this.baseDeckEyeHeight;
+    this.floorEyeHeight = start.y;
     this.activeLadderId = null;
     this.verticalVelocity = 0;
     this.yaw = DEFAULT_YAW;
