@@ -8,6 +8,7 @@ import {
 import {
   resolveLadderTraversal,
   type LadderClimbZone,
+  type LadderEntryArea,
 } from './LadderTraversal';
 
 const JUMP_SPEED = 5.2;
@@ -30,6 +31,16 @@ function containsLocalPosition(
     && position.x <= bounds.maxX
     && position.z >= bounds.minZ
     && position.z <= bounds.maxZ;
+}
+
+function containsElevatedFloor(
+  floor: LadderEntryArea,
+  position: Pick<LocalPlayerPosition, 'x' | 'z'>,
+): boolean {
+  return position.x >= floor.minX
+    && position.x <= floor.maxX
+    && position.z >= floor.minZ
+    && position.z <= floor.maxZ;
 }
 
 export class PlayerController {
@@ -138,6 +149,16 @@ export class PlayerController {
       this.colliders,
       this.arcColliders,
     );
+    const supportedByActiveElevatedFloor = this.climbZones.some((zone) =>
+      Math.abs(zone.topEyeY - this.floorEyeHeight) <= GROUND_EPSILON
+      && containsElevatedFloor(zone.topFloor, resolved));
+    if (
+      this.floorEyeHeight > this.baseDeckEyeHeight + GROUND_EPSILON
+      && !supportedByActiveElevatedFloor
+    ) {
+      this.floorEyeHeight = this.baseDeckEyeHeight;
+      resolved.y = Math.max(this.floorEyeHeight, nextY);
+    }
     const support = findSupportEyeHeight(
       resolved,
       0.35,

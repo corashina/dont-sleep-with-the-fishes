@@ -21,6 +21,7 @@ export interface LadderClimbZone {
   readonly outwardZ: number;
   readonly bottomEyeY: number;
   readonly topEyeY: number;
+  readonly topFloor: LadderEntryArea;
   readonly bottomEntry: LadderEntryArea;
   readonly topEntry: LadderEntryArea;
   readonly bottomDismount: readonly [number, number];

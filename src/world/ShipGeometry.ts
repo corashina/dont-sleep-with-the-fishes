@@ -1118,6 +1118,7 @@ function orderedEntryArea(
 function resolvedClimbZone(
   ladder: ShipLadderSpec,
   balcony: ShipBalconySpec,
+  topFloor: LadderEntryArea,
   wallZ: number,
   ladderZ: number,
   outwardZ: number,
@@ -1155,6 +1156,7 @@ function resolvedClimbZone(
     outwardZ,
     bottomEyeY: FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT,
     topEyeY: topFloorY + PLAYER_BODY_HEIGHT,
+    topFloor: Object.freeze({ ...topFloor }),
     bottomEntry,
     topEntry,
     bottomDismount,
@@ -1227,6 +1229,7 @@ function addLadders(
     return resolvedClimbZone(
       ladderSpec,
       balcony,
+      zone.bounds,
       wallZ,
       ladderZ,
       outwardZ,
