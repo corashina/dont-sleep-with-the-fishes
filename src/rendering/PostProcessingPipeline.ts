@@ -81,7 +81,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly inkFrame: ReturnType<typeof createInkFrameMask>;
   private readonly composer: EffectComposer;
   private readonly renderPass: RenderPass;
-  private readonly itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
+  private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
   private readonly outlinePass: OutlinePass;
   private readonly printPass: ShaderPass;
   private readonly outputPass: OutputPass;
@@ -142,7 +142,19 @@ export class PostProcessingPipeline implements SceneRenderer {
       printPass.enabled = this.gradeEnabled;
 
       composer.addPass(this.renderPass);
-      if (itemAmbientOcclusionPass !== null) composer.addPass(itemAmbientOcclusionPass);
+      if (itemAmbientOcclusionPass !== null) {
+        try {
+          composer.addPass(itemAmbientOcclusionPass);
+        } catch (error) {
+          const failedPass = itemAmbientOcclusionPass;
+          itemAmbientOcclusionPass = null;
+          failedPass.enabled = false;
+          composer.removePass(failedPass);
+          this.aoUnavailable = true;
+          failedPass.dispose();
+          this.reportFallback(error);
+        }
+      }
       composer.addPass(outlinePass);
       composer.addPass(printPass);
       composer.addPass(outputPass);
@@ -193,21 +205,39 @@ export class PostProcessingPipeline implements SceneRenderer {
       !Number.isFinite(physicalWidth) || !Number.isFinite(physicalHeight)
       || physicalWidth > this.maxTextureSize || physicalHeight > this.maxTextureSize
     ) return;
-    this.composer.setPixelRatio(pixelRatio);
-    this.composer.setSize(width, height);
+    const ambientOcclusionPass = this.itemAmbientOcclusionPass;
+    if (ambientOcclusionPass !== null) {
+      try {
+        ambientOcclusionPass.setSize(physicalWidth, physicalHeight);
+      } catch (error) {
+        this.retireAmbientOcclusion(error);
+      }
+    }
+    const activeAmbientOcclusionPass = this.itemAmbientOcclusionPass;
+    if (activeAmbientOcclusionPass !== null) {
+      this.composer.removePass(activeAmbientOcclusionPass);
+    }
+    try {
+      this.composer.setPixelRatio(pixelRatio);
+      this.composer.setSize(width, height);
+    } finally {
+      if (activeAmbientOcclusionPass !== null) {
+        this.composer.passes.splice(1, 0, activeAmbientOcclusionPass);
+      }
+    }
     this.uniforms.uResolution.value.set(physicalWidth, physicalHeight);
     this.uniforms.uPixelRatio.value = pixelRatio;
   }
 
   setVisualQuality(value: VisualQuality): void {
-    if (this.disposed || this.itemAmbientOcclusionPass === null) return;
+    if (
+      this.disposed || this.aoUnavailable
+      || this.itemAmbientOcclusionPass === null
+    ) return;
     try {
       this.itemAmbientOcclusionPass.setVisualQuality(value);
     } catch (error) {
-      this.reportFallback(error);
-      this.itemAmbientOcclusionPass.enabled = false;
-      this.aoUnavailable = true;
-      this.removeAmbientOcclusionHotkey();
+      this.retireAmbientOcclusion(error);
     }
   }
 
@@ -263,6 +293,18 @@ export class PostProcessingPipeline implements SceneRenderer {
       window.removeEventListener('keydown', this.handleAmbientOcclusionHotkey);
     }
     this.aoHotkeyRegistered = false;
+  }
+
+  private retireAmbientOcclusion(error: unknown): void {
+    const pass = this.itemAmbientOcclusionPass;
+    if (pass === null || this.aoUnavailable) return;
+    this.itemAmbientOcclusionPass = null;
+    this.aoUnavailable = true;
+    pass.enabled = false;
+    this.composer.removePass(pass);
+    this.removeAmbientOcclusionHotkey();
+    pass.dispose();
+    this.reportFallback(error);
   }
 
   private applyProfile(

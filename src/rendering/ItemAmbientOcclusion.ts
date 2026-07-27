@@ -44,17 +44,23 @@ export function resolveItemAmbientOcclusionMode(search: string): ItemAmbientOccl
   return 'composite';
 }
 
+function hasTransparentMaterial(mesh: Mesh): boolean {
+  if (Array.isArray(mesh.material)) {
+    return mesh.material.some((material) => material.transparent);
+  }
+  return mesh.material.transparent;
+}
+
 export function enableItemAmbientOcclusion(root: Object3D): void {
   root.traverse((object) => {
-    if (object instanceof Mesh) object.layers.enable(ITEM_AMBIENT_OCCLUSION_LAYER);
+    if (!(object instanceof Mesh) || hasTransparentMaterial(object)) return;
+    object.layers.enable(ITEM_AMBIENT_OCCLUSION_LAYER);
   });
 }
 
 export function enableItemAmbientOcclusionOccluder(root: Object3D): void {
   root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    if (materials.some((material) => material.transparent)) return;
+    if (!(object instanceof Mesh) || hasTransparentMaterial(object)) return;
     object.layers.enable(ITEM_AMBIENT_OCCLUSION_LAYER);
   });
 }

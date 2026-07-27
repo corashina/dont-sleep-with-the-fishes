@@ -37,6 +37,26 @@ describe('item ambient occlusion', () => {
     mesh.material.dispose();
   });
 
+  it('keeps transparent collectible meshes out of the dedicated AO layer', () => {
+    const root = new Group();
+    const opaque = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+    const transparent = new Mesh(
+      new BoxGeometry(),
+      new MeshBasicMaterial({ transparent: true, opacity: 0.4 }),
+    );
+    root.add(opaque, transparent);
+
+    enableItemAmbientOcclusion(root);
+
+    expect(opaque.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+    expect(transparent.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
+
+    opaque.geometry.dispose();
+    opaque.material.dispose();
+    transparent.geometry.dispose();
+    transparent.material.dispose();
+  });
+
   it('adds opaque ship meshes as AO depth occluders but keeps glass transparent', () => {
     const root = new Group();
     const wall = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
