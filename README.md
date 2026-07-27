@@ -35,7 +35,7 @@ Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog adapts the original game's ordinary item responses to this single-survivor rescue loop. Recovered usable items can unlock suitable responses; unavailable, broken, consumed, and lost supplies cannot. Unsupported companion, trade, later-loot, story-branch, and alternate-ending outcomes remain outside this milestone. The wiki informed the committed event data but is not a runtime dependency.
+The ordinary event catalog includes Drifting Loot, Drifting Bottle, Check the Back, Mystery Chest, Midnight Tour, Night Trader, The Handyman, and Other People alongside the existing encounters. Recovered usable items unlock suitable physical responses, while compact contextual buttons handle choices such as retrieving loot, visiting an island, accepting a resource trade, refusing, or letting a sighting pass. Encounters can generate stable onboard supplies such as Bottled Paper, Duct Tape, Energy Bars, Medkits, and traded tools; an occupied item slot falls back to food. Companion content, companion needs, lore and story branches, and alternate-ending chains remain explicitly excluded. The wiki informed the committed event data but is not a runtime dependency.
 
 ## Run
 
@@ -96,13 +96,13 @@ In the lifeboat, each day gives three energy for daytime actions:
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
-Day and night events fade to black for 2.5 seconds, stage the committed event while covered, and fade into the event over 2.5 seconds. The event title appears at the top of the scene; green, yellow, or red title color communicates its risk. Suitable recovered physical items become selectable after the reveal, while **Endure** appears when no recovered item response is available. A one-use event supply is consumed only when its authored outcome spends it.
+Day and night events fade to black for 2.5 seconds, stage the committed event while covered, and fade into the event over 2.5 seconds. Original procedural placeholder tableaus depict the bottle, drifting cargo, stern fish, chest, island, trader skiff, reaching hand, cargo vessel, and Death Stare fish without reproducing story artwork. The event title appears at the top of the scene; green, yellow, or red title color communicates its risk. Suitable recovered physical items become selectable after the reveal, contextual decisions appear as nearby buttons, and **Endure** appears only when no physical or authored contextual response is available. A one-use event supply is consumed only when its authored outcome spends it.
 
 End Day uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 
-Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while a flare used during the right sighting can secure immediate rescue. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
+Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while signaling the cargo vessel in **Other People** with a Flare Gun secures immediate rescue and holds the rescue tableau through the ending. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
 
 ## Asset sources
 

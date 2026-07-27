@@ -324,7 +324,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Let It Drift', outcome(1, 'The loot drifts out of reach.')),
   ]),
   event('drifting-bottle', 'Drifting Bottle', 'sighting', 30, 2, 0, [
-    contextualChoice('retrieve', 'Retrieve It', outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    choice('fishingNet', 'Use Fishing Net', 'fishingNet',
+      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    choice('swimRing', 'Use Swim Ring', 'swimRing',
+      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The bottle drifts away.')),
   ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'Check the Back', 'fish', 35, 2, 35, [

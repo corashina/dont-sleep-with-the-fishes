@@ -206,6 +206,16 @@ describe('survival events', () => {
     ]));
   });
 
+  it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
+    const bottle = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle');
+
+    expect(bottle?.choices.map(({ id, itemId }) => ({ id, itemId }))).toEqual([
+      { id: 'fishingNet', itemId: 'fishingNet' },
+      { id: 'swimRing', itemId: 'swimRing' },
+      { id: 'sleep', itemId: undefined },
+    ]);
+  });
+
   it('blocks one-time, absent-item, and rescue-progress events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,

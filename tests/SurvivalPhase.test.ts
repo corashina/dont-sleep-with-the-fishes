@@ -1302,34 +1302,129 @@ describe('SurvivalPhase orchestration', () => {
     expect(render).toHaveBeenCalledTimes(rendersBeforeRestart);
   });
 
-  it('retains the Other People tableau when its outcome rescues the survivor', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'other-people')!;
-    const rescued = snapshot({ state: 'rescued', day: 5, pendingEventId: null });
-    let current = snapshot({
-      state: 'nightEvent',
-      day: 5,
-      pendingEventId: event.id,
-      inventory: inventory({
-        'flareGun-1': { instanceId: 'flareGun-1', type: 'flareGun', condition: 'usable' },
-      }),
-    });
-    const clearEvent = vi.fn();
-    const showEnding = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => current),
-        resolveEvent: vi.fn(() => {
-          current = rescued;
-          return accepted({ code: 'event-resolved', cue: 'rescue' });
-        }),
+  it('integrates Swim Ring bottle recovery through reveal, inventory sync, reaction, and dawn', async () => {
+    const calls: string[] = [];
+    const session = new SurvivalSession(
+      [{ instanceId: 'swimRing-1', type: 'swimRing' }],
+      {
+        seed: 201,
+        random: sequenceRandom([0, 0]),
+        initial: { day: 2 },
+        initialEventId: 'drifting-bottle',
       },
+    );
+    const syncInventory = vi.fn((current: SurvivalSnapshot) => {
+      const bottledPaper = current.inventory['bottledPaper-1']?.condition ?? 'absent';
+      calls.push(`inventory:${current.state}:${bottledPaper}`);
+    });
+    const setEventSelection = vi.fn((
+      _eligible: ReadonlyMap<ItemInstanceId, string>,
+    ) => {
+      calls.push('selection');
+    });
+    const phase = SurvivalPhase.forTest({
+      session,
       world: {
-        revealEvent: vi.fn(() => Promise.resolve()),
-        playEventItemUse: vi.fn(() => Promise.resolve()),
-        reactToEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEvent,
+        syncInventory,
+        play: vi.fn(async (cue) => { calls.push(`cue:${cue}`); }),
+        stageEvent: vi.fn(() => { calls.push('stage:drifting-bottle'); }),
+        revealEvent: vi.fn(async () => { calls.push('reveal:drifting-bottle'); }),
+        playEventItemUse: vi.fn(async () => { calls.push('use:swimRing-1'); }),
+        reactToEventOutcome: vi.fn(async () => { calls.push('react:drifting-bottle'); }),
+        clearEvent: vi.fn(() => { calls.push('clear:drifting-bottle'); }),
         dispose: vi.fn(),
       },
+      ui: {
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        setBusy: vi.fn(),
+        beginEventPresentation: vi.fn(() => { calls.push('begin-event'); }),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+        }),
+        showEventReveal: vi.fn(async () => { calls.push('caption:drifting-bottle'); }),
+        setEventSelection,
+        setEventUsing: vi.fn(),
+        showFeedback: vi.fn(() => { calls.push('feedback'); }),
+        clearEventPresentation: vi.fn(),
+        restoreCommandFocus: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect([...setEventSelection.mock.calls[0]![0]]).toEqual([
+      ['swimRing-1', 'swimRing'],
+    ]);
+    phase.handleEventItem('swimRing', 'swimRing-1');
+    await flushPromises();
+
+    expect(session.snapshot()).toMatchObject({
+      state: 'day',
+      day: 3,
+      inventory: {
+        'swimRing-1': { condition: 'usable' },
+        'bottledPaper-1': { condition: 'usable' },
+      },
+    });
+    expect(syncInventory.mock.calls.some(([current]) => (
+      current.state === 'nightEvent'
+      && current.inventory['bottledPaper-1']?.condition === 'usable'
+    ))).toBe(true);
+    expect(calls).toEqual(expect.arrayContaining([
+      'cover',
+      'stage:drifting-bottle',
+      'caption:drifting-bottle',
+      'reveal:drifting-bottle',
+      'uncover',
+      'selection',
+      'use:swimRing-1',
+      'react:drifting-bottle',
+      'feedback',
+      'clear:drifting-bottle',
+      'cue:dawn',
+      'inventory:day:usable',
+    ]));
+    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:drifting-bottle'));
+    expect(calls.indexOf('reveal:drifting-bottle')).toBeLessThan(calls.indexOf('selection'));
+    expect(calls.indexOf('use:swimRing-1')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
+    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('feedback'));
+    expect(calls.indexOf('feedback')).toBeLessThan(calls.indexOf('clear:drifting-bottle'));
+    expect(calls.indexOf('clear:drifting-bottle')).toBeLessThan(calls.indexOf('cue:dawn'));
+  });
+
+  it('keeps the Other People rescue tableau visible until phase disposal', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'flareGun-1', type: 'flareGun' }],
+      {
+        seed: 202,
+        random: sequenceRandom([0]),
+        initial: { day: 15, rescueProgress: 15 },
+        initialEventId: 'other-people',
+      },
+    );
+    let rescueTableauVisible = false;
+    const clearEvent = vi.fn(() => {
+      rescueTableauVisible = false;
+    });
+    const showEnding = vi.fn();
+    const world = {
+      syncInventory: vi.fn(),
+      play: vi.fn(() => Promise.resolve()),
+      stageEvent: vi.fn((eventId: string) => {
+        rescueTableauVisible = eventId === 'other-people';
+      }),
+      revealEvent: vi.fn(() => Promise.resolve()),
+      playEventItemUse: vi.fn(() => Promise.resolve()),
+      reactToEventOutcome: vi.fn(() => Promise.resolve()),
+      clearEvent,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world,
       ui: {
         beginEventPresentation: vi.fn(),
         setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -1341,6 +1436,7 @@ describe('SurvivalPhase orchestration', () => {
         render: vi.fn(),
         setJournalUnread: vi.fn(),
         showEnding,
+        clearEventPresentation: vi.fn(),
         dispose: vi.fn(),
       },
     });
@@ -1350,8 +1446,19 @@ describe('SurvivalPhase orchestration', () => {
     phase.handleEventItem('flareGun', 'flareGun-1');
     await flushPromises();
 
+    expect(session.snapshot()).toMatchObject({
+      state: 'rescued',
+      inventory: { 'flareGun-1': { condition: 'consumed' } },
+    });
     expect(showEnding).toHaveBeenCalledOnce();
+    expect(rescueTableauVisible).toBe(true);
     expect(clearEvent).not.toHaveBeenCalled();
+
+    phase.dispose();
+
+    expect(clearEvent).toHaveBeenCalledOnce();
+    expect(rescueTableauVisible).toBe(false);
+    expect(world.dispose).toHaveBeenCalledOnce();
   });
 
   it('clears a staged tableau when disposed during its reveal', async () => {
