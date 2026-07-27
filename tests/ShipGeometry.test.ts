@@ -710,7 +710,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('builds a faceted tapered wraparound wheelhouse facade with captured glass', () => {
+  it('builds an upright faceted wheelhouse facade with captured glass and no inner rails', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const facade = build.root.getObjectByName('wheelhouse-facade')!;
@@ -729,23 +729,19 @@ describe('freighter geometry', () => {  interface PointXZ {
       const glass = pane.getObjectByName(`wheelhouse-pane:${id}:glass`) as Mesh;
       const sill = pane.getObjectByName(`wheelhouse-pane:${id}:sill`) as Mesh;
       const header = pane.getObjectByName(`wheelhouse-pane:${id}:header`) as Mesh;
-      const sillCap = pane.getObjectByName(`wheelhouse-pane:${id}:sill-cap`) as Mesh;
-      const headerTrim = pane.getObjectByName(`wheelhouse-pane:${id}:header-trim`) as Mesh;
       const start = pane.getObjectByName(`wheelhouse-pane:${id}:frame-start`) as Mesh;
       const end = pane.getObjectByName(`wheelhouse-pane:${id}:frame-end`) as Mesh;
-      expect([glass, sill, sillCap, header, headerTrim, start, end].every(Boolean), id)
+      expect([glass, sill, header, start, end].every(Boolean), id)
         .toBe(true);
       expect(pane.children.filter((child) =>
         child instanceof Mesh && child.material === materials.glass), id).toHaveLength(1);
-      expect(sillCap.material, `${id} sill cap material`).toBe(materials.darkMetal);
-      expect(headerTrim.material, `${id} header trim material`).toBe(materials.darkMetal);
-      expect(pane.rotation.x, `${id} taper`).not.toBe(0);
+      expect(pane.getObjectByName(`wheelhouse-pane:${id}:sill-cap`), id).toBeUndefined();
+      expect(pane.getObjectByName(`wheelhouse-pane:${id}:header-trim`), id).toBeUndefined();
+      expect(pane.rotation.x, `${id} vertical alignment`).toBe(0);
 
       const glassBounds = localMeshBounds(glass);
       const sillBounds = localMeshBounds(sill);
-      const sillCapBounds = localMeshBounds(sillCap);
       const headerBounds = localMeshBounds(header);
-      const headerTrimBounds = localMeshBounds(headerTrim);
       const startBounds = localMeshBounds(start);
       const endBounds = localMeshBounds(end);
       expect(glassBounds.min.x, `${id} start capture`)
@@ -756,25 +752,6 @@ describe('freighter geometry', () => {  interface PointXZ {
         .toBeGreaterThanOrEqual(sillBounds.max.y - 0.01);
       expect(glassBounds.max.y, `${id} header capture`)
         .toBeLessThanOrEqual(headerBounds.min.y + 0.01);
-      expect(sillCapBounds.min.x, `${id} sill cap start`)
-        .toBeGreaterThanOrEqual(sillBounds.min.x);
-      expect(sillCapBounds.max.x, `${id} sill cap end`)
-        .toBeLessThanOrEqual(sillBounds.max.x);
-      expect(sillCapBounds.min.y, `${id} sill cap vertical`)
-        .toBeGreaterThanOrEqual(sillBounds.min.y);
-      expect(sillCapBounds.max.y, `${id} sill cap vertical`)
-        .toBeLessThanOrEqual(sillBounds.max.y);
-      expect(sillCapBounds.min.z, `${id} sill cap layer`).toBeLessThan(sillBounds.min.z);
-      expect(headerTrimBounds.min.x, `${id} header trim start`)
-        .toBeGreaterThanOrEqual(headerBounds.min.x);
-      expect(headerTrimBounds.max.x, `${id} header trim end`)
-        .toBeLessThanOrEqual(headerBounds.max.x);
-      expect(headerTrimBounds.min.y, `${id} header trim vertical`)
-        .toBeGreaterThanOrEqual(headerBounds.min.y);
-      expect(headerTrimBounds.max.y, `${id} header trim vertical`)
-        .toBeLessThanOrEqual(headerBounds.max.y);
-      expect(headerTrimBounds.min.z, `${id} header trim layer`)
-        .toBeLessThan(headerBounds.min.z);
       expect(glassBounds.min.x).toBeGreaterThanOrEqual(sillBounds.min.x);
       expect(glassBounds.max.x).toBeLessThanOrEqual(sillBounds.max.x);
       expect(glassBounds.min.y).toBeGreaterThanOrEqual(0);
@@ -786,6 +763,18 @@ describe('freighter geometry', () => {  interface PointXZ {
         expect(pointInCollider(build, doorPoint(door, axis)), door.id).toBe(false);
       });
     });
+    const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+    const wallSampleY = FREIGHTER_DIMENSIONS.deckY + 1;
+    expect(pointInCollider(build, new Vector3(
+      wheelhouse.maxX - 0.65,
+      wallSampleY,
+      wheelhouse.maxZ - 0.65,
+    ))).toBe(true);
+    expect(pointInCollider(build, new Vector3(
+      wheelhouse.maxX - 0.1,
+      wallSampleY,
+      wheelhouse.maxZ - 0.1,
+    ))).toBe(false);
     build.disposeGeometry();
     materials.dispose();
   });

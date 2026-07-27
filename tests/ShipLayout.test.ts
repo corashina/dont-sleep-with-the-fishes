@@ -26,6 +26,15 @@ describe('scavenging ship layout', () => {
     expect(storage.maxX - storage.minX).toBeCloseTo(11.5);
     expect(wheelhouse.maxX - wheelhouse.minX).toBeCloseTo(11);
     expect(wheelhouse.minZ - crew.maxZ).toBeCloseTo(3.5);
+    expect(SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.polygon).toEqual([
+      [-5.5, 17],
+      [5.5, 17],
+      [5.5, 20.7],
+      [4.2, 22],
+      [-4.2, 22],
+      [-5.5, 20.7],
+    ]);
+    expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'helm-desk-forward')).toBeUndefined();
     expect(FREIGHTER_DIMENSIONS.deckY).toBe(2.22);
   });
 

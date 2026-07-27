@@ -26,6 +26,7 @@ import {
   SHIP_LAYOUT,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
+  SHIP_WHEELHOUSE_CHAMFER_SIZE,
   deckHatchRect,
 } from './ShipLayout';
 import type {
@@ -94,13 +95,9 @@ const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
-const WHEELHOUSE_CHAMFER_DEPTH = 1.3;
-const WHEELHOUSE_CHAMFER_WIDTH = 1.3;
-const WHEELHOUSE_TAPER_ANGLE = Math.PI / 90;
 const WHEELHOUSE_ROOF_OVERHANG = 0.28;
 const WHEELHOUSE_FRAME_WIDTH = 0.18;
-const WHEELHOUSE_PROFILE_HEIGHT = 0.07;
-const WHEELHOUSE_PROFILE_DEPTH = 0.05;
+const WHEELHOUSE_COLLIDER_SEGMENT_LENGTH = 0.18;
 const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
 const PORTHOLE_GLASS_RADIUS = 0.46;
@@ -721,12 +718,6 @@ function addWallSegments(
       : segment.zoneId === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
     const name = `${prefix}-wall-${segment.edge}-${index}`;
     if (segment.zoneId === 'wheelhouse') {
-      const wall = segmentColliderTransform(
-        segment,
-        ROOM_WALL_HEIGHT,
-        wallBottomY + ROOM_WALL_HEIGHT / 2,
-      );
-      shellColliders.push(toCollisionBox(wall.position, wall.size));
       return;
     }
     const height = roomWallHeight(segment.zoneId);
@@ -756,6 +747,8 @@ function addWallSegments(
       });
     }
   });
+  wheelhousePaneSpecs(layout).forEach((spec) =>
+    addWheelhousePaneColliders(shellColliders, spec, wallBottomY));
 }
 
 interface WheelhousePaneSpec {
@@ -764,99 +757,7 @@ interface WheelhousePaneSpec {
   readonly end: readonly [number, number];
 }
 
-function addWheelhousePane(
-  facade: Group,
-  geometries: Set<BufferGeometry>,
-  materials: ShipMaterials,
-  spec: WheelhousePaneSpec,
-): void {
-  const dx = spec.end[0] - spec.start[0];
-  const dz = spec.end[1] - spec.start[1];
-  const width = Math.hypot(dx, dz);
-  const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
-  const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
-  const pane = new Group();
-  pane.name = `wheelhouse-pane:${spec.id}`;
-  pane.position.set(
-    (spec.start[0] + spec.end[0]) / 2,
-    FREIGHTER_DIMENSIONS.deckY,
-    (spec.start[1] + spec.end[1]) / 2,
-  );
-  pane.rotation.set(
-    -WHEELHOUSE_TAPER_ANGLE,
-    Math.atan2(-dz, dx),
-    0,
-    'YXZ',
-  );
-  pane.userData.inwardTaper = WHEELHOUSE_TAPER_ANGLE;
-  facade.add(pane);
-
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:sill`,
-    size: [width, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
-    position: [0, WINDOW_SILL_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:header`,
-    size: [width, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
-    position: [0, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:sill-cap`,
-    size: [openingWidth, WHEELHOUSE_PROFILE_HEIGHT, WHEELHOUSE_PROFILE_DEPTH],
-    position: [
-      0,
-      WINDOW_SILL_HEIGHT - WHEELHOUSE_PROFILE_HEIGHT / 2,
-      -WALL_THICKNESS - WHEELHOUSE_PROFILE_DEPTH / 2,
-    ],
-    material: materials.darkMetal,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:header-trim`,
-    size: [openingWidth, WHEELHOUSE_PROFILE_HEIGHT, WHEELHOUSE_PROFILE_DEPTH],
-    position: [
-      0,
-      ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT + WHEELHOUSE_PROFILE_HEIGHT / 2,
-      -WALL_THICKNESS - WHEELHOUSE_PROFILE_DEPTH / 2,
-    ],
-    material: materials.darkMetal,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:frame-start`,
-    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
-    position: [
-      -width / 2 + WHEELHOUSE_FRAME_WIDTH / 2,
-      WINDOW_SILL_HEIGHT + windowHeight / 2,
-      -WALL_HALF_THICKNESS,
-    ],
-    material: materials.darkMetal,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:frame-end`,
-    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
-    position: [
-      width / 2 - WHEELHOUSE_FRAME_WIDTH / 2,
-      WINDOW_SILL_HEIGHT + windowHeight / 2,
-      -WALL_HALF_THICKNESS,
-    ],
-    material: materials.darkMetal,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:glass`,
-    size: [openingWidth, windowHeight, WINDOW_GLASS_THICKNESS],
-    position: [0, WINDOW_SILL_HEIGHT + windowHeight / 2, -WALL_HALF_THICKNESS],
-    material: materials.glass,
-  }).castShadow = false;
-}
-
-function addWheelhouseFacade(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
+function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpec[] {
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
   const portDoor = layout.doors.find((door) =>
     door.zoneId === 'wheelhouse' && door.orientation === 'side' && door.side === 'port')!;
@@ -865,14 +766,11 @@ function addWheelhouseFacade(
   const portDoorMinZ = portDoor.center[1] - portDoor.width / 2;
   const aftDoorMinX = aftDoor.center[0] - aftDoor.width / 2;
   const aftDoorMaxX = aftDoor.center[0] + aftDoor.width / 2;
-  const frontSideZ = wheelhouse.maxZ - WHEELHOUSE_CHAMFER_DEPTH;
-  const frontCenterMinX = wheelhouse.minX + WHEELHOUSE_CHAMFER_WIDTH;
-  const frontCenterMaxX = wheelhouse.maxX - WHEELHOUSE_CHAMFER_WIDTH;
-  const facade = new Group();
-  facade.name = 'wheelhouse-facade';
-  root.add(facade);
+  const frontSideZ = wheelhouse.maxZ - SHIP_WHEELHOUSE_CHAMFER_SIZE;
+  const frontCenterMinX = wheelhouse.minX + SHIP_WHEELHOUSE_CHAMFER_SIZE;
+  const frontCenterMaxX = wheelhouse.maxX - SHIP_WHEELHOUSE_CHAMFER_SIZE;
 
-  ([
+  return [
     {
       id: 'front-center',
       start: [frontCenterMinX, wheelhouse.maxZ],
@@ -908,7 +806,115 @@ function addWheelhouseFacade(
       start: [wheelhouse.maxX - WALL_THICKNESS, wheelhouse.minZ],
       end: [aftDoorMaxX, wheelhouse.minZ],
     },
-  ] satisfies readonly WheelhousePaneSpec[]).forEach((spec) =>
+  ];
+}
+
+function addWheelhousePaneColliders(
+  shellColliders: CollisionBox[],
+  spec: WheelhousePaneSpec,
+  wallBottomY: number,
+): void {
+  const dx = spec.end[0] - spec.start[0];
+  const dz = spec.end[1] - spec.start[1];
+  const length = Math.hypot(dx, dz);
+  const isDiagonal = Math.abs(dx) > Number.EPSILON && Math.abs(dz) > Number.EPSILON;
+  const segmentCount = isDiagonal
+    ? Math.ceil(length / WHEELHOUSE_COLLIDER_SEGMENT_LENGTH)
+    : 1;
+  const segmentDx = dx / segmentCount;
+  const segmentDz = dz / segmentCount;
+  const rotationY = Math.atan2(-dz, dx);
+  const normalX = Math.sin(rotationY);
+  const normalZ = Math.cos(rotationY);
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const centerX = spec.start[0] + segmentDx * (index + 0.5)
+      - normalX * WALL_HALF_THICKNESS;
+    const centerZ = spec.start[1] + segmentDz * (index + 0.5)
+      - normalZ * WALL_HALF_THICKNESS;
+    shellColliders.push(toCollisionBox(
+      [centerX, wallBottomY + ROOM_WALL_HEIGHT / 2, centerZ],
+      [
+        Math.abs(segmentDx) + Math.abs(normalX) * WALL_THICKNESS,
+        ROOM_WALL_HEIGHT,
+        Math.abs(segmentDz) + Math.abs(normalZ) * WALL_THICKNESS,
+      ],
+    ));
+  }
+}
+
+function addWheelhousePane(
+  facade: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  spec: WheelhousePaneSpec,
+): void {
+  const dx = spec.end[0] - spec.start[0];
+  const dz = spec.end[1] - spec.start[1];
+  const width = Math.hypot(dx, dz);
+  const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
+  const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
+  const pane = new Group();
+  pane.name = `wheelhouse-pane:${spec.id}`;
+  pane.position.set(
+    (spec.start[0] + spec.end[0]) / 2,
+    FREIGHTER_DIMENSIONS.deckY,
+    (spec.start[1] + spec.end[1]) / 2,
+  );
+  pane.rotation.y = Math.atan2(-dz, dx);
+  facade.add(pane);
+
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:sill`,
+    size: [width, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
+    position: [0, WINDOW_SILL_HEIGHT / 2, -WALL_HALF_THICKNESS],
+    material: materials.paintedPanel,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:header`,
+    size: [width, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
+    position: [0, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2, -WALL_HALF_THICKNESS],
+    material: materials.paintedPanel,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:frame-start`,
+    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
+    position: [
+      -width / 2 + WHEELHOUSE_FRAME_WIDTH / 2,
+      WINDOW_SILL_HEIGHT + windowHeight / 2,
+      -WALL_HALF_THICKNESS,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:frame-end`,
+    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
+    position: [
+      width / 2 - WHEELHOUSE_FRAME_WIDTH / 2,
+      WINDOW_SILL_HEIGHT + windowHeight / 2,
+      -WALL_HALF_THICKNESS,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:glass`,
+    size: [openingWidth, windowHeight, WINDOW_GLASS_THICKNESS],
+    position: [0, WINDOW_SILL_HEIGHT + windowHeight / 2, -WALL_HALF_THICKNESS],
+    material: materials.glass,
+  }).castShadow = false;
+}
+
+function addWheelhouseFacade(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  const facade = new Group();
+  facade.name = 'wheelhouse-facade';
+  root.add(facade);
+
+  wheelhousePaneSpecs(layout).forEach((spec) =>
     addWheelhousePane(facade, geometries, materials, spec));
 }
 
@@ -924,9 +930,9 @@ function addRoomRoofs(
     const length = zone.bounds.maxZ - zone.bounds.minZ;
     const wallTopY = FREIGHTER_DIMENSIONS.deckY + roomWallHeight(zone.id);
     if (zone.id === 'wheelhouse') {
-      const frontSideZ = zone.bounds.maxZ - WHEELHOUSE_CHAMFER_DEPTH;
-      const frontCenterMinX = zone.bounds.minX + WHEELHOUSE_CHAMFER_WIDTH;
-      const frontCenterMaxX = zone.bounds.maxX - WHEELHOUSE_CHAMFER_WIDTH;
+      const frontSideZ = zone.bounds.maxZ - SHIP_WHEELHOUSE_CHAMFER_SIZE;
+      const frontCenterMinX = zone.bounds.minX + SHIP_WHEELHOUSE_CHAMFER_SIZE;
+      const frontCenterMaxX = zone.bounds.maxX - SHIP_WHEELHOUSE_CHAMFER_SIZE;
       const diagonalInset = WHEELHOUSE_ROOF_OVERHANG * (Math.SQRT2 - 1);
       const shape = new Shape();
       shape.moveTo(
