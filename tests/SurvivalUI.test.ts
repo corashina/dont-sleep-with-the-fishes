@@ -7,6 +7,7 @@ import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 import type { SurvivalEventDefinition, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
 const activeUIs: SurvivalUI[] = [];
@@ -129,6 +130,32 @@ function openContextualEvent(ui: SurvivalUI): void {
 }
 
 describe('SurvivalUI', () => {
+  it('owns a visual quality control inside the pause overlay', () => {
+    const mount = document.createElement('main');
+    const apply = vi.fn();
+    const preference = createVisualQualityPreference(apply, null);
+    const ui = new SurvivalUI(mount, preference);
+    activeUIs.push(ui);
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-visual-quality="high"]',
+    )!;
+    const control = mount.querySelector('[data-visual-quality-control]');
+
+    high.click();
+
+    expect(preference.get()).toBe('high');
+    expect(apply).toHaveBeenCalledWith('high');
+    expect(control).not.toBeNull();
+    expect(mount.querySelector('[data-pause]')?.contains(control)).toBe(true);
+    expect(mount.querySelector('[data-survival-top]')?.contains(control)).toBe(false);
+    expect(mount.querySelector('[data-journal]')?.contains(control)).toBe(false);
+    expect(mount.querySelector('[data-ending]')?.contains(control)).toBe(false);
+
+    ui.dispose();
+    high.click();
+    expect(apply).toHaveBeenCalledOnce();
+  });
+
 
   it('shows authored contextual choices only after selection unlocks', () => {
     const mount = document.createElement('main');

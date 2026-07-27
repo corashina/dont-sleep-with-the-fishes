@@ -1,8 +1,13 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
+import {
+  createVisualQualityPreference,
+  type VisualQualityPreference,
+} from '../rendering/visualQuality';
 import { formatDuration } from './formatDuration';
 import { itemArtwork, uiArtwork } from './uiArtwork';
+import { VisualQualityControl } from './VisualQualityControl';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -40,9 +45,16 @@ export class GameUI {
   private readonly resumeButton: HTMLButtonElement;
   private readonly replayButton: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
+  private readonly visualQualityControl: VisualQualityControl;
   private disposed = false;
 
-  constructor(mount: HTMLElement) {
+  constructor(
+    mount: HTMLElement,
+    visualQuality: VisualQualityPreference = createVisualQualityPreference(
+      () => undefined,
+      null,
+    ),
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'game-ui';
     this.root.innerHTML = `
@@ -84,6 +96,7 @@ export class GameUI {
           <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
           <h2 class="ui-role-display">Back to the deck?</h2>
           <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
+          <div data-visual-quality-control></div>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
             <span class="salvage-action__note" aria-hidden="true">RETURN TO THE DECK</span>
@@ -116,6 +129,12 @@ export class GameUI {
       </section>
     `;
     mount.append(this.root);
+    const visualQualityHost = requireElement(
+      this.root,
+      '[data-visual-quality-control]',
+    );
+    this.visualQualityControl = new VisualQualityControl(visualQuality);
+    visualQualityHost.append(this.visualQualityControl.element);
     this.hud = requireElement(this.root, '.hud');
     this.startLayer = requireElement(this.root, '[data-start]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
@@ -241,6 +260,7 @@ export class GameUI {
     this.onStart = () => undefined;
     this.onResume = () => undefined;
     this.onReplay = () => undefined;
+    this.visualQualityControl.dispose();
     this.root.remove();
   }
 

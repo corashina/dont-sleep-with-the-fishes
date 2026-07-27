@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { GameUI } from '../src/ui/GameUI';
 
 describe('GameUI scavenging item tooltip', () => {
@@ -28,5 +29,30 @@ describe('GameUI scavenging item tooltip', () => {
     ui.setItemTooltip(null);
     expect(tooltip.classList).not.toContain('is-visible');
     ui.dispose();
+  });
+
+  it('owns a visual quality control inside the pause screen', () => {
+    const mount = document.createElement('main');
+    const apply = vi.fn();
+    const preference = createVisualQualityPreference(apply, null);
+    const ui = new GameUI(mount, preference);
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-visual-quality="high"]',
+    )!;
+    const control = mount.querySelector('[data-visual-quality-control]');
+
+    high.click();
+
+    expect(preference.get()).toBe('high');
+    expect(apply).toHaveBeenCalledWith('high');
+    expect(control).not.toBeNull();
+    expect(mount.querySelector('[data-pause]')?.contains(control)).toBe(true);
+    expect(mount.querySelector('.hud')?.contains(control)).toBe(false);
+    expect(mount.querySelector('[data-start]')?.contains(control)).toBe(false);
+    expect(mount.querySelector('[data-result]')?.contains(control)).toBe(false);
+
+    ui.dispose();
+    high.click();
+    expect(apply).toHaveBeenCalledOnce();
   });
 });

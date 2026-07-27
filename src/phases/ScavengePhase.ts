@@ -78,7 +78,7 @@ export class ScavengePhase implements GamePhase {
     private readonly onRestart: () => void,
   ) {
     this.scene.add(context.camera);
-    this.ui = new GameUI(context.mount);
+    this.ui = new GameUI(context.mount, context.visualQuality);
     const instances = createScavengeItemInstances();
     this.session = new ScavengeSession(instances);
     this.world = new World(

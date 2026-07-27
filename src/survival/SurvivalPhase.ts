@@ -6,6 +6,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
+import { createVisualQualityPreference } from '../rendering/visualQuality';
 import {
   SurvivalUI,
   type EventContextChoice,
@@ -101,6 +102,7 @@ function testContext(
     mount,
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
     sceneRenderer,
+    visualQuality: createVisualQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
     shipFurniture: {} as ShipFurnitureLibrary,
@@ -170,7 +172,7 @@ export class SurvivalPhase implements GamePhase {
           savedItems,
           context.lifeboatAssets,
         ),
-        new SurvivalUI(context.mount),
+        new SurvivalUI(context.mount, context.visualQuality),
         scavengeElapsedSeconds,
         onRestart,
       );

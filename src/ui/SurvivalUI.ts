@@ -1,4 +1,8 @@
 import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
+import {
+  createVisualQualityPreference,
+  type VisualQualityPreference,
+} from '../rendering/visualQuality';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -16,6 +20,7 @@ import type {
 } from '../survival/survivalTypes';
 import { formatDuration } from './formatDuration';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
+import { VisualQualityControl } from './VisualQualityControl';
 
 interface ActionDefinition {
   id: DayActionId;
@@ -266,6 +271,7 @@ export class SurvivalUI {
   private readonly restartButton: HTMLButtonElement;
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
+  private readonly visualQualityControl: VisualQualityControl;
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
@@ -315,7 +321,13 @@ export class SurvivalUI {
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
 
-  constructor(private readonly mount: HTMLElement) {
+  constructor(
+    private readonly mount: HTMLElement,
+    visualQuality: VisualQualityPreference = createVisualQualityPreference(
+      () => undefined,
+      null,
+    ),
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
@@ -410,6 +422,7 @@ export class SurvivalUI {
           <p class="eyebrow ui-role-context">PAUSED</p>
           <h2 class="ui-role-display">Hold Fast</h2>
           <p class="ui-role-narrative">The sea will wait until you return.</p>
+          <div data-visual-quality-control></div>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
             RESUME
             <span class="salvage-action__note" aria-hidden="true">RETURN TO THE BOAT</span>
@@ -430,6 +443,12 @@ export class SurvivalUI {
       </section>
     `;
     mount.append(this.root);
+    const visualQualityHost = requireElement(
+      this.root,
+      '[data-visual-quality-control]',
+    );
+    this.visualQualityControl = new VisualQualityControl(visualQuality);
+    visualQualityHost.append(this.visualQualityControl.element);
 
     this.day = requireElement(this.root, '[data-day]');
     this.weather = requireElement(this.root, '[data-weather]');
@@ -974,6 +993,7 @@ export class SurvivalUI {
     this.onFishingCast = null;
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
+    this.visualQualityControl.dispose();
     this.root.remove();
   }
 

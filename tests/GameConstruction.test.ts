@@ -9,6 +9,7 @@ import type { ShipAssets } from '../src/world/ShipAssets';
 
 const constructionMocks = vi.hoisted(() => ({
   WebGLRenderer: vi.fn(),
+  createSceneRenderer: vi.fn(),
 }));
 
 vi.mock('three', async (importOriginal) => ({
@@ -16,17 +17,23 @@ vi.mock('three', async (importOriginal) => ({
   WebGLRenderer: constructionMocks.WebGLRenderer,
 }));
 
+vi.mock('../src/rendering/PostProcessingPipeline', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/rendering/PostProcessingPipeline')>(),
+  createSceneRenderer: constructionMocks.createSceneRenderer,
+}));
+
 describe('Game construction rollback', () => {
   beforeEach(() => {
     vi.resetModules();
     constructionMocks.WebGLRenderer.mockReset();
+    constructionMocks.createSceneRenderer.mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('preserves the renderer setup error while cleaning up direct rendering', async () => {
+  it('starts with low visual quality and preserves renderer setup errors during cleanup', async () => {
     const calls: string[] = [];
     const canvas = document.createElement('canvas');
     vi.spyOn(canvas, 'remove').mockImplementation(() => calls.push('canvas'));
@@ -36,8 +43,13 @@ describe('Game construction rollback', () => {
       dispose: vi.fn(() => calls.push('renderer')),
     };
     constructionMocks.WebGLRenderer.mockReturnValue(renderer);
-    const { DirectSceneRenderer } = await import('../src/rendering/SceneRenderer');
-    const disposeSceneRenderer = vi.spyOn(DirectSceneRenderer.prototype, 'dispose');
+    const sceneRenderer = {
+      render: vi.fn(),
+      resize: vi.fn(),
+      setVisualQuality: vi.fn(),
+      dispose: vi.fn(() => calls.push('sceneRenderer')),
+    };
+    constructionMocks.createSceneRenderer.mockReturnValue(sceneRenderer);
     const { Game } = await import('../src/Game');
 
     let thrown: unknown;
@@ -56,8 +68,9 @@ describe('Game construction rollback', () => {
 
     expect(thrown).toBeInstanceOf(TypeError);
     expect((thrown as Error).message).toContain('getMaxAnisotropy');
-    expect(calls).toEqual(['renderer', 'canvas']);
-    expect(disposeSceneRenderer).toHaveBeenCalledOnce();
+    expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(renderer, 'low');
+    expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
+    expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
   });
 });
