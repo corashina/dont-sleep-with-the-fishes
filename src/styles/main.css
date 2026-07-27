@@ -1544,14 +1544,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font: 700 1rem/1 var(--font-numeral);
   cursor: pointer;
 }
-.post-processing-console__switch,
 .post-processing-console__select {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
-.post-processing-console__switch input { accent-color: #d29a43; }
 .post-processing-console__select select {
   min-width: 132px;
   padding: 5px 7px;
@@ -1565,12 +1563,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) 52px;
   gap: 4px 10px;
-}
-.post-processing-console__slider[data-group="grade"]
-  + .post-processing-console__slider[data-group="ambient-occlusion"] {
-  margin-top: 5px;
-  padding-top: 10px;
-  border-top: 1px solid #526c6266;
 }
 .post-processing-console__slider output {
   color: #e7ba56;
