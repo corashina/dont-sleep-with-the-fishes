@@ -26,5 +26,6 @@ export interface GamePhase {
   update(time: number, deltaSeconds: number): void;
   resize(width: number, height: number): void;
   render(): void;
+  setOverlayActive?(active: boolean): void;
   dispose(): void;
 }

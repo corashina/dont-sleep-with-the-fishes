@@ -12,24 +12,17 @@ const PANEL_ID = 'post-processing-console-panel';
 export class PostProcessingConsole {
   readonly element = document.createElement('aside');
   private readonly panel: HTMLElement;
-  private readonly toggleButton: HTMLButtonElement;
   private disposed = false;
 
   constructor(
     mount: HTMLElement,
     private readonly controls: PostProcessingControls,
+    private readonly onOpenChange: (open: boolean) => void = () => undefined,
   ) {
     const state = controls.getState();
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
-      <button
-        type="button"
-        class="post-processing-console__toggle"
-        data-post-processing-toggle
-        aria-expanded="false"
-        aria-controls="${PANEL_ID}"
-      >AO <kbd>\`</kbd></button>
       <section
         id="${PANEL_ID}"
         class="post-processing-console__panel"
@@ -53,7 +46,6 @@ export class PostProcessingConsole {
       </section>
     `;
     this.panel = this.requireElement('[data-post-processing-panel]');
-    this.toggleButton = this.requireElement('[data-post-processing-toggle]');
     const aoMode = this.requireElement<HTMLSelectElement>('[data-post-processing-ao-mode]');
     aoMode.value = state.ambientOcclusionMode;
     aoMode.disabled = !state.ambientOcclusionAvailable;
@@ -67,6 +59,7 @@ export class PostProcessingConsole {
 
   dispose(): void {
     if (this.disposed) return;
+    if (!this.panel.hidden) this.onOpenChange(false);
     this.disposed = true;
     window.removeEventListener('keydown', this.handleKeyDown);
     this.element.removeEventListener('click', this.handleClick);
@@ -103,9 +96,10 @@ export class PostProcessingConsole {
 
   private setOpen(open: boolean): void {
     if (this.disposed) return;
+    if (this.panel.hidden === !open) return;
     this.element.dataset.open = String(open);
     this.panel.hidden = !open;
-    this.toggleButton.setAttribute('aria-expanded', String(open));
+    this.onOpenChange(open);
     if (open && document.pointerLockElement != null) {
       document.exitPointerLock?.();
     }
@@ -113,9 +107,7 @@ export class PostProcessingConsole {
 
   private readonly handleClick = (event: Event): void => {
     const target = event.target as Element | null;
-    if (target?.closest('[data-post-processing-toggle]')) {
-      this.setOpen(this.panel.hidden);
-    } else if (target?.closest('[data-post-processing-close]')) {
+    if (target?.closest('[data-post-processing-close]')) {
       this.setOpen(false);
     }
   };

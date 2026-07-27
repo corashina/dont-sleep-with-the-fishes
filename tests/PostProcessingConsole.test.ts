@@ -23,6 +23,16 @@ describe('PostProcessingConsole', () => {
   });
 
   it('toggles with Backquote and routes controls without retaining listeners', () => {
+    const onOpenChange = vi.fn();
+    const exitPointerLock = vi.fn();
+    Object.defineProperty(document, 'pointerLockElement', {
+      configurable: true,
+      value: document.createElement('canvas'),
+    });
+    Object.defineProperty(document, 'exitPointerLock', {
+      configurable: true,
+      value: exitPointerLock,
+    });
     const controls: PostProcessingControls = {
       getState: vi.fn(() => state()),
       setAmbientOcclusionMode: vi.fn(),
@@ -30,14 +40,15 @@ describe('PostProcessingConsole', () => {
     };
     const mount = document.createElement('main');
     document.body.append(mount);
-    const consoleMenu = new PostProcessingConsole(mount, controls);
+    const consoleMenu = new PostProcessingConsole(mount, controls, onOpenChange);
     const panel = mount.querySelector<HTMLElement>('[data-post-processing-panel]')!;
-    const toggle = mount.querySelector<HTMLButtonElement>('[data-post-processing-toggle]')!;
 
+    expect(mount.querySelector('[data-post-processing-toggle]')).toBeNull();
     expect(panel.hidden).toBe(true);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
     expect(panel.hidden).toBe(false);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    expect(exitPointerLock).toHaveBeenCalledOnce();
 
     expect(panel.textContent).not.toContain('Color grade');
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2);
@@ -60,9 +71,19 @@ describe('PostProcessingConsole', () => {
         ?.value,
     ).toBe('0.40');
 
+    panel.querySelector<HTMLButtonElement>('[data-post-processing-close]')!.click();
+    expect(panel.hidden).toBe(true);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
     consoleMenu.dispose();
     expect(consoleMenu.element.isConnected).toBe(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
     expect(consoleMenu.element.dataset.open).toBe('false');
+    Object.defineProperty(document, 'pointerLockElement', {
+      configurable: true,
+      value: null,
+    });
   });
 });
