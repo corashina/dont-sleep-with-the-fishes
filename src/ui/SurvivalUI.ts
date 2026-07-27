@@ -131,6 +131,7 @@ const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
 const EVENT_CHOICE_BEAT_MS = 240;
+const EVENT_OUTCOME_HOLD_MS = 2_000;
 const REDUCED_TRANSITION_MS = 1;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
@@ -306,6 +307,7 @@ export class SurvivalUI {
   private pendingFishingFade: PendingFade | null = null;
   private pendingSleepTransition: PendingFade | null = null;
   private pendingEventChoiceBeat: PendingFade | null = null;
+  private pendingEventOutcomeHold: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
@@ -777,6 +779,29 @@ export class SurvivalUI {
     return new Promise((resolve) => window.setTimeout(resolve, delay));
   }
 
+  holdEventOutcome(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingEventOutcomeHold?.finish();
+    const delay = this.reducedMotion.matches
+      ? REDUCED_TRANSITION_MS
+      : EVENT_OUTCOME_HOLD_MS;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (this.pendingEventOutcomeHold?.finish === finish) {
+          this.pendingEventOutcomeHold = null;
+        }
+        resolve();
+      };
+      timer = window.setTimeout(finish, delay);
+      this.pendingEventOutcomeHold = { finish };
+    });
+  }
+
   showJournal(entries: readonly JournalEntry[]): void {
     if (this.disposed) return;
     this.focusReturnTarget = this.journalMarker;
@@ -873,6 +898,7 @@ export class SurvivalUI {
     this.pendingSleepTransition?.finish();
     this.pendingFishingFade?.finish();
     this.pendingEventChoiceBeat?.finish();
+    this.pendingEventOutcomeHold?.finish();
     this.fishingAnnouncementVersion += 1;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');

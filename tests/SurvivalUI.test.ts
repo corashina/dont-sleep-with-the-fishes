@@ -199,6 +199,39 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-event-choices]')?.hidden).toBe(true);
   });
 
+  it('holds a completed event outcome for two seconds and settles on dispose', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    let settled = false;
+    const hold = ui.holdEventOutcome().then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await hold;
+    expect(settled).toBe(true);
+
+    const pending = ui.holdEventOutcome();
+    ui.dispose();
+    await pending;
+  });
+
+  it('reduces an event outcome hold to one millisecond', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount, { matches: true });
+
+    let settled = false;
+    const hold = ui.holdEventOutcome().then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await hold;
+    expect(settled).toBe(true);
+    ui.dispose();
+  });
+
   it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
