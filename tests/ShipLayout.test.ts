@@ -51,7 +51,6 @@ describe('scavenging ship layout', () => {
         ladderId: 'crew-ladder',
         edge: 'aft',
         coamingHeight: 0.12,
-        railHeight: 1.05,
         openingWidth: 1.5,
       }),
       expect.objectContaining({
@@ -60,7 +59,6 @@ describe('scavenging ship layout', () => {
         ladderId: 'storage-ladder',
         edge: 'forward',
         coamingHeight: 0.12,
-        railHeight: 1.05,
         openingWidth: 1.5,
       }),
     ]);
@@ -122,7 +120,7 @@ describe('scavenging ship layout', () => {
     const invalidDimension = {
       ...SHIP_LAYOUT,
       balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
-        ? { ...balcony, railHeight: Number.NaN }
+        ? { ...balcony, coamingHeight: Number.NaN }
         : balcony),
     };
     expect(() => validateShipLayout(invalidDimension)).toThrow(/crew-balcony.*positive/i);

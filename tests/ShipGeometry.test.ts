@@ -984,7 +984,7 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each(SHIP_LAYOUT.balconies)(
-    'builds $id from uniform dark-steel members with a centered opening',
+    'builds $id with only a low dark-steel perimeter and matching collision',
     (balcony) => {
       const materials = createShipMaterials();
       const build = createShipGeometry(materials);
@@ -999,19 +999,14 @@ describe('freighter geometry', () => {  interface PointXZ {
         object instanceof Mesh && object.name.startsWith(`${prefix}top-rail:`));
       const openingCoamings = coamings.filter(({ name }) =>
         name.startsWith(`${prefix}coaming:${openingEdge}:`));
-      const openingRails = topRails.filter(({ name }) =>
-        name.startsWith(`${prefix}top-rail:${openingEdge}:`));
 
       expect(coamings).toHaveLength(5);
       expect(coamings.every(({ material }) => material === materials.darkMetal)).toBe(true);
-      expect(posts.length).toBeGreaterThanOrEqual(10);
-      expect(posts.every(({ material }) => material === materials.darkMetal)).toBe(true);
-      expect(topRails).toHaveLength(5);
-      expect(topRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
+      expect(posts).toHaveLength(0);
+      expect(topRails).toHaveLength(0);
       expect(openingCoamings).toHaveLength(2);
-      expect(openingRails).toHaveLength(2);
 
-      const railingParts = [...coamings, ...posts, ...topRails];
+      const railingParts = coamings;
       railingParts.forEach((part) => {
         const dimensions = new Box3().setFromObject(part).getSize(new Vector3()).toArray()
           .sort((leftDimension, rightDimension) => leftDimension - rightDimension);
@@ -1026,14 +1021,6 @@ describe('freighter geometry', () => {  interface PointXZ {
           ).toBeLessThan(1e-8);
         });
       });
-      const coamingTopY = new Box3().setFromObject(coamings[0]!).max.y;
-      const topRailBottomY = new Box3().setFromObject(topRails[0]!).min.y;
-      posts.forEach((post) => {
-        const bounds = new Box3().setFromObject(post);
-        expect(bounds.min.y, `${post.name} starts above its coaming`).toBeCloseTo(coamingTopY);
-        expect(bounds.max.y, `${post.name} penetrates its top rail`).toBeCloseTo(topRailBottomY);
-      });
-
       const left = new Box3().setFromObject(openingCoamings[0]!);
       const right = new Box3().setFromObject(openingCoamings[1]!);
       const gapMin = Math.min(left.max.x, right.max.x);
@@ -1044,7 +1031,8 @@ describe('freighter geometry', () => {  interface PointXZ {
 
       const deck = build.root.getObjectByName(`${prefix}deck`) as Mesh;
       const deckBounds = new Box3().setFromObject(deck);
-      const railSampleY = deckBounds.max.y + balcony.railHeight / 2;
+      const railSampleY = deckBounds.max.y + balcony.coamingHeight / 2;
+      const clearSampleY = deckBounds.max.y + PLAYER_BODY_HEIGHT / 2;
       const openingZ = balcony.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
       const oppositeZ = balcony.edge === 'aft' ? zone.bounds.maxZ : zone.bounds.minZ;
       expect(pointInCollider(build, new Vector3(0, railSampleY, openingZ))).toBe(false);
@@ -1059,6 +1047,18 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(pointInCollider(build, new Vector3(zone.bounds.maxX, railSampleY, 0.5 * (
         zone.bounds.minZ + zone.bounds.maxZ
       )))).toBe(true);
+      [
+        [zone.bounds.minX, openingZ],
+        [zone.bounds.maxX, openingZ],
+        [0, oppositeZ],
+        [zone.bounds.minX, 0.5 * (zone.bounds.minZ + zone.bounds.maxZ)],
+        [zone.bounds.maxX, 0.5 * (zone.bounds.minZ + zone.bounds.maxZ)],
+      ].forEach(([x, z]) => {
+        expect(
+          pointInCollider(build, new Vector3(x, clearSampleY, z)),
+          `invisible elevated railing collider at ${x}, ${z}`,
+        ).toBe(false);
+      });
 
       build.disposeGeometry();
       materials.dispose();

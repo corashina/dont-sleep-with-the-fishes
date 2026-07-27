@@ -120,7 +120,6 @@ const STACK_COLLAR_HEIGHT = 0.22;
 
 const BALCONY_DECK_THICKNESS = 0.1;
 const BALCONY_RAIL_MEMBER_THICKNESS = 0.12;
-const BALCONY_RAIL_POST_SPACING = 2.2;
 
 const LADDER_RAIL_WIDTH = 0.08;
 const LADDER_RAIL_DEPTH = 0.1;
@@ -1062,64 +1061,6 @@ function balconyRuns(
   ];
 }
 
-function addBalconyPosts(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  shellColliders: CollisionBox[],
-  materials: ShipMaterials,
-  balcony: ShipBalconySpec,
-  runs: readonly BalconyRun[],
-  deckTopY: number,
-): void {
-  const positions: Array<{
-    edge: WallEdge;
-    alongX: boolean;
-    x: number;
-    z: number;
-  }> = [];
-  runs.forEach((run) => {
-    const alongX = run.edge === 'aft' || run.edge === 'forward';
-    const length = alongX ? run.size[0] : run.size[1];
-    const count = Math.max(1, Math.ceil(length / BALCONY_RAIL_POST_SPACING));
-    for (let index = 0; index <= count; index += 1) {
-      const amount = index / count - 0.5;
-      const x = run.position[0] + (alongX ? length * amount : 0);
-      const z = run.position[1] + (alongX ? 0 : length * amount);
-      const sharedCorner = positions.find((position) =>
-        position.alongX !== alongX
-        && Math.abs(position.x - x) <= BALCONY_RAIL_MEMBER_THICKNESS
-        && Math.abs(position.z - z) <= BALCONY_RAIL_MEMBER_THICKNESS);
-      if (sharedCorner) {
-        sharedCorner.x = alongX ? sharedCorner.x : x;
-        sharedCorner.z = alongX ? z : sharedCorner.z;
-        continue;
-      }
-      const duplicate = positions.some((position) =>
-        Math.abs(position.x - x) < 1e-8 && Math.abs(position.z - z) < 1e-8);
-      if (!duplicate) positions.push({ edge: run.edge, alongX, x, z });
-    }
-  });
-
-  const postHeight =
-    balcony.railHeight - balcony.coamingHeight - BALCONY_RAIL_MEMBER_THICKNESS;
-  positions.forEach((position, index) => {
-    addBlock(root, geometries, shellColliders, {
-      name: `balcony:${balcony.id}:post:${position.edge}:${index}`,
-      size: [
-        BALCONY_RAIL_MEMBER_THICKNESS,
-        postHeight,
-        BALCONY_RAIL_MEMBER_THICKNESS,
-      ],
-      position: [
-        position.x,
-        deckTopY + balcony.coamingHeight + postHeight / 2,
-        position.z,
-      ],
-      material: materials.darkMetal,
-    });
-  });
-}
-
 function addRoofBalconies(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -1154,35 +1095,9 @@ function addRoofBalconies(
           run.position[1],
         ],
         material: materials.darkMetal,
+        collider: true,
       });
-      addBlock(root, geometries, shellColliders, {
-        name: `balcony:${balcony.id}:top-rail:${run.edge}:${run.index}`,
-        size: [run.size[0], BALCONY_RAIL_MEMBER_THICKNESS, run.size[1]],
-        position: [
-          run.position[0],
-          deckTopY + balcony.railHeight - BALCONY_RAIL_MEMBER_THICKNESS / 2,
-          run.position[1],
-        ],
-        material: materials.darkMetal,
-      });
-      shellColliders.push(toCollisionBox(
-        [
-          run.position[0],
-          deckTopY + balcony.railHeight / 2,
-          run.position[1],
-        ],
-        [run.size[0], balcony.railHeight, run.size[1]],
-      ));
     });
-    addBalconyPosts(
-      root,
-      geometries,
-      shellColliders,
-      materials,
-      balcony,
-      runs,
-      deckTopY,
-    );
   });
 }
 
