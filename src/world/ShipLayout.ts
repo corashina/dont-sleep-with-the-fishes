@@ -8,6 +8,8 @@ export const SHIP_ROOM_WALL_THICKNESS = 0.22;
 export type ShipZoneId =
   | 'crewCabin' | 'wheelhouse' | 'cargoDeck'
   | 'storageWorkroom' | 'lifeboatStation';
+export type ShipBalconyZoneId = 'crewCabin' | 'storageWorkroom';
+export type ShipTransverseEdge = 'aft' | 'forward';
 export type ClearanceClass = 'primary' | 'secondary';
 export type ShipFurnitureAssetId =
   | 'bedBunk' | 'desk' | 'chairDesk' | 'bookcaseOpen'
@@ -148,6 +150,26 @@ export interface ShipNavigationTargetSpec {
   readonly kind: 'start' | 'door' | 'loop' | 'surface' | 'evacuation' | 'endDeck';
 }
 
+export interface ShipBalconySpec {
+  readonly id: 'crew-balcony' | 'storage-balcony';
+  readonly zoneId: ShipBalconyZoneId;
+  readonly ladderId: 'crew-ladder' | 'storage-ladder';
+  readonly edge: ShipTransverseEdge;
+  readonly coamingHeight: number;
+  readonly railHeight: number;
+  readonly openingWidth: number;
+}
+
+export interface ShipLadderSpec {
+  readonly id: 'crew-ladder' | 'storage-ladder';
+  readonly zoneId: ShipBalconyZoneId;
+  readonly edge: ShipTransverseEdge;
+  readonly centerX: number;
+  readonly width: number;
+  readonly wallOffset: number;
+  readonly rungSpacing: number;
+}
+
 export interface ShipLayoutSpec {
   readonly zones: readonly ShipZoneSpec[];
   readonly doors: readonly ShipDoorSpec[];
@@ -156,6 +178,8 @@ export interface ShipLayoutSpec {
   readonly details: readonly ShipDeckDetailSpec[];
   readonly deckHatch: ShipDeckHatchSpec;
   readonly rigging: ShipRiggingSpec;
+  readonly balconies: readonly ShipBalconySpec[];
+  readonly ladders: readonly ShipLadderSpec[];
   readonly targets: readonly ShipNavigationTargetSpec[];
   readonly rail: {
     readonly height: number;
@@ -685,6 +709,46 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
     size: [1.45, 0.18, 1.8],
     colliderSize: [1.45, 0.18, 1.8],
   },
+  balconies: [
+    {
+      id: 'crew-balcony',
+      zoneId: 'crewCabin',
+      ladderId: 'crew-ladder',
+      edge: 'aft',
+      coamingHeight: 0.16,
+      railHeight: 1.05,
+      openingWidth: 1.5,
+    },
+    {
+      id: 'storage-balcony',
+      zoneId: 'storageWorkroom',
+      ladderId: 'storage-ladder',
+      edge: 'forward',
+      coamingHeight: 0.16,
+      railHeight: 1.05,
+      openingWidth: 1.5,
+    },
+  ],
+  ladders: [
+    {
+      id: 'crew-ladder',
+      zoneId: 'crewCabin',
+      edge: 'aft',
+      centerX: 0,
+      width: 0.8,
+      wallOffset: 0.18,
+      rungSpacing: 0.32,
+    },
+    {
+      id: 'storage-ladder',
+      zoneId: 'storageWorkroom',
+      edge: 'forward',
+      centerX: 0,
+      width: 0.8,
+      wallOffset: 0.18,
+      rungSpacing: 0.32,
+    },
+  ],
   rigging: { masts: [{
     id: 'mainmast',
     position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
@@ -1037,6 +1101,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   assertUnique('door', layout.doors.map(({ id }) => id));
   assertUnique('furniture', layout.furniture.map(({ id }) => id));
   assertUnique('detail', layout.details.map(({ id }) => id));
+  assertUnique('balcony', layout.balconies.map(({ id }) => id));
+  assertUnique('ladder', layout.ladders.map(({ id }) => id));
   assertUnique('mast', layout.rigging.masts.map(({ id }) => id));
   assertUnique('surface', layout.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)));
   assertUnique('lane', layout.lanes.map(({ id }) => id));
@@ -1058,6 +1124,56 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   if (!crewCabin || !wheelhouse
     || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
     throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
+  }
+  if (layout.balconies.length !== 2 || layout.ladders.length !== 2) {
+    throw new Error('Layout must define exactly two balconies and two ladders');
+  }
+  const balconyZoneEdges: Readonly<Record<ShipBalconyZoneId, ShipTransverseEdge>> = {
+    crewCabin: 'aft',
+    storageWorkroom: 'forward',
+  };
+  layout.ladders.forEach((ladder) => {
+    if (!Number.isFinite(ladder.centerX) || !positive(ladder.width)
+      || !positive(ladder.wallOffset) || !positive(ladder.rungSpacing)) {
+      throw new Error(`Ladder ${ladder.id} must have positive finite dimensions`);
+    }
+    if (ladder.centerX !== 0) {
+      throw new Error(`Ladder ${ladder.id} must be centered at x = 0`);
+    }
+    if (ladder.zoneId !== 'crewCabin' && ladder.zoneId !== 'storageWorkroom') {
+      throw new Error(`Ladder ${ladder.id} cannot be assigned to ${ladder.zoneId}`);
+    }
+    if (balconyZoneEdges[ladder.zoneId] !== ladder.edge) {
+      throw new Error(`Ladder ${ladder.id} must use the mast-facing ${balconyZoneEdges[ladder.zoneId]} edge`);
+    }
+  });
+  const balconyLadderIds = new Set<string>();
+  layout.balconies.forEach((balcony) => {
+    if (!positive(balcony.coamingHeight) || !positive(balcony.railHeight)
+      || !positive(balcony.openingWidth)) {
+      throw new Error(`Balcony ${balcony.id} must have positive finite dimensions`);
+    }
+    if (balcony.zoneId !== 'crewCabin' && balcony.zoneId !== 'storageWorkroom') {
+      throw new Error(`Balcony ${balcony.id} cannot be assigned to ${balcony.zoneId}`);
+    }
+    if (balconyZoneEdges[balcony.zoneId] !== balcony.edge) {
+      throw new Error(`Balcony ${balcony.id} must use the mast-facing ${balconyZoneEdges[balcony.zoneId]} edge`);
+    }
+    const ladder = layout.ladders.find(({ id }) => id === balcony.ladderId);
+    if (!ladder) {
+      throw new Error(`Balcony ${balcony.id} references missing ladder ${balcony.ladderId}`);
+    }
+    if (ladder.zoneId !== balcony.zoneId || ladder.edge !== balcony.edge) {
+      throw new Error(`Balcony ${balcony.id} ladder ${ladder.id} must share its zone and edge`);
+    }
+    if (balcony.openingWidth < ladder.width + 2 * PLAYER_LAYOUT_RADIUS) {
+      throw new Error(`Balcony ${balcony.id} opening must fit its ladder and player clearance`);
+    }
+    balconyLadderIds.add(balcony.ladderId);
+  });
+  if (balconyLadderIds.size !== layout.balconies.length
+    || balconyLadderIds.size !== layout.ladders.length) {
+    throw new Error('Each balcony must reference one unique ladder');
   }
   layout.doors.forEach((door) => {
     if (!finiteTuple(door.center) || !validRect(door.approach)) {
