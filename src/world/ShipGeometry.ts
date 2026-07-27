@@ -1239,124 +1239,6 @@ function addLadders(
   return Object.freeze(climbZones);
 }
 
-function addWheelhouseInteriorDetails(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
-  const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
-  const centerZ = (wheelhouse.minZ + wheelhouse.maxZ) / 2;
-  const interiorAftZ = wheelhouse.minZ + WALL_THICKNESS + 0.015;
-  const interiorStarboardX = wheelhouse.maxX - WALL_THICKNESS - 0.015;
-  const deckY = FREIGHTER_DIMENSIONS.deckY;
-
-  const details = new Group();
-  details.name = 'wheelhouse-interior-details';
-  root.add(details);
-
-  const chart = new Group();
-  chart.name = 'captain-detail:chart';
-  chart.position.set(wheelhouse.minX + wheelhouseWidth * 0.173, deckY + 1.96, interiorAftZ);
-  chart.rotation.y = Math.PI;
-  details.add(chart);
-  const chartShape = new Shape();
-  chartShape.moveTo(-0.52, -0.34);
-  chartShape.lineTo(0.49, -0.31);
-  chartShape.lineTo(0.53, 0.35);
-  chartShape.lineTo(-0.46, 0.32);
-  chartShape.closePath();
-  const chartGeometry = new ShapeGeometry(chartShape);
-  geometries.add(chartGeometry);
-  const chartPaper = new Mesh(chartGeometry, materials.paintedPanel);
-  chartPaper.name = `${chart.name}:paper`;
-  chart.add(chartPaper);
-  [-0.2, 0.03, 0.25].forEach((x, index) => {
-    const course = addBlock(chart, geometries, [], {
-      name: `${chart.name}:course-${index + 1}`,
-      size: [0.025, 0.48 - index * 0.07, 0.012],
-      position: [x, index * 0.025, 0.012],
-      material: materials.darkMetal,
-    });
-    course.rotation.z = 0.65 + index * 0.22;
-  });
-
-  const coat = new Group();
-  coat.name = 'captain-detail:coat';
-  coat.position.set(
-    centerX + wheelhouseWidth * 0.223,
-    deckY + 1.83,
-    interiorAftZ,
-  );
-  coat.rotation.y = Math.PI;
-  details.add(coat);
-  const coatShape = new Shape();
-  coatShape.moveTo(-0.18, 0.52);
-  coatShape.lineTo(0.2, 0.52);
-  coatShape.lineTo(0.55, 0.18);
-  coatShape.lineTo(0.34, 0.02);
-  coatShape.lineTo(0.42, -0.58);
-  coatShape.lineTo(-0.4, -0.58);
-  coatShape.lineTo(-0.31, 0.02);
-  coatShape.lineTo(-0.55, 0.18);
-  coatShape.closePath();
-  const coatGeometry = new ShapeGeometry(coatShape);
-  geometries.add(coatGeometry);
-  const coatMesh = new Mesh(coatGeometry, materials.canvas);
-  coatMesh.name = `${coat.name}:cloth`;
-  coatMesh.castShadow = true;
-  coat.add(coatMesh);
-
-  const keys = new Group();
-  keys.name = 'captain-detail:key-hooks';
-  keys.position.set(
-    centerX + wheelhouseWidth * 0.347,
-    deckY + 2,
-    interiorAftZ,
-  );
-  keys.rotation.y = Math.PI;
-  details.add(keys);
-  addBlock(keys, geometries, [], {
-    name: `${keys.name}:rail`,
-    size: [0.62, 0.08, 0.06],
-    position: [0, 0.18, 0],
-    material: materials.plainTimber,
-  });
-  [-0.2, 0, 0.21].forEach((x, index) => {
-    addBlock(keys, geometries, [], {
-      name: `${keys.name}:key-${index + 1}`,
-      size: [0.035, 0.26 - index * 0.03, 0.03],
-      position: [x, 0.02, 0.04],
-      material: materials.exposedMetal,
-    });
-  });
-
-  const repairedPanel = new Group();
-  repairedPanel.name = 'captain-detail:repaired-panel';
-  repairedPanel.position.set(
-    interiorStarboardX,
-    deckY + 1.9,
-    centerZ - (wheelhouse.maxZ - wheelhouse.minZ) * 0.01,
-  );
-  details.add(repairedPanel);
-  addBlock(repairedPanel, geometries, [], {
-    name: `${repairedPanel.name}:plate`,
-    size: [0.055, 0.78, 0.92],
-    position: [0, 0, 0],
-    material: materials.plainPaintedSteel,
-  });
-  [-0.32, 0.32].forEach((y, yIndex) => [-0.4, 0.4].forEach((z, zIndex) => {
-    addBlock(repairedPanel, geometries, [], {
-      name: `${repairedPanel.name}:fastener-${yIndex}-${zIndex}`,
-      size: [0.035, 0.055, 0.055],
-      position: [-0.045, y, z],
-      material: materials.rust,
-    });
-  }));
-}
-
 function addExteriorConstructionDetails(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -1705,7 +1587,6 @@ export function createShipGeometry(
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
   addRoofBalconies(root, geometries, shellColliders, materials, layout);
   const climbZones = addLadders(root, geometries, materials, layout);
-  addWheelhouseInteriorDetails(root, geometries, materials, layout);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);

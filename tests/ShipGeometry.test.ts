@@ -828,103 +828,28 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('keeps captain-room window glazing clear of mounted clutter and omits the lamp', () => {
+  it('keeps captain-room window glazing completely clear of mounted clutter', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
-    const details = build.root.getObjectByName('wheelhouse-interior-details')!;
     [
       'chart',
       'coat',
       'key-hooks',
       'repaired-panel',
+      'helm-wheel',
+      'compass',
+      'lamp',
+      'logbook',
+      'mug',
     ].forEach((id) => {
-      const detail = details.getObjectByName(`captain-detail:${id}`)!;
-      expect(detail, id).toBeDefined();
-      expect(detail.userData.interactive, id).not.toBe(true);
-    });
-    ['helm-wheel', 'compass', 'lamp', 'logbook', 'mug'].forEach((id) => {
-      expect(details.getObjectByName(`captain-detail:${id}`), id).toBeUndefined();
+      expect(build.root.getObjectByName(`captain-detail:${id}`), id).toBeUndefined();
     });
 
     build.disposeGeometry();
     materials.dispose();
   });
 
-  it('anchors remaining captain-room dressing to the supplied wheelhouse layout', () => {
-    const shiftX = 0.35;
-    const layout: ShipLayoutSpec = {
-      ...SHIP_LAYOUT,
-      zones: SHIP_LAYOUT.zones.map((zone) => zone.id !== 'wheelhouse' ? zone : {
-        ...zone,
-        bounds: {
-          ...zone.bounds,
-          minX: zone.bounds.minX + shiftX,
-          maxX: zone.bounds.maxX + shiftX,
-        },
-        polygon: zone.polygon.map(([x, z]) => [x + shiftX, z] as const),
-      }),
-      doors: SHIP_LAYOUT.doors.map((door) => door.zoneId !== 'wheelhouse' ? door : {
-        ...door,
-        center: [door.center[0] + shiftX, door.center[1]] as const,
-        approach: {
-          ...door.approach,
-          minX: door.approach.minX + shiftX,
-          maxX: door.approach.maxX + shiftX,
-        },
-      }),
-      furniture: SHIP_LAYOUT.furniture.map((fixture) =>
-        fixture.zoneId !== 'wheelhouse' ? fixture : {
-          ...fixture,
-        position: [
-          fixture.position[0] + shiftX,
-          fixture.position[1],
-          fixture.position[2],
-        ] as const,
-      }),
-    };
-    const materials = createShipMaterials();
-    expect(() => validateShipLayout(layout)).not.toThrow();
-    const baseline = createShipGeometry(materials);
-    const modified = createShipGeometry(materials, layout);
-
-    const baselinePanel = baseline.root.getObjectByName('captain-detail:repaired-panel')!;
-    const modifiedPanel = modified.root.getObjectByName('captain-detail:repaired-panel')!;
-    expect(modifiedPanel.position.x - baselinePanel.position.x).toBeCloseTo(shiftX);
-
-    baseline.disposeGeometry();
-    modified.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('seats remaining wall dressing on solid wheelhouse panels outside door approaches', () => {
-    const materials = createShipMaterials();
-    const build = createShipGeometry(materials);
-    const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
-    const details = build.root.getObjectByName('wheelhouse-interior-details')!;
-    const aftZ = wheelhouse.minZ + SHIP_ROOM_WALL_THICKNESS + 0.015;
-    ['chart', 'coat', 'key-hooks'].forEach((id) => {
-      expect(details.getObjectByName(`captain-detail:${id}`)!.position.z, id)
-        .toBeCloseTo(aftZ);
-    });
-    expect(details.getObjectByName('captain-detail:repaired-panel')!.position.x)
-      .toBeCloseTo(wheelhouse.maxX - SHIP_ROOM_WALL_THICKNESS - 0.015);
-
-    details.children.forEach((detail) => {
-      const bounds = new Box3().setFromObject(detail);
-      SHIP_LAYOUT.doors.filter(({ zoneId }) => zoneId === 'wheelhouse').forEach((door) => {
-        const overlapX = Math.max(0, Math.min(bounds.max.x, door.approach.maxX)
-          - Math.max(bounds.min.x, door.approach.minX));
-        const overlapZ = Math.max(0, Math.min(bounds.max.z, door.approach.maxZ)
-          - Math.max(bounds.min.z, door.approach.minZ));
-        expect(overlapX * overlapZ, `${detail.name} overlaps ${door.id}`).toBe(0);
-      });
-    });
-
-    build.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('disposes wheelhouse facade, roof, and interior geometry exactly once', () => {
+  it('disposes wheelhouse facade and roof geometry exactly once', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const geometries = new Set<Mesh['geometry']>();
