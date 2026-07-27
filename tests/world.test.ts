@@ -198,13 +198,17 @@ describe('world builders', () => {
     }
 
     expect(world.physicsBarrel.position.distanceTo(before)).toBeGreaterThan(1e-3);
-    expect(world.physicsBarrel.position.x).toBeCloseTo(physics.barrelPose.translation.x, 10);
-    expect(world.physicsBarrel.position.y).toBeCloseTo(physics.barrelPose.translation.y, 10);
-    expect(world.physicsBarrel.position.z).toBeCloseTo(physics.barrelPose.translation.z, 10);
-    expect(world.physicsBarrel.quaternion.x).toBeCloseTo(physics.barrelPose.rotation.x, 10);
-    expect(world.physicsBarrel.quaternion.y).toBeCloseTo(physics.barrelPose.rotation.y, 10);
-    expect(world.physicsBarrel.quaternion.z).toBeCloseTo(physics.barrelPose.rotation.z, 10);
-    expect(world.physicsBarrel.quaternion.w).toBeCloseTo(physics.barrelPose.rotation.w, 10);
+    expect(world.physicsBarrel.position.toArray()).toEqual([
+      physics.barrelPose.translation.x,
+      physics.barrelPose.translation.y,
+      physics.barrelPose.translation.z,
+    ]);
+    expect(world.physicsBarrel.quaternion.toArray()).toEqual([
+      physics.barrelPose.rotation.x,
+      physics.barrelPose.rotation.y,
+      physics.barrelPose.rotation.z,
+      physics.barrelPose.rotation.w,
+    ]);
 
     world.dispose();
     propModels.dispose();
