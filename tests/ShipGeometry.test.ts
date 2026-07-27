@@ -1003,12 +1003,15 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('falls back safely when a valid scaled helm is too small in width and depth', () => {
+  it.each([
+    ['width', [0.1, 1, 1] as const],
+    ['depth', [1, 1, 0.1] as const],
+  ])('falls back safely when a valid scaled helm is too small in %s', (_axis, scale) => {
     const layout: ShipLayoutSpec = {
       ...SHIP_LAYOUT,
       furniture: SHIP_LAYOUT.furniture.map((fixture) =>
         fixture.id === 'helm-desk-forward'
-          ? { ...fixture, scale: [0.1, 1, 0.1] as const, surfaces: [] }
+          ? { ...fixture, scale, surfaces: [] }
           : fixture),
     };
     expect(() => validateShipLayout(layout)).not.toThrow();
@@ -1022,8 +1025,10 @@ describe('freighter geometry', () => {  interface PointXZ {
     const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
     ['logbook', 'mug'].forEach((id) => {
       const prop = details.getObjectByName(`captain-detail:${id}`)!;
-      expect(prop.getObjectByName(`captain-detail:${id}:fallback-support`), id)
-        .toBeDefined();
+      const support = prop.getObjectByName(`captain-detail:${id}:fallback-support`)!;
+      expect(support, `${id} fallback support`).toBeDefined();
+      expect(prop.parent, `${id} attached to details`).toBe(details);
+      expect(support.parent, `${id} support attached to prop`).toBe(prop);
       expect(prop.position.z, `${id} wall anchor`).toBeGreaterThan(wheelhouse.maxZ - 0.6);
       expect(Math.abs(prop.position.x - centerX), `${id} central path`).toBeGreaterThan(1.1);
     });
