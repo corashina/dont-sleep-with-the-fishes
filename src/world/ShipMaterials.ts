@@ -17,12 +17,15 @@ import type { ShipAssets } from './ShipAssets';
 
 export interface ShipMaterials {
   timber: MeshStandardMaterial;
+  timberFloor: MeshStandardMaterial;
   crewFloor: MeshStandardMaterial;
   wheelhouseFloor: MeshStandardMaterial;
   cargoFloor: MeshStandardMaterial;
   storageFloor: MeshStandardMaterial;
   lifeboatFloor: MeshStandardMaterial;
   emergencyStripe: MeshStandardMaterial;
+  upperHull: MeshStandardMaterial;
+  waterline: MeshStandardMaterial;
   plainPaintedSteel: MeshStandardMaterial;
   plainTimber: MeshStandardMaterial;
   paintedPanel: MeshStandardMaterial;
@@ -35,13 +38,14 @@ export interface ShipMaterials {
   glass: MeshPhysicalMaterial;
   emergency: MeshStandardMaterial;
   canvas: MeshStandardMaterial;
+  canvasEdge: MeshStandardMaterial;
   ownedMaterialsForTest(): readonly Material[];
   ownedTexturesForTest(): readonly Texture[];
   textureBytesForTest(): readonly (readonly number[])[];
   dispose(): void;
 }
 
-type SurfaceKind = 'warmWood' | 'maritimeDeck' | 'industrialFloor' | 'paintedPanel';
+type SurfaceKind = 'warmWood' | 'industrialFloor' | 'paintedPanel';
 type TextureRole = 'color' | 'roughness' | 'bump';
 
 interface SurfaceSpec {
@@ -73,14 +77,6 @@ const SURFACE_SPECS: Record<SurfaceKind, SurfaceSpec> = {
     bumpScale: 0.035,
     repeat: [3, 12],
     seedOffset: 0x13579bdf,
-  },
-  maritimeDeck: {
-    color: [91, 101, 100],
-    roughness: 232,
-    bump: 126,
-    bumpScale: 0.018,
-    repeat: [6, 18],
-    seedOffset: 0x2468ace0,
   },
   industrialFloor: {
     color: [82, 89, 91],
@@ -120,8 +116,6 @@ function surfaceOffset(kind: SurfaceKind, x: number, y: number, byte: number): n
   switch (kind) {
     case 'warmWood':
       return x % 16 === 0 ? -28 : centeredNoise(byte, 10);
-    case 'maritimeDeck':
-      return centeredNoise(byte, 8) - (x % 32 === 0 ? 12 : 0);
     case 'industrialFloor': {
       const tileX = x % 4;
       const tileY = y % 4;
@@ -285,7 +279,6 @@ export function createShipMaterials(
 ): ShipMaterials {
   const anisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   const warmWood = createSurfaceTextureSet(seed, 'warmWood', anisotropy);
-  const maritimeDeck = createSurfaceTextureSet(seed, 'maritimeDeck', anisotropy);
   const industrialFloor = createSurfaceTextureSet(seed, 'industrialFloor', anisotropy);
   const paintedPanelTextures = createSurfaceTextureSet(seed, 'paintedPanel', anisotropy);
   const emergencyStripeTexture = createEmergencyStripeTexture(seed ^ 0xa54ff53a, anisotropy);
@@ -296,25 +289,24 @@ export function createShipMaterials(
         assets.woodColor,
         assets.woodRoughness,
         assets.woodNormal,
-        { roughness: 0.96, normalScale: 0.42 },
+        { color: 0xb88759, roughness: 0.94, metalness: 0, normalScale: 0.42 },
       )
-      : createSurfaceMaterial(warmWood)
+      : createSurfaceMaterial(warmWood, {
+        color: 0xb88759,
+        roughness: 0.94,
+        metalness: 0,
+      })
   );
-  const createFloorMaterial = (
-    color: number,
-    fallbackTextures: SurfaceTextureSet = maritimeDeck,
-  ): MeshStandardMaterial => (
-    createSurfaceMaterial(fallbackTextures, {
-      color,
-      roughness: 0.9,
-      metalness: 0.36,
-    })
-  );
-  const crewFloor = createFloorMaterial(0xe2e3df);
-  const wheelhouseFloor = createFloorMaterial(0xebeae3);
-  const cargoFloor = createFloorMaterial(0xd0d5d5);
-  const storageFloor = createFloorMaterial(0xc8ccca, industrialFloor);
-  const lifeboatFloor = createFloorMaterial(0xcbd1cf, industrialFloor);
+  const timberFloor = timber;
+  const crewFloor = timberFloor;
+  const wheelhouseFloor = timberFloor;
+  const cargoFloor = timberFloor;
+  const storageFloor = timberFloor;
+  const lifeboatFloor = createSurfaceMaterial(industrialFloor, {
+    color: 0xcbd1cf,
+    roughness: 0.9,
+    metalness: 0.36,
+  });
   const emergencyStripe = new MeshStandardMaterial({
     color: 0xffffff,
     map: emergencyStripeTexture,
@@ -322,7 +314,7 @@ export function createShipMaterials(
     metalness: 0.2,
   });
   const plainPaintedSteel = new MeshStandardMaterial({
-    color: 0x77868b,
+    color: 0xcbd2cf,
     roughness: 0.9,
     metalness: 0.24,
     flatShading: true,
@@ -335,13 +327,13 @@ export function createShipMaterials(
   });
   const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
   const paintedSteel = new MeshStandardMaterial({
-    color: 0x8d9ba0,
+    color: 0xd5dbd8,
     roughness: 0.86,
     metalness: 0.32,
     flatShading: true,
   });
   const darkHull = new MeshStandardMaterial({
-    color: 0x242e32,
+    color: 0x172b38,
     roughness: 0.9,
     metalness: 0.28,
     flatShading: true,
@@ -353,20 +345,36 @@ export function createShipMaterials(
   const glass = new MeshPhysicalMaterial({ color: 0x6d8790, roughness: 0.18, transmission: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
   const emergency = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
   const canvas = new MeshStandardMaterial({
-    color: 0xc7ad7a,
+    color: 0xb9cad0,
     roughness: 0.96,
+    metalness: 0,
+    side: DoubleSide,
+  });
+  const upperHull = new MeshStandardMaterial({
+    color: 0xd8dedb,
+    roughness: 0.84,
+    metalness: 0.18,
+    flatShading: true,
+  });
+  const waterline = new MeshStandardMaterial({
+    color: 0x243f4c,
+    roughness: 0.88,
+    metalness: 0.24,
+    flatShading: true,
+  });
+  const canvasEdge = new MeshStandardMaterial({
+    color: 0x647b82,
+    roughness: 0.98,
     metalness: 0,
     side: DoubleSide,
   });
 
   const ownedMaterials = new Set<Material>([
     timber,
-    crewFloor,
-    wheelhouseFloor,
-    cargoFloor,
-    storageFloor,
     lifeboatFloor,
     emergencyStripe,
+    upperHull,
+    waterline,
     plainPaintedSteel,
     plainTimber,
     paintedPanel,
@@ -379,14 +387,12 @@ export function createShipMaterials(
     glass,
     emergency,
     canvas,
+    canvasEdge,
   ]);
   const ownedTextures = [
     warmWood.color,
     warmWood.roughness,
     warmWood.bump,
-    maritimeDeck.color,
-    maritimeDeck.roughness,
-    maritimeDeck.bump,
     industrialFloor.color,
     industrialFloor.roughness,
     industrialFloor.bump,
@@ -399,12 +405,15 @@ export function createShipMaterials(
 
   return {
     timber,
+    timberFloor,
     crewFloor,
     wheelhouseFloor,
     cargoFloor,
     storageFloor,
     lifeboatFloor,
     emergencyStripe,
+    upperHull,
+    waterline,
     plainPaintedSteel,
     plainTimber,
     paintedPanel,
@@ -417,6 +426,7 @@ export function createShipMaterials(
     glass,
     emergency,
     canvas,
+    canvasEdge,
     ownedMaterialsForTest: () => [...ownedMaterials],
     ownedTexturesForTest: () => [...ownedTextures],
     textureBytesForTest: () => ownedTextures.map((texture) =>

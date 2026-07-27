@@ -119,6 +119,29 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('keeps ship material textures deterministic and disposes owned resources once', () => {
+    const materials = createShipMaterials(0x1a2b3c);
+    const duplicate = createShipMaterials(0x1a2b3c);
+    const ownedMaterials = materials.ownedMaterialsForTest();
+    const ownedTextures = materials.ownedTexturesForTest();
+    const materialDisposals = ownedMaterials.map((material) => vi.spyOn(material, 'dispose'));
+    const textureDisposals = ownedTextures.map((texture) => vi.spyOn(texture, 'dispose'));
+
+    try {
+      expect(materials.textureBytesForTest()).toEqual(duplicate.textureBytesForTest());
+      expect(new Set(ownedMaterials).size).toBe(ownedMaterials.length);
+      expect(new Set(ownedTextures).size).toBe(ownedTextures.length);
+
+      materials.dispose();
+      materials.dispose();
+
+      materialDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+      textureDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    } finally {
+      duplicate.dispose();
+    }
+  });
+
   it('places a dropped carried item on the deck and triggers local smoke immediately', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
