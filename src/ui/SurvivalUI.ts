@@ -821,6 +821,13 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.clearAnchorHighlight();
+    this.eventEligibility = null;
+    this.contextualEventChoices = [];
+    this.eventSelectedInstanceId = null;
+    this.eventPresentationActive = false;
+    this.eventChoices.replaceChildren();
+    this.eventChoices.hidden = true;
+    this.endureButton.hidden = true;
     this.pendingSleepTransition?.finish();
     this.pendingFishingFade?.finish();
     this.fishingAnnouncementVersion += 1;

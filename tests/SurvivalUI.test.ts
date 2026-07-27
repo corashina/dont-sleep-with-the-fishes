@@ -152,7 +152,46 @@ describe('SurvivalUI', () => {
     const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
     choice.focus();
     press('[data-event-choice="retrieve"]', 'Enter');
+    press('[data-event-choice="retrieve"]', ' ');
     expect(onEventChoice).toHaveBeenCalledWith('retrieve');
+    expect(onEventChoice).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    ui.beginEventPresentation();
+    void ui.showEventReveal(eventWithChoices('retrieve'));
+    ui.setEventSelection(new Map(), [
+      { id: 'retrieve', label: 'RETRIEVE', unavailableReason: 'The crate is out of reach.' },
+    ]);
+
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    expect(choice.disabled).toBe(false);
+    expect(choice.getAttribute('aria-disabled')).toBe('true');
+    expect(choice.getAttribute('aria-description')).toBe('The crate is out of reach.');
+    expect(choice.textContent).toContain('The crate is out of reach.');
+    choice.focus();
+    expect(document.activeElement).toBe(choice);
+    choice.click();
+    press('[data-event-choice="retrieve"]', ' ');
+    expect(onEventChoice).not.toHaveBeenCalled();
+  });
+
+  it('clears contextual choice state before disposal removes the UI', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const strip = mount.querySelector<HTMLElement>('[data-event-choices]')!;
+
+    ui.dispose();
+
+    expect(strip.hidden).toBe(true);
+    expect(strip.childElementCount).toBe(0);
   });
 
   it('chooses only broken repairable instance targets with a discriminated option', () => {
