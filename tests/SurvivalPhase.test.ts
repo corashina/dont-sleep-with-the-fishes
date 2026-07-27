@@ -1179,10 +1179,12 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
-  it('reacts before clearing the tableau and beginning dawn', async () => {
+  it('settles the outcome cue and tableau reaction before feedback, clear, and dawn', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle')!;
     let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
     const calls: string[] = [];
+    const outcomeCue = deferred();
+    const tableauReaction = deferred();
     const ui: Partial<SurvivalUI> = {
       beginEventPresentation: vi.fn(),
       setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -1215,10 +1217,13 @@ describe('SurvivalPhase orchestration', () => {
         reactToEventOutcome: vi.fn((eventId) => {
           calls.push('react');
           expect(eventId).toBe(event.id);
-          return Promise.resolve();
+          return tableauReaction.promise;
         }),
         clearEvent: vi.fn(() => { calls.push('clear'); }),
-        play: vi.fn(() => Promise.resolve()),
+        play: vi.fn((cue) => {
+          calls.push(cue === 'impact' ? 'cue' : 'dawn-cue');
+          return cue === 'impact' ? outcomeCue.promise : Promise.resolve();
+        }),
         dispose: vi.fn(),
       },
       ui,
@@ -1229,10 +1234,72 @@ describe('SurvivalPhase orchestration', () => {
     ui.onEventChoice?.('retrieve');
     await flushPromises();
 
-    const reaction = calls.indexOf('react');
-    expect(calls.slice(reaction - 1, reaction + 4)).toEqual([
-      'resolve', 'react', 'feedback', 'clear', 'dawn',
+    expect(calls).toEqual(['resolve', 'cue', 'react']);
+    outcomeCue.resolve();
+    await flushPromises();
+    expect(calls).toEqual(['resolve', 'cue', 'react']);
+
+    tableauReaction.resolve();
+    await flushPromises();
+    expect(calls).toEqual([
+      'resolve', 'cue', 'react', 'feedback', 'clear', 'dawn', 'dawn-cue',
     ]);
+  });
+
+  it('does not render stale dawn state when restart supersedes its pending cue', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle')!;
+    let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
+    const dawnCue = deferred();
+    const render = vi.fn();
+    const onRestart = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      setBusy: vi.fn(),
+      showFeedback: vi.fn(),
+      render,
+      setJournalUnread: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'nightEvent', pendingEventId: null });
+          return accepted({ code: 'event-resolved', cue: 'impact' });
+        }),
+        beginDawn: vi.fn(() => {
+          current = snapshot({ state: 'day', day: 2 });
+          return accepted({ code: 'dawn', cue: 'dawn' });
+        }),
+      },
+      world: {
+        revealEvent: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        play: vi.fn((cue) => cue === 'dawn' ? dawnCue.promise : Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui,
+      onRestart,
+    });
+    phase.start();
+    await flushPromises();
+
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    const rendersBeforeRestart = render.mock.calls.length;
+
+    phase.requestRestart();
+    dawnCue.resolve();
+    await flushPromises();
+
+    expect(onRestart).toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledTimes(rendersBeforeRestart);
   });
 
   it('retains the Other People tableau when its outcome rescues the survivor', async () => {
