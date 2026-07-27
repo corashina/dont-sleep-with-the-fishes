@@ -8,7 +8,6 @@ export interface PostProcessingProfile {
   highlightTint: number;
   highlightTintStrength: number;
   posterizationLevels: number;
-  inkFrameStrength: number;
   halftoneStrength: number;
   halftoneSizeCssPixels: number;
 }
@@ -24,7 +23,6 @@ export const GLOBAL_POST_PROCESSING_PROFILE =
     highlightTint: 0xd8aa6d,
     highlightTintStrength: 0.035,
     posterizationLevels: 48,
-    inkFrameStrength: 0.42,
     halftoneStrength: 0.075,
     halftoneSizeCssPixels: 4.5,
   });

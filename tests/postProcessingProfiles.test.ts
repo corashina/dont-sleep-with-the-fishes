@@ -14,9 +14,10 @@ describe('global post-processing profile', () => {
     expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.05);
   });
 
-  it('contains no scene identity, grain, or vignette settings', () => {
+  it('contains no scene identity, grain, vignette, or edge-mask settings', () => {
     expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('id');
     expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('grainStrength');
     expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('vignetteStrength');
+    expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('inkFrameStrength');
   });
 });

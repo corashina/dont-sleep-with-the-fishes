@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DataTexture,
   PerspectiveCamera,
   Scene,
   Vector2,
@@ -454,11 +453,11 @@ describe('post-processing pipeline', () => {
     expect(composer.target.dispose).toHaveBeenCalledOnce();
   });
 
-  it('keeps the generated ink frame owned by the pipeline', () => {
-    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
-    const frame = postProcessingMocks.printPasses[0]?.uniforms?.tInkFrame?.value as DataTexture;
-    vi.spyOn(frame, 'dispose');
-    pipeline.dispose();
-    expect(frame.dispose).toHaveBeenCalledOnce();
+  it('has no pixelated edge mask or edge-weighted halftone', () => {
+    expect(PrintShader.uniforms).not.toHaveProperty('tInkFrame');
+    expect(PrintShader.uniforms).not.toHaveProperty('uInkFrameStrength');
+    expect(PrintShader.fragmentShader).not.toContain('frameInk');
+    expect(PrintShader.fragmentShader).not.toContain('edgeDistance');
+    expect(PrintShader.fragmentShader).not.toContain('centerRelief');
   });
 });
