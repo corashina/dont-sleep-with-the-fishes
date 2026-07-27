@@ -327,11 +327,20 @@ describe('ship item placement', () => {
         }
         expect([...assignments.keys()]).not.toContain('fishingRod-1');
       }
+      expect(ship.playerStart).toEqual(new Vector3(0, 3.72, 8.4));
+      expect(ship.evacuationPoint).toEqual(new Vector3(8.9, 3.72, 0));
+      expect(ship.lifeboatAnchor).toEqual(new Vector3(12.75, 0.35, 0));
       expect(ship.playerNavigationBounds.safe).toEqual({
-        minX: -7.65,
-        maxX: 7.65,
-        minZ: -21.2,
-        maxZ: 21.2,
+        minX: -9.65,
+        maxX: 9.65,
+        minZ: -26.7,
+        maxZ: 26.7,
+      });
+      expect(ship.playerNavigationBounds.fall).toEqual({
+        minX: -10.8,
+        maxX: 10.8,
+        minZ: -28.3,
+        maxZ: 28.3,
       });
     } finally {
       ship.dispose();
