@@ -918,31 +918,6 @@ function addExteriorConstructionDetails(
     root.add(hawse);
   });
 
-  const sideX = (cargo.maxX - cargo.minX) / 2 + 0.34;
-  const ribZs = [
-    sternCenterZ + 4.8,
-    sternCenterZ + 10.4,
-    bowCenterZ - 10.4,
-    bowCenterZ - 4.8,
-  ] as const;
-  let ribIndex = 0;
-  ([-1, 1] as const).forEach((side) => {
-    ribZs.forEach((z) => {
-      ribIndex += 1;
-      addBlock(root, geometries, shellColliders, {
-        name: `upper-hull-rib-${ribIndex}`,
-        size: [0.12, 0.44, 0.3],
-        position: [side * sideX, 1.96, z],
-        material: materials.upperHull,
-      });
-      addBlock(root, geometries, shellColliders, {
-        name: `hull-rib-fastener-${ribIndex}`,
-        size: [0.08, 0.08, 0.1],
-        position: [side * (sideX + 0.065), 2.12, z],
-        material: materials.darkMetal,
-      });
-    });
-  });
 }
 
 function addCylinder(

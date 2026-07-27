@@ -381,8 +381,9 @@ describe('freighter geometry', () => {  interface PointXZ {
         'anchor-hawse-port',
         'anchor-hawse-starboard',
       ].forEach((name) => expect(build.root.getObjectByName(name), name).toBeDefined());
-      const ribs = build.root.children.filter(({ name }) => name.startsWith('upper-hull-rib-'));
-      expect(ribs).toHaveLength(8);
+      const sideFittings = build.root.children.filter(({ name }) =>
+        name.startsWith('upper-hull-rib-') || name.startsWith('hull-rib-fastener-'));
+      expect(sideFittings).toHaveLength(0);
     } finally {
       build.disposeGeometry();
       materials.dispose();
