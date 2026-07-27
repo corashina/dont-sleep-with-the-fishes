@@ -93,8 +93,12 @@ const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
-const WINDOW_PILLAR_WIDTH = 0.28;
 const WINDOW_GLASS_THICKNESS = 0.035;
+const WHEELHOUSE_CHAMFER_DEPTH = 1.3;
+const WHEELHOUSE_CHAMFER_WIDTH = 1.3;
+const WHEELHOUSE_TAPER_ANGLE = Math.PI / 90;
+const WHEELHOUSE_ROOF_OVERHANG = 0.28;
+const WHEELHOUSE_FRAME_WIDTH = 0.18;
 const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
 const PORTHOLE_GLASS_RADIUS = 0.46;
@@ -716,94 +720,176 @@ function addWallSegments(
     const prefix = segment.zoneId === 'crewCabin' ? 'crew-cabin'
       : segment.zoneId === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
     const name = `${prefix}-wall-${segment.edge}-${index}`;
-    if (segment.zoneId !== 'wheelhouse') {
-      const height = roomWallHeight(segment.zoneId);
-      const material = segment.zoneId === 'crewCabin'
-        ? materials.paintedPanel
-        : materials.plainPaintedSteel;
-      const portholes = portholesForSegment(segment);
-      if (portholes.length > 0) {
-        const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
-        shellColliders.push(toCollisionBox(wall.position, wall.size));
-        addPortholeWallPanel(
-          root,
-          geometries,
-          name,
-          segment,
-          portholes,
-          wallBottomY,
-          material,
-        );
-      } else {
-        const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
-        shellColliders.push(toCollisionBox(wall.position, wall.size));
-        addBlock(root, geometries, shellColliders, {
-          name,
-          ...segmentTransform(segment, height, wallBottomY + height / 2),
-          material,
-        });
-      }
+    if (segment.zoneId === 'wheelhouse') {
+      const wall = segmentColliderTransform(
+        segment,
+        ROOM_WALL_HEIGHT,
+        wallBottomY + ROOM_WALL_HEIGHT / 2,
+      );
+      shellColliders.push(toCollisionBox(wall.position, wall.size));
       return;
     }
-    const full = segmentColliderTransform(
-      segment,
-      ROOM_WALL_HEIGHT,
-      wallBottomY + ROOM_WALL_HEIGHT / 2,
-    );
-    shellColliders.push(toCollisionBox(full.position, full.size));
-    const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
-    addBlock(root, geometries, shellColliders, {
-      name: `${name}-sill`,
-      ...segmentTransform(segment, WINDOW_SILL_HEIGHT, wallBottomY + WINDOW_SILL_HEIGHT / 2),
-      material: materials.paintedPanel,
-    });
-    addBlock(root, geometries, shellColliders, {
-      name: `${name}-header`,
-      ...segmentTransform(segment, WINDOW_HEADER_HEIGHT, wallBottomY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2),
-      material: materials.paintedPanel,
-    });
-    if (segment.edge !== 'forward') {
+    const height = roomWallHeight(segment.zoneId);
+    const material = segment.zoneId === 'crewCabin'
+      ? materials.paintedPanel
+      : materials.plainPaintedSteel;
+    const portholes = portholesForSegment(segment);
+    if (portholes.length > 0) {
+      const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
+      shellColliders.push(toCollisionBox(wall.position, wall.size));
+      addPortholeWallPanel(
+        root,
+        geometries,
+        name,
+        segment,
+        portholes,
+        wallBottomY,
+        material,
+      );
+    } else {
+      const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
+      shellColliders.push(toCollisionBox(wall.position, wall.size));
       addBlock(root, geometries, shellColliders, {
-        name: `${name}-window-0`,
-        ...segmentTransform(segment, windowHeight, wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2, WINDOW_GLASS_THICKNESS),
-        material: materials.glass,
+        name,
+        ...segmentTransform(segment, height, wallBottomY + height / 2),
+        material,
       });
     }
   });
+}
 
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const innerMinX = wheelhouse.minX + WALL_THICKNESS;
-  const innerMaxX = wheelhouse.maxX - WALL_THICKNESS;
-  const innerWidth = innerMaxX - innerMinX;
-  const windowWidth = (innerWidth - WINDOW_PILLAR_WIDTH * 4) / 3;
+interface WheelhousePaneSpec {
+  readonly id: string;
+  readonly start: readonly [number, number];
+  readonly end: readonly [number, number];
+}
+
+function addWheelhousePane(
+  facade: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  spec: WheelhousePaneSpec,
+): void {
+  const dx = spec.end[0] - spec.start[0];
+  const dz = spec.end[1] - spec.start[1];
+  const width = Math.hypot(dx, dz);
   const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
-  for (let pillar = 0; pillar < 4; pillar += 1) {
-    const x = innerMinX + WINDOW_PILLAR_WIDTH / 2
-      + pillar * (windowWidth + WINDOW_PILLAR_WIDTH);
-    addBlock(root, geometries, shellColliders, {
-      name: `wheelhouse-front-pillar-${pillar}`,
-      size: [WINDOW_PILLAR_WIDTH, windowHeight, WALL_THICKNESS],
-      position: [
-        x,
-        wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2,
-        wheelhouse.maxZ - WALL_HALF_THICKNESS,
-      ],
-      material: materials.paintedSteel,
-    });
-  }
-  for (let pane = 0; pane < 3; pane += 1) {
-    addBlock(root, geometries, shellColliders, {
-      name: `wheelhouse-front-window-${pane}`,
-      size: [windowWidth, windowHeight, WINDOW_GLASS_THICKNESS],
-      position: [
-        innerMinX + WINDOW_PILLAR_WIDTH + windowWidth / 2
-          + pane * (windowWidth + WINDOW_PILLAR_WIDTH),
-        wallBottomY + WINDOW_SILL_HEIGHT + windowHeight / 2,
-        wheelhouse.maxZ - WALL_HALF_THICKNESS,
-      ],
-      material: materials.glass,
-    });
-  }
+  const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
+  const pane = new Group();
+  pane.name = `wheelhouse-pane:${spec.id}`;
+  pane.position.set(
+    (spec.start[0] + spec.end[0]) / 2,
+    FREIGHTER_DIMENSIONS.deckY,
+    (spec.start[1] + spec.end[1]) / 2,
+  );
+  pane.rotation.set(
+    -WHEELHOUSE_TAPER_ANGLE,
+    Math.atan2(-dz, dx),
+    0,
+    'YXZ',
+  );
+  pane.userData.inwardTaper = WHEELHOUSE_TAPER_ANGLE;
+  facade.add(pane);
+
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:sill`,
+    size: [width, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
+    position: [0, WINDOW_SILL_HEIGHT / 2, -WALL_HALF_THICKNESS],
+    material: materials.paintedPanel,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:header`,
+    size: [width, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
+    position: [0, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2, -WALL_HALF_THICKNESS],
+    material: materials.paintedPanel,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:frame-start`,
+    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
+    position: [
+      -width / 2 + WHEELHOUSE_FRAME_WIDTH / 2,
+      WINDOW_SILL_HEIGHT + windowHeight / 2,
+      -WALL_HALF_THICKNESS,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:frame-end`,
+    size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
+    position: [
+      width / 2 - WHEELHOUSE_FRAME_WIDTH / 2,
+      WINDOW_SILL_HEIGHT + windowHeight / 2,
+      -WALL_HALF_THICKNESS,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:glass`,
+    size: [openingWidth, windowHeight, WINDOW_GLASS_THICKNESS],
+    position: [0, WINDOW_SILL_HEIGHT + windowHeight / 2, -WALL_HALF_THICKNESS],
+    material: materials.glass,
+  }).castShadow = false;
+}
+
+function addWheelhouseFacade(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
+  const portDoor = layout.doors.find((door) =>
+    door.zoneId === 'wheelhouse' && door.orientation === 'side' && door.side === 'port')!;
+  const aftDoor = layout.doors.find((door) =>
+    door.zoneId === 'wheelhouse' && door.orientation === 'aft')!;
+  const portDoorMinZ = portDoor.center[1] - portDoor.width / 2;
+  const aftDoorMinX = aftDoor.center[0] - aftDoor.width / 2;
+  const aftDoorMaxX = aftDoor.center[0] + aftDoor.width / 2;
+  const frontSideZ = wheelhouse.maxZ - WHEELHOUSE_CHAMFER_DEPTH;
+  const frontCenterMinX = wheelhouse.minX + WHEELHOUSE_CHAMFER_WIDTH;
+  const frontCenterMaxX = wheelhouse.maxX - WHEELHOUSE_CHAMFER_WIDTH;
+  const facade = new Group();
+  facade.name = 'wheelhouse-facade';
+  root.add(facade);
+
+  ([
+    {
+      id: 'front-center',
+      start: [frontCenterMinX, wheelhouse.maxZ],
+      end: [frontCenterMaxX, wheelhouse.maxZ],
+    },
+    {
+      id: 'front-port-chamfer',
+      start: [wheelhouse.minX, frontSideZ],
+      end: [frontCenterMinX, wheelhouse.maxZ],
+    },
+    {
+      id: 'front-starboard-chamfer',
+      start: [frontCenterMaxX, wheelhouse.maxZ],
+      end: [wheelhouse.maxX, frontSideZ],
+    },
+    {
+      id: 'port-side',
+      start: [wheelhouse.minX, wheelhouse.minZ],
+      end: [wheelhouse.minX, portDoorMinZ],
+    },
+    {
+      id: 'starboard-side',
+      start: [wheelhouse.maxX, frontSideZ],
+      end: [wheelhouse.maxX, wheelhouse.minZ],
+    },
+    {
+      id: 'aft-port',
+      start: [aftDoorMinX, wheelhouse.minZ],
+      end: [wheelhouse.minX + WALL_THICKNESS, wheelhouse.minZ],
+    },
+    {
+      id: 'aft-starboard',
+      start: [wheelhouse.maxX - WALL_THICKNESS, wheelhouse.minZ],
+      end: [aftDoorMaxX, wheelhouse.minZ],
+    },
+  ] satisfies readonly WheelhousePaneSpec[]).forEach((spec) =>
+    addWheelhousePane(facade, geometries, materials, spec));
 }
 
 function addRoomRoofs(
@@ -817,6 +903,52 @@ function addRoomRoofs(
     const width = zone.bounds.maxX - zone.bounds.minX;
     const length = zone.bounds.maxZ - zone.bounds.minZ;
     const wallTopY = FREIGHTER_DIMENSIONS.deckY + roomWallHeight(zone.id);
+    if (zone.id === 'wheelhouse') {
+      const frontSideZ = zone.bounds.maxZ - WHEELHOUSE_CHAMFER_DEPTH;
+      const frontCenterMinX = zone.bounds.minX + WHEELHOUSE_CHAMFER_WIDTH;
+      const frontCenterMaxX = zone.bounds.maxX - WHEELHOUSE_CHAMFER_WIDTH;
+      const diagonalInset = WHEELHOUSE_ROOF_OVERHANG * (Math.SQRT2 - 1);
+      const shape = new Shape();
+      shape.moveTo(
+        zone.bounds.minX - WHEELHOUSE_ROOF_OVERHANG,
+        zone.bounds.minZ - WHEELHOUSE_ROOF_OVERHANG,
+      );
+      shape.lineTo(
+        zone.bounds.maxX + WHEELHOUSE_ROOF_OVERHANG,
+        zone.bounds.minZ - WHEELHOUSE_ROOF_OVERHANG,
+      );
+      shape.lineTo(
+        zone.bounds.maxX + WHEELHOUSE_ROOF_OVERHANG,
+        frontSideZ + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+      );
+      shape.lineTo(
+        frontCenterMaxX + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+        zone.bounds.maxZ + WHEELHOUSE_ROOF_OVERHANG,
+      );
+      shape.lineTo(
+        frontCenterMinX - WHEELHOUSE_ROOF_OVERHANG + diagonalInset,
+        zone.bounds.maxZ + WHEELHOUSE_ROOF_OVERHANG,
+      );
+      shape.lineTo(
+        zone.bounds.minX - WHEELHOUSE_ROOF_OVERHANG,
+        frontSideZ + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+      );
+      shape.closePath();
+      const geometry = new ExtrudeGeometry(shape, {
+        depth: ROOM_ROOF_THICKNESS,
+        bevelEnabled: false,
+        steps: 1,
+      });
+      geometry.rotateX(Math.PI / 2);
+      const roof = new Mesh(geometry, materials.paintedSteel);
+      roof.name = 'wheelhouse-roof';
+      roof.position.y = wallTopY + ROOM_ROOF_THICKNESS;
+      roof.castShadow = true;
+      roof.receiveShadow = true;
+      root.add(roof);
+      geometries.add(geometry);
+      return;
+    }
     addBlock(root, geometries, shellColliders, {
       name: `${zone.id}-roof`,
       size: [
@@ -1138,54 +1270,186 @@ function addLadders(
   return Object.freeze(climbZones);
 }
 
-function addFocalSuperstructureDetails(
+function addWheelhouseInteriorDetails(
   root: Group,
   geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
-  layout: ShipLayoutSpec,
 ): void {
-  const deckY = FREIGHTER_DIMENSIONS.deckY;
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
-  const renderedFrontWallCenterZ = wheelhouse.maxZ - WALL_HALF_THICKNESS;
-  const renderedFrontWallOuterFaceZ = renderedFrontWallCenterZ + WALL_HALF_THICKNESS;
-  addBlock(root, geometries, [], {
-    name: 'wheelhouse-front-sill-band',
-    size: [wheelhouseWidth - 0.3, 0.09, 0.1],
-    position: [
-      (wheelhouse.minX + wheelhouse.maxX) / 2,
-      deckY + WINDOW_SILL_HEIGHT + 0.045,
-      renderedFrontWallOuterFaceZ + 0.05,
-    ],
-    material: materials.darkMetal,
-  });
-  ([
-    ['port', wheelhouse.minX + 0.2],
-    ['starboard', wheelhouse.maxX - 0.2],
-  ] as const).forEach(([side, x]) => {
-    addBlock(root, geometries, [], {
-      name: `wheelhouse-header-bracket-${side}`,
-      size: [0.24, 0.4, 0.16],
-      position: [
-        x,
-        deckY + ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT - 0.12,
-        renderedFrontWallOuterFaceZ + 0.08,
-      ],
-      material: materials.darkMetal,
-    });
-  });
-  for (let index = 0; index < 5; index += 1) {
-    addBlock(root, geometries, [], {
-      name: `wheelhouse-front-fastener-${index + 1}`,
-      size: [0.055, 0.055, 0.035],
-      position: [
-        wheelhouse.minX + 0.35 + (wheelhouseWidth - 0.7) * (index / 4),
-        deckY + WINDOW_SILL_HEIGHT + 0.12,
-        renderedFrontWallOuterFaceZ + 0.0175,
-      ],
+  const details = new Group();
+  details.name = 'wheelhouse-interior-details';
+  root.add(details);
+
+  const helm = new Group();
+  helm.name = 'captain-detail:helm-wheel';
+  helm.position.set(0, 4.12, 21.78);
+  details.add(helm);
+  const wheelGeometry = new RingGeometry(0.39, 0.48, 16);
+  geometries.add(wheelGeometry);
+  const wheel = new Mesh(wheelGeometry, materials.darkMetal);
+  wheel.name = `${helm.name}:rim`;
+  wheel.castShadow = true;
+  helm.add(wheel);
+  for (let index = 0; index < 6; index += 1) {
+    const spoke = addBlock(helm, geometries, [], {
+      name: `${helm.name}:spoke-${index + 1}`,
+      size: [0.82, 0.045, 0.045],
+      position: [0, 0, -0.006],
       material: materials.exposedMetal,
     });
+    spoke.rotation.z = index * Math.PI / 3;
   }
+  addCylinder(helm, geometries, `${helm.name}:hub`, 0.09, 0.11, [0, 0, -0.035],
+    materials.exposedMetal).rotation.x = Math.PI / 2;
+
+  const compass = new Group();
+  compass.name = 'captain-detail:compass';
+  compass.position.set(-1.28, 4.48, 21.77);
+  details.add(compass);
+  const compassGeometry = new RingGeometry(0.14, 0.22, 12);
+  geometries.add(compassGeometry);
+  const compassRim = new Mesh(compassGeometry, materials.exposedMetal);
+  compassRim.name = `${compass.name}:rim`;
+  compass.add(compassRim);
+  const needle = addBlock(compass, geometries, [], {
+    name: `${compass.name}:needle`,
+    size: [0.045, 0.27, 0.025],
+    position: [0, 0, 0.012],
+    material: materials.emergency,
+  });
+  needle.rotation.z = -0.34;
+
+  const chart = new Group();
+  chart.name = 'captain-detail:chart';
+  chart.position.set(-3.6, 4.18, 17.13);
+  chart.rotation.y = Math.PI;
+  details.add(chart);
+  const chartShape = new Shape();
+  chartShape.moveTo(-0.52, -0.34);
+  chartShape.lineTo(0.49, -0.31);
+  chartShape.lineTo(0.53, 0.35);
+  chartShape.lineTo(-0.46, 0.32);
+  chartShape.closePath();
+  const chartGeometry = new ShapeGeometry(chartShape);
+  geometries.add(chartGeometry);
+  const chartPaper = new Mesh(chartGeometry, materials.paintedPanel);
+  chartPaper.name = `${chart.name}:paper`;
+  chart.add(chartPaper);
+  [-0.2, 0.03, 0.25].forEach((x, index) => {
+    const course = addBlock(chart, geometries, [], {
+      name: `${chart.name}:course-${index + 1}`,
+      size: [0.025, 0.48 - index * 0.07, 0.012],
+      position: [x, index * 0.025, 0.012],
+      material: materials.darkMetal,
+    });
+    course.rotation.z = 0.65 + index * 0.22;
+  });
+
+  const lamp = new Group();
+  lamp.name = 'captain-detail:lamp';
+  lamp.position.set(2.72, 4.86, 20.6);
+  details.add(lamp);
+  addBlock(lamp, geometries, [], {
+    name: `${lamp.name}:hanger`,
+    size: [0.04, 0.48, 0.04],
+    position: [0, 0.24, 0],
+    material: materials.darkMetal,
+  });
+  addCylinder(lamp, geometries, `${lamp.name}:shade`, 0.22, 0.25, [0, -0.08, 0],
+    materials.emergency);
+  addCylinder(lamp, geometries, `${lamp.name}:cage`, 0.12, 0.2, [0, -0.26, 0],
+    materials.exposedMetal);
+
+  const logbook = new Group();
+  logbook.name = 'captain-detail:logbook';
+  logbook.position.set(-2.25, 4.22, 21.72);
+  logbook.rotation.z = -0.08;
+  details.add(logbook);
+  addBlock(logbook, geometries, [], {
+    name: `${logbook.name}:cover`,
+    size: [0.5, 0.34, 0.07],
+    position: [0, 0, 0],
+    material: materials.plainTimber,
+  });
+  addBlock(logbook, geometries, [], {
+    name: `${logbook.name}:pages`,
+    size: [0.44, 0.29, 0.018],
+    position: [0.02, 0, 0.044],
+    material: materials.paintedPanel,
+  });
+
+  const mug = new Group();
+  mug.name = 'captain-detail:mug';
+  mug.position.set(3.35, 4.2, 21.68);
+  details.add(mug);
+  addCylinder(mug, geometries, `${mug.name}:body`, 0.11, 0.24, [0, 0, 0],
+    materials.paintedSteel);
+  const mugHandleGeometry = new RingGeometry(0.08, 0.115, 10, 1, -Math.PI / 2, Math.PI);
+  geometries.add(mugHandleGeometry);
+  const mugHandle = new Mesh(mugHandleGeometry, materials.darkMetal);
+  mugHandle.name = `${mug.name}:handle`;
+  mugHandle.position.x = 0.13;
+  mug.add(mugHandle);
+
+  const coat = new Group();
+  coat.name = 'captain-detail:coat';
+  coat.position.set(2.45, 4.05, 17.13);
+  coat.rotation.y = Math.PI;
+  details.add(coat);
+  const coatShape = new Shape();
+  coatShape.moveTo(-0.18, 0.52);
+  coatShape.lineTo(0.2, 0.52);
+  coatShape.lineTo(0.55, 0.18);
+  coatShape.lineTo(0.34, 0.02);
+  coatShape.lineTo(0.42, -0.58);
+  coatShape.lineTo(-0.4, -0.58);
+  coatShape.lineTo(-0.31, 0.02);
+  coatShape.lineTo(-0.55, 0.18);
+  coatShape.closePath();
+  const coatGeometry = new ShapeGeometry(coatShape);
+  geometries.add(coatGeometry);
+  const coatMesh = new Mesh(coatGeometry, materials.canvas);
+  coatMesh.name = `${coat.name}:cloth`;
+  coatMesh.castShadow = true;
+  coat.add(coatMesh);
+
+  const keys = new Group();
+  keys.name = 'captain-detail:key-hooks';
+  keys.position.set(3.82, 4.22, 17.13);
+  keys.rotation.y = Math.PI;
+  details.add(keys);
+  addBlock(keys, geometries, [], {
+    name: `${keys.name}:rail`,
+    size: [0.62, 0.08, 0.06],
+    position: [0, 0.18, 0],
+    material: materials.plainTimber,
+  });
+  [-0.2, 0, 0.21].forEach((x, index) => {
+    addBlock(keys, geometries, [], {
+      name: `${keys.name}:key-${index + 1}`,
+      size: [0.035, 0.26 - index * 0.03, 0.03],
+      position: [x, 0.02, 0.04],
+      material: materials.exposedMetal,
+    });
+  });
+
+  const repairedPanel = new Group();
+  repairedPanel.name = 'captain-detail:repaired-panel';
+  repairedPanel.position.set(5.38, 4.12, 19.45);
+  details.add(repairedPanel);
+  addBlock(repairedPanel, geometries, [], {
+    name: `${repairedPanel.name}:plate`,
+    size: [0.055, 0.78, 0.92],
+    position: [0, 0, 0],
+    material: materials.plainPaintedSteel,
+  });
+  [-0.32, 0.32].forEach((y, yIndex) => [-0.4, 0.4].forEach((z, zIndex) => {
+    addBlock(repairedPanel, geometries, [], {
+      name: `${repairedPanel.name}:fastener-${yIndex}-${zIndex}`,
+      size: [0.035, 0.055, 0.055],
+      position: [-0.045, y, z],
+      material: materials.rust,
+    });
+  }));
 }
 
 function addExteriorConstructionDetails(
@@ -1531,11 +1795,12 @@ export function createShipGeometry(
   addFinishedFloors(root, geometries, materials, layout);
 
   addWallSegments(root, geometries, shellColliders, materials, layout);
+  addWheelhouseFacade(root, geometries, materials, layout);
   addPortholeDetails(root, geometries, materials, layout);
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
   addRoofBalconies(root, geometries, shellColliders, materials, layout);
   const climbZones = addLadders(root, geometries, materials, layout);
-  addFocalSuperstructureDetails(root, geometries, materials, layout);
+  addWheelhouseInteriorDetails(root, geometries, materials);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
