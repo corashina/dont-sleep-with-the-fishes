@@ -14,6 +14,7 @@ import {
   Object3D,
   Points,
   PointsMaterial,
+  PerspectiveCamera,
   Quaternion,
   Scene,
   ShaderMaterial,
@@ -27,6 +28,7 @@ import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
+import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
@@ -53,6 +55,9 @@ import {
 } from './helpers/propModels';
 import { createTestMoonTexture } from './helpers/skyAssets';
 import { createTestShip, createTestShipFurniture } from './helpers/shipFurniture';
+import { testPhysicsRuntime } from './helpers/physics';
+
+const physicsRuntime = await testPhysicsRuntime();
 
 const meshCount = (root: Object3D): number => {
   let count = 0;
@@ -116,10 +121,20 @@ const createTestWorld = (
   moonTexture = createTestMoonTexture(),
   instances: readonly ItemInstance[] = createItemInstances(),
   random: () => number = Math.random,
+  runtime = physicsRuntime,
 ): World => {
   const furniture = createTestShipFurniture();
   try {
-    const world = new World(scene, propModels, furniture, 1, moonTexture, instances, random);
+    const world = new World(
+      scene,
+      propModels,
+      furniture,
+      1,
+      moonTexture,
+      runtime,
+      instances,
+      random,
+    );
     const disposeWorld = world.dispose.bind(world);
     world.dispose = () => {
       disposeWorld();
@@ -133,6 +148,43 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('adds one separate physics barrel and preserves both static barrels', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      Math.random,
+      physicsRuntime,
+    );
+
+    expect(world.physicsBarrel.name).toBe('physics-test-barrel');
+    expect(world.physicsBarrel.parent).toBe(scene);
+    expect(world.ship.getObjectByName('detail:barrel-1')).toBeDefined();
+    expect(world.ship.getObjectByName('detail:barrel-2')).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('advances and synchronizes the physics barrel only when enabled', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const camera = new PerspectiveCamera();
+    const before = world.physicsBarrel.position.clone();
+
+    world.update(1, 1 / 60, getSinkingState(30, 120), camera.position, false);
+    expect(world.physicsBarrel.position).toEqual(before);
+    world.update(1 + 1 / 60, 1 / 60, getSinkingState(30, 120), camera.position, true);
+    expect(world.physicsBarrel.position.toArray().every(Number.isFinite)).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps ship material textures deterministic and disposes owned resources once', () => {
     const materials = createShipMaterials(0x1a2b3c);
     const duplicate = createShipMaterials(0x1a2b3c);
@@ -248,7 +300,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it.each(['lifeboat', 'ocean', 'environment', 'buoyancy'] as const)(
+  it.each(['physics', 'lifeboat', 'ocean', 'environment', 'buoyancy'] as const)(
     'rolls back every owned resource when construction fails after %s creation',
     (failureStage) => {
       const scene = new Scene();
@@ -268,14 +320,22 @@ describe('world builders', () => {
       let observed: Map<BufferGeometry | Material, number> | undefined;
       let constructed: World | undefined;
       let caught: unknown;
+      const originalPhysicsDispose = ScavengePhysics.prototype.dispose;
+      const physicsDispose = vi.spyOn(ScavengePhysics.prototype, 'dispose')
+        .mockImplementation(function trackedDispose(this: ScavengePhysics) {
+          originalPhysicsDispose.call(this);
+        });
 
       try {
         constructed = Reflect.construct(World, [
-          scene, propModels, furniture, 1, moonTexture, [], () => 0.4,
+          scene, propModels, furniture, 1, moonTexture, physicsRuntime, [], () => 0.4,
           {
             checkpoint: (stage: typeof failureStage) => {
               if (stage !== failureStage) return;
               const resources = new Set<BufferGeometry | Material>();
+              if (failureStage === 'physics') {
+                resources.add((scene.getObjectByName('sail:mainsail') as Mesh).geometry);
+              }
               ['lifeboat', 'procedural-ocean', 'procedural-skybox']
                 .forEach((name) => {
                   const object = scene.getObjectByName(name);
@@ -304,7 +364,9 @@ describe('world builders', () => {
         expect(propDispose).not.toHaveBeenCalled();
         expect(furnitureDispose).not.toHaveBeenCalled();
         expect(moonDispose).not.toHaveBeenCalled();
+        expect(physicsDispose).toHaveBeenCalledOnce();
       } finally {
+        physicsDispose.mockRestore();
         furniture.dispose();
         propModels.dispose();
         moonTexture.dispose();
@@ -342,7 +404,7 @@ describe('world builders', () => {
     try {
       try {
         constructed = Reflect.construct(World, [
-          scene, propModels, furniture, 1, moonTexture, [], () => 0.4,
+          scene, propModels, furniture, 1, moonTexture, physicsRuntime, [], () => 0.4,
           { checkpoint: (stage: string) => { if (stage === 'environment') throw failure; } },
         ]);
       } catch (error) {
@@ -411,6 +473,7 @@ describe('world builders', () => {
           furniture,
           1,
           moonTexture,
+          physicsRuntime,
           [flareGun],
           () => 0.4,
           {
@@ -468,6 +531,8 @@ describe('world builders', () => {
     const moonTexture = createTestMoonTexture();
     const moonTextureDispose = vi.spyOn(moonTexture, 'dispose');
     const world = createTestWorld(scene, propModels, moonTexture);
+    const internals = world as unknown as { scavengePhysics: ScavengePhysics };
+    const physicsDispose = vi.spyOn(internals.scavengePhysics, 'dispose');
     const ocean = scene.getObjectByName('procedural-ocean') as Mesh;
     const sky = scene.getObjectByName('procedural-skybox') as Mesh;
     const skyGeometryDispose = vi.spyOn(sky.geometry, 'dispose');
@@ -527,6 +592,7 @@ describe('world builders', () => {
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
     expect(world.itemObjects.get('cannedFood-1')!.parent).toBe(world.ship);
+    expect(world.physicsBarrel.parent).toBe(scene);
     for (let call = 0; call < disposeCalls; call += 1) world.dispose();
 
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
@@ -535,6 +601,9 @@ describe('world builders', () => {
     expect(scene.getObjectByName('rain')).toBeUndefined();
     expect(scene.getObjectByName('procedural-skybox')).toBeUndefined();
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
+    expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
+    expect(world.physicsBarrel.parent).toBeNull();
+    expect(physicsDispose).toHaveBeenCalledOnce();
     expect(skyGeometryDispose).toHaveBeenCalledOnce();
     expect(skyMaterialDispose).toHaveBeenCalledOnce();
     expect(moonTextureDispose).not.toHaveBeenCalled();
@@ -557,6 +626,7 @@ describe('world builders', () => {
       furniture,
       1,
       createTestMoonTexture(),
+      physicsRuntime,
       [createItemInstances()[0]!],
     );
     const propResources = collectRenderResources(world.itemObjects.values().next().value!);
@@ -603,6 +673,7 @@ describe('world builders', () => {
       furniture,
       1,
       createTestMoonTexture(),
+      physicsRuntime,
       [createItemInstances()[0]!],
     );
     const internals = world as unknown as {

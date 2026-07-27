@@ -87,6 +87,7 @@ export class ScavengePhase implements GamePhase {
       context.shipFurniture,
       context.maxTextureAnisotropy,
       context.skyAssets.moonTexture,
+      context.physicsRuntime,
       instances,
       Math.random,
       {},
@@ -144,11 +145,14 @@ export class ScavengePhase implements GamePhase {
     let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
     this.syncVisualState(sinking);
     const updateWorld = (worldDelta: number): void => {
+      const simulatePhysics = active
+        && this.session.snapshot().status === 'running';
       this.world.update(
         this.worldTime,
         worldDelta,
         sinking,
         this.context.camera.position,
+        simulatePhysics,
       );
     };
     const synchronizeElapsed = (): boolean => {

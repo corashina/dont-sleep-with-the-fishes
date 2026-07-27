@@ -101,6 +101,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.objectContaining({ progress: 0 }),
       camera.position,
+      false,
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
@@ -175,6 +176,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
+      true,
     );
 
     input.pointerLocked = false;
@@ -184,6 +186,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
+      false,
     );
   });
 
