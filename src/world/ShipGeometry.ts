@@ -31,6 +31,7 @@ import {
 import type {
   ShipBalconySpec,
   ShipDoorSpec,
+  ShipFurniturePlacementSpec,
   ShipLadderSpec,
   ShipLayoutSpec,
   ShipTransverseEdge,
@@ -99,6 +100,8 @@ const WHEELHOUSE_CHAMFER_WIDTH = 1.3;
 const WHEELHOUSE_TAPER_ANGLE = Math.PI / 90;
 const WHEELHOUSE_ROOF_OVERHANG = 0.28;
 const WHEELHOUSE_FRAME_WIDTH = 0.18;
+const WHEELHOUSE_PROFILE_HEIGHT = 0.07;
+const WHEELHOUSE_PROFILE_DEPTH = 0.05;
 const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
 const PORTHOLE_GLASS_RADIUS = 0.46;
@@ -804,6 +807,26 @@ function addWheelhousePane(
     material: materials.paintedPanel,
   });
   addBlock(pane, geometries, [], {
+    name: `${pane.name}:sill-cap`,
+    size: [openingWidth, WHEELHOUSE_PROFILE_HEIGHT, WHEELHOUSE_PROFILE_DEPTH],
+    position: [
+      0,
+      WINDOW_SILL_HEIGHT - WHEELHOUSE_PROFILE_HEIGHT / 2,
+      -WALL_THICKNESS - WHEELHOUSE_PROFILE_DEPTH / 2,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
+    name: `${pane.name}:header-trim`,
+    size: [openingWidth, WHEELHOUSE_PROFILE_HEIGHT, WHEELHOUSE_PROFILE_DEPTH],
+    position: [
+      0,
+      ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT + WHEELHOUSE_PROFILE_HEIGHT / 2,
+      -WALL_THICKNESS - WHEELHOUSE_PROFILE_DEPTH / 2,
+    ],
+    material: materials.darkMetal,
+  });
+  addBlock(pane, geometries, [], {
     name: `${pane.name}:frame-start`,
     size: [WHEELHOUSE_FRAME_WIDTH, windowHeight, WALL_THICKNESS],
     position: [
@@ -919,19 +942,19 @@ function addRoomRoofs(
       );
       shape.lineTo(
         zone.bounds.maxX + WHEELHOUSE_ROOF_OVERHANG,
-        frontSideZ + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+        frontSideZ + diagonalInset,
       );
       shape.lineTo(
-        frontCenterMaxX + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+        frontCenterMaxX + diagonalInset,
         zone.bounds.maxZ + WHEELHOUSE_ROOF_OVERHANG,
       );
       shape.lineTo(
-        frontCenterMinX - WHEELHOUSE_ROOF_OVERHANG + diagonalInset,
+        frontCenterMinX - diagonalInset,
         zone.bounds.maxZ + WHEELHOUSE_ROOF_OVERHANG,
       );
       shape.lineTo(
         zone.bounds.minX - WHEELHOUSE_ROOF_OVERHANG,
-        frontSideZ + WHEELHOUSE_ROOF_OVERHANG - diagonalInset,
+        frontSideZ + diagonalInset,
       );
       shape.closePath();
       const geometry = new ExtrudeGeometry(shape, {
@@ -1270,18 +1293,71 @@ function addLadders(
   return Object.freeze(climbZones);
 }
 
+function requiredFurniture(
+  layout: ShipLayoutSpec,
+  id: string,
+): ShipFurniturePlacementSpec {
+  const furniture = layout.furniture.find((candidate) => candidate.id === id);
+  if (!furniture) throw new Error(`Ship geometry requires furniture ${id}`);
+  return furniture;
+}
+
+function furnitureLocalPoint(
+  furniture: ShipFurniturePlacementSpec,
+  localX: number,
+  localZ: number,
+): readonly [number, number] {
+  const scaledX = localX * furniture.scale[0];
+  const scaledZ = localZ * furniture.scale[2];
+  const cosine = Math.cos(furniture.rotationY);
+  const sine = Math.sin(furniture.rotationY);
+  return [
+    furniture.position[0] + scaledX * cosine + scaledZ * sine,
+    furniture.position[2] - scaledX * sine + scaledZ * cosine,
+  ];
+}
+
 function addWheelhouseInteriorDetails(
   root: Group,
   geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
+  layout: ShipLayoutSpec,
 ): void {
+  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
+  const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
+  const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
+  const centerZ = (wheelhouse.minZ + wheelhouse.maxZ) / 2;
+  const interiorFrontZ = wheelhouse.maxZ - WALL_THICKNESS - 0.015;
+  const interiorAftZ = wheelhouse.minZ + WALL_THICKNESS + 0.015;
+  const interiorStarboardX = wheelhouse.maxX - WALL_THICKNESS - 0.015;
+  const deckY = FREIGHTER_DIMENSIONS.deckY;
+  const helmDesk = requiredFurniture(layout, 'helm-desk-forward');
+  const helmSurfaceMaxZ = Math.max(...helmDesk.surfaces.map((surface) =>
+    surface.localPosition[2] + surface.footprint.depth / 2));
+  const helmSupportHalfDepth = helmDesk.colliderSize[2] / 2;
+  const logbookLocalZ = helmSurfaceMaxZ + 0.075;
+  const mugLocalZ = helmSurfaceMaxZ + 0.07;
+  if (logbookLocalZ + 0.065 > helmSupportHalfDepth
+    || mugLocalZ + 0.055 > helmSupportHalfDepth) {
+    throw new Error('Helm desk has no non-searchable rear support for captain details');
+  }
+  const logbookLocalX = helmDesk.surfaces[0]?.localPosition[0] ?? -0.25;
+  const mugLocalX = helmDesk.surfaces.at(-1)?.localPosition[0] ?? 0.25;
+  const [logbookX, logbookZ] = furnitureLocalPoint(
+    helmDesk,
+    logbookLocalX,
+    logbookLocalZ,
+  );
+  const [mugX, mugZ] = furnitureLocalPoint(helmDesk, mugLocalX, mugLocalZ);
+  const helmSupportTop = helmDesk.position[1] + helmDesk.colliderSize[1] * helmDesk.scale[1];
+
   const details = new Group();
   details.name = 'wheelhouse-interior-details';
   root.add(details);
 
   const helm = new Group();
   helm.name = 'captain-detail:helm-wheel';
-  helm.position.set(0, 4.12, 21.78);
+  helm.position.set(centerX, deckY + 1.9, interiorFrontZ);
   details.add(helm);
   const wheelGeometry = new RingGeometry(0.39, 0.48, 16);
   geometries.add(wheelGeometry);
@@ -1303,7 +1379,7 @@ function addWheelhouseInteriorDetails(
 
   const compass = new Group();
   compass.name = 'captain-detail:compass';
-  compass.position.set(-1.28, 4.48, 21.77);
+  compass.position.set(centerX - wheelhouseWidth * 0.116, deckY + 2.26, interiorFrontZ);
   details.add(compass);
   const compassGeometry = new RingGeometry(0.14, 0.22, 12);
   geometries.add(compassGeometry);
@@ -1320,7 +1396,7 @@ function addWheelhouseInteriorDetails(
 
   const chart = new Group();
   chart.name = 'captain-detail:chart';
-  chart.position.set(-3.6, 4.18, 17.13);
+  chart.position.set(wheelhouse.minX + wheelhouseWidth * 0.173, deckY + 1.96, interiorAftZ);
   chart.rotation.y = Math.PI;
   details.add(chart);
   const chartShape = new Shape();
@@ -1346,7 +1422,11 @@ function addWheelhouseInteriorDetails(
 
   const lamp = new Group();
   lamp.name = 'captain-detail:lamp';
-  lamp.position.set(2.72, 4.86, 20.6);
+  lamp.position.set(
+    centerX + wheelhouseWidth * 0.247,
+    deckY + ROOM_WALL_HEIGHT - 0.76,
+    centerZ + (wheelhouse.maxZ - wheelhouse.minZ) * 0.22,
+  );
   details.add(lamp);
   addBlock(lamp, geometries, [], {
     name: `${lamp.name}:hanger`,
@@ -1361,38 +1441,43 @@ function addWheelhouseInteriorDetails(
 
   const logbook = new Group();
   logbook.name = 'captain-detail:logbook';
-  logbook.position.set(-2.25, 4.22, 21.72);
-  logbook.rotation.z = -0.08;
+  logbook.position.set(logbookX, helmSupportTop + 0.025, logbookZ);
+  logbook.rotation.y = helmDesk.rotationY - 0.08;
   details.add(logbook);
   addBlock(logbook, geometries, [], {
     name: `${logbook.name}:cover`,
-    size: [0.5, 0.34, 0.07],
+    size: [0.28, 0.05, 0.1],
     position: [0, 0, 0],
     material: materials.plainTimber,
   });
   addBlock(logbook, geometries, [], {
     name: `${logbook.name}:pages`,
-    size: [0.44, 0.29, 0.018],
-    position: [0.02, 0, 0.044],
+    size: [0.24, 0.018, 0.08],
+    position: [0.01, 0.034, 0],
     material: materials.paintedPanel,
   });
 
   const mug = new Group();
   mug.name = 'captain-detail:mug';
-  mug.position.set(3.35, 4.2, 21.68);
+  mug.position.set(mugX, helmSupportTop + 0.12, mugZ);
+  mug.rotation.y = helmDesk.rotationY;
   details.add(mug);
-  addCylinder(mug, geometries, `${mug.name}:body`, 0.11, 0.24, [0, 0, 0],
+  addCylinder(mug, geometries, `${mug.name}:body`, 0.055, 0.24, [0, 0, 0],
     materials.paintedSteel);
-  const mugHandleGeometry = new RingGeometry(0.08, 0.115, 10, 1, -Math.PI / 2, Math.PI);
+  const mugHandleGeometry = new RingGeometry(0.027, 0.045, 10, 1, -Math.PI / 2, Math.PI);
   geometries.add(mugHandleGeometry);
   const mugHandle = new Mesh(mugHandleGeometry, materials.darkMetal);
   mugHandle.name = `${mug.name}:handle`;
-  mugHandle.position.x = 0.13;
+  mugHandle.position.x = 0.06;
   mug.add(mugHandle);
 
   const coat = new Group();
   coat.name = 'captain-detail:coat';
-  coat.position.set(2.45, 4.05, 17.13);
+  coat.position.set(
+    centerX + wheelhouseWidth * 0.223,
+    deckY + 1.83,
+    interiorAftZ,
+  );
   coat.rotation.y = Math.PI;
   details.add(coat);
   const coatShape = new Shape();
@@ -1414,7 +1499,11 @@ function addWheelhouseInteriorDetails(
 
   const keys = new Group();
   keys.name = 'captain-detail:key-hooks';
-  keys.position.set(3.82, 4.22, 17.13);
+  keys.position.set(
+    centerX + wheelhouseWidth * 0.347,
+    deckY + 2,
+    interiorAftZ,
+  );
   keys.rotation.y = Math.PI;
   details.add(keys);
   addBlock(keys, geometries, [], {
@@ -1434,7 +1523,11 @@ function addWheelhouseInteriorDetails(
 
   const repairedPanel = new Group();
   repairedPanel.name = 'captain-detail:repaired-panel';
-  repairedPanel.position.set(5.38, 4.12, 19.45);
+  repairedPanel.position.set(
+    interiorStarboardX,
+    deckY + 1.9,
+    centerZ - (wheelhouse.maxZ - wheelhouse.minZ) * 0.01,
+  );
   details.add(repairedPanel);
   addBlock(repairedPanel, geometries, [], {
     name: `${repairedPanel.name}:plate`,
@@ -1800,7 +1893,7 @@ export function createShipGeometry(
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
   addRoofBalconies(root, geometries, shellColliders, materials, layout);
   const climbZones = addLadders(root, geometries, materials, layout);
-  addWheelhouseInteriorDetails(root, geometries, materials);
+  addWheelhouseInteriorDetails(root, geometries, materials, layout);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);
 
   const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
