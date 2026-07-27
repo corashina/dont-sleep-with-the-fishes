@@ -179,6 +179,16 @@ describe('post-processing pipeline', () => {
     expect(PrintShader.fragmentShader).not.toContain('uChromaticAberration');
   });
 
+  it('passes the safe scavenge posterization and shadow-detail bounds to the shader', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    pipeline.render(new Scene(), new PerspectiveCamera(), {
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
+    });
+    const uniforms = postProcessingMocks.printPasses[0]!.uniforms!;
+    expect(uniforms.uPosterizationLevels?.value).toBe(48);
+    expect(uniforms.uShadowLift?.value).toBe(0.02);
+  });
+
   it('keeps grade and outline when AO construction fails', () => {
     const failure = new Error('ao unavailable');
     const reportAoFallback = vi.fn();

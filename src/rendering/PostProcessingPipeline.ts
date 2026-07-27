@@ -278,7 +278,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     uniforms.uShadowTintStrength.value = clampPostProcessingValue(profile.shadowTintStrength, 0, 0.25, 0);
     uniforms.uHighlightTint.value.setHex(clampPostProcessingValue(profile.highlightTint, 0, 0xffffff, 0xd8aa6d));
     uniforms.uHighlightTintStrength.value = clampPostProcessingValue(profile.highlightTintStrength, 0, 0.25, 0);
-    uniforms.uPosterizationLevels.value = clampPostProcessingValue(profile.posterizationLevels, 4, 16, 12);
+    uniforms.uPosterizationLevels.value = clampPostProcessingValue(profile.posterizationLevels, 32, 48, 40);
     uniforms.uInkFrameStrength.value = clampPostProcessingValue(profile.inkFrameStrength, 0, 0.95, 0);
     uniforms.uHalftoneStrength.value = clampPostProcessingValue(profile.halftoneStrength, 0, 0.15, 0);
     uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(profile.halftoneSizeCssPixels, 3, 8, 5);
