@@ -132,8 +132,8 @@ vi.mock('three/addons/postprocessing/OutlinePass.js', () => ({
 }));
 
 vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
-  ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY: 0.65,
-  ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS: 0.24,
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY: 1,
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS: 0.5,
   ItemAmbientOcclusionPass: class {
     enabled = true;
     readonly setContext = vi.fn();

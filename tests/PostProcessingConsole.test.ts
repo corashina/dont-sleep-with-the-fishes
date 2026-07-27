@@ -11,8 +11,8 @@ function state(): PostProcessingControlState {
   return {
     ambientOcclusionAvailable: true,
     ambientOcclusionMode: 'composite',
-    ambientOcclusionIntensity: 0.65,
-    ambientOcclusionRadius: 0.24,
+    ambientOcclusionIntensity: 1,
+    ambientOcclusionRadius: 0.5,
   };
 }
 
