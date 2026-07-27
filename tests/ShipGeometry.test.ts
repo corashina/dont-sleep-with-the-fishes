@@ -126,7 +126,9 @@ describe('freighter geometry', () => {  interface PointXZ {
     build.root.traverse((object) => {
       if (!(object instanceof Mesh)
         || !/(wall|sill|header|pillar|window|door-side)/.test(object.name)) return;
-      if (new Box3().setFromObject(object).containsPoint(point)) blockers.push(object.name);
+      if (new Box3().setFromObject(object).expandByScalar(1e-7).containsPoint(point)) {
+        blockers.push(object.name);
+      }
     });
     return blockers;
   };
@@ -139,6 +141,13 @@ describe('freighter geometry', () => {  interface PointXZ {
   const doorPoint = (door: ShipDoorSpec, axis: number): Vector3 => door.orientation === 'side'
     ? new Vector3(door.center[0], playerY, axis)
     : new Vector3(axis, playerY, door.center[1]);
+
+  const renderedWallPoint = (door: ShipDoorSpec, axis: number): Vector3 => {
+    const point = doorPoint(door, axis);
+    if (door.orientation === 'aft') point.z += 0.11;
+    else point.x += door.side === 'port' ? 0.11 : -0.11;
+    return point;
+  };
 
   const railColliderAt = (
     build: ReturnType<typeof createShipGeometry>,
@@ -211,6 +220,41 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('renders the passage-facing walls inside the approved room bounds', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+      const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+      const passageWalls = [
+        {
+          prefix: 'crew-cabin-wall-forward-',
+          expectedBoundary: crew.maxZ,
+          boundary: 'max',
+        },
+        {
+          prefix: 'wheelhouse-wall-aft-',
+          expectedBoundary: wheelhouse.minZ,
+          boundary: 'min',
+        },
+      ] as const;
+
+      passageWalls.forEach(({ prefix, expectedBoundary, boundary }) => {
+        const walls = build.root.children.filter((object): object is Mesh =>
+          object instanceof Mesh && object.name.startsWith(prefix));
+        expect(walls.length, prefix).toBeGreaterThan(0);
+        const bounds = walls.reduce(
+          (combined, wall) => combined.union(new Box3().setFromObject(wall)),
+          new Box3(),
+        );
+        expect(bounds[boundary].z, prefix).toBeCloseTo(expectedBoundary);
+      });
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('adds authored exterior construction details', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
@@ -262,14 +306,14 @@ describe('freighter geometry', () => {  interface PointXZ {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const expected = [
-      { zoneId: 'crewCabin', edge: 'aft', index: 1, x: -2.2, z: 4.5 },
-      { zoneId: 'crewCabin', edge: 'aft', index: 2, x: 2.2, z: 4.5 },
-      { zoneId: 'crewCabin', edge: 'forward', index: 1, x: -2.2, z: 13.5 },
-      { zoneId: 'crewCabin', edge: 'forward', index: 2, x: 2.2, z: 13.5 },
-      { zoneId: 'storageWorkroom', edge: 'aft', index: 1, x: -2.2, z: -17.4 },
-      { zoneId: 'storageWorkroom', edge: 'aft', index: 2, x: 2.2, z: -17.4 },
-      { zoneId: 'storageWorkroom', edge: 'forward', index: 1, x: -2.2, z: -10.65 },
-      { zoneId: 'storageWorkroom', edge: 'forward', index: 2, x: 2.2, z: -10.65 },
+      { zoneId: 'crewCabin', edge: 'aft', index: 1, x: -2.2, z: 4.61 },
+      { zoneId: 'crewCabin', edge: 'aft', index: 2, x: 2.2, z: 4.61 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 1, x: -2.2, z: 13.39 },
+      { zoneId: 'crewCabin', edge: 'forward', index: 2, x: 2.2, z: 13.39 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 1, x: -2.2, z: -17.29 },
+      { zoneId: 'storageWorkroom', edge: 'aft', index: 2, x: 2.2, z: -17.29 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 1, x: -2.2, z: -10.76 },
+      { zoneId: 'storageWorkroom', edge: 'forward', index: 2, x: 2.2, z: -10.76 },
     ] as const;
 
     expected.forEach(({ zoneId, edge, index, x, z }) => {
@@ -330,7 +374,10 @@ describe('freighter geometry', () => {  interface PointXZ {
       .forEach((axis) => {
         const point = doorPoint(door, axis);
         expect(pointInCollider(build, point), `${door.id} jamb collider at ${axis}`).toBe(true);
-        expect(wallRenderBlockers(build, point).length, `${door.id} jamb render at ${axis}`)
+        expect(
+          wallRenderBlockers(build, renderedWallPoint(door, axis)).length,
+          `${door.id} jamb render at ${axis}`,
+        )
           .toBeGreaterThan(0);
       });
 
