@@ -174,12 +174,37 @@ describe('world builders', () => {
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
     const camera = new PerspectiveCamera();
+    const physics = (world as unknown as {
+      scavengePhysics: ScavengePhysics;
+    }).scavengePhysics;
     const before = world.physicsBarrel.position.clone();
+    const beforePhysics = {
+      translation: { ...physics.barrelPose.translation },
+      rotation: { ...physics.barrelPose.rotation },
+    };
 
     world.update(1, 1 / 60, getSinkingState(30, 120), camera.position, false);
     expect(world.physicsBarrel.position).toEqual(before);
-    world.update(1 + 1 / 60, 1 / 60, getSinkingState(30, 120), camera.position, true);
-    expect(world.physicsBarrel.position.toArray().every(Number.isFinite)).toBe(true);
+    expect(physics.barrelPose).toEqual(beforePhysics);
+
+    for (let step = 1; step <= 30; step += 1) {
+      world.update(
+        1 + step / 60,
+        1 / 60,
+        getSinkingState(30, 120),
+        camera.position,
+        true,
+      );
+    }
+
+    expect(world.physicsBarrel.position.distanceTo(before)).toBeGreaterThan(1e-3);
+    expect(world.physicsBarrel.position.x).toBeCloseTo(physics.barrelPose.translation.x, 10);
+    expect(world.physicsBarrel.position.y).toBeCloseTo(physics.barrelPose.translation.y, 10);
+    expect(world.physicsBarrel.position.z).toBeCloseTo(physics.barrelPose.translation.z, 10);
+    expect(world.physicsBarrel.quaternion.x).toBeCloseTo(physics.barrelPose.rotation.x, 10);
+    expect(world.physicsBarrel.quaternion.y).toBeCloseTo(physics.barrelPose.rotation.y, 10);
+    expect(world.physicsBarrel.quaternion.z).toBeCloseTo(physics.barrelPose.rotation.z, 10);
+    expect(world.physicsBarrel.quaternion.w).toBeCloseTo(physics.barrelPose.rotation.w, 10);
 
     world.dispose();
     propModels.dispose();
@@ -461,6 +486,12 @@ describe('world builders', () => {
         order.push('ocean');
         originalOceanDispose.call(this);
       });
+    const originalPhysicsDispose = ScavengePhysics.prototype.dispose;
+    const physicsDispose = vi.spyOn(ScavengePhysics.prototype, 'dispose')
+      .mockImplementation(function orderedDispose(this: ScavengePhysics) {
+        order.push('physics');
+        originalPhysicsDispose.call(this);
+      });
     const failure = new Error('buoyancy checkpoint failure');
     const flareGun = createItemInstances().find(({ type }) => type === 'flareGun')!;
     let caught: unknown;
@@ -487,6 +518,10 @@ describe('world builders', () => {
               mark('ship', shipResources.geometries.values().next().value!);
               mark('prop', propResources.geometries.values().next().value!);
               mark('lifeboat', lifeboatResources.geometries.values().next().value!);
+              scene.getObjectByName('physics-test-barrel')!.addEventListener(
+                'removed',
+                () => order.push('barrel'),
+              );
               throw failure;
             },
           },
@@ -497,15 +532,18 @@ describe('world builders', () => {
 
       expect(caught).toBe(failure);
       expect(order).toEqual(expect.arrayContaining([
-        'environment', 'ocean', 'lifeboat', 'prop', 'ship',
+        'environment', 'ocean', 'lifeboat', 'prop', 'physics', 'barrel', 'ship',
       ]));
       expect(order.indexOf('environment')).toBeLessThan(order.indexOf('ocean'));
       expect(order.indexOf('ocean')).toBeLessThan(order.indexOf('lifeboat'));
       expect(order.indexOf('lifeboat')).toBeLessThan(order.indexOf('prop'));
-      expect(order.indexOf('prop')).toBeLessThan(order.indexOf('ship'));
+      expect(order.indexOf('prop')).toBeLessThan(order.indexOf('physics'));
+      expect(order.indexOf('physics')).toBeLessThan(order.indexOf('barrel'));
+      expect(order.indexOf('barrel')).toBeLessThan(order.indexOf('ship'));
       counts.forEach((count) => expect(count).toBe(1));
       expect(environmentDispose).toHaveBeenCalledTimes(1);
       expect(oceanDispose).toHaveBeenCalledTimes(1);
+      expect(physicsDispose).toHaveBeenCalledTimes(1);
       expect(scene.children).toEqual([sentinel]);
       expect(scene.background).toBe(originalBackground);
       expect(scene.fog).toBe(originalFog);
@@ -515,6 +553,72 @@ describe('world builders', () => {
     } finally {
       environmentDispose.mockRestore();
       oceanDispose.mockRestore();
+      physicsDispose.mockRestore();
+      furniture.dispose();
+      propModels.dispose();
+      moonTexture.dispose();
+    }
+  });
+
+  it('continues constructor rollback when physics disposal throws', () => {
+    const scene = new Scene();
+    const sentinel = new Object3D();
+    scene.add(sentinel);
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const moonTexture = createTestMoonTexture();
+    const constructionFailure = new Error('physics checkpoint failure');
+    const disposalFailure = new Error('physics disposal failure');
+    const calls: string[] = [];
+    const originalPhysicsDispose = ScavengePhysics.prototype.dispose;
+    const physicsDispose = vi.spyOn(ScavengePhysics.prototype, 'dispose')
+      .mockImplementation(function disposeThenThrow(this: ScavengePhysics) {
+        calls.push('physics');
+        originalPhysicsDispose.call(this);
+        throw disposalFailure;
+      });
+    let caught: unknown;
+
+    try {
+      try {
+        Reflect.construct(World, [
+          scene,
+          propModels,
+          furniture,
+          1,
+          moonTexture,
+          physicsRuntime,
+          [],
+          () => 0.4,
+          {
+            checkpoint: (stage: string) => {
+              if (stage !== 'physics') return;
+              scene.getObjectByName('physics-test-barrel')!.addEventListener(
+                'removed',
+                () => calls.push('barrel'),
+              );
+              const ship = scene.getObjectByName('sinking-ship')!;
+              ship.addEventListener('removed', () => calls.push('ship-remove'));
+              (ship.getObjectByName('sail:mainsail') as Mesh).geometry.addEventListener(
+                'dispose',
+                () => calls.push('ship-dispose'),
+              );
+              throw constructionFailure;
+            },
+          },
+        ]);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBe(constructionFailure);
+      expect(calls).toEqual(['physics', 'barrel', 'ship-remove', 'ship-dispose']);
+      expect(scene.children).toEqual([sentinel]);
+      expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
+      expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
+      expect(physicsDispose).toHaveBeenCalledOnce();
+    } finally {
+      physicsDispose.mockRestore();
       furniture.dispose();
       propModels.dispose();
       moonTexture.dispose();
