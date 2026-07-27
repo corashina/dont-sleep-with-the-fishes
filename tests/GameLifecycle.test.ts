@@ -160,6 +160,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const input = { pointerLocked: true, consumeLook: vi.fn() };
     const tick = vi.fn();
     const updatePlayer = vi.fn();
+    const updatePassivePlayer = vi.fn();
     const updateFlight = vi.fn();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
@@ -173,7 +174,7 @@ describe('ScavengePhase lifecycle integration', () => {
       },
       input,
       world: { update: updateWorld },
-      player: { update: updatePlayer },
+      player: { update: updatePlayer, updatePassive: updatePassivePlayer },
       ui: { render: vi.fn(), setPrompt: vi.fn() },
       visualState: {
         kind: 'scavenge',
@@ -220,6 +221,7 @@ describe('ScavengePhase lifecycle integration', () => {
     );
     expect(tick).toHaveBeenCalledWith(0.25);
     expect(updatePlayer).not.toHaveBeenCalled();
+    expect(updatePassivePlayer).toHaveBeenCalledWith(0.25, expect.any(Number));
     expect(updateFlight).toHaveBeenCalledOnce();
     expect(input.consumeLook).toHaveBeenCalled();
   });
