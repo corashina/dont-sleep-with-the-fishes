@@ -41,6 +41,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   activeUIs.splice(0).forEach((ui) => ui.dispose());
   document.body.innerHTML = '';
 });
@@ -547,6 +548,61 @@ describe('SurvivalUI', () => {
     await pendingAtDispose;
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2\.5s/s);
     expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
+  });
+
+  it('keeps a covered scene pending for two browser frames', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const cancelFrame = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', requestFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    let settled = false;
+
+    const pending = ui.settleCoveredScene();
+    void pending.then(() => { settled = true; });
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+
+    callbacks.shift()!(16);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(requestFrame).toHaveBeenCalledTimes(2);
+
+    callbacks.shift()!(32);
+    await pending;
+    expect(settled).toBe(true);
+    expect(cancelFrame).not.toHaveBeenCalled();
+  });
+
+  it('settles superseded and disposed covered-scene waits without stale frames', async () => {
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextHandle = 1;
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      const handle = nextHandle++;
+      callbacks.set(handle, callback);
+      return handle;
+    });
+    const cancelFrame = vi.fn((handle: number) => { callbacks.delete(handle); });
+    vi.stubGlobal('requestAnimationFrame', requestFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    const first = ui.settleCoveredScene();
+    const second = ui.settleCoveredScene();
+    await first;
+    expect(cancelFrame).toHaveBeenCalledWith(1);
+
+    ui.dispose();
+    await second;
+    expect(cancelFrame).toHaveBeenCalledWith(2);
+    expect(callbacks.size).toBe(0);
   });
 
   it('publishes first and repeated identical outcomes as fresh live mutations', async () => {

@@ -307,6 +307,7 @@ export class SurvivalUI {
   private pendingSleepTransition: PendingFade | null = null;
   private pendingEventChoiceBeat: PendingFade | null = null;
   private pendingEventOutcomeHold: PendingFade | null = null;
+  private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
@@ -679,6 +680,36 @@ export class SurvivalUI {
     });
   }
 
+  settleCoveredScene(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingCoveredSceneSettle?.finish();
+    return new Promise((resolve) => {
+      let settled = false;
+      let frame = 0;
+      let completedFrames = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (frame !== 0) window.cancelAnimationFrame(frame);
+        if (this.pendingCoveredSceneSettle?.finish === finish) {
+          this.pendingCoveredSceneSettle = null;
+        }
+        resolve();
+      };
+      const advance = (): void => {
+        frame = 0;
+        completedFrames += 1;
+        if (completedFrames >= 2) {
+          finish();
+          return;
+        }
+        frame = window.requestAnimationFrame(advance);
+      };
+      frame = window.requestAnimationFrame(advance);
+      this.pendingCoveredSceneSettle = { finish };
+    });
+  }
+
   setFishingState(state: FishingUiState): void {
     if (this.disposed) return;
     const previousMode = this.fishingMode;
@@ -893,6 +924,7 @@ export class SurvivalUI {
     this.pendingFishingFade?.finish();
     this.pendingEventChoiceBeat?.finish();
     this.pendingEventOutcomeHold?.finish();
+    this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
