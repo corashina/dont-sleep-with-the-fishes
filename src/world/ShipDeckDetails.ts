@@ -8,6 +8,7 @@ import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 export interface ShipDeckDetailsBuild {
   readonly root: Group;
   readonly colliders: CollisionBox[];
+  readonly colliderById: ReadonlyMap<string, CollisionBox>;
   disposeGeometry(): void;
 }
 
@@ -47,6 +48,7 @@ export function createShipDeckDetails(
   const root = new Group();
   root.name = 'ship-deck-details';
   const colliders: CollisionBox[] = [];
+  const colliderById = new Map<string, CollisionBox>();
 
   specs.forEach((spec) => {
     const detailRoot = new Group();
@@ -58,13 +60,17 @@ export function createShipDeckDetails(
     addDetailParts(spec.kind, detailRoot, library);
     root.add(detailRoot);
     const collider = toCollider(spec);
-    if (collider) colliders.push(collider);
+    if (collider) {
+      colliders.push(collider);
+      colliderById.set(spec.id, collider);
+    }
   });
 
   let disposed = false;
   return {
     root,
     colliders,
+    colliderById,
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;

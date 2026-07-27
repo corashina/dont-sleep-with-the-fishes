@@ -28,7 +28,10 @@ import { getSinkingState, type SinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
-import { ScavengePhysics } from '../src/physics/ScavengePhysics';
+import {
+  SCAVENGE_BARREL_HALF_HEIGHT,
+  ScavengePhysics,
+} from '../src/physics/ScavengePhysics';
 import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
@@ -47,7 +50,10 @@ import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 import { skyPaletteFor } from '../src/world/skyPalette';
-import { World } from '../src/world/World';
+import {
+  World,
+  type WorldConstructionDependencies,
+} from '../src/world/World';
 import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
@@ -121,7 +127,8 @@ const createTestWorld = (
   moonTexture = createTestMoonTexture(),
   instances: readonly ItemInstance[] = createItemInstances(),
   random: () => number = Math.random,
-  runtime = physicsRuntime,
+  runtime: typeof physicsRuntime | null = physicsRuntime,
+  construction: WorldConstructionDependencies = {},
 ): World => {
   const furniture = createTestShipFurniture();
   try {
@@ -134,6 +141,7 @@ const createTestWorld = (
       runtime,
       instances,
       random,
+      construction,
     );
     const disposeWorld = world.dispose.bind(world);
     world.dispose = () => {
@@ -148,7 +156,7 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
-  it('adds one separate physics barrel and preserves both static barrels', () => {
+  it('uses both authored barrels as aligned physics visuals without diagnostic objects', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(
@@ -160,16 +168,89 @@ describe('world builders', () => {
       physicsRuntime,
     );
 
-    expect(world.physicsBarrel.name).toBe('physics-test-barrel');
-    expect(world.physicsBarrel.parent).toBe(scene);
-    expect(world.ship.getObjectByName('detail:barrel-1')).toBeDefined();
-    expect(world.ship.getObjectByName('detail:barrel-2')).toBeDefined();
+    expect(world.physicsBarrels.map(({ name }) => name)).toEqual([
+      'detail:barrel-1',
+      'detail:barrel-2',
+    ]);
+    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));
+    expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
+    expect(scene.getObjectByName('physics-test-ball')).toBeUndefined();
+    const physics = (world as unknown as {
+      scavengePhysics: ScavengePhysics;
+    }).scavengePhysics;
+    world.physicsBarrels.forEach((barrel, index) => {
+      expect(physics.barrelPoses[index]!.translation.y - barrel.position.y)
+        .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
+    });
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('advances and synchronizes the physics barrel only when enabled', () => {
+  it('keeps authored barrels static and creates no physics owner when disabled', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      Math.random,
+      null,
+      { physicsMode: 'off' },
+    );
+    const internals = world as unknown as {
+      scavengePhysics: ScavengePhysics | null;
+      physicsDebugView: unknown;
+    };
+
+    expect(world.physicsMode).toBe('off');
+    expect(internals.scavengePhysics).toBeNull();
+    expect(internals.physicsDebugView).toBeNull();
+    world.physicsBarrels.forEach((barrel) => {
+      expect(barrel.parent).not.toBe(scene);
+      expect(world.ship.getObjectByName(barrel.name)).toBe(barrel);
+    });
+    expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
+    expect(world.ship.getObjectByName('physics-debug-static')).toBeUndefined();
+    expect(() => world.update(
+      1,
+      1 / 60,
+      getSinkingState(30, 120),
+      new Vector3(),
+      true,
+    )).not.toThrow();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('owns and disposes a collider overlay only in debug mode', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      Math.random,
+      physicsRuntime,
+      { physicsMode: 'debug' },
+    );
+
+    expect(world.physicsMode).toBe('debug');
+    expect(scene.getObjectByName('physics-debug-dynamic')).toBeDefined();
+    expect(world.ship.getObjectByName('physics-debug-static')).toBeDefined();
+    expect(scene.getObjectByName('physics-debug-barrel:1')).toBeDefined();
+    expect(scene.getObjectByName('physics-debug-barrel:2')).toBeDefined();
+
+    world.dispose();
+    expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
+    expect(scene.getObjectByName('physics-debug-static')).toBeUndefined();
+    propModels.dispose();
+  });
+
+  it('advances and synchronizes both authored barrels only when enabled', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
@@ -177,15 +258,12 @@ describe('world builders', () => {
     const physics = (world as unknown as {
       scavengePhysics: ScavengePhysics;
     }).scavengePhysics;
-    const before = world.physicsBarrel.position.clone();
-    const beforePhysics = {
-      translation: { ...physics.barrelPose.translation },
-      rotation: { ...physics.barrelPose.rotation },
-    };
+    const before = world.physicsBarrels.map((barrel) => barrel.position.clone());
+    const beforePhysics = structuredClone(physics.barrelPoses);
 
     world.update(1, 1 / 60, getSinkingState(30, 120), camera.position, false);
-    expect(world.physicsBarrel.position).toEqual(before);
-    expect(physics.barrelPose).toEqual(beforePhysics);
+    world.physicsBarrels.forEach((barrel, index) => expect(barrel.position).toEqual(before[index]));
+    expect(physics.barrelPoses).toEqual(beforePhysics);
 
     for (let step = 1; step <= 30; step += 1) {
       world.update(
@@ -197,18 +275,23 @@ describe('world builders', () => {
       );
     }
 
-    expect(world.physicsBarrel.position.distanceTo(before)).toBeGreaterThan(1e-3);
-    expect(world.physicsBarrel.position.toArray()).toEqual([
-      physics.barrelPose.translation.x,
-      physics.barrelPose.translation.y,
-      physics.barrelPose.translation.z,
-    ]);
-    expect(world.physicsBarrel.quaternion.toArray()).toEqual([
-      physics.barrelPose.rotation.x,
-      physics.barrelPose.rotation.y,
-      physics.barrelPose.rotation.z,
-      physics.barrelPose.rotation.w,
-    ]);
+    world.physicsBarrels.forEach((barrel, index) => {
+      const pose = physics.barrelPoses[index]!;
+      expect(barrel.position.distanceTo(before[index]!)).toBeGreaterThan(1e-3);
+      expect(barrel.quaternion.toArray()).toEqual([
+        pose.rotation.x,
+        pose.rotation.y,
+        pose.rotation.z,
+        pose.rotation.w,
+      ]);
+      const colliderCenter = new Vector3(
+        pose.translation.x,
+        pose.translation.y,
+        pose.translation.z,
+      );
+      expect(barrel.position.distanceTo(colliderCenter))
+        .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
+    });
 
     world.dispose();
     propModels.dispose();
@@ -522,7 +605,7 @@ describe('world builders', () => {
               mark('ship', shipResources.geometries.values().next().value!);
               mark('prop', propResources.geometries.values().next().value!);
               mark('lifeboat', lifeboatResources.geometries.values().next().value!);
-              scene.getObjectByName('physics-test-barrel')!.addEventListener(
+              scene.getObjectByName('detail:barrel-1')!.addEventListener(
                 'removed',
                 () => order.push('barrel'),
               );
@@ -597,7 +680,7 @@ describe('world builders', () => {
           {
             checkpoint: (stage: string) => {
               if (stage !== 'physics') return;
-              scene.getObjectByName('physics-test-barrel')!.addEventListener(
+              scene.getObjectByName('detail:barrel-1')!.addEventListener(
                 'removed',
                 () => calls.push('barrel'),
               );
@@ -618,7 +701,7 @@ describe('world builders', () => {
       expect(caught).toBe(constructionFailure);
       expect(calls).toEqual(['physics', 'barrel', 'ship-remove', 'ship-dispose']);
       expect(scene.children).toEqual([sentinel]);
-      expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
+      expect(scene.getObjectByName('detail:barrel-1')).toBeUndefined();
       expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
       expect(physicsDispose).toHaveBeenCalledOnce();
     } finally {
@@ -700,7 +783,7 @@ describe('world builders', () => {
     expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
     expect(world.itemObjects.get('cannedFood-1')!.parent).toBe(world.ship);
-    expect(world.physicsBarrel.parent).toBe(scene);
+    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));
     for (let call = 0; call < disposeCalls; call += 1) world.dispose();
 
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
@@ -709,8 +792,9 @@ describe('world builders', () => {
     expect(scene.getObjectByName('rain')).toBeUndefined();
     expect(scene.getObjectByName('procedural-skybox')).toBeUndefined();
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
-    expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
-    expect(world.physicsBarrel.parent).toBeNull();
+    expect(scene.getObjectByName('detail:barrel-1')).toBeUndefined();
+    expect(scene.getObjectByName('detail:barrel-2')).toBeUndefined();
+    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBeNull());
     expect(physicsDispose).toHaveBeenCalledOnce();
     expect(skyGeometryDispose).toHaveBeenCalledOnce();
     expect(skyMaterialDispose).toHaveBeenCalledOnce();

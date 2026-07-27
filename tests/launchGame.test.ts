@@ -125,6 +125,7 @@ describe('launchGame', () => {
       lifeboatAssets,
       shipAssets,
       physicsRuntime,
+      'enabled',
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
@@ -186,7 +187,36 @@ describe('launchGame', () => {
       lifeboatAssets,
       shipAssets,
       physicsRuntime,
+      'enabled',
     );
+  });
+
+  it('skips Rapier loading entirely when physics is disabled', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const loadPhysicsRuntime = vi.fn(() => Promise.reject(
+      new Error('must not be requested'),
+    ));
+    const game = { start: vi.fn(), dispose: vi.fn() };
+    const createGame = vi.fn(() => game);
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { loadPhysicsRuntime, createGame },
+    ), 'off');
+
+    await expect(handle.completion).resolves.toBe(game as unknown as Game);
+    expect(loadPhysicsRuntime).not.toHaveBeenCalled();
+    expect(createGame).toHaveBeenCalledWith(
+      mount,
+      models,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      null,
+      'off',
+    );
+    expect(game.start).toHaveBeenCalledOnce();
   });
 
   it('reports physics preload failure and disposes fulfilled assets', async () => {

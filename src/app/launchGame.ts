@@ -27,6 +27,10 @@ import {
   PhysicsLoadError,
   type PhysicsRuntime,
 } from '../physics/PhysicsRuntime';
+import {
+  configuredPhysicsMode,
+  type PhysicsMode,
+} from '../physics/PhysicsOptions';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -47,7 +51,8 @@ export interface LaunchDependencies {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
-    physicsRuntime: PhysicsRuntime,
+    physicsRuntime: PhysicsRuntime | null,
+    physicsMode: PhysicsMode,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -66,6 +71,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     lifeboatAssets,
     shipAssets,
     physicsRuntime,
+    physicsMode,
   ) => (
     new Game(
       mount,
@@ -75,6 +81,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       lifeboatAssets,
       shipAssets,
       physicsRuntime,
+      physicsMode,
     )
   ),
 };
@@ -85,12 +92,16 @@ interface LoadedGameAssets {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
-  physicsRuntime: PhysicsRuntime;
+  physicsRuntime: PhysicsRuntime | null;
 }
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
+  physicsMode: PhysicsMode,
 ): Promise<LoadedGameAssets> {
+  const physicsRuntimePromise = physicsMode === 'off'
+    ? Promise.resolve(null)
+    : dependencies.loadPhysicsRuntime();
   const [
     models,
     shipFurniture,
@@ -105,7 +116,7 @@ async function loadGameAssets(
       dependencies.loadSkyAssets(),
       dependencies.loadLifeboatAssets(),
       dependencies.loadShipAssets(),
-      dependencies.loadPhysicsRuntime(),
+      physicsRuntimePromise,
     ]);
   const assetResults = [
     models,
@@ -310,6 +321,7 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
 export function launchGame(
   mount: HTMLElement,
   dependencies: LaunchDependencies = PRODUCTION_DEPENDENCIES,
+  physicsMode: PhysicsMode = configuredPhysicsMode(),
 ): LaunchHandle {
   let cancelled = false;
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
@@ -330,7 +342,7 @@ export function launchGame(
 
   const completion = (async (): Promise<Game | null> => {
     try {
-      unownedAssets = await loadGameAssets(dependencies);
+      unownedAssets = await loadGameAssets(dependencies, physicsMode);
     } catch (error) {
       if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
       return null;
@@ -351,6 +363,7 @@ export function launchGame(
         unownedAssets.lifeboatAssets,
         unownedAssets.shipAssets,
         unownedAssets.physicsRuntime,
+        physicsMode,
       );
       game = createdGame;
       unownedAssets = null;

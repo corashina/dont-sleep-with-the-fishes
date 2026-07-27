@@ -90,7 +90,7 @@ export class ScavengePhase implements GamePhase {
       context.physicsRuntime,
       instances,
       Math.random,
-      {},
+      { physicsMode: context.physicsMode },
       context.lifeboatAssets,
       context.shipAssets,
     );

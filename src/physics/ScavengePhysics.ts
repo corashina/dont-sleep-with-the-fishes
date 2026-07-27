@@ -9,14 +9,13 @@ const MAX_PHYSICS_SUBSTEPS = 3;
 const DECK_THICKNESS = 0.2;
 const BARRIER_THICKNESS = 0.25;
 const BARRIER_HEIGHT = 2;
-const BARREL_RADIUS = 0.54;
-const BARREL_HALF_HEIGHT = 0.55;
+export const SCAVENGE_BARREL_RADIUS = 0.565;
+export const SCAVENGE_BARREL_HALF_HEIGHT = 0.575;
 const BARREL_MASS = 35;
-const BARREL_FRICTION = 0.65;
+const BARREL_FRICTION = 0.002;
 const BARREL_RESTITUTION = 0.05;
-const BARREL_LINEAR_DAMPING = 0.15;
-const BARREL_ANGULAR_DAMPING = 0.1;
-const BARREL_SPAWN_LOCAL = { x: 6, y: 2.22 + 0.575, z: -6 };
+const BARREL_LINEAR_DAMPING = 0.04;
+const BARREL_ANGULAR_DAMPING = 0.03;
 
 interface MutablePhysicsVector3 {
   x: number;
@@ -55,18 +54,21 @@ export interface ScavengePhysicsConfig {
   readonly shipWidth: number;
   readonly shipLength: number;
   readonly initialShipPose: PhysicsPose;
+  readonly barrelSpawns: readonly PhysicsVector3[];
 }
 
 export interface ScavengePhysicsController {
-  readonly barrelPose: PhysicsPose;
+  readonly barrelPoses: readonly PhysicsPose[];
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void;
   dispose(): void;
 }
 
-export function collisionBoxToCuboid(box: CollisionBox): {
+export interface PhysicsCuboid {
   center: PhysicsVector3;
   halfExtents: PhysicsVector3;
-} {
+}
+
+export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
   const length = box.maxZ - box.minZ;
@@ -92,6 +94,79 @@ export function collisionBoxToCuboid(box: CollisionBox): {
       z: length / 2,
     },
   };
+}
+
+export function createScavengeStaticCuboids(
+  config: Pick<
+    ScavengePhysicsConfig,
+    'colliders' | 'safeBounds' | 'deckY' | 'shipWidth' | 'shipLength'
+  >,
+): readonly PhysicsCuboid[] {
+  const { safeBounds: bounds, deckY } = config;
+  const width = bounds.maxX - bounds.minX;
+  const length = bounds.maxZ - bounds.minZ;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  const centerY = deckY + BARRIER_HEIGHT / 2;
+  return [
+    {
+      center: { x: 0, y: deckY - DECK_THICKNESS / 2, z: 0 },
+      halfExtents: {
+        x: config.shipWidth / 2,
+        y: DECK_THICKNESS / 2,
+        z: config.shipLength / 2,
+      },
+    },
+    ...config.colliders.map(collisionBoxToCuboid),
+    {
+      center: {
+        x: bounds.minX + BARRIER_THICKNESS / 2,
+        y: centerY,
+        z: centerZ,
+      },
+      halfExtents: {
+        x: BARRIER_THICKNESS / 2,
+        y: BARRIER_HEIGHT / 2,
+        z: length / 2,
+      },
+    },
+    {
+      center: {
+        x: bounds.maxX - BARRIER_THICKNESS / 2,
+        y: centerY,
+        z: centerZ,
+      },
+      halfExtents: {
+        x: BARRIER_THICKNESS / 2,
+        y: BARRIER_HEIGHT / 2,
+        z: length / 2,
+      },
+    },
+    {
+      center: {
+        x: centerX,
+        y: centerY,
+        z: bounds.minZ + BARRIER_THICKNESS / 2,
+      },
+      halfExtents: {
+        x: width / 2,
+        y: BARRIER_HEIGHT / 2,
+        z: BARRIER_THICKNESS / 2,
+      },
+    },
+    {
+      center: {
+        x: centerX,
+        y: centerY,
+        z: bounds.maxZ - BARRIER_THICKNESS / 2,
+      },
+      halfExtents: {
+        x: width / 2,
+        y: BARRIER_HEIGHT / 2,
+        z: BARRIER_THICKNESS / 2,
+      },
+    },
+  ];
 }
 
 function copyVector(target: MutablePhysicsVector3, source: PhysicsVector3): void {
@@ -177,17 +252,15 @@ function isFinitePose(translation: PhysicsVector3, rotation: PhysicsQuaternion):
 }
 
 export class ScavengePhysics implements ScavengePhysicsController {
-  readonly barrelPose: MutablePhysicsPose = {
-    translation: { x: 0, y: 0, z: 0 },
-    rotation: { x: 0, y: 0, z: 0, w: 1 },
-  };
-
-  readonly barrelLocalPositionForTest: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  readonly barrelPoses: readonly MutablePhysicsPose[];
+  readonly barrelLocalPositionsForTest: readonly MutablePhysicsVector3[];
 
   private readonly world: RAPIER.World;
   private readonly clock: FixedStepClock;
   private readonly shipBody: RAPIER.RigidBody;
-  private readonly barrelBody: RAPIER.RigidBody;
+  private readonly barrelBodies: readonly RAPIER.RigidBody[];
+  private readonly barrelSpawns: readonly MutablePhysicsVector3[];
+  private readonly barrelSpawnWorlds: readonly MutablePhysicsVector3[];
   private readonly safeBounds: PlayerNavigationBounds['safe'];
   private readonly deckY: number;
   private readonly previousShipPose: MutablePhysicsPose = {
@@ -202,7 +275,6 @@ export class ScavengePhysics implements ScavengePhysicsController {
     translation: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0, w: 1 },
   };
-  private readonly spawnWorld: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
   private readonly zeroVelocity: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
   private recoveryCount = 0;
   private disposed = false;
@@ -232,7 +304,10 @@ export class ScavengePhysics implements ScavengePhysicsController {
   };
 
   constructor(runtime: PhysicsRuntime, config: ScavengePhysicsConfig) {
-    const configuredCuboids = config.colliders.map(collisionBoxToCuboid);
+    if (config.barrelSpawns.length === 0) {
+      throw new Error('Scavenging physics requires at least one barrel spawn');
+    }
+    const staticCuboids = createScavengeStaticCuboids(config);
     this.safeBounds = config.safeBounds;
     this.deckY = config.deckY;
     copyVector(this.previousShipPose.translation, config.initialShipPose.translation);
@@ -254,31 +329,40 @@ export class ScavengePhysics implements ScavengePhysicsController {
         .setRotation(config.initialShipPose.rotation),
     );
 
-    this.addCuboid(
-      { x: 0, y: config.deckY - DECK_THICKNESS / 2, z: 0 },
-      { x: config.shipWidth / 2, y: DECK_THICKNESS / 2, z: config.shipLength / 2 },
-      runtime,
-    );
-    configuredCuboids.forEach((cuboid) => {
+    staticCuboids.forEach((cuboid) => {
       this.addCuboid(cuboid.center, cuboid.halfExtents, runtime);
     });
-    this.addContainmentBarriers(config.safeBounds, config.deckY, runtime);
 
-    localToWorld(this.spawnWorld, BARREL_SPAWN_LOCAL, this.currentShipPose);
-    this.barrelBody = this.world.createRigidBody(
-      runtime.rapier.RigidBodyDesc.dynamic()
-        .setTranslation(this.spawnWorld.x, this.spawnWorld.y, this.spawnWorld.z)
-        .setLinearDamping(BARREL_LINEAR_DAMPING)
-        .setAngularDamping(BARREL_ANGULAR_DAMPING),
-    );
-    this.world.createCollider(
-      runtime.rapier.ColliderDesc.cylinder(BARREL_HALF_HEIGHT, BARREL_RADIUS)
+    this.barrelSpawns = config.barrelSpawns.map((spawn) => ({ ...spawn }));
+    this.barrelSpawnWorlds = this.barrelSpawns.map(() => ({ x: 0, y: 0, z: 0 }));
+    this.barrelPoses = this.barrelSpawns.map(() => ({
+      translation: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    }));
+    this.barrelLocalPositionsForTest = this.barrelSpawns.map(() => ({ x: 0, y: 0, z: 0 }));
+    this.barrelBodies = this.barrelSpawns.map((spawn, index) => {
+      const spawnWorld = this.barrelSpawnWorlds[index]!;
+      localToWorld(spawnWorld, spawn, this.currentShipPose);
+      const body = this.world.createRigidBody(
+        runtime.rapier.RigidBodyDesc.dynamic()
+          .setTranslation(spawnWorld.x, spawnWorld.y, spawnWorld.z)
+          .setLinearDamping(BARREL_LINEAR_DAMPING)
+          .setAngularDamping(BARREL_ANGULAR_DAMPING),
+      );
+      this.world.createCollider(
+        runtime.rapier.ColliderDesc.cylinder(
+          SCAVENGE_BARREL_HALF_HEIGHT,
+          SCAVENGE_BARREL_RADIUS,
+        )
         .setMass(BARREL_MASS)
         .setFriction(BARREL_FRICTION)
+        .setFrictionCombineRule(runtime.rapier.CoefficientCombineRule.Min)
         .setRestitution(BARREL_RESTITUTION),
-      this.barrelBody,
-    );
-    this.validateAndCopyBarrel();
+        body,
+      );
+      return body;
+    });
+    this.validateAndCopyBarrels();
   }
 
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void {
@@ -286,7 +370,9 @@ export class ScavengePhysics implements ScavengePhysicsController {
     copyVector(this.targetShipPose.translation, shipPose.translation);
     copyNormalizedQuaternion(this.targetShipPose.rotation, shipPose.rotation);
     const stepCount = this.clock.advance(deltaSeconds, this.stepPhysics);
-    if (stepCount > 0) this.validateAndCopyBarrel();
+    if (stepCount > 0) {
+      this.validateAndCopyBarrels();
+    }
     copyVector(this.previousShipPose.translation, this.targetShipPose.translation);
     copyNormalizedQuaternion(this.previousShipPose.rotation, this.targetShipPose.rotation);
   }
@@ -295,16 +381,20 @@ export class ScavengePhysics implements ScavengePhysicsController {
     return this.recoveryCount;
   }
 
-  setBarrelPoseForTest(pose: PhysicsPose): void {
+  setBarrelPoseForTest(pose: PhysicsPose, index = 0): void {
     if (this.disposed) return;
-    this.barrelBody.setTranslation(pose.translation, true);
-    this.barrelBody.setRotation(pose.rotation, true);
+    const body = this.barrelBodies[index];
+    if (!body) throw new Error(`Missing physics barrel ${index}`);
+    body.setTranslation(pose.translation, true);
+    body.setRotation(pose.rotation, true);
   }
 
-  setBarrelVelocityForTest(velocity: PhysicsVector3): void {
+  setBarrelVelocityForTest(velocity: PhysicsVector3, index = 0): void {
     if (this.disposed) return;
-    this.barrelBody.setLinvel(velocity, true);
-    this.barrelBody.setAngvel(velocity, true);
+    const body = this.barrelBodies[index];
+    if (!body) throw new Error(`Missing physics barrel ${index}`);
+    body.setLinvel(velocity, true);
+    body.setAngvel(velocity, true);
   }
 
   dispose(): void {
@@ -325,64 +415,41 @@ export class ScavengePhysics implements ScavengePhysicsController {
     );
   }
 
-  private addContainmentBarriers(
-    bounds: PlayerNavigationBounds['safe'],
-    deckY: number,
-    runtime: PhysicsRuntime,
-  ): void {
-    const width = bounds.maxX - bounds.minX;
-    const length = bounds.maxZ - bounds.minZ;
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const centerY = deckY + BARRIER_HEIGHT / 2;
-
-    this.addCuboid(
-      { x: bounds.minX + BARRIER_THICKNESS / 2, y: centerY, z: centerZ },
-      { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: length / 2 },
-      runtime,
-    );
-    this.addCuboid(
-      { x: bounds.maxX - BARRIER_THICKNESS / 2, y: centerY, z: centerZ },
-      { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: length / 2 },
-      runtime,
-    );
-    this.addCuboid(
-      { x: centerX, y: centerY, z: bounds.minZ + BARRIER_THICKNESS / 2 },
-      { x: width / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 },
-      runtime,
-    );
-    this.addCuboid(
-      { x: centerX, y: centerY, z: bounds.maxZ - BARRIER_THICKNESS / 2 },
-      { x: width / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 },
-      runtime,
-    );
+  private validateAndCopyBarrels(): void {
+    this.barrelBodies.forEach((body, index) => {
+      this.validateAndCopyBarrel(body, index);
+    });
   }
 
-  private validateAndCopyBarrel(): void {
-    const translation = this.barrelBody.translation();
-    const rotation = this.barrelBody.rotation();
+  private validateAndCopyBarrel(body: RAPIER.RigidBody, index: number): void {
+    const translation = body.translation();
+    const rotation = body.rotation();
+    const localPosition = this.barrelLocalPositionsForTest[index]!;
+    const spawn = this.barrelSpawns[index]!;
+    const spawnWorld = this.barrelSpawnWorlds[index]!;
+    const pose = this.barrelPoses[index]!;
     let recover = !isFinitePose(translation, rotation);
     if (!recover) {
-      worldToLocal(this.barrelLocalPositionForTest, translation, this.currentShipPose);
-      recover = this.barrelLocalPositionForTest.x < this.safeBounds.minX
-        || this.barrelLocalPositionForTest.x > this.safeBounds.maxX
-        || this.barrelLocalPositionForTest.z < this.safeBounds.minZ
-        || this.barrelLocalPositionForTest.z > this.safeBounds.maxZ
-        || this.barrelLocalPositionForTest.y < this.deckY - 2;
+      worldToLocal(localPosition, translation, this.currentShipPose);
+      recover = localPosition.x < this.safeBounds.minX
+        || localPosition.x > this.safeBounds.maxX
+        || localPosition.z < this.safeBounds.minZ
+        || localPosition.z > this.safeBounds.maxZ
+        || localPosition.y < this.deckY - 2;
     }
     if (recover) {
-      localToWorld(this.spawnWorld, BARREL_SPAWN_LOCAL, this.currentShipPose);
-      this.barrelBody.setTranslation(this.spawnWorld, true);
-      this.barrelBody.setRotation(this.currentShipPose.rotation, true);
-      this.barrelBody.setLinvel(this.zeroVelocity, true);
-      this.barrelBody.setAngvel(this.zeroVelocity, true);
+      localToWorld(spawnWorld, spawn, this.currentShipPose);
+      body.setTranslation(spawnWorld, true);
+      body.setRotation(this.currentShipPose.rotation, true);
+      body.setLinvel(this.zeroVelocity, true);
+      body.setAngvel(this.zeroVelocity, true);
       this.recoveryCount += 1;
-      copyVector(this.barrelLocalPositionForTest, BARREL_SPAWN_LOCAL);
-      copyVector(this.barrelPose.translation, this.spawnWorld);
-      copyNormalizedQuaternion(this.barrelPose.rotation, this.currentShipPose.rotation);
+      copyVector(localPosition, spawn);
+      copyVector(pose.translation, spawnWorld);
+      copyNormalizedQuaternion(pose.rotation, this.currentShipPose.rotation);
       return;
     }
-    copyVector(this.barrelPose.translation, translation);
-    copyNormalizedQuaternion(this.barrelPose.rotation, rotation);
+    copyVector(pose.translation, translation);
+    copyNormalizedQuaternion(pose.rotation, rotation);
   }
 }

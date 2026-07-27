@@ -287,11 +287,8 @@ describe('ScavengePhase lifecycle integration', () => {
       const firstPhysics = (firstWorld as unknown as {
         scavengePhysics: ScavengePhysics;
       }).scavengePhysics;
-      const initialPose = {
-        translation: { ...firstPhysics.barrelPose.translation },
-        rotation: { ...firstPhysics.barrelPose.rotation },
-      };
-      const initialPosition = firstWorld.physicsBarrel.position.clone();
+      const initialPoses = structuredClone(firstPhysics.barrelPoses);
+      const initialPositions = firstWorld.physicsBarrels.map((barrel) => barrel.position.clone());
       for (let step = 1; step <= 30; step += 1) {
         firstWorld.update(
           step / 60,
@@ -301,7 +298,9 @@ describe('ScavengePhase lifecycle integration', () => {
           true,
         );
       }
-      expect(firstWorld.physicsBarrel.position.distanceTo(initialPosition)).toBeGreaterThan(1e-3);
+      firstWorld.physicsBarrels.forEach((barrel, index) => {
+        expect(barrel.position.distanceTo(initialPositions[index]!)).toBeGreaterThan(1e-3);
+      });
 
       game.restart();
 
@@ -311,10 +310,10 @@ describe('ScavengePhase lifecycle integration', () => {
       }).scavengePhysics;
       expect(secondWorld).not.toBe(firstWorld);
       expect(secondPhysics).not.toBe(firstPhysics);
-      expect(secondWorld.physicsBarrel).not.toBe(firstWorld.physicsBarrel);
-      expect(firstWorld.physicsBarrel.parent).toBeNull();
-      expect(secondWorld.physicsBarrel.parent).not.toBeNull();
-      expect(secondPhysics.barrelPose).toEqual(initialPose);
+      expect(secondWorld.physicsBarrels[0]).not.toBe(firstWorld.physicsBarrels[0]);
+      firstWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBeNull());
+      secondWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).not.toBeNull());
+      expect(secondPhysics.barrelPoses).toEqual(initialPoses);
     } finally {
       game.dispose();
     }
