@@ -1067,8 +1067,12 @@ function addBalconyPosts(
   runs: readonly BalconyRun[],
   deckTopY: number,
 ): void {
-  const occupied = new Set<string>();
-  const edgeIndices = new Map<WallEdge, number>();
+  const positions: Array<{
+    edge: WallEdge;
+    alongX: boolean;
+    x: number;
+    z: number;
+  }> = [];
   runs.forEach((run) => {
     const alongX = run.edge === 'aft' || run.edge === 'forward';
     const length = alongX ? run.size[0] : run.size[1];
@@ -1077,22 +1081,38 @@ function addBalconyPosts(
       const amount = index / count - 0.5;
       const x = run.position[0] + (alongX ? length * amount : 0);
       const z = run.position[1] + (alongX ? 0 : length * amount);
-      const key = `${x.toFixed(5)}:${z.toFixed(5)}`;
-      if (occupied.has(key)) continue;
-      occupied.add(key);
-      const edgeIndex = edgeIndices.get(run.edge) ?? 0;
-      edgeIndices.set(run.edge, edgeIndex + 1);
-      addBlock(root, geometries, shellColliders, {
-        name: `balcony:${balcony.id}:post:${run.edge}:${edgeIndex}`,
-        size: [
-          BALCONY_RAIL_POST_WIDTH,
-          balcony.railHeight,
-          BALCONY_RAIL_POST_WIDTH,
-        ],
-        position: [x, deckTopY + balcony.railHeight / 2, z],
-        material: materials.paintedSteel,
-      });
+      const sharedCorner = positions.find((position) =>
+        position.alongX !== alongX
+        && Math.abs(position.x - x) <= BALCONY_EDGE_THICKNESS
+        && Math.abs(position.z - z) <= BALCONY_EDGE_THICKNESS);
+      if (sharedCorner) {
+        sharedCorner.x = alongX ? sharedCorner.x : x;
+        sharedCorner.z = alongX ? z : sharedCorner.z;
+        continue;
+      }
+      const duplicate = positions.some((position) =>
+        Math.abs(position.x - x) < 1e-8 && Math.abs(position.z - z) < 1e-8);
+      if (!duplicate) positions.push({ edge: run.edge, alongX, x, z });
     }
+  });
+
+  const postHeight =
+    balcony.railHeight - balcony.coamingHeight - BALCONY_TOP_RAIL_THICKNESS;
+  positions.forEach((position, index) => {
+    addBlock(root, geometries, shellColliders, {
+      name: `balcony:${balcony.id}:post:${position.edge}:${index}`,
+      size: [
+        BALCONY_RAIL_POST_WIDTH,
+        postHeight,
+        BALCONY_RAIL_POST_WIDTH,
+      ],
+      position: [
+        position.x,
+        deckTopY + balcony.coamingHeight + postHeight / 2,
+        position.z,
+      ],
+      material: materials.paintedSteel,
+    });
   });
 }
 
