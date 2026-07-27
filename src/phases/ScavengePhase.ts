@@ -71,6 +71,7 @@ export class ScavengePhase implements GamePhase {
   private readonly itemTooltipBounds = new Box3();
   private viewportWidth = 1;
   private viewportHeight = 1;
+  private overlayActive = false;
 
   constructor(
     private readonly context: PhaseContext,
@@ -139,8 +140,16 @@ export class ScavengePhase implements GamePhase {
   update(_time: number, deltaSeconds: number): void {
     if (this.disposed) return;
     const before = this.session.snapshot();
-    const active = before.status === 'running' && this.input.pointerLocked && !document.hidden;
-    if (this.presentation === 'title' || active) this.worldTime += deltaSeconds;
+    const sessionActive = before.status === 'running' && !document.hidden;
+    const directControlActive = sessionActive && this.input.pointerLocked;
+    const overlaySimulationActive = sessionActive && this.overlayActive;
+    if (
+      this.presentation === 'title'
+      || directControlActive
+      || overlaySimulationActive
+    ) {
+      this.worldTime += deltaSeconds;
+    }
     let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
     this.syncVisualState(sinking);
     const updateWorld = (worldDelta: number): void => {
@@ -160,7 +169,7 @@ export class ScavengePhase implements GamePhase {
       return true;
     };
 
-    if (active) {
+    if (directControlActive) {
       runGameplayFrame(true, {
         tick: () => this.session.tick(deltaSeconds),
         afterTick: () => {
@@ -178,6 +187,14 @@ export class ScavengePhase implements GamePhase {
         flight: () => this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale),
         isRunning: () => this.session.snapshot().status === 'running',
       });
+    } else if (overlaySimulationActive) {
+      this.session.tick(deltaSeconds);
+      synchronizeElapsed();
+      updateWorld(deltaSeconds);
+      if (this.session.snapshot().status === 'running') {
+        this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
+      }
+      this.input.consumeLook();
     } else {
       updateWorld(deltaSeconds);
       this.input.consumeLook();
@@ -217,6 +234,19 @@ export class ScavengePhase implements GamePhase {
     this.viewportHeight = height;
     this.context.camera.aspect = width / height;
     this.context.camera.updateProjectionMatrix();
+  }
+
+  setOverlayActive(active: boolean): void {
+    if (this.disposed || this.overlayActive === active) return;
+    this.overlayActive = active;
+    if (
+      !active
+      && this.session.snapshot().status === 'running'
+      && !this.input.pointerLocked
+      && !document.hidden
+    ) {
+      void this.requestPointerLock();
+    }
   }
 
   render(): void {
@@ -346,6 +376,7 @@ export class ScavengePhase implements GamePhase {
   }
 
   private handlePointerLockChange(locked: boolean): void {
+    if (this.overlayActive && !locked) return;
     const status = this.session.snapshot().status;
     const transition = pointerLockTransition(status, locked);
     if (transition === 'start') {
@@ -385,6 +416,14 @@ export class ScavengePhase implements GamePhase {
 
   private async requestPointerLock(): Promise<void> {
     const acquired = await this.input.requestPointerLock();
-    if (!acquired && !this.disposed) this.ui.showPointerLockError();
+    if (acquired || this.disposed) return;
+    this.ui.showPointerLockError();
+    if (
+      !this.overlayActive
+      && this.session.snapshot().status === 'running'
+    ) {
+      this.session.pause();
+      this.ui.setPaused(true);
+    }
   }
 }

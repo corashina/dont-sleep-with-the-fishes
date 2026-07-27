@@ -135,9 +135,32 @@ describe('ScavengePhase lifecycle integration', () => {
     ]);
   });
 
-  it('advances the visual clock during active play and freezes it while inactive', () => {
+  it('does not pause when pointer lock is released for the AO overlay', () => {
+    const pause = vi.fn();
+    const setPaused = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      overlayActive: true,
+      session: {
+        snapshot: () => ({ status: 'running' }),
+        pause,
+      },
+      ui: { setPaused },
+    });
+
+    (phase as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(false);
+
+    expect(pause).not.toHaveBeenCalled();
+    expect(setPaused).not.toHaveBeenCalled();
+  });
+
+  it('continues simulation without player controls while the AO overlay is open', () => {
     const updateWorld = vi.fn();
     const input = { pointerLocked: true, consumeLook: vi.fn() };
+    const tick = vi.fn();
+    const updatePlayer = vi.fn();
+    const updateFlight = vi.fn();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
@@ -146,11 +169,11 @@ describe('ScavengePhase lifecycle integration', () => {
       presentation: 'playing',
       session: {
         snapshot: () => ({ status: 'running', remainingSeconds: 120 }),
-        tick: vi.fn(),
+        tick,
       },
       input,
       world: { update: updateWorld },
-      player: { update: vi.fn() },
+      player: { update: updatePlayer },
       ui: { render: vi.fn(), setPrompt: vi.fn() },
       visualState: {
         kind: 'scavenge',
@@ -163,7 +186,7 @@ describe('ScavengePhase lifecycle integration', () => {
       contextAction: { type: 'none', prompt: '' },
       terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
       updateInteraction: vi.fn(),
-      updateFlight: vi.fn(),
+      updateFlight,
     });
 
     phase.update(0.25, 0.25);
@@ -175,6 +198,9 @@ describe('ScavengePhase lifecycle integration', () => {
     );
 
     input.pointerLocked = false;
+    tick.mockClear();
+    updatePlayer.mockClear();
+    updateFlight.mockClear();
     phase.update(0.5, 0.25);
     expect(updateWorld).toHaveBeenLastCalledWith(
       1.25,
@@ -182,6 +208,20 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
     );
+    expect(tick).not.toHaveBeenCalled();
+
+    phase.setOverlayActive(true);
+    phase.update(0.75, 0.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.5,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+    );
+    expect(tick).toHaveBeenCalledWith(0.25);
+    expect(updatePlayer).not.toHaveBeenCalled();
+    expect(updateFlight).toHaveBeenCalledOnce();
+    expect(input.consumeLook).toHaveBeenCalled();
   });
 
   it('renders scavenging through sceneRenderer with current sinking progress', () => {
@@ -847,6 +887,7 @@ describe('ScavengePhase lifecycle integration', () => {
     Object.assign(phase, {
       disposed: false,
       input: { requestPointerLock: vi.fn().mockResolvedValue(false) },
+      session: { snapshot: () => ({ status: 'idle' }) },
       ui: { showPointerLockError },
     });
 

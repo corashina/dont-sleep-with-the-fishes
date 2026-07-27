@@ -330,6 +330,7 @@ export class Game {
         this.postProcessingConsole = new PostProcessingConsole(
           mount,
           sceneRenderer.postProcessingControls,
+          (open) => this.activePhase?.setOverlayActive?.(open),
         );
       }
       this.seed = this.createSeed();
