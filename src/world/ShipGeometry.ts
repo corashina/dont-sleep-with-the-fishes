@@ -31,7 +31,6 @@ import {
 import type {
   ShipBalconySpec,
   ShipDoorSpec,
-  ShipFurniturePlacementSpec,
   ShipLadderSpec,
   ShipLayoutSpec,
   ShipTransverseEdge,
@@ -129,6 +128,7 @@ const LADDER_RAIL_WIDTH = 0.08;
 const LADDER_RAIL_DEPTH = 0.1;
 const LADDER_RUNG_HEIGHT = 0.065;
 const LADDER_RUNG_DEPTH = 0.11;
+const LADDER_CLIMB_CLEARANCE = PLAYER_LAYOUT_RADIUS + LADDER_RUNG_DEPTH / 2 + 0.03;
 const LADDER_GRAB_RISE = 0.72;
 const LADDER_ENTRY_DEPTH = 0.9;
 const LADDER_DISMOUNT_DISTANCE = 0.75;
@@ -1211,7 +1211,7 @@ function resolvedClimbZone(
   return Object.freeze({
     id: ladder.id,
     climbX: ladder.centerX,
-    climbZ: ladderZ,
+    climbZ: ladderZ + outwardZ * LADDER_CLIMB_CLEARANCE,
     outwardX: 0,
     outwardZ,
     bottomEyeY: FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT,
@@ -1281,7 +1281,7 @@ function addLadders(
           LADDER_RUNG_DEPTH,
         ],
         position: [0, y, 0],
-        material: materials.timber,
+        material: materials.darkMetal,
       });
     }
 
@@ -1297,19 +1297,6 @@ function addLadders(
   return Object.freeze(climbZones);
 }
 
-function furnitureSupportPoint(
-  furniture: ShipFurniturePlacementSpec,
-  supportX: number,
-  supportZ: number,
-): readonly [number, number] {
-  const cosine = Math.cos(furniture.rotationY);
-  const sine = Math.sin(furniture.rotationY);
-  return [
-    furniture.position[0] + supportX * cosine + supportZ * sine,
-    furniture.position[2] - supportX * sine + supportZ * cosine,
-  ];
-}
-
 function addWheelhouseInteriorDetails(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -1320,67 +1307,9 @@ function addWheelhouseInteriorDetails(
   const wheelhouseWidth = wheelhouse.maxX - wheelhouse.minX;
   const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
   const centerZ = (wheelhouse.minZ + wheelhouse.maxZ) / 2;
-  const interiorFrontZ = wheelhouse.maxZ - WALL_THICKNESS - 0.015;
   const interiorAftZ = wheelhouse.minZ + WALL_THICKNESS + 0.015;
   const interiorStarboardX = wheelhouse.maxX - WALL_THICKNESS - 0.015;
   const deckY = FREIGHTER_DIMENSIONS.deckY;
-  const helmDesk = layout.furniture.find(({ id }) => id === 'helm-desk-forward');
-  let logbookX = centerX - wheelhouseWidth * 0.18;
-  let logbookZ = interiorFrontZ - 0.08;
-  let mugX = centerX + wheelhouseWidth * 0.18;
-  let mugZ = interiorFrontZ - 0.08;
-  let supportTop = deckY + 1.1;
-  let supportRotationY = 0;
-  let usesFallbackWallSupport = true;
-
-  if (helmDesk) {
-    const helmSupportHalfWidth = helmDesk.colliderSize[0] * helmDesk.scale[0] / 2;
-    const helmSupportHalfDepth = helmDesk.colliderSize[2] * helmDesk.scale[2] / 2;
-    let logbookSupportX: number;
-    let logbookSupportZ: number;
-    let mugSupportX: number;
-    let mugSupportZ: number;
-    if (helmDesk.surfaces.length === 0) {
-      logbookSupportX = -helmSupportHalfWidth * 0.44;
-      mugSupportX = helmSupportHalfWidth * 0.44;
-      logbookSupportZ = helmSupportHalfDepth * 0.36;
-      mugSupportZ = helmSupportHalfDepth * 0.36;
-    } else {
-      const helmSurfaceMaxZ = Math.max(...helmDesk.surfaces.map((surface) =>
-        (surface.localPosition[2] + surface.footprint.depth / 2) * helmDesk.scale[2]));
-      logbookSupportX = helmDesk.surfaces[0]!.localPosition[0] * helmDesk.scale[0];
-      mugSupportX = helmDesk.surfaces.at(-1)!.localPosition[0] * helmDesk.scale[0];
-      logbookSupportZ = helmSurfaceMaxZ + 0.075;
-      mugSupportZ = helmSurfaceMaxZ + 0.07;
-    }
-    if (helmSupportHalfWidth >= 0.15) {
-      logbookSupportX = Math.max(
-        -helmSupportHalfWidth + 0.15,
-        Math.min(helmSupportHalfWidth - 0.15, logbookSupportX),
-      );
-    }
-    if (helmSupportHalfWidth >= 0.11) {
-      mugSupportX = Math.max(
-        -helmSupportHalfWidth + 0.11,
-        Math.min(helmSupportHalfWidth - 0.11, mugSupportX),
-      );
-    }
-    if (helmSupportHalfWidth >= 0.15
-      && Number.isFinite(logbookSupportZ)
-      && Number.isFinite(mugSupportZ)
-      && logbookSupportZ + 0.065 <= helmSupportHalfDepth
-      && mugSupportZ + 0.055 <= helmSupportHalfDepth) {
-      [logbookX, logbookZ] = furnitureSupportPoint(
-        helmDesk,
-        logbookSupportX,
-        logbookSupportZ,
-      );
-      [mugX, mugZ] = furnitureSupportPoint(helmDesk, mugSupportX, mugSupportZ);
-      supportTop = helmDesk.position[1] + helmDesk.colliderSize[1] * helmDesk.scale[1];
-      supportRotationY = helmDesk.rotationY;
-      usesFallbackWallSupport = false;
-    }
-  }
 
   const details = new Group();
   details.name = 'wheelhouse-interior-details';
@@ -1411,54 +1340,6 @@ function addWheelhouseInteriorDetails(
     });
     course.rotation.z = 0.65 + index * 0.22;
   });
-
-  const logbook = new Group();
-  logbook.name = 'captain-detail:logbook';
-  logbook.position.set(logbookX, supportTop + 0.025, logbookZ);
-  logbook.rotation.y = supportRotationY - 0.08;
-  details.add(logbook);
-  addBlock(logbook, geometries, [], {
-    name: `${logbook.name}:cover`,
-    size: [0.28, 0.05, 0.1],
-    position: [0, 0, 0],
-    material: materials.plainTimber,
-  });
-  addBlock(logbook, geometries, [], {
-    name: `${logbook.name}:pages`,
-    size: [0.24, 0.018, 0.08],
-    position: [0.01, 0.034, 0],
-    material: materials.paintedPanel,
-  });
-  if (usesFallbackWallSupport) {
-    addBlock(logbook, geometries, [], {
-      name: `${logbook.name}:fallback-support`,
-      size: [0.36, 0.06, 0.18],
-      position: [0, -0.055, 0.04],
-      material: materials.plainTimber,
-    });
-  }
-
-  const mug = new Group();
-  mug.name = 'captain-detail:mug';
-  mug.position.set(mugX, supportTop + 0.12, mugZ);
-  mug.rotation.y = supportRotationY;
-  details.add(mug);
-  addCylinder(mug, geometries, `${mug.name}:body`, 0.055, 0.24, [0, 0, 0],
-    materials.paintedSteel);
-  const mugHandleGeometry = new RingGeometry(0.027, 0.045, 10, 1, -Math.PI / 2, Math.PI);
-  geometries.add(mugHandleGeometry);
-  const mugHandle = new Mesh(mugHandleGeometry, materials.darkMetal);
-  mugHandle.name = `${mug.name}:handle`;
-  mugHandle.position.x = 0.06;
-  mug.add(mugHandle);
-  if (usesFallbackWallSupport) {
-    addBlock(mug, geometries, [], {
-      name: `${mug.name}:fallback-support`,
-      size: [0.24, 0.06, 0.18],
-      position: [0, -0.15, 0.04],
-      material: materials.plainTimber,
-    });
-  }
 
   const coat = new Group();
   coat.name = 'captain-detail:coat';

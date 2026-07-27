@@ -31,7 +31,7 @@ describe('resolveLadderTraversal', () => {
 
     expect(result.activeLadderId).toBe('crew-ladder');
     expect(result.consumed).toBe(true);
-    expect(result.position).toEqual({ x: 0, y: 3.72, z: 4 });
+    expect(result.position).toEqual({ x: 0.1, y: 3.72, z: 3.7 });
   });
 
   it('captures at balcony level while moving toward the ladder', () => {
@@ -46,7 +46,7 @@ describe('resolveLadderTraversal', () => {
 
     expect(result.activeLadderId).toBe('crew-ladder');
     expect(result.consumed).toBe(true);
-    expect(result.position).toEqual({ x: 0, y: 6.42, z: 4 });
+    expect(result.position).toEqual({ x: -0.1, y: 6.42, z: 3.7 });
   });
 
   it('does not capture an idle player in a ladder entry area', () => {
@@ -81,9 +81,35 @@ describe('resolveLadderTraversal', () => {
     expect(result.activeLadderId).toBeNull();
   });
 
+  it('aligns toward the climb line without snapping or climbing vertically', () => {
+    const start = { x: 0.3, y: crewZone.bottomEyeY, z: 3.7 };
+    const startDistance = Math.hypot(
+      start.x - crewZone.climbX,
+      start.z - crewZone.climbZ,
+    );
+    const result = resolveLadderTraversal({
+      position: start,
+      activeLadderId: 'crew-ladder',
+      planarMovement: [0, 0.2],
+      verticalInput: 1,
+      deltaSeconds: 0.05,
+      floorEyeY: crewZone.bottomEyeY,
+    }, [crewZone]);
+    const resultDistance = Math.hypot(
+      result.position.x - crewZone.climbX,
+      result.position.z - crewZone.climbZ,
+    );
+
+    expect(result.position.y).toBe(start.y);
+    expect(resultDistance).toBeGreaterThan(0);
+    expect(resultDistance).toBeLessThan(startDistance);
+    expect(result.activeLadderId).toBe('crew-ladder');
+    expect(result.consumed).toBe(true);
+  });
+
   it('moves upward along the ladder centerline at the climb speed', () => {
     const result = resolveLadderTraversal({
-      position: { x: 0.3, y: 4, z: 4.3 },
+      position: { x: crewZone.climbX, y: 4, z: crewZone.climbZ },
       activeLadderId: 'crew-ladder',
       planarMovement: [0.5, 0.5],
       verticalInput: 1,
@@ -101,7 +127,7 @@ describe('resolveLadderTraversal', () => {
 
   it('moves downward along the ladder centerline at the climb speed', () => {
     const result = resolveLadderTraversal({
-      position: { x: -0.3, y: 5, z: 3.8 },
+      position: { x: crewZone.climbX, y: 5, z: crewZone.climbZ },
       activeLadderId: 'crew-ladder',
       planarMovement: [0, 0],
       verticalInput: -1,
