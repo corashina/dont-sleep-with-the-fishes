@@ -1,7 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 
 export const UI_ARTWORK_IDS = [
-  'health', 'hunger', 'energy', 'hull', 'watch', 'journal', 'warning',
+  'health', 'hunger', 'energy', 'hull', 'watch', 'journal', 'warning', 'lantern',
 ] as const;
 
 export type UiArtworkId = typeof UI_ARTWORK_IDS[number];
@@ -14,6 +14,7 @@ const ARTWORK: Record<UiArtworkId, string> = {
   watch: '<circle cx="40" cy="43" r="27"/><path d="M32 8h16v8H32zM40 16V4M40 43V26M40 43l12 8"/><circle class="ui-artwork__shine" cx="40" cy="43" r="21"/>',
   journal: '<path d="M16 9h39c7 0 11 4 11 11v45H27c-7 0-11-4-11-11z"/><path d="M27 9v56M34 23h22M34 34h18"/><path class="ui-artwork__shine" d="M20 14h5"/>',
   warning: '<path d="M40 7 73 65H7z"/><path d="M40 25v21M40 55v2"/><path class="ui-artwork__shine" d="m20 56 20-35"/>',
+  lantern: '<path class="ui-artwork__lantern-line" d="M24 27C24 6 56 6 56 27"/><path class="ui-artwork__lantern-frame" d="m27 24 5-7h16l5 7-4 8H31zM25 31h30l7 29H18zM17 59h46l-4 8H21z"/><path class="ui-artwork__lantern-glass" d="M31 34h18l6 21H25z"/><path class="ui-artwork__lantern-line" d="m27 34 26 20M53 34 27 54"/><path class="ui-artwork__shine" d="M34 37h7"/>',
 };
 
 const ITEM_ARTWORK: Readonly<Record<ItemId, string>> = {

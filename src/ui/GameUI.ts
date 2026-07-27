@@ -68,7 +68,10 @@ export class GameUI {
             <dl class="controls ui-role-context"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>LEFT CLICK</dd></div></dl>
           </div>
           <div class="start-screen__action">
-            <button type="button" class="primary-action timber-action ui-role-context" data-start-button>BEGIN EVACUATION</button>
+            <button type="button" class="primary-action salvage-action ui-role-context" data-start-button aria-label="Begin evacuation">
+              BEGIN EVACUATION
+              <span class="salvage-action__note" aria-hidden="true">LIFEBOAT ORDER 01</span>
+            </button>
             <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
               ${uiArtwork('warning', 'illustrated-warning__art')}
               <span data-pointer-lock-error-copy></span>
@@ -81,7 +84,10 @@ export class GameUI {
           <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
           <h2 class="ui-role-display">Back to the deck?</h2>
           <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
-          <button type="button" class="primary-action timber-action ui-role-context" data-resume-button>RESUME</button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
+            RESUME
+            <span class="salvage-action__note" aria-hidden="true">RETURN TO THE DECK</span>
+          </button>
           <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
             <span data-pointer-lock-error-copy></span>
@@ -102,7 +108,10 @@ export class GameUI {
           <h2 class="ui-role-display" data-result-title></h2>
           <p class="lead ui-role-narrative" data-result-body></p>
           <p class="result-items ui-role-numeral" data-result-items></p>
-          <button type="button" class="primary-action timber-action ui-role-context" data-replay-button>TRY ANOTHER ROUTE</button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-replay-button aria-label="Try another route">
+            TRY ANOTHER ROUTE
+            <span class="salvage-action__note" aria-hidden="true">RESET THE VOYAGE</span>
+          </button>
         </div>
       </section>
     `;

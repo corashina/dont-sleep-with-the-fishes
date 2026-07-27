@@ -323,8 +323,13 @@ export class SurvivalUI {
             <span class="survival-status__detail ui-role-context"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
           </section>
         </div>
-        <button type="button" class="end-day-button timber-action ui-role-context" data-action="endDay" aria-keyshortcuts="7">
-          END DAY
+        <button type="button" class="end-day-button ui-role-context" data-action="endDay" aria-keyshortcuts="7" aria-label="End day">
+          <span class="end-day-button__cord" aria-hidden="true"></span>
+          ${uiArtwork('lantern', 'end-day-button__art')}
+          <span class="end-day-button__tag" aria-hidden="true">
+            <strong>END DAY</strong>
+            <small>7 · DOUSE LAMP</small>
+          </span>
         </button>
       </div>
       <section class="survival-meters" aria-label="Condition meters">
@@ -342,7 +347,10 @@ export class SurvivalUI {
           <p class="eyebrow ui-role-context">FISHING RESULT</p>
           <h2 class="ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
           <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
-          <button type="button" class="primary-action timber-action ui-role-context" data-fishing-result-continue>CONTINUE</button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
+            CONTINUE
+            <span class="salvage-action__note" aria-hidden="true">BACK TO THE BOAT</span>
+          </button>
         </div>
       </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
@@ -351,13 +359,19 @@ export class SurvivalUI {
           <h2 class="ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
           <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
           <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="secondary-action timber-action ui-role-context" data-repair-cancel>CANCEL</button>
+          <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel aria-label="Cancel repair">
+            CANCEL
+            <span class="salvage-action__note" aria-hidden="true">KEEP THE TAPE</span>
+          </button>
         </div>
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
       </section>
-      <button type="button" class="event-endure timber-action ui-role-context" data-endure hidden>ENDURE</button>
+      <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
+        ENDURE
+        <span class="salvage-action__note" aria-hidden="true">TAKE THE HIT</span>
+      </button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <div class="journal-book" data-journal-book>
           <div class="journal-book__cover" aria-hidden="true"></div>
@@ -384,7 +398,10 @@ export class SurvivalUI {
           <p class="eyebrow ui-role-context">PAUSED</p>
           <h2 class="ui-role-display">Hold Fast</h2>
           <p class="ui-role-narrative">The sea will wait until you return.</p>
-          <button type="button" class="primary-action timber-action ui-role-context" data-resume>RESUME</button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
+            RESUME
+            <span class="salvage-action__note" aria-hidden="true">RETURN TO THE BOAT</span>
+          </button>
         </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
@@ -393,7 +410,10 @@ export class SurvivalUI {
           <h2 class="ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
           <p class="ui-role-narrative" data-ending-body></p>
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
-          <button type="button" class="primary-action timber-action ui-role-context" data-restart>START FROM THE SHIP</button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
+            START FROM THE SHIP
+            <span class="salvage-action__note" aria-hidden="true">NEW EVACUATION</span>
+          </button>
         </div>
       </section>
     `;
