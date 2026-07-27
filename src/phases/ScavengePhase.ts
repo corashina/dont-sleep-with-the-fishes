@@ -61,7 +61,6 @@ export class ScavengePhase implements GamePhase {
     kind: 'scavenge',
     elapsedSeconds: 0,
     sinkingProgress: 0,
-    reducedMotion: false,
   };
   private terminalPresentation: TerminalPresentation = {
     phase: 'playing',
@@ -150,7 +149,6 @@ export class ScavengePhase implements GamePhase {
         worldDelta,
         sinking,
         this.context.camera.position,
-        this.context.reducedMotion.matches,
       );
     };
     const synchronizeElapsed = (): boolean => {
@@ -170,9 +168,7 @@ export class ScavengePhase implements GamePhase {
           updateWorld(deltaSeconds);
         },
         move: () => {
-          const shake = this.context.reducedMotion.matches
-            ? 0
-            : Math.sin(this.elapsed * 37) * sinking.cameraShake;
+          const shake = Math.sin(this.elapsed * 37) * sinking.cameraShake;
           this.player.update(deltaSeconds, this.input, shake);
         },
         afterMove: () => {
@@ -231,7 +227,6 @@ export class ScavengePhase implements GamePhase {
   private syncVisualState(sinking: Readonly<ReturnType<typeof getSinkingState>>): void {
     this.visualState.elapsedSeconds = this.elapsed;
     this.visualState.sinkingProgress = sinking.progress;
-    this.visualState.reducedMotion = this.context.reducedMotion.matches;
   }
 
   dispose(): void {

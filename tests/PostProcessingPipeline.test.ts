@@ -12,6 +12,7 @@ import {
   createSceneRenderer,
 } from '../src/rendering/PostProcessingPipeline';
 import { PrintShader } from '../src/rendering/PrintShader';
+import { resolveGrainTime } from '../src/rendering/postProcessingProfiles';
 
 type MockFunction = ReturnType<typeof vi.fn>;
 
@@ -148,14 +149,14 @@ describe('post-processing pipeline construction', () => {
     const camera = new PerspectiveCamera();
 
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     });
 
     expect(reportFallback).toHaveBeenCalledWith(failure);
     expect(render).toHaveBeenCalledWith(scene, camera);
     sceneRenderer.dispose();
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 1, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 1, sinkingProgress: 0,
     });
     expect(render).toHaveBeenCalledOnce();
   });
@@ -187,7 +188,7 @@ describe('post-processing pipeline construction', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     });
     expect(renderer.render).toHaveBeenCalledWith(scene, camera);
   });
@@ -269,5 +270,13 @@ describe('post-processing pipeline construction', () => {
     expect(PrintShader.fragmentShader).not.toMatch(/\bfloat\s+luminance\s*\(/);
     expect(PrintShader.fragmentShader).toMatch(/\bfloat\s+printLuminance\s*\(/);
     expect(PrintShader.fragmentShader.match(/\bprintLuminance\s*\(/g)).toHaveLength(3);
+  });
+
+  it('keeps grain animated for scavenging', () => {
+    expect(resolveGrainTime({
+      kind: 'scavenge',
+      elapsedSeconds: 1.26,
+      sinkingProgress: 0,
+    })).toBe(1.25);
   });
 });

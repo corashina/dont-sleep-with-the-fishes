@@ -133,7 +133,6 @@ export class Game {
         GAME_CAMERA.far,
       );
       const clock = new Clock();
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       initializationStarted = true;
       this.initialize(
         mount,
@@ -141,7 +140,6 @@ export class Game {
         sceneRenderer,
         camera,
         clock,
-        reducedMotion,
         propModels,
         shipFurniture,
         skyAssets,
@@ -181,7 +179,6 @@ export class Game {
       start: () => undefined,
       getDelta: () => 0.016,
     };
-    const reducedMotion = { matches: false } as MediaQueryList;
     const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
     const game = Object.create(Game.prototype) as Game;
     game.initialize(
@@ -195,7 +192,6 @@ export class Game {
         GAME_CAMERA.far,
       ),
       clock,
-      reducedMotion,
       options.propModels,
       options.shipFurniture,
       options.skyAssets,
@@ -257,7 +253,6 @@ export class Game {
     sceneRenderer: SceneRenderer,
     camera: PerspectiveCamera,
     clock: GameClock,
-    reducedMotion: MediaQueryList,
     propModels: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
@@ -288,7 +283,6 @@ export class Game {
       renderer,
       sceneRenderer,
       camera,
-      reducedMotion,
       propModels,
       shipFurniture,
       maxTextureAnisotropy,

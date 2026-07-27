@@ -66,7 +66,6 @@ describe('ScavengePhase lifecycle integration', () => {
       mount: document.createElement('main'),
       camera,
       renderer: { domElement: document.createElement('canvas') },
-      reducedMotion: { matches: false },
       propModels,
       shipFurniture,
       skyAssets,
@@ -98,7 +97,6 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.objectContaining({ progress: 0 }),
       camera.position,
-      false,
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
@@ -157,11 +155,9 @@ describe('ScavengePhase lifecycle integration', () => {
         kind: 'scavenge',
         elapsedSeconds: 0,
         sinkingProgress: 0,
-        reducedMotion: false,
       },
       context: {
         camera: new PerspectiveCamera(),
-        reducedMotion: { matches: false },
       },
       contextAction: { type: 'none', prompt: '' },
       terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
@@ -175,7 +171,6 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
-      false,
     );
 
     input.pointerLocked = false;
@@ -185,7 +180,6 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
-      false,
     );
   });
 
@@ -194,7 +188,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const camera = new PerspectiveCamera();
     const render = vi.fn();
     const visualState: ScavengeVisualState = {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     };
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
@@ -204,7 +198,6 @@ describe('ScavengePhase lifecycle integration', () => {
       visualState,
       context: {
         camera,
-        reducedMotion: { matches: true },
         sceneRenderer: { render, resize: vi.fn(), dispose: vi.fn() },
       },
     });
@@ -217,7 +210,6 @@ describe('ScavengePhase lifecycle integration', () => {
       kind: 'scavenge',
       elapsedSeconds: 90,
       sinkingProgress: 0.75,
-      reducedMotion: true,
     });
   });
 
@@ -532,7 +524,6 @@ describe('ScavengePhase lifecycle integration', () => {
       mount: document.createElement('main'),
       camera: new PerspectiveCamera(70, 1, 0.1, 100),
       renderer: { domElement: document.createElement('canvas') },
-      reducedMotion: { matches: false },
       propModels,
       shipFurniture,
       skyAssets,
