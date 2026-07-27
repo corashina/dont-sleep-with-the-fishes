@@ -40,7 +40,6 @@ export interface SurvivalPhaseTestDependencies {
   ui: Partial<SurvivalUI>;
   onRestart?: () => void;
   sceneRenderer?: SceneRenderer;
-  reducedMotion?: boolean;
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
@@ -92,7 +91,6 @@ function testContext(
     resize: () => undefined,
     dispose: () => undefined,
   },
-  reducedMotion = false,
 ): PhaseContext {
   const mount = {
     clientWidth: 1,
@@ -104,7 +102,6 @@ function testContext(
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
     sceneRenderer,
     camera: new PerspectiveCamera(),
-    reducedMotion: { matches: reducedMotion } as MediaQueryList,
     propModels: {} as PropModelLibrary,
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
@@ -127,7 +124,6 @@ export class SurvivalPhase implements GamePhase {
     elapsedSeconds: 0,
     phase: 'day',
     weather: 'calm',
-    reducedMotion: false,
   };
   private busy = false;
   private paused = false;
@@ -169,13 +165,12 @@ export class SurvivalPhase implements GamePhase {
         new SurvivalSession(savedItems, { seed }),
         new BoatWorld(
           context.camera,
-          context.reducedMotion,
           context.propModels,
           context.skyAssets.moonTexture,
           savedItems,
           context.lifeboatAssets,
         ),
-        new SurvivalUI(context.mount, context.reducedMotion),
+        new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
       );
@@ -201,7 +196,7 @@ export class SurvivalPhase implements GamePhase {
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
-      testContext(dependencies.sceneRenderer, dependencies.reducedMotion ?? false),
+      testContext(dependencies.sceneRenderer),
       [],
       0,
       0,
@@ -642,20 +637,10 @@ export class SurvivalPhase implements GamePhase {
     direction: 'enter' | 'exit',
     generation: number,
   ): Promise<boolean> {
-    const reducedMotion = this.context.reducedMotion.matches;
-    if (reducedMotion) {
-      await (this.ui.setFishingFade?.(true) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return false;
-    }
     await (direction === 'enter'
       ? this.world.enterFishingView?.() ?? Promise.resolve()
       : this.world.exitFishingView?.() ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return false;
-    if (reducedMotion) {
-      await (this.ui.setFishingFade?.(false) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return false;
-    }
-    return true;
+    return this.isContinuationActive(generation);
   }
 
   private isCurrentFishing(attempt: FishingSession, generation: number): boolean {
@@ -894,7 +879,6 @@ export class SurvivalPhase implements GamePhase {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
     this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
     this.visualState.weather = snapshot.weather;
-    this.visualState.reducedMotion = this.context.reducedMotion.matches;
   }
 
   private syncPresentation(snapshot: SurvivalSnapshot): void {

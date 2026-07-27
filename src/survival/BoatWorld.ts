@@ -200,7 +200,6 @@ const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
-const FISHING_REDUCED_DURATION = Number.EPSILON;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
 const FISHING_CAST_MAX_X = 2.7;
@@ -422,7 +421,6 @@ function createFishingVisuals(
 export class BoatWorld {
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
-  private readonly reducedMotion: MediaQueryList;
   private readonly ocean: OceanRenderer;
   private readonly sky: Skybox;
   private readonly motionRig = new Group();
@@ -521,7 +519,6 @@ export class BoatWorld {
 
   constructor(
     camera: PerspectiveCamera,
-    reducedMotion: MediaQueryList,
     propModels: PropModelLibrary,
     moonTexture: Texture,
     savedItems: readonly ItemInstance[] = [],
@@ -534,7 +531,6 @@ export class BoatWorld {
       moonTexture,
     );
     this.camera = camera;
-    this.reducedMotion = reducedMotion;
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
@@ -582,7 +578,6 @@ export class BoatWorld {
       propModels,
       build.storageRoot,
       savedItems,
-      reducedMotion.matches,
     );
 
     const repairTools = createRepairToolbox();
@@ -624,7 +619,7 @@ export class BoatWorld {
 
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
-    this.eventPresentation = new EventPresentationLayer(reducedMotion.matches);
+    this.eventPresentation = new EventPresentationLayer();
 
     this.bowAnchor.name = 'survival-bow-motion-anchor';
     this.bowAnchor.position.set(0, 0.1, -2.75);
@@ -809,7 +804,7 @@ export class BoatWorld {
     this.fishingPhase = 'entering';
     return this.startFishingAnimation(
       'enter',
-      this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_CAMERA_DURATION,
+      FISHING_CAMERA_DURATION,
     );
   }
 
@@ -860,7 +855,7 @@ export class BoatWorld {
     this.fishingPhase = 'casting';
     return this.startFishingAnimation(
       'cast',
-      this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_CAST_DURATION,
+      FISHING_CAST_DURATION,
     );
   }
 
@@ -932,7 +927,7 @@ export class BoatWorld {
     this.fishingPhase = 'reeling';
     await this.startFishingAnimation(
       'reel',
-      this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_REEL_DURATION,
+      FISHING_REEL_DURATION,
     );
   }
 
@@ -942,7 +937,7 @@ export class BoatWorld {
     this.fishingPhase = 'missing';
     return this.startFishingAnimation(
       'miss',
-      this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_MISS_DURATION,
+      FISHING_MISS_DURATION,
     );
   }
 
@@ -954,7 +949,7 @@ export class BoatWorld {
     this.fishingPhase = 'returning';
     return this.startFishingAnimation(
       'return',
-      this.reducedMotion.matches ? FISHING_REDUCED_DURATION : FISHING_CAMERA_DURATION,
+      FISHING_CAMERA_DURATION,
     );
   }
 
@@ -1121,7 +1116,7 @@ export class BoatWorld {
     return new Promise<void>((resolve) => {
       this.activeFishingAnimation = { kind, duration, elapsed: 0, resolve };
       this.applyFishingPhasePresentation();
-      this.applyFishingAnimation(kind, this.reducedMotion.matches ? 1 : 0);
+      this.applyFishingAnimation(kind, 0);
     });
   }
 
@@ -1204,25 +1199,22 @@ export class BoatWorld {
         }
         break;
       case 'cast': {
-        const drawBack = this.reducedMotion.matches
-          ? -Math.sin(Math.PI * normalized) * 0.05
-          : normalized < 0.28
-            ? easeInOut(normalized / 0.28) * 0.42
-            : (1 - easeOut((normalized - 0.28) / 0.72)) * 0.42
-              - Math.sin(Math.PI * (normalized - 0.28) / 0.72) * 0.5;
+        const drawBack = normalized < 0.28
+          ? easeInOut(normalized / 0.28) * 0.42
+          : (1 - easeOut((normalized - 0.28) / 0.72)) * 0.42
+            - Math.sin(Math.PI * (normalized - 0.28) / 0.72) * 0.5;
         this.rodPivot.rotation.x = this.baseRodPivotRotationX + drawBack;
         this.fishing.splash.visible = normalized >= 0.9 && normalized < 1;
         break;
       }
       case 'reel': {
-        const swing = this.reducedMotion.matches ? 0.04 : 0.34;
+        const swing = 0.34;
         this.rodPivot.rotation.x = this.baseRodPivotRotationX
           - Math.sin(Math.PI * normalized) * swing;
         if (this.activeFishingCatch) {
           this.activeFishingCatch.position.set(0, 0, 0);
-          this.activeFishingCatch.rotation.z = this.reducedMotion.matches
-            ? 0
-            : Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
+          this.activeFishingCatch.rotation.z = Math.sin(normalized * Math.PI * 2) * 0.16
+            * (1 - normalized);
           this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
           this.fishing.catchDisplay.position.lerpVectors(
             this.fishingCastPosition,
@@ -1234,7 +1226,7 @@ export class BoatWorld {
         break;
       }
       case 'miss': {
-        const swing = this.reducedMotion.matches ? 0.025 : 0.18;
+        const swing = 0.18;
         this.rodPivot.rotation.x = this.baseRodPivotRotationX
           + Math.sin(Math.PI * normalized) * swing;
         break;
@@ -1333,13 +1325,6 @@ export class BoatWorld {
         const material = this.fishing.bubbleMaterials[index]!;
         const offset = FISHING_BUBBLE_OFFSETS[index]!;
 
-        if (this.reducedMotion.matches) {
-          bubble.position.set(offset[0], 0.022 + (index % 2) * 0.004, offset[1]);
-          bubble.scale.setScalar(0.9 + (index % 3) * 0.16);
-          material.opacity = 0.22 + (index % 2) * 0.05;
-          continue;
-        }
-
         const cycle = (time * 0.38 + index * 0.173) % 1;
         const fadeIn = smootherStep(clamp(cycle / 0.18, 0, 1));
         const fadeOut = 1 - smootherStep(clamp((cycle - 0.58) / 0.42, 0, 1));
@@ -1357,11 +1342,6 @@ export class BoatWorld {
       for (let index = 0; index < this.fishing.ripples.children.length; index += 1) {
         const ripple = this.fishing.ripples.children[index]!;
         const material = this.fishing.rippleMaterials[index]!;
-        if (this.reducedMotion.matches) {
-          ripple.scale.setScalar(0.9 + index * 0.52);
-          material.opacity = 0.13 - index * 0.025;
-          continue;
-        }
         const cycle = (time * 0.24 + index * 0.5) % 1;
         ripple.scale.setScalar(0.65 + cycle * 1.55);
         material.opacity = Math.sin(Math.PI * cycle) * 0.24;
@@ -1394,7 +1374,7 @@ export class BoatWorld {
         + (this.fishingCastPosition.z - this.fishingLineOriginWorld.z) * progress;
       this.fishingLineEndWorld.y = this.fishingCastOriginY
         + (this.fishingWaveHeight + 0.075 - this.fishingCastOriginY) * progress
-        + Math.sin(Math.PI * progress) * (this.reducedMotion.matches ? 0.08 : 1.35);
+        + Math.sin(Math.PI * progress) * 1.35;
       this.fishing.bobber.position.copy(this.fishingLineEndWorld);
     } else if (this.fishingPhase === 'reeling' && this.activeFishingCatch) {
       this.fishingLineEndWorld.copy(this.fishing.catchDisplay.position);
@@ -1421,14 +1401,6 @@ export class BoatWorld {
   }
 
   private updateSecondaryMotion(delta: number): void {
-    const reduced = this.reducedMotion.matches;
-    if (reduced) {
-      this.spray.reset();
-      this.sprayCooldown = 0;
-      this.secondaryMotionInitialized = false;
-      return;
-    }
-
     this.spray.update(delta);
     this.scene.updateMatrixWorld(true);
     this.bowAnchor.getWorldPosition(this.bowWorldPosition);
@@ -1468,15 +1440,14 @@ export class BoatWorld {
   private applyCue(cue: PresentationCue, progress: number, elapsed: number): void {
     const eased = easeOut(clamp(progress, 0, 1));
     const pulse = Math.sin(Math.PI * clamp(progress, 0, 1));
-    const reduced = this.reducedMotion.matches;
     switch (cue) {
       case 'none':
         break;
       case 'fish':
-        this.rodPivot.rotation.x = this.baseRodPivotRotationX - eased * (reduced ? 0.035 : 0.12);
+        this.rodPivot.rotation.x = this.baseRodPivotRotationX - eased * 0.12;
         break;
       case 'dive':
-        if (!reduced) this.cameraRig.position.y -= pulse * 0.72;
+        this.cameraRig.position.y -= pulse * 0.72;
         (this.scene.fog as FogExp2).density += pulse * 0.035;
         this.sky.setTint(DIVE_SKY_TINT, pulse * 0.8);
         if (this.scene.background instanceof Color) {
@@ -1484,26 +1455,20 @@ export class BoatWorld {
         }
         break;
       case 'repair':
-        if (!reduced) {
-          this.camera.rotateY(-0.18 * eased);
-          this.camera.rotateX(-0.035 * eased);
-        }
+        this.camera.rotateY(-0.18 * eased);
+        this.camera.rotateX(-0.035 * eased);
         this.key.intensity *= 1 + pulse * 0.18;
         break;
       case 'treat':
         this.ambient.intensity *= 1 + pulse * 0.12;
         break;
       case 'storm':
-        if (!reduced) {
-          this.motionRig.rotation.x += Math.sin(elapsed * 18) * 0.025 * (1 - progress);
-          this.motionRig.rotation.z += Math.sin(elapsed * 23) * 0.035 * (1 - progress);
-        }
+        this.motionRig.rotation.x += Math.sin(elapsed * 18) * 0.025 * (1 - progress);
+        this.motionRig.rotation.z += Math.sin(elapsed * 23) * 0.035 * (1 - progress);
         break;
       case 'impact':
-        if (!reduced) {
-          this.motionRig.rotation.x += pulse * 0.075;
-          this.cameraRig.position.z -= pulse * 0.08;
-        }
+        this.motionRig.rotation.x += pulse * 0.075;
+        this.cameraRig.position.z -= pulse * 0.08;
         break;
       case 'darkness':
         this.ambient.intensity *= 1 - eased * 0.68;
@@ -1521,14 +1486,14 @@ export class BoatWorld {
         break;
       case 'rescue':
         this.eventPresentation.setRescueCue(eased);
-        if (!reduced) this.camera.rotateY(-0.12 * eased);
+        this.camera.rotateY(-0.12 * eased);
         break;
       case 'death':
         this.ambient.intensity *= 1 - eased * 0.88;
         this.key.intensity *= 1 - eased * 0.9;
         break;
       case 'sinking':
-        if (!reduced) this.motionRig.position.y -= eased * 1.05;
+        this.motionRig.position.y -= eased * 1.05;
         this.ambient.intensity *= 1 - eased * 0.72;
         this.key.intensity *= 1 - eased * 0.8;
         (this.scene.fog as FogExp2).density += eased * 0.02;

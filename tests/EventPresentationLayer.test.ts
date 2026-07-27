@@ -8,8 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { collectMeshResources } from '../src/world/SceneResources';
 
-function createLayer(reducedMotion = false): EventPresentationLayer {
-  return new EventPresentationLayer(reducedMotion);
+function createLayer(): EventPresentationLayer {
+  return new EventPresentationLayer();
 }
 
 function geometryOf(root: Object3D, name: string): BufferGeometry {
@@ -88,18 +88,20 @@ describe('EventPresentationLayer', () => {
     for (const dispose of disposals) expect(dispose).toHaveBeenCalledTimes(1);
   });
 
-  it('settles reduced-motion reveals directly into their held pose', async () => {
-    const layer = createLayer(true);
+  it('holds an authored reveal pose until its full animation completes', async () => {
+    const layer = createLayer();
     layer.stage('other-people');
-    const prop = layer.root.getObjectByName('event-prop:other-people')!;
-    const stagedX = prop.position.x;
     const reveal = layer.reveal('other-people');
+    let settled = false;
+    void reveal.then(() => { settled = true; });
 
-    layer.update(4, 1 / 60);
+    layer.update(0.1, 0);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    layer.update(1, 0.9);
     await reveal;
-
-    expect(prop.visible).toBe(true);
-    expect(prop.position.x).not.toBe(stagedX);
+    expect(settled).toBe(true);
     layer.dispose();
   });
 });

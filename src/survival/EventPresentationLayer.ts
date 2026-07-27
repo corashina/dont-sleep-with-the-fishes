@@ -293,7 +293,7 @@ export class EventPresentationLayer {
   private reactionDirection = 1;
   private disposed = false;
 
-  constructor(private readonly reducedMotion = false) {
+  constructor() {
     this.root.name = 'event-presentation-layer';
     const materials = createMaterials();
     const tableaus = [
@@ -427,19 +427,12 @@ export class EventPresentationLayer {
     eventId: string,
   ): Promise<void> {
     this.cancelActiveAnimation();
-    const duration = this.reducedMotion
-      ? Number.EPSILON
-      : kind === 'reveal'
-        ? REVEAL_DURATION
-        : REACTION_DURATION;
+    const duration = kind === 'reveal' ? REVEAL_DURATION : REACTION_DURATION;
     return new Promise((resolve) => {
       this.activeAnimation = { kind, eventId, elapsed: 0, duration, resolve };
       const tableau = this.tableaus.get(eventId)!;
       this.resetTableauPose(tableau);
-      if (this.reducedMotion) {
-        if (kind === 'reveal') this.applyRevealPose(tableau, 1, 0);
-        else this.applyReactionPose(tableau, 1);
-      } else if (kind === 'reveal') {
+      if (kind === 'reveal') {
         this.applyRevealPose(tableau, 0, 0);
       }
     });
