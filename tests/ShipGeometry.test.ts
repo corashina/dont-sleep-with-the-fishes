@@ -186,6 +186,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     const build = createShipGeometry(materials, SHIP_LAYOUT);
     try {
       const deck = build.root.getObjectByName('floor-cargoDeck') as Mesh;
+      const lowerHull = build.root.getObjectByName('main-hull-body') as Mesh;
       const upperHull = build.root.getObjectByName('upper-hull') as Mesh;
       const waterline = build.root.getObjectByName('waterline-band') as Mesh;
       const size = new Box3().setFromObject(build.root).getSize(new Vector3());
@@ -194,6 +195,100 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(deck.material).toBe(materials.timberFloor);
       expect(upperHull.material).toBe(materials.upperHull);
       expect(waterline.material).toBe(materials.waterline);
+      const upperHullBounds = new Box3().setFromObject(upperHull);
+      expect(upperHullBounds.max.y).toBeCloseTo(2.18);
+      expect(upperHullBounds.max.y - upperHullBounds.min.y).toBeGreaterThanOrEqual(0.8);
+      expect(new Box3().setFromObject(waterline).max.y).toBeLessThanOrEqual(
+        upperHullBounds.min.y + 0.05,
+      );
+      const lowerHullBounds = new Box3().setFromObject(lowerHull);
+      expect(upperHullBounds.max.x).toBeGreaterThan(lowerHullBounds.max.x);
+      expect(upperHullBounds.max.z).toBeGreaterThan(lowerHullBounds.max.z);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('renders room panels as textured weathered warm white', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const crewWall = build.root.children.find((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith('crew-cabin-wall-'))!;
+      const wheelhouseSill = build.root.children.find((object): object is Mesh =>
+        object instanceof Mesh && /^wheelhouse-wall-.*-sill$/.test(object.name))!;
+      expect(crewWall.material).toBe(materials.paintedPanel);
+      expect(wheelhouseSill.material).toBe(materials.paintedPanel);
+      expect(materials.paintedPanel.map?.name).toBe('paintedPanel-color');
+      expect(materials.paintedPanel.roughness).toBeGreaterThanOrEqual(0.9);
+
+      const bytes = materials.paintedPanel.map!.image.data as Uint8Array;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (let offset = 0; offset < bytes.length; offset += 4) {
+        red += bytes[offset]!;
+        green += bytes[offset + 1]!;
+        blue += bytes[offset + 2]!;
+      }
+      const pixels = bytes.length / 4;
+      expect(red / pixels).toBeGreaterThan(195);
+      expect(green / pixels).toBeGreaterThan(190);
+      expect(red).toBeGreaterThan(blue);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('builds the deck hatch mesh and collider from layout-owned spatial data', () => {
+    const materials = createShipMaterials();
+    const layout = {
+      ...SHIP_LAYOUT,
+      deckHatch: {
+        ...SHIP_LAYOUT.deckHatch,
+        position: [4.2, 2.22, -6.5] as const,
+        size: [1.2, 0.16, 1.6] as const,
+        colliderSize: [1.1, 0.14, 1.5] as const,
+      },
+    };
+    const build = createShipGeometry(materials, layout);
+    try {
+      const hatch = build.root.getObjectByName('deck-hatch') as Mesh;
+      expect(hatch.position.x).toBe(4.2);
+      expect(hatch.position.y).toBeCloseTo(2.3);
+      expect(hatch.position.z).toBe(-6.5);
+      expect(hatch.scale.toArray()).toEqual([1.2, 0.16, 1.6]);
+      const collider = build.shellColliders.find((candidate) =>
+        candidate.minX > 3.6 && candidate.maxX < 4.8
+        && candidate.minZ < -7.2 && candidate.maxZ > -5.8)!;
+      expect(collider.minX).toBeCloseTo(3.65);
+      expect(collider.maxX).toBeCloseTo(4.75);
+      expect(collider.minY).toBeCloseTo(2.22);
+      expect(collider.maxY).toBeCloseTo(2.36);
+      expect(collider.minZ).toBeCloseTo(-7.25);
+      expect(collider.maxZ).toBeCloseTo(-5.75);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('seats wheelhouse sill, brackets, and fasteners on the rendered front wall face', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+      [
+        'wheelhouse-front-sill-band',
+        'wheelhouse-header-bracket-port',
+        'wheelhouse-header-bracket-starboard',
+        ...Array.from({ length: 5 }, (_, index) => `wheelhouse-front-fastener-${index + 1}`),
+      ].forEach((name) => {
+        const detail = build.root.getObjectByName(name) as Mesh;
+        expect(new Box3().setFromObject(detail).min.z, name).toBeCloseTo(wheelhouse.maxZ);
+      });
     } finally {
       build.disposeGeometry();
       materials.dispose();

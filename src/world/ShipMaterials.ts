@@ -87,10 +87,10 @@ const SURFACE_SPECS: Record<SurfaceKind, SurfaceSpec> = {
     seedOffset: 0x6a09e667,
   },
   paintedPanel: {
-    color: [150, 151, 140],
-    roughness: 210,
+    color: [214, 210, 194],
+    roughness: 224,
     bump: 128,
-    bumpScale: 0.010,
+    bumpScale: 0.014,
     repeat: [5, 4],
     seedOffset: 0xbb67ae85,
   },
@@ -123,7 +123,9 @@ function surfaceOffset(kind: SurfaceKind, x: number, y: number, byte: number): n
       return centeredNoise(byte, 6) + (diamond ? 8 : -2);
     }
     case 'paintedPanel':
-      return centeredNoise(byte, 4) - (x % 32 === 0 || y % 32 === 0 ? 6 : 0);
+      return centeredNoise(byte, 7)
+        - (x % 32 === 0 || y % 32 === 0 ? 9 : 0)
+        - ((x + y * 3) % 47 === 0 ? 12 : 0);
   }
 }
 
@@ -325,7 +327,11 @@ export function createShipMaterials(
     metalness: 0,
     flatShading: true,
   });
-  const paintedPanel = createSurfaceMaterial(paintedPanelTextures);
+  const paintedPanel = createSurfaceMaterial(paintedPanelTextures, {
+    color: 0xf5f0e5,
+    roughness: 0.94,
+    metalness: 0.12,
+  });
   const paintedSteel = new MeshStandardMaterial({
     color: 0xd5dbd8,
     roughness: 0.86,
