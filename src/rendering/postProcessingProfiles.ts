@@ -24,7 +24,6 @@ export interface PostProcessingProfile {
   halftoneStrength: number;
   halftoneSizeCssPixels: number;
   vignetteStrength: number;
-  chromaticAberrationCssPixels: number;
   grainStrength: number;
 }
 
@@ -40,7 +39,7 @@ const PROFILES = {
     highlightTint: 0xd8aa6d, highlightTintStrength: 0.035,
     posterizationLevels: 12, inkFrameStrength: 0.42,
     halftoneStrength: 0.075, halftoneSizeCssPixels: 4.5,
-    vignetteStrength: 0.22, chromaticAberrationCssPixels: 0.45, grainStrength: 0.022,
+    vignetteStrength: 0.22, grainStrength: 0.022,
   }),
   'survival-day-calm': profile({
     id: 'survival-day-calm', contrast: 1.10, saturation: 1.08, highlightCompression: 0.14,
@@ -49,7 +48,7 @@ const PROFILES = {
     highlightTint: 0xe0b879, highlightTintStrength: 0.045,
     posterizationLevels: 10, inkFrameStrength: 0.72,
     halftoneStrength: 0.055, halftoneSizeCssPixels: 5,
-    vignetteStrength: 0.18, chromaticAberrationCssPixels: 0.3, grainStrength: 0.018,
+    vignetteStrength: 0.18, grainStrength: 0.018,
   }),
   'survival-day-overcast': profile({
     id: 'survival-day-overcast', contrast: 1.11, saturation: 1.06, highlightCompression: 0.15,
@@ -58,7 +57,7 @@ const PROFILES = {
     highlightTint: 0xc8ad7c, highlightTintStrength: 0.03,
     posterizationLevels: 9, inkFrameStrength: 0.76,
     halftoneStrength: 0.06, halftoneSizeCssPixels: 5,
-    vignetteStrength: 0.21, chromaticAberrationCssPixels: 0.38, grainStrength: 0.023,
+    vignetteStrength: 0.21, grainStrength: 0.023,
   }),
   'survival-day-squall': profile({
     id: 'survival-day-squall', contrast: 1.14, saturation: 1.04, highlightCompression: 0.18,
@@ -67,7 +66,7 @@ const PROFILES = {
     highlightTint: 0xb39c77, highlightTintStrength: 0.02,
     posterizationLevels: 8, inkFrameStrength: 0.82,
     halftoneStrength: 0.045, halftoneSizeCssPixels: 5.5,
-    vignetteStrength: 0.29, chromaticAberrationCssPixels: 0.55, grainStrength: 0.035,
+    vignetteStrength: 0.29, grainStrength: 0.035,
   }),
   'survival-night-calm': profile({
     id: 'survival-night-calm', contrast: 1.08, saturation: 1.06, highlightCompression: 0.1,
@@ -76,7 +75,7 @@ const PROFILES = {
     highlightTint: 0xb9a477, highlightTintStrength: 0.025,
     posterizationLevels: 8, inkFrameStrength: 0.78,
     halftoneStrength: 0.035, halftoneSizeCssPixels: 5.5,
-    vignetteStrength: 0.24, chromaticAberrationCssPixels: 0.35, grainStrength: 0.024,
+    vignetteStrength: 0.24, grainStrength: 0.024,
   }),
   'survival-night-overcast': profile({
     id: 'survival-night-overcast', contrast: 1.10, saturation: 1.04, highlightCompression: 0.11,
@@ -85,7 +84,7 @@ const PROFILES = {
     highlightTint: 0xa89777, highlightTintStrength: 0.018,
     posterizationLevels: 7, inkFrameStrength: 0.82,
     halftoneStrength: 0.03, halftoneSizeCssPixels: 5.5,
-    vignetteStrength: 0.27, chromaticAberrationCssPixels: 0.42, grainStrength: 0.029,
+    vignetteStrength: 0.27, grainStrength: 0.029,
   }),
   'survival-night-squall': profile({
     id: 'survival-night-squall', contrast: 1.12, saturation: 1.02, highlightCompression: 0.13,
@@ -94,7 +93,7 @@ const PROFILES = {
     highlightTint: 0x97886f, highlightTintStrength: 0.012,
     posterizationLevels: 6, inkFrameStrength: 0.88,
     halftoneStrength: 0.025, halftoneSizeCssPixels: 6,
-    vignetteStrength: 0.31, chromaticAberrationCssPixels: 0.6, grainStrength: 0.04,
+    vignetteStrength: 0.31, grainStrength: 0.04,
   }),
 } as const;
 

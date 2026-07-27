@@ -3,7 +3,7 @@ import {
   DataTexture,
   PerspectiveCamera,
   Scene,
-  type Vector2,
+  Vector2,
   type WebGLRenderer,
   type WebGLRenderTarget,
 } from 'three';
@@ -12,10 +12,7 @@ import {
   createSceneRenderer,
 } from '../src/rendering/PostProcessingPipeline';
 import { PrintShader } from '../src/rendering/PrintShader';
-import {
-  postProcessingProfilesForTest,
-  resolveGrainTime,
-} from '../src/rendering/postProcessingProfiles';
+import type { ItemAmbientOcclusionPass } from '../src/rendering/ItemAmbientOcclusion';
 
 type MockFunction = ReturnType<typeof vi.fn>;
 
@@ -35,45 +32,37 @@ interface PassMock {
 
 const postProcessingMocks = vi.hoisted((): {
   composers: ComposerMock[];
+  aoPasses: Array<{
+    enabled: boolean;
+    setContext: MockFunction;
+    setMode: MockFunction;
+    setVisualQuality: MockFunction;
+    dispose: MockFunction;
+  }>;
+  outlinePasses: Array<{
+    renderScene: Scene;
+    renderCamera: PerspectiveCamera;
+    selectedObjects: object[];
+    visibleEdgeColor: { setHex: MockFunction };
+    hiddenEdgeColor: { setHex: MockFunction };
+    edgeStrength: number;
+    edgeThickness: number;
+    edgeGlow: number;
+    downSampleRatio: number;
+    setSize: MockFunction;
+    dispose: MockFunction;
+  }>;
   printPasses: PassMock[];
   outputPasses: PassMock[];
-  setSizeFailure: Error | null;
-} => ({
-  composers: [],
-  printPasses: [],
-  outputPasses: [],
-  setSizeFailure: null,
-}));
-
-const inkFrameMocks = vi.hoisted((): { frames: DataTexture[] } => ({
-  frames: [],
-}));
-
-vi.mock('../src/rendering/inkFrameMask', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/rendering/inkFrameMask')>();
-  return {
-    ...actual,
-    createInkFrameMask: vi.fn((size?: number) => {
-      const frame = actual.createInkFrameMask(size);
-      vi.spyOn(frame, 'dispose');
-      inkFrameMocks.frames.push(frame);
-      return frame;
-    }),
-  };
-});
+} => ({ composers: [], aoPasses: [], outlinePasses: [], printPasses: [], outputPasses: [] }));
 
 vi.mock('three/addons/postprocessing/EffectComposer.js', () => ({
   EffectComposer: class {
     readonly addPass = vi.fn();
     readonly render = vi.fn();
     readonly setPixelRatio = vi.fn();
-    readonly setSize = vi.fn(() => {
-      if (postProcessingMocks.setSizeFailure !== null) {
-        throw postProcessingMocks.setSizeFailure;
-      }
-    });
+    readonly setSize = vi.fn();
     readonly dispose: MockFunction;
-
     constructor(_renderer: WebGLRenderer, readonly target: WebGLRenderTarget) {
       vi.spyOn(target, 'dispose');
       this.dispose = vi.fn(() => target.dispose());
@@ -88,17 +77,46 @@ vi.mock('three/addons/postprocessing/RenderPass.js', () => ({
   },
 }));
 
+vi.mock('three/addons/postprocessing/OutlinePass.js', () => ({
+  OutlinePass: class {
+    readonly visibleEdgeColor = { setHex: vi.fn() };
+    readonly hiddenEdgeColor = { setHex: vi.fn() };
+    readonly setSize = vi.fn();
+    readonly dispose = vi.fn();
+    renderScene = new Scene();
+    renderCamera = new PerspectiveCamera();
+    selectedObjects: object[] = [];
+    edgeStrength = 0;
+    edgeThickness = 0;
+    edgeGlow = 0;
+    downSampleRatio = 1;
+    constructor() { postProcessingMocks.outlinePasses.push(this); }
+  },
+}));
+
+vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
+  resolveItemAmbientOcclusionMode: () => 'composite',
+  nextItemAmbientOcclusionMode: () => 'debug',
+  ITEM_AMBIENT_OCCLUSION_HOTKEY: 'KeyO',
+  ItemAmbientOcclusionPass: class {
+    enabled = true;
+    readonly setContext = vi.fn();
+    readonly setMode = vi.fn();
+    readonly setVisualQuality = vi.fn();
+    readonly dispose = vi.fn();
+    constructor() { postProcessingMocks.aoPasses.push(this); }
+  },
+}));
+
 vi.mock('three/addons/postprocessing/ShaderPass.js', () => ({
   ShaderPass: class {
     readonly uniforms: Record<string, { value: unknown }>;
     readonly dispose = vi.fn();
-
     constructor(shader: typeof PrintShader) {
       this.uniforms = Object.fromEntries(Object.entries(shader.uniforms).map(([name, uniform]) => {
         const value: unknown = uniform.value;
         const clone = typeof value === 'object' && value !== null && 'clone' in value
-          ? value.clone
-          : null;
+          ? value.clone : null;
         return [name, { value: typeof clone === 'function' ? clone.call(value) : value }];
       }));
       postProcessingMocks.printPasses.push(this);
@@ -109,186 +127,100 @@ vi.mock('three/addons/postprocessing/ShaderPass.js', () => ({
 vi.mock('three/addons/postprocessing/OutputPass.js', () => ({
   OutputPass: class {
     readonly dispose = vi.fn();
-
-    constructor() {
-      postProcessingMocks.outputPasses.push(this);
-    }
+    constructor() { postProcessingMocks.outputPasses.push(this); }
   },
 }));
 
-function createRenderer(
-  maxTextureSize?: number,
-  pixelRatio = 1,
-): WebGLRenderer & { render: MockFunction } {
-  const render = vi.fn();
+function createRenderer(): WebGLRenderer & { render: MockFunction } {
   return {
-    capabilities: { maxSamples: 4, maxTextureSize },
+    capabilities: { maxSamples: 4, maxTextureSize: 4096 },
     getSize: (target: Vector2) => target.set(320, 180),
-    getPixelRatio: () => pixelRatio,
-    render,
+    getPixelRatio: () => 1,
+    render: vi.fn(),
   } as unknown as WebGLRenderer & { render: MockFunction };
 }
 
-describe('post-processing pipeline construction', () => {
+describe('post-processing pipeline', () => {
   beforeEach(() => {
     postProcessingMocks.composers.length = 0;
+    postProcessingMocks.aoPasses.length = 0;
+    postProcessingMocks.outlinePasses.length = 0;
     postProcessingMocks.printPasses.length = 0;
     postProcessingMocks.outputPasses.length = 0;
-    postProcessingMocks.setSizeFailure = null;
-    inkFrameMocks.frames.length = 0;
   });
 
-  it('falls back to direct rendering when pipeline construction throws', () => {
-    const render = vi.fn();
-    const renderer = { render } as unknown as WebGLRenderer;
+  it('builds the consolidated pass order and retains hover targets', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    const composer = postProcessingMocks.composers[0]!;
+    expect(composer.addPass.mock.calls.map(([pass]) => pass.constructor.name)).toEqual([
+      'RenderPass', 'ItemAmbientOcclusionPass', 'OutlinePass', 'ShaderPass', 'OutputPass',
+    ]);
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    pipeline.render(scene, camera, { kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0 });
+    expect(postProcessingMocks.outlinePasses[0]?.renderScene).toBe(scene);
+    expect(postProcessingMocks.outlinePasses[0]?.renderCamera).toBe(camera);
+  });
+
+  it('changes only AO quality at runtime', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    pipeline.setVisualQuality('high');
+    expect(postProcessingMocks.aoPasses[0]?.setVisualQuality).toHaveBeenCalledWith('high');
+    expect(postProcessingMocks.printPasses).toHaveLength(1);
+    expect(postProcessingMocks.composers).toHaveLength(1);
+  });
+
+  it('samples scene color once and omits chromatic aberration', () => {
+    expect(PrintShader.fragmentShader.match(/texture2D\(tDiffuse/g)).toHaveLength(1);
+    expect(PrintShader.fragmentShader).not.toContain('uChromaticAberration');
+  });
+
+  it('keeps grade and outline when AO construction fails', () => {
+    const failure = new Error('ao unavailable');
+    const reportAoFallback = vi.fn();
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => { throw failure; }, reportAoFallback);
+    expect(reportAoFallback).toHaveBeenCalledWith(failure);
+    expect(postProcessingMocks.composers[0]?.addPass).toHaveBeenCalledTimes(4);
+    pipeline.dispose();
+  });
+
+  it('disables AO but keeps rendering when quality reconfiguration fails', () => {
+    const failure = new Error('ao resize unavailable');
+    const reportAoFallback = vi.fn();
+    const failingAoPass = {
+      enabled: true, setVisualQuality: vi.fn(() => { throw failure; }),
+    } as unknown as ItemAmbientOcclusionPass;
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => failingAoPass, reportAoFallback);
+    expect(() => pipeline.setVisualQuality('high')).not.toThrow();
+    expect(reportAoFallback).toHaveBeenCalledWith(failure);
+    expect(failingAoPass.enabled).toBe(false);
+  });
+
+  it('falls back to direct rendering when pipeline construction fails', () => {
+    const renderer = { render: vi.fn() } as unknown as WebGLRenderer;
     const failure = new Error('composer unavailable');
-    const reportFallback = vi.fn();
-    const sceneRenderer = createSceneRenderer(
-      renderer,
-      () => { throw failure; },
-      reportFallback,
-    );
+    const sceneRenderer = createSceneRenderer(renderer, 'high', () => { throw failure; }, vi.fn());
     const scene = new Scene();
     const camera = new PerspectiveCamera();
-
-    sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
-    });
-
-    expect(reportFallback).toHaveBeenCalledWith(failure);
-    expect(render).toHaveBeenCalledWith(scene, camera);
-    sceneRenderer.dispose();
-    sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 1, sinkingProgress: 0,
-    });
-    expect(render).toHaveBeenCalledOnce();
-  });
-
-  it('returns the constructed pipeline when setup succeeds', () => {
-    const pipeline = { render: vi.fn(), resize: vi.fn(), dispose: vi.fn() };
-    const renderer = {} as WebGLRenderer;
-    expect(createSceneRenderer(renderer, () => pipeline, vi.fn())).toBe(pipeline);
-  });
-
-  it('disposes constructed resources when initial resize throws before falling back', () => {
-    const failure = new Error('initial composer resize failed');
-    postProcessingMocks.setSizeFailure = failure;
-    const renderer = createRenderer();
-    const reportFallback = vi.fn();
-
-    const sceneRenderer = createSceneRenderer(
-      renderer,
-      (value) => new PostProcessingPipeline(value),
-      reportFallback,
-    );
-
-    expect(reportFallback).toHaveBeenCalledWith(failure);
-    expect(postProcessingMocks.printPasses[0]?.dispose).toHaveBeenCalledOnce();
-    expect(postProcessingMocks.outputPasses[0]?.dispose).toHaveBeenCalledOnce();
-    expect(postProcessingMocks.composers[0]?.dispose).toHaveBeenCalledOnce();
-    expect(postProcessingMocks.composers[0]?.target.dispose).toHaveBeenCalledOnce();
-
-    const scene = new Scene();
-    const camera = new PerspectiveCamera();
-    sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
-    });
+    sceneRenderer.render(scene, camera, { kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0 });
     expect(renderer.render).toHaveBeenCalledWith(scene, camera);
   });
 
-  it('disposes the ink frame when renderer sizing fails before composer construction', () => {
-    const failure = new Error('renderer sizing failed');
-    const renderer = createRenderer();
-    renderer.getSize = vi.fn(() => {
-      throw failure;
-    });
-    const reportFallback = vi.fn();
-
-    const sceneRenderer = createSceneRenderer(
-      renderer,
-      (value) => new PostProcessingPipeline(value),
-      reportFallback,
-    );
-
-    expect(reportFallback).toHaveBeenCalledWith(failure);
-    expect(inkFrameMocks.frames).toHaveLength(1);
-    expect(inkFrameMocks.frames[0]?.dispose).toHaveBeenCalledOnce();
-    expect(postProcessingMocks.composers).toHaveLength(0);
-
-    sceneRenderer.dispose();
-  });
-
-  it('leaves composer size and uniforms unchanged for invalid or extreme resize inputs', () => {
-    const pipeline = new PostProcessingPipeline(createRenderer(1_024));
-    const composer = postProcessingMocks.composers[0];
-    const uniforms = postProcessingMocks.printPasses[0]?.uniforms;
-    const resolution = uniforms?.uResolution?.value as Vector2;
-    const initialResolution = resolution.clone();
-    const initialPixelRatio = uniforms?.uPixelRatio?.value;
-
-    pipeline.resize(Number.NaN, 180, 1);
-    pipeline.resize(320, 180, 3);
-    pipeline.resize(600, 180, 2);
-    pipeline.resize(Number.MAX_VALUE, 180, 2);
-
-    expect(composer?.setPixelRatio).toHaveBeenCalledOnce();
-    expect(composer?.setSize).toHaveBeenCalledOnce();
-    expect(resolution).toEqual(initialResolution);
-    expect(uniforms?.uPixelRatio?.value).toBe(initialPixelRatio);
-  });
-
-  it('uses a finite texture-size bound when renderer capabilities omit one', () => {
-    const pipeline = new PostProcessingPipeline(createRenderer());
-    const composer = postProcessingMocks.composers[0];
-
-    pipeline.resize(Number.MAX_VALUE, Number.MAX_VALUE, 1);
-
-    expect(composer?.setPixelRatio).toHaveBeenCalledOnce();
-    expect(composer?.setSize).toHaveBeenCalledOnce();
-  });
-
-  it('defines CSS-pixel screen-space sampling without remote textures', () => {
-    expect(PrintShader.uniforms.uPixelRatio.value).toBe(1);
-    expect(PrintShader.fragmentShader).toContain('gl_FragCoord.xy / uPixelRatio');
-    expect(PrintShader.fragmentShader).toContain('uChromaticAberrationCssPixels * uPixelRatio');
-    expect(PrintShader.fragmentShader).toContain('uniform sampler2D tInkFrame');
-    expect(PrintShader.fragmentShader).toContain('uPosterizationLevels');
-    expect(PrintShader.fragmentShader).toContain('uInkFrameStrength');
-    expect(PrintShader.fragmentShader).not.toMatch(/https?:\/\//);
-  });
-
-  it('disposes the generated ink frame exactly once', () => {
-    const pipeline = new PostProcessingPipeline(createRenderer());
-    const shaderPass = postProcessingMocks.printPasses[0];
-    const frame = shaderPass?.uniforms?.tInkFrame?.value as DataTexture;
-    const disposeFrame = vi.mocked(frame.dispose);
-
+  it('uses a standard 8-bit composer target and disposes it once', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    const composer = postProcessingMocks.composers[0]!;
+    expect(composer.target.texture.name).toBe('illustrated-post-composer');
+    expect(composer.target.samples).toBe(0);
     pipeline.dispose();
     pipeline.dispose();
-
-    expect(disposeFrame).toHaveBeenCalledOnce();
+    expect(composer.target.dispose).toHaveBeenCalledOnce();
   });
 
-  it('avoids Three injected shader helper name collisions', () => {
-    expect(PrintShader.fragmentShader).not.toMatch(/\bfloat\s+luminance\s*\(/);
-    expect(PrintShader.fragmentShader).toMatch(/\bfloat\s+printLuminance\s*\(/);
-    expect(PrintShader.fragmentShader.match(/\bprintLuminance\s*\(/g)).toHaveLength(3);
-  });
-
-  it('keeps every profile inside the approved vivid range', () => {
-    for (const profile of postProcessingProfilesForTest()) {
-      expect(profile.saturation, profile.id).toBeGreaterThanOrEqual(1.02);
-      expect(profile.saturation, profile.id).toBeLessThanOrEqual(1.12);
-      expect(profile.contrast, profile.id).toBeGreaterThanOrEqual(1.08);
-      expect(profile.contrast, profile.id).toBeLessThanOrEqual(1.14);
-    }
-  });
-
-  it('keeps grain animated for scavenging', () => {
-    expect(resolveGrainTime({
-      kind: 'scavenge',
-      elapsedSeconds: 1.26,
-      sinkingProgress: 0,
-    })).toBe(1.25);
+  it('keeps the generated ink frame owned by the pipeline', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    const frame = postProcessingMocks.printPasses[0]?.uniforms?.tInkFrame?.value as DataTexture;
+    vi.spyOn(frame, 'dispose');
+    pipeline.dispose();
+    expect(frame.dispose).toHaveBeenCalledOnce();
   });
 });

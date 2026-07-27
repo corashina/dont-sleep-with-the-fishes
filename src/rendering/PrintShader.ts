@@ -20,7 +20,6 @@ export const PrintShader = {
     uHalftoneStrength: { value: 0 },
     uHalftoneSizeCssPixels: { value: 5 },
     uVignetteStrength: { value: 0 },
-    uChromaticAberrationCssPixels: { value: 0 },
     uGrainStrength: { value: 0 },
     uGrainTime: { value: 0 },
   },
@@ -50,7 +49,6 @@ export const PrintShader = {
     uniform float uHalftoneStrength;
     uniform float uHalftoneSizeCssPixels;
     uniform float uVignetteStrength;
-    uniform float uChromaticAberrationCssPixels;
     uniform float uGrainStrength;
     uniform float uGrainTime;
     varying vec2 vUv;
@@ -68,16 +66,7 @@ export const PrintShader = {
     void main() {
       vec2 centered = vUv - 0.5;
       float edgeDistance = length(centered * vec2(1.0, 1.25));
-      float edgeMask = smoothstep(0.38, 0.72, edgeDistance);
-      vec2 edgeDirection = normalize(centered + vec2(0.00001));
-      vec2 colorOffset = edgeDirection
-        * edgeMask
-        * ((uChromaticAberrationCssPixels * uPixelRatio) / uResolution);
-
-      vec3 color;
-      color.r = texture2D(tDiffuse, vUv + colorOffset).r;
-      color.g = texture2D(tDiffuse, vUv).g;
-      color.b = texture2D(tDiffuse, vUv - colorOffset).b;
+      vec3 color = texture2D(tDiffuse, vUv).rgb;
 
       color = color / (vec3(1.0) + color * uHighlightCompression);
       color = max((color - vec3(0.18)) * uContrast + vec3(0.18), vec3(0.0));
