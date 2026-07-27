@@ -22,6 +22,7 @@ import {
   TITLE_CAMERA_TARGET,
 } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
+import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -245,6 +246,40 @@ describe('ScavengePhase lifecycle integration', () => {
     );
     game.dispose();
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('applies a supplied visual quality preference to the shared scene renderer', () => {
+    const setVisualQuality = vi.fn();
+    let received!: PhaseContext;
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(),
+      resize: vi.fn(),
+      setVisualQuality,
+      dispose: vi.fn(),
+    };
+    const preference = createVisualQualityPreference(
+      (quality) => sceneRenderer.setVisualQuality?.(quality),
+      null,
+    );
+    const game = Game.forTest({
+      createScavenge: (context) => {
+        received = context;
+        return gamePhase();
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      sceneRenderer,
+      visualQuality: preference,
+    });
+
+    preference.set('high');
+
+    expect(received.visualQuality).toBe(preference);
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    game.dispose();
   });
 
   it('uses one long-range camera without changing its near view', () => {

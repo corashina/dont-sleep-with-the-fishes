@@ -13,6 +13,11 @@ import {
   DirectSceneRenderer,
   type SceneRenderer,
 } from './rendering/SceneRenderer';
+import { createSceneRenderer } from './rendering/PostProcessingPipeline';
+import {
+  createVisualQualityPreference,
+  type VisualQualityPreference,
+} from './rendering/visualQuality';
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import type { PropModelLibrary } from './world/PropModelLibrary';
@@ -70,6 +75,7 @@ export interface GameTestOptions {
   mount?: HTMLElement;
   renderer?: WebGLRenderer;
   sceneRenderer?: SceneRenderer;
+  visualQuality?: VisualQualityPreference;
 }
 
 function createRandomSeed(): number {
@@ -119,13 +125,16 @@ export class Game {
       powerPreference: 'high-performance',
     });
     let sceneRenderer: SceneRenderer | null = null;
+    const visualQuality = createVisualQualityPreference((quality) => {
+      sceneRenderer?.setVisualQuality?.(quality);
+    });
     let initializationStarted = false;
     try {
       renderer.outputColorSpace = SRGBColorSpace;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
-      sceneRenderer = new DirectSceneRenderer(renderer);
+      sceneRenderer = createSceneRenderer(renderer, visualQuality.get());
       const camera = new PerspectiveCamera(
         GAME_CAMERA.fov,
         1,
@@ -138,6 +147,7 @@ export class Game {
         mount,
         renderer,
         sceneRenderer,
+        visualQuality,
         camera,
         clock,
         propModels,
@@ -180,11 +190,16 @@ export class Game {
       getDelta: () => 0.016,
     };
     const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
+    const visualQuality = options.visualQuality ?? createVisualQualityPreference(
+      (quality) => sceneRenderer.setVisualQuality?.(quality),
+      null,
+    );
     const game = Object.create(Game.prototype) as Game;
     game.initialize(
       mount,
       renderer,
       sceneRenderer,
+      visualQuality,
       new PerspectiveCamera(
         GAME_CAMERA.fov,
         1,
@@ -251,6 +266,7 @@ export class Game {
     mount: HTMLElement,
     renderer: WebGLRenderer,
     sceneRenderer: SceneRenderer,
+    visualQuality: VisualQualityPreference,
     camera: PerspectiveCamera,
     clock: GameClock,
     propModels: PropModelLibrary,
@@ -285,6 +301,7 @@ export class Game {
         mount,
         renderer,
         sceneRenderer,
+        visualQuality,
         camera,
         propModels,
         shipFurniture,
