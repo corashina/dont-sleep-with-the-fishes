@@ -5,6 +5,10 @@ import {
   findSupportEyeHeight,
   resolveLocalMovement,
 } from './collisions';
+import {
+  resolveLadderTraversal,
+  type LadderClimbZone,
+} from './LadderTraversal';
 
 const JUMP_SPEED = 5.2;
 const GRAVITY = 14;
@@ -36,7 +40,9 @@ export class PlayerController {
   private readonly localView = new Quaternion();
   private readonly worldPosition = new Vector3();
   private readonly movement = new Vector3();
-  private deckEyeHeight: number;
+  private readonly baseDeckEyeHeight: number;
+  private floorEyeHeight: number;
+  private activeLadderId: string | null = null;
   private verticalVelocity = 0;
 
   constructor(
@@ -47,10 +53,12 @@ export class PlayerController {
     private readonly navigationBounds: PlayerNavigationBounds,
     private readonly onFall: () => void,
     private readonly arcColliders: readonly CollisionArc[] = [],
+    private readonly climbZones: readonly LadderClimbZone[] = [],
   ) {
     this.localPosition = start.clone();
     this.safePosition = start.clone();
-    this.deckEyeHeight = start.y;
+    this.baseDeckEyeHeight = start.y;
+    this.floorEyeHeight = start.y;
   }
 
   update(delta: number, input: InputController, cameraShake = 0): void {
@@ -71,10 +79,37 @@ export class PlayerController {
       (-axes.x * sin + axes.z * cos) * speed * delta,
     );
 
+    const ladderTraversal = resolveLadderTraversal({
+      position: this.localPosition,
+      activeLadderId: this.activeLadderId,
+      planarMovement: [this.movement.x, this.movement.z],
+      verticalInput: -axes.z,
+      deltaSeconds: delta,
+      floorEyeY: this.floorEyeHeight,
+    }, this.climbZones);
+    if (ladderTraversal.consumed) {
+      this.localPosition.set(
+        ladderTraversal.position.x,
+        ladderTraversal.position.y,
+        ladderTraversal.position.z,
+      );
+      this.activeLadderId = ladderTraversal.activeLadderId;
+      this.floorEyeHeight = ladderTraversal.floorEyeY;
+      this.verticalVelocity = 0;
+      input.consumeJump();
+      this.safePosition.set(
+        ladderTraversal.position.x,
+        ladderTraversal.floorEyeY,
+        ladderTraversal.position.z,
+      );
+      this.placeCamera(cameraShake);
+      return;
+    }
+
     const currentSupport = findSupportEyeHeight(
       this.localPosition,
       0.35,
-      this.deckEyeHeight,
+      this.floorEyeHeight,
       this.colliders,
     );
     const grounded = this.localPosition.y <= currentSupport + GROUND_EPSILON
@@ -93,7 +128,7 @@ export class PlayerController {
     };
     const desired: LocalPlayerPosition = {
       x: current.x + this.movement.x,
-      y: Math.max(this.deckEyeHeight, nextY),
+      y: Math.max(this.floorEyeHeight, nextY),
       z: current.z + this.movement.z,
     };
     const resolved = resolveLocalMovement(
@@ -106,7 +141,7 @@ export class PlayerController {
     const support = findSupportEyeHeight(
       resolved,
       0.35,
-      this.deckEyeHeight,
+      this.floorEyeHeight,
       this.colliders,
     );
     if (
@@ -120,7 +155,7 @@ export class PlayerController {
     this.localPosition.set(resolved.x, resolved.y, resolved.z);
 
     if (containsLocalPosition(this.navigationBounds.safe, this.localPosition)) {
-      this.safePosition.set(this.localPosition.x, this.deckEyeHeight, this.localPosition.z);
+      this.safePosition.set(this.localPosition.x, this.floorEyeHeight, this.localPosition.z);
     }
     if (!containsLocalPosition(this.navigationBounds.fall, this.localPosition)) {
       this.localPosition.copy(this.safePosition);
@@ -143,7 +178,8 @@ export class PlayerController {
   reset(start: Vector3): void {
     this.localPosition.copy(start);
     this.safePosition.copy(start);
-    this.deckEyeHeight = start.y;
+    this.floorEyeHeight = this.baseDeckEyeHeight;
+    this.activeLadderId = null;
     this.verticalVelocity = 0;
     this.yaw = DEFAULT_YAW;
     this.pitch = 0;

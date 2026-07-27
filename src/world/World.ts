@@ -34,6 +34,7 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import type { CollisionArc, CollisionBox } from '../player/collisions';
+import type { LadderClimbZone } from '../player/LadderTraversal';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { boatStorageTransform } from './BoatStorage';
 import { BoatDepositSmoke } from './BoatDepositSmoke';
@@ -117,6 +118,7 @@ export class World {
   readonly colliders: CollisionBox[];
   readonly interactionOccluders: readonly CollisionBox[];
   readonly arcColliders: CollisionArc[];
+  readonly climbZones: readonly LadderClimbZone[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
   readonly playerNavigationBounds: PlayerNavigationBounds;
@@ -187,6 +189,7 @@ export class World {
     this.colliders = this.shipBuild.colliders;
     this.interactionOccluders = this.shipBuild.interactionOccluders;
     this.arcColliders = this.shipBuild.arcColliders;
+    this.climbZones = this.shipBuild.climbZones;
     this.playerStart = this.shipBuild.playerStart.clone();
     this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
     this.playerNavigationBounds = this.shipBuild.playerNavigationBounds;
