@@ -26,6 +26,15 @@ describe('scavenging ship layout', () => {
     expect(storage.maxX - storage.minX).toBeCloseTo(11.5);
     expect(wheelhouse.maxX - wheelhouse.minX).toBeCloseTo(11);
     expect(wheelhouse.minZ - crew.maxZ).toBeCloseTo(3.5);
+    expect(SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.polygon).toEqual([
+      [-5.5, 17],
+      [5.5, 17],
+      [5.5, 20.7],
+      [4.2, 22],
+      [-4.2, 22],
+      [-5.5, 20.7],
+    ]);
+    expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'helm-desk-forward')).toBeUndefined();
     expect(FREIGHTER_DIMENSIONS.deckY).toBe(2.22);
   });
 
@@ -41,6 +50,97 @@ describe('scavenging ship layout', () => {
     expect(
       mast.position[2] <= crew.maxZ || mast.position[2] >= wheelhouse.minZ,
     ).toBe(true);
+  });
+
+  it('authors one mast-facing centered ladder for each inner roof balcony', () => {
+    expect(SHIP_LAYOUT.balconies).toEqual([
+      expect.objectContaining({
+        id: 'crew-balcony',
+        zoneId: 'crewCabin',
+        ladderId: 'crew-ladder',
+        edge: 'aft',
+        coamingHeight: 0.12,
+        openingWidth: 1.5,
+      }),
+      expect.objectContaining({
+        id: 'storage-balcony',
+        zoneId: 'storageWorkroom',
+        ladderId: 'storage-ladder',
+        edge: 'forward',
+        coamingHeight: 0.12,
+        openingWidth: 1.5,
+      }),
+    ]);
+    expect(SHIP_LAYOUT.ladders).toEqual([
+      expect.objectContaining({
+        id: 'crew-ladder',
+        zoneId: 'crewCabin',
+        edge: 'aft',
+        centerX: 0,
+      }),
+      expect.objectContaining({
+        id: 'storage-ladder',
+        zoneId: 'storageWorkroom',
+        edge: 'forward',
+        centerX: 0,
+      }),
+    ]);
+  });
+
+  it('rejects invalid balcony and ladder assignments', () => {
+    const narrowerOpening = {
+      ...SHIP_LAYOUT,
+      balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
+        ? { ...balcony, openingWidth: 0.4 }
+        : balcony),
+    };
+    expect(() => validateShipLayout(narrowerOpening)).toThrow(/crew-balcony.*opening/i);
+
+    const duplicateLadder = {
+      ...SHIP_LAYOUT,
+      ladders: [...SHIP_LAYOUT.ladders, { ...SHIP_LAYOUT.ladders[0]! }],
+    };
+    expect(() => validateShipLayout(duplicateLadder)).toThrow(/crew-ladder/i);
+
+    const missingLadder = {
+      ...SHIP_LAYOUT,
+      balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
+        ? { ...balcony, ladderId: 'missing-ladder' as never }
+        : balcony),
+    };
+    expect(() => validateShipLayout(missingLadder)).toThrow(/crew-balcony.*missing-ladder/i);
+
+    const mismatchedEdge = {
+      ...SHIP_LAYOUT,
+      ladders: SHIP_LAYOUT.ladders.map((ladder) => ladder.id === 'crew-ladder'
+        ? { ...ladder, edge: 'forward' as const }
+        : ladder),
+    };
+    expect(() => validateShipLayout(mismatchedEdge)).toThrow(/crew-ladder.*edge/i);
+
+    const offCenter = {
+      ...SHIP_LAYOUT,
+      ladders: SHIP_LAYOUT.ladders.map((ladder) => ladder.id === 'crew-ladder'
+        ? { ...ladder, centerX: 0.1 }
+        : ladder),
+    };
+    expect(() => validateShipLayout(offCenter)).toThrow(/crew-ladder.*centered/i);
+
+    const invalidDimension = {
+      ...SHIP_LAYOUT,
+      balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
+        ? { ...balcony, coamingHeight: Number.NaN }
+        : balcony),
+    };
+    expect(() => validateShipLayout(invalidDimension)).toThrow(/crew-balcony.*positive/i);
+
+    const wheelhouseBalcony = {
+      ...SHIP_LAYOUT,
+      balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
+        ? { ...balcony, zoneId: 'wheelhouse' as never }
+        : balcony),
+    };
+    expect(() => validateShipLayout(wheelhouseBalcony)).toThrow(/crew-balcony.*wheelhouse/i);
   });
 
   it('rejects a forward-room gap that is not exactly 3.5 metres', () => {

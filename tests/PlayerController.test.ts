@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
 import type { MovementAxes } from '../src/player/collisions';
+import type { LadderClimbZone } from '../src/player/LadderTraversal';
 import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createTestShip } from './helpers/shipFurniture';
@@ -53,6 +54,23 @@ function expectRotation(actual: Quaternion, expected: Quaternion): void {
 function navigationTarget(id: string): Vector3 {
   const position = SHIP_LAYOUT.targets.find((candidate) => candidate.id === id)!.position;
   return new Vector3(position[0], FREIGHTER_DIMENSIONS.deckY + 1.5, position[1]);
+}
+
+function testLadderZone(): LadderClimbZone {
+  return {
+    id: 'test-ladder',
+    climbX: 0,
+    climbZ: 4,
+    outwardX: 0,
+    outwardZ: -1,
+    bottomEyeY: 3.72,
+    topEyeY: 6.42,
+    topFloor: { minX: -1, maxX: 1, minZ: 4, maxZ: 6 },
+    bottomEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
+    topEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
+    bottomDismount: [0, 3.5],
+    topDismount: [0, 4.5],
+  };
 }
 
 describe('PlayerController', () => {
@@ -143,6 +161,159 @@ describe('PlayerController', () => {
 
     expect(walking.localPosition.z).toBeCloseTo(3.8);
     expect(sprinting.localPosition.z).toBeCloseTo(6.2);
+  });
+
+  it('automatically climbs and keeps the balcony as its active floor', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, zone.bottomEntry.minZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: -1 };
+
+    for (let frame = 0; frame < 15; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.y).toBeCloseTo(zone.topEyeY);
+    expect(controller.localPosition.x).toBeCloseTo(zone.topDismount[0]);
+    expect(controller.localPosition.z).toBeCloseTo(zone.topDismount[1]);
+    input.movement = { x: 0, z: 0 };
+    controller.update(0.5, input.asControllerInput());
+    expect(controller.localPosition.y).toBeCloseTo(zone.topEyeY);
+  });
+
+  it('falls to the main deck after jumping off the balcony floor', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, zone.bottomEntry.minZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: -1 };
+    for (let frame = 0; frame < 15; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    input.movement = { x: -1, z: 0 };
+    input.queueJump();
+    for (let frame = 0; frame < 4; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    input.movement = { x: 0, z: 0 };
+    for (let frame = 0; frame < 20; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.x).toBeGreaterThan(1);
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
+  });
+
+  it('automatically descends and keeps the lower deck as its active floor', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.topEyeY, zone.topEntry.maxZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: 1 };
+
+    for (let frame = 0; frame < 14; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
+    expect(controller.localPosition.x).toBeCloseTo(zone.bottomDismount[0]);
+    expect(controller.localPosition.z).toBeCloseTo(zone.bottomDismount[1]);
+    input.movement = { x: 0, z: 0 };
+    controller.update(0.5, input.asControllerInput());
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
+  });
+
+  it('suppresses gravity and jump but still consumes camera look while climbing', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const camera = new PerspectiveCamera();
+    const controller = new PlayerController(
+      camera,
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, zone.bottomEntry.minZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: -1 };
+    controller.update(0.1, input.asControllerInput());
+    input.movement = { x: 0, z: 0 };
+    input.queueJump();
+    input.queueLook(100, -50);
+
+    controller.update(0.5, input.asControllerInput());
+
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
+    expectRotation(
+      camera.quaternion,
+      new Quaternion().setFromEuler(new Euler(0.09, Math.PI - 0.18, 0, 'YXZ')),
+    );
+
+    input.movement = { x: 0, z: -1 };
+    for (let frame = 0; frame < 16; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    input.movement = { x: 0, z: 0 };
+    controller.update(0.1, input.asControllerInput());
+    expect(controller.localPosition.y).toBeCloseTo(zone.topEyeY);
+  });
+
+  it.each([
+    ['right to left', 0.3, 1, -0.27],
+    ['left to right', -0.3, -1, 0.27],
+  ])('does not capture the ladder when crossing its entry sideways %s', (
+    _direction,
+    startX,
+    movementX,
+    expectedX,
+  ) => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(startX, zone.bottomEyeY, 3.7),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: movementX, z: 0 };
+
+    controller.update(0.15, input.asControllerInput());
+
+    expect(controller.localPosition.x).toBeCloseTo(expectedX);
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
+    expect(controller.localPosition.z).toBeCloseTo(3.7);
   });
 
   it('jumps, ignores another jump while airborne, and can jump again after landing', () => {
@@ -373,5 +544,24 @@ describe('PlayerController', () => {
       camera.quaternion,
       new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
     );
+  });
+
+  it('reset uses the supplied start height as the floor for an immediate jump', () => {
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.7, 0),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+    );
+    const resetStart = new Vector3(2, 4.2, -1);
+
+    controller.reset(resetStart);
+    input.queueJump();
+    controller.update(0.1, input.asControllerInput());
+
+    expect(controller.localPosition.y).toBeGreaterThan(resetStart.y);
   });
 });
