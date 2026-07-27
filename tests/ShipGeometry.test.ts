@@ -911,6 +911,98 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
+  it('builds finite supported captain details without a helm desk', () => {
+    const layout: ShipLayoutSpec = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.filter(({ id }) => id !== 'helm-desk-forward'),
+    };
+    expect(() => validateShipLayout(layout)).not.toThrow();
+    const materials = createShipMaterials();
+    let build: ReturnType<typeof createShipGeometry> | undefined;
+    expect(() => {
+      build = createShipGeometry(materials, layout);
+    }).not.toThrow();
+    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
+    details.traverse((object) => {
+      expect([
+        ...object.position.toArray(),
+        object.rotation.x,
+        object.rotation.y,
+        object.rotation.z,
+        ...object.scale.toArray(),
+      ].every(Number.isFinite), object.name).toBe(true);
+    });
+
+    const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+    const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
+    ['logbook', 'mug'].forEach((id) => {
+      const prop = details.getObjectByName(`captain-detail:${id}`)!;
+      const support = prop.getObjectByName(`captain-detail:${id}:fallback-support`);
+      expect(support, `${id} fallback support`).toBeDefined();
+      expect(prop.position.z, `${id} wall anchor`).toBeGreaterThan(wheelhouse.maxZ - 0.6);
+      expect(Math.abs(prop.position.x - centerX), `${id} central path`).toBeGreaterThan(1.1);
+      const propBounds = new Box3().setFromObject(prop);
+      layout.doors.filter(({ zoneId }) => zoneId === 'wheelhouse').forEach((door) => {
+        const overlapX = Math.max(0, Math.min(propBounds.max.x, door.approach.maxX)
+          - Math.max(propBounds.min.x, door.approach.minX));
+        const overlapZ = Math.max(0, Math.min(propBounds.max.z, door.approach.maxZ)
+          - Math.max(propBounds.min.z, door.approach.minZ));
+        expect(overlapX * overlapZ, `${id} overlaps ${door.id}`).toBe(0);
+      });
+    });
+
+    build!.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('uses finite helm-collider tabletop anchors when the helm has no surfaces', () => {
+    const layout: ShipLayoutSpec = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((fixture) =>
+        fixture.id === 'helm-desk-forward' ? { ...fixture, surfaces: [] } : fixture),
+    };
+    expect(() => validateShipLayout(layout)).not.toThrow();
+    const helm = layout.furniture.find(({ id }) => id === 'helm-desk-forward')!;
+    const materials = createShipMaterials();
+    let build: ReturnType<typeof createShipGeometry> | undefined;
+    expect(() => {
+      build = createShipGeometry(materials, layout);
+    }).not.toThrow();
+    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
+    details.traverse((object) => {
+      expect([
+        ...object.position.toArray(),
+        object.rotation.x,
+        object.rotation.y,
+        object.rotation.z,
+        ...object.scale.toArray(),
+      ].every(Number.isFinite), object.name).toBe(true);
+    });
+
+    const supportTop = helm.position[1] + helm.colliderSize[1] * helm.scale[1];
+    ['logbook', 'mug'].forEach((id) => {
+      const prop = details.getObjectByName(`captain-detail:${id}`)!;
+      const bounds = new Box3().setFromObject(prop);
+      expect(bounds.min.y, `${id} support`).toBeCloseTo(supportTop);
+      expect(bounds.min.x).toBeGreaterThanOrEqual(
+        helm.position[0] - helm.colliderSize[0] / 2,
+      );
+      expect(bounds.max.x).toBeLessThanOrEqual(
+        helm.position[0] + helm.colliderSize[0] / 2,
+      );
+      expect(bounds.min.z).toBeGreaterThanOrEqual(
+        helm.position[2] - helm.colliderSize[2] / 2,
+      );
+      expect(bounds.max.z).toBeLessThanOrEqual(
+        helm.position[2] + helm.colliderSize[2] / 2,
+      );
+      expect(prop.getObjectByName(`captain-detail:${id}:fallback-support`)).toBeUndefined();
+    });
+
+    build!.disposeGeometry();
+    materials.dispose();
+  });
+
   it('rests tabletop captain props on the helm desk outside searchable footprints', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
