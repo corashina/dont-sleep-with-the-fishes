@@ -217,7 +217,6 @@ export class BoatSupplyDisplay {
     propModels: PropModelLibrary,
     parent: Group,
     savedItems: readonly ItemInstance[],
-    private readonly reducedMotion = false,
   ) {
     const sortedItems = [
       ...savedItems,
@@ -352,7 +351,7 @@ export class BoatSupplyDisplay {
     if (groupId === undefined) return Promise.resolve();
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return Promise.resolve();
-    const duration = this.reducedMotion ? Number.EPSILON : EVENT_ITEM_USE_DURATION;
+    const duration = EVENT_ITEM_USE_DURATION;
     return new Promise((resolve) => {
       this.activeAnimation = {
         root: record.root,

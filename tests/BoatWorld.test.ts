@@ -148,7 +148,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
-      { matches: true } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -156,7 +155,7 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('drifting-bottle');
     expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(true);
     const reveal = world.revealEvent('drifting-bottle');
-    world.update(1, 1 / 60);
+    world.update(1, 1);
     await reveal;
     world.clearEvent();
     expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(false);
@@ -175,7 +174,6 @@ describe('BoatWorld helpers', () => {
     const create = vi.spyOn(propModels, 'create');
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -205,7 +203,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -228,7 +225,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -248,7 +244,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       [savedItem('medicalKit')],
@@ -305,7 +300,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       camera,
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       [savedItem('medicalKit')],
@@ -419,7 +413,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       savedItems,
@@ -457,7 +450,6 @@ describe('BoatWorld helpers', () => {
     camera.updateProjectionMatrix();
     const world = new BoatWorld(
       camera,
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       savedItems,
@@ -493,7 +485,6 @@ describe('BoatWorld helpers', () => {
     camera.updateProjectionMatrix();
     const world = new BoatWorld(
       camera,
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
       savedItems,
@@ -526,7 +517,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -545,7 +535,6 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       camera,
-      { matches: false } as MediaQueryList,
       propModels,
       createTestMoonTexture(),
     );
@@ -580,7 +569,6 @@ describe('BoatWorld helpers', () => {
       const propModels = createTestPropModels();
       const world = new BoatWorld(
         new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-        { matches: false } as MediaQueryList,
         propModels,
         createTestMoonTexture(),
       );
@@ -618,7 +606,6 @@ describe('BoatWorld helpers', () => {
       const propModels = createTestPropModels();
       const world = new BoatWorld(
         new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-        { matches: false } as MediaQueryList,
         propModels,
         createTestMoonTexture(),
       );

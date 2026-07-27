@@ -67,7 +67,6 @@ function deferred() {
 type Deferred = ReturnType<typeof deferred>;
 
 interface FishingRigOptions {
-  readonly reducedMotion?: boolean;
   readonly withBait?: boolean;
   readonly day?: number;
   readonly catchRoll?: number;
@@ -204,7 +203,6 @@ function createFishingRig(options: FishingRigOptions = {}) {
     session,
     world,
     ui,
-    reducedMotion: options.reducedMotion,
     onRestart: options.onRestart,
   });
   return {
@@ -236,18 +234,9 @@ function fishingReelCallback(rig: FishingRig) {
 }
 
 async function settleFishingEntry(rig: FishingRig): Promise<void> {
-  if (rig.animations.fade.length > 0) {
-    rig.animations.fade.at(-1)!.resolve();
-    await flushPromises();
-  }
   expect(rig.animations.enter).toHaveLength(1);
   rig.animations.enter.at(-1)!.resolve();
   await flushPromises();
-  const latestFade = rig.animations.fade.at(-1);
-  if (latestFade !== undefined && rig.calls.at(-1) === 'fade:uncover') {
-    latestFade.resolve();
-    await flushPromises();
-  }
 }
 
 async function completeFishingCast(rig: FishingRig): Promise<void> {
@@ -259,28 +248,17 @@ async function settleFishingReturn(
   rig: FishingRig,
   resultAnimation: 'reel' | 'miss',
 ): Promise<void> {
-  const fadeCount = rig.animations.fade.length;
   rig.animations[resultAnimation].at(-1)!.resolve();
   await flushPromises();
   rig.ui.onFishingResultContinue?.();
   rig.ui.onFishingResultContinue?.();
-  if (rig.animations.fade.length > fadeCount) {
-    rig.animations.fade[fadeCount]!.resolve();
-    await flushPromises();
-  }
   expect(rig.animations.exit).toHaveLength(1);
   rig.animations.exit[0]!.resolve();
   await flushPromises();
-  if (rig.animations.fade.length > fadeCount + 1) {
-    rig.animations.fade[fadeCount + 1]!.resolve();
-    await flushPromises();
-  }
 }
 
 type FishingTeardownStage =
-  | 'enter-cover'
   | 'entering'
-  | 'enter-uncover'
   | 'aiming'
   | 'casting'
   | 'waiting'
@@ -288,22 +266,13 @@ type FishingTeardownStage =
   | 'reeling'
   | 'missing'
   | 'result'
-  | 'exit-cover'
-  | 'returning'
-  | 'exit-uncover';
+  | 'returning';
 
 async function reachFishingTeardownStage(
   rig: FishingRig,
   stage: FishingTeardownStage,
 ): Promise<void> {
-  if (stage === 'enter-cover' || stage === 'entering') return;
-  if (stage === 'enter-uncover') {
-    rig.animations.fade[0]!.resolve();
-    await flushPromises();
-    rig.animations.enter[0]!.resolve();
-    await flushPromises();
-    return;
-  }
+  if (stage === 'entering') return;
 
   await settleFishingEntry(rig);
   if (stage === 'aiming') return;
@@ -324,9 +293,7 @@ async function reachFishingTeardownStage(
   await flushPromises();
   if (stage === 'result') return;
   rig.ui.onFishingResultContinue?.();
-  if (stage === 'exit-cover' || stage === 'returning') return;
-  rig.animations.fade.at(-1)!.resolve();
-  await flushPromises();
+  if (stage === 'returning') return;
   rig.animations.exit.at(-1)!.resolve();
   await flushPromises();
 }
@@ -365,7 +332,6 @@ describe('SurvivalPhase orchestration', () => {
         elapsedSeconds: 7,
         phase: 'night',
         weather: 'squall',
-        reducedMotion: false,
       },
     );
   });
@@ -859,10 +825,8 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot().food).toBe(1);
   });
 
-  it.each([false, true])(
-    'keeps gameplay timing and results identical with reduced motion %s',
-    async (reducedMotion) => {
-      const rig = createFishingRig({ reducedMotion });
+  it('keeps gameplay timing and results identical through normal motion', async () => {
+      const rig = createFishingRig();
       rig.phase.start();
       rig.phase.handleAction('fish');
       await settleFishingEntry(rig);
@@ -881,32 +845,20 @@ describe('SurvivalPhase orchestration', () => {
 
       expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
       expect(rig.world.play).not.toHaveBeenCalled();
-      expect(rig.animations.fade).toHaveLength(reducedMotion ? 4 : 0);
+      expect(rig.animations.fade).toHaveLength(0);
     },
   );
 
   it.each(([
-    ['enter-cover', true],
-    ['entering', false],
-    ['enter-uncover', true],
-    ['aiming', false],
-    ['casting', false],
-    ['waiting', false],
-    ['bite', false],
-    ['reeling', false],
-    ['missing', false],
-    ['result', false],
-    ['exit-cover', true],
-    ['returning', false],
-    ['exit-uncover', true],
-  ] as const).flatMap(([stage, reducedMotion]) => (
-    (['dispose', 'restart'] as const).map((teardown) => [stage, reducedMotion, teardown] as const)
+    'entering', 'aiming', 'casting', 'waiting', 'bite', 'reeling', 'missing', 'result', 'returning',
+  ] as const).flatMap((stage) => (
+    (['dispose', 'restart'] as const).map((teardown) => [stage, teardown] as const)
   )))(
-    '%s (reduced motion %s) settles safely through %s without later callbacks',
-    async (state, reducedMotion, teardown) => {
+    '%s settles safely through %s without later callbacks',
+    async (state, teardown) => {
     let rig!: FishingRig;
     const onRestart = vi.fn(() => rig.phase.dispose());
-    rig = createFishingRig({ reducedMotion, onRestart });
+    rig = createFishingRig({ onRestart });
     rig.phase.start();
     rig.phase.handleAction('fish');
     await reachFishingTeardownStage(rig, state);
@@ -1123,12 +1075,11 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.at(-1)).toBe('selection');
   });
 
-  it('keeps reveal ordering when reduced motion settles each transition immediately', async () => {
+  it('keeps event reveal ordering through authored transitions', async () => {
     const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
     let current = snapshot();
     const calls: string[] = [];
     const phase = SurvivalPhase.forTest({
-      reducedMotion: true,
       session: {
         snapshot: vi.fn(() => current),
         perform: vi.fn(() => {
