@@ -811,6 +811,12 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(sideRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
       expect(brackets.length).toBeGreaterThanOrEqual(4);
       expect(brackets.every(({ material }) => material === materials.exposedMetal)).toBe(true);
+      build.root.updateMatrixWorld(true);
+      brackets.forEach((bracket) => {
+        const bracketBounds = new Box3().setFromObject(bracket);
+        const wallContactZ = outwardZ < 0 ? bracketBounds.max.z : bracketBounds.min.z;
+        expect(wallContactZ, `${bracket.name} wall contact`).toBeCloseTo(wallZ);
+      });
       expect(grabRails).toHaveLength(2);
       expect(grabRails.every(({ material }) => material === materials.exposedMetal)).toBe(true);
       expect(zone.bottomEyeY).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT);
