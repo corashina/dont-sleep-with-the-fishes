@@ -324,17 +324,31 @@ describe('player movement helpers', () => {
     }
   });
 
-  it('keeps the assembled shell and furniture clear of the approved loop by player radius', () => {
+  it('keeps both full exterior side routes clear of the assembled ship by player radius', () => {
     const ship = createTestShip();
-    const loopCenters = [
+    const exteriorLanes = ['port-exterior-main', 'starboard-exterior-main']
+      .map((id) => SHIP_LAYOUT.lanes.find((candidate) => candidate.id === id)!);
+    const minZ = Math.max(...exteriorLanes.map(({ bounds }) => bounds.minZ));
+    const maxZ = Math.min(...exteriorLanes.map(({ bounds }) => bounds.maxZ));
+    const intervalCount = Math.ceil(
+      (maxZ - minZ) / (PLAYER_LAYOUT_RADIUS * 2),
+    );
+    const sideRouteSamples = Array.from({ length: intervalCount + 1 }, (_, index) =>
+      minZ + (maxZ - minZ) * index / intervalCount)
+      .flatMap((z) => [
+        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, z),
+        new Vector3(EXTERIOR_ROUTE_X, PLAYER_Y, z),
+      ]);
+    const loopTargets = [
       'port-loop-forward',
       'port-loop-aft',
       'starboard-loop-forward',
       'starboard-loop-aft',
     ].map(layoutTarget);
     try {
-      loopCenters.forEach((point) => expect(
+      [...sideRouteSamples, ...loopTargets].forEach((point) => expect(
         ship.colliders.every((box) => !playerOverlaps(point, 0.35, box)),
+        `${point.x},${point.z}`,
       ).toBe(true));
     } finally {
       ship.dispose();
