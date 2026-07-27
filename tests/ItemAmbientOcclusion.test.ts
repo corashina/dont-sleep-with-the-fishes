@@ -58,7 +58,7 @@ describe('item ambient occlusion', () => {
   });
 
   it('runs full-resolution GTAO with visible screen-scaled item settings', () => {
-    const pass = new ItemAmbientOcclusionPass();
+    const pass = new ItemAmbientOcclusionPass('composite', 'high');
     const scene = new Scene();
     const camera = new PerspectiveCamera();
 
@@ -73,6 +73,29 @@ describe('item ambient occlusion', () => {
     expect(pass.gtaoMaterial.uniforms.radius!.value).toBe(0.24);
     expect(pass.gtaoMaterial.defines.SCREEN_SPACE_RADIUS).toBe(1);
 
+    pass.dispose();
+  });
+
+  it('uses half-resolution eight-sample AO for low quality', () => {
+    const pass = new ItemAmbientOcclusionPass('composite', 'low');
+    pass.setSize(800, 450);
+    expect(pass.gtaoRenderTarget.width).toBe(400);
+    expect(pass.gtaoRenderTarget.height).toBe(225);
+    expect(pass.gtaoMaterial.defines.SAMPLES).toBe(8);
+    expect(pass.pdMaterial.defines.SAMPLES).toBe(8);
+    pass.dispose();
+  });
+
+  it('reconfigures existing targets for high quality without replacing the pass', () => {
+    const pass = new ItemAmbientOcclusionPass('composite', 'low');
+    pass.setSize(800, 450);
+    const target = pass.gtaoRenderTarget;
+    pass.setVisualQuality('high');
+    expect(pass.gtaoRenderTarget).toBe(target);
+    expect(target.width).toBe(800);
+    expect(target.height).toBe(450);
+    expect(pass.gtaoMaterial.defines.SAMPLES).toBe(16);
+    expect(pass.pdMaterial.defines.SAMPLES).toBe(16);
     pass.dispose();
   });
 
