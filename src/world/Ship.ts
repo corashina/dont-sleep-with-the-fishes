@@ -5,6 +5,7 @@ import {
   type CollisionArc,
   type CollisionBox,
 } from '../player/collisions';
+import type { LadderClimbZone } from '../player/LadderTraversal';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import { createShipDeckDetails } from './ShipDeckDetails';
@@ -23,6 +24,7 @@ export interface ShipBuild {
   colliders: CollisionBox[];
   interactionOccluders: readonly CollisionBox[];
   arcColliders: CollisionArc[];
+  readonly climbZones: readonly LadderClimbZone[];
   itemSurfaces: ShipItemSurface[];
   furnitureColliderById: ReadonlyMap<string, CollisionBox>;
   detailColliderById: ReadonlyMap<string, CollisionBox>;
@@ -214,6 +216,7 @@ export function createShip(
     colliders,
     interactionOccluders: assembledGeometry.shellColliders,
     arcColliders: assembledGeometry.arcColliders,
+    climbZones: assembledGeometry.climbZones,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
     detailColliderById: assembledDetails.colliderById,

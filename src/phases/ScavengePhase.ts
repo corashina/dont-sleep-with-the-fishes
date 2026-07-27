@@ -108,6 +108,7 @@ export class ScavengePhase implements GamePhase {
       this.world.playerNavigationBounds,
       () => this.session.penalize(5),
       this.world.arcColliders,
+      this.world.climbZones,
     );
     this.interaction = new InteractionSystem(context.camera, {
       root: this.world.ship,
