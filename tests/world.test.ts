@@ -437,6 +437,8 @@ describe('world builders', () => {
     const skyMaterialDispose = vi.spyOn(sky.material as Material, 'dispose');
 
     const freighter = world.ship.getObjectByName('coastal-freighter')!;
+    const sailGeometries = new Set(['mainsail', 'staysail'].map((id) =>
+      (freighter.getObjectByName(`sail:${id}`) as Mesh).geometry));
     const shipResources = collectRenderResources(freighter);
     const shipGeometries = shipResources.geometries;
     const shipMaterials = shipResources.materials;
@@ -452,6 +454,8 @@ describe('world builders', () => {
       !propGeometries.has(geometry) && !lifeboatResources.geometries.has(geometry))).toBe(true);
     expect([...shipResources.materials].every((material) =>
       !propMaterials.has(material) && !lifeboatResources.materials.has(material))).toBe(true);
+    expect(sailGeometries.size).toBe(2);
+    expect([...sailGeometries].every((geometry) => shipGeometries.has(geometry))).toBe(true);
     const ownedTask6Geometries = new Set([
       ...shipGeometries,
       ...lifeboatResources.geometries,
