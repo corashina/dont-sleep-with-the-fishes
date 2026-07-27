@@ -1,5 +1,6 @@
 import { Camera, Scene, type WebGLRenderer } from 'three';
 import type { WeatherId } from '../survival/survivalTypes';
+import type { PostProcessingControls } from './postProcessingControls';
 import type { VisualQuality } from './visualQuality';
 
 export interface ScavengeVisualState {
@@ -18,6 +19,7 @@ export interface SurvivalVisualState {
 export type SceneVisualState = ScavengeVisualState | SurvivalVisualState;
 
 export interface SceneRenderer {
+  readonly postProcessingControls?: PostProcessingControls;
   render(scene: Scene, camera: Camera, state: Readonly<SceneVisualState>): void;
   resize(width: number, height: number, pixelRatio: number): void;
   setVisualQuality?(value: VisualQuality): void;

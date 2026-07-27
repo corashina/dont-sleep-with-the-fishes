@@ -20,6 +20,7 @@ import {
 } from './rendering/visualQuality';
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
+import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import type { PropModelLibrary } from './world/PropModelLibrary';
 import { runCleanupSteps } from './world/SceneResources';
 import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
@@ -102,6 +103,7 @@ export class Game {
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
   private performanceStats: PerformanceStats | null = null;
+  private postProcessingConsole: PostProcessingConsole | null = null;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -248,8 +250,11 @@ export class Game {
     this.exitPointerLock();
     const performanceStats = this.performanceStats;
     this.performanceStats = null;
+    const postProcessingConsole = this.postProcessingConsole;
+    this.postProcessingConsole = null;
     runCleanupSteps([
       () => outgoing?.dispose(),
+      () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
       () => this.shipFurniture.dispose(),
@@ -312,6 +317,7 @@ export class Game {
       };
       this.activePhase = null;
       this.performanceStats = null;
+      this.postProcessingConsole = null;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
@@ -320,6 +326,12 @@ export class Game {
       const showDevelopmentStats = import.meta.env.DEV
         && new URLSearchParams(window.location.search).has('stats');
       this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);
+      if (sceneRenderer.postProcessingControls !== undefined) {
+        this.postProcessingConsole = new PostProcessingConsole(
+          mount,
+          sceneRenderer.postProcessingControls,
+        );
+      }
       this.seed = this.createSeed();
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
@@ -341,11 +353,14 @@ export class Game {
     const activePhase = this.detachActivePhase();
     const performanceStats = this.performanceStats;
     this.performanceStats = null;
+    const postProcessingConsole = this.postProcessingConsole;
+    this.postProcessingConsole = null;
     runCleanupSteps([
       () => {
         if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
       },
       () => activePhase?.dispose(),
+      () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),

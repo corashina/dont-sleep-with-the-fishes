@@ -17,7 +17,7 @@ export const GLOBAL_POST_PROCESSING_PROFILE =
     contrast: 1.08,
     saturation: 1.10,
     highlightCompression: 0.16,
-    shadowLift: 0.055,
+    shadowLift: 0.12,
     shadowTint: 0x123039,
     shadowTintStrength: 0.025,
     highlightTint: 0xd8aa6d,

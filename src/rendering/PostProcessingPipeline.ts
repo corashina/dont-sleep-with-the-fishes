@@ -13,9 +13,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import {
-  ITEM_AMBIENT_OCCLUSION_HOTKEY,
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
   ItemAmbientOcclusionPass,
-  nextItemAmbientOcclusionMode,
   type ItemAmbientOcclusionMode,
 } from './ItemAmbientOcclusion';
 import { sceneHoverOutlineTargets } from './HoverOutline';
@@ -31,6 +31,12 @@ import {
   type PostProcessingProfile,
 } from './postProcessingProfiles';
 import type { VisualQuality } from './visualQuality';
+import {
+  clampPostProcessingSetting,
+  type PostProcessingControls,
+  type PostProcessingControlState,
+  type PostProcessingNumericSetting,
+} from './postProcessingControls';
 
 type PrintUniforms = {
   tDiffuse: { value: null };
@@ -57,9 +63,20 @@ type FallbackReporter = (error: unknown) => void;
 
 const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
-const GRADE_HOTKEY = 'KeyP';
 
 export class PostProcessingPipeline implements SceneRenderer {
+  readonly postProcessingControls: PostProcessingControls = Object.freeze({
+    getState: () => Object.freeze({
+      ...this.controlState,
+      ambientOcclusionAvailable:
+        !this.aoUnavailable && this.itemAmbientOcclusionPass !== null,
+    }),
+    setGradeEnabled: (enabled: boolean) => this.setGradeEnabled(enabled),
+    setAmbientOcclusionMode: (mode: ItemAmbientOcclusionMode) =>
+      this.setAmbientOcclusionMode(mode),
+    setNumeric: (setting: PostProcessingNumericSetting, value: number) =>
+      this.setNumeric(setting, value),
+  });
   private readonly composer: EffectComposer;
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
@@ -69,11 +86,8 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly uniforms: PrintUniforms;
   private readonly size: Vector2;
   private readonly maxTextureSize: number;
-  private itemAmbientOcclusionMode: ItemAmbientOcclusionMode = 'composite';
-  private gradeEnabled = true;
+  private readonly controlState: PostProcessingControlState;
   private aoUnavailable = false;
-  private aoHotkeyRegistered = false;
-  private gradeHotkeyRegistered = false;
   private disposed = false;
 
   constructor(
@@ -85,6 +99,21 @@ export class PostProcessingPipeline implements SceneRenderer {
       console.warn('Ambient occlusion unavailable; continuing without it.', error);
     },
   ) {
+    this.controlState = {
+      gradeEnabled: true,
+      ambientOcclusionAvailable: true,
+      ambientOcclusionMode: 'composite',
+      contrast: GLOBAL_POST_PROCESSING_PROFILE.contrast,
+      saturation: GLOBAL_POST_PROCESSING_PROFILE.saturation,
+      highlightCompression: GLOBAL_POST_PROCESSING_PROFILE.highlightCompression,
+      shadowLift: GLOBAL_POST_PROCESSING_PROFILE.shadowLift,
+      shadowTintStrength: GLOBAL_POST_PROCESSING_PROFILE.shadowTintStrength,
+      highlightTintStrength: GLOBAL_POST_PROCESSING_PROFILE.highlightTintStrength,
+      posterizationLevels: GLOBAL_POST_PROCESSING_PROFILE.posterizationLevels,
+      halftoneStrength: GLOBAL_POST_PROCESSING_PROFILE.halftoneStrength,
+      ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
+      ambientOcclusionRadius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
+    };
     let target: WebGLRenderTarget | undefined;
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
@@ -104,7 +133,10 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.renderPass = new RenderPass(new Scene(), new Camera());
 
       try {
-        itemAmbientOcclusionPass = createAmbientOcclusion(this.itemAmbientOcclusionMode, quality);
+        itemAmbientOcclusionPass = createAmbientOcclusion(
+          this.controlState.ambientOcclusionMode,
+          quality,
+        );
       } catch (error) {
         this.reportFallback(error);
       }
@@ -117,7 +149,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       outlinePass.downSampleRatio = 2;
       printPass = new ShaderPass(PrintShader);
       outputPass = new OutputPass();
-      printPass.enabled = this.gradeEnabled;
+      printPass.enabled = this.controlState.gradeEnabled;
 
       composer.addPass(this.renderPass);
       if (itemAmbientOcclusionPass !== null) {
@@ -144,10 +176,8 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.outputPass = outputPass;
       this.uniforms = printPass.uniforms as PrintUniforms;
       this.applyProfile(GLOBAL_POST_PROCESSING_PROFILE);
-      this.registerComparisonHotkeys();
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
-      this.removeComparisonHotkeys();
       itemAmbientOcclusionPass?.dispose();
       outlinePass?.dispose();
       printPass?.dispose();
@@ -223,7 +253,6 @@ export class PostProcessingPipeline implements SceneRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.removeComparisonHotkeys();
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
     this.printPass.dispose();
@@ -231,46 +260,61 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.composer.dispose();
   }
 
-  private registerComparisonHotkeys(): void {
-    if (typeof window === 'undefined') return;
-    if (this.itemAmbientOcclusionPass !== null) {
-      window.addEventListener('keydown', this.handleAmbientOcclusionHotkey);
-      this.aoHotkeyRegistered = true;
-    }
-    window.addEventListener('keydown', this.handleGradeHotkey);
-    this.gradeHotkeyRegistered = true;
+  private setGradeEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.controlState.gradeEnabled = enabled;
+    this.printPass.enabled = enabled;
   }
 
-  private readonly handleAmbientOcclusionHotkey = (event: KeyboardEvent): void => {
-    if (this.aoUnavailable || !this.isComparisonHotkey(event, ITEM_AMBIENT_OCCLUSION_HOTKEY)) return;
-    this.itemAmbientOcclusionMode = nextItemAmbientOcclusionMode(this.itemAmbientOcclusionMode);
-    this.itemAmbientOcclusionPass?.setMode(this.itemAmbientOcclusionMode);
-  };
-
-  private readonly handleGradeHotkey = (event: KeyboardEvent): void => {
-    if (!this.isComparisonHotkey(event, GRADE_HOTKEY)) return;
-    this.gradeEnabled = !this.gradeEnabled;
-    this.printPass.enabled = this.gradeEnabled;
-  };
-
-  private isComparisonHotkey(event: KeyboardEvent, code: string): boolean {
-    return !this.disposed && event.code === code && !event.repeat
-      && !event.altKey && !event.ctrlKey && !event.metaKey;
+  private setAmbientOcclusionMode(mode: ItemAmbientOcclusionMode): void {
+    if (this.disposed) return;
+    this.controlState.ambientOcclusionMode = mode;
+    if (!this.aoUnavailable) this.itemAmbientOcclusionPass?.setMode(mode);
   }
 
-  private removeComparisonHotkeys(): void {
-    this.removeAmbientOcclusionHotkey();
-    if (this.gradeHotkeyRegistered && typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleGradeHotkey);
+  private setNumeric(
+    setting: PostProcessingNumericSetting,
+    value: number,
+  ): void {
+    if (this.disposed) return;
+    const clamped = clampPostProcessingSetting(setting, value);
+    this.controlState[setting] = clamped;
+    switch (setting) {
+      case 'contrast':
+        this.uniforms.uContrast.value = clamped;
+        break;
+      case 'saturation':
+        this.uniforms.uSaturation.value = clamped;
+        break;
+      case 'highlightCompression':
+        this.uniforms.uHighlightCompression.value = clamped;
+        break;
+      case 'shadowLift':
+        this.uniforms.uShadowLift.value = clamped;
+        break;
+      case 'shadowTintStrength':
+        this.uniforms.uShadowTintStrength.value = clamped;
+        break;
+      case 'highlightTintStrength':
+        this.uniforms.uHighlightTintStrength.value = clamped;
+        break;
+      case 'posterizationLevels':
+        this.uniforms.uPosterizationLevels.value = clamped;
+        break;
+      case 'halftoneStrength':
+        this.uniforms.uHalftoneStrength.value = clamped;
+        break;
+      case 'ambientOcclusionIntensity':
+        if (!this.aoUnavailable) {
+          this.itemAmbientOcclusionPass?.setIntensity(clamped);
+        }
+        break;
+      case 'ambientOcclusionRadius':
+        if (!this.aoUnavailable) {
+          this.itemAmbientOcclusionPass?.setRadius(clamped);
+        }
+        break;
     }
-    this.gradeHotkeyRegistered = false;
-  }
-
-  private removeAmbientOcclusionHotkey(): void {
-    if (this.aoHotkeyRegistered && typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleAmbientOcclusionHotkey);
-    }
-    this.aoHotkeyRegistered = false;
   }
 
   private retireAmbientOcclusion(error: unknown): void {
@@ -278,26 +322,40 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (pass === null || this.aoUnavailable) return;
     this.itemAmbientOcclusionPass = null;
     this.aoUnavailable = true;
+    this.controlState.ambientOcclusionAvailable = false;
     pass.enabled = false;
     this.composer.removePass(pass);
-    this.removeAmbientOcclusionHotkey();
     pass.dispose();
     this.reportFallback(error);
   }
 
   private applyProfile(profile: Readonly<PostProcessingProfile>): void {
-    const uniforms = this.uniforms;
-    uniforms.uContrast.value = clampPostProcessingValue(profile.contrast, 0.8, 1.2, 1);
-    uniforms.uSaturation.value = clampPostProcessingValue(profile.saturation, 0.7, 1.1, 1);
-    uniforms.uHighlightCompression.value = clampPostProcessingValue(profile.highlightCompression, 0, 0.3, 0);
-    uniforms.uShadowLift.value = clampPostProcessingValue(profile.shadowLift, 0, 0.08, 0);
-    uniforms.uShadowTint.value.setHex(clampPostProcessingValue(profile.shadowTint, 0, 0xffffff, 0x123039));
-    uniforms.uShadowTintStrength.value = clampPostProcessingValue(profile.shadowTintStrength, 0, 0.25, 0);
-    uniforms.uHighlightTint.value.setHex(clampPostProcessingValue(profile.highlightTint, 0, 0xffffff, 0xd8aa6d));
-    uniforms.uHighlightTintStrength.value = clampPostProcessingValue(profile.highlightTintStrength, 0, 0.25, 0);
-    uniforms.uPosterizationLevels.value = clampPostProcessingValue(profile.posterizationLevels, 32, 48, 40);
-    uniforms.uHalftoneStrength.value = clampPostProcessingValue(profile.halftoneStrength, 0, 0.15, 0);
-    uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(profile.halftoneSizeCssPixels, 3, 8, 5);
+    this.setNumeric('contrast', profile.contrast);
+    this.setNumeric('saturation', profile.saturation);
+    this.setNumeric('highlightCompression', profile.highlightCompression);
+    this.setNumeric('shadowLift', profile.shadowLift);
+    this.uniforms.uShadowTint.value.setHex(clampPostProcessingValue(
+      profile.shadowTint,
+      0,
+      0xffffff,
+      0x123039,
+    ));
+    this.setNumeric('shadowTintStrength', profile.shadowTintStrength);
+    this.uniforms.uHighlightTint.value.setHex(clampPostProcessingValue(
+      profile.highlightTint,
+      0,
+      0xffffff,
+      0xd8aa6d,
+    ));
+    this.setNumeric('highlightTintStrength', profile.highlightTintStrength);
+    this.setNumeric('posterizationLevels', profile.posterizationLevels);
+    this.setNumeric('halftoneStrength', profile.halftoneStrength);
+    this.uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(
+      profile.halftoneSizeCssPixels,
+      3,
+      8,
+      5,
+    );
   }
 }
 

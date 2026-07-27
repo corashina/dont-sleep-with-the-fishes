@@ -10,8 +10,8 @@ describe('global post-processing profile', () => {
   });
 
   it('keeps deep shadows readable without flattening the full image', () => {
-    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeGreaterThanOrEqual(0.045);
-    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.065);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeGreaterThanOrEqual(0.1);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.2);
     expect(GLOBAL_POST_PROCESSING_PROFILE.contrast).toBeLessThanOrEqual(1.1);
     expect(GLOBAL_POST_PROCESSING_PROFILE.shadowTintStrength).toBeLessThanOrEqual(0.04);
   });

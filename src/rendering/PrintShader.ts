@@ -51,7 +51,8 @@ export const PrintShader = {
       color = color / (vec3(1.0) + color * uHighlightCompression);
       color = max((color - vec3(0.18)) * uContrast + vec3(0.18), vec3(0.0));
       float liftWeight = 1.0 - smoothstep(0.02, 0.38, printLuminance(color));
-      color += vec3(uShadowLift * liftWeight);
+      vec3 openedShadows = sqrt(max(color, vec3(0.0)));
+      color = mix(color, openedShadows, uShadowLift * liftWeight);
 
       float gray = printLuminance(color);
       color = mix(vec3(gray), color, uSaturation);
