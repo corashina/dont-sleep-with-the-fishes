@@ -8,9 +8,9 @@ import {
 import type { CollisionBox } from '../player/collisions';
 import {
   SHIP_SAIL_CLOTH_MIN_Y,
-  shipSailGeometryLimits,
   type ShipMastSpec,
   type ShipRiggingSpec,
+  type ShipSailSpec,
 } from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
 
@@ -21,15 +21,17 @@ export interface ShipRiggingBuild {
   disposeGeometry(): void;
 }
 
-function createSailGeometry(spec: ShipMastSpec): BufferGeometry {
+function createSailGeometry(spec: ShipSailSpec): BufferGeometry {
+  const zMid = spec.clewZ * 0.5;
+  const yMid = spec.footY + (spec.topY - spec.footY) * 0.48;
   const geometry = new BufferGeometry();
-  const { top, clothLength } = shipSailGeometryLimits(spec);
-  const tipZ = spec.sailDirectionZ * clothLength;
   geometry.setAttribute('position', new Float32BufferAttribute([
-    0, top, 0,
-    0, SHIP_SAIL_CLOTH_MIN_Y, 0,
-    0, SHIP_SAIL_CLOTH_MIN_Y, tipZ,
+    0, spec.topY, 0,
+    0, spec.footY, 0,
+    spec.billow, yMid, zMid,
+    0, spec.footY, spec.clewZ,
   ], 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
   geometry.computeVertexNormals();
   geometry.name = `sail-geometry:${spec.id}`;
   return geometry;
@@ -61,15 +63,16 @@ function addStay(
   geometry: CylinderGeometry,
   materials: ShipMaterials,
   spec: ShipMastSpec,
+  id: 'fore' | 'aft',
+  anchorZ: number,
 ): void {
   const highY = spec.height - 0.18;
-  const anchorZ = -spec.sailDirectionZ * 2.4;
   const length = Math.hypot(highY, anchorZ);
   addCylinder(
     root,
     geometry,
     materials.rope,
-    `stay:${spec.id}`,
+    `stay:${spec.id}:${id}`,
     [0, highY / 2, anchorZ / 2],
     [0.035, length, 0.035],
     Math.atan2(-anchorZ, highY),
@@ -101,7 +104,7 @@ export function createShipRigging(
   const neutralRotations: number[] = [];
   const phases: number[] = [];
 
-  spec.masts.forEach((mastSpec, index) => {
+  spec.masts.forEach((mastSpec) => {
     const mast = new Group();
     mast.name = `mast:${mastSpec.id}`;
     mast.position.set(...mastSpec.position);
@@ -122,44 +125,47 @@ export function createShipRigging(
       [0, 0.09, 0],
       [mastSpec.baseDiameter * 1.25, 0.18, mastSpec.baseDiameter * 1.25],
     );
-    addStay(mast, cylinder, materials, mastSpec);
+    addStay(mast, cylinder, materials, mastSpec, 'fore', mastSpec.foreStayAnchorZ);
+    addStay(mast, cylinder, materials, mastSpec, 'aft', mastSpec.aftStayAnchorZ);
 
-    const sailGeometry = createSailGeometry(mastSpec);
-    ownedGeometries.add(sailGeometry);
-    const sail = new Mesh(sailGeometry, materials.canvas);
-    sail.name = `sail:${mastSpec.id}`;
-    sail.castShadow = true;
-    sail.receiveShadow = true;
-    mast.add(sail);
-
-    const clothLength = Math.abs(
-      sailGeometry.getAttribute('position').getZ(2),
-    );
-    if (mastSpec.sailKind === 'boom') {
+    const boomSail = mastSpec.sails.find(({ kind }) => kind === 'boom');
+    if (boomSail) {
       addCylinder(
         mast,
         cylinder,
         materials.darkMetal,
         `boom:${mastSpec.id}`,
-        [0, SHIP_SAIL_CLOTH_MIN_Y, mastSpec.sailDirectionZ * clothLength / 2],
-        [0.11, clothLength, 0.11],
+        [0, boomSail.footY, boomSail.clewZ / 2],
+        [0.11, mastSpec.boomLength, 0.11],
         Math.PI / 2,
       );
     }
-    addCylinder(
-      mast,
-      cylinder,
-      materials.exposedMetal,
-      `pulley:${mastSpec.id}`,
-      [0, SHIP_SAIL_CLOTH_MIN_Y + 0.16, mastSpec.sailDirectionZ * 0.16],
-      [0.18, 0.12, 0.18],
-      0,
-      Math.PI / 2,
-    );
 
-    sails.push(sail);
-    neutralRotations.push(sail.rotation.z);
-    phases.push(0.35 + index * 0.9);
+    mastSpec.sails.forEach((sailSpec) => {
+      const sailGeometry = createSailGeometry(sailSpec);
+      ownedGeometries.add(sailGeometry);
+      const sail = new Mesh(sailGeometry, materials.canvas);
+      sail.name = `sail:${sailSpec.id}`;
+      sail.castShadow = true;
+      sail.receiveShadow = true;
+      mast.add(sail);
+
+      addCylinder(
+        mast,
+        cylinder,
+        materials.exposedMetal,
+        `pulley:${mastSpec.id}:${sailSpec.id}`,
+        [0, SHIP_SAIL_CLOTH_MIN_Y + 0.16, Math.sign(sailSpec.clewZ) * 0.16],
+        [0.18, 0.12, 0.18],
+        0,
+        Math.PI / 2,
+      );
+
+      sails.push(sail);
+      neutralRotations.push(sail.rotation.z);
+      phases.push(0.35 + (sails.length - 1) * 0.9);
+    });
+
     colliders.push(toCollider(mastSpec));
     root.add(mast);
   });
@@ -172,11 +178,10 @@ export function createShipRigging(
     update: (delta, reducedMotion) => {
       elapsed += Math.max(0, Math.min(delta, 0.1));
       for (let index = 0; index < sails.length; index += 1) {
-        const sail = sails[index]!;
-        sail.rotation.z = reducedMotion
-          ? neutralRotations[index]!
-          : neutralRotations[index]!
-            + Math.sin(elapsed * 1.4 + phases[index]!) * 0.025;
+        const neutral = neutralRotations[index]!;
+        sails[index]!.rotation.z = reducedMotion
+          ? neutral
+          : neutral + Math.sin(elapsed * 1.1 + phases[index]!) * 0.018;
       }
     },
     disposeGeometry: () => {
