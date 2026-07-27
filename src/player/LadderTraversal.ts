@@ -1,7 +1,9 @@
 import type { LocalPlayerPosition } from './collisions';
 
 const CLIMB_SPEED = 2.4;
+const ALIGN_SPEED = 3.8;
 const ENTRY_EPSILON = 0.08;
+const ALIGN_EPSILON = 1e-4;
 const MOVEMENT_INTENT_EPSILON = 1e-8;
 
 export interface LadderEntryArea {
@@ -71,7 +73,7 @@ function unchanged(input: LadderTraversalInput): LadderTraversalResult {
 
 function captured(zone: LadderClimbZone, input: LadderTraversalInput): LadderTraversalResult {
   return {
-    position: { x: zone.climbX, y: input.position.y, z: zone.climbZ },
+    position: { ...input.position },
     activeLadderId: zone.id,
     floorEyeY: input.floorEyeY,
     consumed: true,
@@ -104,6 +106,34 @@ export function resolveLadderTraversal(
 
   const zone = zones.find(({ id }) => id === input.activeLadderId);
   if (!zone) return unchanged(input);
+
+  const alignmentX = zone.climbX - input.position.x;
+  const alignmentZ = zone.climbZ - input.position.z;
+  const alignmentDistance = Math.hypot(alignmentX, alignmentZ);
+  if (alignmentDistance > ALIGN_EPSILON) {
+    if (Math.hypot(...input.planarMovement) <= MOVEMENT_INTENT_EPSILON) {
+      return {
+        position: { ...input.position },
+        activeLadderId: zone.id,
+        floorEyeY: input.floorEyeY,
+        consumed: true,
+      };
+    }
+    const alignmentStep = Math.min(
+      alignmentDistance,
+      ALIGN_SPEED * input.deltaSeconds,
+    );
+    return {
+      position: {
+        x: input.position.x + alignmentX / alignmentDistance * alignmentStep,
+        y: input.position.y,
+        z: input.position.z + alignmentZ / alignmentDistance * alignmentStep,
+      },
+      activeLadderId: zone.id,
+      floorEyeY: input.floorEyeY,
+      consumed: true,
+    };
+  }
 
   const nextY = input.position.y + input.verticalInput * CLIMB_SPEED * input.deltaSeconds;
   if (nextY >= zone.topEyeY) {

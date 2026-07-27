@@ -177,7 +177,7 @@ describe('PlayerController', () => {
     );
     input.movement = { x: 0, z: -1 };
 
-    for (let frame = 0; frame < 13; frame += 1) {
+    for (let frame = 0; frame < 15; frame += 1) {
       controller.update(0.1, input.asControllerInput());
     }
 
@@ -204,7 +204,7 @@ describe('PlayerController', () => {
     );
     input.movement = { x: 0, z: 1 };
 
-    for (let frame = 0; frame < 13; frame += 1) {
+    for (let frame = 0; frame < 14; frame += 1) {
       controller.update(0.1, input.asControllerInput());
     }
 

@@ -834,8 +834,6 @@ describe('freighter geometry', () => {  interface PointXZ {
     const details = build.root.getObjectByName('wheelhouse-interior-details')!;
     [
       'chart',
-      'logbook',
-      'mug',
       'coat',
       'key-hooks',
       'repaired-panel',
@@ -844,7 +842,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(detail, id).toBeDefined();
       expect(detail.userData.interactive, id).not.toBe(true);
     });
-    ['helm-wheel', 'compass', 'lamp'].forEach((id) => {
+    ['helm-wheel', 'compass', 'lamp', 'logbook', 'mug'].forEach((id) => {
       expect(details.getObjectByName(`captain-detail:${id}`), id).toBeUndefined();
     });
 
@@ -852,9 +850,8 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('anchors captain-room dressing to supplied wheelhouse and furniture layout', () => {
+  it('anchors remaining captain-room dressing to the supplied wheelhouse layout', () => {
     const shiftX = 0.35;
-    const helmShiftZ = 0.1;
     const layout: ShipLayoutSpec = {
       ...SHIP_LAYOUT,
       zones: SHIP_LAYOUT.zones.map((zone) => zone.id !== 'wheelhouse' ? zone : {
@@ -878,12 +875,12 @@ describe('freighter geometry', () => {  interface PointXZ {
       furniture: SHIP_LAYOUT.furniture.map((fixture) =>
         fixture.zoneId !== 'wheelhouse' ? fixture : {
           ...fixture,
-          position: [
-            fixture.position[0] + shiftX,
-            fixture.position[1],
-            fixture.position[2] + (fixture.id === 'helm-desk-forward' ? helmShiftZ : 0),
-          ] as const,
-        }),
+        position: [
+          fixture.position[0] + shiftX,
+          fixture.position[1],
+          fixture.position[2],
+        ] as const,
+      }),
     };
     const materials = createShipMaterials();
     expect(() => validateShipLayout(layout)).not.toThrow();
@@ -894,184 +891,8 @@ describe('freighter geometry', () => {  interface PointXZ {
     const modifiedPanel = modified.root.getObjectByName('captain-detail:repaired-panel')!;
     expect(modifiedPanel.position.x - baselinePanel.position.x).toBeCloseTo(shiftX);
 
-    ['logbook', 'mug'].forEach((id) => {
-      const baselineProp = baseline.root.getObjectByName(`captain-detail:${id}`)!;
-      const modifiedProp = modified.root.getObjectByName(`captain-detail:${id}`)!;
-      expect(modifiedProp.position.x - baselineProp.position.x, `${id} x`)
-        .toBeCloseTo(shiftX);
-      expect(modifiedProp.position.z - baselineProp.position.z, `${id} z`)
-        .toBeCloseTo(helmShiftZ);
-    });
-
     baseline.disposeGeometry();
     modified.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('builds finite supported captain details without a helm desk', () => {
-    const layout: ShipLayoutSpec = {
-      ...SHIP_LAYOUT,
-      furniture: SHIP_LAYOUT.furniture.filter(({ id }) => id !== 'helm-desk-forward'),
-    };
-    expect(() => validateShipLayout(layout)).not.toThrow();
-    const materials = createShipMaterials();
-    let build: ReturnType<typeof createShipGeometry> | undefined;
-    expect(() => {
-      build = createShipGeometry(materials, layout);
-    }).not.toThrow();
-    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
-    details.traverse((object) => {
-      expect([
-        ...object.position.toArray(),
-        object.rotation.x,
-        object.rotation.y,
-        object.rotation.z,
-        ...object.scale.toArray(),
-      ].every(Number.isFinite), object.name).toBe(true);
-    });
-
-    const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
-    const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
-    ['logbook', 'mug'].forEach((id) => {
-      const prop = details.getObjectByName(`captain-detail:${id}`)!;
-      const support = prop.getObjectByName(`captain-detail:${id}:fallback-support`);
-      expect(support, `${id} fallback support`).toBeDefined();
-      expect(prop.position.z, `${id} wall anchor`).toBeGreaterThan(wheelhouse.maxZ - 0.6);
-      expect(Math.abs(prop.position.x - centerX), `${id} central path`).toBeGreaterThan(1.1);
-      const propBounds = new Box3().setFromObject(prop);
-      layout.doors.filter(({ zoneId }) => zoneId === 'wheelhouse').forEach((door) => {
-        const overlapX = Math.max(0, Math.min(propBounds.max.x, door.approach.maxX)
-          - Math.max(propBounds.min.x, door.approach.minX));
-        const overlapZ = Math.max(0, Math.min(propBounds.max.z, door.approach.maxZ)
-          - Math.max(propBounds.min.z, door.approach.minZ));
-        expect(overlapX * overlapZ, `${id} overlaps ${door.id}`).toBe(0);
-      });
-    });
-
-    build!.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('uses finite helm-collider tabletop anchors when the helm has no surfaces', () => {
-    const layout: ShipLayoutSpec = {
-      ...SHIP_LAYOUT,
-      furniture: SHIP_LAYOUT.furniture.map((fixture) =>
-        fixture.id === 'helm-desk-forward' ? { ...fixture, surfaces: [] } : fixture),
-    };
-    expect(() => validateShipLayout(layout)).not.toThrow();
-    const helm = layout.furniture.find(({ id }) => id === 'helm-desk-forward')!;
-    const materials = createShipMaterials();
-    let build: ReturnType<typeof createShipGeometry> | undefined;
-    expect(() => {
-      build = createShipGeometry(materials, layout);
-    }).not.toThrow();
-    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
-    details.traverse((object) => {
-      expect([
-        ...object.position.toArray(),
-        object.rotation.x,
-        object.rotation.y,
-        object.rotation.z,
-        ...object.scale.toArray(),
-      ].every(Number.isFinite), object.name).toBe(true);
-    });
-
-    const supportTop = helm.position[1] + helm.colliderSize[1] * helm.scale[1];
-    ['logbook', 'mug'].forEach((id) => {
-      const prop = details.getObjectByName(`captain-detail:${id}`)!;
-      const bounds = new Box3().setFromObject(prop);
-      expect(bounds.min.y, `${id} support`).toBeCloseTo(supportTop);
-      expect(bounds.min.x).toBeGreaterThanOrEqual(
-        helm.position[0] - helm.colliderSize[0] * helm.scale[0] / 2,
-      );
-      expect(bounds.max.x).toBeLessThanOrEqual(
-        helm.position[0] + helm.colliderSize[0] * helm.scale[0] / 2,
-      );
-      expect(bounds.min.z).toBeGreaterThanOrEqual(
-        helm.position[2] - helm.colliderSize[2] * helm.scale[2] / 2,
-      );
-      expect(bounds.max.z).toBeLessThanOrEqual(
-        helm.position[2] + helm.colliderSize[2] * helm.scale[2] / 2,
-      );
-      expect(prop.getObjectByName(`captain-detail:${id}:fallback-support`)).toBeUndefined();
-    });
-
-    build!.disposeGeometry();
-    materials.dispose();
-  });
-
-  it.each([
-    ['width', [0.1, 1, 1] as const],
-    ['depth', [1, 1, 0.1] as const],
-  ])('falls back safely when a valid scaled helm is too small in %s', (_axis, scale) => {
-    const layout: ShipLayoutSpec = {
-      ...SHIP_LAYOUT,
-      furniture: SHIP_LAYOUT.furniture.map((fixture) =>
-        fixture.id === 'helm-desk-forward'
-          ? { ...fixture, scale, surfaces: [] }
-          : fixture),
-    };
-    expect(() => validateShipLayout(layout)).not.toThrow();
-    const materials = createShipMaterials();
-    let build: ReturnType<typeof createShipGeometry> | undefined;
-    expect(() => {
-      build = createShipGeometry(materials, layout);
-    }).not.toThrow();
-    const details = build!.root.getObjectByName('wheelhouse-interior-details')!;
-    const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
-    const centerX = (wheelhouse.minX + wheelhouse.maxX) / 2;
-    ['logbook', 'mug'].forEach((id) => {
-      const prop = details.getObjectByName(`captain-detail:${id}`)!;
-      const support = prop.getObjectByName(`captain-detail:${id}:fallback-support`)!;
-      expect(support, `${id} fallback support`).toBeDefined();
-      expect(prop.parent, `${id} attached to details`).toBe(details);
-      expect(support.parent, `${id} support attached to prop`).toBe(prop);
-      expect(prop.position.z, `${id} wall anchor`).toBeGreaterThan(wheelhouse.maxZ - 0.6);
-      expect(Math.abs(prop.position.x - centerX), `${id} central path`).toBeGreaterThan(1.1);
-    });
-    details.traverse((object) => {
-      expect([
-        ...object.position.toArray(),
-        object.rotation.x,
-        object.rotation.y,
-        object.rotation.z,
-        ...object.scale.toArray(),
-      ].every(Number.isFinite), object.name).toBe(true);
-    });
-
-    build!.disposeGeometry();
-    materials.dispose();
-  });
-
-  it('rests tabletop captain props on the helm desk outside searchable footprints', () => {
-    const materials = createShipMaterials();
-    const build = createShipGeometry(materials);
-    const helm = SHIP_LAYOUT.furniture.find(({ id }) => id === 'helm-desk-forward')!;
-    const supportTop = helm.position[1] + helm.colliderSize[1] * helm.scale[1];
-
-    ['logbook', 'mug'].forEach((id) => {
-      const propBounds = new Box3().setFromObject(
-        build.root.getObjectByName(`captain-detail:${id}`)!,
-      );
-      expect(propBounds.min.y, `${id} support`).toBeCloseTo(supportTop);
-      helm.surfaces.forEach((surface) => {
-        const minX = helm.position[0] + surface.localPosition[0]
-          - surface.footprint.width / 2;
-        const maxX = helm.position[0] + surface.localPosition[0]
-          + surface.footprint.width / 2;
-        const minZ = helm.position[2] + surface.localPosition[2]
-          - surface.footprint.depth / 2;
-        const maxZ = helm.position[2] + surface.localPosition[2]
-          + surface.footprint.depth / 2;
-        const overlapX = Math.max(0, Math.min(propBounds.max.x, maxX)
-          - Math.max(propBounds.min.x, minX));
-        const overlapZ = Math.max(0, Math.min(propBounds.max.z, maxZ)
-          - Math.max(propBounds.min.z, minZ));
-        expect(overlapX * overlapZ, `${id} overlaps ${surface.id}`).toBe(0);
-      });
-    });
-
-    build.disposeGeometry();
     materials.dispose();
   });
 
@@ -1223,7 +1044,7 @@ describe('freighter geometry', () => {  interface PointXZ {
   );
 
   it.each(SHIP_LAYOUT.ladders)(
-    'builds $id with timber rungs, metal rails and brackets, and geometry-derived climb heights',
+    'builds $id with matching dark rungs and rails, attached brackets, and a clear climb line',
     (ladderSpec) => {
       const materials = createShipMaterials();
       const build = createShipGeometry(materials);
@@ -1247,7 +1068,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       const topEntryZ = (zone.topEntry.minZ + zone.topEntry.maxZ) / 2;
 
       expect(rungs.length).toBeGreaterThan(8);
-      expect(rungs.every(({ material }) => material === materials.timber)).toBe(true);
+      expect(rungs.every(({ material }) => material === materials.darkMetal)).toBe(true);
       expect(sideRails).toHaveLength(2);
       expect(sideRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
       rungs.forEach((rung) => {
@@ -1268,7 +1089,8 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(zone.bottomEyeY).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT);
       expect(zone.topEyeY).toBeCloseTo(deckBounds.max.y + PLAYER_BODY_HEIGHT);
       expect(zone.climbX).toBeCloseTo(ladder.position.x);
-      expect(zone.climbZ).toBeCloseTo(ladder.position.z);
+      expect((zone.climbZ - ladder.position.z) * outwardZ)
+        .toBeGreaterThan(PLAYER_LAYOUT_RADIUS);
       expect(zone.outwardX).toBe(0);
       expect(zone.outwardZ).toBe(outwardZ);
       expect((bottomEntryZ - wallZ) * outwardZ).toBeGreaterThan(0);
