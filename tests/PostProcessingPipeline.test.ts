@@ -12,6 +12,7 @@ import {
   createSceneRenderer,
 } from '../src/rendering/PostProcessingPipeline';
 import { PrintShader } from '../src/rendering/PrintShader';
+import { postProcessingProfilesForTest } from '../src/rendering/postProcessingProfiles';
 
 type MockFunction = ReturnType<typeof vi.fn>;
 
@@ -269,5 +270,14 @@ describe('post-processing pipeline construction', () => {
     expect(PrintShader.fragmentShader).not.toMatch(/\bfloat\s+luminance\s*\(/);
     expect(PrintShader.fragmentShader).toMatch(/\bfloat\s+printLuminance\s*\(/);
     expect(PrintShader.fragmentShader.match(/\bprintLuminance\s*\(/g)).toHaveLength(3);
+  });
+
+  it('keeps every profile inside the approved vivid range', () => {
+    for (const profile of postProcessingProfilesForTest()) {
+      expect(profile.saturation, profile.id).toBeGreaterThanOrEqual(1.02);
+      expect(profile.saturation, profile.id).toBeLessThanOrEqual(1.12);
+      expect(profile.contrast, profile.id).toBeGreaterThanOrEqual(1.08);
+      expect(profile.contrast, profile.id).toBeLessThanOrEqual(1.14);
+    }
   });
 });
