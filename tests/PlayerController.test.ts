@@ -512,4 +512,23 @@ describe('PlayerController', () => {
       new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
     );
   });
+
+  it('reset uses the supplied start height as the floor for an immediate jump', () => {
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.7, 0),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+    );
+    const resetStart = new Vector3(2, 4.2, -1);
+
+    controller.reset(resetStart);
+    input.queueJump();
+    controller.update(0.1, input.asControllerInput());
+
+    expect(controller.localPosition.y).toBeGreaterThan(resetStart.y);
+  });
 });
