@@ -219,21 +219,6 @@ describe('SurvivalUI', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('reduces an event outcome hold to one millisecond', async () => {
-    vi.useFakeTimers();
-    const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount, { matches: true });
-
-    let settled = false;
-    const hold = ui.holdEventOutcome().then(() => { settled = true; });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    await hold;
-    expect(settled).toBe(true);
-    ui.dispose();
-  });
-
   it('supersedes an event outcome hold without leaving its timer active', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
@@ -340,7 +325,7 @@ describe('SurvivalUI', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const state = new SurvivalSession(saved('bucket', 'umbrella'), { seed: 3 }).snapshot();
     ui.render(state, () => null);
@@ -534,25 +519,34 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(broken);
   });
 
-  it('settles and safely supersedes reduced-motion sleep covers', async () => {
+  it('uses the authored sleep-cover duration while preserving supersession and disposal', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
 
+    let firstSettled = false;
     const first = ui.setSleepCovered(true);
+    void first.then(() => { firstSettled = true; });
     expect(cover.classList).toContain('is-covered');
-    const second = ui.setSleepCovered(false);
-    await first;
-    expect(cover.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(firstSettled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
+    await first;
+
+    const second = ui.setSleepCovered(false);
+    expect(cover.classList).not.toContain('is-covered');
+    const replacement = ui.setSleepCovered(true);
     await second;
+    await vi.advanceTimersByTimeAsync(2_500);
+    await replacement;
 
     const pendingAtDispose = ui.setSleepCovered(true);
     ui.dispose();
     await pendingAtDispose;
-    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.sleep-cover\s*\{[^}]*transition-duration:\s*1ms/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2\.5s/s);
+    expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
   });
 
   it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
@@ -797,22 +791,30 @@ describe('SurvivalUI', () => {
     expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
   });
 
-  it('settles and safely supersedes reduced-motion fishing fades without transition events', async () => {
+  it('uses the authored fishing-fade duration while preserving supersession', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const fade = mount.querySelector<HTMLElement>('[data-fishing-fade]')!;
 
+    let firstSettled = false;
     const first = ui.setFishingFade(true);
+    void first.then(() => { firstSettled = true; });
     expect(fade.classList).toContain('is-covered');
-    const second = ui.setFishingFade(false);
-    await first;
-    expect(fade.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(179);
+    expect(firstSettled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
+    await first;
+
+    const second = ui.setFishingFade(false);
+    expect(fade.classList).not.toContain('is-covered');
+    const replacement = ui.setFishingFade(true);
     await second;
+    await vi.advanceTimersByTimeAsync(180);
+    await replacement;
     expect(mainStyles).toMatch(/\.fishing-fade\s*\{[^}]*transition:\s*opacity/s);
-    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.fishing-fade\s*\{[^}]*transition-duration:\s*1ms/s);
+    expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
   });
 
   it('disposes fishing listeners, pending fade work, inert state, and focused controls once', async () => {

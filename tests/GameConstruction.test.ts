@@ -26,9 +26,8 @@ describe('Game construction rollback', () => {
     vi.restoreAllMocks();
   });
 
-  it('preserves the construction error while cleaning up direct rendering', async () => {
+  it('preserves the renderer setup error while cleaning up direct rendering', async () => {
     const calls: string[] = [];
-    const constructionError = new Error('matchMedia construction failed');
     const canvas = document.createElement('canvas');
     vi.spyOn(canvas, 'remove').mockImplementation(() => calls.push('canvas'));
     const renderer = {
@@ -39,13 +38,6 @@ describe('Game construction rollback', () => {
     constructionMocks.WebGLRenderer.mockReturnValue(renderer);
     const { DirectSceneRenderer } = await import('../src/rendering/SceneRenderer');
     const disposeSceneRenderer = vi.spyOn(DirectSceneRenderer.prototype, 'dispose');
-    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: vi.fn(() => {
-        throw constructionError;
-      }),
-    });
     const { Game } = await import('../src/Game');
 
     let thrown: unknown;
@@ -60,15 +52,10 @@ describe('Game construction rollback', () => {
       );
     } catch (error) {
       thrown = error;
-    } finally {
-      if (originalMatchMedia) {
-        Object.defineProperty(window, 'matchMedia', originalMatchMedia);
-      } else {
-        Reflect.deleteProperty(window, 'matchMedia');
-      }
     }
 
-    expect(thrown).toBe(constructionError);
+    expect(thrown).toBeInstanceOf(TypeError);
+    expect((thrown as Error).message).toContain('getMaxAnisotropy');
     expect(calls).toEqual(['renderer', 'canvas']);
     expect(disposeSceneRenderer).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();

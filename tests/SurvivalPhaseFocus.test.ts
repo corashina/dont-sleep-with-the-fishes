@@ -343,7 +343,7 @@ describe('SurvivalPhase focus synchronization', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     const session = new SurvivalSession([], {
       seed: 4,
       random: sequenceRandom([0.5, 0]),

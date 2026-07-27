@@ -272,33 +272,34 @@ export class Game {
     this.shipAssets = shipAssets;
     this.factories = factories;
     this.createSeed = createSeed;
-    const maxTextureAnisotropy = Math.max(
-      1,
-      renderer.capabilities.getMaxAnisotropy(),
-    );
-    this.lifeboatAssets.configure(maxTextureAnisotropy);
-    this.shipAssets.configure(maxTextureAnisotropy);
-    this.context = {
-      mount,
-      renderer,
-      sceneRenderer,
-      camera,
-      propModels,
-      shipFurniture,
-      maxTextureAnisotropy,
-      skyAssets,
-      lifeboatAssets,
-      shipAssets,
-    };
-    this.activePhase = null;
-    this.performanceStats = null;
-    this.animationFrame = 0;
-    this.started = false;
-    this.disposed = false;
-    this.elapsed = 0;
-    this.phaseGeneration = 0;
+    let maxTextureAnisotropy = 1;
     let resizeListenerRegistered = false;
     try {
+      maxTextureAnisotropy = Math.max(
+        1,
+        renderer.capabilities.getMaxAnisotropy(),
+      );
+      this.lifeboatAssets.configure(maxTextureAnisotropy);
+      this.shipAssets.configure(maxTextureAnisotropy);
+      this.context = {
+        mount,
+        renderer,
+        sceneRenderer,
+        camera,
+        propModels,
+        shipFurniture,
+        maxTextureAnisotropy,
+        skyAssets,
+        lifeboatAssets,
+        shipAssets,
+      };
+      this.activePhase = null;
+      this.performanceStats = null;
+      this.animationFrame = 0;
+      this.started = false;
+      this.disposed = false;
+      this.elapsed = 0;
+      this.phaseGeneration = 0;
       const showDevelopmentStats = import.meta.env.DEV
         && new URLSearchParams(window.location.search).has('stats');
       this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);

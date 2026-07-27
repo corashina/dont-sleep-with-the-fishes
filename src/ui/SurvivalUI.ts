@@ -132,7 +132,6 @@ const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
 const EVENT_CHOICE_BEAT_MS = 240;
 const EVENT_OUTCOME_HOLD_MS = 2_000;
-const REDUCED_TRANSITION_MS = 1;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
 
@@ -315,10 +314,7 @@ export class SurvivalUI {
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
 
-  constructor(
-    private readonly mount: HTMLElement,
-    private readonly reducedMotion: Pick<MediaQueryList, 'matches'> = { matches: false },
-  ) {
+  constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
@@ -601,7 +597,7 @@ export class SurvivalUI {
     this.pendingEventChoiceBeat?.finish();
     this.eventSelectedChoiceId = choiceId;
     this.syncCommandState();
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : EVENT_CHOICE_BEAT_MS;
+    const delay = EVENT_CHOICE_BEAT_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -662,7 +658,7 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_TRANSITION_MS;
+    const delay = SLEEP_TRANSITION_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -753,7 +749,7 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingFishingFade?.finish();
     this.fishingFade.classList.toggle('is-covered', covered);
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : FISHING_FADE_MS;
+    const delay = FISHING_FADE_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -775,16 +771,14 @@ export class SurvivalUI {
   }
 
   holdSleep(): Promise<void> {
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_HOLD_MS;
+    const delay = SLEEP_HOLD_MS;
     return new Promise((resolve) => window.setTimeout(resolve, delay));
   }
 
   holdEventOutcome(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.pendingEventOutcomeHold?.finish();
-    const delay = this.reducedMotion.matches
-      ? REDUCED_TRANSITION_MS
-      : EVENT_OUTCOME_HOLD_MS;
+    const delay = EVENT_OUTCOME_HOLD_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
