@@ -15,6 +15,7 @@ import {
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import {
   FREIGHTER_DIMENSIONS,
+  PLAYER_LAYOUT_RADIUS,
   SHIP_LAYOUT,
   type ShipDoorSpec,
   type ShipLayoutSpec,
@@ -687,6 +688,212 @@ describe('freighter geometry', () => {  interface PointXZ {
     });
 
     build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('turns only the two inner room roofs into timber balconies', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+
+    expect((build.root.getObjectByName('balcony:crew-balcony:deck') as Mesh).material)
+      .toBe(materials.timberFloor);
+    expect((build.root.getObjectByName('balcony:storage-balcony:deck') as Mesh).material)
+      .toBe(materials.timberFloor);
+    expect(build.root.getObjectByName('balcony:wheelhouse:deck')).toBeUndefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it.each([
+    ['crew-ladder', 0, 4.5, -1],
+    ['storage-ladder', 0, -10.65, 1],
+  ] as const)('centers %s on its mast-facing wall', (id, x, wallZ, outwardZ) => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const ladder = build.root.getObjectByName(`ladder:${id}`)!;
+
+    expect(ladder.position.x).toBeCloseTo(x);
+    expect(Math.sign(ladder.position.z - wallZ)).toBe(outwardZ);
+    expect(build.climbZones.find((zone) => zone.id === id)).toBeDefined();
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it.each(SHIP_LAYOUT.balconies)(
+    'builds $id with white coamings and posts, dark rails, and a centered opening',
+    (balcony) => {
+      const materials = createShipMaterials();
+      const build = createShipGeometry(materials);
+      const zone = SHIP_LAYOUT.zones.find(({ id }) => id === balcony.zoneId)!;
+      const prefix = `balcony:${balcony.id}:`;
+      const openingEdge = balcony.edge;
+      const coamings = build.root.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`${prefix}coaming:`));
+      const posts = build.root.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`${prefix}post:`));
+      const topRails = build.root.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`${prefix}top-rail:`));
+      const openingCoamings = coamings.filter(({ name }) =>
+        name.startsWith(`${prefix}coaming:${openingEdge}:`));
+      const openingRails = topRails.filter(({ name }) =>
+        name.startsWith(`${prefix}top-rail:${openingEdge}:`));
+
+      expect(coamings).toHaveLength(5);
+      expect(coamings.every(({ material }) =>
+        material === materials.paintedPanel || material === materials.paintedSteel)).toBe(true);
+      expect(posts.length).toBeGreaterThanOrEqual(10);
+      expect(posts.every(({ material }) => material === materials.paintedSteel)).toBe(true);
+      expect(topRails).toHaveLength(5);
+      expect(topRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
+      expect(openingCoamings).toHaveLength(2);
+      expect(openingRails).toHaveLength(2);
+
+      const left = new Box3().setFromObject(openingCoamings[0]!);
+      const right = new Box3().setFromObject(openingCoamings[1]!);
+      const gapMin = Math.min(left.max.x, right.max.x);
+      const gapMax = Math.max(left.min.x, right.min.x);
+      expect(gapMin).toBeCloseTo(-balcony.openingWidth / 2);
+      expect(gapMax).toBeCloseTo(balcony.openingWidth / 2);
+      expect(gapMax - gapMin).toBeGreaterThanOrEqual(PLAYER_LAYOUT_RADIUS * 2);
+
+      const deck = build.root.getObjectByName(`${prefix}deck`) as Mesh;
+      const deckBounds = new Box3().setFromObject(deck);
+      const railSampleY = deckBounds.max.y + balcony.railHeight / 2;
+      const openingZ = balcony.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
+      const oppositeZ = balcony.edge === 'aft' ? zone.bounds.maxZ : zone.bounds.minZ;
+      expect(pointInCollider(build, new Vector3(0, railSampleY, openingZ))).toBe(false);
+      expect(pointInCollider(build, new Vector3(zone.bounds.minX, railSampleY, openingZ)))
+        .toBe(true);
+      expect(pointInCollider(build, new Vector3(zone.bounds.maxX, railSampleY, openingZ)))
+        .toBe(true);
+      expect(pointInCollider(build, new Vector3(0, railSampleY, oppositeZ))).toBe(true);
+      expect(pointInCollider(build, new Vector3(zone.bounds.minX, railSampleY, 0.5 * (
+        zone.bounds.minZ + zone.bounds.maxZ
+      )))).toBe(true);
+      expect(pointInCollider(build, new Vector3(zone.bounds.maxX, railSampleY, 0.5 * (
+        zone.bounds.minZ + zone.bounds.maxZ
+      )))).toBe(true);
+
+      build.disposeGeometry();
+      materials.dispose();
+    },
+  );
+
+  it.each(SHIP_LAYOUT.ladders)(
+    'builds $id with timber rungs, metal rails and brackets, and geometry-derived climb heights',
+    (ladderSpec) => {
+      const materials = createShipMaterials();
+      const build = createShipGeometry(materials);
+      const balcony = SHIP_LAYOUT.balconies.find(({ ladderId }) => ladderId === ladderSpec.id)!;
+      const ladder = build.root.getObjectByName(`ladder:${ladderSpec.id}`)!;
+      const rungs = ladder.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:rung:`));
+      const sideRails = ladder.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:side-rail:`));
+      const brackets = ladder.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:bracket:`));
+      const grabRails = ladder.children.filter((object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:grab-rail:`));
+      const deck = build.root.getObjectByName(`balcony:${balcony.id}:deck`) as Mesh;
+      const deckBounds = new Box3().setFromObject(deck);
+      const zone = build.climbZones.find(({ id }) => id === ladderSpec.id)!;
+      const room = SHIP_LAYOUT.zones.find(({ id }) => id === ladderSpec.zoneId)!;
+      const wallZ = ladderSpec.edge === 'aft' ? room.bounds.minZ : room.bounds.maxZ;
+      const outwardZ = ladderSpec.edge === 'aft' ? -1 : 1;
+      const bottomEntryZ = (zone.bottomEntry.minZ + zone.bottomEntry.maxZ) / 2;
+      const topEntryZ = (zone.topEntry.minZ + zone.topEntry.maxZ) / 2;
+
+      expect(rungs.length).toBeGreaterThan(8);
+      expect(rungs.every(({ material }) => material === materials.timber)).toBe(true);
+      expect(sideRails).toHaveLength(2);
+      expect(sideRails.every(({ material }) => material === materials.darkMetal)).toBe(true);
+      expect(brackets.length).toBeGreaterThanOrEqual(4);
+      expect(brackets.every(({ material }) => material === materials.exposedMetal)).toBe(true);
+      expect(grabRails).toHaveLength(2);
+      expect(grabRails.every(({ material }) => material === materials.exposedMetal)).toBe(true);
+      expect(zone.bottomEyeY).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT);
+      expect(zone.topEyeY).toBeCloseTo(deckBounds.max.y + PLAYER_BODY_HEIGHT);
+      expect(zone.climbX).toBeCloseTo(ladder.position.x);
+      expect(zone.climbZ).toBeCloseTo(ladder.position.z);
+      expect(zone.outwardX).toBe(0);
+      expect(zone.outwardZ).toBe(outwardZ);
+      expect((bottomEntryZ - wallZ) * outwardZ).toBeGreaterThan(0);
+      expect((topEntryZ - wallZ) * outwardZ).toBeLessThan(0);
+      expect((zone.bottomDismount[1] - wallZ) * outwardZ).toBeGreaterThan(0);
+      expect((zone.topDismount[1] - wallZ) * outwardZ).toBeLessThan(0);
+      expect(zone.bottomEntry.maxX - zone.bottomEntry.minX)
+        .toBeLessThanOrEqual(balcony.openingWidth - PLAYER_LAYOUT_RADIUS * 2);
+      expect(Object.isFrozen(zone)).toBe(true);
+      expect(Object.isFrozen(zone.bottomEntry)).toBe(true);
+      expect(Object.isFrozen(zone.topEntry)).toBe(true);
+
+      build.disposeGeometry();
+      materials.dispose();
+    },
+  );
+
+  it('keeps balcony layers, rails, room roofs, and chimney volumes flush or separate', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const chimneyParts = build.root.children.filter((object): object is Mesh =>
+      object instanceof Mesh
+      && (object.name === 'machinery-island' || object.name.startsWith('smokestack-')));
+
+    SHIP_LAYOUT.balconies.forEach((balcony) => {
+      const roof = build.root.getObjectByName(`${balcony.zoneId}-roof`) as Mesh;
+      const deck = build.root.getObjectByName(`balcony:${balcony.id}:deck`) as Mesh;
+      const rails = build.root.children.filter((object): object is Mesh =>
+        object instanceof Mesh
+        && (
+          object.name.startsWith(`balcony:${balcony.id}:coaming:`)
+          || object.name.startsWith(`balcony:${balcony.id}:post:`)
+          || object.name.startsWith(`balcony:${balcony.id}:top-rail:`)
+        ));
+
+      expect(overlappingVolume(roof, deck)).toBeLessThan(1e-8);
+      rails.forEach((rail) => {
+        expect(overlappingVolume(deck, rail), `${deck.name} overlaps ${rail.name}`)
+          .toBeLessThan(1e-8);
+        chimneyParts.forEach((chimney) => {
+          expect(overlappingVolume(rail, chimney), `${rail.name} overlaps ${chimney.name}`)
+            .toBeLessThan(1e-8);
+        });
+      });
+    });
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
+  it('disposes added balcony and ladder geometries exactly once', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const geometries = new Set(
+      build.root.children
+        .filter((object): object is Mesh =>
+          object instanceof Mesh
+          && (object.name.startsWith('balcony:') || object.name.startsWith('ladder:')))
+        .map(({ geometry }) => geometry),
+    );
+    build.root.traverse((object) => {
+      if (object instanceof Mesh && object.name.startsWith('ladder:')) geometries.add(object.geometry);
+    });
+    const disposeCalls = new Map([...geometries].map((geometry) => {
+      let calls = 0;
+      const original = geometry.dispose.bind(geometry);
+      geometry.dispose = () => {
+        calls += 1;
+        original();
+      };
+      return [geometry, () => calls] as const;
+    }));
+
+    expect(geometries.size).toBeGreaterThan(0);
+    build.disposeGeometry();
+    build.disposeGeometry();
+    disposeCalls.forEach((calls) => expect(calls()).toBe(1));
     materials.dispose();
   });
 

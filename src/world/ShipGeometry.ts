@@ -18,15 +18,25 @@ import {
   type CollisionArc,
   type CollisionBox,
 } from '../player/collisions';
+import type { LadderClimbZone, LadderEntryArea } from '../player/LadderTraversal';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import {
   FREIGHTER_DIMENSIONS,
+  PLAYER_LAYOUT_RADIUS,
   SHIP_LAYOUT,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   deckHatchRect,
 } from './ShipLayout';
-import type { ShipDoorSpec, ShipLayoutSpec, ShipZoneId, ShipZoneSpec } from './ShipLayout';
+import type {
+  ShipBalconySpec,
+  ShipDoorSpec,
+  ShipLadderSpec,
+  ShipLayoutSpec,
+  ShipTransverseEdge,
+  ShipZoneId,
+  ShipZoneSpec,
+} from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
 
 export { FREIGHTER_DIMENSIONS } from './ShipLayout';
@@ -45,6 +55,7 @@ export interface ShipGeometryBuild {
     heightProfile: WaterExclusionHeightProfile;
   };
   stackOutlets: readonly [Vector3, Vector3];
+  climbZones: readonly LadderClimbZone[];
   disposeGeometry(): void;
 }
 
@@ -100,6 +111,20 @@ const STACK_OUTLET_Y = 7.1;
 const STACK_RADIUS = 0.58;
 const STACK_COLLAR_RADIUS = 0.72;
 const STACK_COLLAR_HEIGHT = 0.22;
+
+const BALCONY_DECK_THICKNESS = 0.1;
+const BALCONY_EDGE_THICKNESS = 0.14;
+const BALCONY_RAIL_POST_WIDTH = 0.12;
+const BALCONY_TOP_RAIL_THICKNESS = 0.12;
+const BALCONY_RAIL_POST_SPACING = 2.2;
+
+const LADDER_RAIL_WIDTH = 0.08;
+const LADDER_RAIL_DEPTH = 0.1;
+const LADDER_RUNG_HEIGHT = 0.065;
+const LADDER_RUNG_DEPTH = 0.11;
+const LADDER_GRAB_RISE = 0.72;
+const LADDER_ENTRY_DEPTH = 0.9;
+const LADDER_DISMOUNT_DISTANCE = 0.75;
 
 const RAIL_THICKNESS = 0.2;
 const RAIL_COLLIDER_THICKNESS = 0.25;
@@ -811,6 +836,308 @@ function addRoomRoofs(
   });
 }
 
+interface BalconyRun {
+  readonly edge: WallEdge;
+  readonly index: number;
+  readonly size: readonly [number, number];
+  readonly position: readonly [number, number];
+}
+
+function balconyDeckTopY(zoneId: ShipZoneId): number {
+  return FREIGHTER_DIMENSIONS.deckY
+    + roomWallHeight(zoneId)
+    + ROOM_ROOF_THICKNESS
+    + BALCONY_DECK_THICKNESS;
+}
+
+function balconyRuns(
+  balcony: ShipBalconySpec,
+  zone: ShipZoneSpec,
+): readonly BalconyRun[] {
+  const { bounds } = zone;
+  const width = bounds.maxX - bounds.minX;
+  const length = bounds.maxZ - bounds.minZ;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  const openingZ = balcony.edge === 'aft'
+    ? bounds.minZ + BALCONY_EDGE_THICKNESS / 2
+    : bounds.maxZ - BALCONY_EDGE_THICKNESS / 2;
+  const oppositeEdge: ShipTransverseEdge = balcony.edge === 'aft' ? 'forward' : 'aft';
+  const oppositeZ = balcony.edge === 'aft'
+    ? bounds.maxZ - BALCONY_EDGE_THICKNESS / 2
+    : bounds.minZ + BALCONY_EDGE_THICKNESS / 2;
+  const openingHalfWidth = balcony.openingWidth / 2;
+  const leftWidth = -openingHalfWidth - bounds.minX;
+  const rightWidth = bounds.maxX - openingHalfWidth;
+
+  return [
+    {
+      edge: 'port',
+      index: 0,
+      size: [BALCONY_EDGE_THICKNESS, length - BALCONY_EDGE_THICKNESS * 2],
+      position: [bounds.minX + BALCONY_EDGE_THICKNESS / 2, centerZ],
+    },
+    {
+      edge: 'starboard',
+      index: 0,
+      size: [BALCONY_EDGE_THICKNESS, length - BALCONY_EDGE_THICKNESS * 2],
+      position: [bounds.maxX - BALCONY_EDGE_THICKNESS / 2, centerZ],
+    },
+    {
+      edge: oppositeEdge,
+      index: 0,
+      size: [width, BALCONY_EDGE_THICKNESS],
+      position: [(bounds.minX + bounds.maxX) / 2, oppositeZ],
+    },
+    {
+      edge: balcony.edge,
+      index: 0,
+      size: [leftWidth, BALCONY_EDGE_THICKNESS],
+      position: [bounds.minX + leftWidth / 2, openingZ],
+    },
+    {
+      edge: balcony.edge,
+      index: 1,
+      size: [rightWidth, BALCONY_EDGE_THICKNESS],
+      position: [openingHalfWidth + rightWidth / 2, openingZ],
+    },
+  ];
+}
+
+function addBalconyPosts(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  shellColliders: CollisionBox[],
+  materials: ShipMaterials,
+  balcony: ShipBalconySpec,
+  runs: readonly BalconyRun[],
+  deckTopY: number,
+): void {
+  const occupied = new Set<string>();
+  const edgeIndices = new Map<WallEdge, number>();
+  runs.forEach((run) => {
+    const alongX = run.edge === 'aft' || run.edge === 'forward';
+    const length = alongX ? run.size[0] : run.size[1];
+    const count = Math.max(1, Math.ceil(length / BALCONY_RAIL_POST_SPACING));
+    for (let index = 0; index <= count; index += 1) {
+      const amount = index / count - 0.5;
+      const x = run.position[0] + (alongX ? length * amount : 0);
+      const z = run.position[1] + (alongX ? 0 : length * amount);
+      const key = `${x.toFixed(5)}:${z.toFixed(5)}`;
+      if (occupied.has(key)) continue;
+      occupied.add(key);
+      const edgeIndex = edgeIndices.get(run.edge) ?? 0;
+      edgeIndices.set(run.edge, edgeIndex + 1);
+      addBlock(root, geometries, shellColliders, {
+        name: `balcony:${balcony.id}:post:${run.edge}:${edgeIndex}`,
+        size: [
+          BALCONY_RAIL_POST_WIDTH,
+          balcony.railHeight,
+          BALCONY_RAIL_POST_WIDTH,
+        ],
+        position: [x, deckTopY + balcony.railHeight / 2, z],
+        material: materials.paintedSteel,
+      });
+    }
+  });
+}
+
+function addRoofBalconies(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  shellColliders: CollisionBox[],
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  layout.balconies.forEach((balcony) => {
+    const zone = requiredZone(layout, balcony.zoneId);
+    const width = zone.bounds.maxX - zone.bounds.minX;
+    const length = zone.bounds.maxZ - zone.bounds.minZ;
+    const deckTopY = balconyDeckTopY(zone.id);
+    addBlock(root, geometries, shellColliders, {
+      name: `balcony:${balcony.id}:deck`,
+      size: [width, BALCONY_DECK_THICKNESS, length],
+      position: [
+        (zone.bounds.minX + zone.bounds.maxX) / 2,
+        deckTopY - BALCONY_DECK_THICKNESS / 2,
+        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
+      ],
+      material: materials.timberFloor,
+    });
+
+    const runs = balconyRuns(balcony, zone);
+    runs.forEach((run) => {
+      addBlock(root, geometries, shellColliders, {
+        name: `balcony:${balcony.id}:coaming:${run.edge}:${run.index}`,
+        size: [run.size[0], balcony.coamingHeight, run.size[1]],
+        position: [
+          run.position[0],
+          deckTopY + balcony.coamingHeight / 2,
+          run.position[1],
+        ],
+        material: materials.paintedPanel,
+      });
+      addBlock(root, geometries, shellColliders, {
+        name: `balcony:${balcony.id}:top-rail:${run.edge}:${run.index}`,
+        size: [run.size[0], BALCONY_TOP_RAIL_THICKNESS, run.size[1]],
+        position: [
+          run.position[0],
+          deckTopY + balcony.railHeight - BALCONY_TOP_RAIL_THICKNESS / 2,
+          run.position[1],
+        ],
+        material: materials.darkMetal,
+      });
+      shellColliders.push(toCollisionBox(
+        [
+          run.position[0],
+          deckTopY + balcony.railHeight / 2,
+          run.position[1],
+        ],
+        [run.size[0], balcony.railHeight, run.size[1]],
+      ));
+    });
+    addBalconyPosts(
+      root,
+      geometries,
+      shellColliders,
+      materials,
+      balcony,
+      runs,
+      deckTopY,
+    );
+  });
+}
+
+function orderedEntryArea(
+  centerX: number,
+  halfWidth: number,
+  firstZ: number,
+  secondZ: number,
+): LadderEntryArea {
+  return Object.freeze({
+    minX: centerX - halfWidth,
+    maxX: centerX + halfWidth,
+    minZ: Math.min(firstZ, secondZ),
+    maxZ: Math.max(firstZ, secondZ),
+  });
+}
+
+function resolvedClimbZone(
+  ladder: ShipLadderSpec,
+  balcony: ShipBalconySpec,
+  wallZ: number,
+  ladderZ: number,
+  outwardZ: number,
+  topFloorY: number,
+): LadderClimbZone {
+  const halfEntryWidth = Math.min(
+    ladder.width / 2,
+    balcony.openingWidth / 2 - PLAYER_LAYOUT_RADIUS,
+  );
+  const bottomEntry = orderedEntryArea(
+    ladder.centerX,
+    halfEntryWidth,
+    ladderZ + outwardZ * 0.05,
+    ladderZ + outwardZ * LADDER_ENTRY_DEPTH,
+  );
+  const topEntry = orderedEntryArea(
+    ladder.centerX,
+    halfEntryWidth,
+    wallZ - outwardZ * 0.05,
+    wallZ - outwardZ * LADDER_ENTRY_DEPTH,
+  );
+  const bottomDismount = Object.freeze([
+    ladder.centerX,
+    ladderZ + outwardZ * LADDER_DISMOUNT_DISTANCE,
+  ]) as readonly [number, number];
+  const topDismount = Object.freeze([
+    ladder.centerX,
+    wallZ - outwardZ * LADDER_DISMOUNT_DISTANCE,
+  ]) as readonly [number, number];
+  return Object.freeze({
+    id: ladder.id,
+    climbX: ladder.centerX,
+    climbZ: ladderZ,
+    outwardX: 0,
+    outwardZ,
+    bottomEyeY: FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT,
+    topEyeY: topFloorY + PLAYER_BODY_HEIGHT,
+    bottomEntry,
+    topEntry,
+    bottomDismount,
+    topDismount,
+  });
+}
+
+function addLadders(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): readonly LadderClimbZone[] {
+  const climbZones = layout.ladders.map((ladderSpec) => {
+    const zone = requiredZone(layout, ladderSpec.zoneId);
+    const balcony = layout.balconies.find(({ ladderId }) => ladderId === ladderSpec.id);
+    if (!balcony) throw new Error(`Ship geometry requires balcony for ${ladderSpec.id}`);
+    const outwardZ = ladderSpec.edge === 'aft' ? -1 : 1;
+    const wallZ = ladderSpec.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
+    const ladderZ = wallZ + outwardZ * (WALL_HALF_THICKNESS + ladderSpec.wallOffset);
+    const bottomFloorY = FREIGHTER_DIMENSIONS.deckY;
+    const topFloorY = balconyDeckTopY(zone.id);
+    const ladderHeight = topFloorY - bottomFloorY;
+    const ladder = new Group();
+    ladder.name = `ladder:${ladderSpec.id}`;
+    ladder.position.set(ladderSpec.centerX, 0, ladderZ);
+    root.add(ladder);
+
+    ([-1, 1] as const).forEach((side, index) => {
+      const sideName = index === 0 ? 'port' : 'starboard';
+      const x = side * ladderSpec.width / 2;
+      addBlock(ladder, geometries, [], {
+        name: `${ladder.name}:side-rail:${sideName}`,
+        size: [LADDER_RAIL_WIDTH, ladderHeight, LADDER_RAIL_DEPTH],
+        position: [x, bottomFloorY + ladderHeight / 2, 0],
+        material: materials.darkMetal,
+      });
+      addBlock(ladder, geometries, [], {
+        name: `${ladder.name}:grab-rail:${sideName}`,
+        size: [LADDER_RAIL_WIDTH, LADDER_GRAB_RISE, LADDER_RAIL_DEPTH],
+        position: [x, topFloorY + LADDER_GRAB_RISE / 2, 0],
+        material: materials.exposedMetal,
+      });
+      for (let bracketIndex = 0; bracketIndex < 3; bracketIndex += 1) {
+        const y = bottomFloorY + ladderHeight * ((bracketIndex + 1) / 4);
+        addBlock(ladder, geometries, [], {
+          name: `${ladder.name}:bracket:${sideName}:${bracketIndex}`,
+          size: [LADDER_RAIL_WIDTH, LADDER_RAIL_WIDTH, ladderSpec.wallOffset],
+          position: [x, y, -outwardZ * ladderSpec.wallOffset / 2],
+          material: materials.exposedMetal,
+        });
+      }
+    });
+
+    const rungCount = Math.floor(ladderHeight / ladderSpec.rungSpacing);
+    for (let index = 0; index <= rungCount; index += 1) {
+      const y = bottomFloorY + Math.min(index * ladderSpec.rungSpacing, ladderHeight);
+      addBlock(ladder, geometries, [], {
+        name: `${ladder.name}:rung:${index}`,
+        size: [ladderSpec.width, LADDER_RUNG_HEIGHT, LADDER_RUNG_DEPTH],
+        position: [0, y, 0],
+        material: materials.timber,
+      });
+    }
+
+    return resolvedClimbZone(
+      ladderSpec,
+      balcony,
+      wallZ,
+      ladderZ,
+      outwardZ,
+      topFloorY,
+    );
+  });
+  return Object.freeze(climbZones);
+}
+
 function addFocalSuperstructureDetails(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -1206,6 +1533,8 @@ export function createShipGeometry(
   addWallSegments(root, geometries, shellColliders, materials, layout);
   addPortholeDetails(root, geometries, materials, layout);
   addRoomRoofs(root, geometries, shellColliders, materials, layout);
+  addRoofBalconies(root, geometries, shellColliders, materials, layout);
+  const climbZones = addLadders(root, geometries, materials, layout);
   addFocalSuperstructureDetails(root, geometries, materials, layout);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);
 
@@ -1244,6 +1573,7 @@ export function createShipGeometry(
       },
     },
     stackOutlets,
+    climbZones,
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
