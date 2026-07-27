@@ -250,6 +250,12 @@ export class SurvivalPhase implements GamePhase {
     );
   }
 
+  private async renderAndSettleCoveredScene(generation: number): Promise<boolean> {
+    this.render();
+    await (this.ui.settleCoveredScene?.() ?? Promise.resolve());
+    return this.isContinuationActive(generation);
+  }
+
   handleAction(action: DayActionId, option?: DayActionOption): void {
     if (!this.canAcceptCommand()) return;
     if (action === 'fish') {
@@ -714,6 +720,7 @@ export class SurvivalPhase implements GamePhase {
       if (!this.isContinuationActive(generation)) return;
       snapshot = await this.runDawn(generation);
       if (!this.isContinuationActive(generation)) return;
+      if (!await this.renderAndSettleCoveredScene(generation)) return;
       await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
       this.eventPresentation = 'idle';
@@ -832,6 +839,7 @@ export class SurvivalPhase implements GamePhase {
       ? await this.runDawn(generation)
       : this.renderSnapshot(false, false);
     if (!this.isContinuationActive(generation)) return;
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
@@ -923,10 +931,10 @@ export class SurvivalPhase implements GamePhase {
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
-    await Promise.all([
-      this.world.revealEvent?.(event.id) ?? Promise.resolve(),
-      this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
-    ]);
+    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
     const revealed = this.session.snapshot();

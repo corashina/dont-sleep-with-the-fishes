@@ -303,6 +303,8 @@ async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -917,7 +919,14 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot();
     const calls: string[] = [];
     const cover = deferred();
+    const tableauReveal = deferred();
+    const sceneSettle = deferred();
     const uncover = deferred();
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(() => { calls.push('scene-render'); }),
+      resize: vi.fn(),
+      dispose: vi.fn(),
+    };
     const setEventSelection = vi.fn(() => { calls.push('selection'); });
     const requestDayEvent = vi.fn(() => {
       current = snapshot({ state: 'dayEvent', pendingEventId: event.id, actedToday: true });
@@ -926,9 +935,13 @@ describe('SurvivalPhase orchestration', () => {
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), perform: vi.fn(() => accepted()), requestDayEvent },
       world: {
+        scene: new Scene(),
         play: vi.fn(async (cue) => { calls.push(cue); }),
         stageEvent: vi.fn(() => { calls.push('stage'); }),
-        revealEvent: vi.fn(async () => { calls.push('reveal-tableau'); }),
+        revealEvent: vi.fn(() => {
+          calls.push('reveal-tableau');
+          return tableauReveal.promise;
+        }),
         dispose: vi.fn(),
       },
       ui: {
@@ -938,9 +951,14 @@ describe('SurvivalPhase orchestration', () => {
           calls.push(covered ? 'cover' : 'uncover');
           return covered ? cover.promise : uncover.promise;
         }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return sceneSettle.promise;
+        }),
         showEventReveal: vi.fn(async () => { calls.push('event'); }), dispose: vi.fn(),
         setEventSelection,
       },
+      sceneRenderer,
     });
 
     phase.handleAction('dive');
@@ -953,15 +971,24 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event', 'reveal-tableau', 'uncover',
+      'fish', 'begin-event', 'cover', 'stage', 'event', 'reveal-tableau',
     ]);
     expect(setEventSelection).not.toHaveBeenCalled();
+
+    tableauReveal.resolve();
+    await flushPromises();
+    expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
+    expect(calls).not.toContain('uncover');
+
+    sceneSettle.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('uncover');
 
     uncover.resolve();
     await flushPromises();
     expect(calls).toEqual([
       'fish', 'begin-event', 'cover', 'stage', 'event',
-      'reveal-tableau', 'uncover', 'selection',
+      'reveal-tableau', 'scene-render', 'settle', 'uncover', 'selection',
     ]);
   });
 
@@ -1029,7 +1056,13 @@ describe('SurvivalPhase orchestration', () => {
     const calls: string[] = [];
     const cover = deferred();
     const tableauReveal = deferred();
+    const sceneSettle = deferred();
     const uncover = deferred();
+    const sceneRenderer: SceneRenderer = {
+      render: vi.fn(() => { calls.push('scene-render'); }),
+      resize: vi.fn(),
+      dispose: vi.fn(),
+    };
     const perform = vi.fn(() => {
       current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
       return accepted({ code: 'event-opened', cue: 'nightfall', deltas: {} });
@@ -1037,6 +1070,7 @@ describe('SurvivalPhase orchestration', () => {
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), perform },
       world: {
+        scene: new Scene(),
         play: vi.fn(async (cue) => { calls.push(cue); }),
         stageEvent: vi.fn(() => { calls.push('stage'); }),
         revealEvent: vi.fn(() => {
@@ -1051,10 +1085,15 @@ describe('SurvivalPhase orchestration', () => {
           calls.push(covered ? 'cover' : 'uncover');
           return covered ? cover.promise : uncover.promise;
         }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return sceneSettle.promise;
+        }),
         setBusy: vi.fn(), render: vi.fn(), showEventReveal: vi.fn(async () => { calls.push('caption'); }),
         setEventSelection: vi.fn(() => { calls.push('selection'); }),
         setJournalUnread: vi.fn(), dispose: vi.fn(),
       },
+      sceneRenderer,
     });
     phase.handleAction('endDay');
     await flushPromises();
@@ -1063,12 +1102,18 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'begin-event', 'nightfall', 'cover', 'stage', 'caption', 'reveal-tableau', 'uncover',
+      'begin-event', 'nightfall', 'cover', 'stage', 'caption', 'reveal-tableau',
     ]);
 
     tableauReveal.resolve();
     await flushPromises();
+    expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
+    expect(calls).not.toContain('uncover');
     expect(calls).not.toContain('selection');
+
+    sceneSettle.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('uncover');
 
     uncover.resolve();
     await flushPromises();
@@ -1292,6 +1337,8 @@ describe('SurvivalPhase orchestration', () => {
     const tableauReaction = deferred();
     const outcomeHold = deferred();
     const cover = deferred();
+    const dawnCue = deferred();
+    const sceneSettle = deferred();
     const uncover = deferred();
     let trackExit = false;
     const setBusy = vi.fn();
@@ -1302,6 +1349,11 @@ describe('SurvivalPhase orchestration', () => {
         if (!trackExit) return Promise.resolve();
         calls.push(covered ? 'cover' : 'uncover');
         return covered ? cover.promise : uncover.promise;
+      }),
+      settleCoveredScene: vi.fn(() => {
+        if (!trackExit) return Promise.resolve();
+        calls.push('settle');
+        return sceneSettle.promise;
       }),
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
@@ -1334,6 +1386,7 @@ describe('SurvivalPhase orchestration', () => {
         }),
       },
       world: {
+        scene: new Scene(),
         revealEvent: vi.fn(() => Promise.resolve()),
         reactToEventOutcome: vi.fn((eventId) => {
           calls.push('react');
@@ -1346,11 +1399,16 @@ describe('SurvivalPhase orchestration', () => {
         }),
         play: vi.fn((cue) => {
           calls.push(cue === 'impact' ? 'cue' : 'dawn-cue');
-          return cue === 'impact' ? outcomeCue.promise : Promise.resolve();
+          return cue === 'impact' ? outcomeCue.promise : dawnCue.promise;
         }),
         dispose: vi.fn(),
       },
       ui,
+      sceneRenderer: {
+        render: vi.fn(() => { calls.push('scene-render'); }),
+        resize: vi.fn(),
+        dispose: vi.fn(),
+      },
     });
     phase.start();
     await flushPromises();
@@ -1381,14 +1439,24 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'resolve', 'cue', 'react', 'feedback', 'hold', 'cover',
-      'clear', 'dawn', 'dawn-cue', 'render:day', 'inventory:day', 'uncover',
+      'clear', 'dawn', 'dawn-cue',
     ]);
+    expect(calls).not.toContain('uncover');
+
+    dawnCue.resolve();
+    await flushPromises();
+    expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
+    expect(calls).not.toContain('uncover');
     for (const mutation of ['clear', 'dawn', 'render:day', 'inventory:day']) {
       expect(calls.indexOf(mutation)).toBeGreaterThan(calls.indexOf('cover'));
-      expect(calls.indexOf(mutation)).toBeLessThan(calls.indexOf('uncover'));
+      expect(calls.indexOf(mutation)).toBeLessThan(calls.indexOf('settle'));
     }
     expect(setBusy).not.toHaveBeenLastCalledWith(false);
     expect(restoreCommandFocus).not.toHaveBeenCalled();
+
+    sceneSettle.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('uncover');
 
     uncover.resolve();
     await flushPromises();
@@ -1402,6 +1470,7 @@ describe('SurvivalPhase orchestration', () => {
     const calls: string[] = [];
     const outcomeHold = deferred();
     const cover = deferred();
+    const sceneSettle = deferred();
     const uncover = deferred();
     let trackExit = false;
     const beginDawn = vi.fn();
@@ -1415,6 +1484,7 @@ describe('SurvivalPhase orchestration', () => {
         beginDawn,
       },
       world: {
+        scene: new Scene(),
         revealEvent: vi.fn(() => Promise.resolve()),
         play: vi.fn(() => Promise.resolve()),
         reactToEventOutcome: vi.fn(() => Promise.resolve()),
@@ -1431,6 +1501,11 @@ describe('SurvivalPhase orchestration', () => {
           calls.push(covered ? 'cover' : 'uncover');
           return covered ? cover.promise : uncover.promise;
         }),
+        settleCoveredScene: vi.fn(() => {
+          if (!trackExit) return Promise.resolve();
+          calls.push('settle');
+          return sceneSettle.promise;
+        }),
         showEventReveal: vi.fn(() => Promise.resolve()),
         setEventSelection: vi.fn(),
         setBusy: vi.fn(),
@@ -1444,6 +1519,11 @@ describe('SurvivalPhase orchestration', () => {
         }),
         setJournalUnread: vi.fn(),
         restoreCommandFocus: vi.fn(),
+        dispose: vi.fn(),
+      },
+      sceneRenderer: {
+        render: vi.fn(() => { calls.push('scene-render'); }),
+        resize: vi.fn(),
         dispose: vi.fn(),
       },
     });
@@ -1463,11 +1543,15 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'feedback', 'hold', 'cover', 'clear', 'render:day', 'inventory:day', 'uncover',
+      'feedback', 'hold', 'cover', 'clear', 'render:day', 'inventory:day', 'scene-render', 'settle',
     ]);
     expect(beginDawn).not.toHaveBeenCalled();
     expect(calls.indexOf('render:day')).toBeGreaterThan(calls.indexOf('cover'));
-    expect(calls.indexOf('render:day')).toBeLessThan(calls.indexOf('uncover'));
+    expect(calls).not.toContain('uncover');
+
+    sceneSettle.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('uncover');
 
     uncover.resolve();
     await flushPromises();
@@ -1478,6 +1562,8 @@ describe('SurvivalPhase orchestration', () => {
     ['restart', 'hold'],
     ['dispose', 'cover'],
     ['restart', 'cover'],
+    ['dispose', 'settle'],
+    ['restart', 'settle'],
     ['dispose', 'uncover'],
     ['restart', 'uncover'],
   ] as const)(
@@ -1487,6 +1573,7 @@ describe('SurvivalPhase orchestration', () => {
       let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
       const outcomeHold = deferred();
       const cover = deferred();
+      const sceneSettle = deferred();
       const uncover = deferred();
       let trackExit = false;
       const clearEvent = vi.fn();
@@ -1498,6 +1585,7 @@ describe('SurvivalPhase orchestration', () => {
       const setBusy = vi.fn();
       const restoreCommandFocus = vi.fn();
       const holdEventOutcome = vi.fn(() => outcomeHold.promise);
+      const settleCoveredScene = vi.fn(() => trackExit ? sceneSettle.promise : Promise.resolve());
       const setSleepCovered = vi.fn((covered: boolean) => {
         if (!trackExit) return Promise.resolve();
         return covered ? cover.promise : uncover.promise;
@@ -1522,6 +1610,7 @@ describe('SurvivalPhase orchestration', () => {
         ui: {
           beginEventPresentation: vi.fn(),
           setSleepCovered,
+          settleCoveredScene,
           showEventReveal: vi.fn(() => Promise.resolve()),
           setEventSelection: vi.fn(),
           setBusy,
@@ -1538,6 +1627,7 @@ describe('SurvivalPhase orchestration', () => {
       phase.start();
       await flushPromises();
       trackExit = true;
+      settleCoveredScene.mockClear();
 
       phase.handleEndure();
       await flushPromises();
@@ -1548,8 +1638,15 @@ describe('SurvivalPhase orchestration', () => {
         await flushPromises();
         expect(setSleepCovered).toHaveBeenLastCalledWith(true);
       }
-      if (pendingStep === 'uncover') {
+      if (pendingStep === 'settle' || pendingStep === 'uncover') {
         cover.resolve();
+        await flushPromises();
+      }
+      if (pendingStep === 'settle') {
+        expect(settleCoveredScene).toHaveBeenCalledOnce();
+      }
+      if (pendingStep === 'uncover') {
+        sceneSettle.resolve();
         await flushPromises();
         expect(setSleepCovered).toHaveBeenLastCalledWith(false);
       }
@@ -1565,7 +1662,12 @@ describe('SurvivalPhase orchestration', () => {
 
       if (pendingStep === 'hold') outcomeHold.resolve();
       else if (pendingStep === 'cover') cover.resolve();
-      else uncover.resolve();
+      else if (pendingStep === 'settle') {
+        expect(setSleepCovered).not.toHaveBeenCalledWith(false);
+        expect(setBusy).not.toHaveBeenLastCalledWith(false);
+        expect(restoreCommandFocus).not.toHaveBeenCalled();
+        sceneSettle.resolve();
+      } else uncover.resolve();
       await flushPromises();
 
       expect(clearEvent).not.toHaveBeenCalled();
@@ -1829,6 +1931,7 @@ describe('SurvivalPhase orchestration', () => {
 
   it('holds a quiet night under cover and begins dawn without a journal modal', async () => {
     const calls: string[] = [];
+    const sceneSettle = deferred();
     let current = snapshot({ state: 'nightEvent', journalEntries: [completedEntry(1, { kind: 'quiet' })] });
     const beginDawn = vi.fn(() => {
       calls.push('begin-dawn');
@@ -1842,22 +1945,40 @@ describe('SurvivalPhase orchestration', () => {
         perform: vi.fn(() => accepted({ code: 'quiet-night', cue: 'nightfall', deltas: {} })),
         beginDawn,
       },
-      world: { play: vi.fn((cue) => { calls.push(cue); return Promise.resolve(); }), dispose: vi.fn() },
+      world: {
+        scene: new Scene(),
+        play: vi.fn((cue) => { calls.push(cue); return Promise.resolve(); }),
+        dispose: vi.fn(),
+      },
       ui: {
         setSleepCovered: vi.fn((covered) => {
           calls.push(covered ? 'cover' : 'uncover');
           return Promise.resolve();
         }),
         holdSleep: vi.fn(() => { calls.push('hold'); return Promise.resolve(); }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return sceneSettle.promise;
+        }),
         setBusy: vi.fn(), render: vi.fn(), setJournalUnread: vi.fn(), showJournal,
         restoreCommandFocus: vi.fn(), dispose: vi.fn(),
+      },
+      sceneRenderer: {
+        render: vi.fn(() => { calls.push('scene-render'); }),
+        resize: vi.fn(),
+        dispose: vi.fn(),
       },
     });
     phase.handleAction('endDay');
     await flushPromises();
     expect(beginDawn).toHaveBeenCalledOnce();
     expect(showJournal).not.toHaveBeenCalled();
-    expect(calls).toEqual(['nightfall', 'cover', 'hold', 'begin-dawn', 'dawn', 'uncover']);
+    expect(calls).toEqual(['nightfall', 'cover', 'hold', 'begin-dawn', 'dawn', 'scene-render', 'settle']);
+    expect(calls).not.toContain('uncover');
+
+    sceneSettle.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('uncover');
   });
 
   it.each(['dispose', 'restart'] as const)(
