@@ -55,9 +55,19 @@ const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
 const DECK_WIDTH = FREIGHTER_DIMENSIONS.width - 0.5;
 const DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 2;
 const END_CAP_DEPTH = 5.2;
-const HULL_HEIGHT = 1.65;
+const HULL_HEIGHT = 4.6;
 const HULL_TOP_Y = 1.98;
-const HULL_BOTTOM_TAPER = { widthScale: 0.72, lengthScale: 0.95 } as const;
+const HULL_BOTTOM_TAPER = {
+  widthScale: 0.1,
+  lengthScale: 0.58,
+  chine: {
+    depthFraction: 0.5,
+    widthScale: 0.7,
+    lengthScale: 0.78,
+  },
+} as const;
+const HULL_EXCLUSION_LOWER_SCALE = { width: 0.4, length: 0.58 } as const;
+const UPPER_HULL_BOTTOM_TAPER = { widthScale: 0.96, lengthScale: 0.94 } as const;
 const DECK_THICKNESS = 0.28;
 const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
@@ -342,24 +352,50 @@ function addRoundedPrism(
   topY: number,
   material: Material,
   collider = true,
-  bottomTaper?: { widthScale: number; lengthScale: number },
+  bottomTaper?: {
+    widthScale: number;
+    lengthScale: number;
+    chine?: {
+      depthFraction: number;
+      widthScale: number;
+      lengthScale: number;
+    };
+  },
 ): Mesh {
   const geometry = new ExtrudeGeometry(roundedPlanShape(width, length), {
     depth: height,
     bevelEnabled: false,
     curveSegments: 24,
-    steps: 1,
+    steps: bottomTaper?.chine ? 2 : 1,
   });
   geometry.rotateX(Math.PI / 2);
   if (bottomTaper) {
     const positions = geometry.getAttribute('position');
     for (let index = 0; index < positions.count; index += 1) {
-      if (positions.getY(index) > -height / 2) continue;
+      const depthFraction = Math.min(1, Math.max(0, -positions.getY(index) / height));
+      if (depthFraction === 0) continue;
+      const chine = bottomTaper.chine;
+      let widthScale: number;
+      let lengthScale: number;
+      if (chine && depthFraction <= chine.depthFraction) {
+        const progress = depthFraction / chine.depthFraction;
+        widthScale = 1 + (chine.widthScale - 1) * progress;
+        lengthScale = 1 + (chine.lengthScale - 1) * progress;
+      } else if (chine) {
+        const progress = (depthFraction - chine.depthFraction) / (1 - chine.depthFraction);
+        widthScale = chine.widthScale
+          + (bottomTaper.widthScale - chine.widthScale) * progress;
+        lengthScale = chine.lengthScale
+          + (bottomTaper.lengthScale - chine.lengthScale) * progress;
+      } else {
+        widthScale = 1 + (bottomTaper.widthScale - 1) * depthFraction;
+        lengthScale = 1 + (bottomTaper.lengthScale - 1) * depthFraction;
+      }
       positions.setXYZ(
         index,
-        positions.getX(index) * bottomTaper.widthScale,
+        positions.getX(index) * widthScale,
         positions.getY(index),
-        positions.getZ(index) * bottomTaper.lengthScale,
+        positions.getZ(index) * lengthScale,
       );
     }
     positions.needsUpdate = true;
@@ -1139,14 +1175,15 @@ export function createShipGeometry(
     UPPER_HULL_TOP_Y,
     materials.upperHull,
     false,
+    UPPER_HULL_BOTTOM_TAPER,
   );
   addRoundedPrism(
     root,
     geometries,
     shellColliders,
     'waterline-band',
-    FREIGHTER_DIMENSIONS.width + 0.08,
-    FREIGHTER_DIMENSIONS.length + 0.08,
+    (FREIGHTER_DIMENSIONS.width + 0.04) * UPPER_HULL_BOTTOM_TAPER.widthScale + 0.08,
+    (FREIGHTER_DIMENSIONS.length + 0.04) * UPPER_HULL_BOTTOM_TAPER.lengthScale + 0.08,
     WATERLINE_HEIGHT,
     WATERLINE_TOP_Y,
     materials.waterline,
@@ -1196,12 +1233,12 @@ export function createShipGeometry(
       taperStart: DECK_LENGTH / 2 - END_CAP_DEPTH,
       minimumLocalY: HULL_TOP_Y - HULL_HEIGHT,
       heightProfile: {
-        lowerHalfWidth: DECK_WIDTH / 2 * HULL_BOTTOM_TAPER.widthScale,
+        lowerHalfWidth: DECK_WIDTH / 2 * HULL_EXCLUSION_LOWER_SCALE.width,
         lowerHalfLength: Math.round(
-          DECK_LENGTH / 2 * HULL_BOTTOM_TAPER.lengthScale * 1000,
+          DECK_LENGTH / 2 * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         lowerTaperStart: Math.round(
-          (DECK_LENGTH / 2 - END_CAP_DEPTH) * HULL_BOTTOM_TAPER.lengthScale * 1000,
+          (DECK_LENGTH / 2 - END_CAP_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         upperLocalY: HULL_TOP_Y,
       },
