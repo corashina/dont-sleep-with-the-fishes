@@ -1344,6 +1344,7 @@ describe('SurvivalPhase orchestration', () => {
     const uncover = deferred();
     let trackExit = false;
     const setBusy = vi.fn();
+    const restoreCommandFocus = vi.fn();
     const ui: Partial<SurvivalUI> = {
       beginEventPresentation: vi.fn(),
       setSleepCovered: vi.fn((covered) => {
@@ -1363,7 +1364,7 @@ describe('SurvivalPhase orchestration', () => {
         if (trackExit) calls.push(`render:${rendered.state}`);
       }),
       setJournalUnread: vi.fn(),
-      restoreCommandFocus: vi.fn(),
+      restoreCommandFocus,
       dispose: vi.fn(),
     };
     const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
@@ -1404,6 +1405,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     calls.length = 0;
     setBusy.mockClear();
+    restoreCommandFocus.mockClear();
     trackExit = true;
 
     ui.onEventChoice?.('retrieve');
@@ -1435,10 +1437,12 @@ describe('SurvivalPhase orchestration', () => {
       expect(calls.indexOf(mutation)).toBeLessThan(calls.indexOf('uncover'));
     }
     expect(setBusy).not.toHaveBeenLastCalledWith(false);
+    expect(restoreCommandFocus).not.toHaveBeenCalled();
 
     uncover.resolve();
     await flushPromises();
     expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(restoreCommandFocus).toHaveBeenCalledOnce();
   });
 
   it('renders a resolved day event under black without beginning dawn', async () => {
@@ -1523,6 +1527,8 @@ describe('SurvivalPhase orchestration', () => {
     ['restart', 'hold'],
     ['dispose', 'cover'],
     ['restart', 'cover'],
+    ['dispose', 'uncover'],
+    ['restart', 'uncover'],
   ] as const)(
     'does not continue a resolved event after %s supersedes its pending %s',
     async (teardown, pendingStep) => {
@@ -1530,6 +1536,7 @@ describe('SurvivalPhase orchestration', () => {
       let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
       const outcomeHold = deferred();
       const cover = deferred();
+      const uncover = deferred();
       let trackExit = false;
       const clearEvent = vi.fn();
       const beginDawn = vi.fn(() => {
@@ -1537,10 +1544,13 @@ describe('SurvivalPhase orchestration', () => {
         return accepted({ code: 'dawn', cue: 'dawn' });
       });
       const render = vi.fn();
+      const setBusy = vi.fn();
+      const restoreCommandFocus = vi.fn();
       const holdEventOutcome = vi.fn(() => outcomeHold.promise);
-      const setSleepCovered = vi.fn((covered: boolean) => (
-        trackExit && covered ? cover.promise : Promise.resolve()
-      ));
+      const setSleepCovered = vi.fn((covered: boolean) => {
+        if (!trackExit) return Promise.resolve();
+        return covered ? cover.promise : uncover.promise;
+      });
       const onRestart = vi.fn();
       const phase = SurvivalPhase.forTest({
         session: {
@@ -1563,12 +1573,12 @@ describe('SurvivalPhase orchestration', () => {
           setSleepCovered,
           showEventReveal: vi.fn(() => Promise.resolve()),
           setEventSelection: vi.fn(),
-          setBusy: vi.fn(),
+          setBusy,
           showFeedback: vi.fn(),
           holdEventOutcome,
           render,
           setJournalUnread: vi.fn(),
-          restoreCommandFocus: vi.fn(),
+          restoreCommandFocus,
           clearEventPresentation: vi.fn(),
           dispose: vi.fn(),
         },
@@ -1582,10 +1592,15 @@ describe('SurvivalPhase orchestration', () => {
       await flushPromises();
       expect(holdEventOutcome).toHaveBeenCalledOnce();
 
-      if (pendingStep === 'cover') {
+      if (pendingStep !== 'hold') {
         outcomeHold.resolve();
         await flushPromises();
         expect(setSleepCovered).toHaveBeenLastCalledWith(true);
+      }
+      if (pendingStep === 'uncover') {
+        cover.resolve();
+        await flushPromises();
+        expect(setSleepCovered).toHaveBeenLastCalledWith(false);
       }
 
       if (teardown === 'dispose') phase.dispose();
@@ -1594,15 +1609,20 @@ describe('SurvivalPhase orchestration', () => {
       render.mockClear();
       setSleepCovered.mockClear();
       beginDawn.mockClear();
+      setBusy.mockClear();
+      restoreCommandFocus.mockClear();
 
       if (pendingStep === 'hold') outcomeHold.resolve();
-      else cover.resolve();
+      else if (pendingStep === 'cover') cover.resolve();
+      else uncover.resolve();
       await flushPromises();
 
       expect(clearEvent).not.toHaveBeenCalled();
       expect(beginDawn).not.toHaveBeenCalled();
       expect(render).not.toHaveBeenCalled();
       expect(setSleepCovered).not.toHaveBeenCalledWith(false);
+      expect(setBusy).not.toHaveBeenCalledWith(false);
+      expect(restoreCommandFocus).not.toHaveBeenCalled();
       expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
     },
   );
