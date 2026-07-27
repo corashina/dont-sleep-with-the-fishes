@@ -980,6 +980,8 @@ describe('SurvivalUI', () => {
     expect(status.querySelector('[data-ui-artwork="journal"]')).toBeNull();
     expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
     expect(endDay.closest('[data-boat-anchors]')).toBeNull();
+    expect(endDay.classList.contains('salvage-action')).toBe(false);
+    expect(endDay.querySelector('[data-ui-artwork="lantern"]')).not.toBeNull();
     expect(endDay.getAttribute('aria-keyshortcuts')).toBe('7');
     ui.dispose();
   });
