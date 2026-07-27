@@ -16,6 +16,7 @@ import type { ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import {
   ScavengePhase,
   TITLE_CAMERA_POSITION,
@@ -25,8 +26,11 @@ import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneR
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
+import { testPhysicsRuntime } from './helpers/physics';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
+
+const physicsRuntime = await testPhysicsRuntime();
 
 vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/world/ShipItemPlacement')>();
@@ -57,6 +61,48 @@ function gamePhase(): GamePhase {
   };
 }
 
+function createUpdateHarness(
+  session: ScavengeSession,
+  input = { pointerLocked: true, consumeLook: vi.fn() },
+): {
+  phase: ScavengePhase;
+  input: { pointerLocked: boolean; consumeLook: ReturnType<typeof vi.fn> };
+  updateWorld: ReturnType<typeof vi.fn>;
+} {
+  const updateWorld = vi.fn();
+  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+  Object.assign(phase, {
+    disposed: false,
+    elapsed: 0,
+    worldTime: 1,
+    presentation: 'playing',
+    session,
+    input,
+    world: { update: updateWorld },
+    player: { update: vi.fn() },
+    ui: {
+      render: vi.fn(),
+      setPrompt: vi.fn(),
+      showFailureSequence: vi.fn(),
+      showFailureResult: vi.fn(),
+    },
+    visualState: {
+      kind: 'scavenge',
+      elapsedSeconds: 0,
+      sinkingProgress: 0,
+    },
+    context: {
+      camera: new PerspectiveCamera(),
+    },
+    contextAction: { type: 'none', prompt: '' },
+    terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
+    completionReported: false,
+    updateInteraction: vi.fn(),
+    updateFlight: vi.fn(),
+  });
+  return { phase, input, updateWorld };
+}
+
 describe('ScavengePhase lifecycle integration', () => {
   it('keeps an animated title world while the session and sinking clock stay idle', () => {
     const propModels = createTestPropModels();
@@ -70,6 +116,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels,
       shipFurniture,
       skyAssets,
+      physicsRuntime,
       maxTextureAnisotropy: 1,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
@@ -98,6 +145,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.objectContaining({ progress: 0 }),
       camera.position,
+      false,
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
@@ -195,6 +243,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
+      true,
     );
 
     input.pointerLocked = false;
@@ -207,6 +256,7 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
+      false,
     );
     expect(tick).not.toHaveBeenCalled();
 
@@ -217,11 +267,149 @@ describe('ScavengePhase lifecycle integration', () => {
       0.25,
       expect.anything(),
       expect.any(Vector3),
+      true,
     );
     expect(tick).toHaveBeenCalledWith(0.25);
     expect(updatePlayer).not.toHaveBeenCalled();
     expect(updateFlight).toHaveBeenCalledOnce();
     expect(input.consumeLook).toHaveBeenCalled();
+  });
+
+  it('advances the visual clock during active play and freezes it while inactive', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, input, updateWorld } = createUpdateHarness(session);
+
+    phase.update(0.25, 0.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.25,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      true,
+    );
+
+    input.pointerLocked = false;
+    phase.update(0.5, 0.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.25,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+  });
+
+  it('disables physics while the document is hidden', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, updateWorld } = createUpdateHarness(session);
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+
+    try {
+      phase.update(0.25, 0.25);
+
+      expect(updateWorld).toHaveBeenLastCalledWith(
+        1,
+        0.25,
+        expect.anything(),
+        expect.any(Vector3),
+        false,
+      );
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it('disables physics for an explicitly paused session', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pause();
+    const { phase, updateWorld } = createUpdateHarness(session);
+
+    phase.update(0.25, 0.25);
+
+    expect(session.snapshot().status).toBe('paused');
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+  });
+
+  it('disables physics when the session becomes terminal during tick', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, input, updateWorld } = createUpdateHarness(session);
+    const originalTick = session.tick.bind(session);
+    vi.spyOn(session, 'tick').mockImplementation((deltaSeconds) => {
+      originalTick(deltaSeconds);
+      input.pointerLocked = false;
+    });
+
+    phase.update(120, 120);
+
+    expect(session.snapshot().status).toBe('failure');
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      121,
+      120,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+  });
+
+  it('constructs fresh physics state when the game restarts scavenging', () => {
+    const phases: ScavengePhase[] = [];
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const game = Game.forTest({
+      createScavenge: (context, onComplete, onRestart) => {
+        const phase = new ScavengePhase(context, onComplete, onRestart);
+        phases.push(phase);
+        return phase;
+      },
+      createSurvival: () => gamePhase(),
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+
+    try {
+      const firstWorld = (phases[0] as unknown as { world: World }).world;
+      const firstPhysics = (firstWorld as unknown as {
+        scavengePhysics: ScavengePhysics;
+      }).scavengePhysics;
+      const initialPoses = structuredClone(firstPhysics.barrelPoses);
+      const initialPositions = firstWorld.physicsBarrels.map((barrel) => barrel.position.clone());
+      for (let step = 1; step <= 30; step += 1) {
+        firstWorld.update(
+          step / 60,
+          1 / 60,
+          getSinkingState(30, 120),
+          new Vector3(),
+          true,
+        );
+      }
+      firstWorld.physicsBarrels.forEach((barrel, index) => {
+        expect(barrel.position.distanceTo(initialPositions[index]!)).toBeGreaterThan(1e-3);
+      });
+
+      game.restart();
+
+      const secondWorld = (phases[1] as unknown as { world: World }).world;
+      const secondPhysics = (secondWorld as unknown as {
+        scavengePhysics: ScavengePhysics;
+      }).scavengePhysics;
+      expect(secondWorld).not.toBe(firstWorld);
+      expect(secondPhysics).not.toBe(firstPhysics);
+      expect(secondWorld.physicsBarrels[0]).not.toBe(firstWorld.physicsBarrels[0]);
+      firstWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBeNull());
+      secondWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).not.toBeNull());
+      expect(secondPhysics.barrelPoses).toEqual(initialPoses);
+    } finally {
+      game.dispose();
+    }
   });
 
   it('renders scavenging through sceneRenderer with current sinking progress', () => {
@@ -273,7 +461,7 @@ describe('ScavengePhase lifecycle integration', () => {
         contexts.push(context);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets, sceneRenderer });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime, sceneRenderer });
 
     complete({ savedItems: [], elapsedSeconds: 2 });
 
@@ -311,6 +499,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels: createTestPropModels(),
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
+      physicsRuntime,
       sceneRenderer,
       visualQuality: preference,
     });
@@ -334,6 +523,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels: createTestPropModels(),
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
+      physicsRuntime,
     });
 
     expect(received[0]!.camera).toMatchObject({
@@ -363,7 +553,14 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const game = Game.forTest({
       createScavenge: () => gamePhase(), createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
 
     expect(() => game.dispose()).toThrow(failure);
     expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
@@ -382,12 +579,15 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalSkyAssets: unknown[] = [];
     const scavengeFurniture: unknown[] = [];
     const survivalFurniture: unknown[] = [];
+    const scavengePhysics: unknown[] = [];
+    const survivalPhysics: unknown[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
       createScavenge: (context, onComplete) => {
         scavengeModels.push(context.propModels);
         scavengeSkyAssets.push(context.skyAssets);
         scavengeFurniture.push(context.shipFurniture);
+        scavengePhysics.push(context.physicsRuntime);
         complete = onComplete;
         return gamePhase();
       },
@@ -395,9 +595,10 @@ describe('ScavengePhase lifecycle integration', () => {
         survivalModels.push(context.propModels);
         survivalSkyAssets.push(context.skyAssets);
         survivalFurniture.push(context.shipFurniture);
+        survivalPhysics.push(context.physicsRuntime);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
 
     game.start();
     complete({ savedItems: [], elapsedSeconds: 3 });
@@ -412,6 +613,8 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(survivalSkyAssets).toEqual([skyAssets]);
     expect(scavengeFurniture).toEqual([shipFurniture, shipFurniture]);
     expect(survivalFurniture).toEqual([shipFurniture]);
+    expect(scavengePhysics).toEqual([physicsRuntime, physicsRuntime]);
+    expect(survivalPhysics).toEqual([physicsRuntime]);
     expect(disposePropModels).not.toHaveBeenCalled();
     expect(disposeShipFurniture).not.toHaveBeenCalled();
     expect(disposeSkyAssets).not.toHaveBeenCalled();
@@ -431,7 +634,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets });
+    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
 
     game.dispose();
     game.dispose();
@@ -484,7 +687,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -556,7 +766,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, renderer, sceneRenderer });
+    }, {
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      renderer,
+      sceneRenderer,
+    });
     const performanceStats = (game as unknown as {
       performanceStats: { dispose(): void };
     }).performanceStats;
@@ -602,6 +819,7 @@ describe('ScavengePhase lifecycle integration', () => {
       propModels,
       shipFurniture,
       skyAssets,
+      physicsRuntime,
       maxTextureAnisotropy: 1,
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());

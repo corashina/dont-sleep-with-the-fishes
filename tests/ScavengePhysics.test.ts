@@ -1,0 +1,279 @@
+import { Euler, Quaternion } from 'three';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  BoatBuoyancy,
+  smoothBoatPoseInto,
+  type BoatPose,
+} from '../src/ocean/BoatBuoyancy';
+import {
+  DEFAULT_WAVES,
+  sampleWaveField,
+  sampleWaveFieldInto,
+  type WaveSample,
+} from '../src/ocean/WaveField';
+import {
+  ScavengePhysics,
+  collisionBoxToCuboid,
+  type PhysicsPose,
+} from '../src/physics/ScavengePhysics';
+import type { PhysicsRuntime } from '../src/physics/PhysicsRuntime';
+import { testPhysicsRuntime } from './helpers/physics';
+
+const identityPose = (): PhysicsPose => ({
+  translation: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0, w: 1 },
+});
+
+const config = () => ({
+  colliders: [],
+  safeBounds: { minX: -9, maxX: 9, minZ: -12, maxZ: 12 },
+  deckY: 2.22,
+  shipWidth: 20,
+  shipLength: 25,
+  initialShipPose: identityPose(),
+  barrelSpawns: [
+    { x: -2.5, y: 2.795, z: 3.2 },
+    { x: 2.6, y: 2.795, z: -9 },
+  ],
+});
+
+describe('ScavengePhysics', () => {
+  let runtime: PhysicsRuntime;
+  beforeAll(async () => { runtime = await testPhysicsRuntime(); });
+
+  it('converts collision boxes to centered cuboids', () => {
+    expect(collisionBoxToCuboid({
+      minX: -2, maxX: 4, minY: 1, maxY: 3, minZ: -5, maxZ: -1,
+    })).toEqual({
+      center: { x: 1, y: 2, z: -3 },
+      halfExtents: { x: 3, y: 1, z: 2 },
+    });
+  });
+
+  it('rejects non-positive collider extents', () => {
+    expect(() => collisionBoxToCuboid({
+      minX: 1, maxX: 1, minY: 0, maxY: 1, minZ: 0, maxZ: 1,
+    })).toThrow('Physics collider must have finite positive extents');
+  });
+
+  it('rejects invalid configured colliders before creating a world', () => {
+    const createWorld = vi.spyOn(runtime, 'createWorld');
+    expect(() => new ScavengePhysics(runtime, {
+      ...config(),
+      colliders: [{
+        minX: 1,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+        minZ: 0,
+        maxZ: 1,
+      }],
+    })).toThrow('Physics collider must have finite positive extents');
+    expect(createWorld).not.toHaveBeenCalled();
+    createWorld.mockRestore();
+  });
+
+  it('rests on a stationary level deck repeatably', () => {
+    const create = () => new ScavengePhysics(runtime, {
+      ...config(),
+      safeBounds: { minX: -9, maxX: 9, minZ: -26, maxZ: 26 },
+      shipLength: 55,
+    });
+    const left = create();
+    const right = create();
+    for (let frame = 0; frame < 180; frame += 1) {
+      left.update(identityPose(), 1 / 60, true);
+      right.update(identityPose(), 1 / 60, true);
+    }
+    expect(left.barrelPoses).toEqual(right.barrelPoses);
+    expect(left.barrelPoses).toHaveLength(2);
+    expect(left.barrelPoses[0]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
+    expect(left.barrelPoses[1]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
+    left.dispose();
+    right.dispose();
+  });
+
+  it('spawns both authored barrels without diagnostic objects', () => {
+    const physics = new ScavengePhysics(runtime, config());
+    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
+    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
+    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
+    expect(physics.barrelPoses[1]!.translation.x).toBeCloseTo(2.6);
+    expect(physics.barrelPoses[1]!.translation.y).toBeCloseTo(2.795);
+    expect(physics.barrelPoses[1]!.translation.z).toBeCloseTo(-9);
+    expect(physics.barrelPoses[1]!.rotation).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+    physics.dispose();
+  });
+
+  it('moves under a controlled kinematic tilt and remains contained', () => {
+    const physics = new ScavengePhysics(runtime, config());
+    const tilted: PhysicsPose = {
+      translation: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: Math.sin(0.2 / 2), w: Math.cos(0.2 / 2) },
+    };
+    for (let frame = 0; frame < 300; frame += 1) {
+      physics.update(tilted, 1 / 60, true);
+    }
+    expect(physics.barrelPoses[0]!.translation.x).not.toBeCloseTo(-2.5);
+    expect(Math.abs(physics.barrelLocalPositionsForTest[0]!.x)).toBeLessThan(9);
+    expect(physics.barrelPoses[1]!.translation.x).not.toBeCloseTo(2.6);
+    physics.dispose();
+  });
+
+  it('slides strongly but remains contained under the real scavenging wave field', () => {
+    const sample = (time: number, x: number, z: number, scale: number) =>
+      sampleWaveField(DEFAULT_WAVES, time, x, z, scale);
+    const sampleInto = (
+      output: WaveSample,
+      time: number,
+      x: number,
+      z: number,
+      scale: number,
+    ) => sampleWaveFieldInto(output, DEFAULT_WAVES, time, x, z, scale);
+    const buoyancy = new BoatBuoyancy(sample, { length: 38, width: 13 }, sampleInto);
+    const current: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+    const target: BoatPose = { ...current };
+    const rotation = new Quaternion();
+    const pose: PhysicsPose = {
+      translation: { x: 0, y: -0.76, z: 0 },
+      rotation,
+    };
+    const safeBounds = { minX: -9.65, maxX: 9.65, minZ: -26.7, maxZ: 26.7 };
+    const physics = new ScavengePhysics(runtime, {
+      colliders: [],
+      safeBounds,
+      deckY: 2.22,
+      shipWidth: 20,
+      shipLength: 55,
+      initialShipPose: pose,
+      barrelSpawns: config().barrelSpawns,
+    });
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (let frame = 1; frame <= 120 * 60; frame += 1) {
+      const time = frame / 60;
+      const progress = time / 120;
+      const scale = 1 + 0.35 * progress * progress * progress
+        * (progress * (progress * 6 - 15) + 10);
+      buoyancy.sampleTargetInto(target, time, 0, 0, scale);
+      smoothBoatPoseInto(current, current, target, 1 / 60, 2.4);
+      rotation.setFromEuler(new Euler(current.pitch, 0, -current.roll));
+      (pose.translation as { y: number }).y = current.y - 0.76;
+      physics.update(pose, 1 / 60, true);
+
+      const local = physics.barrelLocalPositionsForTest[0]!;
+      minX = Math.min(minX, local.x);
+      maxX = Math.max(maxX, local.x);
+      minY = Math.min(minY, local.y);
+      maxY = Math.max(maxY, local.y);
+      minZ = Math.min(minZ, local.z);
+      maxZ = Math.max(maxZ, local.z);
+    }
+
+    const horizontalRange = Math.max(maxX - minX, maxZ - minZ);
+    expect(horizontalRange).toBeGreaterThanOrEqual(0.3);
+    expect(horizontalRange).toBeLessThan(15);
+    expect(maxY - minY).toBeLessThan(0.2);
+    expect(minX).toBeGreaterThan(safeBounds.minX);
+    expect(maxX).toBeLessThan(safeBounds.maxX);
+    expect(minZ).toBeGreaterThan(safeBounds.minZ);
+    expect(maxZ).toBeLessThan(safeBounds.maxZ);
+    expect(physics.recoveryCountForTest).toBe(0);
+    physics.dispose();
+  });
+
+  it('freezes when inactive and disposes repeatedly', () => {
+    const world = runtime.createWorld({ x: 0, y: -9.81, z: 0 });
+    const free = vi.spyOn(world, 'free');
+    const createWorld = vi.spyOn(runtime, 'createWorld').mockReturnValueOnce(world);
+    const physics = new ScavengePhysics(runtime, config());
+    const before = structuredClone(physics.barrelPoses);
+    physics.update(identityPose(), 1, false);
+    expect(physics.barrelPoses).toEqual(before);
+    physics.dispose();
+    expect(() => physics.dispose()).not.toThrow();
+    expect(free).toHaveBeenCalledOnce();
+    createWorld.mockRestore();
+  });
+
+  it('reads the Rapier pose once after all accepted substeps', () => {
+    const physics = new ScavengePhysics(runtime, config());
+    const internals = physics as unknown as {
+      barrelBodies: Array<{
+        translation(): { x: number; y: number; z: number };
+        rotation(): { x: number; y: number; z: number; w: number };
+      }>;
+      world: { step(): void };
+    };
+    const translations = internals.barrelBodies.map((body) => vi.spyOn(body, 'translation'));
+    const rotations = internals.barrelBodies.map((body) => vi.spyOn(body, 'rotation'));
+    const step = vi.spyOn(internals.world, 'step');
+    physics.update(identityPose(), 1 / 20, true);
+    expect(step).toHaveBeenCalledTimes(3);
+    translations.forEach((translation) => {
+      expect(translation).toHaveBeenCalledOnce();
+      expect(translation.mock.invocationCallOrder[0]!)
+        .toBeGreaterThan(step.mock.invocationCallOrder[2]!);
+    });
+    rotations.forEach((rotation) => {
+      expect(rotation).toHaveBeenCalledOnce();
+      expect(rotation.mock.invocationCallOrder[0]!)
+        .toBeGreaterThan(step.mock.invocationCallOrder[2]!);
+    });
+    physics.dispose();
+  });
+
+  it.each([
+    ['escaped', { translation: { x: 20, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
+    ['non-finite', { translation: { x: Number.NaN, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
+  ] as const)('recovers a %s barrel and clears velocity', (_label, pose) => {
+    const physics = new ScavengePhysics(runtime, config());
+    physics.setBarrelVelocityForTest({ x: 4, y: 5, z: 6 });
+    physics.setBarrelPoseForTest(pose);
+    physics.update(identityPose(), 1 / 60, true);
+    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
+    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
+    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
+    expect(physics.recoveryCountForTest).toBe(1);
+    const barrelBody = (physics as unknown as {
+      barrelBodies: Array<{
+        linvel(): { x: number; y: number; z: number };
+        angvel(): { x: number; y: number; z: number };
+      }>;
+    }).barrelBodies[0]!;
+    expect(barrelBody.linvel()).toEqual({ x: 0, y: 0, z: 0 });
+    expect(barrelBody.angvel()).toEqual({ x: 0, y: 0, z: 0 });
+    physics.dispose();
+  });
+
+  it.each([
+    ['minX', { x: -9 + 0.54, y: 2.22 + 0.55, z: 0 }, { x: -8, y: 0, z: 0 }],
+    ['maxX', { x: 9 - 0.54, y: 2.22 + 0.55, z: 0 }, { x: 8, y: 0, z: 0 }],
+    ['minZ', { x: 0, y: 2.22 + 0.55, z: -12 + 0.54 }, { x: 0, y: 0, z: -8 }],
+    ['maxZ', { x: 0, y: 2.22 + 0.55, z: 12 - 0.54 }, { x: 0, y: 0, z: 8 }],
+  ] as const)('contains the barrel at %s', (boundary, translation, velocity) => {
+    const physics = new ScavengePhysics(runtime, config());
+    const recoveryCount = physics.recoveryCountForTest;
+    expect(recoveryCount).toBe(0);
+    physics.setBarrelPoseForTest({
+      translation,
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    });
+    physics.setBarrelVelocityForTest(velocity);
+    for (let frame = 0; frame < 120; frame += 1) {
+      physics.update(identityPose(), 1 / 60, true);
+      const local = physics.barrelLocalPositionsForTest[0]!;
+      if (boundary === 'minX') expect(local.x).toBeGreaterThanOrEqual(-9);
+      if (boundary === 'maxX') expect(local.x).toBeLessThanOrEqual(9);
+      if (boundary === 'minZ') expect(local.z).toBeGreaterThanOrEqual(-12);
+      if (boundary === 'maxZ') expect(local.z).toBeLessThanOrEqual(12);
+    }
+    expect(physics.recoveryCountForTest).toBe(recoveryCount);
+    physics.dispose();
+  });
+});

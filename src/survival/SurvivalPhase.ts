@@ -7,6 +7,7 @@ import {
 } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
 import { createVisualQualityPreference } from '../rendering/visualQuality';
+import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
   type EventContextChoice,
@@ -110,6 +111,8 @@ function testContext(
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
     shipAssets: {} as ShipAssets,
+    physicsRuntime: {} as PhysicsRuntime,
+    physicsMode: 'enabled',
   };
 }
 

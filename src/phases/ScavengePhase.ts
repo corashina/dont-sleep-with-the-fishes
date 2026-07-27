@@ -88,9 +88,10 @@ export class ScavengePhase implements GamePhase {
       context.shipFurniture,
       context.maxTextureAnisotropy,
       context.skyAssets.moonTexture,
+      context.physicsRuntime,
       instances,
       Math.random,
-      {},
+      { physicsMode: context.physicsMode },
       context.lifeboatAssets,
       context.shipAssets,
     );
@@ -142,7 +143,7 @@ export class ScavengePhase implements GamePhase {
     const before = this.session.snapshot();
     const sessionActive = before.status === 'running' && !document.hidden;
     const directControlActive = sessionActive && this.input.pointerLocked;
-    const overlaySimulationActive = sessionActive && this.overlayActive;
+    const overlaySimulationActive = sessionActive && this.overlayActive === true;
     if (
       this.presentation === 'title'
       || directControlActive
@@ -153,11 +154,14 @@ export class ScavengePhase implements GamePhase {
     let sinking = getSinkingState(this.elapsed, RUN_SECONDS);
     this.syncVisualState(sinking);
     const updateWorld = (worldDelta: number): void => {
+      const simulatePhysics = (directControlActive || overlaySimulationActive)
+        && this.session.snapshot().status === 'running';
       this.world.update(
         this.worldTime,
         worldDelta,
         sinking,
         this.context.camera.position,
+        simulatePhysics,
       );
     };
     const synchronizeElapsed = (): boolean => {

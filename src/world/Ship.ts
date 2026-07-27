@@ -25,6 +25,7 @@ export interface ShipBuild {
   arcColliders: CollisionArc[];
   itemSurfaces: ShipItemSurface[];
   furnitureColliderById: ReadonlyMap<string, CollisionBox>;
+  detailColliderById: ReadonlyMap<string, CollisionBox>;
   playerStart: Vector3;
   evacuationPoint: Vector3;
   lifeboatAnchor: Vector3;
@@ -215,6 +216,7 @@ export function createShip(
     arcColliders: assembledGeometry.arcColliders,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
+    detailColliderById: assembledDetails.colliderById,
     playerStart: new Vector3(startX, FREIGHTER_DIMENSIONS.deckY + 1.5, startZ),
     evacuationPoint: new Vector3(
       evacuationX,
