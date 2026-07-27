@@ -12,6 +12,7 @@ const crewZone: LadderClimbZone = {
   outwardZ: -1,
   bottomEyeY: 3.72,
   topEyeY: 6.42,
+  topFloor: { minX: -3, maxX: 3, minZ: 4, maxZ: 8 },
   bottomEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
   topEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
   bottomDismount: [0, 3.5],

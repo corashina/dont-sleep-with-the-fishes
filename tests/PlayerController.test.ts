@@ -65,6 +65,7 @@ function testLadderZone(): LadderClimbZone {
     outwardZ: -1,
     bottomEyeY: 3.72,
     topEyeY: 6.42,
+    topFloor: { minX: -1, maxX: 1, minZ: 4, maxZ: 6 },
     bottomEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
     topEntry: { minX: -0.4, maxX: 0.4, minZ: 3.6, maxZ: 3.9 },
     bottomDismount: [0, 3.5],
@@ -187,6 +188,38 @@ describe('PlayerController', () => {
     input.movement = { x: 0, z: 0 };
     controller.update(0.5, input.asControllerInput());
     expect(controller.localPosition.y).toBeCloseTo(zone.topEyeY);
+  });
+
+  it('falls to the main deck after jumping off the balcony floor', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, zone.bottomEntry.minZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: -1 };
+    for (let frame = 0; frame < 15; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    input.movement = { x: -1, z: 0 };
+    input.queueJump();
+    for (let frame = 0; frame < 4; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+    input.movement = { x: 0, z: 0 };
+    for (let frame = 0; frame < 20; frame += 1) {
+      controller.update(0.1, input.asControllerInput());
+    }
+
+    expect(controller.localPosition.x).toBeGreaterThan(1);
+    expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
   });
 
   it('automatically descends and keeps the lower deck as its active floor', () => {

@@ -1110,6 +1110,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(grabRails.every(({ material }) => material === materials.exposedMetal)).toBe(true);
       expect(zone.bottomEyeY).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT);
       expect(zone.topEyeY).toBeCloseTo(deckBounds.max.y + PLAYER_BODY_HEIGHT);
+      expect(zone.topFloor).toEqual(room.bounds);
       expect(zone.climbX).toBeCloseTo(ladder.position.x);
       expect((zone.climbZ - ladder.position.z) * outwardZ)
         .toBeGreaterThan(PLAYER_LAYOUT_RADIUS);
@@ -1124,6 +1125,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(Object.isFrozen(zone)).toBe(true);
       expect(Object.isFrozen(zone.bottomEntry)).toBe(true);
       expect(Object.isFrozen(zone.topEntry)).toBe(true);
+      expect(Object.isFrozen(zone.topFloor)).toBe(true);
 
       build.disposeGeometry();
       materials.dispose();
