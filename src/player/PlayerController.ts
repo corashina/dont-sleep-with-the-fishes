@@ -53,7 +53,7 @@ export class PlayerController {
     this.deckEyeHeight = start.y;
   }
 
-  update(delta: number, input: InputController, reducedMotionShake = 0): void {
+  update(delta: number, input: InputController, cameraShake = 0): void {
     const look = input.consumeLook();
     this.yaw -= look.x * LOOK_SENSITIVITY;
     this.pitch = Math.max(
@@ -128,14 +128,14 @@ export class PlayerController {
       this.onFall();
     }
 
-    this.placeCamera(reducedMotionShake);
+    this.placeCamera(cameraShake);
   }
 
-  placeCamera(reducedMotionShake = 0): void {
+  placeCamera(cameraShake = 0): void {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
     this.camera.position.copy(this.worldPosition);
-    this.localView.setFromEuler(new Euler(this.pitch + reducedMotionShake, this.yaw, 0, 'YXZ'));
+    this.localView.setFromEuler(new Euler(this.pitch + cameraShake, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(this.ship.quaternion).multiply(this.localView);
     this.camera.updateMatrixWorld(true);
   }

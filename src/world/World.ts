@@ -357,7 +357,6 @@ export class World {
     delta: number,
     sinking: SinkingState,
     cameraPosition: Vector3,
-    reducedMotion: boolean,
   ): void {
     if (this.disposed) return;
     this.freighterBuoyancy.sampleTargetInto(
@@ -384,9 +383,9 @@ export class World {
       0,
       sinking.rollRadians - this.freighterPose.roll,
     );
-    this.shipBuild.updateEffects(delta, sinking.progress, reducedMotion);
-    this.boatDepositSmoke.update(delta, reducedMotion);
-    this.groundDropSmoke.update(delta, reducedMotion);
+    this.shipBuild.updateEffects(delta, sinking.progress);
+    this.boatDepositSmoke.update(delta);
+    this.groundDropSmoke.update(delta);
 
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,

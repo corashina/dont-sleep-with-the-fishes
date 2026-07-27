@@ -130,7 +130,8 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
 const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
 const FISHING_FADE_MS = 180;
-const REDUCED_TRANSITION_MS = 1;
+const EVENT_CHOICE_BEAT_MS = 240;
+const EVENT_OUTCOME_HOLD_MS = 2_000;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
 
@@ -189,6 +190,12 @@ export interface FishingResultView {
   readonly detail: string;
 }
 
+export interface EventContextChoice {
+  readonly id: EventResponseId;
+  readonly label: string;
+  readonly unavailableReason: string | null;
+}
+
 interface PendingFade {
   readonly finish: () => void;
 }
@@ -203,6 +210,7 @@ interface AnchorTooltipNodes {
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
+  onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onEndure: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
@@ -227,6 +235,7 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
+  private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingLive: HTMLElement;
@@ -296,15 +305,17 @@ export class SurvivalUI {
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFade | null = null;
   private pendingSleepTransition: PendingFade | null = null;
+  private pendingEventChoiceBeat: PendingFade | null = null;
+  private pendingEventOutcomeHold: PendingFade | null = null;
+  private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
+  private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
+  private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
 
-  constructor(
-    private readonly mount: HTMLElement,
-    private readonly reducedMotion: Pick<MediaQueryList, 'matches'> = { matches: false },
-  ) {
+  constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
@@ -367,6 +378,7 @@ export class SurvivalUI {
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
+        <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
       <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
         ENDURE
@@ -432,6 +444,7 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
+    this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
@@ -571,11 +584,17 @@ export class SurvivalUI {
     return Promise.resolve();
   }
 
-  setEventSelection(eligible: ReadonlyMap<ItemInstanceId, EventResponseId>): void {
+  setEventSelection(
+    eligible: ReadonlyMap<ItemInstanceId, EventResponseId>,
+    contextualChoices: readonly EventContextChoice[] = [],
+  ): void {
     if (this.disposed) return;
     this.eventEligibility = new Map(eligible);
+    this.contextualEventChoices = [...contextualChoices];
     this.eventSelectedInstanceId = null;
-    this.endureButton.hidden = eligible.size > 0;
+    this.eventSelectedChoiceId = null;
+    this.renderContextualEventChoices();
+    this.endureButton.hidden = eligible.size > 0 || contextualChoices.length > 0;
     this.syncCommandState();
   }
 
@@ -585,18 +604,61 @@ export class SurvivalUI {
     this.syncCommandState();
   }
 
+  playEventChoiceBeat(choiceId: EventResponseId): Promise<void> {
+    if (this.disposed || !this.eventPresentationActive) return Promise.resolve();
+    const button = [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
+      .find((candidate) => candidate.dataset.eventChoice === choiceId);
+    if (
+      button === undefined
+      || button.dataset.unavailableReason !== undefined
+      || this.eventSelectedChoiceId !== null
+    ) {
+      return Promise.resolve();
+    }
+    this.pendingEventChoiceBeat?.finish();
+    this.eventSelectedChoiceId = choiceId;
+    this.syncCommandState();
+    const delay = EVENT_CHOICE_BEAT_MS;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        button.removeEventListener('animationend', handleAnimationEnd);
+        if (this.pendingEventChoiceBeat?.finish === finish) this.pendingEventChoiceBeat = null;
+        resolve();
+      };
+      const handleAnimationEnd = (event: AnimationEvent): void => {
+        if (event.target === button) finish();
+      };
+      button.addEventListener('animationend', handleAnimationEnd);
+      timer = window.setTimeout(finish, delay);
+      this.pendingEventChoiceBeat = { finish };
+    });
+  }
+
   clearEventPresentation(): void {
     if (this.disposed) return;
+    this.pendingEventChoiceBeat?.finish();
+    const focusedContextualChoice = document.activeElement !== null
+      && this.eventChoices.contains(document.activeElement);
     this.eventEligibility = null;
+    this.contextualEventChoices = [];
     this.eventSelectedInstanceId = null;
+    this.eventSelectedChoiceId = null;
     this.eventPresentationActive = false;
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    this.eventChoices.replaceChildren();
+    this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
     this.syncCommandState();
+    if (focusedContextualChoice) this.firstUsableAction()?.focus();
   }
 
   showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
@@ -617,7 +679,7 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_TRANSITION_MS;
+    const delay = SLEEP_TRANSITION_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -635,6 +697,36 @@ export class SurvivalUI {
       this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
       timer = window.setTimeout(finish, delay);
       this.pendingSleepTransition = { finish };
+    });
+  }
+
+  settleCoveredScene(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingCoveredSceneSettle?.finish();
+    return new Promise((resolve) => {
+      let settled = false;
+      let frame = 0;
+      let completedFrames = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (frame !== 0) window.cancelAnimationFrame(frame);
+        if (this.pendingCoveredSceneSettle?.finish === finish) {
+          this.pendingCoveredSceneSettle = null;
+        }
+        resolve();
+      };
+      const advance = (): void => {
+        frame = 0;
+        completedFrames += 1;
+        if (completedFrames >= 2) {
+          finish();
+          return;
+        }
+        frame = window.requestAnimationFrame(advance);
+      };
+      frame = window.requestAnimationFrame(advance);
+      this.pendingCoveredSceneSettle = { finish };
     });
   }
 
@@ -708,7 +800,7 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingFishingFade?.finish();
     this.fishingFade.classList.toggle('is-covered', covered);
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : FISHING_FADE_MS;
+    const delay = FISHING_FADE_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -730,8 +822,29 @@ export class SurvivalUI {
   }
 
   holdSleep(): Promise<void> {
-    const delay = this.reducedMotion.matches ? REDUCED_TRANSITION_MS : SLEEP_HOLD_MS;
+    const delay = SLEEP_HOLD_MS;
     return new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+
+  holdEventOutcome(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingEventOutcomeHold?.finish();
+    const delay = EVENT_OUTCOME_HOLD_MS;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (this.pendingEventOutcomeHold?.finish === finish) {
+          this.pendingEventOutcomeHold = null;
+        }
+        resolve();
+      };
+      timer = window.setTimeout(finish, delay);
+      this.pendingEventOutcomeHold = { finish };
+    });
   }
 
   showJournal(entries: readonly JournalEntry[]): void {
@@ -819,8 +932,19 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.clearAnchorHighlight();
+    this.eventEligibility = null;
+    this.contextualEventChoices = [];
+    this.eventSelectedInstanceId = null;
+    this.eventSelectedChoiceId = null;
+    this.eventPresentationActive = false;
+    this.eventChoices.replaceChildren();
+    this.eventChoices.hidden = true;
+    this.endureButton.hidden = true;
     this.pendingSleepTransition?.finish();
     this.pendingFishingFade?.finish();
+    this.pendingEventChoiceBeat?.finish();
+    this.pendingEventOutcomeHold?.finish();
+    this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
@@ -840,6 +964,7 @@ export class SurvivalUI {
     document.removeEventListener('keydown', this.handleKeyDown);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
+    this.onEventChoice = () => undefined;
     this.onEndure = () => undefined;
     this.onRestart = () => undefined;
     this.onAnchorHighlight = () => undefined;
@@ -1077,7 +1202,41 @@ export class SurvivalUI {
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
+    this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
+      const unavailable = button.dataset.unavailableReason !== undefined;
+      const selected = button.dataset.eventChoice === this.eventSelectedChoiceId;
+      button.dataset.eventState = selected ? 'selected' : 'idle';
+      button.setAttribute('aria-pressed', String(selected));
+      button.disabled = false;
+      button.setAttribute(
+        'aria-disabled',
+        unavailable || this.busy || this.eventSelectedChoiceId !== null ? 'true' : 'false',
+      );
+    });
     this.endureButton.disabled = this.busy;
+  }
+
+  private renderContextualEventChoices(): void {
+    const choices = this.contextualEventChoices.map((choice) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'event-choice ui-role-context';
+      button.dataset.eventChoice = choice.id;
+      button.dataset.eventState = 'idle';
+      button.setAttribute('aria-pressed', 'false');
+      button.textContent = choice.label;
+      if (choice.unavailableReason !== null) {
+        button.dataset.unavailableReason = choice.unavailableReason;
+        button.setAttribute('aria-description', choice.unavailableReason);
+        const reason = document.createElement('span');
+        reason.className = 'event-choice__reason ui-role-narrative';
+        reason.textContent = choice.unavailableReason;
+        button.append(reason);
+      }
+      return button;
+    });
+    this.eventChoices.replaceChildren(...choices);
+    this.eventChoices.hidden = choices.length === 0;
   }
 
   private itemAnchorId(target: EventTarget | null): string | null {
@@ -1327,8 +1486,10 @@ export class SurvivalUI {
       )
       && this.isUsableCommand(button)
     ))
-      ?? (this.eventPresentationActive && this.isUsableCommand(this.endureButton)
-        ? this.endureButton
+      ?? (this.eventPresentationActive
+        ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
+          .find((button) => this.isUsableCommand(button))
+          ?? (this.isUsableCommand(this.endureButton) ? this.endureButton : null)
         : this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
   }
 
@@ -1404,6 +1565,43 @@ export class SurvivalUI {
     return false;
   }
 
+  private trapEventFocus(event: KeyboardEvent): boolean {
+    if (event.key !== 'Tab' || !this.eventPresentationActive) return false;
+    const controls = [
+      ...this.anchorButtons.values(),
+      ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
+      this.endureButton,
+    ].filter((element) => this.isFocusableCommand(element));
+    if (controls.length === 0) return false;
+    const first = controls[0]!;
+    const last = controls[controls.length - 1]!;
+    const active = document.activeElement;
+    const activeIsControl = active instanceof HTMLButtonElement && controls.includes(active);
+    if (event.shiftKey && (active === first || !activeIsControl)) {
+      event.preventDefault();
+      last.focus();
+      return true;
+    }
+    if (!event.shiftKey && (active === last || !activeIsControl)) {
+      event.preventDefault();
+      first.focus();
+      return true;
+    }
+    return false;
+  }
+
+  private activateEventChoice(button: HTMLButtonElement): void {
+    const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
+    if (
+      choiceId === undefined
+      || !this.eventPresentationActive
+      || this.busy
+      || this.eventSelectedChoiceId !== null
+      || button.getAttribute('aria-disabled') === 'true'
+    ) return;
+    this.onEventChoice(choiceId);
+  }
+
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -1447,6 +1645,11 @@ export class SurvivalUI {
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (button.getAttribute('aria-disabled') === 'true') {
       if (action !== undefined && !this.overlayOpen()) this.showUnavailableActionFeedback(action.id);
+      return;
+    }
+
+    if (button.hasAttribute('data-event-choice')) {
+      this.activateEventChoice(button);
       return;
     }
 
@@ -1499,6 +1702,7 @@ export class SurvivalUI {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
+    if (this.trapEventFocus(event)) return;
     if (event.key === 'Escape') {
       if (topmostModal === this.journalLayer) {
         event.preventDefault();
@@ -1519,6 +1723,19 @@ export class SurvivalUI {
         else if (this.fishingMode === 'bite') this.issueFishingReel();
       }
       return;
+    }
+    const target = event.target;
+    if (
+      this.eventPresentationActive
+      && target instanceof Element
+      && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
+    ) {
+      const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
+      if (choice !== null && this.eventChoices.contains(choice)) {
+        event.preventDefault();
+        this.activateEventChoice(choice);
+        return;
+      }
     }
     if (this.overlayOpen() || this.busy || this.eventPresentationActive) return;
     const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);

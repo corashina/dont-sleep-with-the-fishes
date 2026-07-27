@@ -12,7 +12,10 @@ import {
   createSceneRenderer,
 } from '../src/rendering/PostProcessingPipeline';
 import { PrintShader } from '../src/rendering/PrintShader';
-import { postProcessingProfilesForTest } from '../src/rendering/postProcessingProfiles';
+import {
+  postProcessingProfilesForTest,
+  resolveGrainTime,
+} from '../src/rendering/postProcessingProfiles';
 
 type MockFunction = ReturnType<typeof vi.fn>;
 
@@ -149,14 +152,14 @@ describe('post-processing pipeline construction', () => {
     const camera = new PerspectiveCamera();
 
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     });
 
     expect(reportFallback).toHaveBeenCalledWith(failure);
     expect(render).toHaveBeenCalledWith(scene, camera);
     sceneRenderer.dispose();
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 1, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 1, sinkingProgress: 0,
     });
     expect(render).toHaveBeenCalledOnce();
   });
@@ -188,7 +191,7 @@ describe('post-processing pipeline construction', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     sceneRenderer.render(scene, camera, {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0, reducedMotion: false,
+      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
     });
     expect(renderer.render).toHaveBeenCalledWith(scene, camera);
   });
@@ -279,5 +282,13 @@ describe('post-processing pipeline construction', () => {
       expect(profile.contrast, profile.id).toBeGreaterThanOrEqual(1.08);
       expect(profile.contrast, profile.id).toBeLessThanOrEqual(1.14);
     }
+  });
+
+  it('keeps grain animated for scavenging', () => {
+    expect(resolveGrainTime({
+      kind: 'scavenge',
+      elapsedSeconds: 1.26,
+      sinkingProgress: 0,
+    })).toBe(1.25);
   });
 });

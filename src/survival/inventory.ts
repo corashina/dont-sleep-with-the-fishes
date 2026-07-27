@@ -24,6 +24,20 @@ export class SurvivalInventoryState {
     return this.count(type, 'usable') > 0;
   }
 
+  gain(type: ItemId): ItemInstanceId | null {
+    const instanceId = `${type}-1` as ItemInstanceId;
+    const existing = this.items.get(instanceId);
+    if (existing === undefined) {
+      this.items.set(instanceId, { instanceId, type, condition: 'usable' });
+      return instanceId;
+    }
+    if (existing.condition === 'consumed' || existing.condition === 'lost') {
+      this.setCondition(instanceId, 'usable');
+      return instanceId;
+    }
+    return null;
+  }
+
   count(type: ItemId, condition?: ItemCondition): number {
     let count = 0;
     for (const item of this.items.values()) {

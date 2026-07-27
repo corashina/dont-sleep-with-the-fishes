@@ -19,7 +19,7 @@ import type { ShipMaterials } from './ShipMaterials';
 export interface ShipRiggingBuild {
   readonly root: Group;
   readonly colliders: CollisionBox[];
-  update(delta: number, reducedMotion: boolean): void;
+  update(delta: number): void;
   disposeGeometry(): void;
 }
 
@@ -326,13 +326,12 @@ export function createShipRigging(
   return {
     root,
     colliders,
-    update: (delta, reducedMotion) => {
+    update: (delta) => {
       elapsed += Math.max(0, Math.min(delta, 0.1));
       for (let index = 0; index < sails.length; index += 1) {
         const neutral = neutralRotations[index]!;
-        sails[index]!.rotation.z = reducedMotion
-          ? neutral
-          : neutral + Math.sin(elapsed * 1.1 + phases[index]!) * 0.018;
+        sails[index]!.rotation.z =
+          neutral + Math.sin(elapsed * 1.1 + phases[index]!) * 0.018;
       }
     },
     disposeGeometry: () => {

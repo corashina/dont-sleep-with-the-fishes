@@ -32,6 +32,19 @@ const choice = (overrides: Partial<EventChoiceDefinition> = {}): EventChoiceDefi
 });
 
 describe('resolveWeightedOutcome', () => {
+  it('clones gain effects without mutating the catalog outcome', () => {
+    const resolved = resolveWeightedOutcome(choice({
+      outcomes: [{
+        weight: 1,
+        message: 'found',
+        effects: { items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }] },
+      }],
+    }), sequenceRandom([0]));
+    expect(resolved.effects.items).toEqual([
+      { kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 },
+    ]);
+  });
+
   it('selects the next outcome when a roll lands exactly on a cumulative boundary', () => {
     expect(resolveWeightedOutcome(choice(), sequenceRandom([0.25, 0, 0])).message).toBe('second');
   });

@@ -41,6 +41,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   activeUIs.splice(0).forEach((ui) => ui.dispose());
   document.body.innerHTML = '';
 });
@@ -97,7 +98,187 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
   };
 }
 
+function eventWithChoices(...choiceIds: readonly string[]): SurvivalEventDefinition {
+  return {
+    ...testEvent(),
+    choices: choiceIds.map((id) => ({
+      id,
+      label: id === 'retrieve' ? 'RETRIEVE' : 'LEAVE IT',
+      outcomes: [{ weight: 1, message: 'Nothing happens.', effects: {} }],
+    })) as unknown as SurvivalEventDefinition['choices'],
+  };
+}
+
+function labels(selector: string): string[] {
+  return [...document.querySelectorAll<HTMLElement>(selector)].map((element) => element.textContent!.trim());
+}
+
+function press(selector: string, key: string): void {
+  document.querySelector<HTMLButtonElement>(selector)!.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true }),
+  );
+}
+
+function openContextualEvent(ui: SurvivalUI): void {
+  ui.beginEventPresentation();
+  void ui.showEventReveal(eventWithChoices('retrieve', 'leave'));
+  ui.setEventSelection(new Map(), [
+    { id: 'retrieve', label: 'RETRIEVE', unavailableReason: null },
+    { id: 'leave', label: 'LEAVE IT', unavailableReason: null },
+  ]);
+}
+
 describe('SurvivalUI', () => {
+
+  it('shows authored contextual choices only after selection unlocks', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.beginEventPresentation();
+    void ui.showEventReveal(eventWithChoices('retrieve', 'leave'));
+    ui.setEventSelection(new Map(), [
+      { id: 'retrieve', label: 'RETRIEVE', unavailableReason: null },
+      { id: 'leave', label: 'LEAVE IT', unavailableReason: null },
+    ]);
+    expect(labels('[data-event-choice]')).toEqual(['RETRIEVE', 'LEAVE IT']);
+  });
+
+  it('activates a focused contextual choice with the keyboard', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    openContextualEvent(ui);
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    choice.focus();
+    press('[data-event-choice="retrieve"]', 'Enter');
+    press('[data-event-choice="retrieve"]', ' ');
+    expect(onEventChoice).toHaveBeenCalledWith('retrieve');
+    expect(onEventChoice).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['pointer', 'keyboard'] as const)(
+    'shows a distinct selected keyed response for %s activation',
+    async (input) => {
+      vi.useFakeTimers();
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      openContextualEvent(ui);
+      ui.onEventChoice = (choiceId) => {
+        ui.setBusy(true);
+        void ui.playEventChoiceBeat(choiceId);
+      };
+      const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+
+      if (input === 'pointer') choice.click();
+      else {
+        choice.focus();
+        press('[data-event-choice="retrieve"]', 'Enter');
+      }
+
+      expect(choice.dataset.eventState).toBe('selected');
+      expect(choice.getAttribute('aria-pressed')).toBe('true');
+      expect(choice.getAttribute('aria-disabled')).toBe('true');
+      await vi.runAllTimersAsync();
+    },
+  );
+
+  it('settles and clears an active contextual press beat during lifecycle cleanup', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+
+    const beat = ui.playEventChoiceBeat('retrieve');
+    ui.clearEventPresentation();
+    await beat;
+
+    expect(mount.querySelector('[data-event-choice]')).toBeNull();
+    expect(mount.querySelector<HTMLElement>('[data-event-choices]')?.hidden).toBe(true);
+  });
+
+  it('holds a completed event outcome for two seconds and settles on dispose', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    let settled = false;
+    const hold = ui.holdEventOutcome().then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await hold;
+    expect(settled).toBe(true);
+
+    const pending = ui.holdEventOutcome();
+    expect(vi.getTimerCount()).toBe(1);
+    ui.dispose();
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('supersedes an event outcome hold without leaving its timer active', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    let firstSettled = false;
+    const first = ui.holdEventOutcome().then(() => { firstSettled = true; });
+    expect(vi.getTimerCount()).toBe(1);
+    let replacementSettled = false;
+    const replacement = ui.holdEventOutcome().then(() => { replacementSettled = true; });
+
+    await Promise.resolve();
+    expect(firstSettled).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(replacementSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await replacement;
+    expect(replacementSettled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    ui.dispose();
+  });
+
+  it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    ui.beginEventPresentation();
+    void ui.showEventReveal(eventWithChoices('retrieve'));
+    ui.setEventSelection(new Map(), [
+      { id: 'retrieve', label: 'RETRIEVE', unavailableReason: 'The crate is out of reach.' },
+    ]);
+
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    expect(choice.disabled).toBe(false);
+    expect(choice.getAttribute('aria-disabled')).toBe('true');
+    expect(choice.getAttribute('aria-description')).toBe('The crate is out of reach.');
+    expect(choice.textContent).toContain('The crate is out of reach.');
+    choice.focus();
+    expect(document.activeElement).toBe(choice);
+    choice.click();
+    press('[data-event-choice="retrieve"]', ' ');
+    expect(onEventChoice).not.toHaveBeenCalled();
+  });
+
+  it('clears contextual choice state before disposal removes the UI', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const strip = mount.querySelector<HTMLElement>('[data-event-choices]')!;
+
+    ui.dispose();
+
+    expect(strip.hidden).toBe(true);
+    expect(strip.childElementCount).toBe(0);
+  });
 
   it('chooses only broken repairable instance targets with a discriminated option', () => {
     const mount = document.createElement('main');
@@ -145,7 +326,7 @@ describe('SurvivalUI', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const state = new SurvivalSession(saved('bucket', 'umbrella'), { seed: 3 }).snapshot();
     ui.render(state, () => null);
@@ -339,25 +520,89 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(broken);
   });
 
-  it('settles and safely supersedes reduced-motion sleep covers', async () => {
+  it('uses the authored sleep-cover duration while preserving supersession and disposal', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
 
+    let firstSettled = false;
     const first = ui.setSleepCovered(true);
+    void first.then(() => { firstSettled = true; });
     expect(cover.classList).toContain('is-covered');
-    const second = ui.setSleepCovered(false);
-    await first;
-    expect(cover.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(firstSettled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
+    await first;
+
+    const second = ui.setSleepCovered(false);
+    expect(cover.classList).not.toContain('is-covered');
+    const replacement = ui.setSleepCovered(true);
     await second;
+    await vi.advanceTimersByTimeAsync(2_500);
+    await replacement;
 
     const pendingAtDispose = ui.setSleepCovered(true);
     ui.dispose();
     await pendingAtDispose;
-    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.sleep-cover\s*\{[^}]*transition-duration:\s*1ms/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2\.5s/s);
+    expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
+  });
+
+  it('keeps a covered scene pending for two browser frames', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const cancelFrame = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', requestFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    let settled = false;
+
+    const pending = ui.settleCoveredScene();
+    void pending.then(() => { settled = true; });
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+
+    callbacks.shift()!(16);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(requestFrame).toHaveBeenCalledTimes(2);
+
+    callbacks.shift()!(32);
+    await pending;
+    expect(settled).toBe(true);
+    expect(cancelFrame).not.toHaveBeenCalled();
+  });
+
+  it('settles superseded and disposed covered-scene waits without stale frames', async () => {
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextHandle = 1;
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      const handle = nextHandle++;
+      callbacks.set(handle, callback);
+      return handle;
+    });
+    const cancelFrame = vi.fn((handle: number) => { callbacks.delete(handle); });
+    vi.stubGlobal('requestAnimationFrame', requestFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    const first = ui.settleCoveredScene();
+    const second = ui.settleCoveredScene();
+    await first;
+    expect(cancelFrame).toHaveBeenCalledWith(1);
+
+    ui.dispose();
+    await second;
+    expect(cancelFrame).toHaveBeenCalledWith(2);
+    expect(callbacks.size).toBe(0);
   });
 
   it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
@@ -602,22 +847,30 @@ describe('SurvivalUI', () => {
     expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
   });
 
-  it('settles and safely supersedes reduced-motion fishing fades without transition events', async () => {
+  it('uses the authored fishing-fade duration while preserving supersession', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
-    const ui = new SurvivalUI(mount, { matches: true });
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
     const fade = mount.querySelector<HTMLElement>('[data-fishing-fade]')!;
 
+    let firstSettled = false;
     const first = ui.setFishingFade(true);
+    void first.then(() => { firstSettled = true; });
     expect(fade.classList).toContain('is-covered');
-    const second = ui.setFishingFade(false);
-    await first;
-    expect(fade.classList).not.toContain('is-covered');
+    await vi.advanceTimersByTimeAsync(179);
+    expect(firstSettled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
+    await first;
+
+    const second = ui.setFishingFade(false);
+    expect(fade.classList).not.toContain('is-covered');
+    const replacement = ui.setFishingFade(true);
     await second;
+    await vi.advanceTimersByTimeAsync(180);
+    await replacement;
     expect(mainStyles).toMatch(/\.fishing-fade\s*\{[^}]*transition:\s*opacity/s);
-    expect(mainStyles).toMatch(/prefers-reduced-motion:[\s\S]*\.fishing-fade\s*\{[^}]*transition-duration:\s*1ms/s);
+    expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
   });
 
   it('disposes fishing listeners, pending fade work, inert state, and focused controls once', async () => {

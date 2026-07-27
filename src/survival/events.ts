@@ -20,6 +20,9 @@ export const INCLUDED_EVENT_PHASES = Object.freeze({
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
+  'drifting-loot': 'day', 'drifting-bottle': 'night', 'check-the-back': 'night',
+  'mystery-chest': 'night', 'midnight-tour': 'night', 'night-trader': 'night',
+  handyman: 'night', 'other-people': 'night',
 } as const);
 
 type IncludedEventId = keyof typeof INCLUDED_EVENT_PHASES;
@@ -42,6 +45,14 @@ const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.free
   ghosts: 'Pale shapes gather around the drifting boat.',
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
+  'drifting-loot': 'Something useful drifts within reach of the boat.',
+  'drifting-bottle': 'A sealed bottle bobs against the hull.',
+  'check-the-back': 'Something thumps against the back of the boat.',
+  'mystery-chest': 'A waterlogged chest catches on the gunwale.',
+  'midnight-tour': 'A low island shape rises from the midnight water.',
+  'night-trader': 'A trader waits beside the boat with an open case.',
+  handyman: 'A handyman offers to swap whatever you have on hand.',
+  'other-people': 'A distant boat carries other people through the dark.',
 });
 
 const resource = (
@@ -64,6 +75,8 @@ const lose = (itemId: ItemId) => mutation('lose', itemId);
 const loseRandom = (quantity: number): EventInventoryMutation => ({ kind: 'loseRandom', quantity });
 const breakRandom = (quantity: number): EventInventoryMutation => ({ kind: 'breakRandom', quantity });
 const loseEventTarget = (): EventInventoryMutation => ({ kind: 'loseEventTarget', quantity: 1 });
+const gain = (itemId: ItemId): EventInventoryMutation =>
+  ({ kind: 'gain', itemId, quantity: 1, fallbackFood: 1 });
 
 function effects(
   resources?: readonly ResourceEffect[],
@@ -90,6 +103,12 @@ function choice(
   return { id, label, ...(itemId ? { itemId } : {}), outcomes };
 }
 
+const contextualChoice = (
+  id: string,
+  label: string,
+  ...outcomes: [WeightedEventOutcome, ...WeightedEventOutcome[]]
+): EventChoiceDefinition => ({ id, label, outcomes });
+
 function riskForCue(cue: PresentationCue): RiskLabel {
   if (cue === 'fish') return 'safe';
   if (cue === 'impact' || cue === 'storm') return 'dangerous';
@@ -105,6 +124,7 @@ function event(
   cooldownDays: number,
   choices: [EventChoiceDefinition, ...EventChoiceDefinition[]],
   latestDay?: number,
+  eligibility: Pick<SurvivalEventDefinition, 'maximumAppearances' | 'absentItemIds' | 'minimumRescueProgress'> = {},
 ): SurvivalEventDefinition {
   return {
     id,
@@ -117,6 +137,7 @@ function event(
     weight,
     earliestDay,
     ...(latestDay === undefined ? {} : { latestDay }),
+    ...eligibility,
     cooldownDays,
     choices,
   };
@@ -290,12 +311,97 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(100, 'You wake exhausted.', effects([set('energy', 0)])),
       outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
   ]),
+  event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 12, [
+    {
+      ...contextualChoice('retrieve', 'Retrieve It',
+        outcome(45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
+        outcome(25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
+        outcome(20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
+        outcome(10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
+      ),
+      requirements: [{ resource: 'energy', minimum: 3 }],
+    },
+    contextualChoice('sleep', 'Let It Drift', outcome(1, 'The loot drifts out of reach.')),
+  ]),
+  event('drifting-bottle', 'Drifting Bottle', 'sighting', 30, 2, 0, [
+    choice('fishingNet', 'Use Fishing Net', 'fishingNet',
+      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    choice('swimRing', 'Use Swim Ring', 'swimRing',
+      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    contextualChoice('sleep', 'Sleep', outcome(1, 'The bottle drifts away.')),
+  ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
+  event('check-the-back', 'Check the Back', 'fish', 35, 2, 35, [
+    contextualChoice('check', 'Check the Back',
+      outcome(500, 'A fish has landed aboard.', effects([add('food', 1)])),
+      outcome(50, 'There is nothing there.'),
+    ),
+    contextualChoice('sleep', 'Ignore', outcome(1, 'You leave the sound alone.')),
+  ]),
+  event('mystery-chest', 'Mystery Chest', 'impact', 45, 6, 33, [
+    contextualChoice('open', 'Open the Chest',
+      outcome(16, 'The chest holds duct tape.', effects(undefined, [gain('ductTape')])),
+      outcome(16, 'The chest holds an energy bar.', effects(undefined, [gain('energyBar')])),
+      outcome(16, 'The chest holds two food.', effects([add('food', 2)])),
+      outcome(16, 'The chest holds two bait.', effects([add('bait', 2)])),
+      outcome(16, 'The chest holds repair timber.', effects([add('repairMaterial', 2)])),
+      outcome(30, 'The chest bites back.', effects([subtract('health', 25)])),
+    ),
+    contextualChoice('sleep', 'Leave', outcome(1, 'The chest slips back under the water.')),
+  ]),
+  event('midnight-tour', 'Midnight Tour', 'sighting', 18, 7, 30, [
+    contextualChoice('visit', 'Visit the Island',
+      outcome(50, 'You find duct tape.', effects([set('energy', 2)], [gain('ductTape')])),
+      outcome(50, 'You find an energy bar.', effects([set('energy', 2)], [gain('energyBar')])),
+      outcome(50, 'You find a medkit.', effects([set('energy', 2)], [gain('medicalKit')])),
+      outcome(150, 'You find one bait.', effects([add('bait', 1)])),
+      outcome(36, 'Something drops from the rocks.', effects([subtract('health', 35)])),
+    ),
+    contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.')),
+  ], 40),
+  event('night-trader', 'Night Trader', 'sighting', 14, 10, 35, [
+    {
+      ...contextualChoice('food', 'Food for Duct Tape', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]))),
+      requirements: [{ resource: 'food', minimum: 1 }],
+    },
+    {
+      ...contextualChoice('bait', 'Bait for Energy Bar', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]))),
+      requirements: [{ resource: 'bait', minimum: 1 }],
+    },
+    choice('map', 'Map for Compass', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]))),
+    choice('umbrella', 'Umbrella for Medkit', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]))),
+    contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.')),
+  ]),
+  event('handyman', 'Handyman', 'repair', 12, 20, 50, [
+    choice('spyglass', 'Spyglass for Flashlight', 'spyglass', outcome(1, 'The handyman gives you a flashlight.', effects(undefined, [lose('spyglass'), gain('flashlight')]))),
+    choice('flashlight', 'Flashlight for Spyglass', 'flashlight', outcome(1, 'The handyman gives you binoculars.', effects(undefined, [lose('flashlight'), gain('spyglass')]))),
+    choice('flareGun', 'Flare Gun for Harpoon Gun', 'flareGun', outcome(1, 'The handyman gives you a harpoon gun.', effects(undefined, [consume('flareGun'), gain('harpoonGun')]))),
+    choice('harpoonGun', 'Harpoon Gun for Flare Gun', 'harpoonGun', outcome(1, 'The handyman gives you a flare gun.', effects(undefined, [consume('harpoonGun'), gain('flareGun')]))),
+    choice('scubaSet', 'Scuba Gear for Medkit', 'scubaSet', outcome(1, 'The handyman gives you a medkit.', effects(undefined, [lose('scubaSet'), gain('medicalKit')]))),
+    choice('medicalKit', 'Medkit for Scuba Gear', 'medicalKit', outcome(1, 'The handyman gives you scuba gear.', effects(undefined, [consume('medicalKit'), gain('scubaSet')]))),
+    choice('fishingNet', 'Fishing Net for Bucket', 'fishingNet', outcome(1, 'The handyman gives you a bucket.', effects(undefined, [lose('fishingNet'), gain('bucket')]))),
+    choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]))),
+    choice('ductTape', 'Duct Tape for Energy Bar', 'ductTape', outcome(1, 'The handyman gives you an energy bar.', effects(undefined, [consume('ductTape'), gain('energyBar')]))),
+    choice('energyBar', 'Energy Bar for Duct Tape', 'energyBar', outcome(1, 'The handyman gives you duct tape.', effects(undefined, [consume('energyBar'), gain('ductTape')]))),
+    contextualChoice('touch', 'Touch the Hand', outcome(
+      1,
+      'The hand closes around you.',
+      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 70)]),
+    )),
+    contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.')),
+  ]),
+  event('other-people', 'Other People', 'sighting', 10, 15, 20, [
+    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The other boat sees your flare.', { rescue: true, items: [consume('flareGun')] })),
+    choice('flashlight', 'Use Flashlight', 'flashlight',
+      outcome(40, 'The other boat sees your signal.', { rescue: true }),
+      outcome(60, 'The other boat disappears into the dark.')),
+    contextualChoice('pass', 'Let It Pass', outcome(1, 'You let the other boat pass.')),
+  ], undefined, { minimumRescueProgress: 15 }),
 ]);
 
 const EVENT_RESOURCES: readonly EventResource[] = [
-  'health', 'hull', 'energy', 'food', 'bait', 'rescueProgress',
+  'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueProgress',
 ];
-const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'breakRandom', 'loseRandom', 'loseEventTarget'];
+const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
 type PlainRecord = Record<PropertyKey, unknown>;
 
@@ -362,8 +468,10 @@ function validateMutation(candidate: unknown, path: string): void {
   if (typeof kind !== 'string' || !ITEM_MUTATIONS.includes(kind)) {
     throw new Error(`${path} has an unknown mutation kind`);
   }
-  const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose';
-  const allowed = itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
+  const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose' || kind === 'gain';
+  const allowed = kind === 'gain'
+    ? ['kind', 'itemId', 'quantity', 'fallbackFood']
+    : itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
   assertExactKeys(candidate, path, `${kind} mutation`, allowed, allowed);
   const quantity = candidate.quantity;
   if (!Number.isInteger(quantity) || (quantity as number) < 1) {
@@ -376,6 +484,12 @@ function validateMutation(candidate: unknown, path: string): void {
   if (!itemSpecific) return;
   const itemId = candidate.itemId;
   if (!isItemId(itemId)) throw new Error(`${path} contains unknown item`);
+  if (kind === 'gain') {
+    if (quantity !== 1 || candidate.fallbackFood !== 1) {
+      throw new Error(`${path} has an invalid gain quantity or fallback food`);
+    }
+    return;
+  }
   if (kind === 'break' && !ITEM_DEFINITIONS[itemId].breakable) {
     throw new Error(`${path} cannot break ${itemId} because it is not breakable`);
   }
@@ -460,6 +574,27 @@ export function validateSurvivalEventCatalog(
     if (!Number.isInteger(eventEntry.cooldownDays) || eventEntry.cooldownDays < 0) {
       throw new Error(`${eventEntry.id} has an invalid cooldown`);
     }
+    if (eventEntry.maximumAppearances !== undefined
+      && (!Number.isInteger(eventEntry.maximumAppearances) || eventEntry.maximumAppearances < 1)) {
+      throw new Error(`${eventEntry.id} has an invalid maximum appearances`);
+    }
+    if (eventEntry.absentItemIds !== undefined) {
+      if (!Array.isArray(eventEntry.absentItemIds) || eventEntry.absentItemIds.length === 0) {
+        throw new Error(`${eventEntry.id} absent item IDs must be a non-empty array`);
+      }
+      const absentItemIds = new Set<ItemId>();
+      for (const itemId of eventEntry.absentItemIds) {
+        if (!isItemId(itemId)) throw new Error(`${eventEntry.id} absent item IDs contain an unknown item`);
+        if (absentItemIds.has(itemId)) throw new Error(`${eventEntry.id} absent item ID ${itemId} is duplicated`);
+        absentItemIds.add(itemId);
+      }
+    }
+    if (eventEntry.minimumRescueProgress !== undefined
+      && (!Number.isFinite(eventEntry.minimumRescueProgress)
+        || !Number.isInteger(eventEntry.minimumRescueProgress)
+        || eventEntry.minimumRescueProgress < 0)) {
+      throw new Error(`${eventEntry.id} has an invalid minimum rescue progress`);
+    }
     const candidateTargetItemIds: unknown = eventEntry.targetItemIds;
     if (candidateTargetItemIds !== undefined || Object.hasOwn(eventEntry, 'targetItemIds')) {
       if (!Array.isArray(candidateTargetItemIds)) {
@@ -488,6 +623,30 @@ export function validateSurvivalEventCatalog(
       if (choiceIds.has(eventChoice.id)) throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
       choiceIds.add(eventChoice.id);
       if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
+      if (eventChoice.requirements !== undefined) {
+        if (!Array.isArray(eventChoice.requirements)) {
+          throw new Error(`${eventEntry.id}.${eventChoice.id} requirements must be an array`);
+        }
+        const requirementResources = new Set<EventResource>();
+        for (const requirement of eventChoice.requirements) {
+          if (requirement === null || typeof requirement !== 'object' || Array.isArray(requirement)) {
+            throw new Error(`${eventEntry.id}.${eventChoice.id} requirement must be an object`);
+          }
+          const candidate = requirement as Record<string, unknown>;
+          assertExactKeys(candidate, `${eventEntry.id}.${eventChoice.id} requirement`, 'requirement', ['resource', 'minimum'], ['resource', 'minimum']);
+          if (!EVENT_RESOURCES.includes(candidate.resource as EventResource)) {
+            throw new Error(`${eventEntry.id}.${eventChoice.id} requirement contains unknown resource`);
+          }
+          if (!Number.isInteger(candidate.minimum) || (candidate.minimum as number) < 0) {
+            throw new Error(`${eventEntry.id}.${eventChoice.id} requirement has an invalid minimum`);
+          }
+          const resource = candidate.resource as EventResource;
+          if (requirementResources.has(resource)) {
+            throw new Error(`${eventEntry.id}.${eventChoice.id} requirement ${resource} is duplicated`);
+          }
+          requirementResources.add(resource);
+        }
+      }
       if (!Array.isArray(eventChoice.outcomes) || eventChoice.outcomes.length === 0) throw new Error(`${eventEntry.id}.${eventChoice.id} outcomes are empty`);
       (eventChoice.outcomes as readonly WeightedEventOutcome[]).forEach(
         (entry, index) => validateOutcome(entry, `${eventEntry.id}.${eventChoice.id}.outcomes[${index}]`),
@@ -505,6 +664,9 @@ export interface EventEligibility {
   lastEventId: string | null;
   lastSeenDay: ReadonlyMap<string, number>;
   targetableItemIds: ReadonlySet<ItemId>;
+  appearanceCounts: ReadonlyMap<string, number>;
+  inventoryItemIds: ReadonlySet<ItemId>;
+  rescueProgress: number;
 }
 
 export function eligibleEvents(
@@ -518,6 +680,12 @@ export function eligibleEvents(
     if (eventEntry.weather !== undefined && !eventEntry.weather.includes(criteria.weather)) return false;
     if (eventEntry.targetItemIds !== undefined
       && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;
+    if (eventEntry.maximumAppearances !== undefined
+      && (criteria.appearanceCounts.get(eventEntry.id) ?? 0) >= eventEntry.maximumAppearances) return false;
+    if (eventEntry.absentItemIds !== undefined
+      && eventEntry.absentItemIds.some((itemId) => criteria.inventoryItemIds.has(itemId))) return false;
+    if (eventEntry.minimumRescueProgress !== undefined
+      && criteria.rescueProgress < eventEntry.minimumRescueProgress) return false;
     const lastSeen = criteria.lastSeenDay.get(eventEntry.id);
     return lastSeen === undefined || criteria.day - lastSeen >= eventEntry.cooldownDays;
   });

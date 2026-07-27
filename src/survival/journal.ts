@@ -10,7 +10,7 @@ import type { WeatherId } from './survivalTypes';
 export type JournalResolution = 'suitableItem' | 'unsuitableItem' | 'endure';
 
 export interface JournalInventoryMutation {
-  readonly kind: 'consume' | 'break' | 'lose' | 'repair';
+  readonly kind: 'consume' | 'break' | 'lose' | 'gain' | 'repair';
   readonly instanceIds: readonly ItemInstanceId[];
 }
 
@@ -103,6 +103,7 @@ function formatMutations(mutations: readonly JournalInventoryMutation[]): string
     switch (mutation.kind) {
       case 'break': return ` The ${labels} broke.`;
       case 'consume': return ` The ${labels} ${be} used up.`;
+      case 'gain': return ` The ${labels} was brought aboard.`;
       case 'lose': return ` The ${labels} ${be} lost.`;
       case 'repair': return ` The ${labels} ${be} repaired.`;
     }

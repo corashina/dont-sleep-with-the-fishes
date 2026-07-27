@@ -155,7 +155,6 @@ export function resolveVignetteStrength(
 }
 
 export function resolveGrainTime(state: Readonly<SceneVisualState>): number {
-  if (state.reducedMotion) return 0;
   const seconds = clampPostProcessingValue(state.elapsedSeconds, 0, 86_400, 0);
   return Math.floor(seconds * 8) / 8;
 }

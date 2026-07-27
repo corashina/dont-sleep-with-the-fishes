@@ -133,7 +133,6 @@ export class Game {
         GAME_CAMERA.far,
       );
       const clock = new Clock();
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       initializationStarted = true;
       this.initialize(
         mount,
@@ -141,7 +140,6 @@ export class Game {
         sceneRenderer,
         camera,
         clock,
-        reducedMotion,
         propModels,
         shipFurniture,
         skyAssets,
@@ -181,7 +179,6 @@ export class Game {
       start: () => undefined,
       getDelta: () => 0.016,
     };
-    const reducedMotion = { matches: false } as MediaQueryList;
     const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
     const game = Object.create(Game.prototype) as Game;
     game.initialize(
@@ -195,7 +192,6 @@ export class Game {
         GAME_CAMERA.far,
       ),
       clock,
-      reducedMotion,
       options.propModels,
       options.shipFurniture,
       options.skyAssets,
@@ -257,7 +253,6 @@ export class Game {
     sceneRenderer: SceneRenderer,
     camera: PerspectiveCamera,
     clock: GameClock,
-    reducedMotion: MediaQueryList,
     propModels: PropModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
@@ -277,34 +272,34 @@ export class Game {
     this.shipAssets = shipAssets;
     this.factories = factories;
     this.createSeed = createSeed;
-    const maxTextureAnisotropy = Math.max(
-      1,
-      renderer.capabilities.getMaxAnisotropy(),
-    );
-    this.lifeboatAssets.configure(maxTextureAnisotropy);
-    this.shipAssets.configure(maxTextureAnisotropy);
-    this.context = {
-      mount,
-      renderer,
-      sceneRenderer,
-      camera,
-      reducedMotion,
-      propModels,
-      shipFurniture,
-      maxTextureAnisotropy,
-      skyAssets,
-      lifeboatAssets,
-      shipAssets,
-    };
-    this.activePhase = null;
-    this.performanceStats = null;
-    this.animationFrame = 0;
-    this.started = false;
-    this.disposed = false;
-    this.elapsed = 0;
-    this.phaseGeneration = 0;
+    let maxTextureAnisotropy = 1;
     let resizeListenerRegistered = false;
     try {
+      maxTextureAnisotropy = Math.max(
+        1,
+        renderer.capabilities.getMaxAnisotropy(),
+      );
+      this.lifeboatAssets.configure(maxTextureAnisotropy);
+      this.shipAssets.configure(maxTextureAnisotropy);
+      this.context = {
+        mount,
+        renderer,
+        sceneRenderer,
+        camera,
+        propModels,
+        shipFurniture,
+        maxTextureAnisotropy,
+        skyAssets,
+        lifeboatAssets,
+        shipAssets,
+      };
+      this.activePhase = null;
+      this.performanceStats = null;
+      this.animationFrame = 0;
+      this.started = false;
+      this.disposed = false;
+      this.elapsed = 0;
+      this.phaseGeneration = 0;
       const showDevelopmentStats = import.meta.env.DEV
         && new URLSearchParams(window.location.search).has('stats');
       this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);
