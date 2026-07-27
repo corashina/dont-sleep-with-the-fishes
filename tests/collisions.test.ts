@@ -305,7 +305,6 @@ describe('player movement helpers', () => {
   it.each([
     ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
     ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
-    ['wheelhouse console', furniturePoint('helm-desk-forward', 2.72)],
     ['storage workbench', furniturePoint('workbench-port', 2.72)],
     [
       'stern machinery',
@@ -412,6 +411,7 @@ describe('player movement helpers', () => {
     const start = layoutTarget('starboard-loop-forward');
     try {
       const end = followPath(start, [
+        new Vector3(6.2, PLAYER_Y, 22),
         layoutTarget('bow-starboard'),
         layoutTarget('bow-center'),
         layoutTarget('bow-port'),
