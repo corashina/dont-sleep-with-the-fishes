@@ -1080,7 +1080,7 @@ function addLadders(
     if (!balcony) throw new Error(`Ship geometry requires balcony for ${ladderSpec.id}`);
     const outwardZ = ladderSpec.edge === 'aft' ? -1 : 1;
     const wallZ = ladderSpec.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
-    const ladderZ = wallZ + outwardZ * (WALL_HALF_THICKNESS + ladderSpec.wallOffset);
+    const ladderZ = wallZ + outwardZ * ladderSpec.wallOffset;
     const bottomFloorY = FREIGHTER_DIMENSIONS.deckY;
     const topFloorY = balconyDeckTopY(zone.id);
     const ladderHeight = topFloorY - bottomFloorY;
