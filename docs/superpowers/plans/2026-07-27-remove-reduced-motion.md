@@ -33,7 +33,6 @@
 - Modify: `src/world/ShipRigging.ts`
 - Modify: `src/world/ShipSmoke.ts`
 - Modify: `src/world/World.ts`
-- Create: `tests/MotionPolicy.test.ts`
 - Test: `tests/GameLifecycle.test.ts`
 - Test: `tests/PostProcessingPipeline.test.ts`
 
@@ -71,44 +70,6 @@ expect(resolveGrainTime({
   elapsedSeconds: 1.26,
   sinkingProgress: 0,
 })).toBe(1.25);
-```
-
-Create `tests/MotionPolicy.test.ts` with an architectural source check whose
-forbidden identifiers are assembled so the test file does not itself contain
-them:
-
-```ts
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-
-const forbidden = [
-  ['reduced', 'Motion'].join(''),
-  ['REDUCED', 'TRANSITION', 'MS'].join('_'),
-  ['prefers', 'reduced-motion'].join('-'),
-];
-
-const coreSources = [
-  '../src/app/GamePhase.ts',
-  '../src/Game.ts',
-  '../src/phases/ScavengePhase.ts',
-  '../src/player/PlayerController.ts',
-  '../src/rendering/SceneRenderer.ts',
-  '../src/rendering/postProcessingProfiles.ts',
-  '../src/world/BoatDepositSmoke.ts',
-  '../src/world/Ship.ts',
-  '../src/world/ShipRigging.ts',
-  '../src/world/ShipSmoke.ts',
-  '../src/world/World.ts',
-] as const;
-
-describe('authored motion policy', () => {
-  it('keeps core rendering free of removed policy plumbing', () => {
-    for (const path of coreSources) {
-      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-      for (const identifier of forbidden) expect(source).not.toContain(identifier);
-    }
-  });
-});
 ```
 
 - [ ] **Step 2: Run the focused tests to verify the old API fails**
@@ -188,7 +149,7 @@ Remove policy parameters through `World.update`, ship effect updates, rigging, s
 Run:
 
 ```powershell
-npm test -- tests/MotionPolicy.test.ts tests/GameLifecycle.test.ts tests/PostProcessingPipeline.test.ts
+npm test -- tests/GameLifecycle.test.ts tests/PostProcessingPipeline.test.ts
 npm run typecheck
 ```
 
@@ -197,7 +158,7 @@ Expected: both test files PASS and TypeScript reports no errors from core/render
 - [ ] **Step 5: Commit the core removal**
 
 ```powershell
-git add src/app/GamePhase.ts src/Game.ts src/phases/ScavengePhase.ts src/player/PlayerController.ts src/rendering/SceneRenderer.ts src/rendering/postProcessingProfiles.ts src/world/BoatDepositSmoke.ts src/world/Ship.ts src/world/ShipRigging.ts src/world/ShipSmoke.ts src/world/World.ts tests/MotionPolicy.test.ts tests/GameLifecycle.test.ts tests/PostProcessingPipeline.test.ts
+git add src/app/GamePhase.ts src/Game.ts src/phases/ScavengePhase.ts src/player/PlayerController.ts src/rendering/SceneRenderer.ts src/rendering/postProcessingProfiles.ts src/world/BoatDepositSmoke.ts src/world/Ship.ts src/world/ShipRigging.ts src/world/ShipSmoke.ts src/world/World.ts tests/GameLifecycle.test.ts tests/PostProcessingPipeline.test.ts
 git commit -m "refactor: remove reduced motion from core rendering"
 ```
 
@@ -208,7 +169,6 @@ git commit -m "refactor: remove reduced motion from core rendering"
 - Modify: `src/survival/BoatWorld.ts`
 - Modify: `src/survival/EventPresentationLayer.ts`
 - Modify: `src/survival/SurvivalPhase.ts`
-- Modify: `tests/MotionPolicy.test.ts`
 - Test: `tests/EventPresentationLayer.test.ts`
 - Test: `tests/SurvivalPhase.test.ts`
 
@@ -290,30 +250,12 @@ it('keeps event reveal ordering through authored transitions', async () => {
 });
 ```
 
-Extend the architectural check with:
-
-```ts
-const survivalSources = [
-  '../src/survival/BoatSupplyDisplay.ts',
-  '../src/survival/BoatWorld.ts',
-  '../src/survival/EventPresentationLayer.ts',
-  '../src/survival/SurvivalPhase.ts',
-] as const;
-
-it('keeps survival presentation free of removed policy plumbing', () => {
-  for (const path of survivalSources) {
-    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-    for (const identifier of forbidden) expect(source).not.toContain(identifier);
-  }
-});
-```
-
 - [ ] **Step 2: Run focused tests to verify constructors and fixtures fail**
 
 Run:
 
 ```powershell
-npm test -- tests/MotionPolicy.test.ts tests/EventPresentationLayer.test.ts tests/SurvivalPhase.test.ts
+npm test -- tests/EventPresentationLayer.test.ts tests/SurvivalPhase.test.ts
 ```
 
 Expected: FAIL while constructors, visual state, and test dependencies still expose reduced-motion inputs.
@@ -362,7 +304,7 @@ Expected: both test files PASS and all survival constructor/call-site types comp
 - [ ] **Step 5: Commit the survival removal**
 
 ```powershell
-git add src/survival/BoatSupplyDisplay.ts src/survival/BoatWorld.ts src/survival/EventPresentationLayer.ts src/survival/SurvivalPhase.ts tests/MotionPolicy.test.ts tests/EventPresentationLayer.test.ts tests/SurvivalPhase.test.ts
+git add src/survival/BoatSupplyDisplay.ts src/survival/BoatWorld.ts src/survival/EventPresentationLayer.ts src/survival/SurvivalPhase.ts tests/EventPresentationLayer.test.ts tests/SurvivalPhase.test.ts
 git commit -m "refactor: remove reduced motion from survival"
 ```
 
@@ -371,7 +313,6 @@ git commit -m "refactor: remove reduced motion from survival"
 **Files:**
 - Modify: `src/ui/SurvivalUI.ts`
 - Modify: `src/styles/main.css`
-- Modify: `tests/MotionPolicy.test.ts`
 - Test: `tests/SurvivalUI.test.ts`
 
 **Interfaces:**
@@ -418,22 +359,6 @@ expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*transition:\s*opacity 2\.5s/s
 expect(mainStyles).not.toMatch(/prefers-reduced-motion/);
 ```
 
-Extend the architectural test one last time:
-
-```ts
-const interfaceSources = [
-  '../src/ui/SurvivalUI.ts',
-  '../src/styles/main.css',
-] as const;
-
-it('keeps UI and styles free of removed policy plumbing', () => {
-  for (const path of interfaceSources) {
-    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-    for (const identifier of forbidden) expect(source).not.toContain(identifier);
-  }
-});
-```
-
 - [ ] **Step 2: Run UI tests to verify the old 1ms path or constructor fails**
 
 Run:
@@ -461,7 +386,7 @@ Delete all three `@media (prefers-reduced-motion: reduce)` blocks from `src/styl
 Run:
 
 ```powershell
-npm test -- tests/MotionPolicy.test.ts tests/SurvivalUI.test.ts
+npm test -- tests/SurvivalUI.test.ts
 rg -n "reducedMotion|REDUCED_TRANSITION_MS|prefers-reduced-motion" src tests
 ```
 
@@ -493,6 +418,6 @@ Using the already-running `http://127.0.0.1:4173/dont-sleep-with-the-fishes/`, c
 - [ ] **Step 7: Commit the UI policy removal**
 
 ```powershell
-git add src/ui/SurvivalUI.ts src/styles/main.css tests/MotionPolicy.test.ts tests/SurvivalUI.test.ts
+git add src/ui/SurvivalUI.ts src/styles/main.css tests/SurvivalUI.test.ts
 git commit -m "fix: always use authored transition timing"
 ```
