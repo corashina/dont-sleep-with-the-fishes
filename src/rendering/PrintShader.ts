@@ -1,11 +1,10 @@
-import { Color, Vector2 } from 'three';
+import { Color } from 'three';
 
 export const PrintShader = {
   name: 'RestrainedPrintShader',
   uniforms: {
     tDiffuse: { value: null },
     tInkFrame: { value: null },
-    uResolution: { value: new Vector2(1, 1) },
     uPixelRatio: { value: 1 },
     uContrast: { value: 1 },
     uSaturation: { value: 1 },
@@ -19,9 +18,6 @@ export const PrintShader = {
     uInkFrameStrength: { value: 0 },
     uHalftoneStrength: { value: 0 },
     uHalftoneSizeCssPixels: { value: 5 },
-    uVignetteStrength: { value: 0 },
-    uGrainStrength: { value: 0 },
-    uGrainTime: { value: 0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -34,7 +30,6 @@ export const PrintShader = {
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
     uniform sampler2D tInkFrame;
-    uniform vec2 uResolution;
     uniform float uPixelRatio;
     uniform float uContrast;
     uniform float uSaturation;
@@ -48,19 +43,10 @@ export const PrintShader = {
     uniform float uInkFrameStrength;
     uniform float uHalftoneStrength;
     uniform float uHalftoneSizeCssPixels;
-    uniform float uVignetteStrength;
-    uniform float uGrainStrength;
-    uniform float uGrainTime;
     varying vec2 vUv;
 
     float printLuminance(vec3 color) {
       return dot(color, vec3(0.2126, 0.7152, 0.0722));
-    }
-
-    float hash21(vec2 point) {
-      vec3 p3 = fract(vec3(point.xyx) * 0.1031);
-      p3 += dot(p3, p3.yzx + 33.33);
-      return fract((p3.x + p3.y) * p3.z);
     }
 
     void main() {
@@ -99,12 +85,6 @@ export const PrintShader = {
       float midtone = smoothstep(0.1, 0.34, gray) * (1.0 - smoothstep(0.66, 0.92, gray));
       float centerRelief = mix(0.35, 1.0, smoothstep(0.12, 0.58, edgeDistance));
       color *= 1.0 - dotInk * midtone * centerRelief * uHalftoneStrength;
-
-      float vignette = smoothstep(0.42, 0.78, edgeDistance);
-      color *= 1.0 - vignette * uVignetteStrength;
-
-      float grain = hash21(floor(cssPixel) + vec2(uGrainTime * 37.0, uGrainTime * 17.0)) - 0.5;
-      color += vec3(grain * uGrainStrength);
 
       gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
     }

@@ -16,7 +16,6 @@ import {
   ITEM_AMBIENT_OCCLUSION_HOTKEY,
   ItemAmbientOcclusionPass,
   nextItemAmbientOcclusionMode,
-  resolveItemAmbientOcclusionMode,
   type ItemAmbientOcclusionMode,
 } from './ItemAmbientOcclusion';
 import { sceneHoverOutlineTargets } from './HoverOutline';
@@ -29,9 +28,7 @@ import {
 } from './SceneRenderer';
 import {
   clampPostProcessingValue,
-  resolveGrainTime,
-  resolveVignetteStrength,
-  selectPostProcessingProfile,
+  GLOBAL_POST_PROCESSING_PROFILE,
   type PostProcessingProfile,
 } from './postProcessingProfiles';
 import type { VisualQuality } from './visualQuality';
@@ -39,7 +36,6 @@ import type { VisualQuality } from './visualQuality';
 type PrintUniforms = {
   tDiffuse: { value: null };
   tInkFrame: { value: ReturnType<typeof createInkFrameMask> | null };
-  uResolution: { value: Vector2 };
   uPixelRatio: { value: number };
   uContrast: { value: number };
   uSaturation: { value: number };
@@ -53,9 +49,6 @@ type PrintUniforms = {
   uInkFrameStrength: { value: number };
   uHalftoneStrength: { value: number };
   uHalftoneSizeCssPixels: { value: number };
-  uVignetteStrength: { value: number };
-  uGrainStrength: { value: number };
-  uGrainTime: { value: number };
 };
 
 type AmbientOcclusionFactory = (
@@ -69,14 +62,6 @@ const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
 const GRADE_HOTKEY = 'KeyP';
 
-function browserSearch(): string {
-  return typeof window === 'undefined' ? '' : window.location.search;
-}
-
-function gradeEnabledFromSearch(search: string): boolean {
-  return new URLSearchParams(search).get('grade') !== 'off';
-}
-
 export class PostProcessingPipeline implements SceneRenderer {
   private readonly inkFrame: ReturnType<typeof createInkFrameMask>;
   private readonly composer: EffectComposer;
@@ -88,8 +73,8 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly uniforms: PrintUniforms;
   private readonly size: Vector2;
   private readonly maxTextureSize: number;
-  private itemAmbientOcclusionMode: ItemAmbientOcclusionMode;
-  private gradeEnabled: boolean;
+  private itemAmbientOcclusionMode: ItemAmbientOcclusionMode = 'composite';
+  private gradeEnabled = true;
   private aoUnavailable = false;
   private aoHotkeyRegistered = false;
   private gradeHotkeyRegistered = false;
@@ -122,8 +107,6 @@ export class PostProcessingPipeline implements SceneRenderer {
       target.samples = 0;
       composer = new EffectComposer(renderer, target);
       this.renderPass = new RenderPass(new Scene(), new Camera());
-      this.itemAmbientOcclusionMode = resolveItemAmbientOcclusionMode(browserSearch());
-      this.gradeEnabled = gradeEnabledFromSearch(browserSearch());
 
       try {
         itemAmbientOcclusionPass = createAmbientOcclusion(this.itemAmbientOcclusionMode, quality);
@@ -166,6 +149,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.outputPass = outputPass;
       this.uniforms = printPass.uniforms as PrintUniforms;
       this.uniforms.tInkFrame.value = this.inkFrame;
+      this.applyProfile(GLOBAL_POST_PROCESSING_PROFILE);
       this.registerComparisonHotkeys();
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
@@ -181,7 +165,11 @@ export class PostProcessingPipeline implements SceneRenderer {
     }
   }
 
-  render(scene: Scene, camera: Camera, state: Readonly<SceneVisualState>): void {
+  render(
+    scene: Scene,
+    camera: Camera,
+    _state: Readonly<SceneVisualState>,
+  ): void {
     if (this.disposed) return;
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
@@ -189,7 +177,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.outlinePass.renderScene = scene;
     this.outlinePass.renderCamera = camera;
     this.outlinePass.selectedObjects = sceneHoverOutlineTargets(scene);
-    this.applyProfile(selectPostProcessingProfile(state), state);
     this.composer.render(0);
   }
 
@@ -225,7 +212,6 @@ export class PostProcessingPipeline implements SceneRenderer {
         this.composer.passes.splice(1, 0, activeAmbientOcclusionPass);
       }
     }
-    this.uniforms.uResolution.value.set(physicalWidth, physicalHeight);
     this.uniforms.uPixelRatio.value = pixelRatio;
   }
 
@@ -307,10 +293,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.reportFallback(error);
   }
 
-  private applyProfile(
-    profile: Readonly<PostProcessingProfile>,
-    state: Readonly<SceneVisualState>,
-  ): void {
+  private applyProfile(profile: Readonly<PostProcessingProfile>): void {
     const uniforms = this.uniforms;
     uniforms.uContrast.value = clampPostProcessingValue(profile.contrast, 0.8, 1.2, 1);
     uniforms.uSaturation.value = clampPostProcessingValue(profile.saturation, 0.7, 1.1, 1);
@@ -324,9 +307,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     uniforms.uInkFrameStrength.value = clampPostProcessingValue(profile.inkFrameStrength, 0, 0.95, 0);
     uniforms.uHalftoneStrength.value = clampPostProcessingValue(profile.halftoneStrength, 0, 0.15, 0);
     uniforms.uHalftoneSizeCssPixels.value = clampPostProcessingValue(profile.halftoneSizeCssPixels, 3, 8, 5);
-    uniforms.uVignetteStrength.value = resolveVignetteStrength(state, profile);
-    uniforms.uGrainStrength.value = clampPostProcessingValue(profile.grainStrength, 0, 0.06, 0);
-    uniforms.uGrainTime.value = clampPostProcessingValue(resolveGrainTime(state), 0, 86_400, 0);
   }
 }
 

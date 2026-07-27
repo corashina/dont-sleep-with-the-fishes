@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { postProcessingProfilesForTest } from '../src/rendering/postProcessingProfiles';
+import { GLOBAL_POST_PROCESSING_PROFILE } from '../src/rendering/postProcessingProfiles';
 
-describe('post-processing profiles', () => {
+describe('global post-processing profile', () => {
   it('keeps posterization fine enough to preserve sky, water, and deck gradients', () => {
-    for (const profile of postProcessingProfilesForTest()) {
-      expect(profile.posterizationLevels).toBeGreaterThanOrEqual(32);
-      expect(profile.posterizationLevels).toBeLessThanOrEqual(48);
-    }
+    expect(GLOBAL_POST_PROCESSING_PROFILE.posterizationLevels)
+      .toBeGreaterThanOrEqual(32);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.posterizationLevels)
+      .toBeLessThanOrEqual(48);
   });
 
   it('lifts dark detail without turning the grade into a flat wash', () => {
-    for (const profile of postProcessingProfilesForTest()) {
-      expect(profile.shadowLift).toBeGreaterThanOrEqual(0.018);
-      expect(profile.shadowLift).toBeLessThanOrEqual(0.05);
-    }
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeGreaterThanOrEqual(0.018);
+    expect(GLOBAL_POST_PROCESSING_PROFILE.shadowLift).toBeLessThanOrEqual(0.05);
+  });
+
+  it('contains no scene identity, grain, or vignette settings', () => {
+    expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('id');
+    expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('grainStrength');
+    expect(GLOBAL_POST_PROCESSING_PROFILE).not.toHaveProperty('vignetteStrength');
   });
 });
