@@ -11,7 +11,8 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import type { VisualQuality } from './visualQuality';
 
 export const ITEM_AMBIENT_OCCLUSION_LAYER = 1;
-export const ITEM_AMBIENT_OCCLUSION_HOTKEY = 'KeyO';
+export const ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY = 0.65;
+export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.24;
 
 export type ItemAmbientOcclusionMode = 'composite' | 'debug' | 'off';
 
@@ -29,14 +30,6 @@ const AO_QUALITY = {
     denoiseSamples: 16,
   },
 } as const;
-
-export function nextItemAmbientOcclusionMode(
-  mode: ItemAmbientOcclusionMode,
-): ItemAmbientOcclusionMode {
-  if (mode === 'composite') return 'debug';
-  if (mode === 'debug') return 'off';
-  return 'composite';
-}
 
 function hasTransparentMaterial(mesh: Mesh): boolean {
   if (Array.isArray(mesh.material)) {
@@ -70,9 +63,9 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
   ) {
     super(new Scene(), new PerspectiveCamera());
     this.visualQuality = quality;
-    this.blendIntensity = 0.65;
+    this.blendIntensity = ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY;
     this.updateGtaoMaterial({
-      radius: 0.24,
+      radius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
       distanceExponent: 1.3,
       thickness: 0.3,
       distanceFallOff: 1,
@@ -88,6 +81,18 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
     this.visualQuality = value;
     this.applyVisualQuality();
     this.resizeInternalTargets();
+  }
+
+  setIntensity(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.blendIntensity = Math.min(1, Math.max(0, value));
+  }
+
+  setRadius(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.updateGtaoMaterial({
+      radius: Math.min(0.5, Math.max(0.05, value)),
+    });
   }
 
   override setSize(width: number, height: number): void {

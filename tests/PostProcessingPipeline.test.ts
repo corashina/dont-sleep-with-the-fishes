@@ -43,6 +43,8 @@ const postProcessingMocks = vi.hoisted((): {
     enabled: boolean;
     setContext: MockFunction;
     setMode: MockFunction;
+    setIntensity: MockFunction;
+    setRadius: MockFunction;
     setSize: MockFunction;
     setVisualQuality: MockFunction;
     dispose: MockFunction;
@@ -135,12 +137,14 @@ vi.mock('three/addons/postprocessing/OutlinePass.js', () => ({
 }));
 
 vi.mock('../src/rendering/ItemAmbientOcclusion', () => ({
-  nextItemAmbientOcclusionMode: () => 'debug',
-  ITEM_AMBIENT_OCCLUSION_HOTKEY: 'KeyO',
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY: 0.65,
+  ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS: 0.24,
   ItemAmbientOcclusionPass: class {
     enabled = true;
     readonly setContext = vi.fn();
     readonly setMode = vi.fn();
+    readonly setIntensity = vi.fn();
+    readonly setRadius = vi.fn();
     readonly setSize = vi.fn(() => {
       if (postProcessingMocks.aoSizeFailure !== null) {
         throw postProcessingMocks.aoSizeFailure;
@@ -245,6 +249,15 @@ describe('post-processing pipeline', () => {
     expect(PrintShader.fragmentShader).not.toContain('vignette');
   });
 
+  it('opens shadows without adding white to absolute black', () => {
+    expect(PrintShader.fragmentShader).toContain(
+      'vec3 openedShadows = sqrt(max(color, vec3(0.0)));',
+    );
+    expect(PrintShader.fragmentShader).not.toContain(
+      'color += vec3(uShadowLift * liftWeight);',
+    );
+  });
+
   it('passes one global grade to the shader regardless of scene state', () => {
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
     pipeline.render(new Scene(), new PerspectiveCamera(), {
@@ -274,8 +287,33 @@ describe('post-processing pipeline', () => {
       contrast: 1.08,
       saturation: 1.1,
       posterization: 48,
-      shadowLift: 0.055,
+      shadowLift: 0.12,
     });
+  });
+
+  it('exposes grade, AO mode, and numeric controls for the corner console', () => {
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    const controls = pipeline.postProcessingControls;
+
+    controls.setGradeEnabled(false);
+    controls.setAmbientOcclusionMode('debug');
+    controls.setNumeric('contrast', 1.17);
+    controls.setNumeric('ambientOcclusionIntensity', 0.4);
+    controls.setNumeric('ambientOcclusionRadius', 0.18);
+
+    expect(postProcessingMocks.printPasses[0]?.enabled).toBe(false);
+    expect(postProcessingMocks.aoPasses[0]?.setMode).toHaveBeenCalledWith('debug');
+    expect(postProcessingMocks.printPasses[0]?.uniforms?.uContrast?.value).toBe(1.17);
+    expect(postProcessingMocks.aoPasses[0]?.setIntensity).toHaveBeenCalledWith(0.4);
+    expect(postProcessingMocks.aoPasses[0]?.setRadius).toHaveBeenCalledWith(0.18);
+    expect(controls.getState()).toMatchObject({
+      gradeEnabled: false,
+      ambientOcclusionMode: 'debug',
+      contrast: 1.17,
+      ambientOcclusionIntensity: 0.4,
+      ambientOcclusionRadius: 0.18,
+    });
+    pipeline.dispose();
   });
 
   it('does not use URL parameters to disable grade or AO', () => {
@@ -392,44 +430,37 @@ describe('post-processing pipeline', () => {
     expect(failingAoPass.dispose).toHaveBeenCalledOnce();
   });
 
-  it('removes comparison listeners when initial sizing fails after registration', () => {
+  it('does not register the legacy P or O keyboard listeners', () => {
     const keyboardTarget = Object.assign(new EventTarget(), { location: { search: '' } });
-    const removeEventListener = vi.spyOn(keyboardTarget, 'removeEventListener');
+    const addEventListener = vi.spyOn(keyboardTarget, 'addEventListener');
     vi.stubGlobal('window', keyboardTarget);
-    const failure = new Error('pixel ratio unavailable');
-    const renderer = createRenderer();
-    renderer.getPixelRatio = vi.fn(() => { throw failure; });
-
-    expect(() => new PostProcessingPipeline(renderer, 'low')).toThrow(failure);
-
-    expect(removeEventListener).toHaveBeenCalledTimes(2);
-    expect(removeEventListener.mock.calls.map(([type]) => type).sort())
-      .toEqual(['keydown', 'keydown']);
+    const pipeline = new PostProcessingPipeline(createRenderer(), 'low');
+    expect(addEventListener).not.toHaveBeenCalledWith(
+      'keydown',
+      expect.any(Function),
+    );
+    pipeline.dispose();
   });
 
-  it('keeps AO unavailable when KeyO is pressed after quality reconfiguration fails', () => {
-    const keyboardTarget = Object.assign(new EventTarget(), { location: { search: '' } });
-    vi.stubGlobal('window', keyboardTarget);
+  it('keeps AO unavailable when console controls change after quality failure', () => {
     const failure = new Error('ao resize unavailable');
     const failingAoPass = {
       enabled: true,
       dispose: vi.fn(),
       setMode: vi.fn(),
+      setIntensity: vi.fn(),
+      setRadius: vi.fn(),
       setSize: vi.fn(),
       setVisualQuality: vi.fn(() => { throw failure; }),
     } as unknown as ItemAmbientOcclusionPass;
     const pipeline = new PostProcessingPipeline(createRenderer(), 'low', () => failingAoPass, vi.fn());
     pipeline.setVisualQuality('high');
-    const keyO = new Event('keydown');
-    Object.defineProperties(keyO, {
-      code: { value: 'KeyO' }, repeat: { value: false }, altKey: { value: false },
-      ctrlKey: { value: false }, metaKey: { value: false },
-    });
-
-    keyboardTarget.dispatchEvent(keyO);
+    pipeline.postProcessingControls.setAmbientOcclusionMode('debug');
+    pipeline.postProcessingControls.setNumeric('ambientOcclusionIntensity', 0.4);
 
     expect(failingAoPass.enabled).toBe(false);
     expect(failingAoPass.setMode).not.toHaveBeenCalled();
+    expect(failingAoPass.setIntensity).not.toHaveBeenCalled();
     pipeline.dispose();
   });
 

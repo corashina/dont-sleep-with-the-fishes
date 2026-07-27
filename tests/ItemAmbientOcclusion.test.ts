@@ -13,7 +13,6 @@ import {
   enableItemAmbientOcclusionOccluder,
   ITEM_AMBIENT_OCCLUSION_LAYER,
   ItemAmbientOcclusionPass,
-  nextItemAmbientOcclusionMode,
 } from '../src/rendering/ItemAmbientOcclusion';
 import type { ItemId } from '../src/game/ItemState';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
@@ -132,10 +131,13 @@ describe('item ambient occlusion', () => {
     pass.dispose();
   });
 
-  it('cycles through composite, raw-buffer, and disabled modes', () => {
-    expect(nextItemAmbientOcclusionMode('composite')).toBe('debug');
-    expect(nextItemAmbientOcclusionMode('debug')).toBe('off');
-    expect(nextItemAmbientOcclusionMode('off')).toBe('composite');
+  it('updates AO intensity and radius from console controls', () => {
+    const pass = new ItemAmbientOcclusionPass();
+    pass.setIntensity(0.4);
+    pass.setRadius(0.18);
+    expect(pass.blendIntensity).toBe(0.4);
+    expect(pass.gtaoMaterial.uniforms.radius!.value).toBe(0.18);
+    pass.dispose();
   });
 
   it('marks collectible clones without adding equipment to the AO layer', () => {
