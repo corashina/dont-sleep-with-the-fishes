@@ -6,7 +6,11 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
-import { SurvivalUI, type FishingResultView } from '../ui/SurvivalUI';
+import {
+  SurvivalUI,
+  type EventContextChoice,
+  type FishingResultView,
+} from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
@@ -354,6 +358,8 @@ export class SurvivalPhase implements GamePhase {
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
+    this.ui.onEventChoice = (choiceId) =>
+      void this.resolveContextualChoice(choiceId, this.lifecycleGeneration);
     this.ui.onEndure = () => this.handleEndure();
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onAnchorHighlight = (anchorId) => {
@@ -749,25 +755,52 @@ export class SurvivalPhase implements GamePhase {
     await (this.world.playEventItemUse?.(instanceId) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
-    const eventState = this.session.snapshot().state;
+    const pending = this.session.snapshot();
+    const eventState = pending.state;
+    const eventId = pending.pendingEventId;
+    if (eventId === null) return;
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
     if (outcome === undefined) return;
     if (!outcome.accepted) {
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.world.setEventSelectedItem?.(null);
-      this.ui.setEventSelection?.(this.eventEligibility);
+      this.restoreEventSelection();
       this.setBusy(false);
       return;
     }
-    this.clearEventPresentation();
-    await this.runEventResolution(outcome, eventState, generation);
+    await this.runEventResolution(eventId, outcome, eventState, generation);
+  }
+
+  private async resolveContextualChoice(
+    choiceId: EventResponseId,
+    generation: number,
+  ): Promise<void> {
+    if (this.eventPresentation !== 'choosing' || !this.isContinuationActive(generation)) return;
+    const pending = this.session.snapshot();
+    const eventId = pending.pendingEventId;
+    if (eventId === null) return;
+    this.eventPresentation = 'resolving';
+    this.setBusy(true);
+    const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
+    if (outcome === undefined || !this.isContinuationActive(generation)) return;
+    if (!outcome.accepted) {
+      this.ui.showFeedback?.(outcome);
+      this.eventPresentation = 'choosing';
+      this.restoreEventSelection();
+      this.setBusy(false);
+      return;
+    }
+    await this.runEventResolution(eventId, outcome, pending.state, generation);
   }
 
   private async resolveEndure(generation: number): Promise<void> {
     this.eventPresentation = 'resolving';
     this.setBusy(true);
-    const eventState = this.session.snapshot().state;
+    const pending = this.session.snapshot();
+    const eventState = pending.state;
+    const eventId = pending.pendingEventId;
+    if (eventId === null) return;
     const outcome = this.session.resolveEvent?.({ kind: 'endure' });
     if (outcome === undefined) return;
     if (!outcome.accepted) {
@@ -776,20 +809,22 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    this.clearEventPresentation();
-    await this.runEventResolution(outcome, eventState, generation);
+    await this.runEventResolution(eventId, outcome, eventState, generation);
   }
 
   private async runEventResolution(
+    eventId: string,
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
   ): Promise<void> {
     this.setBusy(true);
-    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
+    await (this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     let snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
+    if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
+    else this.clearEventPresentation();
     if (isTerminal(snapshot.state)) {
       this.eventPresentation = 'idle';
       this.setBusy(false);
@@ -882,12 +917,13 @@ export class SurvivalPhase implements GamePhase {
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
+    this.world.stageEvent?.(event.id);
     this.eventPresentation = 'revealing';
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
     await Promise.all([
-      this.world.play?.(event.cue) ?? Promise.resolve(),
+      this.world.revealEvent?.(event.id) ?? Promise.resolve(),
       this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
@@ -896,7 +932,10 @@ export class SurvivalPhase implements GamePhase {
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
     this.eventEligibility = this.eventEligibilityFor(event, revealed);
     this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
-    this.ui.setEventSelection?.(this.eventEligibility);
+    this.ui.setEventSelection?.(
+      this.eventEligibility,
+      this.contextualChoicesFor(event, revealed),
+    );
     this.eventPresentation = 'choosing';
     this.setBusy(false);
   }
@@ -919,11 +958,56 @@ export class SurvivalPhase implements GamePhase {
     return eligibility;
   }
 
+  private contextualChoicesFor(
+    event: NonNullable<ReturnType<typeof survivalEventById>>,
+    snapshot: SurvivalSnapshot,
+  ): EventContextChoice[] {
+    return event.choices
+      .filter((choice) => choice.itemId === undefined)
+      .map((choice) => {
+        const unmet = choice.requirements?.filter(
+          ({ resource, minimum }) => snapshot[resource] < minimum,
+        ) ?? [];
+        return {
+          id: choice.id,
+          label: choice.label,
+          unavailableReason: unmet.length === 0
+            ? null
+            : unmet
+                .map(({ resource, minimum }) => (
+                  `Requires ${minimum} ${resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US')}; `
+                  + `you have ${snapshot[resource]}.`
+                ))
+                .join(' '),
+        };
+      });
+  }
+
+  private restoreEventSelection(): void {
+    const snapshot = this.session.snapshot();
+    const event = snapshot.pendingEventId === null
+      ? undefined
+      : survivalEventById(snapshot.pendingEventId);
+    this.ui.setEventSelection?.(
+      this.eventEligibility,
+      event === undefined ? [] : this.contextualChoicesFor(event, snapshot),
+    );
+  }
+
+  private retainTerminalEventTableau(): void {
+    this.eventEligibility.clear();
+    this.eventPresentation = 'idle';
+    this.world.setEventSelectedItem?.(null);
+    this.world.setEventEligibleItems?.(null);
+    this.ui.clearEventPresentation?.();
+  }
+
   private clearEventPresentation(): void {
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(null);
+    this.world.clearEvent?.();
     this.ui.clearEventPresentation?.();
   }
 
