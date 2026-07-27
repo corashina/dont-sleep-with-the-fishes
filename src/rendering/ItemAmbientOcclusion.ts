@@ -8,11 +8,27 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import type { VisualQuality } from './visualQuality';
 
 export const ITEM_AMBIENT_OCCLUSION_LAYER = 1;
 export const ITEM_AMBIENT_OCCLUSION_HOTKEY = 'KeyO';
 
 export type ItemAmbientOcclusionMode = 'composite' | 'debug' | 'off';
+
+const AO_QUALITY = {
+  low: {
+    resolutionScale: 0.5,
+    gtaoSamples: 8,
+    denoiseRings: 1,
+    denoiseSamples: 8,
+  },
+  high: {
+    resolutionScale: 1,
+    gtaoSamples: 16,
+    denoiseRings: 2,
+    denoiseSamples: 16,
+  },
+} as const;
 
 export function nextItemAmbientOcclusionMode(
   mode: ItemAmbientOcclusionMode,
@@ -44,8 +60,16 @@ export function enableItemAmbientOcclusionOccluder(root: Object3D): void {
 }
 
 export class ItemAmbientOcclusionPass extends GTAOPass {
-  constructor(mode: ItemAmbientOcclusionMode = 'composite') {
+  private visualQuality: VisualQuality;
+  private fullWidth = 1;
+  private fullHeight = 1;
+
+  constructor(
+    mode: ItemAmbientOcclusionMode = 'composite',
+    quality: VisualQuality = 'low',
+  ) {
     super(new Scene(), new PerspectiveCamera());
+    this.visualQuality = quality;
     this.blendIntensity = 0.65;
     this.updateGtaoMaterial({
       radius: 0.24,
@@ -53,19 +77,23 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
       thickness: 0.3,
       distanceFallOff: 1,
       scale: 1,
-      samples: 16,
       screenSpaceRadius: true,
     });
-    this.updatePdMaterial({
-      radius: 4,
-      radiusExponent: 2,
-      rings: 2,
-      samples: 16,
-      lumaPhi: 10,
-      depthPhi: 2,
-      normalPhi: 3,
-    });
+    this.applyVisualQuality();
     this.setMode(mode);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (value === this.visualQuality) return;
+    this.visualQuality = value;
+    this.applyVisualQuality();
+    this.resizeInternalTargets();
+  }
+
+  override setSize(width: number, height: number): void {
+    this.fullWidth = width;
+    this.fullHeight = height;
+    this.resizeInternalTargets();
   }
 
   setMode(mode: ItemAmbientOcclusionMode): void {
@@ -99,5 +127,27 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
     } finally {
       this.camera.layers.mask = originalCameraLayerMask;
     }
+  }
+
+  private applyVisualQuality(): void {
+    const quality = AO_QUALITY[this.visualQuality];
+    this.updateGtaoMaterial({ samples: quality.gtaoSamples });
+    this.updatePdMaterial({
+      radius: 4,
+      radiusExponent: 2,
+      rings: quality.denoiseRings,
+      samples: quality.denoiseSamples,
+      lumaPhi: 10,
+      depthPhi: 2,
+      normalPhi: 3,
+    });
+  }
+
+  private resizeInternalTargets(): void {
+    const scale = AO_QUALITY[this.visualQuality].resolutionScale;
+    super.setSize(
+      Math.max(1, Math.floor(this.fullWidth * scale)),
+      Math.max(1, Math.floor(this.fullHeight * scale)),
+    );
   }
 }
