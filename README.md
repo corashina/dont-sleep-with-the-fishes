@@ -72,6 +72,15 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 
+### Fishing
+
+Fishing can also recover utility salvage at the wiki-documented weights: Bait,
+Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. Bait stacks;
+Wet Duct Tape becomes ordinary usable Duct Tape; Energy Bars are usable;
+Compass and Fishing Net arrive broken and require Duct Tape. A usable or broken
+unique utility is removed from the catch pool until it is consumed or lost.
+Utility catches neither consume bait nor receive bait's fish-weight bonus.
+
 ### Weather debug control
 
 Press <code>`</code> (backquote) in either scavenging or lifeboat survival to open **System Tuning**, then select a presentation weather profile. The menu offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. A selection is a forced visual override: it takes precedence over event weather, carries across the scavenging-to-survival handoff, and remains active until the page reloads.

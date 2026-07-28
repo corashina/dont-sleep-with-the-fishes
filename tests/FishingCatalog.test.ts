@@ -63,7 +63,7 @@ describe('fishing utility catalog', () => {
   it('rejects broken rewards for non-breakable items', () => {
     const invalid = [{
       ...FISHING_CATCHES.find(({ id }) => id === 'energyBar')!,
-      reward: { kind: 'item', itemId: 'energyBar', condition: 'broken', unique: true },
+      reward: { kind: 'item', itemId: 'energyBar', condition: 'broken', unique: true } as const,
     }];
     expect(() => validateCatalog(invalid)).toThrow(/energyBar.*breakable/i);
   });

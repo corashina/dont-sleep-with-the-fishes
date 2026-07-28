@@ -4,9 +4,10 @@ import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
+import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
-import { SurvivalPhase } from '../src/survival/SurvivalPhase';
+import { formatFishingResult, SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { SurvivalInventorySnapshot, SurvivalItemState, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import type { FishingResultView, FishingUiState, SurvivalUI } from '../src/ui/SurvivalUI';
@@ -52,6 +53,24 @@ function accepted(overrides: Record<string, unknown> = {}) {
     deltas: { energy: -2, food: 1 }, cue: 'fish' as const, ...overrides,
   };
 }
+
+describe('formatFishingResult utility salvage', () => {
+  it.each([
+    ['bait', 'BAIT', 'BAIT +1'],
+    ['wetDuctTape', 'WET DUCT TAPE', 'DUCT TAPE RECOVERED'],
+    ['brokenCompass', 'BROKEN COMPASS', 'BROKEN — REPAIR WITH DUCT TAPE'],
+    ['tornFishingNet', 'TORN FISHING NET', 'BROKEN — REPAIR WITH DUCT TAPE'],
+    ['energyBar', 'ENERGY BAR', 'ENERGY BAR RECOVERED'],
+  ] as const)('formats the %s utility result', (catchId, title, detail) => {
+    expect(formatFishingResult({
+      kind: 'catch',
+      catch: FISHING_CATCHES.find(({ id }) => id === catchId)!,
+    }, accepted({
+      code: 'utility-caught',
+      deltas: catchId === 'bait' ? { bait: 1 } : {},
+    }))).toMatchObject({ caption: 'UTILITY SALVAGE', title, detail });
+  });
+});
 
 function deferred() {
   let complete!: () => void;
@@ -771,13 +790,34 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot().journalEntries[0]?.actions).toHaveLength(1);
   });
 
+  it('shows the projected broken compass utility result after reeling', async () => {
+    const rig = createFishingRig({ day: 3, catchRoll: 390 / 406 });
+    rig.phase.start();
+    rig.phase.handleAction('fish');
+    await settleFishingEntry(rig);
+    expect(fishingCastCallback(rig)(null)).toBe(true);
+    await completeFishingCast(rig);
+    rig.phase.update(3, 3);
+
+    expect(fishingReelCallback(rig)()).toBe(true);
+    rig.animations.reel.at(-1)!.resolve();
+    await flushPromises();
+
+    expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
+      caption: 'UTILITY SALVAGE',
+      title: 'BROKEN COMPASS',
+      detail: 'BROKEN — REPAIR WITH DUCT TAPE',
+      catchTarget: rig.catchTarget,
+    });
+  });
+
   it.each([
     {
       label: 'baited tuna', options: { withBait: true, day: 3, catchRoll: 0.17 },
       resultAnimation: 'reel' as const, expected: 'result:TUNA:+2 FOOD - 1 BAIT USED',
     },
     {
-      label: 'plastic bottle', options: { catchRoll: 0.999999 },
+      label: 'plastic bottle', options: { catchRoll: 300 / 375 },
       resultAnimation: 'reel' as const, expected: 'result:PLASTIC BOTTLE:NO FOOD',
     },
     {

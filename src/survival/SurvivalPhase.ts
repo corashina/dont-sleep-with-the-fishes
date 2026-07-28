@@ -25,6 +25,7 @@ import {
 } from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
 import { survivalEventById } from './events';
+import { fishingCatchFood } from './fishingCatalog';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -96,11 +97,27 @@ export function formatFishingResult(
       catchTarget: null,
     };
   }
+  if (result.catch.kind === 'utility') {
+    const reward = result.catch.reward;
+    const detail = reward.kind === 'bait'
+      ? 'BAIT +1'
+      : reward.kind === 'item' && reward.condition === 'broken'
+        ? 'BROKEN — REPAIR WITH DUCT TAPE'
+        : reward.kind === 'item' && reward.itemId === 'ductTape'
+          ? 'DUCT TAPE RECOVERED'
+          : 'ENERGY BAR RECOVERED';
+    return {
+      caption: 'UTILITY SALVAGE',
+      title: result.catch.label.toLocaleUpperCase('en-US'),
+      detail,
+      catchTarget: null,
+    };
+  }
   const bait = outcome.deltas.bait === -1 ? ' - 1 BAIT USED' : '';
   return {
     caption: `${result.catch.size.toLocaleUpperCase('en-US')} CATCH`,
     title: result.catch.label.toLocaleUpperCase('en-US'),
-    detail: `+${result.catch.food} FOOD${bait}`,
+    detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
     catchTarget: null,
   };
 }
