@@ -22,6 +22,8 @@ import {
 } from '../src/world/BoatStorage';
 import {
   LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
+  LIFEBOAT_FLOOR_RIB_CENTERS_Z,
+  LIFEBOAT_FLOOR_RIB_DEPTH,
   LIFEBOAT_FLOOR_SURFACE_Y,
   lifeboatHullHalfWidthAt,
 } from '../src/world/Lifeboat';
@@ -116,7 +118,9 @@ describe('boat item layout', () => {
     expect(Math.abs(transform('umbrella').rotation.x)).toBeGreaterThan(0.35);
     expect(Math.abs(transform('umbrella').rotation.z)).toBeGreaterThan(0.25);
     expect(transform('swimRing').rotation.x).toBeCloseTo(0);
-    expect(transform('swimRing').position.z).toBeLessThan(-0.45);
+    expect(transform('swimRing').position.x).toBeGreaterThan(0.80);
+    expect(transform('swimRing').position.x).toBeLessThan(1.20);
+    expect(transform('swimRing').position.z).toBeLessThan(-0.85);
   });
 
   it('keeps bait closest to the fishing rod', () => {
@@ -160,6 +164,23 @@ describe('boat item layout', () => {
       }
     }
     expect(overlaps).toEqual([]);
+  });
+
+  it('keeps every floor prop clear of the raised ribs', () => {
+    const clearance = 0.015;
+    const halfRibDepth = LIFEBOAT_FLOOR_RIB_DEPTH / 2;
+
+    for (const instance of createItemInstances()) {
+      if (boatStorageSurface(instance) !== 'floor') continue;
+      const bounds = productionBounds(instance);
+      for (const ribZ of LIFEBOAT_FLOOR_RIB_CENTERS_Z) {
+        const entersRibBand = (
+          bounds.min.z < ribZ + halfRibDepth + clearance
+          && bounds.max.z > ribZ - halfRibDepth - clearance
+        );
+        expect(entersRibBand, `${instance.instanceId} crosses rib ${ribZ}`).toBe(false);
+      }
+    }
   });
 
   it('rests every production prop on its support inside the hull', () => {
