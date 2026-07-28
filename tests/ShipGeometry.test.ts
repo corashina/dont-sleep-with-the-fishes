@@ -777,6 +777,114 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
+  it('uses 0.01 m visual overlaps at room and wheelhouse structural seams', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const seamOverlap = 0.01;
+    try {
+      (['crewCabin', 'storageWorkroom'] as const).forEach((zoneId) => {
+        const zone = SHIP_LAYOUT.zones.find(({ id }) => id === zoneId)!;
+        const prefix = zoneId === 'crewCabin' ? 'crew-cabin' : 'storage-workroom';
+        const walls: Mesh[] = [];
+        build.root.traverse((object) => {
+          if (object instanceof Mesh && object.name.startsWith(`${prefix}-wall-`)) {
+            walls.push(object);
+          }
+        });
+        const wallAt = (edge: 'port' | 'starboard' | 'aft' | 'forward', end: 'aft' | 'forward') => {
+          const match = walls.find((wall) => {
+            if (!wall.name.startsWith(`${prefix}-wall-${edge}-`)) return false;
+            const bounds = new Box3().setFromObject(wall);
+            return end === 'aft'
+              ? bounds.min.z < zone.bounds.minZ
+              : bounds.max.z > zone.bounds.maxZ;
+          });
+          expect(match, `${zoneId} ${edge} ${end} structural wall`).toBeDefined();
+          return new Box3().setFromObject(match!);
+        };
+
+        const portAft = wallAt('port', 'aft');
+        const portForward = wallAt('port', 'forward');
+        const starboardAft = wallAt('starboard', 'aft');
+        const starboardForward = wallAt('starboard', 'forward');
+        const aft = new Box3().setFromObject(walls.find((wall) =>
+          wall.name.startsWith(`${prefix}-wall-aft-`))!);
+        const forward = new Box3().setFromObject(walls.find((wall) =>
+          wall.name.startsWith(`${prefix}-wall-forward-`))!);
+
+        expect(zone.bounds.minZ - portAft.min.z, `${zoneId} port aft seal`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(portForward.max.z - zone.bounds.maxZ, `${zoneId} port forward seal`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(zone.bounds.minZ - starboardAft.min.z, `${zoneId} starboard aft seal`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(starboardForward.max.z - zone.bounds.maxZ, `${zoneId} starboard forward seal`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(portAft.max.x - aft.min.x, `${zoneId} port aft corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(aft.max.x - starboardAft.min.x, `${zoneId} starboard aft corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(portForward.max.x - forward.min.x, `${zoneId} port forward corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(forward.max.x - starboardForward.min.x, `${zoneId} starboard forward corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+
+        SHIP_LAYOUT.doors.filter((door) => door.zoneId === zoneId).forEach((door) => {
+          const openingMin = door.center[1] - door.width / 2;
+          const openingMax = door.center[1] + door.width / 2;
+          const sideWalls = walls.filter((wall) =>
+            wall.name.startsWith(`${prefix}-wall-${door.side}-`));
+          const beforeOpening = sideWalls.find((wall) =>
+            Math.abs(new Box3().setFromObject(wall).max.z - openingMin) < 1e-6);
+          const afterOpening = sideWalls.find((wall) =>
+            Math.abs(new Box3().setFromObject(wall).min.z - openingMax) < 1e-6);
+          expect(beforeOpening, `${door.id} wall before opening`).toBeDefined();
+          expect(afterOpening, `${door.id} wall after opening`).toBeDefined();
+          expect(new Box3().setFromObject(beforeOpening).max.z, `${door.id} before opening`)
+            .toBeCloseTo(openingMin, 6);
+          expect(new Box3().setFromObject(afterOpening).min.z, `${door.id} after opening`)
+            .toBeCloseTo(openingMax, 6);
+        });
+      });
+
+      ([
+        ['front-center', true, true],
+        ['front-port-chamfer', true, true],
+        ['front-starboard-chamfer', true, true],
+        ['port-side', true, false],
+        ['starboard-side', true, true],
+        ['aft-port', false, true],
+        ['aft-starboard', true, false],
+      ] as const).forEach(([paneId, sealsStart, sealsEnd]) => {
+        const startFrame = build.root.getObjectByName(
+          `wheelhouse-pane:${paneId}:frame-start`,
+        ) as Mesh;
+        const endFrame = build.root.getObjectByName(
+          `wheelhouse-pane:${paneId}:frame-end`,
+        ) as Mesh;
+        const startFrameBounds = localMeshBounds(startFrame);
+        const endFrameBounds = localMeshBounds(endFrame);
+        (['sill', 'header'] as const).forEach((part) => {
+          const structuralPart = build.root.getObjectByName(
+            `wheelhouse-pane:${paneId}:${part}`,
+          ) as Mesh;
+          const partBounds = localMeshBounds(structuralPart);
+          expect(
+            startFrameBounds.min.x - partBounds.min.x,
+            `${paneId} ${part} start seal`,
+          ).toBeCloseTo(sealsStart ? seamOverlap : 0, 6);
+          expect(
+            partBounds.max.x - endFrameBounds.max.x,
+            `${paneId} ${part} end seal`,
+          ).toBeCloseTo(sealsEnd ? seamOverlap : 0, 6);
+        });
+      });
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('keeps room roofs and chimney-housing parts flush without intersecting volumes', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
