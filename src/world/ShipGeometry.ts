@@ -92,6 +92,7 @@ const WATERLINE_HEIGHT = 0.14;
 const WATERLINE_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_BASE_HEIGHT + 0.03;
 const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
+const ROOM_SEAM_OVERLAP = 0.01;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
@@ -150,6 +151,38 @@ function sharedBoxGeometry(root: Group, geometries: Set<BufferGeometry>): BoxGeo
   if (existing) return existing;
   const geometry = new BoxGeometry(1, 1, 1);
   boxGeometries.set(root, geometry);
+  geometries.add(geometry);
+  return geometry;
+}
+
+function applyWallPlanarUvs(
+  geometry: BufferGeometry,
+  horizontalOffset: number,
+  verticalOffset: number,
+): void {
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    const normalX = Math.abs(normals.getX(index));
+    const normalZ = Math.abs(normals.getZ(index));
+    const u = normalZ >= normalX ? positions.getX(index) : positions.getZ(index);
+    const v = positions.getY(index);
+    uvs.setXY(index, u + horizontalOffset, v + verticalOffset);
+  }
+  uvs.needsUpdate = true;
+}
+
+function createWallBoxGeometry(
+  geometries: Set<BufferGeometry>,
+  width: number,
+  height: number,
+  depth: number,
+  horizontalOffset: number,
+  verticalOffset: number,
+): BoxGeometry {
+  const geometry = new BoxGeometry(width, height, depth);
+  applyWallPlanarUvs(geometry, horizontalOffset, verticalOffset);
   geometries.add(geometry);
   return geometry;
 }
@@ -452,6 +485,8 @@ interface WallSegmentSpec {
   readonly fixed: number;
   readonly min: number;
   readonly max: number;
+  readonly sealMin: boolean;
+  readonly sealMax: boolean;
 }
 
 type PortholeZoneId = 'crewCabin' | 'storageWorkroom';
@@ -507,7 +542,15 @@ function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
       { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX + WALL_THICKNESS, max: bounds.maxX - WALL_THICKNESS, doors: [] as ShipDoorSpec[], axis: 0 as const },
     ];
     edges.forEach((edge) => subtractDoorIntervals(edge.min, edge.max, edge.doors, edge.axis)
-      .forEach((segment) => result.push({ zoneId, edge: edge.edge, orientation: edge.orientation, fixed: edge.fixed, ...segment })));
+      .forEach((segment) => result.push({
+        zoneId,
+        edge: edge.edge,
+        orientation: edge.orientation,
+        fixed: edge.fixed,
+        ...segment,
+        sealMin: edge.orientation === 'x' && segment.min === edge.min,
+        sealMax: edge.orientation === 'x' && segment.max === edge.max,
+      })));
   });
   return result;
 }
@@ -542,6 +585,17 @@ function roomWallHeight(_zoneId: ShipZoneId): number {
   return ROOM_WALL_HEIGHT;
 }
 
+function wallUvOffsets(
+  segment: WallSegmentSpec,
+  horizontalCenter: number,
+  centerY: number,
+): readonly [number, number] {
+  return [
+    segment.orientation === 'x' ? horizontalCenter : -horizontalCenter,
+    centerY,
+  ];
+}
+
 function portholesForSegment(segment: WallSegmentSpec): readonly PortholeSpec[] {
   if (segment.orientation !== 'x' || segment.zoneId === 'wheelhouse') return [];
   return PORTHOLE_SPECS.filter((porthole) =>
@@ -561,10 +615,13 @@ function addPortholeWallPanel(
   material: Material,
 ): void {
   const height = roomWallHeight(segment.zoneId);
-  const renderHeight = height - 0.00002;
-  const length = segment.max - segment.min;
-  const renderLength = length - 0.00002;
-  const horizontalCenter = (segment.min + segment.max) / 2;
+  const sealBefore = segment.sealMin ? ROOM_SEAM_OVERLAP : 0;
+  const sealAfter = segment.sealMax ? ROOM_SEAM_OVERLAP : 0;
+  const renderHeight = height + ROOM_SEAM_OVERLAP * 2;
+  const renderLength = segment.max - segment.min + sealBefore + sealAfter;
+  const horizontalCenter = (
+    segment.min - sealBefore + segment.max + sealAfter
+  ) / 2;
   const shape = new Shape();
   shape.moveTo(-renderLength / 2, -renderHeight / 2);
   shape.lineTo(renderLength / 2, -renderHeight / 2);
@@ -591,6 +648,10 @@ function addPortholeWallPanel(
     steps: 1,
   });
   geometry.translate(0, 0, -WALL_HALF_THICKNESS);
+  applyWallPlanarUvs(
+    geometry,
+    ...wallUvOffsets(segment, horizontalCenter, wallBottomY + height / 2),
+  );
   const mesh = new Mesh(geometry, material);
   mesh.name = name;
   mesh.position.set(
@@ -740,11 +801,34 @@ function addWallSegments(
     } else {
       const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
       shellColliders.push(toCollisionBox(wall.position, wall.size));
-      addBlock(root, geometries, shellColliders, {
-        name,
-        ...segmentTransform(segment, height, wallBottomY + height / 2),
-        material,
-      });
+      const length = segment.max - segment.min;
+      const wallCenterY = wallBottomY + height / 2;
+      const sealBefore = segment.sealMin ? ROOM_SEAM_OVERLAP : 0;
+      const sealAfter = segment.sealMax ? ROOM_SEAM_OVERLAP : 0;
+      const renderLength = length + sealBefore + sealAfter;
+      const horizontalCenter = (
+        segment.min - sealBefore + segment.max + sealAfter
+      ) / 2;
+      const renderHeight = height + ROOM_SEAM_OVERLAP * 2;
+      const geometry = createWallBoxGeometry(
+        geometries,
+        renderLength,
+        renderHeight,
+        WALL_THICKNESS,
+        ...wallUvOffsets(segment, horizontalCenter, wallCenterY),
+      );
+      const mesh = new Mesh(geometry, material);
+      mesh.name = name;
+      const transform = segmentTransform(segment, height, wallCenterY);
+      mesh.position.set(
+        segment.orientation === 'x' ? horizontalCenter : transform.position[0],
+        transform.position[1],
+        segment.orientation === 'z' ? horizontalCenter : transform.position[2],
+      );
+      if (segment.orientation === 'z') mesh.rotation.y = Math.PI / 2;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      root.add(mesh);
     }
   });
   wheelhousePaneSpecs(layout).forEach((spec) =>
@@ -755,6 +839,8 @@ interface WheelhousePaneSpec {
   readonly id: string;
   readonly start: readonly [number, number];
   readonly end: readonly [number, number];
+  readonly sealStart: boolean;
+  readonly sealEnd: boolean;
 }
 
 function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpec[] {
@@ -775,36 +861,50 @@ function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpe
       id: 'front-center',
       start: [frontCenterMinX, wheelhouse.maxZ],
       end: [frontCenterMaxX, wheelhouse.maxZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'front-port-chamfer',
       start: [wheelhouse.minX, frontSideZ],
       end: [frontCenterMinX, wheelhouse.maxZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'front-starboard-chamfer',
       start: [frontCenterMaxX, wheelhouse.maxZ],
       end: [wheelhouse.maxX, frontSideZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'port-side',
       start: [wheelhouse.minX, wheelhouse.minZ],
       end: [wheelhouse.minX, portDoorMinZ],
+      sealStart: false,
+      sealEnd: false,
     },
     {
       id: 'starboard-side',
       start: [wheelhouse.maxX, frontSideZ],
       end: [wheelhouse.maxX, wheelhouse.minZ],
+      sealStart: true,
+      sealEnd: false,
     },
     {
       id: 'aft-port',
       start: [aftDoorMinX, wheelhouse.minZ],
       end: [wheelhouse.minX + WALL_THICKNESS, wheelhouse.minZ],
+      sealStart: false,
+      sealEnd: true,
     },
     {
       id: 'aft-starboard',
       start: [wheelhouse.maxX - WALL_THICKNESS, wheelhouse.minZ],
       end: [aftDoorMaxX, wheelhouse.minZ],
+      sealStart: true,
+      sealEnd: false,
     },
   ];
 }
@@ -863,18 +963,55 @@ function addWheelhousePane(
   );
   pane.rotation.y = Math.atan2(-dz, dx);
   facade.add(pane);
+  const horizontalOffset = (
+    pane.position.x * dx
+    + pane.position.z * dz
+  ) / width;
 
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:sill`,
-    size: [width, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
-    position: [0, WINDOW_SILL_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:header`,
-    size: [width, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
-    position: [0, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
+  ([
+    ['sill', WINDOW_SILL_HEIGHT + ROOM_SEAM_OVERLAP, WINDOW_SILL_HEIGHT / 2 - ROOM_SEAM_OVERLAP / 2],
+    ['header', WINDOW_HEADER_HEIGHT + ROOM_SEAM_OVERLAP, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2 + ROOM_SEAM_OVERLAP / 2],
+  ] as const).forEach(([part, height, centerY]) => {
+    const geometry = createWallBoxGeometry(
+      geometries,
+      width,
+      height,
+      WALL_THICKNESS,
+      horizontalOffset,
+      FREIGHTER_DIMENSIONS.deckY + centerY,
+    );
+    const mesh = new Mesh(geometry, materials.paintedPanel);
+    mesh.name = `${pane.name}:${part}`;
+    mesh.position.set(0, centerY, -WALL_HALF_THICKNESS);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    pane.add(mesh);
+
+    ([
+      ['start', spec.sealStart, -1],
+      ['end', spec.sealEnd, 1],
+    ] as const).forEach(([end, sealed, direction]) => {
+      if (!sealed) return;
+      const sealCenterX = direction * (width / 2 + ROOM_SEAM_OVERLAP / 2);
+      const sealGeometry = createWallBoxGeometry(
+        geometries,
+        ROOM_SEAM_OVERLAP,
+        height,
+        WALL_THICKNESS - ROOM_SEAM_OVERLAP,
+        horizontalOffset + sealCenterX,
+        FREIGHTER_DIMENSIONS.deckY + centerY,
+      );
+      const seal = new Mesh(sealGeometry, materials.paintedPanel);
+      seal.name = `${pane.name}:${part}-seal-${end}`;
+      seal.position.set(
+        sealCenterX,
+        centerY,
+        -(WALL_THICKNESS + ROOM_SEAM_OVERLAP) / 2,
+      );
+      seal.castShadow = true;
+      seal.receiveShadow = true;
+      pane.add(seal);
+    });
   });
   addBlock(pane, geometries, [], {
     name: `${pane.name}:frame-start`,
@@ -1606,6 +1743,7 @@ export function createShipGeometry(
       (zone.bounds.minZ + zone.bounds.maxZ) / 2,
     ),
   ]));
+  root.updateMatrixWorld(true);
   let disposed = false;
 
   return {
