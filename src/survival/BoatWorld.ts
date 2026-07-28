@@ -623,7 +623,11 @@ export class BoatWorld {
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
-        : instanceId === 'end-day-lantern' ? this.lantern.root : null,
+        : instanceId === 'end-day-lantern'
+          ? this.lantern.root
+          : instanceId === 'drifting-loot'
+            ? this.driftingLootPresentation?.interactionRoot() ?? null
+            : null,
     );
   }
 
@@ -663,15 +667,15 @@ export class BoatWorld {
   }
 
   retrieveDriftingLoot(): Promise<void> {
-    return this.disposed || this.driftingLootPresentation === null
-      ? Promise.resolve()
-      : this.driftingLootPresentation.retrieve();
+    if (this.disposed || this.driftingLootPresentation === null) return Promise.resolve();
+    this.toolHoverOutline.setTarget(null);
+    return this.driftingLootPresentation.retrieve();
   }
 
   recedeDriftingLoot(): Promise<void> {
-    return this.disposed || this.driftingLootPresentation === null
-      ? Promise.resolve()
-      : this.driftingLootPresentation.recede();
+    if (this.disposed || this.driftingLootPresentation === null) return Promise.resolve();
+    this.toolHoverOutline.setTarget(null);
+    return this.driftingLootPresentation.recede();
   }
 
   projectDriftingLoot(width: number, height: number): ProjectedBoatBounds | null {
@@ -816,7 +820,43 @@ export class BoatWorld {
         depth: lanternDepth,
       },
     } satisfies BoatInteractionAnchor;
-    return [...itemAnchors, fishingAnchor, repairAnchor, lanternAnchor];
+    const driftingLootProjection = this.driftingLootPresentation?.projectInteraction(
+      this.camera,
+      width,
+      height,
+    ) ?? null;
+    const driftingLootAnchor = driftingLootProjection === null
+      ? null
+      : {
+          id: 'drifting-loot',
+          label: driftingLootProjection.variant === 'barrel' ? 'BARREL' : 'CRATE',
+          description: 'Floating salvage within reach.',
+          eventChoiceId: 'retrieve',
+          itemType: null,
+          toolId: null,
+          action: null,
+          x: driftingLootProjection.bounds.x,
+          y: driftingLootProjection.bounds.y,
+          visible: driftingLootProjection.bounds.visible,
+          depleted: false,
+          remainingUses: null,
+          quantity: 1,
+          usableQuantity: 1,
+          brokenQuantity: 0,
+          backingInstanceId: null,
+          hitArea: {
+            width: Math.max(64, driftingLootProjection.bounds.width),
+            height: Math.max(64, driftingLootProjection.bounds.height),
+            depth: driftingLootProjection.bounds.depth,
+          },
+        } satisfies BoatInteractionAnchor;
+    return [
+      ...itemAnchors,
+      fishingAnchor,
+      repairAnchor,
+      lanternAnchor,
+      ...(driftingLootAnchor === null ? [] : [driftingLootAnchor]),
+    ];
   }
 
   enterFishingView(): Promise<void> {

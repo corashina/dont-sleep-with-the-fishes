@@ -30,6 +30,11 @@ export interface DriftingLootModels {
   readonly crate: Group;
 }
 
+export interface DriftingLootInteractionProjection {
+  readonly variant: DriftingLootVariant;
+  readonly bounds: ProjectedBoatBounds;
+}
+
 const FLOAT_POSITION = Object.freeze({ x: -3, y: 0.02, z: -4.2 });
 const REVEAL_OFFSET = Object.freeze({ x: -1.1, y: -0.35, z: 0.3 });
 const RECEDE_OFFSET = Object.freeze({ x: -1.8, y: -0.25, z: 1.6 });
@@ -163,6 +168,35 @@ export class DriftingLootPresentation {
       || height <= 0
     ) return null;
     return projectBoatObjectBounds(this.roots[this.activeVariant], camera, width, height);
+  }
+
+  projectInteraction(
+    camera: PerspectiveCamera,
+    width: number,
+    height: number,
+  ): DriftingLootInteractionProjection | null {
+    if (
+      this.disposed
+      || this.state !== 'floating'
+      || this.activeVariant === null
+      || width <= 0
+      || height <= 0
+    ) return null;
+    return {
+      variant: this.activeVariant,
+      bounds: projectBoatObjectBounds(
+        this.roots[this.activeVariant],
+        camera,
+        width,
+        height,
+      ),
+    };
+  }
+
+  interactionRoot(): Group | null {
+    return this.disposed || this.state !== 'floating' || this.activeVariant === null
+      ? null
+      : this.roots[this.activeVariant];
   }
 
   clear(): void {
