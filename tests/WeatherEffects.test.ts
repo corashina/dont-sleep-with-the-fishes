@@ -5,6 +5,7 @@ import {
   Object3D,
   Points,
   Scene,
+  ShaderMaterial,
   Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -85,6 +86,16 @@ describe('WeatherEffects', () => {
     const spray = layer(scene, 'weather-spray');
     const lightning = layer(scene, 'weather-lightning');
 
+    effects.setWeather('overcast');
+    expect([rain.visible, impacts.visible, mist.visible, spray.visible, lightning.visible]).toEqual(
+      [false, false, true, true, false],
+    );
+
+    effects.setWeather('squall');
+    expect([rain.visible, impacts.visible, mist.visible, spray.visible, lightning.visible]).toEqual(
+      [false, false, true, true, false],
+    );
+
     effects.setWeather('rain');
     expect([rain.visible, impacts.visible, mist.visible, spray.visible, lightning.visible]).toEqual(
       [true, true, true, true, false],
@@ -102,7 +113,9 @@ describe('WeatherEffects', () => {
     expect([rain.visible, impacts.visible, spray.visible]).toEqual([false, false, true]);
 
     effects.setWeather('fog');
-    expect([rain.visible, impacts.visible, lightning.visible]).toEqual([false, false, false]);
+    expect([rain.visible, impacts.visible, mist.visible, spray.visible, lightning.visible]).toEqual(
+      [false, false, false, false, false],
+    );
 
     effects.setWeather('calm');
     expect([rain.visible, impacts.visible, mist.visible, spray.visible, lightning.visible]).toEqual(
@@ -136,6 +149,35 @@ describe('WeatherEffects', () => {
 
     first.dispose();
     second.dispose();
+  });
+
+  it('renders the pooled opacity attribute as per-particle alpha', () => {
+    const scene = new Scene();
+    const effects = new WeatherEffects(scene);
+    const material = points(scene, 'weather-rain').material;
+
+    expect(material).toBeInstanceOf(ShaderMaterial);
+    if (!(material instanceof ShaderMaterial)) throw new Error('Expected alpha-aware shader');
+    expect(material.vertexShader).toContain('attribute float opacity');
+    expect(material.vertexShader).toContain('vParticleOpacity = opacity');
+    expect(material.fragmentShader).toContain('diffuseColor.a *= vParticleOpacity');
+
+    effects.dispose();
+  });
+
+  it('consumes skipped lightning intervals instead of replaying them on later frames', () => {
+    const scene = new Scene();
+    const effects = new WeatherEffects(scene, new ReducedMotionQuery(false));
+    effects.setWeather('thunderstorm');
+    const lightning = layer(scene, 'weather-lightning-light');
+
+    effects.update(20, 20, new Vector3());
+    expect(lightning.visible).toBe(true);
+
+    effects.update(20.01, 0.01, new Vector3());
+    expect(lightning.visible).toBe(false);
+
+    effects.dispose();
   });
 
   it('uses lower active particle counts and suppresses repeated lightning for reduced motion', () => {
