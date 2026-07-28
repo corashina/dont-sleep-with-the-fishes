@@ -1,4 +1,5 @@
 import {
+  AnimationClip,
   Box3,
   BufferGeometry,
   Group,
@@ -8,6 +9,7 @@ import {
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../game/ItemState';
 import {
   ITEM_MODEL_MAX_TOTAL_TRIANGLES,
@@ -29,6 +31,11 @@ import {
   disposeResourceSets,
 } from './SceneResources';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
+import {
+  CAPTAIN_WHISKERS_IDLE_CLIP,
+  KeyedPropAnimation,
+  type PropAnimation,
+} from './PropAnimation';
 
 type RuntimeModelId = ItemId | LifeboatEquipmentId | PracticalLightModelId;
 const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
@@ -43,8 +50,13 @@ function runtimeModelSpec(id: RuntimeModelId): RuntimeModelSpec {
   return ITEM_MODEL_SPECS[id];
 }
 
+export interface LoadedItemModel {
+  readonly scene: Group;
+  readonly animations: readonly AnimationClip[];
+}
+
 export interface ItemModelLoader {
-  load(url: string): Promise<Group>;
+  load(url: string): Promise<LoadedItemModel>;
 }
 
 export class ItemModelLoadError extends Error {
@@ -60,8 +72,9 @@ export class ItemModelLoadError extends Error {
 class GltfItemModelLoader implements ItemModelLoader {
   private readonly loader = new GLTFLoader();
 
-  async load(url: string): Promise<Group> {
-    return (await this.loader.loadAsync(url)).scene;
+  async load(url: string): Promise<LoadedItemModel> {
+    const gltf = await this.loader.loadAsync(url);
+    return { scene: gltf.scene, animations: gltf.animations };
   }
 }
 
@@ -201,7 +214,7 @@ function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSp
 }
 
 function cloneOwnedTemplate(template: Group): Group {
-  const clone = template.clone(true);
+  const clone = cloneSkeleton(template) as Group;
   clone.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.geometry = object.geometry.clone();
@@ -216,16 +229,53 @@ function cloneOwnedTemplate(template: Group): Group {
 
 interface LoadedTemplate {
   readonly root: Group;
+  readonly animations: readonly AnimationClip[];
   readonly triangles: number;
+}
+
+interface ModelTemplate {
+  readonly root: Group;
+  readonly animations: readonly AnimationClip[];
+}
+
+export interface PropPresentation {
+  readonly root: Group;
+  readonly animation: PropAnimation | null;
+  update(deltaSeconds: number): void;
+  dispose(): void;
+}
+
+function validateAnimations(
+  id: RuntimeModelId,
+  animations: readonly AnimationClip[],
+): readonly AnimationClip[] {
+  for (const clip of animations) {
+    if (
+      !clip.name
+      || !Number.isFinite(clip.duration)
+      || clip.duration <= 0
+      || clip.tracks.length === 0
+      || clip.tracks.some((track) => !track.validate())
+    ) {
+      throw new ItemModelLoadError(id, `animation clip ${clip.name || '<unnamed>'} is invalid`);
+    }
+  }
+  if (
+    id === 'captainWhiskers'
+    && !animations.some((clip) => clip.name === CAPTAIN_WHISKERS_IDLE_CLIP)
+  ) {
+    throw new ItemModelLoadError(id, `required ${CAPTAIN_WHISKERS_IDLE_CLIP} clip is missing`);
+  }
+  return animations;
 }
 
 export class PropModelLibrary {
   private disposed = false;
 
   private constructor(
-    private readonly itemTemplates: ReadonlyMap<ItemId, Group>,
-    private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group>,
-    private readonly practicalLightTemplates: ReadonlyMap<PracticalLightModelId, Group>,
+    private readonly itemTemplates: ReadonlyMap<ItemId, ModelTemplate>,
+    private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, ModelTemplate>,
+    private readonly practicalLightTemplates: ReadonlyMap<PracticalLightModelId, ModelTemplate>,
   ) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
@@ -235,12 +285,14 @@ export class PropModelLibrary {
 
     const results = await Promise.allSettled(RUNTIME_MODEL_IDS.map(async (id): Promise<LoadedTemplate> => {
       const spec = runtimeModelSpec(id);
-      const root = await loader.load(spec.url);
+      const loadedModel = await loader.load(spec.url);
+      const root = loadedModel.scene;
       try {
         const triangles = normalizeTemplate(id, root, spec);
+        const animations = validateAnimations(id, loadedModel.animations);
         const template = new Group();
         template.add(root);
-        return { root: template, triangles };
+        return { root: template, animations, triangles };
       } catch (error) {
         attemptCleanup(() => disposeRoots([root]));
         throw error;
@@ -274,14 +326,23 @@ export class PropModelLibrary {
     }
 
     return new PropModelLibrary(
-      new Map(ITEM_IDS.map((id, index) => [id, loaded[index]!.root])),
+      new Map(ITEM_IDS.map((id, index) => [id, {
+        root: loaded[index]!.root,
+        animations: loaded[index]!.animations,
+      }])),
       new Map(LIFEBOAT_EQUIPMENT_IDS.map((id, index) => [
         id,
-        loaded[ITEM_IDS.length + index]!.root,
+        {
+          root: loaded[ITEM_IDS.length + index]!.root,
+          animations: loaded[ITEM_IDS.length + index]!.animations,
+        },
       ])),
       new Map(PRACTICAL_LIGHT_MODEL_IDS.map((id, index) => [
         id,
-        loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.root,
+        {
+          root: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.root,
+          animations: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.animations,
+        },
       ])),
     );
   }
@@ -290,14 +351,51 @@ export class PropModelLibrary {
     itemTemplates: ReadonlyMap<ItemId, Group>,
     equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, Group> = new Map(),
     practicalLightTemplates: ReadonlyMap<PracticalLightModelId, Group> = new Map(),
+    itemAnimations: ReadonlyMap<ItemId, readonly AnimationClip[]> = new Map(),
   ): PropModelLibrary {
-    return new PropModelLibrary(itemTemplates, equipmentTemplates, practicalLightTemplates);
+    return new PropModelLibrary(
+      new Map([...itemTemplates].map(([id, root]) => [
+        id,
+        { root, animations: itemAnimations.get(id) ?? [] },
+      ])),
+      new Map([...equipmentTemplates].map(([id, root]) => [id, { root, animations: [] }])),
+      new Map([...practicalLightTemplates].map(([id, root]) => [id, { root, animations: [] }])),
+    );
   }
 
   create(instance: ItemInstance): Group {
     const template = this.itemTemplates.get(instance.type);
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
-    const clone = cloneOwnedTemplate(template);
+    return this.createRoot(instance, template);
+  }
+
+  createPresentation(instance: ItemInstance): PropPresentation {
+    const template = this.itemTemplates.get(instance.type);
+    if (!template) throw new Error(`Missing item model template: ${instance.type}`);
+    const root = this.createRoot(instance, template);
+    const clip = instance.type === 'captainWhiskers'
+      ? template.animations.find((candidate) => candidate.name === CAPTAIN_WHISKERS_IDLE_CLIP)
+      : undefined;
+    const animation = clip === undefined
+      ? null
+      : new KeyedPropAnimation(root, clip, instance.instanceId);
+    let disposed = false;
+    return {
+      root,
+      animation,
+      update(deltaSeconds: number): void {
+        if (!disposed) animation?.update(deltaSeconds);
+      },
+      dispose(): void {
+        if (disposed) return;
+        disposed = true;
+        animation?.dispose();
+      },
+    };
+  }
+
+  private createRoot(instance: ItemInstance, template: ModelTemplate): Group {
+    const clone = cloneOwnedTemplate(template.root);
     clone.traverse((object) => {
       if (object instanceof Mesh) object.castShadow = false;
     });
@@ -314,7 +412,7 @@ export class PropModelLibrary {
   createEquipment(id: LifeboatEquipmentId): Group {
     const template = this.equipmentTemplates.get(id);
     if (!template) throw new Error(`Missing equipment model template: ${id}`);
-    const clone = cloneOwnedTemplate(template);
+    const clone = cloneOwnedTemplate(template.root);
     clone.position.set(0, 0, 0);
     clone.quaternion.identity();
     clone.scale.set(1, 1, 1);
@@ -326,7 +424,7 @@ export class PropModelLibrary {
   createPracticalLight(id: PracticalLightModelId): Group {
     const template = this.practicalLightTemplates.get(id);
     if (!template) throw new Error(`Missing practical light model template: ${id}`);
-    const clone = cloneOwnedTemplate(template);
+    const clone = cloneOwnedTemplate(template.root);
     clone.position.set(0, 0, 0);
     clone.quaternion.identity();
     clone.scale.set(1, 1, 1);
@@ -339,9 +437,9 @@ export class PropModelLibrary {
     if (this.disposed) return;
     this.disposed = true;
     disposeRoots([
-      ...this.itemTemplates.values(),
-      ...this.equipmentTemplates.values(),
-      ...this.practicalLightTemplates.values(),
+      ...[...this.itemTemplates.values()].map(({ root }) => root),
+      ...[...this.equipmentTemplates.values()].map(({ root }) => root),
+      ...[...this.practicalLightTemplates.values()].map(({ root }) => root),
     ]);
   }
 }
