@@ -57,6 +57,7 @@ import {
 } from './helpers/propModels';
 import { loadProductionPropModels } from './helpers/productionPropModels';
 import { createTestMoonTexture } from './helpers/skyAssets';
+import { createTestShipFurniture } from './helpers/shipFurniture';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -286,6 +287,78 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('event-prop:other-people')?.visible).toBe(true);
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes deterministic drifting loot through borrowed furniture at the stern', async () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+    );
+    const sternRest = world.scene.getObjectByName('drifting-loot-stern-rest')!;
+
+    expect(sternRest.position.toArray()).toEqual([0.72, 0.58, 1.05]);
+    expect(() => world.stageEvent('drifting-loot')).toThrow(
+      'Drifting loot requires a variant.',
+    );
+    world.stageEvent('drifting-loot', 'crate');
+    expect(world.scene.getObjectByName('drifting-loot:barrel')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('drifting-loot:crate')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('event-prop:drifting-loot')).toBeUndefined();
+
+    const reveal = world.revealEvent('drifting-loot');
+    world.update(1, 0.9);
+    await reveal;
+    expect(world.projectDriftingLoot(800, 600)).toBeNull();
+
+    const retrieve = world.retrieveDriftingLoot();
+    world.update(2, 1.1);
+    await retrieve;
+    expect(world.projectDriftingLoot(800, 600)).not.toBeNull();
+
+    const recede = world.recedeDriftingLoot();
+    world.update(3, 0.8);
+    await recede;
+    expect(world.scene.getObjectByName('drifting-loot:crate')?.visible).toBe(false);
+
+    world.dispose();
+    furniture.dispose();
+    propModels.dispose();
+  });
+
+  it('does not dispose drifting-loot resources borrowed from the furniture library', () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+    );
+    const barrel = world.scene.getObjectByName('drifting-loot:barrel')!;
+    const resources = new Set<BufferGeometry | Material>();
+    barrel.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      resources.add(object.geometry);
+      (Array.isArray(object.material) ? object.material : [object.material])
+        .forEach((material) => resources.add(material));
+    });
+    const disposals = [...resources].map((resource) => vi.spyOn(resource, 'dispose'));
+
+    world.dispose();
+    world.dispose();
+
+    disposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
+    furniture.dispose();
+    disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
     propModels.dispose();
   });
 

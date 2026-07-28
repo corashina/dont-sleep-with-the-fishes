@@ -195,6 +195,7 @@ export class SurvivalPhase implements GamePhase {
           context.skyAssets.moonTexture,
           savedItems,
           context.lifeboatAssets,
+          context.shipFurniture,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -997,7 +998,7 @@ export class SurvivalPhase implements GamePhase {
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
-    this.world.stageEvent?.(event.id);
+    this.world.stageEvent?.(event.id, current.pendingDriftingLootVariant);
     this.eventPresentation = 'revealing';
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
