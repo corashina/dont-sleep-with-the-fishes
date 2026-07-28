@@ -13,10 +13,11 @@ import {
 import {
   LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
   LIFEBOAT_FLOOR_SURFACE_Y,
+  LIFEBOAT_GUNWALE_SURFACE_Y,
 } from './Lifeboat';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
-export type BoatItemSurface = 'shelf' | 'floor';
+export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale';
 export type BoatSupplyGroupId = ItemId | 'repairMaterial';
 
 export const BOAT_SUPPLY_GROUP_IDS = Object.freeze([
@@ -49,7 +50,9 @@ const restingSlot = (
 ): SlotSpec => {
   const supportY = surface === 'shelf'
     ? LIFEBOAT_DISPLAY_SHELF_SURFACE_Y
-    : LIFEBOAT_FLOOR_SURFACE_Y;
+    : surface === 'gunwale'
+      ? LIFEBOAT_GUNWALE_SURFACE_Y
+      : LIFEBOAT_FLOOR_SURFACE_Y;
   const rotation = [pitch, yaw, roll] as const;
   const modelBounds = ITEM_MODEL_SPECS[id].normalizedBounds;
   const rotatedBounds = new Box3(
@@ -96,7 +99,9 @@ const BOAT_STORAGE_SLOTS = {
   flashlight: [restingSlot('shelf', 'flashlight', 1.10, -1.74, 0.10)],
   harpoonGun: [restingSlot('floor', 'harpoonGun', 0.50, -1.05, Math.PI / 2 - 0.18)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
-  captainWhiskers: [restingSlot('floor', 'captainWhiskers', 0.92, 0.48, Math.PI, 0.6)],
+  captainWhiskers: [
+    restingSlot('gunwale', 'captainWhiskers', 1.62, 0.10, Math.PI / 2, 0.6),
+  ],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
 const BAIT_OVERFLOW_SLOT = restingSlot(
