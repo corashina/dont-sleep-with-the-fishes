@@ -53,7 +53,10 @@ import { createLifeboat, type LifeboatBuild } from './Lifeboat';
 import { LifeboatAssets } from './LifeboatAssets';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 import { createProp } from './PropFactory';
-import type { PropModelLibrary } from './PropModelLibrary';
+import type {
+  PropModelLibrary,
+  PropPresentation,
+} from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import type { ShipAssets } from './ShipAssets';
@@ -175,6 +178,7 @@ export class World {
   private readonly shipBuild: ShipBuild;
   private readonly boatAnchor: Vector3;
   private readonly shipItemScales = new Map<ItemInstanceId, number>();
+  private readonly animatedItemPresentations = new Map<ItemInstanceId, PropPresentation>();
   private readonly itemDropPosition = new Vector3();
   private readonly itemDropRotation = new Quaternion();
   private readonly shipPhysicsTranslation = new Vector3();
@@ -349,7 +353,9 @@ export class World {
       );
       instances.forEach((instance) => {
         const transform = assignments.get(instance.instanceId)!;
-        const prop = createProp(this.propModels, instance);
+        const presentation = createProp(this.propModels, instance);
+        const prop = presentation.root;
+        rollback.push(() => presentation.dispose());
         collectMeshResources(
           prop,
           this.ownedGeometries,
@@ -374,6 +380,9 @@ export class World {
         this.ship.add(prop);
         rollback.push(() => prop.removeFromParent());
         this.itemObjects.set(instance.instanceId, prop);
+        if (presentation.animation !== null) {
+          this.animatedItemPresentations.set(instance.instanceId, presentation);
+        }
         this.shipItemScales.set(instance.instanceId, transform.scale);
       });
       this.groundDropSmoke = new BoatDepositSmoke('ground-drop-smoke');
@@ -459,6 +468,7 @@ export class World {
       this.ownedMaterials.clear();
       this.ownedTextures.clear();
       this.itemObjects.clear();
+      this.animatedItemPresentations.clear();
       this.shipItemScales.clear();
       throw error;
     }
@@ -509,6 +519,9 @@ export class World {
     this.scavengePhysics?.update(this.shipPhysicsPose, delta, simulatePhysics);
     this.syncPhysicsObjects();
     this.shipBuild.updateEffects(delta, sinking.progress);
+    for (const presentation of this.animatedItemPresentations.values()) {
+      presentation.update(delta);
+    }
     this.boatDepositSmoke.update(delta);
     this.groundDropSmoke.update(delta);
 
@@ -687,6 +700,12 @@ export class World {
       () => this.groundDropSmoke.dispose(),
       () => this.physicsDebugView?.dispose(),
       () => this.scavengePhysics?.dispose(),
+      () => {
+        for (const presentation of this.animatedItemPresentations.values()) {
+          presentation.dispose();
+        }
+        this.animatedItemPresentations.clear();
+      },
       () => this.shipBuild.dispose(),
       () => disposeResourceSets(
         this.ownedGeometries,

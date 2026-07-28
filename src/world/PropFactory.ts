@@ -1,7 +1,12 @@
-import type { Group } from 'three';
 import type { ItemInstance } from '../game/ItemState';
-import type { PropModelLibrary } from './PropModelLibrary';
+import type {
+  PropModelLibrary,
+  PropPresentation,
+} from './PropModelLibrary';
 
-export function createProp(models: PropModelLibrary, instance: ItemInstance): Group {
-  return models.create(instance);
+export function createProp(
+  models: PropModelLibrary,
+  instance: ItemInstance,
+): PropPresentation {
+  return models.createPresentation(instance);
 }

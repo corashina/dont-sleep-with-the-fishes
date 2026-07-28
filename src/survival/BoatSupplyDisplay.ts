@@ -23,7 +23,10 @@ import {
   boatSupplyTransform,
   type BoatSupplyGroupId,
 } from '../world/BoatStorage';
-import type { PropModelLibrary } from '../world/PropModelLibrary';
+import type {
+  PropModelLibrary,
+  PropPresentation,
+} from '../world/PropModelLibrary';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
 import {
@@ -57,6 +60,7 @@ interface MutableRecord {
 
 interface CopyBinding {
   readonly root: Group;
+  readonly presentation: PropPresentation | null;
   readonly materials: readonly ConditionMaterialBinding[];
   instanceId: ItemInstanceId | null;
   condition: ItemCondition;
@@ -254,9 +258,10 @@ export class BoatSupplyDisplay {
             instanceId: `${groupId}-${index + 1}` as ItemInstanceId,
             type: groupId,
           };
-        const copy = groupId === 'repairMaterial'
-          ? createRepairMaterialBundle(index)
-          : propModels.create(instance!);
+        const presentation = groupId === 'repairMaterial'
+          ? null
+          : propModels.createPresentation(instance!);
+        const copy = presentation?.root ?? createRepairMaterialBundle(index);
         const transform = boatSupplyTransform(groupId, index);
         copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
         copy.position.copy(transform.position);
@@ -267,6 +272,7 @@ export class BoatSupplyDisplay {
         collectMeshResources(copy, this.ownedGeometries, this.ownedMaterials);
         copies.push({
           root: copy,
+          presentation,
           materials: createConditionBindings(copy, this.ownedMaterials),
           instanceId: instance?.instanceId ?? null,
           condition: 'lost',
@@ -364,8 +370,12 @@ export class BoatSupplyDisplay {
   }
 
   update(deltaSeconds: number): void {
+    if (this.disposed) return;
+    for (const copies of this.copiesById.values()) {
+      for (const copy of copies) copy.presentation?.update(deltaSeconds);
+    }
     const animation = this.activeAnimation;
-    if (animation === null || this.disposed) return;
+    if (animation === null) return;
     animation.elapsed = Math.min(
       animation.duration,
       animation.elapsed + Math.max(0, deltaSeconds),
@@ -389,6 +399,9 @@ export class BoatSupplyDisplay {
     this.hoverOutline.dispose();
     this.cancelActiveAnimation();
     this.disposed = true;
+    for (const copies of this.copiesById.values()) {
+      for (const copy of copies) copy.presentation?.dispose();
+    }
     for (const record of this.recordsById.values()) record.root.removeFromParent();
     disposeResourceSets(
       this.ownedGeometries,

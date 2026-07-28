@@ -5,6 +5,7 @@ import type { PracticalLightModelId } from '../../src/world/practicalLightModelM
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {
+  const staticItemCount = ITEM_IDS.filter((id) => id !== 'captainWhiskers').length;
   const template = (id: string, index: number): Group => {
     const root = new Group();
     const model = new Group();
@@ -26,11 +27,11 @@ export function createTestPropModels(): PropModelLibrary {
     template(id, index),
   ]));
   const equipmentTemplates = new Map<LifeboatEquipmentId, Group>([
-    ['fishingRod', template('fishingRod', ITEM_IDS.length)],
+    ['fishingRod', template('fishingRod', staticItemCount)],
   ]);
   const practicalLightTemplates = new Map<PracticalLightModelId, Group>([
-    ['lantern', template('lantern', ITEM_IDS.length + 1)],
-    ['ceilingLight', template('ceilingLight', ITEM_IDS.length + 2)],
+    ['lantern', template('lantern', staticItemCount + 1)],
+    ['ceilingLight', template('ceilingLight', staticItemCount + 2)],
   ]);
 
   return PropModelLibrary.fromTemplatesForTest(

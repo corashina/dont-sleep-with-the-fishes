@@ -18,6 +18,7 @@ function stablePhase(instanceId: string): number {
 }
 
 function visibleInHierarchy(root: Group): boolean {
+  if (root.parent === null) return false;
   let current: Object3D | null = root;
   while (current !== null) {
     if (!current.visible) return false;
