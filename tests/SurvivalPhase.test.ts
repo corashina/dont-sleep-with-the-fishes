@@ -2127,7 +2127,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(setEventSelection.mock.calls[1]![1]).toEqual([
-      { id: 'retrieve', label: 'Retrieve It', unavailableReason: null },
+      { id: 'retrieve', label: 'Retrieve It — 3 Energy', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -2259,7 +2259,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setEventSelection.mock.calls[0]![1]).toEqual([
       {
         id: 'retrieve',
-        label: 'Retrieve It',
+        label: 'Retrieve It — 3 Energy',
         unavailableReason: 'Requires 3 energy; you have 2.',
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
