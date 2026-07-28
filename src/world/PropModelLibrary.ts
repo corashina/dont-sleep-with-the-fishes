@@ -133,6 +133,8 @@ function validateGeometry(id: RuntimeModelId, geometry: BufferGeometry): number 
     throw new ItemModelLoadError(id, 'mesh element count does not describe complete triangles');
   }
 
+  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
+
   return geometryTriangles(geometry);
 }
 

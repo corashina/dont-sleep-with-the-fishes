@@ -24,7 +24,6 @@ import {
   InteractionSystem,
   type ContextAction,
 } from '../interaction/InteractionSystem';
-import { DEFAULT_WAVES, sampleWaveField } from '../ocean/WaveField';
 import { PlayerController } from '../player/PlayerController';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
 import { projectScreenBounds } from '../rendering/projectScreenBounds';
@@ -33,6 +32,7 @@ import {
   type ScavengeItemTooltip,
   type ScavengePresentation,
 } from '../ui/GameUI';
+import type { PresentationWeatherId } from '../weather/presentationWeather';
 import { World } from '../world/World';
 import { commitBoatDeposit } from './scavengeDeposit';
 
@@ -72,6 +72,7 @@ export class ScavengePhase implements GamePhase {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private overlayActive = false;
+  private presentationWeather: PresentationWeatherId = 'calm';
 
   constructor(
     private readonly context: PhaseContext,
@@ -79,7 +80,7 @@ export class ScavengePhase implements GamePhase {
     private readonly onRestart: () => void,
   ) {
     this.scene.add(context.camera);
-    this.ui = new GameUI(context.mount, context.visualQuality);
+    this.ui = new GameUI(context.mount);
     const instances = createScavengeItemInstances();
     this.session = new ScavengeSession(instances);
     this.world = new World(
@@ -181,10 +182,7 @@ export class ScavengePhase implements GamePhase {
           synchronizeElapsed();
           updateWorld(deltaSeconds);
         },
-        move: () => {
-          const shake = Math.sin(this.elapsed * 37) * sinking.cameraShake;
-          this.player.update(deltaSeconds, this.input, shake);
-        },
+        move: () => this.player.update(deltaSeconds, this.input),
         afterMove: () => {
           if (synchronizeElapsed()) updateWorld(0);
         },
@@ -197,8 +195,7 @@ export class ScavengePhase implements GamePhase {
       synchronizeElapsed();
       updateWorld(deltaSeconds);
       if (this.session.snapshot().status === 'running') {
-        const shake = Math.sin(this.elapsed * 37) * sinking.cameraShake;
-        this.player.updatePassive(deltaSeconds, shake);
+        this.player.updatePassive(deltaSeconds);
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
       }
       this.input.consumeLook();
@@ -213,6 +210,7 @@ export class ScavengePhase implements GamePhase {
     const visibleItemTooltip = stillActive ? this.itemTooltip : null;
     this.ui.setPrompt(visibleItemTooltip === null && stillActive ? this.contextAction.prompt : '');
     this.ui.setItemTooltip?.(visibleItemTooltip);
+    this.ui.setPickupPointer?.(stillActive && this.contextAction.type === 'pickUp');
 
     const previousTerminalPhase = this.terminalPresentation.phase;
     this.terminalPresentation = advanceTerminalPresentation(
@@ -254,6 +252,15 @@ export class ScavengePhase implements GamePhase {
     ) {
       void this.requestPointerLock();
     }
+  }
+
+  setWeatherOverride(id: PresentationWeatherId | null): void {
+    this.presentationWeather = id ?? 'calm';
+    this.world.setPresentationWeather(this.presentationWeather);
+  }
+
+  getPresentationWeather(): PresentationWeatherId {
+    return this.presentationWeather;
   }
 
   render(): void {
@@ -364,7 +371,7 @@ export class ScavengePhase implements GamePhase {
     this.carry.update(
       deltaSeconds,
       boatBox,
-      (x, z) => sampleWaveField(DEFAULT_WAVES, this.worldTime, x, z, amplitudeScale).height,
+      (x, z) => this.world.sampleFlightWaterHeight(this.worldTime, x, z, amplitudeScale),
       {
         onSaved: (instance) => {
           if (!this.session.saveCarried()) return;

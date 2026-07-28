@@ -5,6 +5,13 @@ export interface CollisionBox {
   maxY: number;
   minZ: number;
   maxZ: number;
+  orientedFootprint?: {
+    readonly centerX: number;
+    readonly centerZ: number;
+    readonly halfWidth: number;
+    readonly halfDepth: number;
+    readonly rotationY: number;
+  };
 }
 
 export interface CollisionArc {
@@ -43,12 +50,41 @@ export function segmentBoxInterval(
   end: LocalPlayerPosition,
   box: CollisionBox,
 ): SegmentBoxInterval | undefined {
+  const footprint = box.orientedFootprint;
+  const cosine = footprint ? Math.cos(footprint.rotationY) : 1;
+  const sine = footprint ? Math.sin(footprint.rotationY) : 0;
+  const startOffsetX = footprint ? start.x - footprint.centerX : start.x;
+  const startOffsetZ = footprint ? start.z - footprint.centerZ : start.z;
+  const endOffsetX = footprint ? end.x - footprint.centerX : end.x;
+  const endOffsetZ = footprint ? end.z - footprint.centerZ : end.z;
+  const localStartX = footprint
+    ? cosine * startOffsetX - sine * startOffsetZ
+    : start.x;
+  const localStartZ = footprint
+    ? sine * startOffsetX + cosine * startOffsetZ
+    : start.z;
+  const localEndX = footprint
+    ? cosine * endOffsetX - sine * endOffsetZ
+    : end.x;
+  const localEndZ = footprint
+    ? sine * endOffsetX + cosine * endOffsetZ
+    : end.z;
   let minimum = 0;
   let maximum = 1;
   for (const [startValue, delta, min, max] of [
-    [start.x, end.x - start.x, box.minX, box.maxX],
+    [
+      localStartX,
+      localEndX - localStartX,
+      footprint ? -footprint.halfWidth : box.minX,
+      footprint ? footprint.halfWidth : box.maxX,
+    ],
     [start.y, end.y - start.y, box.minY, box.maxY],
-    [start.z, end.z - start.z, box.minZ, box.maxZ],
+    [
+      localStartZ,
+      localEndZ - localStartZ,
+      footprint ? -footprint.halfDepth : box.minZ,
+      footprint ? footprint.halfDepth : box.maxZ,
+    ],
   ] as const) {
     if (Math.abs(delta) < 1e-9) {
       if (startValue < min || startValue > max) return undefined;
@@ -65,14 +101,46 @@ export function segmentBoxInterval(
     : undefined;
 }
 
-function circleOverlapsFootprint(
+export function circleOverlapsCollisionFootprint(
   position: Pick<LocalPlayerPosition, 'x' | 'z'>,
   radius: number,
   box: CollisionBox,
 ): boolean {
+  const footprint = box.orientedFootprint;
+  if (footprint) {
+    const cosine = Math.cos(footprint.rotationY);
+    const sine = Math.sin(footprint.rotationY);
+    const offsetX = position.x - footprint.centerX;
+    const offsetZ = position.z - footprint.centerZ;
+    const localX = cosine * offsetX - sine * offsetZ;
+    const localZ = sine * offsetX + cosine * offsetZ;
+    const closestX = Math.max(-footprint.halfWidth, Math.min(localX, footprint.halfWidth));
+    const closestZ = Math.max(-footprint.halfDepth, Math.min(localZ, footprint.halfDepth));
+    return (localX - closestX) ** 2 + (localZ - closestZ) ** 2 < radius ** 2;
+  }
   const closestX = Math.max(box.minX, Math.min(position.x, box.maxX));
   const closestZ = Math.max(box.minZ, Math.min(position.z, box.maxZ));
   return (position.x - closestX) ** 2 + (position.z - closestZ) ** 2 < radius ** 2;
+}
+
+export function pointInsideCollisionBox(
+  position: LocalPlayerPosition,
+  box: CollisionBox,
+): boolean {
+  if (position.y < box.minY || position.y > box.maxY) return false;
+  const footprint = box.orientedFootprint;
+  if (!footprint) {
+    return position.x >= box.minX && position.x <= box.maxX
+      && position.z >= box.minZ && position.z <= box.maxZ;
+  }
+  const cosine = Math.cos(footprint.rotationY);
+  const sine = Math.sin(footprint.rotationY);
+  const offsetX = position.x - footprint.centerX;
+  const offsetZ = position.z - footprint.centerZ;
+  const localX = cosine * offsetX - sine * offsetZ;
+  const localZ = sine * offsetX + cosine * offsetZ;
+  return Math.abs(localX) <= footprint.halfWidth
+    && Math.abs(localZ) <= footprint.halfDepth;
 }
 
 function bodyOverlapsBox(
@@ -84,7 +152,7 @@ function bodyOverlapsBox(
   const feetY = eyeHeight - PLAYER_BODY_HEIGHT;
   return feetY < box.maxY
     && eyeHeight > box.minY
-    && circleOverlapsFootprint(position, radius, box);
+    && circleOverlapsCollisionFootprint(position, radius, box);
 }
 
 export function findSupportEyeHeight(
@@ -95,7 +163,7 @@ export function findSupportEyeHeight(
 ): number {
   const deckFeetY = deckEyeHeight - PLAYER_BODY_HEIGHT;
   const candidates = boxes
-    .filter((box) => circleOverlapsFootprint(position, radius, box))
+    .filter((box) => circleOverlapsCollisionFootprint(position, radius, box))
     .filter((box) => {
       const supportHeight = box.maxY - deckFeetY;
       return supportHeight > SUPPORT_EPSILON
@@ -225,6 +293,7 @@ function resolveBoxAxisInPlace(
 ): void {
   const perpendicularAxis = axis === 'x' ? 'z' : 'x';
   for (const box of boxes) {
+    if (box.orientedFootprint) continue;
     const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
     const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
     if (!verticallyOverlaps) continue;
@@ -252,6 +321,69 @@ function resolveBoxAxisInPlace(
   }
 }
 
+function resolveOrientedBoxMovementInPlace(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  box: CollisionBox,
+): void {
+  const footprint = box.orientedFootprint;
+  if (!footprint) return;
+  const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
+  if (playerFeetY >= box.maxY || result.y <= box.minY) return;
+
+  const cosine = Math.cos(footprint.rotationY);
+  const sine = Math.sin(footprint.rotationY);
+  const currentOffsetX = current.x - footprint.centerX;
+  const currentOffsetZ = current.z - footprint.centerZ;
+  const resultOffsetX = result.x - footprint.centerX;
+  const resultOffsetZ = result.z - footprint.centerZ;
+  const currentLocalX = cosine * currentOffsetX - sine * currentOffsetZ;
+  const currentLocalZ = sine * currentOffsetX + cosine * currentOffsetZ;
+  let resultLocalX = cosine * resultOffsetX - sine * resultOffsetZ;
+  const desiredLocalZ = sine * resultOffsetX + cosine * resultOffsetZ;
+
+  const zDistance = currentLocalZ < -footprint.halfDepth
+    ? -footprint.halfDepth - currentLocalZ
+    : Math.max(0, currentLocalZ - footprint.halfDepth);
+  if (zDistance < radius) {
+    const radiusAtX = Math.sqrt(radius * radius - zDistance * zDistance);
+    const lowerBoundary = -footprint.halfWidth - radiusAtX;
+    const upperBoundary = footprint.halfWidth + radiusAtX;
+    if (currentLocalX <= -footprint.halfWidth
+      && resultLocalX >= currentLocalX
+      && resultLocalX > lowerBoundary) {
+      resultLocalX = lowerBoundary;
+    } else if (currentLocalX >= footprint.halfWidth
+      && resultLocalX <= currentLocalX
+      && resultLocalX < upperBoundary) {
+      resultLocalX = upperBoundary;
+    }
+  }
+
+  let resultLocalZ = desiredLocalZ;
+  const xDistance = resultLocalX < -footprint.halfWidth
+    ? -footprint.halfWidth - resultLocalX
+    : Math.max(0, resultLocalX - footprint.halfWidth);
+  if (xDistance < radius) {
+    const radiusAtZ = Math.sqrt(radius * radius - xDistance * xDistance);
+    const lowerBoundary = -footprint.halfDepth - radiusAtZ;
+    const upperBoundary = footprint.halfDepth + radiusAtZ;
+    if (currentLocalZ <= -footprint.halfDepth
+      && resultLocalZ >= currentLocalZ
+      && resultLocalZ > lowerBoundary) {
+      resultLocalZ = lowerBoundary;
+    } else if (currentLocalZ >= footprint.halfDepth
+      && resultLocalZ <= currentLocalZ
+      && resultLocalZ < upperBoundary) {
+      resultLocalZ = upperBoundary;
+    }
+  }
+
+  result.x = footprint.centerX + cosine * resultLocalX + sine * resultLocalZ;
+  result.z = footprint.centerZ - sine * resultLocalX + cosine * resultLocalZ;
+}
+
 function resolveBoxMovementInPlace(
   current: LocalPlayerPosition,
   result: LocalPlayerPosition,
@@ -262,6 +394,11 @@ function resolveBoxMovementInPlace(
   result.z = current.z;
   resolveBoxAxisInPlace(current, result, radius, boxes, 'x');
   result.z = desiredZ;
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'z');
+  for (const box of boxes) {
+    resolveOrientedBoxMovementInPlace(current, result, radius, box);
+  }
+  resolveBoxAxisInPlace(current, result, radius, boxes, 'x');
   resolveBoxAxisInPlace(current, result, radius, boxes, 'z');
 }
 

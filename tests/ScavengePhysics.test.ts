@@ -13,10 +13,15 @@ import {
 } from '../src/ocean/WaveField';
 import {
   ScavengePhysics,
+  collisionArcToCuboids,
   collisionBoxToCuboid,
+  createScavengeStaticCuboids,
   type PhysicsPose,
 } from '../src/physics/ScavengePhysics';
 import type { PhysicsRuntime } from '../src/physics/PhysicsRuntime';
+import { createShipGeometry } from '../src/world/ShipGeometry';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
+import { createShipMaterials } from '../src/world/ShipMaterials';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const identityPose = (): PhysicsPose => ({
@@ -24,8 +29,16 @@ const identityPose = (): PhysicsPose => ({
   rotation: { x: 0, y: 0, z: 0, w: 1 },
 });
 
+const testRailColliders = [
+  { minX: -9.25, maxX: -9, minY: 2.22, maxY: 4.22, minZ: -12, maxZ: 12 },
+  { minX: 9, maxX: 9.25, minY: 2.22, maxY: 4.22, minZ: -12, maxZ: 12 },
+  { minX: -9, maxX: 9, minY: 2.22, maxY: 4.22, minZ: -12.25, maxZ: -12 },
+  { minX: -9, maxX: 9, minY: 2.22, maxY: 4.22, minZ: 12, maxZ: 12.25 },
+] as const;
+
 const config = () => ({
-  colliders: [],
+  colliders: testRailColliders,
+  arcColliders: [],
   safeBounds: { minX: -9, maxX: 9, minZ: -12, maxZ: 12 },
   deckY: 2.22,
   shipWidth: 20,
@@ -48,6 +61,56 @@ describe('ScavengePhysics', () => {
       center: { x: 1, y: 2, z: -3 },
       halfExtents: { x: 3, y: 1, z: 2 },
     });
+  });
+
+  it('preserves an oriented collision box as one rotated cuboid', () => {
+    const cuboid = collisionBoxToCuboid({
+      minX: -1.5,
+      maxX: 2.5,
+      minY: 1,
+      maxY: 3,
+      minZ: -2.5,
+      maxZ: 1.5,
+      orientedFootprint: {
+        centerX: 0.5,
+        centerZ: -0.5,
+        halfWidth: 2,
+        halfDepth: 0.1,
+        rotationY: Math.PI / 4,
+      },
+    });
+
+    expect(cuboid.center).toEqual({ x: 0.5, y: 2, z: -0.5 });
+    expect(cuboid.halfExtents).toEqual({ x: 2, y: 1, z: 0.1 });
+    expect(cuboid.rotation).toEqual({
+      x: 0,
+      y: Math.sin(Math.PI / 8),
+      z: 0,
+      w: Math.cos(Math.PI / 8),
+    });
+  });
+
+  it('uses the authored rail colliders without adding a second perimeter boundary', () => {
+    const cuboids = createScavengeStaticCuboids(config());
+    expect(cuboids).toHaveLength(1 + testRailColliders.length);
+    expect(cuboids.slice(1)).toEqual(testRailColliders.map(collisionBoxToCuboid));
+  });
+
+  it('converts a curved end rail into eight rotated physics segments', () => {
+    const cuboids = collisionArcToCuboids({
+      centerX: 0,
+      centerZ: 22,
+      radiusX: 9.725,
+      radiusZ: 5.325,
+      end: 'bow',
+      thickness: 0.25,
+      minY: 2.22,
+      maxY: 3.22,
+    });
+    expect(cuboids).toHaveLength(8);
+    expect(cuboids.every(({ rotation }) => rotation !== undefined)).toBe(true);
+    expect(cuboids[0]!.center.x).toBeGreaterThan(9);
+    expect(cuboids[3]!.center.z).toBeGreaterThan(27);
   });
 
   it('rejects non-positive collider extents', () => {
@@ -121,6 +184,8 @@ describe('ScavengePhysics', () => {
   });
 
   it('slides strongly but remains contained under the real scavenging wave field', () => {
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
     const sample = (time: number, x: number, z: number, scale: number) =>
       sampleWaveField(DEFAULT_WAVES, time, x, z, scale);
     const sampleInto = (
@@ -140,11 +205,12 @@ describe('ScavengePhysics', () => {
     };
     const safeBounds = { minX: -9.65, maxX: 9.65, minZ: -26.7, maxZ: 26.7 };
     const physics = new ScavengePhysics(runtime, {
-      colliders: [],
+      colliders: ship.shellColliders,
+      arcColliders: ship.arcColliders,
       safeBounds,
-      deckY: 2.22,
-      shipWidth: 20,
-      shipLength: 55,
+      deckY: FREIGHTER_DIMENSIONS.deckY,
+      shipWidth: FREIGHTER_DIMENSIONS.width,
+      shipLength: FREIGHTER_DIMENSIONS.length,
       initialShipPose: pose,
       barrelSpawns: config().barrelSpawns,
     });
@@ -185,6 +251,8 @@ describe('ScavengePhysics', () => {
     expect(maxZ).toBeLessThan(safeBounds.maxZ);
     expect(physics.recoveryCountForTest).toBe(0);
     physics.dispose();
+    ship.disposeGeometry();
+    materials.dispose();
   });
 
   it('freezes when inactive and disposes repeatedly', () => {

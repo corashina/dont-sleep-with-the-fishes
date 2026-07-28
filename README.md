@@ -44,7 +44,7 @@ bun install
 bun run dev
 ```
 
-Open the local URL printed by Vite and select **Begin Evacuation**. The scavenging phase uses pointer lock; the survival phase releases it for a fixed seated view and mouse-accessible controls.
+Open the local URL printed by Vite and select **Start**. The scavenging phase uses pointer lock; the survival phase releases it for a fixed seated view and mouse-accessible controls.
 
 ## Controls
 
@@ -69,11 +69,16 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | `Tab` / `Shift+Tab` | Move forward or backward through controls |
 | `Enter` / `Space` | Activate the focused control; while fishing, cast at the centered water point or reel during a bite |
 | `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |
-| `1`–`7` | Fish, dive, eat, repair, treat, rest, or end the day |
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
-| Bottom-right End Day button / `7` | Fade into sleep and advance to an event or quiet night |
+| Boat lantern | End the day and fade into an event or quiet night |
 
-Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, and purpose. Groups mapped to daytime actions also show their numeric shortcut, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 1 Energy** action in every run, and shortcut `1` activates the same action. **Dive** still requires usable recovered Scuba Gear; without it, shortcut `2` does nothing. Other unavailable actions remain visible and explain what is missing. Number shortcuts only activate legal actions, and event or outcome dialogs keep keyboard focus until they are resolved.
+### Weather debug control
+
+Press <code>`</code> (backquote) in either scavenging or lifeboat survival to open **System Tuning**, then select a presentation weather profile. The menu offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. A selection is a forced visual override: it takes precedence over event weather, carries across the scavenging-to-survival handoff, and remains active until the page reloads.
+
+Normal gameplay is always **Calm**. Only five authored events change presentation weather while they are staged and resolved: **Shower Night → Rain**, **Windy Night → Wind**, **Thunderstorm → Thunderstorm**, **Restless Waves → Waves**, and **Man in the Fog → Fog**. All other events return to Calm after their presentation ends.
+
+Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, purpose, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 1 Energy** action in every run. **Dive** still requires usable recovered Scuba Gear. Other unavailable actions remain visible and explain what is missing. Event and outcome dialogs keep keyboard focus until they are resolved.
 
 Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
 
@@ -98,7 +103,7 @@ Health, Food, Energy, and Hull remain visible as condition meters. Food is the i
 
 Day and night events fade to black for 2.5 seconds, stage the committed event while covered, and fade into the event over 2.5 seconds. Original procedural placeholder tableaus depict the bottle, drifting cargo, stern fish, chest, island, trader skiff, reaching hand, cargo vessel, and Death Stare fish without reproducing story artwork. The event title appears at the top of the scene; green, yellow, or red title color communicates its risk. Suitable recovered physical items become selectable after the reveal, contextual decisions appear as nearby buttons, and **Endure** appears only when no physical or authored contextual response is available. A one-use event supply is consumed only when its authored outcome spends it.
 
-End Day uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
+Clicking the physical boat lantern ends the day and uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 

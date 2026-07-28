@@ -153,9 +153,9 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
       title: 'Ski Goggles', creator: 'iPoly3D', license: 'CC0 1.0',
       sha256: 'B6B77A97AA72EF36815192BFD274FC0F79422F121BD7AE736EAFDDA349450CB9',
       sourceTriangles: 636, downloadedOn: '2026-07-26',
-      translation: [0.25, -0.3, 0.18],
-      rotation: [0.7071067811865476, 0, 0, 0.7071067811865476],
-      scale: [0.22, 0.22, 0.22],
+      translation: [0.00025044, 0.185, -0.06384998],
+      rotation: [1, 0, 0, 0],
+      scale: [0.16, 0.16, 0.16],
     }),
   ]),
   anchor: source({

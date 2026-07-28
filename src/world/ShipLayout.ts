@@ -119,6 +119,8 @@ export interface ShipRoomDecorationSpec {
 export interface ShipSailSpec {
   readonly id: ShipSailId;
   readonly kind: 'boom' | 'stay';
+  readonly furled: boolean;
+  readonly rotationY: number;
   readonly topY: number;
   readonly footY: number;
   readonly clewZ: number;
@@ -131,16 +133,14 @@ export interface ShipMastSpec {
   readonly height: number;
   readonly baseDiameter: number;
   readonly boomLength: number;
-  readonly foreStayAnchorZ: number;
-  readonly aftStayAnchorZ: number;
-  readonly shroudAnchorX: number;
+  readonly stays: readonly ShipStaySpec[];
   readonly sails: readonly ShipSailSpec[];
 }
 
 export const SHIP_SAIL_CLOTH_CLEARANCE_Y = 5.2;
 export const SHIP_SAIL_CLOTH_MIN_Y = 5.21;
 export const SHIP_SAIL_TOP_OFFSET = 0.25;
-export const SHIP_SAIL_MAX_LENGTH = 4.6;
+export const SHIP_SAIL_MAX_LENGTH = 8.6;
 
 export interface ShipSailGeometryLimits {
   readonly top: number;
@@ -333,6 +333,12 @@ const wheelhousePolygon = [
 const storageBounds = rect(-5.75, 5.75, -17.4, -10.65);
 const lifeboatBounds = rect(6.8, 9.6, -2, 2);
 const cargoBounds = rect(-9.6, 9.6, -27.1, 27.1);
+const DECK_HATCH_WIDTH = 1.45;
+const DECK_HATCH_DEPTH = 1.8;
+const DECK_HATCH_Z = -7;
+const deckHatchHalfWidthWithClearance = DECK_HATCH_WIDTH / 2 + PLAYER_LAYOUT_RADIUS;
+const deckHatchHalfDepthWithClearance = DECK_HATCH_DEPTH / 2 + PLAYER_LAYOUT_RADIUS;
+const deckHatchBypassOuterX = deckHatchHalfWidthWithClearance + 2.5;
 
 const doors: readonly ShipDoorSpec[] = [
   sideDoor('cabin-port-door', 'crewCabin', 'port', -5.75, 7.25, 2.6),
@@ -373,7 +379,7 @@ function boxAgainstSideWall(
   const projectedWidth = unscaledWidth * scale[0];
   return {
     position: [
-      wallCenterX + outwardDirection * (SHIP_ROOM_WALL_THICKNESS / 2 + projectedWidth / 2),
+      wallCenterX + outwardDirection * projectedWidth / 2,
       z,
     ],
     rotationY: 0,
@@ -612,23 +618,23 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   ...([
     [
       'cargo-crate-forward-port',
-      crewBounds.minX + SHIP_ROOM_WALL_THICKNESS / 2 + 1.35 / 2,
-      crewBounds.minZ - SHIP_ROOM_WALL_THICKNESS / 2 - 1.15 / 2,
+      crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.35 / 2,
+      crewBounds.minZ - 1.15 / 2,
     ],
     [
       'cargo-crate-forward-starboard',
-      crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS / 2 - 1.35 / 2,
-      crewBounds.minZ - SHIP_ROOM_WALL_THICKNESS / 2 - 1.15 / 2,
+      crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.35 / 2,
+      crewBounds.minZ - 1.15 / 2,
     ],
     [
       'cargo-crate-aft-port',
-      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS / 2 + 1.35 / 2,
-      storageBounds.maxZ + SHIP_ROOM_WALL_THICKNESS / 2 + 1.15 / 2,
+      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.35 / 2,
+      storageBounds.maxZ + 1.15 / 2,
     ],
     [
       'cargo-crate-aft-starboard',
-      storageBounds.maxX - SHIP_ROOM_WALL_THICKNESS / 2 - 1.35 / 2,
-      storageBounds.maxZ + SHIP_ROOM_WALL_THICKNESS / 2 + 1.15 / 2,
+      storageBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.35 / 2,
+      storageBounds.maxZ + 1.15 / 2,
     ],
   ] as const).map(([id, x, z]) => placement(
     id, 'cargoCrate', 'cargoDeck', [x, 2.22, z], 0, [1.35, 1.05, 1.15],
@@ -850,7 +856,10 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   lanes: [
     { id: 'port-exterior-main', className: 'primary', clearWidth: 3.275, bounds: rect(-9.575, -6.3, -21.8, 21.8) },
     { id: 'starboard-exterior-main', className: 'primary', clearWidth: 3.275, bounds: rect(6.3, 9.575, -21.8, 21.8) },
-    { id: 'cargo-aft-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, -10.65, -1.6) },
+    { id: 'cargo-aft-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, -10.65, DECK_HATCH_Z - DECK_HATCH_DEPTH / 2) },
+    { id: 'cargo-aft-longitudinal-forward', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, DECK_HATCH_Z + DECK_HATCH_DEPTH / 2, -1.6) },
+    { id: 'deck-hatch-port-bypass', className: 'primary', clearWidth: 2.5, bounds: rect(-deckHatchBypassOuterX, -deckHatchHalfWidthWithClearance, DECK_HATCH_Z - deckHatchHalfDepthWithClearance, DECK_HATCH_Z + deckHatchHalfDepthWithClearance) },
+    { id: 'deck-hatch-starboard-bypass', className: 'primary', clearWidth: 2.5, bounds: rect(deckHatchHalfWidthWithClearance, deckHatchBypassOuterX, DECK_HATCH_Z - deckHatchHalfDepthWithClearance, DECK_HATCH_Z + deckHatchHalfDepthWithClearance) },
     { id: 'cargo-forward-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, 1.6, 4.5) },
     { id: 'mainmast-port-bypass', className: 'primary', clearWidth: 2.2, bounds: rect(-2.7, -0.5, -1.6, 1.6) },
     { id: 'mainmast-starboard-bypass', className: 'primary', clearWidth: 2.2, bounds: rect(0.5, 2.7, -1.6, 1.6) },
@@ -866,10 +875,10 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   details,
   deckHatch: {
     id: 'deck-hatch',
-    position: [3.8, FREIGHTER_DIMENSIONS.deckY, -7],
+    position: [0, FREIGHTER_DIMENSIONS.deckY, DECK_HATCH_Z],
     rotationY: 0,
-    size: [1.45, 0.18, 1.8],
-    colliderSize: [1.45, 0.18, 1.8],
+    size: [DECK_HATCH_WIDTH, 0.18, DECK_HATCH_DEPTH],
+    colliderSize: [DECK_HATCH_WIDTH, 0.18, DECK_HATCH_DEPTH],
   },
   balconies: [
     {
@@ -912,15 +921,48 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   rigging: { masts: [{
     id: 'mainmast',
     position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
-    height: 11.5,
+    height: 14.5,
     baseDiameter: 0.72,
-    boomLength: 7.5,
-    foreStayAnchorZ: 6.2,
-    aftStayAnchorZ: -8,
-    shroudAnchorX: 3.4,
+    boomLength: 17.2,
+    stays: [
+      {
+        id: 'fore-port',
+        anchor: [crewBounds.minX + 0.42, 3.72, crewBounds.minZ + 0.42],
+      },
+      {
+        id: 'fore-starboard',
+        anchor: [crewBounds.maxX - 0.42, 3.72, crewBounds.minZ + 0.42],
+      },
+      {
+        id: 'aft-port',
+        anchor: [storageBounds.minX + 0.42, 3.72, storageBounds.maxZ - 0.42],
+      },
+      {
+        id: 'aft-starboard',
+        anchor: [storageBounds.maxX - 0.42, 3.72, storageBounds.maxZ - 0.42],
+      },
+    ],
     sails: [
-      { id: 'mainsail', kind: 'boom', topY: 10.8, footY: 5.35, clewZ: -7.5, billow: 0.32 },
-      { id: 'staysail', kind: 'stay', topY: 10.2, footY: 5.35, clewZ: 5.5, billow: 0.22 },
+      {
+        id: 'mainsail',
+        kind: 'boom',
+        furled: true,
+        rotationY: Math.PI / 2,
+        topY: 14.1,
+        footY: 5.85,
+        clewZ: -8.6,
+        billow: 0.85,
+      },
+      {
+        id: 'staysail',
+        kind: 'stay',
+        furled: true,
+        rotationY: Math.PI / 2,
+        topY: 13.6,
+        footY: 5.85,
+        clewZ: 8.6,
+        billow: 0.72,
+      },
     ],
   }] },
   targets: navigationTargets(doors, furniture),
@@ -1302,7 +1344,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   });
   const crewCabin = layout.zones.find(({ id }) => id === 'crewCabin');
   const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse');
-  if (!crewCabin || !wheelhouse
+  const storageWorkroom = layout.zones.find(({ id }) => id === 'storageWorkroom');
+  if (!crewCabin || !wheelhouse || !storageWorkroom
     || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
     throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
   }
@@ -1455,12 +1498,36 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   }
   const mastBounds = layout.rigging.masts.map((spec) => {
     if (!finiteTuple(spec.position) || !positive(spec.height) || !positive(spec.baseDiameter)
-      || !positive(spec.boomLength) || !positive(spec.shroudAnchorX)
-      || !Number.isFinite(spec.foreStayAnchorZ)
-      || !Number.isFinite(spec.aftStayAnchorZ) || spec.foreStayAnchorZ === 0
-      || spec.aftStayAnchorZ === 0 || spec.foreStayAnchorZ === spec.aftStayAnchorZ) {
+      || !positive(spec.boomLength)) {
       throw new Error(`Mast ${spec.id} has invalid dimensions or stay anchors`);
     }
+    const requiredStayIds: readonly ShipStayId[] = [
+      'fore-port', 'fore-starboard', 'aft-port', 'aft-starboard',
+    ];
+    if (spec.stays.length !== requiredStayIds.length
+      || requiredStayIds.some((id) => !spec.stays.some((stay) => stay.id === id))) {
+      throw new Error(`Mast ${spec.id} must define four roof-corner stays`);
+    }
+    assertUnique(`stay on mast ${spec.id}`, spec.stays.map(({ id }) => id));
+    spec.stays.forEach(({ id, anchor }) => {
+      const fore = id.startsWith('fore-');
+      const port = id.endsWith('-port');
+      if (!finiteTuple(anchor) || anchor[1] < 0 || anchor[1] >= spec.height
+        || (fore ? anchor[2] <= 0 : anchor[2] >= 0)
+        || (port ? anchor[0] >= 0 : anchor[0] <= 0)) {
+        throw new Error(`Mast ${spec.id} stay ${id} has an invalid roof anchor`);
+      }
+      const roomBounds = fore ? crewCabin.bounds : storageWorkroom.bounds;
+      const sideInset = port
+        ? anchor[0] - roomBounds.minX
+        : roomBounds.maxX - anchor[0];
+      const nearEdgeInset = fore
+        ? anchor[2] - roomBounds.minZ
+        : roomBounds.maxZ - anchor[2];
+      if (sideInset < 0.3 || nearEdgeInset < 0.3) {
+        throw new Error(`Mast ${spec.id} stay ${id} overlaps the roof railing`);
+      }
+    });
     if (spec.sails.length !== 2
       || !spec.sails.some(({ id }) => id === 'mainsail')
       || !spec.sails.some(({ id }) => id === 'staysail')) {
@@ -1474,6 +1541,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
       if (!Number.isFinite(sail.topY) || !Number.isFinite(sail.footY)
         || !Number.isFinite(sail.clewZ) || !Number.isFinite(sail.billow)
+        || !Number.isFinite(sail.rotationY)
+        || typeof sail.furled !== 'boolean'
         || sail.topY <= sail.footY || sail.clewZ === 0 || !positive(sail.billow)) {
         throw new Error(`Mast ${spec.id} sail ${sail.id} has invalid dimensions`);
       }
@@ -1488,18 +1557,11 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     if (rectCorners(bounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
       throw new Error(`Mast ${spec.id} base crosses the cargoDeck hull polygon`);
     }
-    if (!pointInPolygon([0, spec.foreStayAnchorZ], cargoZone.polygon)
-      || !pointInPolygon([0, spec.aftStayAnchorZ], cargoZone.polygon)) {
+    if (spec.stays.some(({ anchor }) => !pointInPolygon(
+      [spec.position[0] + anchor[0], spec.position[2] + anchor[2]],
+      cargoZone.polygon,
+    ))) {
       throw new Error(`Mast ${spec.id} stay anchors must lie inside the cargoDeck hull polygon`);
-    }
-    if (!pointInPolygon(
-      [spec.position[0] - spec.shroudAnchorX, spec.position[2]],
-      cargoZone.polygon,
-    ) || !pointInPolygon(
-      [spec.position[0] + spec.shroudAnchorX, spec.position[2]],
-      cargoZone.polygon,
-    )) {
-      throw new Error(`Mast ${spec.id} shroud anchors must lie inside the cargoDeck hull polygon`);
     }
     return { id: spec.id, bounds };
   });

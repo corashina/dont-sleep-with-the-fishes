@@ -38,15 +38,15 @@ describe('FishingCatchLibrary', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
   });
 
-  it('creates unmatched procedural catches only for their reveal', async () => {
+  it('falls back to a procedural catch when its model cannot load', async () => {
     const loader: FishingCatchModelLoader = {
-      load: vi.fn(async () => testModel().root),
+      load: vi.fn(async () => { throw new Error('load failed'); }),
     };
     const library = new FishingCatchLibrary(loader);
 
-    const prepared = await library.prepare('flounder');
+    const prepared = await library.prepare('seaweed');
 
-    expect(loader.load).not.toHaveBeenCalled();
+    expect(loader.load).toHaveBeenCalledOnce();
     expect(prepared?.userData.fishingModelSource).toBe('procedural');
     library.dispose();
   });

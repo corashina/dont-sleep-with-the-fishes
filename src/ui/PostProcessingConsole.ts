@@ -6,20 +6,99 @@ import {
   type PostProcessingControls,
   type PostProcessingNumericSetting,
 } from '../rendering/postProcessingControls';
+import {
+  createVisualQualityPreference,
+  type VisualQualityPreference,
+} from '../rendering/visualQuality';
+import {
+  PRESENTATION_WEATHER_IDS,
+  presentationWeatherProfile,
+  type PresentationWeatherId,
+  type WeatherControlSource,
+} from '../weather/presentationWeather';
+import { VisualQualityControl } from './VisualQualityControl';
 
 const PANEL_ID = 'post-processing-console-panel';
+
+export interface PhysicsToggleControls {
+  readonly enabled: boolean;
+  readonly debugMeshes: boolean;
+  setEnabled(enabled: boolean): void;
+  setDebugMeshes(enabled: boolean): void;
+}
+
+export interface WeatherControls {
+  readonly selected: PresentationWeatherId;
+  readonly source: WeatherControlSource;
+  setWeather(id: PresentationWeatherId): void;
+}
+
+const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
+  selected: 'calm',
+  source: 'normal',
+  setWeather: () => undefined,
+};
 
 export class PostProcessingConsole {
   readonly element = document.createElement('aside');
   private readonly panel: HTMLElement;
+  private readonly visualQualityControl: VisualQualityControl;
+  private readonly weatherSelect: HTMLSelectElement;
+  private readonly weatherSource: HTMLOutputElement;
+  private weatherId: PresentationWeatherId;
+  private weatherControlSource: WeatherControlSource;
   private disposed = false;
 
   constructor(
     mount: HTMLElement,
     private readonly controls: PostProcessingControls,
     private readonly onOpenChange: (open: boolean) => void = () => undefined,
+    private readonly physicsControls?: PhysicsToggleControls,
+    visualQuality: VisualQualityPreference = createVisualQualityPreference(
+      () => undefined,
+      null,
+    ),
+    private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
   ) {
     const state = controls.getState();
+    this.weatherId = weatherControls.selected;
+    this.weatherControlSource = weatherControls.source;
+    const physicsControl = physicsControls === undefined
+      ? ''
+      : `
+        <section class="post-processing-console__section">
+          <strong>PHYSICS</strong>
+          <label class="post-processing-console__physics">
+            <span>
+              Barrel simulation
+              <small id="physics-toggle-note">Reloads the scene; fully unloads physics when off</small>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-physics-enabled
+              aria-describedby="physics-toggle-note"
+              ${physicsControls.enabled ? 'checked' : ''}
+            >
+            <output data-physics-state>${physicsControls.enabled ? 'ON' : 'OFF'}</output>
+          </label>
+          <label class="post-processing-console__physics">
+            <span>
+              Collision meshes
+              <small id="physics-debug-note">Shows the physics shapes over the ship</small>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-physics-debug
+              aria-describedby="physics-debug-note"
+              ${physicsControls.debugMeshes ? 'checked' : ''}
+              ${physicsControls.enabled ? '' : 'disabled'}
+            >
+            <output data-physics-debug-state>${physicsControls.debugMeshes ? 'ON' : 'OFF'}</output>
+          </label>
+        </section>
+      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
@@ -27,25 +106,52 @@ export class PostProcessingConsole {
         id="${PANEL_ID}"
         class="post-processing-console__panel"
         data-post-processing-panel
-        aria-label="Ambient occlusion console"
+        aria-label="System tuning menu"
         hidden
       >
         <header>
-          <strong>AMBIENT OCCLUSION</strong>
-          <button type="button" data-post-processing-close aria-label="Close ambient occlusion console">×</button>
+          <strong>SYSTEM TUNING</strong>
+          <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
         </header>
-        <label class="post-processing-console__select">
-          <span>Display</span>
-          <select data-post-processing-ao-mode>
-            <option value="composite">COMPOSITE</option>
-            <option value="debug">DEBUG BUFFER</option>
-            <option value="off">OFF</option>
-          </select>
-        </label>
-        <div class="post-processing-console__sliders" data-post-processing-sliders></div>
+        ${physicsControl}
+        <section class="post-processing-console__section" data-visual-quality-control></section>
+        <section class="post-processing-console__section">
+          <strong>WEATHER</strong>
+          <label class="post-processing-console__select">
+            <span>
+              Presentation
+              <output data-weather-source>${weatherControls.source.toUpperCase()}</output>
+            </span>
+            <select data-presentation-weather>
+              ${PRESENTATION_WEATHER_IDS.map((id) => `
+                <option value="${id}">${presentationWeatherProfile(id).label}</option>
+              `).join('')}
+            </select>
+          </label>
+          <small>Forced weather persists until reload.</small>
+        </section>
+        <section class="post-processing-console__section">
+          <strong>AMBIENT OCCLUSION</strong>
+          <label class="post-processing-console__select">
+            <span>Display</span>
+            <select data-post-processing-ao-mode>
+              <option value="composite">COMPOSITE</option>
+              <option value="debug">DEBUG BUFFER</option>
+              <option value="off">OFF</option>
+            </select>
+          </label>
+          <div class="post-processing-console__sliders" data-post-processing-sliders></div>
+        </section>
       </section>
     `;
     this.panel = this.requireElement('[data-post-processing-panel]');
+    this.visualQualityControl = new VisualQualityControl(visualQuality);
+    this.requireElement('[data-visual-quality-control]').append(
+      this.visualQualityControl.element,
+    );
+    this.weatherSelect = this.requireElement('[data-presentation-weather]');
+    this.weatherSource = this.requireElement('[data-weather-source]');
+    this.weatherSelect.value = weatherControls.selected;
     const aoMode = this.requireElement<HTMLSelectElement>('[data-post-processing-ao-mode]');
     aoMode.value = state.ambientOcclusionMode;
     aoMode.disabled = !state.ambientOcclusionAvailable;
@@ -57,6 +163,20 @@ export class PostProcessingConsole {
     mount.append(this.element);
   }
 
+  setWeatherState(
+    id: PresentationWeatherId,
+    source: WeatherControlSource,
+  ): void {
+    if (
+      this.disposed
+      || (id === this.weatherId && source === this.weatherControlSource)
+    ) return;
+    this.weatherId = id;
+    this.weatherControlSource = source;
+    this.weatherSelect.value = id;
+    this.weatherSource.value = source.toUpperCase();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     if (!this.panel.hidden) this.onOpenChange(false);
@@ -65,6 +185,7 @@ export class PostProcessingConsole {
     this.element.removeEventListener('click', this.handleClick);
     this.element.removeEventListener('change', this.handleChange);
     this.element.removeEventListener('input', this.handleInput);
+    this.visualQualityControl.dispose();
     this.element.dataset.open = 'false';
     this.element.remove();
   }
@@ -114,6 +235,38 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-physics-enabled]')
+    ) {
+      const output = this.element.querySelector<HTMLOutputElement>('[data-physics-state]');
+      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      const debug = this.element.querySelector<HTMLInputElement>('[data-physics-debug]');
+      if (debug !== null) debug.disabled = !target.checked;
+      this.physicsControls?.setEnabled(target.checked);
+      return;
+    }
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-physics-debug]')
+    ) {
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-physics-debug-state]',
+      );
+      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      this.physicsControls?.setDebugMeshes(target.checked);
+      return;
+    }
+    if (
+      target instanceof HTMLSelectElement
+      && target.matches('[data-presentation-weather]')
+    ) {
+      const id = target.value as PresentationWeatherId;
+      if (!PRESENTATION_WEATHER_IDS.includes(id)) return;
+      this.setWeatherState(id, 'forced');
+      this.weatherControls.setWeather(id);
+      return;
+    }
     if (target instanceof HTMLSelectElement && target.matches('[data-post-processing-ao-mode]')) {
       const mode = target.value as ItemAmbientOcclusionMode;
       if (mode === 'composite' || mode === 'debug' || mode === 'off') {

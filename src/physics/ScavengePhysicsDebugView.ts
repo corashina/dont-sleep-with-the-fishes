@@ -46,11 +46,12 @@ export class ScavengePhysicsDebugView {
   ) {
     this.staticRoot.name = 'physics-debug-static';
     this.dynamicRoot.name = 'physics-debug-dynamic';
-    staticCuboids.forEach(({ center, halfExtents }, index) => {
+    staticCuboids.forEach(({ center, halfExtents, rotation }, index) => {
       const mesh = new Mesh(this.boxGeometry, this.staticMaterial);
       mesh.name = `physics-debug-cuboid:${index}`;
       mesh.position.set(center.x, center.y, center.z);
       mesh.scale.set(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2);
+      if (rotation) mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
       mesh.renderOrder = DEBUG_RENDER_ORDER;
       this.staticRoot.add(mesh);
     });

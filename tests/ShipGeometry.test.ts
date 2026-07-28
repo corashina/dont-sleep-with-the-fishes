@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   PLAYER_BODY_HEIGHT,
+  pointInsideCollisionBox,
   resolveArcMovement,
   resolveLocalMovement,
 } from '../src/player/collisions';
@@ -19,6 +20,7 @@ import {
   SHIP_LAYOUT,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
+  SHIP_WHEELHOUSE_CHAMFER_SIZE,
   type ShipDoorSpec,
   type ShipLayoutSpec,
   validateShipLayout,
@@ -120,10 +122,7 @@ describe('freighter geometry', () => {  interface PointXZ {
   const pointInCollider = (
     build: ReturnType<typeof createShipGeometry>,
     point: Vector3,
-  ): boolean => build.shellColliders.some((box) =>
-    point.x >= box.minX && point.x <= box.maxX
-    && point.y >= box.minY && point.y <= box.maxY
-    && point.z >= box.minZ && point.z <= box.maxZ);
+  ): boolean => build.shellColliders.some((box) => pointInsideCollisionBox(point, box));
 
   const wallRenderBlockers = (
     build: ReturnType<typeof createShipGeometry>,
@@ -285,7 +284,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
-  it('joins the finished deck and lifeboat stripe cleanly to the white rail edge', () => {
+  it('covers the full lifeboat station with emergency stripes up to the rail edge', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
     try {
@@ -295,19 +294,16 @@ describe('freighter geometry', () => {  interface PointXZ {
       const cargoFloorBounds = new Box3().setFromObject(
         build.root.getObjectByName('floor-cargoDeck')!,
       );
-      const stationFloorBounds = new Box3().setFromObject(
-        build.root.getObjectByName('floor-lifeboatStation')!,
-      );
-      const stripeBounds = new Box3().setFromObject(
-        build.root.getObjectByName('lifeboat-station-emergency-border')!,
-      );
+      const stationFloor = build.root.getObjectByName('floor-lifeboatStation') as Mesh;
+      const stationFloorBounds = new Box3().setFromObject(stationFloor);
 
       expect(cargoFloorBounds.min.x).toBeCloseTo(timberDeckBounds.min.x);
       expect(cargoFloorBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
       expect(cargoFloorBounds.min.z).toBeCloseTo(timberDeckBounds.min.z);
       expect(cargoFloorBounds.max.z).toBeCloseTo(timberDeckBounds.max.z);
       expect(stationFloorBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
-      expect(stripeBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
+      expect(stationFloor.material).toBe(materials.emergencyStripe);
+      expect(build.root.getObjectByName('lifeboat-station-emergency-border')).toBeUndefined();
 
       const portRails = build.root.children.filter(({ name }) => name.startsWith('rail-port-'));
       const starboardRails = build.root.children.filter(({ name }) =>
@@ -431,6 +427,23 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('uses broad alternating bands for the lifeboat station paint', () => {
+    const materials = createShipMaterials();
+    try {
+      const texture = materials.emergencyStripe.map!;
+      const bytes = texture.image.data as Uint8Array;
+      const redAt = (x: number, y: number): number =>
+        bytes[(y * texture.image.width + x) * 4]!;
+
+      expect(redAt(0, 0)).toBeGreaterThan(100);
+      expect(redAt(31, 0)).toBeGreaterThan(100);
+      expect(redAt(32, 0)).toBeLessThan(100);
+      expect(redAt(63, 0)).toBeLessThan(100);
+    } finally {
+      materials.dispose();
+    }
+  });
+
   it('renders room panels as textured weathered warm white', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
@@ -464,7 +477,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
-  it('builds the deck hatch mesh and collider from layout-owned spatial data', () => {
+  it('builds the deck hatch mesh without adding it to the collision pool', () => {
     const materials = createShipMaterials();
     const layout = {
       ...SHIP_LAYOUT,
@@ -484,13 +497,8 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(hatch.scale.toArray()).toEqual([1.2, 0.16, 1.6]);
       const collider = build.shellColliders.find((candidate) =>
         candidate.minX > 3.6 && candidate.maxX < 4.8
-        && candidate.minZ < -7.2 && candidate.maxZ > -5.8)!;
-      expect(collider.minX).toBeCloseTo(3.65);
-      expect(collider.maxX).toBeCloseTo(4.75);
-      expect(collider.minY).toBeCloseTo(2.22);
-      expect(collider.maxY).toBeCloseTo(2.36);
-      expect(collider.minZ).toBeCloseTo(-7.25);
-      expect(collider.maxZ).toBeCloseTo(-5.75);
+        && candidate.minZ < -7.2 && candidate.maxZ > -5.8);
+      expect(collider).toBeUndefined();
     } finally {
       build.disposeGeometry();
       materials.dispose();
@@ -600,6 +608,19 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  it('does not register unreachable below-deck bow or stern colliders', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      expect(
+        build.shellColliders.filter(({ maxY }) => maxY < FREIGHTER_DIMENSIONS.deckY),
+      ).toEqual([]);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('keeps both loop doorways and the lifeboat rail opening clear', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -698,10 +719,10 @@ describe('freighter geometry', () => {  interface PointXZ {
     const center = door.orientation === 'side' ? door.center[1] : door.center[0];
     [center - door.width / 2 - 0.02, center + door.width / 2 + 0.02]
       .forEach((axis) => {
-        const point = doorPoint(door, axis);
+        const point = renderedWallPoint(door, axis);
         expect(pointInCollider(build, point), `${door.id} jamb collider at ${axis}`).toBe(true);
         expect(
-          wallRenderBlockers(build, renderedWallPoint(door, axis)).length,
+          wallRenderBlockers(build, point).length,
           `${door.id} jamb render at ${axis}`,
         )
           .toBeGreaterThan(0);
@@ -981,6 +1002,25 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
+  it('limits the machinery-island collider to the box below the smokestacks', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const machinery = build.root.getObjectByName('machinery-island') as Mesh;
+    const bounds = new Box3().setFromObject(machinery);
+    const collider = build.shellColliders.find((candidate) =>
+      Math.abs(candidate.minX - bounds.min.x) < 1e-6
+      && Math.abs(candidate.maxX - bounds.max.x) < 1e-6
+      && Math.abs(candidate.minZ - bounds.min.z) < 1e-6
+      && Math.abs(candidate.maxZ - bounds.max.z) < 1e-6);
+
+    expect(collider).toBeDefined();
+    expect(collider!.minY).toBeCloseTo(bounds.min.y);
+    expect(collider!.maxY).toBeCloseTo(bounds.max.y);
+
+    build.disposeGeometry();
+    materials.dispose();
+  });
+
   it('builds an upright faceted wheelhouse facade with captured glass and no inner rails', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -1017,6 +1057,18 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(glassBounds.max.x).toBeLessThanOrEqual(sillBounds.max.x);
       expect(glassBounds.min.y).toBeGreaterThanOrEqual(0);
       expect(glassBounds.max.y).toBeLessThanOrEqual(SHIP_ROOM_WALL_HEIGHT);
+    });
+
+    const chamferColliders = build.shellColliders
+      .filter((box) => box.orientedFootprint)
+      .map((box) => box.orientedFootprint!);
+    expect(chamferColliders).toHaveLength(2);
+    chamferColliders.forEach((collider) => {
+      expect(collider.halfWidth).toBeCloseTo(
+        SHIP_WHEELHOUSE_CHAMFER_SIZE * Math.SQRT2 / 2,
+      );
+      expect(collider.halfDepth).toBeCloseTo(SHIP_ROOM_WALL_THICKNESS / 2);
+      expect(Math.abs(collider.rotationY)).toBeCloseTo(Math.PI / 4);
     });
 
     SHIP_LAYOUT.doors.filter(({ zoneId }) => zoneId === 'wheelhouse').forEach((door) => {
@@ -1072,7 +1124,9 @@ describe('freighter geometry', () => {  interface PointXZ {
     expect((portChamferOffset - facadeChamferSum) / Math.SQRT2).toBeCloseTo(0.28);
     expect(crewRoofBounds.max.z).toBeLessThanOrEqual(roofBounds.min.z);
     expect(mast.position[2] + mast.baseDiameter / 2).toBeLessThan(roofBounds.min.z);
-    expect(mast.foreStayAnchorZ).toBeLessThan(roofBounds.min.z);
+    expect(Math.max(...mast.stays
+      .filter(({ id }) => id.startsWith('fore-'))
+      .map(({ anchor }) => anchor[2]))).toBeLessThan(roofBounds.min.z);
 
     build.disposeGeometry();
     materials.dispose();
@@ -1159,7 +1213,7 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each(SHIP_LAYOUT.balconies)(
-    'builds $id with only a low dark-steel perimeter and matching collision',
+    'builds $id with a visible low dark-steel perimeter and no rail collision',
     (balcony) => {
       const materials = createShipMaterials();
       const build = createShipGeometry(materials);
@@ -1210,18 +1264,20 @@ describe('freighter geometry', () => {  interface PointXZ {
       const clearSampleY = deckBounds.max.y + PLAYER_BODY_HEIGHT / 2;
       const openingZ = balcony.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
       const oppositeZ = balcony.edge === 'aft' ? zone.bounds.maxZ : zone.bounds.minZ;
-      expect(pointInCollider(build, new Vector3(0, railSampleY, openingZ))).toBe(false);
-      expect(pointInCollider(build, new Vector3(zone.bounds.minX, railSampleY, openingZ)))
-        .toBe(true);
-      expect(pointInCollider(build, new Vector3(zone.bounds.maxX, railSampleY, openingZ)))
-        .toBe(true);
-      expect(pointInCollider(build, new Vector3(0, railSampleY, oppositeZ))).toBe(true);
-      expect(pointInCollider(build, new Vector3(zone.bounds.minX, railSampleY, 0.5 * (
-        zone.bounds.minZ + zone.bounds.maxZ
-      )))).toBe(true);
-      expect(pointInCollider(build, new Vector3(zone.bounds.maxX, railSampleY, 0.5 * (
-        zone.bounds.minZ + zone.bounds.maxZ
-      )))).toBe(true);
+      const railSamples = [
+        [0, openingZ],
+        [zone.bounds.minX, openingZ],
+        [zone.bounds.maxX, openingZ],
+        [0, oppositeZ],
+        [zone.bounds.minX, 0.5 * (zone.bounds.minZ + zone.bounds.maxZ)],
+        [zone.bounds.maxX, 0.5 * (zone.bounds.minZ + zone.bounds.maxZ)],
+      ] as const;
+      railSamples.forEach(([x, z]) => {
+        expect(
+          pointInCollider(build, new Vector3(x, railSampleY, z)),
+          `visible railing collider at ${x}, ${z}`,
+        ).toBe(false);
+      });
       [
         [zone.bounds.minX, openingZ],
         [zone.bounds.maxX, openingZ],

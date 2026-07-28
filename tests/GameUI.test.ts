@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest';
-import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import { describe, expect, it } from 'vitest';
 import { GameUI } from '../src/ui/GameUI';
 
 describe('GameUI scavenging item tooltip', () => {
@@ -31,28 +30,30 @@ describe('GameUI scavenging item tooltip', () => {
     ui.dispose();
   });
 
-  it('owns a visual quality control inside the pause screen', () => {
+  it('keeps visual quality controls out of the pause screen', () => {
     const mount = document.createElement('main');
-    const apply = vi.fn();
-    const preference = createVisualQualityPreference(apply, null);
-    const ui = new GameUI(mount, preference);
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-visual-quality="high"]',
-    )!;
-    const control = mount.querySelector('[data-visual-quality-control]');
+    const ui = new GameUI(mount);
 
-    high.click();
-
-    expect(preference.get()).toBe('high');
-    expect(apply).toHaveBeenCalledWith('high');
-    expect(control).not.toBeNull();
-    expect(mount.querySelector('[data-pause]')?.contains(control)).toBe(true);
-    expect(mount.querySelector('.hud')?.contains(control)).toBe(false);
-    expect(mount.querySelector('[data-start]')?.contains(control)).toBe(false);
-    expect(mount.querySelector('[data-result]')?.contains(control)).toBe(false);
-
+    expect(mount.querySelector('[data-pause] [data-visual-quality-control]')).toBeNull();
+    expect(mount.querySelector('[data-pause] [data-visual-quality]')).toBeNull();
     ui.dispose();
-    high.click();
-    expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it('replaces the crosshair with a pickup hand for a valid pickup target', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const pointer = mount.querySelector<HTMLElement>('[data-pickup-pointer]')!;
+    const crosshair = mount.querySelector<HTMLElement>('[data-crosshair]')!;
+
+    ui.setPickupPointer(true);
+
+    expect(pointer.classList).toContain('is-visible');
+    expect(crosshair.classList).toContain('is-pickup-hidden');
+
+    ui.setPickupPointer(false);
+
+    expect(pointer.classList).not.toContain('is-visible');
+    expect(crosshair.classList).not.toContain('is-pickup-hidden');
+    ui.dispose();
   });
 });

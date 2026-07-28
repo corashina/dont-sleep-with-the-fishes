@@ -17,6 +17,9 @@ $modelIds = @(
   'bass'
   'redSnapper'
   'clownfish'
+  'seaweed'
+  'boot'
+  'plasticBottle'
 )
 $expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) + @('fishing-model-metadata.json')
 

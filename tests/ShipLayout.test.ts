@@ -4,6 +4,7 @@ import {
   PLAYER_LAYOUT_RADIUS,
   SHIP_DECK_DETAIL_COUNTS,
   SHIP_LAYOUT,
+  SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   analyzeShipNavigation,
   detailVisualRect,
@@ -183,6 +184,55 @@ describe('scavenging ship layout', () => {
     expect(() => validateShipLayout(wheelhouseBalcony)).toThrow(/crew-balcony.*wheelhouse/i);
   });
 
+  it('faces the sail forward with four stays inset from the nearest roof corners', () => {
+    const mast = SHIP_LAYOUT.rigging.masts[0]!;
+    const sailSpan = mast.sails.reduce((span, sail) => span + Math.abs(sail.clewZ), 0);
+    expect(sailSpan).toBeGreaterThanOrEqual(FREIGHTER_DIMENSIONS.width * 0.85);
+    expect(mast.sails.every(({ rotationY }) => rotationY === Math.PI / 2)).toBe(true);
+
+    const roofTop = SHIP_ROOM_WALL_HEIGHT + 0.24;
+    const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
+
+    expect(mast.stays).toEqual([
+      { id: 'fore-port', anchor: [crew.minX + 0.42, 3.72, crew.minZ + 0.42] },
+      { id: 'fore-starboard', anchor: [crew.maxX - 0.42, 3.72, crew.minZ + 0.42] },
+      { id: 'aft-port', anchor: [storage.minX + 0.42, 3.72, storage.maxZ - 0.42] },
+      { id: 'aft-starboard', anchor: [storage.maxX - 0.42, 3.72, storage.maxZ - 0.42] },
+    ]);
+    expect(mast.stays.every(({ anchor }) => anchor[1] >= roofTop)).toBe(true);
+  });
+
+  it('rejects missing roof stays and anchors that overlap the roof railing', () => {
+    const missingStay = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
+          ...mast,
+          stays: mast.stays.slice(1),
+        })),
+      },
+    };
+    expect(() => validateShipLayout(missingStay)).toThrow(/four roof-corner stays/i);
+
+    const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+    const railingOverlap = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
+          ...mast,
+          stays: mast.stays.map((stay) => stay.id === 'fore-port'
+            ? {
+              ...stay,
+              anchor: [crew.minX + 0.1, stay.anchor[1], stay.anchor[2]] as const,
+            }
+            : stay),
+        })),
+      },
+    };
+    expect(() => validateShipLayout(railingOverlap)).toThrow(/fore-port.*roof railing/i);
+  });
+
   it('rejects a forward-room gap that is not exactly 3.5 metres', () => {
     const changedGap = {
       ...SHIP_LAYOUT,
@@ -229,14 +279,22 @@ describe('scavenging ship layout', () => {
     expect(() => validateShipLayout(overHeightSail)).toThrow(/mainsail.*mast height/i);
   });
 
-  it('owns the deck hatch transform and collision footprint in layout data', () => {
+  it('centers the deck hatch on the fore-aft ship axis', () => {
     expect(SHIP_LAYOUT.deckHatch).toEqual({
       id: 'deck-hatch',
-      position: [3.8, 2.22, -7],
+      position: [0, 2.22, -7],
       rotationY: 0,
       size: [1.45, 0.18, 1.8],
       colliderSize: [1.45, 0.18, 1.8],
     });
+    expect(SHIP_LAYOUT.deckHatch.size[2]).toBeGreaterThan(SHIP_LAYOUT.deckHatch.size[0]);
+    const bypasses = SHIP_LAYOUT.lanes.filter(({ id }) => id.startsWith('deck-hatch-'));
+    expect(bypasses.map(({ id }) => id)).toEqual([
+      'deck-hatch-port-bypass',
+      'deck-hatch-starboard-bypass',
+    ]);
+    expect(bypasses[0]!.bounds.minX).toBe(-bypasses[1]!.bounds.maxX);
+    expect(bypasses[0]!.bounds.maxX).toBe(-bypasses[1]!.bounds.minX);
   });
 
   it('rejects a deck hatch that conflicts with a primary lane or item access', () => {
@@ -244,7 +302,7 @@ describe('scavenging ship layout', () => {
       ...SHIP_LAYOUT,
       deckHatch: {
         ...SHIP_LAYOUT.deckHatch,
-        position: [0, 2.22, -7] as const,
+        position: [0, 2.22, -3] as const,
       },
     };
     expect(() => validateShipLayout(laneConflict)).toThrow(/deck-hatch.*primary lane/i);
@@ -297,34 +355,33 @@ describe('scavenging ship layout', () => {
   it('aligns crates and boxes exactly against exterior wall faces', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
-    const halfWall = SHIP_ROOM_WALL_THICKNESS / 2;
     const fixtureRect = (id: string) => furnitureRect(
       SHIP_LAYOUT.furniture.find((fixture) => fixture.id === id)!,
     );
 
     expect(fixtureRect('cargo-crate-forward-port').minX)
-      .toBeCloseTo(crew.minX + halfWall);
+      .toBeCloseTo(crew.minX + SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cargo-crate-forward-port').maxZ)
-      .toBeCloseTo(crew.minZ - halfWall);
+      .toBeCloseTo(crew.minZ);
     expect(fixtureRect('cargo-crate-forward-starboard').maxX)
-      .toBeCloseTo(crew.maxX - halfWall);
+      .toBeCloseTo(crew.maxX - SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cargo-crate-forward-starboard').maxZ)
-      .toBeCloseTo(crew.minZ - halfWall);
+      .toBeCloseTo(crew.minZ);
     expect(fixtureRect('cargo-crate-aft-port').minX)
-      .toBeCloseTo(storage.minX + halfWall);
+      .toBeCloseTo(storage.minX + SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cargo-crate-aft-port').minZ)
-      .toBeCloseTo(storage.maxZ + halfWall);
+      .toBeCloseTo(storage.maxZ);
     expect(fixtureRect('cargo-crate-aft-starboard').maxX)
-      .toBeCloseTo(storage.maxX - halfWall);
+      .toBeCloseTo(storage.maxX - SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cargo-crate-aft-starboard').minZ)
-      .toBeCloseTo(storage.maxZ + halfWall);
+      .toBeCloseTo(storage.maxZ);
 
     const boxRect = (id: string) => detailVisualRect(
       SHIP_LAYOUT.details.find((detail) => detail.id === id)!,
     );
-    expect(boxRect('cargoBox-1').maxX).toBeCloseTo(crew.minX - halfWall);
-    expect(boxRect('cargoBox-2').minX).toBeCloseTo(storage.maxX + halfWall);
-    expect(boxRect('cargoBox-3').maxX).toBeCloseTo(storage.minX - halfWall);
+    expect(boxRect('cargoBox-1').maxX).toBeCloseTo(crew.minX);
+    expect(boxRect('cargoBox-2').minX).toBeCloseTo(storage.maxX);
+    expect(boxRect('cargoBox-3').maxX).toBeCloseTo(storage.minX);
     SHIP_LAYOUT.details.filter(({ kind }) => kind === 'cargoBox')
       .forEach(({ rotationY }) => expect(rotationY).toBe(0));
   });

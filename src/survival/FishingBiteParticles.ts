@@ -7,18 +7,18 @@ import {
   Vector3,
 } from 'three';
 
-export const BOAT_SPRAY_CAPACITY = 24;
+export const FISHING_BITE_PARTICLE_CAPACITY = 24;
 const INACTIVE_Y = -1000;
 
-export class BoatSpray {
+export class FishingBiteParticles {
   readonly points: Points<BufferGeometry, PointsMaterial>;
-  private readonly positions = new Float32Array(BOAT_SPRAY_CAPACITY * 3);
-  private readonly velocities = new Float32Array(BOAT_SPRAY_CAPACITY * 3);
-  private readonly life = new Float32Array(BOAT_SPRAY_CAPACITY);
+  private readonly positions = new Float32Array(FISHING_BITE_PARTICLE_CAPACITY * 3);
+  private readonly velocities = new Float32Array(FISHING_BITE_PARTICLE_CAPACITY * 3);
+  private readonly life = new Float32Array(FISHING_BITE_PARTICLE_CAPACITY);
   private cursor = 0;
 
   constructor() {
-    for (let index = 0; index < BOAT_SPRAY_CAPACITY; index += 1) {
+    for (let index = 0; index < FISHING_BITE_PARTICLE_CAPACITY; index += 1) {
       this.positions[index * 3 + 1] = INACTIVE_Y;
     }
     const geometry = new BufferGeometry();
@@ -32,7 +32,7 @@ export class BoatSpray {
       depthWrite: false,
     });
     this.points = new Points(geometry, material);
-    this.points.name = 'survival-bow-spray';
+    this.points.name = 'fishing-bite-particles';
     this.points.frustumCulled = false;
   }
 
@@ -41,7 +41,7 @@ export class BoatSpray {
     const count = 3 + Math.floor(strength * 5);
     for (let burstIndex = 0; burstIndex < count; burstIndex += 1) {
       const index = this.cursor;
-      this.cursor = (this.cursor + 1) % BOAT_SPRAY_CAPACITY;
+      this.cursor = (this.cursor + 1) % FISHING_BITE_PARTICLE_CAPACITY;
       const offset = index * 3;
       const phase = index * 2.399963 + burstIndex * 0.71;
       const radialSpeed = 0.22 + strength * 0.34;
@@ -59,7 +59,7 @@ export class BoatSpray {
   update(delta: number): void {
     const dt = Math.min(0.1, Math.max(0, delta));
     if (dt === 0) return;
-    for (let index = 0; index < BOAT_SPRAY_CAPACITY; index += 1) {
+    for (let index = 0; index < FISHING_BITE_PARTICLE_CAPACITY; index += 1) {
       if (this.life[index]! <= 0) continue;
       const offset = index * 3;
       this.life[index] = Math.max(0, this.life[index]! - dt);
@@ -77,7 +77,7 @@ export class BoatSpray {
 
   reset(): void {
     this.life.fill(0);
-    for (let index = 0; index < BOAT_SPRAY_CAPACITY; index += 1) {
+    for (let index = 0; index < FISHING_BITE_PARTICLE_CAPACITY; index += 1) {
       this.positions[index * 3 + 1] = INACTIVE_Y;
     }
     (this.points.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;

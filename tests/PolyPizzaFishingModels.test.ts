@@ -19,12 +19,16 @@ const EXPECTED_IDS = [
   'bass',
   'redSnapper',
   'clownfish',
+  'seaweed',
+  'boot',
+  'plasticBottle',
 ];
 
 describe('Poly Pizza fishing models', () => {
   it('pins each selected source once and excludes non-matching submissions', () => {
     expect(POLY_PIZZA_FISHING_MODEL_IDS).toEqual(EXPECTED_IDS);
     expect(FISHING_MODEL_CATCH_IDS).toEqual(EXPECTED_IDS);
+    expect(FISHING_CATCHES.map(({ id }) => id)).toEqual(EXPECTED_IDS);
 
     const publicIds = Object.values(POLY_PIZZA_FISHING_MODEL_SOURCES)
       .map(({ publicId }) => publicId);

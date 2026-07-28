@@ -129,6 +129,32 @@ function collisionBounds(collider: CollisionBox): Box3 {
   );
 }
 
+function positiveVolumeOverlapCollider(bounds: Box3, collider: CollisionBox): boolean {
+  if (bounds.min.y >= collider.maxY - EPSILON
+    || bounds.max.y <= collider.minY + EPSILON) return false;
+  const footprint = collider.orientedFootprint;
+  if (!footprint) return positiveVolumeOverlap(bounds, collisionBounds(collider));
+
+  const boundsHalfX = (bounds.max.x - bounds.min.x) / 2;
+  const boundsHalfZ = (bounds.max.z - bounds.min.z) / 2;
+  const offsetX = (bounds.min.x + bounds.max.x) / 2 - footprint.centerX;
+  const offsetZ = (bounds.min.z + bounds.max.z) / 2 - footprint.centerZ;
+  const cosine = Math.cos(footprint.rotationY);
+  const sine = Math.sin(footprint.rotationY);
+  return Math.abs(offsetX)
+      < boundsHalfX + Math.abs(cosine) * footprint.halfWidth
+        + Math.abs(sine) * footprint.halfDepth - EPSILON
+    && Math.abs(offsetZ)
+      < boundsHalfZ + Math.abs(sine) * footprint.halfWidth
+        + Math.abs(cosine) * footprint.halfDepth - EPSILON
+    && Math.abs(cosine * offsetX - sine * offsetZ)
+      < footprint.halfWidth + Math.abs(cosine) * boundsHalfX
+        + Math.abs(sine) * boundsHalfZ - EPSILON
+    && Math.abs(sine * offsetX + cosine * offsetZ)
+      < footprint.halfDepth + Math.abs(sine) * boundsHalfX
+        + Math.abs(cosine) * boundsHalfZ - EPSILON;
+}
+
 function sameTransform(left: ShipItemSurface, right: ShipItemSurface): boolean {
   return left.position.distanceTo(right.position) <= EPSILON
     && left.rotation.toArray().slice(0, 3).every((value, index) =>
@@ -200,7 +226,7 @@ export function validateShipItemSurfaces(
         new Vector3(STRUCTURE_CLEARANCE, 0, STRUCTURE_CLEARANCE),
       );
       shellColliders.forEach((collider, index) => {
-        if (positiveVolumeOverlap(clearance, collisionBounds(collider))) {
+        if (positiveVolumeOverlapCollider(clearance, collider)) {
           throw new Error(
             `Ship item surface ${surface.id} violates wall clearance ${STRUCTURE_CLEARANCE} at shell collider ${index}`,
           );
@@ -341,6 +367,19 @@ export function assignShipItems(
         ? shuffled(fallbackCandidates, random)
         : fallbackCandidates.sort((left, right) => left.id.localeCompare(right.id));
       eligible.set(instance.instanceId, [...regular, ...fallback]);
+    }
+
+    const candidatePhysicalSlots = new Set(
+      [...eligible.values()].flatMap((candidates) =>
+        candidates.map(({ physicalSlotId }) => physicalSlotId)),
+    );
+    if (candidatePhysicalSlots.size < instances.length) {
+      const failureIndex = candidatePhysicalSlots.size;
+      const instance = instances[Math.min(failureIndex, instances.length - 1)];
+      if (instance && (!deepestFailure || failureIndex >= deepestFailure.index)) {
+        deepestFailure = { index: failureIndex, instance };
+      }
+      return undefined;
     }
 
     const sortedInstances = [...instances].sort((left, right) => {
