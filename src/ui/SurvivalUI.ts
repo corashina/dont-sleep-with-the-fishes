@@ -86,6 +86,10 @@ function spokenEnergyCost(cost: number): string | null {
   return `${ENERGY_WORDS[cost] ?? String(cost)} energy`;
 }
 
+function quantityLabel(label: string, quantity: number): string {
+  return quantity > 1 ? `${label} ×${quantity}` : label;
+}
+
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
   const missingHull = Math.max(0, 100 - snapshot.hull);
   switch (definition.id) {
@@ -593,6 +597,9 @@ export class SurvivalUI {
     this.eventSelectedChoiceId = null;
     this.renderContextualEventChoices();
     this.endureButton.hidden = eligible.size > 0 || contextualChoices.length > 0;
+    this.anchors.forEach((anchor, id) => {
+      this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
+    });
     this.syncCommandState();
   }
 
@@ -604,8 +611,10 @@ export class SurvivalUI {
 
   playEventChoiceBeat(choiceId: EventResponseId): Promise<void> {
     if (this.disposed || !this.eventPresentationActive) return Promise.resolve();
-    const button = [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
-      .find((candidate) => candidate.dataset.eventChoice === choiceId);
+    const button = [
+      ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
+      ...this.anchorButtons.values(),
+    ].find((candidate) => candidate.dataset.eventChoice === choiceId);
     if (
       button === undefined
       || button.dataset.unavailableReason !== undefined
@@ -655,6 +664,9 @@ export class SurvivalUI {
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
+    this.anchors.forEach((anchor, id) => {
+      this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
+    });
     this.syncCommandState();
     if (focusedContextualChoice) this.firstUsableAction()?.focus();
   }
@@ -1055,19 +1067,31 @@ export class SurvivalUI {
     const brokenQuantity = anchor.brokenQuantity ?? (
       item?.condition === 'broken' ? quantity : 0
     );
-    const toolCopy = anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
+    const lanternSleep = anchor.toolId === 'lantern'
+      ? this.eventLanternChoice()
+      : undefined;
+    const toolCopy = lanternSleep === undefined
+      ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
+      : {
+          label: 'SLEEP',
+          description: 'Douse the lantern to sleep through the current event.',
+        };
     const itemLabel = anchor.itemType === null
       ? anchor.supplyGroupId === 'repairMaterial'
-        ? `REPAIR MATERIAL ×${quantity}`
+        ? quantityLabel('REPAIR MATERIAL', quantity)
         : toolCopy?.label ?? 'UNKNOWN TOOL'
-      : `${ITEM_LABELS[anchor.itemType]} ×${quantity}`;
+      : quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
     const itemDescription = anchor.itemType === null
       ? anchor.supplyGroupId === 'repairMaterial'
         ? 'Recovered timber, fasteners, and rope for hull repairs.'
         : toolCopy?.description ?? 'Permanent lifeboat equipment.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
-    const action = anchor.action === null ? null : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = this.anchorUnavailableReason(anchor);
+    const action = lanternSleep !== undefined || anchor.action === null
+      ? null
+      : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
+    const reason = lanternSleep === undefined
+      ? this.anchorUnavailableReason(anchor)
+      : lanternSleep.unavailableReason;
     const state = brokenQuantity > 0 && usableQuantity > 0
       ? `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`
       : brokenQuantity > 0 ? 'BROKEN'
@@ -1082,9 +1106,9 @@ export class SurvivalUI {
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     const visibleLabel = anchor.itemType !== null
-      ? `${ITEM_LABELS[anchor.itemType]} ×${quantity}`
+      ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
-        ? `REPAIR MATERIAL ×${quantity}`
+        ? quantityLabel('REPAIR MATERIAL', quantity)
         : anchor.toolId === 'fishingRod'
           ? 'Fishing rod'
           : anchor.toolId === 'repairTools'
@@ -1173,9 +1197,37 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
+    const lanternChoice = this.eventLanternChoice();
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
+      delete button.dataset.eventChoice;
+      if (
+        this.eventPresentationActive
+        && anchor?.toolId === 'lantern'
+        && lanternChoice !== undefined
+      ) {
+        button.dataset.eventChoice = lanternChoice.id;
+        if (lanternChoice.unavailableReason === null) {
+          delete button.dataset.unavailableReason;
+        } else {
+          button.dataset.unavailableReason = lanternChoice.unavailableReason;
+        }
+        button.dataset.eventState = this.eventSelectedChoiceId === lanternChoice.id
+          ? 'selected'
+          : 'eligible';
+        button.disabled = false;
+        button.setAttribute(
+          'aria-disabled',
+          lanternChoice.unavailableReason === null
+            && !this.busy
+            && this.eventSelectedChoiceId === null
+            ? 'false'
+            : 'true',
+        );
+        return;
+      }
+      delete button.dataset.unavailableReason;
       if (this.eventPresentationActive && anchor !== undefined && anchor.itemType !== null) {
         const instanceId = anchor.backingInstanceId ?? (
           id.startsWith('supply:') ? null : id as ItemInstanceId
@@ -1221,26 +1273,33 @@ export class SurvivalUI {
   }
 
   private renderContextualEventChoices(): void {
-    const choices = this.contextualEventChoices.map((choice) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'event-choice ui-role-context';
-      button.dataset.eventChoice = choice.id;
-      button.dataset.eventState = 'idle';
-      button.setAttribute('aria-pressed', 'false');
-      button.textContent = choice.label;
-      if (choice.unavailableReason !== null) {
-        button.dataset.unavailableReason = choice.unavailableReason;
-        button.setAttribute('aria-description', choice.unavailableReason);
-        const reason = document.createElement('span');
-        reason.className = 'event-choice__reason ui-role-narrative';
-        reason.textContent = choice.unavailableReason;
-        button.append(reason);
-      }
-      return button;
-    });
+    const choices = this.contextualEventChoices
+      .filter((choice) => choice.id !== 'sleep')
+      .map((choice) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'event-choice ui-role-context';
+        button.dataset.eventChoice = choice.id;
+        button.dataset.eventState = 'idle';
+        button.setAttribute('aria-pressed', 'false');
+        button.textContent = choice.label;
+        if (choice.unavailableReason !== null) {
+          button.dataset.unavailableReason = choice.unavailableReason;
+          button.setAttribute('aria-description', choice.unavailableReason);
+          const reason = document.createElement('span');
+          reason.className = 'event-choice__reason ui-role-narrative';
+          reason.textContent = choice.unavailableReason;
+          button.append(reason);
+        }
+        return button;
+      });
     this.eventChoices.replaceChildren(...choices);
     this.eventChoices.hidden = choices.length === 0;
+  }
+
+  private eventLanternChoice(): EventContextChoice | undefined {
+    if (!this.eventPresentationActive) return undefined;
+    return this.contextualEventChoices.find((choice) => choice.id === 'sleep');
   }
 
   private itemAnchorId(target: EventTarget | null): string | null {
