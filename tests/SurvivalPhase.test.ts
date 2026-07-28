@@ -1026,24 +1026,26 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event', 'reveal-tableau',
+      'fish', 'begin-event', 'cover', 'stage', 'event', 'scene-render', 'settle',
     ]);
     expect(setEventSelection).not.toHaveBeenCalled();
-
-    tableauReveal.resolve();
-    await flushPromises();
-    expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
-    expect(calls).not.toContain('uncover');
+    expect(calls).not.toContain('reveal-tableau');
 
     sceneSettle.resolve();
     await flushPromises();
     expect(calls.at(-1)).toBe('uncover');
+    expect(calls).not.toContain('reveal-tableau');
 
     uncover.resolve();
     await flushPromises();
+    expect(calls.at(-1)).toBe('reveal-tableau');
+    expect(setEventSelection).not.toHaveBeenCalled();
+
+    tableauReveal.resolve();
+    await flushPromises();
     expect(calls).toEqual([
       'fish', 'begin-event', 'cover', 'stage', 'event',
-      'reveal-tableau', 'scene-render', 'settle', 'uncover', 'selection',
+      'scene-render', 'settle', 'uncover', 'reveal-tableau', 'selection',
     ]);
   });
 
@@ -1160,22 +1162,24 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'begin-event', 'nightfall', 'cover', 'stage', 'caption', 'reveal-tableau',
+      'begin-event', 'nightfall', 'cover', 'stage', 'caption', 'scene-render', 'settle',
     ]);
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
     expect(setEventSelection).not.toHaveBeenCalled();
-
-    tableauReveal.resolve();
-    await flushPromises();
-    expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
-    expect(calls).not.toContain('uncover');
-    expect(calls).not.toContain('selection');
+    expect(calls).not.toContain('reveal-tableau');
 
     sceneSettle.resolve();
     await flushPromises();
     expect(calls.at(-1)).toBe('uncover');
+    expect(calls).not.toContain('reveal-tableau');
+    expect(calls).not.toContain('selection');
 
     uncover.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('reveal-tableau');
+    expect(calls).not.toContain('selection');
+
+    tableauReveal.resolve();
     await flushPromises();
     expect(calls.at(-1)).toBe('selection');
     expect(setEventSelection).toHaveBeenCalledOnce();
@@ -1213,7 +1217,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(calls).toEqual([
       'begin-event', 'nightfall', 'cover', 'stage', 'caption',
-      'reveal-tableau', 'uncover', 'selection',
+      'uncover', 'reveal-tableau', 'selection',
     ]);
   });
 
@@ -2616,6 +2620,164 @@ describe('SurvivalPhase orchestration', () => {
     (ui.onPauseChange as (paused: boolean) => void)(false);
     phase.update(3, 0.016);
     expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('settles a hidden event reveal but keeps choices locked until explicit resume', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const reveal = deferred();
+    const setEventSelection = vi.fn();
+    const setDocumentHidden = vi.fn((hidden: boolean) => {
+      if (hidden) reveal.resolve();
+    });
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'shower-night',
+        })),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => reveal.promise),
+        setEventEligibleItems: vi.fn(),
+        setDocumentHidden,
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        setPaused: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(setDocumentHidden).toHaveBeenCalledWith(true);
+    expect(setEventSelection).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    phase.setPaused(false);
+    await flushPromises();
+    expect(setEventSelection).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
+  it('defers item resolution and outcome feedback across hidden item and reaction boundaries', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const itemUse = deferred();
+    const reaction = deferred();
+    const hold = deferred();
+    let activeBoundary: 'item' | 'reaction' = 'item';
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'shower-night',
+      inventory: inventory({
+        'bucket-1': {
+          instanceId: 'bucket-1',
+          type: 'bucket',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({
+      code: 'event-resolved',
+      cue: 'none',
+      deltas: {},
+    });
+    const resolveEvent = vi.fn(() => {
+      current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: null,
+        inventory: inventory({
+          'bucket-1': {
+            instanceId: 'bucket-1',
+            type: 'bucket',
+            condition: 'broken',
+          },
+        }),
+      });
+      activeBoundary = 'reaction';
+      return outcome;
+    });
+    const setDocumentHidden = vi.fn((hidden: boolean) => {
+      if (!hidden) return;
+      if (activeBoundary === 'item') itemUse.resolve();
+      else reaction.resolve();
+    });
+    const syncInventory = vi.fn();
+    const reactToEventOutcome = vi.fn(() => {
+      expect(syncInventory).toHaveBeenLastCalledWith(current);
+      return reaction.promise;
+    });
+    const showFeedback = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current), resolveEvent },
+      world: {
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => itemUse.promise),
+        reactToEventOutcome,
+        play: vi.fn(() => Promise.resolve()),
+        syncInventory,
+        setDocumentHidden,
+        dispose: vi.fn(),
+      },
+      ui: {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setPaused: vi.fn(),
+        showFeedback,
+        holdEventOutcome: vi.fn(() => hold.promise),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('bucket', 'bucket-1');
+    await flushPromises();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    phase.setPaused(false);
+    await flushPromises();
+    expect(resolveEvent).toHaveBeenCalledOnce();
+    expect(showFeedback).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(showFeedback).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    phase.setPaused(false);
+    await flushPromises();
+    expect(showFeedback).toHaveBeenCalledWith(outcome);
+    hold.resolve();
+    phase.dispose();
   });
 
   it('wires command, pause, journal, and restart callbacks without legacy camera input', () => {

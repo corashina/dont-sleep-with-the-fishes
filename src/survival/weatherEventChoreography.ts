@@ -5,6 +5,23 @@ export type WeatherAnimationEventId =
   | 'restless-waves'
   | 'man-in-the-fog';
 
+export type WeatherItemEffectKind =
+  | 'none'
+  | 'shower-rain-catch'
+  | 'shower-umbrella-shed'
+  | 'shower-map-canopy'
+  | 'wind-net-lash'
+  | 'wind-map-flight'
+  | 'wind-umbrella-invert'
+  | 'storm-anchor-check'
+  | 'storm-bucket-bail'
+  | 'storm-umbrella-brace'
+  | 'wave-anchor-stabilize'
+  | 'wave-ring-buffer'
+  | 'compass-bearing'
+  | 'spyglass-optical-push'
+  | 'fog-flashlight-sweep';
+
 export interface WeatherRevealSample {
   cameraX: number;
   cameraY: number;
@@ -30,22 +47,52 @@ export interface WeatherItemSample {
   scaleY: number;
   scaleZ: number;
   effect: number;
+  cameraYaw: number;
+  cameraPush: number;
+  supplyRoll: number;
+  effectKind: WeatherItemEffectKind;
+}
+
+interface WeatherItemChoreography {
+  readonly duration: number;
+  readonly effectKind: Exclude<WeatherItemEffectKind, 'none'>;
 }
 
 const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Object.freeze({
   'shower-night': 3.4,
   'windy-night': 3.6,
-  thunderstorm: 4.0,
+  thunderstorm: 4,
   'restless-waves': 3.8,
   'man-in-the-fog': 4.2,
 });
 
-const ITEM_DURATIONS: Readonly<Record<WeatherAnimationEventId, Readonly<Record<string, number>>>> = Object.freeze({
-  'shower-night': Object.freeze({ bucket: 1.35, umbrella: 1.5, map: 1.4 }),
-  'windy-night': Object.freeze({ fishingNet: 1.6, map: 1.45, umbrella: 1.55 }),
-  thunderstorm: Object.freeze({ anchor: 1.8, bucket: 1.4, umbrella: 1.55 }),
-  'restless-waves': Object.freeze({ anchor: 1.75, swimRing: 1.3 }),
-  'man-in-the-fog': Object.freeze({ compass: 1.2, spyglass: 1.45, flashlight: 1.35 }),
+const ITEM_CHOREOGRAPHY: Readonly<
+  Record<WeatherAnimationEventId, Readonly<Record<string, WeatherItemChoreography>>>
+> = Object.freeze({
+  'shower-night': Object.freeze({
+    bucket: Object.freeze({ duration: 1.35, effectKind: 'shower-rain-catch' }),
+    umbrella: Object.freeze({ duration: 1.5, effectKind: 'shower-umbrella-shed' }),
+    map: Object.freeze({ duration: 1.4, effectKind: 'shower-map-canopy' }),
+  }),
+  'windy-night': Object.freeze({
+    fishingNet: Object.freeze({ duration: 1.6, effectKind: 'wind-net-lash' }),
+    map: Object.freeze({ duration: 1.45, effectKind: 'wind-map-flight' }),
+    umbrella: Object.freeze({ duration: 1.55, effectKind: 'wind-umbrella-invert' }),
+  }),
+  thunderstorm: Object.freeze({
+    anchor: Object.freeze({ duration: 1.8, effectKind: 'storm-anchor-check' }),
+    bucket: Object.freeze({ duration: 1.4, effectKind: 'storm-bucket-bail' }),
+    umbrella: Object.freeze({ duration: 1.55, effectKind: 'storm-umbrella-brace' }),
+  }),
+  'restless-waves': Object.freeze({
+    anchor: Object.freeze({ duration: 1.75, effectKind: 'wave-anchor-stabilize' }),
+    swimRing: Object.freeze({ duration: 1.3, effectKind: 'wave-ring-buffer' }),
+  }),
+  'man-in-the-fog': Object.freeze({
+    compass: Object.freeze({ duration: 1.2, effectKind: 'compass-bearing' }),
+    spyglass: Object.freeze({ duration: 1.45, effectKind: 'spyglass-optical-push' }),
+    flashlight: Object.freeze({ duration: 1.35, effectKind: 'fog-flashlight-sweep' }),
+  }),
 });
 
 function clamp01(value: number): number {
@@ -90,10 +137,37 @@ function resetItem(output: WeatherItemSample): void {
   output.scaleY = 1;
   output.scaleZ = 1;
   output.effect = 0;
+  output.cameraYaw = 0;
+  output.cameraPush = 0;
+  output.supplyRoll = 0;
+  output.effectKind = 'none';
 }
 
 function isWeatherEventId(eventId: string): eventId is WeatherAnimationEventId {
   return Object.hasOwn(REVEAL_DURATIONS, eventId);
+}
+
+function itemChoreography(
+  eventId: string,
+  choiceId: string,
+): WeatherItemChoreography | null {
+  if (!isWeatherEventId(eventId)) return null;
+  const choices = ITEM_CHOREOGRAPHY[eventId];
+  return Object.hasOwn(choices, choiceId) ? choices[choiceId]! : null;
+}
+
+function multiplyReveal(output: WeatherRevealSample, envelope: number): void {
+  output.cameraX *= envelope;
+  output.cameraY *= envelope;
+  output.cameraZ *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPitch *= envelope;
+  output.cameraRoll *= envelope;
+  output.supplyRoll *= envelope;
+  output.supplyLift *= envelope;
+  output.figureVisibility *= envelope;
+  output.figureDistance *= envelope;
+  output.lightningEmphasis *= envelope;
 }
 
 export function weatherRevealDuration(eventId: string): number | null {
@@ -147,29 +221,19 @@ export function sampleWeatherReveal(
       output.cameraYaw = 0.35 * Math.sin(Math.PI * (t - 0.18));
       output.cameraPitch = -0.06 * pulse(t, 0.16, 0.54, 0.82);
       output.figureVisibility = pulse(t, 0.38, 0.55, 0.78);
-      output.figureDistance = output.figureVisibility * (1 - 0.35 * smoothstep((t - 0.38) / 0.4));
+      output.figureDistance = output.figureVisibility
+        * (1 - 0.35 * smoothstep((t - 0.38) / 0.4));
       break;
   }
 
+  const ingressEnvelope = smoothstep(t / 0.12);
   const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
-  output.cameraX *= returnEnvelope;
-  output.cameraY *= returnEnvelope;
-  output.cameraZ *= returnEnvelope;
-  output.cameraYaw *= returnEnvelope;
-  output.cameraPitch *= returnEnvelope;
-  output.cameraRoll *= returnEnvelope;
-  output.supplyRoll *= returnEnvelope;
-  output.supplyLift *= returnEnvelope;
-  output.figureVisibility *= returnEnvelope;
-  output.figureDistance *= returnEnvelope;
-  output.lightningEmphasis *= returnEnvelope;
-
+  multiplyReveal(output, ingressEnvelope * returnEnvelope);
   return true;
 }
 
 export function weatherItemUseDuration(eventId: string, choiceId: string): number | null {
-  if (!isWeatherEventId(eventId)) return null;
-  return ITEM_DURATIONS[eventId][choiceId] ?? null;
+  return itemChoreography(eventId, choiceId)?.duration ?? null;
 }
 
 export function sampleWeatherItemUse(
@@ -179,101 +243,183 @@ export function sampleWeatherItemUse(
   output: WeatherItemSample,
 ): boolean {
   resetItem(output);
-  if (weatherItemUseDuration(eventId, choiceId) === null) return false;
+  const choreography = itemChoreography(eventId, choiceId);
+  if (choreography === null) return false;
 
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;
-  const up = smoothstep(Math.min(1, t / 0.42));
-  const down = 1 - smoothstep(Math.max(0, (t - 0.58) / 0.42));
+  output.effectKind = choreography.effectKind;
+  const up = smoothstep(t / 0.34);
+  const down = 1 - smoothstep((t - 0.66) / 0.34);
   const hold = Math.min(up, down);
+  const impact = pulse(t, 0.28, 0.56, 0.84);
 
-  switch (choiceId) {
-    case 'bucket':
-      output.y = 0.38 * hold;
-      output.pitch = -0.34 * hold;
-      output.roll = 0.15 * hold;
-      output.effect = hold;
-      break;
-    case 'umbrella':
-      output.y = 0.62 * hold;
-      output.pitch = -0.12 * hold;
-      output.roll = -0.18 * hold;
-      output.scaleX = 1 + 0.12 * hold;
-      output.scaleZ = 1 + 0.12 * hold;
-      output.effect = hold;
-      break;
-    case 'map':
-      if (eventId === 'windy-night') {
-        output.x = -0.72 * smoothstep(t / 0.7);
-        output.y = 0.2 * pulse(t, 0.06, 0.38, 0.92);
-        output.yaw = 0.7 * smoothstep(t / 0.7);
-        output.roll = -0.35 * smoothstep(t / 0.7);
-        output.effect = pulse(t, 0.06, 0.38, 0.92);
-      } else {
-        output.y = 0.56 * hold;
-        output.pitch = -0.2 * hold;
-        output.scaleX = 1 + 0.16 * hold;
-        output.scaleZ = 1 + 0.16 * hold;
-        output.effect = hold;
+  switch (eventId) {
+    case 'shower-night':
+      switch (choiceId) {
+        case 'bucket':
+          output.y = 0.42 * hold;
+          output.x = -0.12 * impact;
+          output.pitch = -0.48 * pulse(t, 0.3, 0.62, 0.9);
+          output.roll = 0.14 * hold;
+          output.effect = pulse(t, 0.08, 0.4, 0.72);
+          break;
+        case 'umbrella':
+          output.y = 0.66 * hold;
+          output.pitch = -0.1 * hold;
+          output.roll = -0.2 * hold + 0.08 * impact;
+          output.scaleX = 1 + 0.13 * hold;
+          output.scaleZ = 1 + 0.13 * hold;
+          output.effect = pulse(t, 0.22, 0.58, 0.88);
+          break;
+        case 'map':
+          output.y = 0.54 * hold;
+          output.pitch = -0.24 * hold;
+          output.roll = 0.1 * impact;
+          output.scaleX = 1 + 0.18 * hold;
+          output.scaleY = 1 - 0.1 * impact;
+          output.scaleZ = 1 + 0.12 * hold;
+          output.effect = impact;
+          break;
       }
       break;
-    case 'fishingNet':
-      output.x = 0.34 * hold;
-      output.y = 0.28 * hold;
-      output.yaw = 0.48 * hold;
-      output.roll = 0.28 * Math.sin(Math.PI * t) * hold;
-      output.effect = hold;
+    case 'windy-night':
+      switch (choiceId) {
+        case 'fishingNet':
+          output.x = 0.36 * hold;
+          output.y = 0.3 * hold;
+          output.yaw = 0.5 * hold;
+          output.roll = 0.3 * Math.sin(Math.PI * t) * hold;
+          output.scaleX = 1 + 0.22 * hold;
+          output.scaleZ = 1 + 0.16 * hold;
+          output.effect = impact;
+          break;
+        case 'map': {
+          const travel = smoothstep(t / 0.72);
+          output.x = -0.94 * travel;
+          output.y = 0.22 * pulse(t, 0.04, 0.38, 0.9);
+          output.yaw = 0.78 * travel;
+          output.roll = -0.42 * travel + Math.sin(8 * Math.PI * t) * 0.08 * hold;
+          output.effect = pulse(t, 0.04, 0.42, 0.92);
+          break;
+        }
+        case 'umbrella':
+          output.x = -0.46 * hold;
+          output.y = 0.58 * hold;
+          output.pitch = -0.16 * hold;
+          output.roll = 0.68 * impact;
+          output.scaleX = 1 - 0.16 * impact;
+          output.scaleZ = 1 + 0.18 * impact;
+          output.effect = impact;
+          break;
+      }
       break;
-    case 'anchor':
-      output.y = -0.9 * smoothstep((t - 0.2) / 0.7);
-      output.z = -0.5 * smoothstep((t - 0.2) / 0.7);
-      output.pitch = 0.45 * smoothstep((t - 0.2) / 0.7);
-      output.effect = smoothstep((t - 0.16) / 0.72);
+    case 'thunderstorm':
+      switch (choiceId) {
+        case 'anchor': {
+          const drop = smoothstep((t - 0.12) / 0.64);
+          output.x = 0.24 * hold;
+          output.y = -0.94 * drop;
+          output.z = -0.58 * drop;
+          output.pitch = 0.48 * drop;
+          output.roll = -0.08 * impact;
+          output.effect = smoothstep((t - 0.12) / 0.6);
+          break;
+        }
+        case 'bucket':
+          output.x = 0.22 * impact;
+          output.y = 0.4 * hold;
+          output.pitch = -0.58 * pulse(t, 0.3, 0.6, 0.9);
+          output.roll = -0.22 * hold + 0.18 * impact;
+          output.effect = impact;
+          break;
+        case 'umbrella':
+          output.x = 0.16 * impact;
+          output.y = 0.7 * hold;
+          output.pitch = -0.18 * hold;
+          output.roll = -0.24 * hold + 0.3 * impact;
+          output.scaleX = 1 + 0.1 * hold;
+          output.scaleZ = 1 + 0.1 * hold;
+          output.effect = impact;
+          break;
+      }
       break;
-    case 'swimRing':
-      output.y = -0.24 * pulse(t, 0.1, 0.46, 0.86);
-      output.z = -0.18 * pulse(t, 0.1, 0.46, 0.86);
-      output.pitch = 0.28 * pulse(t, 0.1, 0.46, 0.86);
-      output.scaleY = 1 - 0.18 * pulse(t, 0.1, 0.46, 0.86);
-      output.effect = pulse(t, 0.1, 0.46, 0.86);
+    case 'restless-waves':
+      switch (choiceId) {
+        case 'anchor': {
+          const drop = smoothstep((t - 0.1) / 0.62);
+          output.y = -1.02 * drop;
+          output.z = -0.62 * drop;
+          output.pitch = 0.52 * drop;
+          output.roll = 0.12 * pulse(t, 0.08, 0.3, 0.54);
+          output.effect = smoothstep((t - 0.08) / 0.58);
+          output.supplyRoll = 0.2 * (1 - smoothstep((t - 0.12) / 0.58));
+          break;
+        }
+        case 'swimRing':
+          output.x = 0.3 * hold;
+          output.y = -0.24 * impact;
+          output.z = -0.2 * impact;
+          output.pitch = 0.3 * impact;
+          output.scaleX = 1 + 0.1 * impact;
+          output.scaleY = 1 - 0.2 * impact;
+          output.scaleZ = 1 + 0.08 * impact;
+          output.effect = impact;
+          break;
+      }
       break;
-    case 'compass':
-      output.y = 0.45 * hold;
-      output.z = -0.28 * hold;
-      output.pitch = -0.18 * hold;
-      output.scaleX = 1 + 0.2 * hold;
-      output.scaleY = 1 + 0.2 * hold;
-      output.scaleZ = 1 + 0.2 * hold;
-      output.effect = hold;
-      break;
-    case 'spyglass':
-      output.y = 0.38 * hold;
-      output.z = -0.52 * hold;
-      output.pitch = -0.1 * hold;
-      output.scaleX = 1 + 0.24 * hold;
-      output.scaleY = 1 + 0.24 * hold;
-      output.scaleZ = 1 + 0.24 * hold;
-      output.effect = hold;
-      break;
-    case 'flashlight':
-      output.y = 0.3 * hold;
-      output.yaw = 0.7 * Math.sin(2 * Math.PI * t);
-      output.pitch = -0.2 * hold;
-      output.effect = pulse(t, 0.1, 0.5, 0.95);
+    case 'man-in-the-fog':
+      switch (choiceId) {
+        case 'compass':
+          output.y = 0.46 * hold;
+          output.z = -0.3 * hold;
+          output.yaw = (
+            Math.sin(8 * Math.PI * t) * 0.26 * (1 - smoothstep(t))
+            + 0.18 * hold
+          );
+          output.pitch = -0.18 * hold;
+          output.scaleX = 1 + 0.2 * hold;
+          output.scaleY = 1 + 0.2 * hold;
+          output.scaleZ = 1 + 0.2 * hold;
+          output.effect = hold;
+          output.cameraYaw = 0.14 * pulse(t, 0.24, 0.56, 0.88);
+          break;
+        case 'spyglass':
+          output.y = 0.4 * hold;
+          output.z = -0.52 * hold;
+          output.pitch = -0.1 * hold;
+          output.roll = 0.05 * impact;
+          output.scaleX = 1 + 0.24 * hold;
+          output.scaleY = 1 + 0.24 * hold;
+          output.scaleZ = 1 + 0.24 * hold;
+          output.effect = hold;
+          output.cameraPush = 0.34 * pulse(t, 0.2, 0.54, 0.88);
+          break;
+        case 'flashlight':
+          output.y = 0.32 * hold;
+          output.yaw = 0.72 * Math.sin(2 * Math.PI * t) * hold;
+          output.pitch = -0.2 * hold;
+          output.effect = pulse(t, 0.08, 0.5, 0.94);
+          break;
+      }
       break;
   }
 
-  const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
-  output.x *= returnEnvelope;
-  output.y *= returnEnvelope;
-  output.z *= returnEnvelope;
-  output.yaw *= returnEnvelope;
-  output.pitch *= returnEnvelope;
-  output.roll *= returnEnvelope;
-  output.scaleX = 1 + (output.scaleX - 1) * returnEnvelope;
-  output.scaleY = 1 + (output.scaleY - 1) * returnEnvelope;
-  output.scaleZ = 1 + (output.scaleZ - 1) * returnEnvelope;
-  output.effect *= returnEnvelope;
-
+  const ingressEnvelope = smoothstep(t / 0.08);
+  const returnEnvelope = 1 - smoothstep((t - 0.76) / 0.24);
+  const envelope = ingressEnvelope * returnEnvelope;
+  output.x *= envelope;
+  output.y *= envelope;
+  output.z *= envelope;
+  output.yaw *= envelope;
+  output.pitch *= envelope;
+  output.roll *= envelope;
+  output.scaleX = 1 + (output.scaleX - 1) * envelope;
+  output.scaleY = 1 + (output.scaleY - 1) * envelope;
+  output.scaleZ = 1 + (output.scaleZ - 1) * envelope;
+  output.effect *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPush *= envelope;
+  output.supplyRoll *= envelope;
   return true;
 }

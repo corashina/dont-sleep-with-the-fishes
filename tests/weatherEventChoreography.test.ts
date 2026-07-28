@@ -19,6 +19,7 @@ const reveal = (): WeatherRevealSample => ({
 const item = (): WeatherItemSample => ({
   x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0,
   scaleX: 1, scaleY: 1, scaleZ: 1, effect: 0,
+  cameraYaw: 0, cameraPush: 0, supplyRoll: 0, effectKind: 'none',
 });
 
 const hasItemMotion = (sample: WeatherItemSample): boolean => (
@@ -26,7 +27,17 @@ const hasItemMotion = (sample: WeatherItemSample): boolean => (
   || Math.abs(sample.yaw) > 0.01 || Math.abs(sample.pitch) > 0.01 || Math.abs(sample.roll) > 0.01
   || Math.abs(sample.scaleX - 1) > 0.01 || Math.abs(sample.scaleY - 1) > 0.01
   || Math.abs(sample.scaleZ - 1) > 0.01 || sample.effect > 0.01
+  || Math.abs(sample.cameraYaw) > 0.01 || Math.abs(sample.cameraPush) > 0.01
+  || Math.abs(sample.supplyRoll) > 0.01
 );
+
+const supportedPairs = [
+  ['shower-night', 'bucket'], ['shower-night', 'umbrella'], ['shower-night', 'map'],
+  ['windy-night', 'fishingNet'], ['windy-night', 'map'], ['windy-night', 'umbrella'],
+  ['thunderstorm', 'anchor'], ['thunderstorm', 'bucket'], ['thunderstorm', 'umbrella'],
+  ['restless-waves', 'anchor'], ['restless-waves', 'swimRing'],
+  ['man-in-the-fog', 'compass'], ['man-in-the-fog', 'spyglass'], ['man-in-the-fog', 'flashlight'],
+] as const;
 
 describe('weather event choreography', () => {
   it.each([
@@ -59,18 +70,26 @@ describe('weather event choreography', () => {
     expect(Object.values(nearEnd).every((value) => Math.abs(value) < 0.02)).toBe(true);
   });
 
+  it.each([
+    'shower-night', 'windy-night', 'thunderstorm',
+    'restless-waves', 'man-in-the-fog',
+  ])('%s reveal enters continuously from exact identity', (eventId) => {
+    const start = reveal();
+    const nearStart = reveal();
+    sampleWeatherReveal(eventId, 0, start);
+    sampleWeatherReveal(eventId, 0.00001, nearStart);
+    expect(start).toEqual(reveal());
+    expect(
+      Object.values(nearStart).every((value) => Math.abs(value) < 0.000001),
+    ).toBe(true);
+  });
+
   it('rejects unsupported physical pairs', () => {
     expect(weatherItemUseDuration('shower-night', 'anchor')).toBeNull();
     expect(sampleWeatherItemUse('shower-night', 'anchor', 0.5, item())).toBe(false);
   });
 
-  it.each([
-    ['shower-night', 'bucket'], ['shower-night', 'umbrella'], ['shower-night', 'map'],
-    ['windy-night', 'fishingNet'], ['windy-night', 'map'], ['windy-night', 'umbrella'],
-    ['thunderstorm', 'anchor'], ['thunderstorm', 'bucket'], ['thunderstorm', 'umbrella'],
-    ['restless-waves', 'anchor'], ['restless-waves', 'swimRing'],
-    ['man-in-the-fog', 'compass'], ['man-in-the-fog', 'spyglass'], ['man-in-the-fog', 'flashlight'],
-  ])('supports %s with %s', (eventId, choiceId) => {
+  it.each(supportedPairs)('supports %s with %s', (eventId, choiceId) => {
     const start = item();
     const output = item();
     const midpoint = item();
@@ -82,6 +101,59 @@ describe('weather event choreography', () => {
     expect(sampleWeatherItemUse(eventId, choiceId, 1, output)).toBe(true);
     expect(output).toEqual(item());
   });
+
+  it('assigns a distinct event-specific command to every supported pair', () => {
+    const commands = supportedPairs.map(([eventId, choiceId]) => {
+      const output = item();
+      sampleWeatherItemUse(eventId, choiceId, 0.5, output);
+      expect(output.effectKind).not.toBe('none');
+      return output.effectKind;
+    });
+    expect(new Set(commands).size).toBe(supportedPairs.length);
+  });
+
+  it('authors bearing, optical push, and wave-anchor stabilization as named beats', () => {
+    const compass = item();
+    const spyglass = item();
+    const earlyAnchor = item();
+    const heldAnchor = item();
+    sampleWeatherItemUse('man-in-the-fog', 'compass', 0.52, compass);
+    sampleWeatherItemUse('man-in-the-fog', 'spyglass', 0.52, spyglass);
+    sampleWeatherItemUse('restless-waves', 'anchor', 0.24, earlyAnchor);
+    sampleWeatherItemUse('restless-waves', 'anchor', 0.62, heldAnchor);
+
+    expect(compass.effectKind).toBe('compass-bearing');
+    expect(Math.abs(compass.cameraYaw)).toBeGreaterThan(0.04);
+    expect(spyglass.effectKind).toBe('spyglass-optical-push');
+    expect(spyglass.cameraPush).toBeGreaterThan(0.1);
+    expect(earlyAnchor.effectKind).toBe('wave-anchor-stabilize');
+    expect(Math.abs(heldAnchor.supplyRoll)).toBeLessThan(
+      Math.abs(earlyAnchor.supplyRoll),
+    );
+  });
+
+  it('distinguishes repeated physical items by event semantics', () => {
+    for (const choiceId of ['bucket', 'umbrella', 'anchor'] as const) {
+      const matching = supportedPairs.filter(([, candidate]) => candidate === choiceId);
+      const samples = matching.map(([eventId]) => {
+        const output = item();
+        sampleWeatherItemUse(eventId, choiceId, 0.5, output);
+        return output;
+      });
+      expect(new Set(samples.map(({ effectKind }) => effectKind)).size).toBe(samples.length);
+      expect(new Set(samples.map((sample) => JSON.stringify(sample))).size).toBe(samples.length);
+    }
+  });
+
+  it.each(['constructor', 'toString', '__proto__'])(
+    'rejects prototype key %s as an event or choice',
+    (prototypeKey) => {
+      expect(weatherRevealDuration(prototypeKey)).toBeNull();
+      expect(sampleWeatherReveal(prototypeKey, 0.5, reveal())).toBe(false);
+      expect(weatherItemUseDuration('shower-night', prototypeKey)).toBeNull();
+      expect(sampleWeatherItemUse('shower-night', prototypeKey, 0.5, item())).toBe(false);
+    },
+  );
 
   it.each([
     ['windy-night', 'map'], ['thunderstorm', 'anchor'],

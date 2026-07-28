@@ -362,6 +362,7 @@ export class BoatWorld {
   private readonly sky: Skybox;
   private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
+  private readonly cueCameraRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
   private readonly lantern: SurvivalLantern;
@@ -540,8 +541,10 @@ export class BoatWorld {
     collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);
 
     this.motionRig.name = 'boat-motion-rig';
+    this.cueCameraRig.name = 'boat-cue-camera-rig';
     this.cameraRig.name = 'boat-camera-rig';
-    this.motionRig.add(this.boat, this.cameraRig);
+    this.motionRig.add(this.boat, this.cueCameraRig);
+    this.cueCameraRig.add(this.cameraRig);
     this.cameraRig.add(camera);
     camera.position.set(0, 0.88, 1.72);
     camera.lookAt(this.baseCameraLookTarget);
@@ -663,6 +666,16 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     this.eventPresentation.clear();
     this.weatherEventAnimator.clear();
+    this.supplyDisplay.clearEventMotion();
+  }
+
+  setDocumentHidden(hidden: boolean): void {
+    if (this.disposed || !hidden) return;
+    this.weatherEventOperation += 1;
+    this.skipSequence();
+    this.eventPresentation.settleForVisibilityChange();
+    this.weatherEventAnimator.settleForVisibilityChange();
+    this.supplyDisplay.settleEventItemUse();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1054,9 +1067,8 @@ export class BoatWorld {
 
     this.advanceFishingPresentation(delta);
     this.eventPresentation.update(time, delta);
-    this.supplyDisplay.update(delta);
     this.weatherEventAnimator.update(time, delta);
-    this.supplyDisplay.update(0);
+    this.supplyDisplay.update(delta);
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
     this.updateFishingBiteParticles(delta);
@@ -1134,6 +1146,8 @@ export class BoatWorld {
       SURVIVAL_BOAT_ANCHOR.z + this.boatPose.driftZ,
     );
     this.motionRig.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
+    this.cueCameraRig.position.set(0, 0, 0);
+    this.cueCameraRig.rotation.set(0, 0, 0);
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.position.copy(this.baseCameraPosition);
@@ -1483,7 +1497,7 @@ export class BoatWorld {
         this.rodPivot.rotation.x = this.baseRodPivotRotationX - eased * 0.12;
         break;
       case 'dive':
-        this.cameraRig.position.y -= pulse * 0.72;
+        this.cueCameraRig.position.y -= pulse * 0.72;
         (this.scene.fog as FogExp2).density += pulse * 0.035;
         this.sky.setTint(DIVE_SKY_TINT, pulse * 0.8);
         if (this.scene.background instanceof Color) {
@@ -1504,7 +1518,7 @@ export class BoatWorld {
         break;
       case 'impact':
         this.motionRig.rotation.x += pulse * 0.075;
-        this.cameraRig.position.z -= pulse * 0.08;
+        this.cueCameraRig.position.z -= pulse * 0.08;
         break;
       case 'darkness':
         this.ambient.intensity *= 1 - eased * 0.68;
