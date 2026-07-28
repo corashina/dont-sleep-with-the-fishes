@@ -132,6 +132,46 @@ describe('fishing utility catalog', () => {
       },
       error: /bait.*unknown.*presentation item.*unknownItem/i,
     },
+    {
+      name: 'item reward explicitly marked non-unique',
+      sourceId: 'energyBar',
+      patch: {
+        reward: {
+          kind: 'item', itemId: 'energyBar', condition: 'usable', unique: false,
+        },
+      },
+      error: /energyBar.*item reward.*unique.*true/i,
+    },
+    {
+      name: 'item reward missing the unique marker',
+      sourceId: 'energyBar',
+      patch: {
+        reward: {
+          kind: 'item', itemId: 'energyBar', condition: 'usable',
+        },
+      },
+      error: /energyBar.*item reward.*unique.*true/i,
+    },
+    {
+      name: 'bait reward presented as another known item',
+      sourceId: 'bait',
+      patch: {
+        presentation: {
+          kind: 'item', itemId: 'energyBar', condition: 'usable',
+        },
+      },
+      error: /bait.*bait.*presentation.*baitTin/i,
+    },
+    {
+      name: 'bait reward presented broken',
+      sourceId: 'bait',
+      patch: {
+        presentation: {
+          kind: 'item', itemId: 'baitTin', condition: 'broken',
+        },
+      },
+      error: /bait.*bait.*presentation.*usable/i,
+    },
   ])('rejects $name', ({ sourceId, patch, error }) => {
     const source = FISHING_CATCHES.find(({ id }) => id === sourceId)!;
     const invalid = [{ ...source, ...patch }];
