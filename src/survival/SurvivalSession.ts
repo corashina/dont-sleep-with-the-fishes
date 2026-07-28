@@ -4,7 +4,12 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
-import { SURVIVAL_EVENTS, drawWeightedEvent, eligibleEvents } from './events';
+import {
+  SURVIVAL_EVENTS,
+  drawWeightedEvent,
+  eligibleEvents,
+  survivalEventById,
+} from './events';
 import { resolveWeightedOutcome } from './eventResolver';
 import { FishingSession, type FishingTerminalResult } from './FishingSession';
 import { SurvivalInventoryState } from './inventory';
@@ -23,6 +28,7 @@ import type {
   BeginFishingResult,
   DayActionOption,
   DayActionId,
+  DriftingLootVariant,
   EventResponse,
   EventResponseId,
   EventInventoryMutation,
@@ -34,8 +40,13 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
   ResourceEffect,
+  RewardSummary,
   WeatherId,
+  WeightedEventOutcome,
 } from './survivalTypes';
+
+const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
+const POST_ACTION_EXCLUDED_EVENT_IDS: ReadonlySet<string> = new Set(['drifting-loot']);
 
 export interface SurvivalSessionOptions {
   seed: number;
@@ -91,6 +102,7 @@ export class SurvivalSession {
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
+  private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -120,9 +132,10 @@ export class SurvivalSession {
     this.applyInitialConditions(options.initialConditions);
 
     if (options.initialEventId !== undefined) {
-      const initialEvent = SURVIVAL_EVENTS.find((event) => event.id === options.initialEventId);
+      const initialEvent = survivalEventById(options.initialEventId);
       if (initialEvent === undefined) throw new Error(`Unknown survival event: ${options.initialEventId}`);
       this.openEvent(initialEvent);
+      if (initialEvent.id === 'drifting-loot') this.pendingDriftingLootVariant = 'barrel';
       this.dayEventOccurred = initialEvent.phase === 'day';
     }
 
@@ -136,9 +149,7 @@ export class SurvivalSession {
   }
 
   snapshot(): SurvivalSnapshot {
-    const lastOutcome = this.lastOutcome === null
-      ? null
-      : { ...this.lastOutcome, deltas: { ...this.lastOutcome.deltas } };
+    const lastOutcome = this.lastOutcome === null ? null : this.cloneOutcome(this.lastOutcome);
 
     return {
       state: this.state,
@@ -159,6 +170,7 @@ export class SurvivalSession {
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
       pendingEventId: this.pendingEventId,
+      pendingDriftingLootVariant: this.pendingDriftingLootVariant,
       pendingEventTargetId: this.pendingEventTargetId,
       lastOutcome,
       seed: this.seed,
@@ -313,7 +325,7 @@ export class SurvivalSession {
     if (!this.actedToday) return this.reject('act-first', 'Take a survival action before looking beyond the boat.');
     if (this.dayEventOccurred) return this.reject('day-event-used', 'Today\'s event has already passed.');
 
-    const event = this.drawEvent('day');
+    const event = this.drawEvent('day', POST_ACTION_EXCLUDED_EVENT_IDS);
     this.dayEventOccurred = true;
     this.openEvent(event);
     return this.commit('event-opened', event.prompt, {}, event.cue);
@@ -392,6 +404,7 @@ export class SurvivalSession {
     const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
 
     const phase = event.phase;
+    const pendingDriftingLootVariant = this.pendingDriftingLootVariant;
     const before = this.resourceValues();
     const resolved = resolveWeightedOutcome(choice, this.random);
     const inventoryMutations: JournalInventoryMutation[] = [];
@@ -414,18 +427,22 @@ export class SurvivalSession {
       if (concrete !== null) inventoryMutations.push(concrete);
     }
 
-    if (resolved.effects.rescue === true) this.state = 'rescued';
+    if (resolved.effects.rescue === true) {
+      this.state = 'rescued';
+      this.clearPendingEvent();
+    }
     else this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
-    this.pendingEvent = null;
-    this.pendingEventId = null;
-    this.pendingEventTargetId = null;
+    this.clearPendingEvent();
 
     const after = this.resourceValues();
     const deltas = this.appliedResourceDelta(before, after);
     const cue = this.presentationCue('none');
+    const rewardSummary = pendingDriftingLootVariant === null
+      ? undefined
+      : this.driftingLootRewardSummary(event.id, choiceId, resolved, fallbackFoodGranted);
     const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
@@ -434,6 +451,7 @@ export class SurvivalSession {
         : resolved.message,
       deltas,
       cue,
+      ...(rewardSummary === undefined ? {} : { rewardSummary }),
     };
     this.lastOutcome = outcome;
     this.recordJournalEvent(
@@ -449,7 +467,7 @@ export class SurvivalSession {
       if (phase === 'day') this.state = 'day';
       else this.state = 'nightEvent';
     }
-    return { ...outcome, deltas: { ...outcome.deltas } };
+    return this.cloneOutcome(outcome);
   }
 
   beginDawn(): ActionOutcome {
@@ -465,9 +483,7 @@ export class SurvivalSession {
     this.actedToday = false;
     this.dayActivity = 'none';
     this.dayEventOccurred = false;
-    this.pendingEvent = null;
-    this.pendingEventId = null;
-    this.pendingEventTargetId = null;
+    this.clearPendingEvent();
     this.state = 'day';
 
     this.weather = 'calm';
@@ -490,7 +506,12 @@ export class SurvivalSession {
     }
 
     const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'dawn');
-    if (this.isTerminal() || this.day < SURVIVAL_BALANCE.rescue.firstDay) return dawn;
+    if (this.isTerminal()) return dawn;
+
+    if (this.day < SURVIVAL_BALANCE.rescue.firstDay) {
+      this.openDriftingLootAfterDawn();
+      return dawn;
+    }
 
     const baseChance = Math.min(
       SURVIVAL_BALANCE.rescue.chanceCap,
@@ -498,9 +519,13 @@ export class SurvivalSession {
         + (this.day - SURVIVAL_BALANCE.rescue.firstDay) * SURVIVAL_BALANCE.rescue.dailyIncrease,
     );
     const progressChance = Math.min(SURVIVAL_BALANCE.rescue.progressCap, this.rescueProgress) / 100;
-    if (this.random.next() >= Math.min(0.85, baseChance + progressChance)) return dawn;
+    if (this.random.next() >= Math.min(0.85, baseChance + progressChance)) {
+      this.openDriftingLootAfterDawn();
+      return dawn;
+    }
 
     this.state = 'rescued';
+    this.clearPendingEvent();
     return this.commit('rescued', 'A rescue vessel finds the lifeboat at dawn.', {}, 'rescue');
   }
 
@@ -711,7 +736,10 @@ export class SurvivalSession {
     }, 'none');
   }
 
-  private drawEvent(phase: 'day' | 'night'): SurvivalEventDefinition {
+  private drawEvent(
+    phase: 'day' | 'night',
+    excludedIds: ReadonlySet<string> = NO_EVENT_EXCLUSIONS,
+  ): SurvivalEventDefinition {
     const pool = eligibleEvents(SURVIVAL_EVENTS, {
       phase,
       day: this.day,
@@ -722,8 +750,39 @@ export class SurvivalSession {
       appearanceCounts: this.appearanceCounts,
       inventoryItemIds: this.targetableItemIds(),
       rescueProgress: this.rescueProgress,
-    });
+    }).filter(({ id }) => !excludedIds.has(id));
     return drawWeightedEvent(pool, this.random, phase);
+  }
+
+  private openDriftingLootAfterDawn(): void {
+    const balance = SURVIVAL_BALANCE.dayEvents.driftingLoot;
+    if (this.day < balance.firstDay || this.random.next() >= balance.chance) return;
+    const event = survivalEventById('drifting-loot');
+    if (event === undefined) throw new Error('Missing Drifting Loot event definition.');
+    this.pendingDriftingLootVariant = this.random.next() < balance.barrelChance ? 'barrel' : 'crate';
+    this.dayEventOccurred = true;
+    this.openEvent(event);
+  }
+
+  private driftingLootRewardSummary(
+    eventId: string,
+    choiceId: string,
+    resolved: WeightedEventOutcome,
+    fallbackFoodGranted: boolean,
+  ): RewardSummary | undefined {
+    if (eventId !== 'drifting-loot' || choiceId !== 'retrieve') return undefined;
+    if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
+    const added = resolved.effects.resources?.find(
+      ({ operation, resource }) => operation === 'add'
+        && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),
+    );
+    if (added !== undefined && typeof added.value === 'number') {
+      const id = added.resource;
+      if (id === 'food' || id === 'bait' || id === 'repairMaterial') {
+        return Object.freeze({ kind: 'resource', id, quantity: added.value });
+      }
+    }
+    return Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 });
   }
 
   private recordJournalEvent(
@@ -808,6 +867,23 @@ export class SurvivalSession {
     this.pendingEventId = event.id;
     this.pendingEventTargetId = event.targetItemIds === undefined ? null : this.drawEventTarget(event);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
+  }
+
+  private clearPendingEvent(): void {
+    this.pendingEvent = null;
+    this.pendingEventId = null;
+    this.pendingEventTargetId = null;
+    this.pendingDriftingLootVariant = null;
+  }
+
+  private cloneOutcome(outcome: ActionOutcome): ActionOutcome {
+    return {
+      ...outcome,
+      deltas: { ...outcome.deltas },
+      ...(outcome.rewardSummary === undefined
+        ? {}
+        : { rewardSummary: Object.freeze({ ...outcome.rewardSummary }) as RewardSummary }),
+    };
   }
 
   private targetableItemIds(): ReadonlySet<ItemId> {
@@ -1106,6 +1182,7 @@ export class SurvivalSession {
     if (this.isTerminal()) return;
     if (this.health <= 0) this.state = 'dead';
     else if (this.hull <= 0) this.state = 'sunk';
+    if (this.isTerminal()) this.clearPendingEvent();
   }
 
   private isTerminal(): boolean {

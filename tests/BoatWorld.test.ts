@@ -129,6 +129,7 @@ function snapshot(
     inventory: new SurvivalInventoryState(savedItems).snapshot(),
     savedItems,
     pendingEventId: null,
+    pendingDriftingLootVariant: null,
     lastOutcome: null,
     seed: 8,
     ...overrides,
