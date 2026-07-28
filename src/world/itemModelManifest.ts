@@ -6,6 +6,11 @@ import { ITEM_IDS, type ItemId } from '../game/ItemState';
 
 export interface GeneratedRuntimeModelMetadata {
   readonly triangles: number;
+  readonly animations?: readonly {
+    readonly name: string;
+    readonly duration: number;
+    readonly channels: number;
+  }[];
   readonly rawBounds: {
     readonly min: readonly [number, number, number];
     readonly max: readonly [number, number, number];
@@ -55,6 +60,11 @@ const presentation = {
   flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
   harpoonGun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
   energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  captainWhiskers: {
+    targetLongestDimension: 1.08,
+    rotation: [0, 0, 0],
+    offset: [0, 0.54, 0],
+  },
 } as const satisfies Readonly<Record<ItemId, Presentation>>;
 
 const generatedMetadata = generatedMetadataJson as unknown as Readonly<

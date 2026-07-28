@@ -66,7 +66,21 @@ function inspectDocument(itemId, document) {
   ) {
     throw new Error(`${itemId}: empty or non-finite model bounds`);
   }
-  return { triangles, rawBounds };
+  const animations = document.getRoot().listAnimations().map((animation) => {
+    let duration = 0;
+    for (const sampler of animation.listSamplers()) {
+      const input = sampler.getInput();
+      const times = input?.getArray();
+      if (!times) continue;
+      for (const time of times) duration = Math.max(duration, time);
+    }
+    return {
+      name: animation.getName(),
+      duration,
+      channels: animation.listChannels().length,
+    };
+  });
+  return { triangles, rawBounds, animations };
 }
 
 export async function buildItemModelMetadata(modelsDir, itemIds) {
