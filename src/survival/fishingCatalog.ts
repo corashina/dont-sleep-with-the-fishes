@@ -122,6 +122,9 @@ function validateCatchContract(catchDefinition: FishingCatchDefinition): void {
     if (reward.kind === 'bait' && reward.amount !== 1) {
       throw new Error(`${id} utility bait reward must be one`);
     }
+    if (reward.kind === 'item' && reward.unique !== true) {
+      throw new Error(`${id} item reward unique must be true`);
+    }
     if (size !== 'utility') throw new Error(`${id} utility size must be utility`);
     if (presentation.kind !== 'item') {
       throw new Error(`${id} utility must use an item presentation`);
@@ -150,6 +153,15 @@ export function validateCatalog(catches: readonly FishingCatchDefinition[]): voi
       }
       if (!isFishingItemCondition(catchDefinition.presentation.condition)) {
         throw new Error(`${catchDefinition.id} has an invalid presentation item condition`);
+      }
+      if (
+        catchDefinition.reward.kind === 'bait'
+        && (
+          catchDefinition.presentation.itemId !== 'baitTin'
+          || catchDefinition.presentation.condition !== 'usable'
+        )
+      ) {
+        throw new Error(`${catchDefinition.id} bait presentation must be usable baitTin`);
       }
     }
     if (catchDefinition.reward.kind === 'item') {
