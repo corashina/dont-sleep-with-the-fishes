@@ -1,7 +1,6 @@
 import {
   AmbientLight,
   Box3,
-  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -51,7 +50,7 @@ import {
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
-import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatSupplyLayout';
+import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatStorage';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   collectMeshResources,
@@ -551,28 +550,6 @@ export class BoatWorld {
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
-
-    const platform = new Group();
-    platform.name = 'survival-supply-platform';
-    const platformWood = new MeshStandardMaterial({
-      color: 0x4d392c,
-      roughness: 0.96,
-      flatShading: true,
-    });
-    for (let index = 0; index < 9; index += 1) {
-      const slat = new Mesh(new BoxGeometry(0.25, 0.055, 3.20), platformWood);
-      slat.name = `survival-supply-platform-slat-${index}`;
-      slat.position.set((index - 4) * 0.27, -0.315, -1.05);
-      platform.add(slat);
-    }
-    for (const x of [-1.22, 1.22]) {
-      const rail = new Mesh(new BoxGeometry(0.08, 0.12, 3.32), platformWood);
-      rail.name = `survival-supply-platform-rail-${x < 0 ? 'port' : 'starboard'}`;
-      rail.position.set(x, -0.27, -1.05);
-      platform.add(rail);
-    }
-    this.boat.add(platform);
-    collectMeshResources(platform, this.ownedGeometries, this.ownedMaterials);
 
     this.supplyDisplay = new BoatSupplyDisplay(
       propModels,

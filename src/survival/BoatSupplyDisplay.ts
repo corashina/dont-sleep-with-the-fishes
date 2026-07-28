@@ -20,10 +20,9 @@ import {
 } from '../game/ItemState';
 import {
   BOAT_SUPPLY_GROUP_IDS,
-  boatSupplyCopyOffsets,
-  boatSupplyGroupTransform,
+  boatSupplyTransform,
   type BoatSupplyGroupId,
-} from '../world/BoatSupplyLayout';
+} from '../world/BoatStorage';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
@@ -239,10 +238,6 @@ export class BoatSupplyDisplay {
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
       const root = new Group();
       root.name = `boat-supply:${groupId}`;
-      const transform = boatSupplyGroupTransform(groupId);
-      root.position.copy(transform.position);
-      root.rotation.copy(transform.rotation);
-      root.scale.setScalar(transform.scale);
       parent.add(root);
       this.basePositionById.set(groupId, root.position.clone());
       this.baseQuaternionById.set(groupId, root.quaternion.clone());
@@ -262,7 +257,11 @@ export class BoatSupplyDisplay {
         const copy = groupId === 'repairMaterial'
           ? createRepairMaterialBundle(index)
           : propModels.create(instance!);
+        const transform = boatSupplyTransform(groupId, index);
         copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
+        copy.position.copy(transform.position);
+        copy.rotation.copy(transform.rotation);
+        copy.scale.setScalar(transform.scale);
         copy.visible = false;
         root.add(copy);
         collectMeshResources(copy, this.ownedGeometries, this.ownedMaterials);
@@ -437,15 +436,11 @@ export class BoatSupplyDisplay {
       brokenItems.map(({ instance }) => instance.instanceId),
     );
     record.root.visible = record.visibleCopies > 0;
-    const offsets = record.visibleCopies === 0
-      ? []
-      : boatSupplyCopyOffsets(groupId, record.visibleCopies);
     const copies = this.copiesById.get(groupId)!;
     for (let index = 0; index < copies.length; index += 1) {
       const copy = copies[index]!;
       copy.root.visible = index < record.visibleCopies;
       if (!copy.root.visible) continue;
-      copy.root.position.copy(offsets[index]!);
       const activeItem = activeItems[index];
       copy.instanceId = activeItem?.instance.instanceId ?? copy.instanceId;
       copy.condition = activeItem?.condition

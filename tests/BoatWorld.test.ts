@@ -24,6 +24,7 @@ import {
   Vector4,
 } from 'three';
 import {
+  ITEM_DEFINITIONS,
   createItemInstances,
   type ItemId,
   type ItemInstance,
@@ -35,7 +36,10 @@ import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, FISHING_PLAYER_SEAT } from '../src/survival/BoatWorld';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
-import { boatStorageTransform } from '../src/world/BoatStorage';
+import {
+  boatStorageTransform,
+  boatSupplyTransform,
+} from '../src/world/BoatStorage';
 import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
@@ -144,6 +148,45 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('uses canonical supply transforms without the old slatted platform', () => {
+    const savedItems = createItemInstances();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems, {
+      food: ITEM_DEFINITIONS.cannedFood.spawnCount,
+      bait: ITEM_DEFINITIONS.baitTin.spawnCount,
+      recoveredFood: ITEM_DEFINITIONS.cannedFood.spawnCount,
+      recoveredBait: ITEM_DEFINITIONS.baitTin.spawnCount,
+    }));
+
+    expect(world.scene.getObjectByName('survival-supply-platform')).toBeUndefined();
+    for (const type of Object.keys(ITEM_DEFINITIONS) as ItemId[]) {
+      for (let index = 0; index < ITEM_DEFINITIONS[type].spawnCount; index += 1) {
+        const copy = world.scene.getObjectByName(
+          `boat-supply:${type}:copy-${index + 1}`,
+        )!;
+        const expected = boatSupplyTransform(type, index);
+
+        expect(copy.visible, `${type}-${index + 1}`).toBe(true);
+        expect(copy.position.toArray()).toEqual(expected.position.toArray());
+        expect(copy.rotation.toArray()).toEqual(expected.rotation.toArray());
+        expect(copy.scale.toArray()).toEqual([
+          expected.scale,
+          expected.scale,
+          expected.scale,
+        ]);
+      }
+    }
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('forwards event staging and keeps the cargo vessel held for natural rescue', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -195,6 +238,34 @@ describe('BoatWorld helpers', () => {
       }),
     ]));
 
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('restores an animated item group without changing its canonical copy transform', async () => {
+    const item = savedItem('energyBar');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    world.syncInventory(snapshot([item]));
+    const group = world.scene.getObjectByName('boat-supply:energyBar')!;
+    const copy = world.scene.getObjectByName('boat-supply:energyBar:copy-1')!;
+    const expected = boatSupplyTransform('energyBar', 0);
+    const pending = world.playEventItemUse(item.instanceId);
+
+    world.update(1, 1);
+    await pending;
+
+    expect(group.position.toArray()).toEqual([0, 0, 0]);
+    group.rotation.toArray().slice(0, 3).forEach((value) => {
+      expect(value).toBeCloseTo(0);
+    });
+    expect(copy.position.toArray()).toEqual(expected.position.toArray());
+    expect(copy.rotation.toArray()).toEqual(expected.rotation.toArray());
     world.dispose();
     propModels.dispose();
   });
