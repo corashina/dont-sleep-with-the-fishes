@@ -728,16 +728,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   cursor: default;
 }
 .boat-anchor[data-event-state="eligible"] {
-  border-color: #f0b13acc;
-  border-radius: 50%;
   filter: none;
-  box-shadow: 0 0 0 3px #0b1013aa, 0 0 22px #f0b13a99;
 }
 .boat-anchor[data-event-state="selected"] {
-  border-color: var(--ink-bone);
-  border-radius: 50%;
   filter: none;
-  box-shadow: 0 0 0 4px #f0b13a66, 0 0 34px #f0b13acc;
 }
 .boat-anchor[data-event-state]:focus-visible {
   outline: 3px solid var(--ink-yellow);

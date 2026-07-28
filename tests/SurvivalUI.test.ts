@@ -374,7 +374,7 @@ describe('SurvivalUI', () => {
     const umbrella = mount.querySelector<HTMLButtonElement>('[data-anchor-id="umbrella-2"]')!;
     expect(bucket.dataset.eventState).toBe('eligible');
     expect(bucket.getAttribute('aria-disabled')).toBe('false');
-    expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET ×1');
+    expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
     expect(umbrella.dataset.eventState).toBe('muted');
     expect(umbrella.disabled).toBe(false);
     expect(umbrella.getAttribute('aria-disabled')).toBe('true');
@@ -396,6 +396,60 @@ describe('SurvivalUI', () => {
     ui.clearEventPresentation();
     expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(false);
     expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('routes the event sleep response through the lantern instead of the caption', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const choice = vi.fn();
+    const action = vi.fn();
+    ui.onEventChoice = choice;
+    ui.onAction = action;
+    ui.render(snapshot(), () => null);
+
+    await ui.showEventReveal(testEvent());
+    ui.setEventSelection(new Map(), [
+      { id: 'sleep', label: 'Sleep', unavailableReason: null },
+    ]);
+
+    const lantern = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="end-day-lantern"]',
+    )!;
+    expect(mount.querySelector('[data-event-choice="sleep"]')).toBe(lantern);
+    expect(mount.querySelector('[data-event-choices]')?.textContent).not.toContain('Sleep');
+    expect(lantern.querySelector('[role="tooltip"]')?.textContent).toBe('SLEEP');
+    expect(lantern.getAttribute('aria-disabled')).toBe('false');
+
+    lantern.click();
+    expect(choice).toHaveBeenCalledWith('sleep');
+    expect(action).not.toHaveBeenCalled();
+
+    ui.clearEventPresentation();
+    expect(lantern.querySelector('[role="tooltip"]')?.textContent).toBe('END DAY');
+    expect(lantern.hasAttribute('data-event-choice')).toBe(false);
+  });
+
+  it('shows quantity only when an item represents more than one copy', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    ui.setAnchors([
+      {
+        id: 'bucket-test', itemType: 'bucket', toolId: null, action: null,
+        remainingUses: null, quantity: 1, x: 140, y: 180, visible: true, depleted: false,
+      },
+      {
+        id: 'cannedFood-test', itemType: 'cannedFood', toolId: null, action: 'eat',
+        remainingUses: 1, quantity: 2, x: 340, y: 300, visible: true, depleted: false,
+      },
+    ]);
+
+    expect(
+      mount.querySelector('[data-anchor-id="bucket-test"] [role="tooltip"]')?.textContent,
+    ).toBe('BUCKET');
+    expect(
+      mount.querySelector('[data-anchor-id="cannedFood-test"] [role="tooltip"]')?.textContent,
+    ).toBe('FOOD ×2');
   });
 
   it.each([
@@ -531,7 +585,7 @@ describe('SurvivalUI', () => {
 
     const broken = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
     expect(broken.disabled).toBe(false);
-    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET ×1');
+    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
     expect(broken.getAttribute('aria-description')).toContain('BROKEN');
     expect(broken.dataset.condition).toBe('broken');
     broken.focus();

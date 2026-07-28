@@ -639,6 +639,28 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('uses the full projected item model as its pointer target', () => {
+    const savedItems = [savedItem('bucket')];
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems));
+
+    const bucket = world.projectInteractionAnchors(8_000, 6_000)
+      .find(({ id }) => id === 'supply:bucket')!;
+
+    expect(bucket.hitArea?.width).toBeGreaterThan(50);
+    expect(bucket.hitArea?.height).toBeGreaterThan(50);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps projected item and tool anchors steady while riding waves', () => {
     const savedItems = [savedItem('bucket')];
     const propModels = createTestPropModels();

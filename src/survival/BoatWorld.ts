@@ -665,8 +665,8 @@ export class BoatWorld {
         brokenQuantity: record.brokenQuantity,
         backingInstanceId: record.backingInstanceId,
         hitArea: {
-          width: Math.min(50, Math.max(44, hitWidth)),
-          height: Math.min(50, Math.max(44, hitHeight)),
+          width: Math.max(44, hitWidth),
+          height: Math.max(44, hitHeight),
           depth,
         },
       } satisfies BoatInteractionAnchor;
