@@ -41,7 +41,6 @@ const SHELF_IDS = new Set<ItemId>([
   'flareGun',
   'spyglass',
   'bottledPaper',
-  'medicalKit',
 ]);
 
 const FLOOR_IDS = new Set<ItemId>([
@@ -52,6 +51,7 @@ const FLOOR_IDS = new Set<ItemId>([
   'umbrella',
   'swimRing',
   'harpoonGun',
+  'medicalKit',
 ]);
 
 function productionBounds(instance: ItemInstance): Box3 {
@@ -102,6 +102,20 @@ describe('boat item layout', () => {
         expect(survival.scale).toBe(storage.scale);
       }
     }
+  });
+
+  it('uses the approved authored display poses', () => {
+    const transform = (type: ItemId) => boatStorageTransform({
+      instanceId: `${type}-1` as ItemInstanceId,
+      type,
+    });
+
+    expect(transform('map').rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(transform('ductTape').rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(transform('harpoonGun').rotation.y).toBeGreaterThan(1.2);
+    expect(Math.abs(transform('umbrella').rotation.x)).toBeGreaterThan(0.1);
+    expect(Math.abs(transform('umbrella').rotation.z)).toBeGreaterThan(0.05);
+    expect(transform('swimRing').position.z).toBeLessThan(-0.45);
   });
 
   it('keeps bait closest to the fishing rod', () => {
