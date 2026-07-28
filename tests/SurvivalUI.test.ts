@@ -902,7 +902,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-fishing-result-title]')?.textContent).toBe('TUNA');
     expect(mount.querySelector('[data-fishing-result-detail]')?.textContent).toBe('+2 FOOD');
     expect(mainStyles).toMatch(
-      /\.routine-dialog--fishing \.routine-dialog__card > \*\s*\{[^}]*justify-self:\s*center;/s,
+      /\.routine-dialog--fishing \.routine-dialog__card > \*,\s*\.routine-dialog--salvage \.routine-dialog__card > \*\s*\{[^}]*justify-self:\s*center;/s,
     );
     expect(document.activeElement).toBe(
       mount.querySelector('[data-fishing-result-continue]'),
@@ -932,6 +932,9 @@ describe('SurvivalUI', () => {
 
     const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
     expect(result.dataset.anchorState).toBe('projected');
+    expect(mainStyles).toMatch(
+      /\.routine-dialog--fishing \.fishing-result-card > p\.fishing-result-detail,\s*\.routine-dialog--salvage \.fishing-result-card > p\.fishing-result-detail\s*\{/s,
+    );
     const projectedX = result.style.getPropertyValue('--routine-x');
     target.x = 20;
     ui.setAnchors([]);
@@ -995,6 +998,9 @@ describe('SurvivalUI', () => {
     expect(result.dataset.anchorState).toBe('fallback');
     ui.dispose();
     expect(mount.querySelector('.survival-ui')).toBeNull();
+    expect(result.classList).not.toContain('is-visible');
+    expect(result.hasAttribute('inert')).toBe(true);
+    expect(result.getAttribute('aria-hidden')).toBe('true');
     button.click();
     expect(continued).not.toHaveBeenCalled();
   });
