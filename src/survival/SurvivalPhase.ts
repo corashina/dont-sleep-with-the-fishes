@@ -176,6 +176,7 @@ export class SurvivalPhase implements GamePhase {
     seed: number,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
+    initialEventId?: string,
   );
   constructor(
     context: PhaseContext,
@@ -183,12 +184,16 @@ export class SurvivalPhase implements GamePhase {
     seed: number,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
+    initialEventId: string | undefined,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
     if (testDependencies === undefined) {
       this.initialize(
         context,
-        new SurvivalSession(savedItems, { seed }),
+        new SurvivalSession(savedItems, {
+          seed,
+          ...(initialEventId === undefined ? {} : { initialEventId }),
+        }),
         new BoatWorld(
           context.camera,
           context.propModels,
@@ -219,6 +224,7 @@ export class SurvivalPhase implements GamePhase {
       seed: number,
       scavengeElapsedSeconds: number,
       onRestart: () => void,
+      initialEventId: string | undefined,
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
@@ -227,6 +233,7 @@ export class SurvivalPhase implements GamePhase {
       0,
       0,
       dependencies.onRestart ?? (() => undefined),
+      undefined,
       dependencies,
     );
   }

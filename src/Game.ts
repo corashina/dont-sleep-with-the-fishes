@@ -7,6 +7,11 @@ import {
   Texture,
 } from 'three';
 import type { GamePhase, PhaseContext } from './app/GamePhase';
+import {
+  EVENT_TEST_OPTIONS,
+  createEventTestResult,
+  isEventTestId,
+} from './app/EventTest';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
 import {
@@ -47,6 +52,7 @@ export interface GameFactories {
     result: Readonly<ScavengeResult>,
     seed: number,
     onRestart: () => void,
+    initialEventId?: string,
   ): GamePhase;
 }
 
@@ -54,13 +60,14 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createScavenge: (context, onComplete, onRestart) => (
     new ScavengePhase(context, onComplete, onRestart)
   ),
-  createSurvival: (context, result, seed, onRestart) => (
+  createSurvival: (context, result, seed, onRestart, initialEventId) => (
     new SurvivalPhase(
       context,
       result.savedItems,
       seed,
       result.elapsedSeconds,
       onRestart,
+      initialEventId,
     )
   ),
 };
@@ -373,6 +380,10 @@ export class Game {
             source: 'normal',
             setWeather: (id) => this.setWeatherOverride(id),
           },
+          {
+            options: EVENT_TEST_OPTIONS,
+            enterEvent: (id) => this.enterTestEvent(id),
+          },
         );
       }
       this.seed = this.createSeed();
@@ -449,13 +460,17 @@ export class Game {
     this.activateSurvival(copiedResult);
   }
 
-  private activateSurvival(result: Readonly<ScavengeResult>): void {
+  private activateSurvival(
+    result: Readonly<ScavengeResult>,
+    initialEventId?: string,
+  ): void {
     const generation = ++this.phaseGeneration;
     const survival = this.factories.createSurvival(
       this.context,
       result,
       this.seed,
       () => this.restartFrom(generation),
+      initialEventId,
     );
     if (!this.ownsGeneration(generation)) {
       survival.dispose();
@@ -466,6 +481,18 @@ export class Game {
     this.synchronizeWeatherState();
     survival.resize(window.innerWidth, window.innerHeight);
     survival.start();
+  }
+
+  private enterTestEvent(id: string): void {
+    if (this.disposed) return;
+    if (!isEventTestId(id)) throw new Error(`Unknown event test scene: ${id}`);
+    const outgoing = this.detachActivePhase();
+    this.exitPointerLock();
+    outgoing?.dispose();
+    this.resetCamera();
+    this.elapsed = 0;
+    this.seed = this.createSeed();
+    this.activateSurvival(createEventTestResult(), id);
   }
 
   private restartFrom(generation: number): void {
