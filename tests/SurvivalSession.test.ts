@@ -658,11 +658,72 @@ describe('SurvivalSession daytime actions', () => {
     });
     const tunaAttempt = beginFishing(tuna);
     const tunaResult = reelCatch(tunaAttempt);
-    expect(tunaResult).toMatchObject({ kind: 'catch', catch: { id: 'tuna', food: 2 } });
+    expect(tunaResult).toMatchObject({ kind: 'catch', catch: { id: 'tuna', reward: { kind: 'food', amount: 2 } } });
     expect(tuna.finishFishing(tunaAttempt.snapshot().id, tunaResult)).toMatchObject({
       deltas: { food: 2 },
       cue: 'none',
     });
+  });
+
+  it.each([
+    ['bait', 380 / 406, {}, { bait: 1 }, undefined],
+    ['wetDuctTape', 385 / 406, {}, {}, ['ductTape-1', 'usable']],
+    ['brokenCompass', 390 / 406, {}, {}, ['compass-1', 'broken']],
+    ['tornFishingNet', 395 / 406, {}, {}, ['fishingNet-1', 'broken']],
+    ['energyBar', 398 / 406, {}, {}, ['energyBar-1', 'usable']],
+  ] as const)('applies the %s utility reward', (
+    catchId, catchRoll, deltas, snapshotMatch, item,
+  ) => {
+    const session = new SurvivalSession([], {
+      seed: 1,
+      initial: { day: 3 },
+      random: sequenceRandom([0, catchRoll]),
+    });
+    const attempt = beginFishing(session);
+    const result = reelCatch(attempt);
+    expect(result).toMatchObject({ kind: 'catch', catch: { id: catchId, kind: 'utility' } });
+    expect(session.finishFishing(attempt.snapshot().id, result)).toMatchObject({
+      accepted: true, code: 'utility-caught', deltas,
+    });
+    expect(session.snapshot()).toMatchObject(snapshotMatch);
+    if (item) {
+      expect(session.snapshot().inventory[item[0]]?.condition).toBe(item[1]);
+    }
+  });
+
+  it('does not spend captured bait when bait itself is caught', () => {
+    const session = new SurvivalSession(
+      saved('baitTin', 'ductTape', 'compass', 'fishingNet', 'energyBar'),
+      {
+        seed: 1,
+        initial: { day: 3 },
+        random: sequenceRandom([0, 558 / 563]),
+      },
+    );
+    const attempt = beginFishing(session);
+    const result = reelCatch(attempt);
+    expect(result).toMatchObject({ kind: 'catch', catch: { id: 'bait' } });
+    expect(session.finishFishing(attempt.snapshot().id, result)).toMatchObject({
+      code: 'utility-caught',
+      deltas: { bait: 1 },
+    });
+    expect(session.snapshot()).toMatchObject({ bait: 2, recoveredBait: 1 });
+  });
+
+  it.each([
+    ['usable', undefined],
+    ['broken', { 'compass-1': 'broken' }],
+  ] as const)('excludes a %s owned unique fishing utility before selection', (
+    _condition, initialConditions,
+  ) => {
+    const session = new SurvivalSession(saved('compass'), {
+      seed: 1,
+      initial: { day: 3 },
+      initialConditions,
+      random: sequenceRandom([0, 390 / 406]),
+    });
+    const attempt = beginFishing(session);
+    expect(reelCatch(attempt)).toMatchObject({ kind: 'catch', catch: { id: 'wetDuctTape' } });
   });
 
   it('does not consume bait that was unavailable when the fishing attempt began', () => {

@@ -2,6 +2,7 @@ import {
   selectFishingCatch,
   type FishingCatchDefinition,
 } from './fishingCatalog';
+import type { ItemId } from '../game/ItemState';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type { RandomSource } from './survivalTypes';
 
@@ -44,6 +45,7 @@ export interface FishingSessionOptions {
   readonly id: string;
   readonly day: number;
   readonly capturedBait: boolean;
+  readonly activeItemIds?: ReadonlySet<ItemId>;
   readonly random: RandomSource;
 }
 
@@ -74,7 +76,12 @@ export class FishingSession {
     const catchRoll = options.random.next();
     this.biteDelaySeconds = SURVIVAL_BALANCE.fishing.minimumBiteDelaySeconds
       + biteDelayRoll * SURVIVAL_BALANCE.fishing.biteDelayRangeSeconds;
-    this.hiddenCatch = selectFishingCatch(options.day, options.capturedBait, catchRoll);
+    this.hiddenCatch = selectFishingCatch(
+      options.day,
+      options.capturedBait,
+      catchRoll,
+      options.activeItemIds,
+    );
     const session = this;
     this.liveView = Object.freeze({
       get id(): string { return session.id; },

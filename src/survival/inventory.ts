@@ -24,15 +24,21 @@ export class SurvivalInventoryState {
     return this.count(type, 'usable') > 0;
   }
 
-  gain(type: ItemId): ItemInstanceId | null {
+  gain(
+    type: ItemId,
+    condition: Extract<ItemCondition, 'usable' | 'broken'> = 'usable',
+  ): ItemInstanceId | null {
+    if (condition === 'broken' && !ITEM_DEFINITIONS[type].breakable) {
+      throw new Error(`${type} cannot be gained broken`);
+    }
     const instanceId = `${type}-1` as ItemInstanceId;
     const existing = this.items.get(instanceId);
     if (existing === undefined) {
-      this.items.set(instanceId, { instanceId, type, condition: 'usable' });
+      this.items.set(instanceId, { instanceId, type, condition });
       return instanceId;
     }
     if (existing.condition === 'consumed' || existing.condition === 'lost') {
-      this.setCondition(instanceId, 'usable');
+      this.setCondition(instanceId, condition);
       return instanceId;
     }
     return null;

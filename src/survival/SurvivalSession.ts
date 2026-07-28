@@ -208,12 +208,18 @@ export class SurvivalSession {
     if (rejection !== null) return { accepted: false, outcome: rejection };
 
     const capturedBait = this.bait > 0;
+    const activeItemIds = new Set(
+      Object.values(this.inventory.snapshot())
+        .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
+        .map((item) => item!.type),
+    );
     const previousActedToday = this.actedToday;
     const previousDayActivity = this.dayActivity;
     const attempt = new FishingSession({
       id: `fishing-${this.day}-${++this.fishingCounter}`,
       day: this.day,
       capturedBait,
+      activeItemIds,
       random: this.random,
     });
     const outcome = this.commit(
@@ -273,17 +279,29 @@ export class SurvivalSession {
       return this.reject('fishing-result-mismatch', 'That result does not belong to the active fishing attempt.');
     }
 
-    const isCatch = result.kind === 'catch';
-    const isFish = isCatch && result.catch.kind === 'fish';
-    const food = isFish ? result.catch.food : 0;
-    const baitConsumed = isFish && transaction.capturedBait;
+    const reward = result.kind === 'catch' ? result.catch.reward : { kind: 'none' as const };
+    const food = reward.kind === 'food' ? reward.amount : 0;
+    const baitConsumed = reward.kind === 'food' && transaction.capturedBait;
     const deltas: ResourceDelta = {};
     if (food > 0) deltas.food = food;
+    if (reward.kind === 'bait') deltas.bait = reward.amount;
     if (baitConsumed) deltas.bait = -1;
-    const code = result.kind === 'miss' ? 'fish-missed' : isFish ? 'fish-caught' : 'junk-caught';
+    if (reward.kind === 'item') {
+      const gained = this.inventory.gain(reward.itemId, reward.condition);
+      if (gained === null) {
+        throw new Error(`Fishing reward would duplicate active ${reward.itemId}`);
+      }
+    }
+    const code = result.kind === 'miss'
+      ? 'fish-missed'
+      : result.catch.kind === 'fish'
+        ? 'fish-caught'
+        : result.catch.kind === 'utility'
+          ? 'utility-caught'
+          : 'junk-caught';
     const message = result.kind === 'miss'
       ? 'The fish got away.'
-      : isFish
+      : result.catch.kind === 'fish'
         ? `You caught a ${result.catch.label.toLocaleLowerCase('en-US')}.`
         : `You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`;
     const outcome = this.commit(code, message, deltas, 'none');
