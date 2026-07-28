@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';
+import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 
 const BLOCKED_STATE_SETUPS = [
   { name: 'paused', enter: (session: ScavengeSession) => session.pause() },
@@ -20,7 +21,8 @@ describe('ScavengeSession', () => {
   it('uses the scavenging roster by default', () => {
     const session = new ScavengeSession();
 
-    expect(Object.keys(session.snapshot().items)).toHaveLength(20);
+    expect(Object.keys(session.snapshot().items))
+      .toHaveLength(createScavengeItemInstances().length);
     expect(session.snapshot().items['energyBar-1']).toBeUndefined();
   });
 

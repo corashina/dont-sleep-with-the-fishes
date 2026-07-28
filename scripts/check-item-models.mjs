@@ -11,7 +11,7 @@ export const COLLECTIBLE_ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
-  'energyBar',
+  'energyBar', 'captainWhiskers',
 ];
 export const EQUIPMENT_MODEL_IDS = ['fishingRod'];
 export const PRACTICAL_LIGHT_MODEL_IDS = ['lantern', 'ceilingLight'];
@@ -294,6 +294,31 @@ function verifyLedgerRow(ledger, itemId, measurement) {
   }
   const actual = parseLedgerRow(rows[0]);
   const source = POLY_PIZZA_MODEL_SOURCES[itemId];
+  if (!source) {
+    if (itemId !== 'captainWhiskers') {
+      throw new Error(`ATTRIBUTION.md: no source record for ${itemId}`);
+    }
+    const expected = [
+      'captainWhiskers',
+      '`captainWhiskers.glb`',
+      'Captain Whiskers / project original',
+      'https://unoffdontsleepwiththefishes.fandom.com/wiki/Characters#Captain_Whiskers',
+      '`original:captain-whiskers`',
+      'Project-owned',
+      String(measurement.triangles),
+      String(measurement.triangles),
+    ];
+    const actual = parseLedgerRow(rows[0]);
+    if (
+      actual.length !== 10
+      || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
+      || !actual[8].includes('CaptainWhiskersIdle')
+      || actual[9] !== '2026-07-28'
+    ) {
+      throw new Error('ATTRIBUTION.md: captainWhiskers row does not match the expected record');
+    }
+    return;
+  }
   const allSources = [source, ...(source.components ?? [])];
   const joinSources = (value) => allSources.map(value).join('<br>');
   const licenseCell = joinSources(

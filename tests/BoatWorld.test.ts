@@ -364,7 +364,7 @@ describe('BoatWorld helpers', () => {
 
   it('shows a newly gained supply without allocating a model during inventory sync', () => {
     const propModels = createTestPropModels();
-    const create = vi.spyOn(propModels, 'create');
+    const create = vi.spyOn(propModels, 'createPresentation');
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
@@ -390,6 +390,31 @@ describe('BoatWorld helpers', () => {
 
     world.dispose();
     propModels.dispose();
+  });
+
+  it('plays Captain Whiskers idle on the visible lifeboat perch', async () => {
+    const whiskers = savedItem('captainWhiskers');
+    const propModels = await loadProductionPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      [whiskers],
+    );
+    try {
+      world.syncInventory(snapshot([whiskers]));
+      const copy = world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1')!;
+      const head = copy.getObjectByName('WhiskersHead')!;
+      const before = head.quaternion.clone();
+
+      world.update(0.5, 0.5);
+
+      expect(copy.visible).toBe(true);
+      expect(head.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
   });
 
   it('restores an animated item group without changing its canonical copy transform', async () => {

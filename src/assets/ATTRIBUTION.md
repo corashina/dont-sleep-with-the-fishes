@@ -1,10 +1,12 @@
 # Third-Party Assets
 
-Poly Pizza is the default source for runtime item models. Models credited to
+Poly Pizza is the default source for runtime item models. Captain Whiskers is
+an original model authored for this project from the unofficial wiki's visual
+reference. Models credited to
 **Poly by Google** are preferred when they fit the item, license, visual style,
 and performance budget. Every collectible, lifeboat-equipment, and practical
-light model below comes from Poly Pizza and is pinned by its static resource ID
-and source SHA-256. Ship furniture combines the existing Kenney CC0 set with
+light model below otherwise comes from Poly Pizza and is pinned by its static
+resource ID and source SHA-256. Ship furniture combines the existing Kenney CC0 set with
 pinned Poly Pizza barrel, shelf, crate, and cargo-box models, and the lifeboat
 uses one locally processed Poly Haven CC0 texture set.
 
@@ -47,6 +49,7 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 | flashlight | `flashlight.glb` | Flashlight / Bruno Oliveira | https://poly.pizza/m/8t1DZLLvofk | `poly-pizza:82e1bb6b-c322-4663-ba6e-a44f146bcd41` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 508 | 508 | Source GLB SHA-256 `4DFF38A60AA716D8E7EDD7828C5B3C4E4685DBC983B40E0D400399FBFEFB6C6E`; downloaded from the official Poly Pizza static GLB; retained the original orange, black, silver, and lens materials; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-26 |
 | harpoonGun | `harpoonGun.glb` | Rifle / Quaternius | https://poly.pizza/m/neEjwx9bBJ | `poly-pizza:da83f4f9-7a4e-4739-9033-79d688aa3b5e` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1534 | 1534 | Source GLB SHA-256 `44A923B9358CA07247F125521A85BCE03654AE802984F6333B876C75AE2D0507`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-26 |
 | energyBar | `energyBar.glb` | Chocolate Bar / Quaternius | https://poly.pizza/m/vJsJ1EIiOO | `poly-pizza:c2fe4825-1aed-430d-8925-4541a98d70f8` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 436 | 436 | Source GLB SHA-256 `D34C9AC94FDCE13CA2CB99110EB4A47451DB8F1B9D12B32EA89D12F6C0686FF2`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
+| captainWhiskers | `captainWhiskers.glb` | Captain Whiskers / project original | https://unoffdontsleepwiththefishes.fandom.com/wiki/Characters#Captain_Whiskers | `original:captain-whiskers` | Project-owned | 2724 | 2724 | Authored as an orange-and-white seated cat with a collar and `CaptainWhiskersIdle` breathing, head, ear, and tail animation. Regenerate with `node scripts/captain-whiskers-model.mjs`. | 2026-07-28 |
 | fishingRod | `fishingRod.glb` | Fishing Rod / Quaternius | https://poly.pizza/m/0YAR0Lg58p | `poly-pizza:54eb8952-a61d-45c1-9e64-761376721e14` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 522 | 522 | Source GLB SHA-256 `6D5BD9D93D74B61C68BD053F8B94F5D594DF998938D1A71D38119E2832F8FDB5`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 | lantern | `lantern.glb` | Lantern / Kay Lousberg | https://poly.pizza/m/CtHBJ1ufeW | `poly-pizza:ecbc7b04-09ca-4068-bb3c-4e5ce1163c9a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 264 | 264 | Source GLB SHA-256 `24EE9E4B9E280023CBBAF9FF6284E7BA51A07753F8D5EC8690ECC61DD156981D`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 | ceilingLight | `ceilingLight.glb` | Light Ceiling Single / Quaternius | https://poly.pizza/m/JT44JUXU2d | `poly-pizza:2cc064fb-2b1b-4269-9007-473dfe78bffc` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 232 | 232 | Source GLB SHA-256 `4E307B591D68D8AFF049F07B59E5AA75B81E8DA211FD48B752BF847918EDED1B`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |

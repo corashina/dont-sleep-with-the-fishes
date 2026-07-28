@@ -110,10 +110,14 @@ describe('survival foundations', () => {
   });
 
   it('allows only catalog-approved break and repair transitions', () => {
-    const inventory = new SurvivalInventoryState(saved('compass', 'flashlight', 'ductTape'));
+    const inventory = new SurvivalInventoryState(saved(
+      'compass', 'flashlight', 'ductTape', 'captainWhiskers',
+    ));
     expect(inventory.break('compass-1')).toBe(true);
     expect(inventory.repair('compass-1')).toBe(true);
     expect(inventory.break('flashlight-1')).toBe(false);
+    expect(inventory.break('captainWhiskers-1')).toBe(false);
+    expect(inventory.consume('captainWhiskers')).toEqual([]);
     inventory.consume('ductTape');
     expect(inventory.repair('ductTape-1')).toBe(false);
   });
