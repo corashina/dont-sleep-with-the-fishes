@@ -59,7 +59,6 @@ type VectorTuple = readonly [number, number, number];
 
 const TABLEAU_EVENT_IDS = [
   'drifting-bottle',
-  'drifting-loot',
   'check-the-back',
   'mystery-chest',
   'midnight-tour',
@@ -143,17 +142,6 @@ function bottleTableau(materials: MaritimeMaterials): Group {
     [0, 0, Math.PI / 2 - 0.08],
   );
   root.rotation.z = Math.PI / 2 + 0.13;
-  return root;
-}
-
-function lootTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'loot-barrel', new CylinderGeometry(0.34, 0.30, 0.72, 9), materials.wood, [-0.22, 0, 0], [0, 0, Math.PI / 2]);
-  for (const x of [-0.49, 0.05]) {
-    addMesh(root, `loot-barrel-band:${x}`, new TorusGeometry(0.325, 0.025, 5, 9), materials.metal, [x, 0, 0], [0, Math.PI / 2, 0]);
-  }
-  addMesh(root, 'loot-crate', new BoxGeometry(0.58, 0.48, 0.54), materials.darkWood, [0.46, 0.02, 0.06], [0.03, 0.2, -0.06]);
-  addMesh(root, 'loot-crate-lashing', new TorusGeometry(0.30, 0.025, 5, 10), materials.rope, [0.46, 0.02, 0.06], [Math.PI / 2, 0.2, 0]);
   return root;
 }
 
@@ -298,7 +286,6 @@ export class EventPresentationLayer {
     const materials = createMaterials();
     const tableaus = [
       createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
-      createTableau('drifting-loot', lootTableau(materials), [-3.0, 0.02, -4.2], [-1.1, -0.35, 0.3]),
       createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
       createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),

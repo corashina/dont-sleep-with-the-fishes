@@ -51,13 +51,14 @@ describe('EventPresentationLayer', () => {
     layer.dispose();
   });
 
-  it('restores every staged tableau to its authored base transform on clear', () => {
+  it('omits dedicated drifting loot while restoring remaining tableaus on clear', () => {
     const layer = createLayer();
-    const prop = layer.root.getObjectByName('event-prop:drifting-loot')!;
+    const prop = layer.root.getObjectByName('event-prop:mystery-chest')!;
     const basePosition = prop.position.clone();
     const baseQuaternion = prop.quaternion.clone();
 
-    layer.stage('drifting-loot');
+    expect(layer.root.getObjectByName('event-prop:drifting-loot')).toBeUndefined();
+    layer.stage('mystery-chest');
     layer.update(12, 1 / 60);
     expect(prop.position.equals(basePosition)).toBe(false);
 

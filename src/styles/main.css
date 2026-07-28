@@ -633,7 +633,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   justify-items: center;
   text-align: center;
 }
-.routine-dialog--fishing .fishing-result-card > p.fishing-result-detail {
+.routine-dialog--fishing .fishing-result-card > p.fishing-result-detail,
+.routine-dialog--salvage .fishing-result-card > p.fishing-result-detail {
   color: var(--ink-bone);
   font-family: var(--font-narrative);
   font-size: clamp(1rem, 2vw, 1.35rem);
@@ -887,8 +888,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   justify-self: start;
   min-width: 154px;
 }
-.routine-dialog--fishing .routine-dialog__card { justify-items: center; }
-.routine-dialog--fishing .routine-dialog__card > * {
+.routine-dialog--fishing .routine-dialog__card,
+.routine-dialog--salvage .routine-dialog__card { justify-items: center; }
+.routine-dialog--fishing .routine-dialog__card > *,
+.routine-dialog--salvage .routine-dialog__card > * {
   justify-self: center;
   max-width: 100%;
   text-align: center;

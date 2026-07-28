@@ -38,12 +38,27 @@ export interface ResourceDelta {
   rescueProgress?: number;
 }
 
+export type DriftingLootVariant = 'barrel' | 'crate';
+
+export type RewardSummary =
+  | {
+      readonly kind: 'resource';
+      readonly id: 'food' | 'bait' | 'repairMaterial';
+      readonly quantity: number;
+    }
+  | {
+      readonly kind: 'item';
+      readonly id: 'energyBar';
+      readonly quantity: 1;
+    };
+
 export interface ActionOutcome {
   accepted: boolean;
   code: string;
   message: string;
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
+  readonly rewardSummary?: RewardSummary;
 }
 
 export type BeginFishingResult =
@@ -141,6 +156,7 @@ export interface SurvivalSnapshot {
   inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
   pendingEventId: string | null;
+  readonly pendingDriftingLootVariant: DriftingLootVariant | null;
   lastOutcome: ActionOutcome | null;
   seed: number;
 }

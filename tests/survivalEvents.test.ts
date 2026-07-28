@@ -249,6 +249,20 @@ describe('survival events', () => {
     ))).toEqual([true, true, true, true]);
   });
 
+  it('keeps Drifting Loot in the catalog as a dawn-only zero-cooldown reward event', () => {
+    const loot = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot');
+
+    expect(loot).toMatchObject({
+      phase: 'day',
+      earliestDay: 3,
+      cooldownDays: 0,
+    });
+    const retrieve = loot?.choices.find(({ id }) => id === 'retrieve');
+    expect(retrieve?.label).toBe('Retrieve It — 3 Energy');
+    expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
+    expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
+  });
+
   it('blocks one-time, absent-item, and rescue-progress events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
