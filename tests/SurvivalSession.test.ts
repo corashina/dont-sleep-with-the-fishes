@@ -22,12 +22,21 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number) {
   const session = new SurvivalSession(saved(), {
     seed: 1,
-    random: sequenceRandom([0, rescueRoll]),
+    random: sequenceRandom([0, rescueRoll, 0.99]),
     initial: { day, rescueProgress },
   });
   session.perform('endDay');
   session.beginDawn();
   return session.snapshot().state;
+}
+
+function driftingLootSession(random: readonly number[], energy = 3, items: ItemId[] = []): SurvivalSession {
+  return new SurvivalSession(saved(...items), {
+    seed: 1,
+    random: sequenceRandom(random),
+    initial: { energy },
+    initialEventId: 'drifting-loot',
+  });
 }
 
 function beginFishing(session: SurvivalSession): FishingSession {
@@ -577,6 +586,151 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ state: 'day', pendingEventId: null });
   });
 
+  it('opens Drifting Loot from day 3 at the 25 percent dawn boundary', () => {
+    const opens = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0.249, 0.499]),
+      initial: { day: 2 },
+    });
+    expect(opens.perform('endDay').accepted).toBe(true);
+    expect(opens.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
+    expect(opens.snapshot()).toMatchObject({
+      day: 3,
+      state: 'dayEvent',
+      pendingEventId: 'drifting-loot',
+      pendingDriftingLootVariant: 'barrel',
+    });
+
+    const misses = new SurvivalSession(saved(), {
+      seed: 2,
+      random: sequenceRandom([0, 0.25]),
+      initial: { day: 2 },
+    });
+    misses.perform('endDay');
+    misses.beginDawn();
+    expect(misses.snapshot()).toMatchObject({
+      day: 3,
+      state: 'day',
+      pendingEventId: null,
+      pendingDriftingLootVariant: null,
+    });
+  });
+
+  it('does not roll Drifting Loot before day 3', () => {
+    const next = vi.fn(() => 0);
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: { next },
+      initial: { day: 1 },
+    });
+    session.perform('endDay');
+    const beforeDawn = next.mock.calls.length;
+    session.beginDawn();
+    expect(next).toHaveBeenCalledTimes(beforeDawn);
+    expect(session.snapshot().pendingEventId).toBeNull();
+  });
+
+  it('selects crate at the 50 percent variant boundary', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0, 0.5]),
+      initial: { day: 2 },
+    });
+    session.perform('endDay');
+    session.beginDawn();
+    expect(session.snapshot().pendingDriftingLootVariant).toBe('crate');
+  });
+
+  it('gives rescue priority over Drifting Loot and consumes no loot draws after rescue', () => {
+    const next = vi.fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.049)
+      .mockReturnValueOnce(0);
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: { next },
+      initial: { day: 4 },
+    });
+    session.perform('endDay');
+    session.beginDawn();
+
+    expect(session.snapshot()).toMatchObject({
+      state: 'rescued',
+      pendingEventId: null,
+      pendingDriftingLootVariant: null,
+    });
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it('records every applied Drifting Loot reward without parsing its message', () => {
+    const cases = [
+      [0, { kind: 'resource', id: 'food', quantity: 2 }],
+      [0.45, { kind: 'resource', id: 'bait', quantity: 2 }],
+      [0.7, { kind: 'resource', id: 'repairMaterial', quantity: 2 }],
+      [0.9, { kind: 'item', id: 'energyBar', quantity: 1 }],
+    ] as const;
+
+    for (const [roll, rewardSummary] of cases) {
+      const outcome = driftingLootSession([roll]).resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
+      expect(outcome).toMatchObject({
+        accepted: true,
+        deltas: { energy: -3 },
+        rewardSummary,
+      });
+    }
+  });
+
+  it('reports the food fallback when the Drifting Loot energy-bar slot is occupied', () => {
+    const outcome = driftingLootSession([0.9], 3, ['energyBar'])
+      .resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
+
+    expect(outcome).toMatchObject({
+      accepted: true,
+      rewardSummary: { kind: 'resource', id: 'food', quantity: 1 },
+    });
+  });
+
+  it('clears the Drifting Loot variant on resolution', () => {
+    const session = driftingLootSession([0]);
+    expect(session.snapshot().pendingDriftingLootVariant).toBe('barrel');
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
+      accepted: true,
+      rewardSummary: { kind: 'resource', id: 'food', quantity: 2 },
+    });
+    expect(session.snapshot().pendingDriftingLootVariant).toBeNull();
+  });
+
+  it('excludes Drifting Loot from later post-action day-event draws', () => {
+    const session = new SurvivalSession(saved('energyBar'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 2 },
+    });
+
+    expect(session.perform('useEnergyBar').accepted).toBe(true);
+    expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
+    expect(session.snapshot().pendingEventId).not.toBe('drifting-loot');
+  });
+
+  it('does not add a reward summary when Drifting Loot is allowed to drift', () => {
+    const outcome = driftingLootSession([0]).resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+
+    expect(outcome).toMatchObject({ accepted: true, deltas: {} });
+    expect(outcome.rewardSummary).toBeUndefined();
+  });
+
+  it('rejects insufficient-energy Drifting Loot retrieval atomically', () => {
+    const session = driftingLootSession([0], 2);
+    const before = session.snapshot();
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
+      accepted: false,
+      code: 'requirements-unmet',
+    });
+    expect(session.snapshot()).toEqual(before);
+  });
+
   it('rejects invalid fishing starts atomically', () => {
     const cases: Array<{ session: SurvivalSession; code: string }> = [
       {
@@ -1123,7 +1277,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const missed = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.851]),
+      random: sequenceRandom([0, 0.851, 0.99]),
       initial: { day: 20, rescueProgress: 100 },
       initialEventId: 'shower-night',
     });

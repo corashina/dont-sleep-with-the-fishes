@@ -25,6 +25,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
     rescueProgress: 0, weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
+    pendingDriftingLootVariant: null,
     lastOutcome: null, seed: 8, ...overrides,
   };
 }
@@ -1047,12 +1048,12 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
-  it('opens Drifting Loot after a resource-neutral day action and pays its successful cost', async () => {
+  it('excludes Drifting Loot from the post-action daytime presentation pool', async () => {
     const session = new SurvivalSession(
       [{ instanceId: 'cannedFood-1', type: 'cannedFood' }],
       {
         seed: 202,
-        random: sequenceRandom([0.999999, 0]),
+        random: sequenceRandom([0.999999, 0, 0]),
         initial: { day: 3, hunger: 35, energy: 3 },
       },
     );
@@ -1091,17 +1092,17 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       state: 'dayEvent',
-      pendingEventId: 'drifting-loot',
+      pendingEventId: 'dangerous-waters',
       energy: 3,
     });
     expect(setEventSelection).toHaveBeenCalled();
-    ui.onEventChoice?.('retrieve');
+    ui.onEndure?.();
     await flushPromises();
     expect(session.snapshot()).toMatchObject({
       state: 'day',
       pendingEventId: null,
-      energy: 0,
-      food: 2,
+      energy: 3,
+      food: 0,
     });
   });
 
@@ -1970,7 +1971,7 @@ describe('SurvivalPhase orchestration', () => {
       [{ instanceId: 'swimRing-1', type: 'swimRing' }],
       {
         seed: 201,
-        random: sequenceRandom([0, 0]),
+        random: sequenceRandom([0, 0.99]),
         initial: { day: 2 },
         initialEventId: 'drifting-bottle',
       },

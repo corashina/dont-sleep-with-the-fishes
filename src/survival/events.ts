@@ -311,7 +311,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(100, 'You wake exhausted.', effects([set('energy', 0)])),
       outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
   ]),
-  event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 12, [
+  event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 0, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
         outcome(45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
