@@ -889,7 +889,6 @@ export class SurvivalPhase implements GamePhase {
   private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
-    this.world.setWeather?.(snapshot.weather);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     this.ui.render?.(snapshot, (action) => {
       if (action === 'repairItem') return this.repairItemReason(snapshot);

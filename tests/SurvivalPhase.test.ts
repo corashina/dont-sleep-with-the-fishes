@@ -1283,8 +1283,14 @@ describe('SurvivalPhase orchestration', () => {
   it('keeps forced weather above automatic weather and restores the active event weather', async () => {
     let phase!: SurvivalPhase;
     const calls: string[] = [];
+    let actualWeather: PresentationWeatherId = 'calm';
     const setPresentationWeather = vi.fn((id: PresentationWeatherId) => {
+      actualWeather = id;
       calls.push(`weather:${id}`);
+    });
+    const setWeather = vi.fn((id: PresentationWeatherId) => {
+      calls.push(`gameplay:${id}`);
+      setPresentationWeather(id);
     });
     phase = SurvivalPhase.forTest({
       session: {
@@ -1294,8 +1300,11 @@ describe('SurvivalPhase orchestration', () => {
         })),
       },
       world: {
+        setWeather,
         setPresentationWeather,
-        stageEvent: vi.fn(() => calls.push(`stage:${phase.getPresentationWeather()}`)),
+        stageEvent: vi.fn(() => {
+          calls.push(`stage:${phase.getPresentationWeather()}:${actualWeather}`);
+        }),
         revealEvent: vi.fn(() => Promise.resolve()),
         dispose: vi.fn(),
       },
@@ -1310,10 +1319,13 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
-    expect(calls).toContain('stage:fog');
+    expect(calls).toContain('stage:fog:fog');
+    expect(setWeather).not.toHaveBeenCalled();
     expect(phase.getPresentationWeather()).toBe('fog');
+    expect(actualWeather).toBe('fog');
     phase.setWeatherOverride(null);
     expect(phase.getPresentationWeather()).toBe('thunderstorm');
+    expect(actualWeather).toBe('thunderstorm');
     expect(setPresentationWeather).toHaveBeenLastCalledWith('thunderstorm');
     phase.dispose();
   });
