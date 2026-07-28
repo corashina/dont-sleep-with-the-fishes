@@ -2,10 +2,11 @@ import {
   AmbientLight,
   BufferAttribute,
   BufferGeometry,
+  Color,
   Group,
   Points,
-  PointsMaterial,
   Scene,
+  ShaderMaterial,
   Vector3,
 } from 'three';
 import {
@@ -20,7 +21,7 @@ export interface WeatherEffectsState {
 }
 
 interface ParticlePool {
-  readonly points: Points<BufferGeometry, PointsMaterial>;
+  readonly points: Points<BufferGeometry, ShaderMaterial>;
   readonly positions: Float32Array;
   readonly opacities: Float32Array;
   readonly origins: Float32Array;
@@ -38,6 +39,32 @@ const SPRAY_COUNT = 120;
 const REDUCED_PARTICLE_SCALE = 0.32;
 const LIGHTNING_INTERVALS = Object.freeze([4.1, 6.7, 3.4, 8.2, 5.3]);
 const LIGHTNING_FLASH_DURATION = 0.18;
+const PARTICLE_VERTEX_SHADER = `
+  attribute float opacity;
+  varying float vParticleOpacity;
+  uniform float pointSize;
+
+  void main() {
+    vParticleOpacity = opacity;
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = pointSize * (300.0 / max(1.0, -viewPosition.z));
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`;
+const PARTICLE_FRAGMENT_SHADER = `
+  uniform vec3 particleColor;
+  uniform float materialOpacity;
+  varying float vParticleOpacity;
+
+  void main() {
+    float radius = distance(gl_PointCoord, vec2(0.5));
+    float edgeAlpha = 1.0 - smoothstep(0.38, 0.5, radius);
+    vec4 diffuseColor = vec4(particleColor, materialOpacity * edgeAlpha);
+    diffuseColor.a *= vParticleOpacity;
+    if (diffuseColor.a <= 0.001) discard;
+    gl_FragColor = diffuseColor;
+  }
+`;
 
 function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -80,13 +107,16 @@ function createPool(
   geometry.setAttribute('opacity', opacityAttribute);
   geometry.setDrawRange(0, 0);
 
-  const material = new PointsMaterial({
-    color,
+  const material = new ShaderMaterial({
     depthWrite: false,
-    opacity: 0,
-    size,
-    sizeAttenuation: true,
+    fragmentShader: PARTICLE_FRAGMENT_SHADER,
     transparent: true,
+    uniforms: {
+      materialOpacity: { value: 0 },
+      particleColor: { value: new Color(color) },
+      pointSize: { value: size },
+    },
+    vertexShader: PARTICLE_VERTEX_SHADER,
   });
   const points = new Points(geometry, material);
   points.name = name;
@@ -244,7 +274,9 @@ export class WeatherEffects {
       0,
       visible ? activeCount(pool, intensity, this.reducedMotion) : 0,
     );
-    pool.points.material.opacity = visible ? Math.min(0.88, 0.22 + intensity * 0.66) : 0;
+    const opacity = visible ? Math.min(0.88, 0.22 + intensity * 0.66) : 0;
+    pool.points.material.opacity = opacity;
+    pool.points.material.uniforms.materialOpacity!.value = opacity;
   }
 
   private updateRain(time: number): void {
@@ -309,10 +341,15 @@ export class WeatherEffects {
   private updateLightning(delta: number): void {
     if (!this.profile.lightning || this.reducedMotion) return;
     this.lightningClock += delta;
-    const interval = LIGHTNING_INTERVALS[this.lightningIntervalIndex]!;
-    if (this.lightningClock >= interval) {
+    let crossedInterval = false;
+    let interval = LIGHTNING_INTERVALS[this.lightningIntervalIndex]!;
+    while (this.lightningClock >= interval) {
       this.lightningClock -= interval;
       this.lightningIntervalIndex = (this.lightningIntervalIndex + 1) % LIGHTNING_INTERVALS.length;
+      crossedInterval = true;
+      interval = LIGHTNING_INTERVALS[this.lightningIntervalIndex]!;
+    }
+    if (crossedInterval) {
       this.lightningFlashRemaining = LIGHTNING_FLASH_DURATION;
     }
 
