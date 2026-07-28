@@ -74,6 +74,10 @@ import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
 import {
+  WeatherEventAnimator,
+  type EventPhysicalResponsePresentation,
+} from './WeatherEventAnimator';
+import {
   createSurvivalLantern,
   type SurvivalLantern,
 } from './SurvivalLantern';
@@ -392,6 +396,7 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
   private readonly repairTools: Object3D;
   private readonly rodPivot = new Group();
@@ -456,6 +461,7 @@ export class BoatWorld {
   private phase: 'day' | 'night' = 'day';
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
+  private weatherEventOperation = 0;
   private disposed = false;
 
   constructor(
@@ -506,6 +512,11 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
     );
+    this.weatherEventAnimator = new WeatherEventAnimator(
+      this.cameraRig,
+      this.supplyDisplay,
+    );
+    this.boat.add(this.weatherEventAnimator.boatRoot);
 
     const repairTools = createRepairToolbox();
     repairTools.position.set(-1.05, 0.225, 0.78);
@@ -560,6 +571,7 @@ export class BoatWorld {
       this.key,
       this.key.target,
       this.eventPresentation.root,
+      this.weatherEventAnimator.worldRoot,
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
@@ -603,32 +615,54 @@ export class BoatWorld {
     this.supplyDisplay.setEventSelectedItem(instanceId);
   }
 
-  playEventItemUse(instanceId: ItemInstanceId): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
-      : this.supplyDisplay.playEventItemUse(instanceId);
+  async playEventItemUse(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+  ): Promise<void> {
+    if (this.disposed) return;
+    const operation = ++this.weatherEventOperation;
+    if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+      return;
+    }
+    if (this.disposed || operation !== this.weatherEventOperation) return;
+    await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
   stageEvent(eventId: string): void {
     if (this.disposed) return;
+    this.weatherEventOperation += 1;
     this.eventPresentation.stage(eventId);
+    this.weatherEventAnimator.stage(eventId);
   }
 
-  revealEvent(eventId: string): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
-      : this.eventPresentation.reveal(eventId);
+  async revealEvent(eventId: string): Promise<void> {
+    if (this.disposed) return;
+    this.weatherEventOperation += 1;
+    await Promise.all([
+      this.eventPresentation.reveal(eventId),
+      this.weatherEventAnimator.reveal(eventId),
+    ]);
   }
 
-  reactToEventOutcome(eventId: string, outcome: ActionOutcome): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
-      : this.eventPresentation.react(eventId, outcome);
+  async reactToEventOutcome(
+    eventId: string,
+    outcome: ActionOutcome,
+    response: EventPhysicalResponsePresentation | null = null,
+  ): Promise<void> {
+    if (this.disposed) return;
+    this.weatherEventOperation += 1;
+    await Promise.all([
+      this.eventPresentation.react(eventId, outcome),
+      this.weatherEventAnimator.react(eventId, outcome, response),
+    ]);
   }
 
   clearEvent(): void {
     if (this.disposed) return;
+    this.weatherEventOperation += 1;
     this.eventPresentation.clear();
+    this.weatherEventAnimator.clear();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1021,6 +1055,8 @@ export class BoatWorld {
     this.advanceFishingPresentation(delta);
     this.eventPresentation.update(time, delta);
     this.supplyDisplay.update(delta);
+    this.weatherEventAnimator.update(time, delta);
+    this.supplyDisplay.update(0);
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
     this.updateFishingBiteParticles(delta);
@@ -1053,8 +1089,12 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.setHighlightedItem(null),
-      () => { this.disposed = true; },
+      () => {
+        this.disposed = true;
+        this.weatherEventOperation += 1;
+      },
       () => this.cancelActiveSequence(),
+      () => this.weatherEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.eventPresentation.dispose(),
       () => this.lantern.dispose(),
