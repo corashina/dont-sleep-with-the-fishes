@@ -173,6 +173,121 @@ describe('SurvivalUI', () => {
     expect(onEventChoice).toHaveBeenCalledTimes(2);
   });
 
+  it('routes Drifting Loot through its projected prop instead of a response button', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const selected = vi.fn();
+    const highlighted = vi.fn();
+    ui.onEventChoice = selected;
+    ui.onAnchorHighlight = highlighted;
+    ui.setAnchors([
+      {
+        id: 'drifting-loot',
+        label: 'CRATE',
+        description: 'Floating salvage within reach.',
+        eventChoiceId: 'retrieve',
+        itemType: null,
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 420,
+        y: 260,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 96, height: 82, depth: 2 },
+      },
+      {
+        id: 'end-day-lantern',
+        itemType: null,
+        toolId: 'lantern',
+        action: 'endDay',
+        remainingUses: null,
+        x: 640,
+        y: 280,
+        visible: true,
+        depleted: false,
+      },
+    ]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      {
+        id: 'retrieve',
+        label: 'Retrieve It',
+        unavailableReason: null,
+        anchorId: 'drifting-loot',
+        energyCost: 3,
+      },
+      { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
+    ]);
+
+    expect(
+      mount.querySelector(
+        '[data-event-choices] [data-event-choice="retrieve"]',
+      ),
+    ).toBeNull();
+    const loot = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="drifting-loot"]',
+    )!;
+    expect(loot.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('CRATE — 3 ENERGY');
+    expect(loot.dataset.eventChoice).toBe('retrieve');
+    expect(loot.dataset.backingInstanceId).toBeUndefined();
+    expect(loot.getAttribute('aria-disabled')).toBe('false');
+    expect(mount.querySelector('[data-anchor-id="end-day-lantern"]')?.getAttribute(
+      'data-event-choice',
+    )).toBe('sleep');
+    loot.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlighted).toHaveBeenLastCalledWith('drifting-loot');
+    loot.click();
+    loot.focus();
+    press('[data-anchor-id="drifting-loot"]', 'Enter');
+    expect(selected.mock.calls).toEqual([['retrieve'], ['retrieve']]);
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\s*\{[^}]*cursor:\s*pointer;/s,
+    );
+  });
+
+  it('keeps low-energy Drifting Loot inspectable with an insufficient-energy tooltip', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const selected = vi.fn();
+    ui.onEventChoice = selected;
+    ui.setAnchors([{
+      id: 'drifting-loot',
+      label: 'BARREL',
+      description: 'Floating salvage within reach.',
+      eventChoiceId: 'retrieve',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 420,
+      y: 260,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'retrieve',
+      label: 'Retrieve It',
+      unavailableReason: 'Requires 3 energy; you have 2.',
+      anchorId: 'drifting-loot',
+      energyCost: 3,
+    }]);
+
+    const loot = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="drifting-loot"]',
+    )!;
+    expect(loot.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('BARREL — 3 ENERGY — INSUFFICIENT ENERGY');
+    expect(loot.disabled).toBe(false);
+    expect(loot.getAttribute('aria-disabled')).toBe('true');
+    loot.click();
+    expect(selected).not.toHaveBeenCalled();
+  });
+
   it.each(['pointer', 'keyboard'] as const)(
     'shows a distinct selected keyed response for %s activation',
     async (input) => {
