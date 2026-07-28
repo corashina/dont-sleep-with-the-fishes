@@ -146,7 +146,7 @@ interface RoutineDialogPlacement {
   readonly height: number;
 }
 
-const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDialogPlacement>> = {
+const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage', RoutineDialogPlacement>> = {
   fishing: {
     anchorId: 'fishing-tools',
     fallbackX: 0.7,
@@ -160,6 +160,13 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDi
     fallbackY: 0.6,
     width: 430,
     height: 360,
+  },
+  salvage: {
+    anchorId: 'drifting-loot',
+    fallbackX: 0.68,
+    fallbackY: 0.58,
+    width: 360,
+    height: 250,
   },
 };
 
@@ -195,6 +202,13 @@ export interface FishingResultView {
   readonly catchTarget: ProjectedBoatBounds | null;
 }
 
+export interface DriftingLootResultView {
+  readonly caption: string;
+  readonly title: string;
+  readonly detail: string;
+  readonly target: ProjectedBoatBounds | null;
+}
+
 export interface EventContextChoice {
   readonly id: EventResponseId;
   readonly label: string;
@@ -226,6 +240,7 @@ export class SurvivalUI {
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
   onFishingViewExit: (() => void) | null = null;
+  onDriftingLootContinue: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -251,6 +266,11 @@ export class SurvivalUI {
   private readonly fishingResultTitle: HTMLElement;
   private readonly fishingResultDetail: HTMLElement;
   private readonly fishingResultContinue: HTMLButtonElement;
+  private readonly driftingLootResultLayer: HTMLElement;
+  private readonly driftingLootResultCaption: HTMLElement;
+  private readonly driftingLootResultTitle: HTMLElement;
+  private readonly driftingLootResultDetail: HTMLElement;
+  private readonly driftingLootResultContinue: HTMLButtonElement;
   private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
@@ -317,6 +337,8 @@ export class SurvivalUI {
   private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private fishingResultTarget: ProjectedBoatBounds | null = null;
+  private driftingLootContinueIssued = false;
+  private driftingLootResultTarget: ProjectedBoatBounds | null = null;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
@@ -363,6 +385,14 @@ export class SurvivalUI {
           <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
             CONTINUE
           </button>
+        </div>
+      </section>
+      <section class="routine-dialog routine-dialog--salvage" data-drifting-loot-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-loot-result-title" inert>
+        <div class="routine-dialog__card fishing-result-card">
+          <p class="eyebrow ui-role-context" data-drifting-loot-result-caption></p>
+          <h2 class="ui-role-display" id="drifting-loot-result-title" data-drifting-loot-result-title></h2>
+          <p class="fishing-result-detail ui-role-narrative" data-drifting-loot-result-detail></p>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-loot-result-continue aria-label="Continue">CONTINUE</button>
         </div>
       </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
@@ -451,6 +481,11 @@ export class SurvivalUI {
     this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
     this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
     this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
+    this.driftingLootResultLayer = requireElement(this.root, '[data-drifting-loot-result]');
+    this.driftingLootResultCaption = requireElement(this.root, '[data-drifting-loot-result-caption]');
+    this.driftingLootResultTitle = requireElement(this.root, '[data-drifting-loot-result-title]');
+    this.driftingLootResultDetail = requireElement(this.root, '[data-drifting-loot-result-detail]');
+    this.driftingLootResultContinue = requireElement(this.root, '[data-drifting-loot-result-continue]');
     this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
@@ -477,6 +512,7 @@ export class SurvivalUI {
       this.journalLayer,
       this.repairOptionsLayer,
       this.endingLayer,
+      this.driftingLootResultLayer,
       this.fishingResultLayer,
       this.fishingLayer,
     ];
@@ -491,6 +527,7 @@ export class SurvivalUI {
     this.root.addEventListener('focusin', this.handleAnchorFocusIn);
     this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     document.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('resize', this.handleWindowResize);
   }
 
   render(snapshot: SurvivalSnapshot, unavailable: (action: DayActionId) => string | null): void {
@@ -790,6 +827,25 @@ export class SurvivalUI {
     this.fishingResultTarget = null;
   }
 
+  showDriftingLootResult(view: DriftingLootResultView): void {
+    if (this.disposed) return;
+    this.driftingLootContinueIssued = false;
+    this.driftingLootResultCaption.textContent = view.caption;
+    this.driftingLootResultTitle.textContent = view.title;
+    this.driftingLootResultDetail.textContent = view.detail;
+    this.driftingLootResultTarget = view.target === null
+      ? null
+      : Object.freeze({ ...view.target });
+    this.showLayer(this.driftingLootResultLayer);
+    this.driftingLootResultContinue.focus();
+  }
+
+  hideDriftingLootResult(): void {
+    if (this.disposed) return;
+    this.hideLayer(this.driftingLootResultLayer);
+    this.driftingLootResultTarget = null;
+  }
+
   setFishingViewExitVisible(visible: boolean): void {
     if (this.disposed) return;
     this.fishingViewExit.hidden = !visible;
@@ -972,6 +1028,7 @@ export class SurvivalUI {
     this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
     this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
     document.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('resize', this.handleWindowResize);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
     this.onEventChoice = () => undefined;
@@ -985,6 +1042,7 @@ export class SurvivalUI {
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
     this.onFishingViewExit = null;
+    this.onDriftingLootContinue = null;
     this.root.remove();
   }
 
@@ -1276,6 +1334,10 @@ export class SurvivalUI {
     this.publishAnchorHighlight();
   }
 
+  private readonly handleWindowResize = (): void => {
+    if (!this.disposed) this.positionOpenRoutineDialogs();
+  };
+
   private readonly handleAnchorPointerOver = (event: Event): void => {
     this.hoveredAnchorId = this.itemAnchorId(event.target);
     this.publishAnchorHighlight();
@@ -1309,6 +1371,12 @@ export class SurvivalUI {
         ROUTINE_DIALOG_PLACEMENTS.fishing,
         this.fishingResultTarget,
       );
+    } else if (layer === this.driftingLootResultLayer) {
+      this.positionRoutineDialog(
+        layer,
+        ROUTINE_DIALOG_PLACEMENTS.salvage,
+        this.driftingLootResultTarget,
+      );
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
@@ -1327,6 +1395,13 @@ export class SurvivalUI {
         this.fishingResultLayer,
         ROUTINE_DIALOG_PLACEMENTS.fishing,
         this.fishingResultTarget,
+      );
+    }
+    if (this.driftingLootResultLayer.classList.contains('is-visible')) {
+      this.positionRoutineDialog(
+        this.driftingLootResultLayer,
+        ROUTINE_DIALOG_PLACEMENTS.salvage,
+        this.driftingLootResultTarget,
       );
     }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
@@ -1428,6 +1503,7 @@ export class SurvivalUI {
   private focusModal(layer: HTMLElement): void {
     if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
+    else if (layer === this.driftingLootResultLayer) this.driftingLootResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
@@ -1694,6 +1770,13 @@ export class SurvivalUI {
       if (this.fishingResultContinueIssued) return;
       this.fishingResultContinueIssued = true;
       this.onFishingResultContinue?.();
+      return;
+    }
+    if (button.hasAttribute('data-drifting-loot-result-continue')) {
+      if (topmostModal !== this.driftingLootResultLayer) return;
+      if (this.driftingLootContinueIssued) return;
+      this.driftingLootContinueIssued = true;
+      this.onDriftingLootContinue?.();
       return;
     }
     if (button.hasAttribute('data-fishing-view-exit')) {
