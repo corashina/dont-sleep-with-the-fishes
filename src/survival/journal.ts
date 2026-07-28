@@ -34,7 +34,7 @@ export type JournalNightRecord =
 export interface JournalFishingRecord {
   readonly kind: 'fishing';
   readonly attemptId: string;
-  readonly result: 'fish' | 'junk' | 'miss';
+  readonly result: 'fish' | 'utility' | 'junk' | 'miss';
   readonly catchId: FishingCatchId | null;
   readonly catchLabel: string | null;
   readonly food: 0 | 1 | 2;
@@ -125,9 +125,13 @@ function formatFishing(record: JournalFishingRecord): string {
       throw new Error(`Fishing journal record ${record.attemptId} requires a catch label.`);
     }
     const label = record.catchLabel.toLocaleLowerCase('en-US');
-    sentence = record.result === 'junk'
-      ? `I reeled in ${label}, but it was no use.`
-      : `I caught a ${label} and gained ${record.food === 1 ? 'one' : 'two'} food.`;
+    if (record.result === 'utility') {
+      sentence = `I reeled in ${label} and brought it aboard.`;
+    } else if (record.result === 'junk') {
+      sentence = `I reeled in ${label}, but it was no use.`;
+    } else {
+      sentence = `I caught a ${label} and gained ${record.food === 1 ? 'one' : 'two'} food.`;
+    }
   }
   return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
 }

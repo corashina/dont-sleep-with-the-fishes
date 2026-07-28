@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import {
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  type ItemId,
+  type ItemInstance,
+  type ItemInstanceId,
+} from '../src/game/ItemState';
+import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
 import { SurvivalInventoryState } from '../src/survival/inventory';
 import { mulberry32 } from '../src/survival/random';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
@@ -41,6 +48,48 @@ describe('survival foundations', () => {
     expect(inventory.gain('bucket')).toBeNull();
     inventory.break('bucket-1');
     expect(inventory.gain('bucket')).toBeNull();
+  });
+
+  it('gains a unique item directly in its declared condition', () => {
+    const inventory = new SurvivalInventoryState([]);
+    expect(inventory.gain('compass', 'broken')).toBe('compass-1');
+    expect(inventory.snapshot()['compass-1']).toEqual({
+      instanceId: 'compass-1', type: 'compass', condition: 'broken',
+    });
+    expect(inventory.gain('compass', 'usable')).toBeNull();
+  });
+
+  it('reuses consumed or lost unique slots without duplicating them', () => {
+    const inventory = new SurvivalInventoryState(saved('ductTape', 'fishingNet'));
+    inventory.consume('ductTape');
+    inventory.lose('fishingNet-1');
+    expect(inventory.gain('ductTape', 'usable')).toBe('ductTape-1');
+    expect(inventory.gain('fishingNet', 'broken')).toBe('fishingNet-1');
+    expect(Object.values(inventory.snapshot()).filter((item) => item?.type === 'fishingNet')).toHaveLength(1);
+  });
+
+  it('restores unique fishing eligibility only after loss or consumption', () => {
+    const inventory = new SurvivalInventoryState(saved('compass', 'ductTape'));
+    const activeIds = () => new Set(
+      Object.values(inventory.snapshot())
+        .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
+        .map((item) => item!.type),
+    );
+    expect(eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id))
+      .not.toEqual(expect.arrayContaining(['brokenCompass', 'wetDuctTape']));
+    inventory.lose('compass-1');
+    inventory.consume('ductTape');
+    expect(eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id))
+      .toEqual(expect.arrayContaining(['brokenCompass', 'wetDuctTape']));
+  });
+
+  it('keeps the wiki event-breakable roster stable', () => {
+    expect(
+      ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable),
+    ).toEqual([
+      'compass', 'map', 'spyglass', 'fishingNet', 'bucket',
+      'scubaSet', 'anchor', 'umbrella', 'swimRing',
+    ]);
   });
 
   it('consumes duplicate resources deterministically by instance number', () => {

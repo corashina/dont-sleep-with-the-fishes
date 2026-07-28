@@ -12,6 +12,7 @@ import {
   Object3D,
   SphereGeometry,
   Texture,
+  TorusGeometry,
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -22,13 +23,18 @@ import {
 import {
   FISHING_CATCHES,
   type FishingAppearance,
+  type FishingCatchDefinition,
   type FishingCatchId,
+  type FishingItemCondition,
   type FishingModelFamily,
 } from './fishingCatalog';
 import {
   fishingCatchModelSpec,
   type FishingCatchModelSpec,
 } from './fishingModelManifest';
+import { type ItemId } from '../game/ItemState';
+import { ITEM_MODEL_SPECS } from '../world/itemModelManifest';
+import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 
 interface FamilyTemplate {
   readonly root: Group;
@@ -303,6 +309,21 @@ function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance
   template.root.updateMatrixWorld(true);
 }
 
+function catchModelSpec(
+  definition: FishingCatchDefinition,
+): FishingCatchModelSpec | undefined {
+  if (definition.presentation.kind === 'fishing') {
+    return fishingCatchModelSpec(definition.id);
+  }
+  const item = ITEM_MODEL_SPECS[definition.presentation.itemId];
+  return {
+    url: item.url,
+    targetLength: item.targetLongestDimension,
+    rotation: item.rotation,
+    maxTriangles: item.maxTriangles,
+  };
+}
+
 export class FishingCatchLibrary {
   private active: ActiveCatch | null = null;
   private requestId = 0;
@@ -316,13 +337,25 @@ export class FishingCatchLibrary {
     if (!definition) throw new Error(`Unknown fishing catch: ${catchId}`);
     this.releaseActive();
     const requestId = ++this.requestId;
-    const spec = fishingCatchModelSpec(catchId);
+    const spec = catchModelSpec(definition);
 
     let active: ActiveCatch | null = null;
     if (spec) {
       try {
         const root = await this.loader.load(spec.url);
-        active = prepareLoadedCatch(root, catchId, spec);
+        active = prepareLoadedCatch(
+          root,
+          catchId,
+          spec,
+          definition.presentation.kind === 'item',
+        );
+        if (definition.presentation.kind === 'item') {
+          active.root.userData.fishingModelSource = 'item-model';
+          active.root.userData.fishingItemId = definition.presentation.itemId;
+          if (definition.presentation.condition === 'broken') {
+            for (const material of active.materials) applyBrokenMaterialTreatment(material);
+          }
+        }
       } catch {
         if (!this.isCurrent(requestId)) return null;
       }
@@ -332,11 +365,16 @@ export class FishingCatchLibrary {
       return null;
     }
 
-    active ??= prepareProceduralCatch(
-      definition.family,
-      definition.appearance,
-      catchId,
-    );
+    active ??= definition.presentation.kind === 'fishing'
+      ? prepareProceduralCatch(
+        definition.presentation.family,
+        definition.presentation.appearance,
+        catchId,
+      )
+      : prepareProceduralItemCatch(
+        definition.presentation.itemId,
+        definition.presentation.condition,
+      );
     this.active = active;
     return active.root;
   }
@@ -416,6 +454,7 @@ function prepareLoadedCatch(
   sourceRoot: Object3D,
   catchId: FishingCatchId,
   spec: FishingCatchModelSpec,
+  normalizeByLongestDimension = false,
 ): ActiveCatch {
   const root = new Group();
   root.name = `fishing-catch:${catchId}:model`;
@@ -440,7 +479,10 @@ function prepareLoadedCatch(
     throw new Error(`Fishing model ${catchId} has invalid bounds.`);
   }
   sourceRoot.position.sub(center);
-  root.scale.setScalar(spec.targetLength / size.x);
+  const normalizationDimension = normalizeByLongestDimension
+    ? Math.max(size.x, size.y, size.z)
+    : size.x;
+  root.scale.setScalar(spec.targetLength / normalizationDimension);
 
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
@@ -477,6 +519,64 @@ function prepareProceduralCatch(
     materials,
     textures: new Set<Texture>(),
   };
+}
+
+function prepareProceduralItemCatch(
+  itemId: ItemId,
+  condition: FishingItemCondition,
+): ActiveCatch {
+  const root = new Group();
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  const body = createMaterial(0x69787a);
+  const accent = createMaterial(0xc2aa74);
+  materials.add(body);
+  materials.add(accent);
+
+  const mesh = (
+    name: string,
+    geometry: BufferGeometry,
+    material: MeshStandardMaterial,
+  ): Mesh => {
+    geometries.add(geometry);
+    const child = new Mesh(geometry, material);
+    child.name = name;
+    child.castShadow = true;
+    child.receiveShadow = true;
+    root.add(child);
+    return child;
+  };
+
+  if (itemId === 'baitTin') {
+    mesh('utility:bait:tin', new CylinderGeometry(0.28, 0.3, 0.2, 8), body);
+    const lid = mesh('utility:bait:lid', new CylinderGeometry(0.25, 0.25, 0.035, 8), accent);
+    lid.position.y = 0.115;
+  } else if (itemId === 'ductTape') {
+    mesh('utility:tape:roll', new TorusGeometry(0.26, 0.1, 5, 10), body);
+  } else if (itemId === 'compass') {
+    mesh('utility:compass:case', new CylinderGeometry(0.28, 0.3, 0.1, 10), body);
+    const needle = mesh('utility:compass:needle', new ConeGeometry(0.08, 0.32, 3), accent);
+    needle.position.y = 0.08;
+    needle.rotation.z = Math.PI / 2;
+  } else if (itemId === 'fishingNet') {
+    const handle = mesh('utility:net:handle', new CylinderGeometry(0.035, 0.045, 0.9, 6), body);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.x = -0.42;
+    const rim = mesh('utility:net:rim', new TorusGeometry(0.32, 0.035, 5, 10), accent);
+    rim.position.x = 0.34;
+  } else {
+    mesh('utility:energy-bar:wrapper', new BoxGeometry(0.72, 0.16, 0.28), body);
+    const band = mesh('utility:energy-bar:band', new BoxGeometry(0.2, 0.18, 0.3), accent);
+    band.position.x = 0.08;
+  }
+
+  if (condition === 'broken') {
+    for (const material of materials) applyBrokenMaterialTreatment(material);
+  }
+  root.name = `fishing-catch:${itemId}:procedural`;
+  root.userData.fishingModelSource = 'procedural-item';
+  root.userData.fishingItemId = itemId;
+  return { root, geometries, materials, textures: new Set<Texture>() };
 }
 
 function disposeActiveCatch(active: ActiveCatch): void {
