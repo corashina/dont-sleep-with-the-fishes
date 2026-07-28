@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AnimationClip,
   BufferGeometry,
   Float32BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
+  VectorKeyframeTrack,
 } from 'three';
 import { PropModelLibrary, type ItemModelLoader } from '../src/world/PropModelLibrary';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 function modelWithoutNormals(): Group {
   const geometry = new BufferGeometry();
@@ -23,7 +26,14 @@ function modelWithoutNormals(): Group {
 describe('PropModelLibrary normals', () => {
   it('generates missing normals for lit prop materials', async () => {
     const loader: ItemModelLoader = {
-      load: async () => modelWithoutNormals(),
+      load: async (url) => ({
+        scene: modelWithoutNormals(),
+        animations: url === ITEM_MODEL_SPECS.captainWhiskers.url
+          ? [new AnimationClip('CaptainWhiskersIdle', 1, [
+            new VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0]),
+          ])]
+          : [],
+      }),
     };
     const library = await PropModelLibrary.load(loader);
 

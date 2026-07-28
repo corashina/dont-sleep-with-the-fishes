@@ -36,7 +36,10 @@ class CheckedInItemModelLoader implements ItemModelLoader {
       Object.defineProperty(globalThis, 'self', { configurable: true, value: globalThis });
     }
     return new Promise<Awaited<ReturnType<ItemModelLoader['load']>>>((onLoad, onError) => {
-      new GLTFLoader().parse(data, '', (gltf) => onLoad(gltf.scene), onError);
+      new GLTFLoader().parse(data, '', (gltf) => onLoad({
+        scene: gltf.scene,
+        animations: gltf.animations,
+      }), onError);
     });
   }
 }
