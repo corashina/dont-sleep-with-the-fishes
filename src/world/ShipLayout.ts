@@ -518,6 +518,19 @@ function compactTopSurface(
   )];
 }
 
+function bunkComfortSurface(furnitureId: string): readonly ShipItemSurfaceSpec[] {
+  return [itemSurface(
+    furnitureId,
+    'top-comfort',
+    ['comfort'],
+    [0, 1.708, 0],
+    { width: 0.72, depth: 1.05 },
+    1.10,
+    [[1.25, 0, 0]],
+    { localRotation: [0, -PI_OVER_TWO, 0] },
+  )];
+}
+
 function crewDeskSurfaces(furnitureId: string): readonly ShipItemSurfaceSpec[] {
   return ([-0.35, 0.35] as const).map((x, index) => itemSurface(
     furnitureId,
@@ -584,7 +597,15 @@ function placement(
 }
 
 const furniture: readonly ShipFurniturePlacementSpec[] = [
-  placement('cabin-bunk-port', 'bedBunk', 'crewCabin', [crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.147 / 2, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
+  placement(
+    'cabin-bunk-port',
+    'bedBunk',
+    'crewCabin',
+    [crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.147 / 2, 2.22, 10.5],
+    0,
+    [1.147, 1.708, 2.2],
+    bunkComfortSurface('cabin-bunk-port'),
+  ),
   placement('cabin-bunk-starboard', 'bedBunk', 'crewCabin', [crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.147 / 2, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
   placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.908 / 2], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
   placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 13.08], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES)),

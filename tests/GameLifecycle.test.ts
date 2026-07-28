@@ -13,6 +13,7 @@ import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
+import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
@@ -1161,12 +1162,13 @@ describe('ScavengePhase lifecycle integration', () => {
     const depositTarget = updateInteraction.mock.calls[0]![2];
     const firstInstances = updateInteraction.mock.calls[0]![3];
     const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
-    expect(internals.world.itemObjects.size).toBe(20);
+    const scavengeItemCount = createScavengeItemInstances().length;
+    expect(internals.world.itemObjects.size).toBe(scavengeItemCount);
     expect(internals.world.itemObjects.has('energyBar-1')).toBe(false);
-    expect(firstItems).toHaveLength(20);
+    expect(firstItems).toHaveLength(scavengeItemCount);
     expect(firstItems).toContain(cannedFood);
     expect(depositTarget).toBe(internals.world.boatDepositTarget);
-    expect(firstInstances.size).toBe(20);
+    expect(firstInstances.size).toBe(scavengeItemCount);
     expect(firstInstances.get('cannedFood-1')).toEqual({
       instanceId: 'cannedFood-1',
       type: 'cannedFood',
@@ -1177,7 +1179,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
     const nextItems = updateInteraction.mock.calls[1]![0];
     const nextInstances = updateInteraction.mock.calls[1]![3];
-    expect(nextItems).toHaveLength(19);
+    expect(nextItems).toHaveLength(scavengeItemCount - 1);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();

@@ -867,7 +867,7 @@ describe('world builders', () => {
     ]);
     expect(shipGeometries.size).toBeGreaterThan(0);
     expect(shipMaterials.size).toBeGreaterThan(0);
-    expect(propResources).toHaveLength(21);
+    expect(propResources).toHaveLength(createItemInstances().length);
     propResources.forEach((resources) => {
       expect(resources.geometries.size).toBeGreaterThan(0);
       expect(resources.materials.size).toBeGreaterThan(0);
