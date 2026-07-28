@@ -342,6 +342,20 @@ describe('freighter geometry', () => {  interface PointXZ {
     return [(maxU - minU) / (maxX - minX), (maxV - minV) / (maxY - minY)];
   };
 
+  const verticalFaceUvOffset = (mesh: Mesh): readonly [number, number] => {
+    const positions = mesh.geometry.getAttribute('position');
+    const normals = mesh.geometry.getAttribute('normal');
+    const uvs = mesh.geometry.getAttribute('uv');
+    for (let index = 0; index < positions.count; index += 1) {
+      if (Math.abs(normals.getZ(index)) < 0.9) continue;
+      return [
+        uvs.getX(index) - positions.getX(index),
+        uvs.getY(index) - positions.getY(index),
+      ];
+    }
+    throw new Error(`Expected an upright face for ${mesh.name}`);
+  };
+
   it('uses each room finish consistently with metre-scaled upright wall UVs', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
@@ -358,12 +372,43 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(storageWalls.length).toBeGreaterThan(0);
       crewWalls.forEach((wall) => {
         expect(wall.material).toBe(materials.paintedPanel);
-        expect(verticalFaceUvScale(wall)).toEqual([1, 1]);
+        const [uScale, vScale] = verticalFaceUvScale(wall);
+        expect(uScale).toBeCloseTo(1, 5);
+        expect(vScale).toBeCloseTo(1, 5);
+        const [uOffset, vOffset] = verticalFaceUvOffset(wall);
+        expect(uOffset).toBeCloseTo(
+          wall.rotation.y === 0 ? wall.position.x : -wall.position.z,
+          5,
+        );
+        expect(vOffset).toBeCloseTo(wall.position.y, 5);
       });
       storageWalls.forEach((wall) => {
         expect(wall.material).toBe(materials.plainPaintedSteel);
-        expect(verticalFaceUvScale(wall)).toEqual([1, 1]);
+        const [uScale, vScale] = verticalFaceUvScale(wall);
+        expect(uScale).toBeCloseTo(1, 5);
+        expect(vScale).toBeCloseTo(1, 5);
+        const [uOffset, vOffset] = verticalFaceUvOffset(wall);
+        expect(uOffset).toBeCloseTo(
+          wall.rotation.y === 0 ? wall.position.x : -wall.position.z,
+          5,
+        );
+        expect(vOffset).toBeCloseTo(wall.position.y, 5);
       });
+      const wheelhouseSill = build.root.getObjectByName(
+        'wheelhouse-pane:front-center:sill',
+      ) as Mesh;
+      const wheelhouseHeader = build.root.getObjectByName(
+        'wheelhouse-pane:front-center:header',
+      ) as Mesh;
+      const pane = wheelhouseSill.parent!;
+      const horizontalOffset = pane.position.x * Math.cos(pane.rotation.y)
+        - pane.position.z * Math.sin(pane.rotation.y);
+      const [sillUOffset, sillVOffset] = verticalFaceUvOffset(wheelhouseSill);
+      const [headerUOffset, headerVOffset] = verticalFaceUvOffset(wheelhouseHeader);
+      expect(sillUOffset).toBeCloseTo(horizontalOffset, 5);
+      expect(headerUOffset).toBeCloseTo(horizontalOffset, 5);
+      expect(sillVOffset).toBeCloseTo(pane.position.y + wheelhouseSill.position.y, 5);
+      expect(headerVOffset).toBeCloseTo(pane.position.y + wheelhouseHeader.position.y, 5);
       expect(materials.paintedPanel.map!.repeat.toArray()).toEqual([1, 1]);
     } finally {
       build.disposeGeometry();
