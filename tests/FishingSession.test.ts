@@ -35,7 +35,22 @@ describe('FishingSession', () => {
     session.advance(4);
     expect(session.reel()).toMatchObject({
       accepted: true,
-      result: { kind: 'catch', catch: { id: 'plasticBottle' } },
+      result: { kind: 'catch', catch: { id: 'energyBar' } },
+    });
+  });
+
+  it('removes active unique utility rewards before drawing the hidden catch', () => {
+    const session = new FishingSession({
+      id: 'attempt-1',
+      day: 3,
+      capturedBait: false,
+      activeItemIds: new Set(['ductTape', 'compass', 'fishingNet', 'energyBar']),
+      random: sequenceRandom([0, 0.999999]),
+    });
+    castToWaiting(session);
+    session.advance(session.snapshot().biteDelaySeconds);
+    expect(session.reel()).toMatchObject({
+      result: { kind: 'catch', catch: { id: 'bait' } },
     });
   });
 
