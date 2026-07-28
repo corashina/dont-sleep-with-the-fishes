@@ -11,8 +11,8 @@ import {
 } from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
-import { ScavengeSession } from '../src/game/ScavengeSession';
-import type { ItemInstance } from '../src/game/ItemState';
+import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
+import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
@@ -596,6 +596,78 @@ describe('ScavengePhase lifecycle integration', () => {
       game.dispose();
       requestFrame.mockRestore();
     }
+  });
+
+  it('enters selected test events from scavenging and survival with every item', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const scavenge = gamePhase();
+    const firstSurvival = gamePhase();
+    const secondSurvival = gamePhase();
+    const survivalPhases = [firstSurvival, secondSurvival];
+    const initialEventIds: Array<string | undefined> = [];
+    const createSurvival = vi.fn((
+      _context: PhaseContext,
+      _result: Readonly<ScavengeResult>,
+      _seed: number,
+      _onRestart: () => void,
+      initialEventId?: string,
+    ) => {
+      initialEventIds.push(initialEventId);
+      return survivalPhases[initialEventIds.length - 1]!;
+    });
+    const game = Game.forTest({
+      createScavenge: () => scavenge,
+      createSurvival,
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+      createSeed: vi.fn()
+        .mockReturnValueOnce(11)
+        .mockReturnValueOnce(22)
+        .mockReturnValueOnce(33),
+    });
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    const select = mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!;
+    select.value = 'shower-night';
+    mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
+
+    expect(scavenge.dispose).toHaveBeenCalledOnce();
+    expect(createSurvival).toHaveBeenLastCalledWith(
+      expect.anything(),
+      {
+        savedItems: ITEM_IDS.map((type) => ({ instanceId: `${type}-1`, type })),
+        elapsedSeconds: 0,
+      },
+      22,
+      expect.any(Function),
+      'shower-night',
+    );
+    expect(firstSurvival.resize).toHaveBeenCalledWith(
+      window.innerWidth,
+      window.innerHeight,
+    );
+    expect(firstSurvival.start).toHaveBeenCalledOnce();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    select.value = 'dangerous-waters';
+    mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
+
+    expect(firstSurvival.dispose).toHaveBeenCalledOnce();
+    expect(initialEventIds.at(-1)).toBe('dangerous-waters');
+    expect(secondSurvival.start).toHaveBeenCalledOnce();
+
+    expect(() => (
+      game as unknown as { enterTestEvent(id: string): void }
+    ).enterTestEvent('missing-event')).toThrow(/unknown event test scene/i);
+    expect(secondSurvival.dispose).not.toHaveBeenCalled();
+
+    game.dispose();
   });
 
   it('disposes a new scavenging phase when applying stored weather throws', () => {

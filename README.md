@@ -72,11 +72,16 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 
-### Weather debug control
+### System tuning
 
 Press <code>`</code> (backquote) in either scavenging or lifeboat survival to open **System Tuning**, then select a presentation weather profile. The menu offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. A selection is a forced visual override: it takes precedence over event weather, carries across the scavenging-to-survival handoff, and remains active until the page reloads.
 
 Normal gameplay is always **Calm**. Only five authored events change presentation weather while they are staged and resolved: **Shower Night → Rain**, **Windy Night → Wind**, **Thunderstorm → Thunderstorm**, **Restless Waves → Waves**, and **Man in the Fog → Fog**. All other events return to Calm after their presentation ends.
+
+For testing, the same menu includes an **Event Test** picker. Choose an authored
+event and select **Enter Event** to start a fresh lifeboat run at that event with
+one usable copy of every recoverable item. After the event resolves, survival
+continues normally.
 
 Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, purpose, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 1 Energy** action in every run. **Dive** still requires usable recovered Scuba Gear. Other unavailable actions remain visible and explain what is missing. Event and outcome dialogs keep keyboard focus until they are resolved.
 
