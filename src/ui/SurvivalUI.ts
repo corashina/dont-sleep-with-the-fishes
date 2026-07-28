@@ -1012,6 +1012,8 @@ export class SurvivalUI {
     this.pendingEventOutcomeHold?.finish();
     this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
+    this.hideLayer(this.driftingLootResultLayer);
+    this.driftingLootResultTarget = null;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
       this.fishingMode = 'hidden';
