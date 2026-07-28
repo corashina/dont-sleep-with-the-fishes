@@ -151,6 +151,7 @@ export class SurvivalPhase implements GamePhase {
   };
   private busy = false;
   private paused = false;
+  private visibilityPauseActive = false;
   private disposed = false;
   private started = false;
   private restartRequested = false;
@@ -170,6 +171,7 @@ export class SurvivalPhase implements GamePhase {
   private forcedWeather: PresentationWeatherId | null = null;
   private effectivePresentationWeather: PresentationWeatherId = 'calm';
   private lifecycleGeneration = 0;
+  private readonly visibilityResumeWaiters = new Set<() => void>();
 
   constructor(
     context: PhaseContext,
@@ -243,7 +245,11 @@ export class SurvivalPhase implements GamePhase {
     if (typeof document !== 'undefined') {
       this.visibilityDocument = document;
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
-      if (document.hidden) this.setPaused(true);
+      if (document.hidden) {
+        this.visibilityPauseActive = true;
+        this.setPaused(true);
+        this.world.setDocumentHidden?.(true);
+      }
     }
   }
 
@@ -334,7 +340,9 @@ export class SurvivalPhase implements GamePhase {
   setPaused(paused: boolean): void {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
+    if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
+    if (!paused) this.releaseVisibilityResumeWaiters();
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -351,6 +359,7 @@ export class SurvivalPhase implements GamePhase {
     this.clearEventPresentation();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
+    this.releaseVisibilityResumeWaiters();
     this.onRestart();
   }
 
@@ -359,6 +368,7 @@ export class SurvivalPhase implements GamePhase {
     this.clearEventPresentation();
     this.disposed = true;
     this.lifecycleGeneration += 1;
+    this.releaseVisibilityResumeWaiters();
     this.activeFishing = null;
     this.fishingPresentation = 'idle';
     this.fishingSettlementInProgress = false;
@@ -823,6 +833,10 @@ export class SurvivalPhase implements GamePhase {
       ?? Promise.resolve()
     );
     if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
@@ -836,6 +850,7 @@ export class SurvivalPhase implements GamePhase {
     }
     const resolved = this.session.snapshot();
     const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
+    this.syncPresentation(resolved);
     await this.runEventResolution(
       eventId,
       outcome,
@@ -902,6 +917,10 @@ export class SurvivalPhase implements GamePhase {
         ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
     const terminal = this.session.snapshot();
     this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
@@ -1016,11 +1035,15 @@ export class SurvivalPhase implements GamePhase {
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
-    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
+    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
 
     const revealed = this.session.snapshot();
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
@@ -1138,6 +1161,36 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private readonly handleVisibilityChange = (): void => {
-    if (this.visibilityDocument?.hidden) this.setPaused(true);
+    const hidden = this.visibilityDocument?.hidden === true;
+    if (hidden) {
+      this.visibilityPauseActive = true;
+      this.setPaused(true);
+    }
+    this.world.setDocumentHidden?.(hidden);
   };
+
+  private waitForEventResume(generation: number): Promise<boolean> {
+    if (!this.isContinuationActive(generation)) return Promise.resolve(false);
+    if (!this.visibilityPauseActive && !this.documentIsHidden()) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const resume = () => {
+        this.visibilityResumeWaiters.delete(resume);
+        resolve(
+          this.isContinuationActive(generation)
+          && !this.visibilityPauseActive
+          && !this.documentIsHidden()
+        );
+      };
+      this.visibilityResumeWaiters.add(resume);
+    });
+  }
+
+  private releaseVisibilityResumeWaiters(): void {
+    if (this.visibilityResumeWaiters.size === 0) return;
+    const waiters = [...this.visibilityResumeWaiters];
+    this.visibilityResumeWaiters.clear();
+    for (const resume of waiters) resume();
+  }
 }

@@ -224,6 +224,9 @@ export class BoatSupplyDisplay {
   private eventAmbientRoll = 0;
   private eventAmbientLift = 0;
   private eventItemId: ItemInstanceId | null = null;
+  private pinnedEventActorId: ItemInstanceId | null = null;
+  private pinnedEventGroupId: BoatSupplyGroupId | null = null;
+  private releasePinnedActorOnSync = false;
   private readonly eventItemPose = {
     x: 0,
     y: 0,
@@ -327,7 +330,10 @@ export class BoatSupplyDisplay {
       if (item === undefined) continue;
       this.groupByInstanceId.set(item.instanceId, item.type);
     }
-    for (const groupId of BOAT_SUPPLY_GROUP_IDS) this.syncGroup(groupId, snapshot);
+    if (this.releasePinnedActorOnSync) this.releasePinnedEventActor(false);
+    for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
+      if (groupId !== this.pinnedEventGroupId) this.syncGroup(groupId, snapshot);
+    }
     if (
       this.highlightedGroupId !== null
       && this.recordsById.get(this.highlightedGroupId)?.visibleCopies === 0
@@ -411,26 +417,73 @@ export class BoatSupplyDisplay {
     return true;
   }
 
-  clearEventMotion(): void {
-    this.eventAmbientRoll = 0;
-    this.eventAmbientLift = 0;
-    this.eventItemId = null;
-    this.eventItemPose.x = 0;
-    this.eventItemPose.y = 0;
-    this.eventItemPose.z = 0;
-    this.eventItemPose.yaw = 0;
-    this.eventItemPose.pitch = 0;
-    this.eventItemPose.roll = 0;
-    this.eventItemPose.scaleX = 1;
-    this.eventItemPose.scaleY = 1;
-    this.eventItemPose.scaleZ = 1;
+  pinEventActor(instanceId: ItemInstanceId): boolean {
+    if (this.disposed) return false;
+    if (this.pinnedEventActorId === instanceId) {
+      this.releasePinnedActorOnSync = false;
+      return true;
+    }
+    if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
+    const groupId = this.groupByInstanceId.get(instanceId);
+    if (groupId === undefined) return false;
+    if (this.currentSnapshot !== null) {
+      this.eventSelectedItemId = instanceId;
+      this.syncGroup(groupId, this.currentSnapshot);
+    }
+    const record = this.recordsById.get(groupId);
+    if (
+      record === undefined
+      || record.visibleCopies === 0
+      || record.backingInstanceId !== instanceId
+    ) return false;
+    this.pinnedEventActorId = instanceId;
+    this.pinnedEventGroupId = groupId;
+    this.releasePinnedActorOnSync = false;
+    return true;
+  }
+
+  releaseEventActorOnNextSync(): void {
+    if (this.disposed || this.pinnedEventActorId === null) return;
+    this.releasePinnedActorOnSync = true;
+  }
+
+  releaseEventActor(): void {
+    if (this.disposed) return;
+    this.releasePinnedEventActor(true);
+  }
+
+  resetEventPoseForFrame(): void {
+    if (this.disposed) return;
+    this.resetEventPose();
+  }
+
+  clearEventPose(): void {
+    if (this.disposed) return;
+    this.resetEventPose();
     this.restoreEventMotionBase();
+  }
+
+  settleEventItemUse(): void {
+    if (this.disposed) return;
+    this.cancelActiveAnimation();
+  }
+
+  clearEventMotion(): void {
+    this.resetEventPose();
+    this.cancelActiveAnimation();
+    this.releasePinnedEventActor(false);
+    this.restoreEventMotionBase();
+    if (this.currentSnapshot !== null) {
+      for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
+        this.syncGroup(groupId, this.currentSnapshot);
+      }
+    }
   }
 
   update(deltaSeconds: number): void {
     if (this.disposed) return;
-    this.applyEventMotion();
     const animation = this.activeAnimation;
+    this.applyEventMotion();
     if (animation === null) return;
     animation.elapsed = Math.min(
       animation.duration,
@@ -438,12 +491,13 @@ export class BoatSupplyDisplay {
     );
     const progress = animation.elapsed / animation.duration;
     const eased = progress * progress * (3 - 2 * progress);
-    animation.root.position.y += Math.sin(Math.PI * eased) * 0.28;
-    animation.root.rotateZ(Math.sin(Math.PI * eased) * 0.16);
-    if (progress < 1) return;
-    this.activeAnimation = null;
-    this.applyEventMotion();
-    animation.resolve();
+    const lift = progress >= 1 ? 0 : Math.sin(Math.PI * eased);
+    animation.root.position.y += lift * 0.28;
+    animation.root.rotateZ(lift * 0.16);
+    if (progress >= 1) {
+      this.activeAnimation = null;
+      animation.resolve();
+    }
   }
 
   dispose(): void {
@@ -499,6 +553,15 @@ export class BoatSupplyDisplay {
       usableItems.map(({ instance }) => instance.instanceId),
       brokenItems.map(({ instance }) => instance.instanceId),
     );
+    if (record.backingInstanceId !== null) {
+      const backingIndex = activeItems.findIndex(
+        ({ instance }) => instance.instanceId === record.backingInstanceId,
+      );
+      if (backingIndex > 0) {
+        const [backing] = activeItems.splice(backingIndex, 1);
+        activeItems.unshift(backing!);
+      }
+    }
     record.root.visible = record.visibleCopies > 0;
     const copies = this.copiesById.get(groupId)!;
     for (let index = 0; index < copies.length; index += 1) {
@@ -564,6 +627,33 @@ export class BoatSupplyDisplay {
     this.activeAnimation = null;
     this.applyEventMotion();
     animation.resolve();
+  }
+
+  private resetEventPose(): void {
+    this.eventAmbientRoll = 0;
+    this.eventAmbientLift = 0;
+    this.eventItemId = null;
+    this.eventItemPose.x = 0;
+    this.eventItemPose.y = 0;
+    this.eventItemPose.z = 0;
+    this.eventItemPose.yaw = 0;
+    this.eventItemPose.pitch = 0;
+    this.eventItemPose.roll = 0;
+    this.eventItemPose.scaleX = 1;
+    this.eventItemPose.scaleY = 1;
+    this.eventItemPose.scaleZ = 1;
+  }
+
+  private releasePinnedEventActor(syncLatestSnapshot: boolean): void {
+    const groupId = this.pinnedEventGroupId;
+    this.pinnedEventActorId = null;
+    this.pinnedEventGroupId = null;
+    this.releasePinnedActorOnSync = false;
+    this.resetEventPose();
+    this.restoreEventMotionBase();
+    if (syncLatestSnapshot && groupId !== null && this.currentSnapshot !== null) {
+      this.syncGroup(groupId, this.currentSnapshot);
+    }
   }
 
   private applyEventMotion(): void {

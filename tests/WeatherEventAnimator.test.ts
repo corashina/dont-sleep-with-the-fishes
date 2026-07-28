@@ -10,9 +10,16 @@ import { createTestPropModels } from './helpers/propModels';
 const savedItems: readonly ItemInstance[] = [
   { instanceId: 'bucket-1', type: 'bucket' },
   { instanceId: 'flashlight-1', type: 'flashlight' },
+  { instanceId: 'compass-1', type: 'compass' },
+  { instanceId: 'spyglass-1', type: 'spyglass' },
+  { instanceId: 'anchor-1', type: 'anchor' },
+  { instanceId: 'map-1', type: 'map' },
 ];
 
-function snapshot(): SurvivalSnapshot {
+function snapshot(
+  items: readonly ItemInstance[] = savedItems,
+  inventory = new SurvivalInventoryState(items).snapshot(),
+): SurvivalSnapshot {
   return {
     state: 'nightEvent',
     day: 1,
@@ -29,8 +36,8 @@ function snapshot(): SurvivalSnapshot {
     weather: 'calm',
     actedToday: false,
     journalEntries: [],
-    inventory: new SurvivalInventoryState(savedItems).snapshot(),
-    savedItems,
+    inventory,
+    savedItems: items,
     pendingEventId: null,
     lastOutcome: null,
     seed: 8,
@@ -47,11 +54,11 @@ function outcome(deltas: ActionOutcome['deltas'] = {}): ActionOutcome {
   };
 }
 
-function fixture() {
+function fixture(items: readonly ItemInstance[] = savedItems) {
   const models = createTestPropModels();
   const supplyRoot = new Group();
-  const supplyDisplay = new BoatSupplyDisplay(models, supplyRoot, savedItems);
-  supplyDisplay.sync(snapshot());
+  const supplyDisplay = new BoatSupplyDisplay(models, supplyRoot, items);
+  supplyDisplay.sync(snapshot(items));
   const cameraRig = new Group();
   const animator = new WeatherEventAnimator(cameraRig, supplyDisplay);
   return {
@@ -66,6 +73,15 @@ function fixture() {
       models.dispose();
     },
   };
+}
+
+function advance(
+  scene: ReturnType<typeof fixture>,
+  time: number,
+  delta: number,
+): void {
+  scene.animator.update(time, delta);
+  scene.supplyDisplay.update(delta);
 }
 
 async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
@@ -125,6 +141,65 @@ describe('WeatherEventAnimator', () => {
     const scene = fixture();
     await expect(scene.animator.reveal('strange-noise')).resolves.toBeUndefined();
     scene.dispose();
+  });
+
+  it('uses a dedicated lightning flash instead of presenting a bucket splash as lightning', () => {
+    const scene = fixture();
+    void scene.animator.reveal('thunderstorm');
+
+    scene.animator.update(1, 2.2);
+
+    expect(
+      scene.animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible,
+    ).toBe(true);
+    expect(
+      scene.animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible,
+    ).toBe(false);
+    scene.dispose();
+  });
+
+  it('applies compass bearing, spyglass push, and wave-anchor stabilization commands', async () => {
+    const compassScene = fixture();
+    const compassUse = compassScene.animator.playItemUse(
+      'man-in-the-fog',
+      'compass',
+      'compass-1',
+    );
+    advance(compassScene, 1, 0.62);
+    expect(Math.abs(compassScene.cameraRig.rotation.y)).toBeGreaterThan(0.04);
+    compassScene.animator.clear();
+    await compassUse;
+    compassScene.dispose();
+
+    const spyglassScene = fixture();
+    const spyglassUse = spyglassScene.animator.playItemUse(
+      'man-in-the-fog',
+      'spyglass',
+      'spyglass-1',
+    );
+    advance(spyglassScene, 1, 0.75);
+    expect(Math.abs(spyglassScene.cameraRig.position.z)).toBeGreaterThan(0.1);
+    spyglassScene.animator.clear();
+    await spyglassUse;
+    spyglassScene.dispose();
+
+    const anchorScene = fixture();
+    const ambient = vi.spyOn(anchorScene.supplyDisplay, 'applyEventAmbientPose');
+    const anchorUse = anchorScene.animator.playItemUse(
+      'restless-waves',
+      'anchor',
+      'anchor-1',
+    );
+    advance(anchorScene, 1, 0.42);
+    advance(anchorScene, 2, 0.65);
+    expect(
+      anchorScene.animator.boatRoot.getObjectByName('weather-anchor-chain')?.visible,
+    ).toBe(true);
+    const rolls = ambient.mock.calls.map(([roll]) => Math.abs(roll));
+    expect(rolls.at(-1)!).toBeLessThan(Math.max(...rolls.slice(0, -1)));
+    anchorScene.animator.clear();
+    await anchorUse;
+    anchorScene.dispose();
   });
 
   it.each(['windy-night', 'restless-waves'])(
@@ -202,6 +277,120 @@ describe('WeatherEventAnimator', () => {
     expect(scene.animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible).toBe(false);
     scene.dispose();
   });
+
+  it('pins a lost duplicate through its offscreen reaction until inventory sync', async () => {
+    const items: readonly ItemInstance[] = [
+      { instanceId: 'map-1', type: 'map' },
+      { instanceId: 'map-2', type: 'map' },
+    ];
+    const inventory = new SurvivalInventoryState(items);
+    const scene = fixture(items);
+    scene.supplyDisplay.setEventSelectedItem('map-2');
+    const mapRoot = scene.supplyRoot.getObjectByName('boat-supply:map')!;
+    const base = mapRoot.position.clone();
+    const use = scene.animator.playItemUse('windy-night', 'map', 'map-2');
+    advance(scene, 1, 1.45);
+    await use;
+
+    inventory.lose('map-2');
+    scene.supplyDisplay.sync(snapshot(items, inventory.snapshot()));
+    expect(scene.supplyDisplay.recordFor('map')?.backingInstanceId).toBe('map-2');
+    expect(mapRoot.visible).toBe(true);
+
+    const reaction = scene.animator.react(
+      'windy-night',
+      outcome(),
+      { choiceId: 'map', instanceId: 'map-2', condition: 'lost' },
+    );
+    advance(scene, 2, 0.84);
+    await reaction;
+    expect(mapRoot.visible).toBe(true);
+    expect(mapRoot.position.x).toBeLessThan(base.x - 1);
+
+    scene.supplyDisplay.sync(snapshot(items, inventory.snapshot()));
+    expect(scene.supplyDisplay.recordFor('map')?.backingInstanceId).toBe('map-1');
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
+    scene.dispose();
+  });
+
+  it.each(['lost', 'consumed'] as const)(
+    'keeps a terminal %s actor visible until sync or clear',
+    async (condition) => {
+      const scene = fixture();
+      expect(scene.supplyDisplay.pinEventActor('bucket-1')).toBe(true);
+      const bucket = scene.supplyRoot.getObjectByName('boat-supply:bucket')!;
+      const reaction = scene.animator.react(
+        'shower-night',
+        outcome(),
+        { choiceId: 'bucket', instanceId: 'bucket-1', condition },
+      );
+
+      advance(scene, 1, 0.84);
+      await reaction;
+      expect(bucket.visible).toBe(true);
+      expect(bucket.position.x).toBeLessThan(-1);
+
+      scene.animator.clear();
+      expect(bucket.position.toArray()).toEqual([0, 0, 0]);
+      scene.dispose();
+    },
+  );
+
+  it.each(['reveal', 'item', 'react'] as const)(
+    'settles and restores an active %s timeline for a visibility interruption',
+    async (kind) => {
+      const scene = fixture();
+      const active = kind === 'reveal'
+        ? scene.animator.reveal('windy-night')
+        : kind === 'item'
+          ? scene.animator.playItemUse('shower-night', 'bucket', 'bucket-1')
+          : scene.animator.react(
+            'shower-night',
+            outcome({ hull: -10 }),
+            { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'usable' },
+          );
+      advance(scene, 1, 0.25);
+
+      scene.animator.settleForVisibilityChange();
+      await active;
+      expect(scene.cameraRig.position.toArray()).toEqual([0, 0, 0]);
+      expect(scene.cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      expect(scene.supplyRoot.getObjectByName('boat-supply:bucket')?.position.toArray())
+        .toEqual([0, 0, 0]);
+      scene.dispose();
+    },
+  );
+
+  it.each(['reveal', 'item', 'reaction'] as const)(
+    'cancels older %s work before returning from an unsupported or empty call',
+    async (kind) => {
+      const scene = fixture();
+      const older = kind === 'reveal'
+        ? scene.animator.reveal('windy-night')
+        : kind === 'item'
+          ? scene.animator.playItemUse('shower-night', 'bucket', 'bucket-1')
+          : scene.animator.react(
+            'shower-night',
+            outcome({ hull: -10 }),
+            { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'usable' },
+          );
+      advance(scene, 1, 0.25);
+
+      const replacement = kind === 'reveal'
+        ? scene.animator.reveal('constructor')
+        : kind === 'item'
+          ? scene.animator.playItemUse('shower-night', 'constructor', 'bucket-1')
+          : scene.animator.react('shower-night', outcome(), null);
+      await Promise.resolve();
+      const stillPending = await remainsPending(older);
+      scene.animator.clear();
+      await Promise.all([older, replacement]);
+      expect(stillPending).toBe(false);
+      expect(scene.cameraRig.position.toArray()).toEqual([0, 0, 0]);
+      expect(scene.cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      scene.dispose();
+    },
+  );
 
   it('clears active work exactly once and restores all borrowed state', async () => {
     const scene = fixture();
