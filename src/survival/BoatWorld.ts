@@ -32,6 +32,7 @@ import {
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
+import { HoverOutline } from '../rendering/HoverOutline';
 import {
   BoatBuoyancy,
   smoothBoatPoseInto,
@@ -400,6 +401,7 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly toolHoverOutline = new HoverOutline();
   private readonly eventPresentation: EventPresentationLayer;
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
@@ -618,6 +620,11 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
+    this.toolHoverOutline.setTarget(
+      instanceId === 'repair-tools'
+        ? this.repairTools
+        : instanceId === 'end-day-lantern' ? this.lantern.root : null,
+    );
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
@@ -1111,6 +1118,7 @@ export class BoatWorld {
       () => { this.disposed = true; },
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
+      () => this.toolHoverOutline.dispose(),
       () => this.eventPresentation.dispose(),
       () => this.driftingLootPresentation?.dispose(),
       () => this.lantern.dispose(),

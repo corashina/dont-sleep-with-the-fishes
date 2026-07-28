@@ -556,7 +556,7 @@ export class SurvivalUI {
     let highlightInvalidated = false;
     for (const anchor of anchors) {
       seen.add(anchor.id);
-      if (!anchor.visible || anchor.itemType === null) {
+      if (!anchor.visible || !this.isHighlightableAnchor(anchor)) {
         highlightInvalidated = this.invalidateAnchorHighlight(anchor.id) || highlightInvalidated;
       }
       this.anchors.set(anchor.id, anchor);
@@ -1362,10 +1362,19 @@ export class SurvivalUI {
     return this.contextualEventChoices.find((choice) => choice.id === 'sleep');
   }
 
-  private itemAnchorId(target: EventTarget | null): string | null {
+  private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
+    return anchor.itemType !== null
+      || anchor.toolId === 'repairTools'
+      || anchor.toolId === 'lantern';
+  }
+
+  private highlightAnchorId(target: EventTarget | null): string | null {
     if (!(target instanceof Element)) return null;
-    const button = target.closest<HTMLButtonElement>('.boat-anchor[data-target-kind="item"]');
-    return button !== null && this.root.contains(button) ? button.dataset.anchorId ?? null : null;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor');
+    if (button === null || !this.root.contains(button)) return null;
+    const anchorId = button.dataset.anchorId;
+    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
+    return anchor !== undefined && this.isHighlightableAnchor(anchor) ? anchorId! : null;
   }
 
   private publishAnchorHighlight(): void {
@@ -1400,26 +1409,26 @@ export class SurvivalUI {
   };
 
   private readonly handleAnchorPointerOver = (event: Event): void => {
-    this.hoveredAnchorId = this.itemAnchorId(event.target);
+    this.hoveredAnchorId = this.highlightAnchorId(event.target);
     this.publishAnchorHighlight();
   };
 
   private readonly handleAnchorPointerOut = (event: Event): void => {
     const pointerEvent = event as MouseEvent;
-    const current = this.itemAnchorId(event.target);
-    if (current === null || this.itemAnchorId(pointerEvent.relatedTarget) === current) return;
+    const current = this.highlightAnchorId(event.target);
+    if (current === null || this.highlightAnchorId(pointerEvent.relatedTarget) === current) return;
     if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
     this.publishAnchorHighlight();
   };
 
   private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
-    this.focusedAnchorId = this.itemAnchorId(event.target);
+    this.focusedAnchorId = this.highlightAnchorId(event.target);
     this.publishAnchorHighlight();
   };
 
   private readonly handleAnchorFocusOut = (event: FocusEvent): void => {
-    const current = this.itemAnchorId(event.target);
-    if (current === null || this.itemAnchorId(event.relatedTarget) === current) return;
+    const current = this.highlightAnchorId(event.target);
+    if (current === null || this.highlightAnchorId(event.relatedTarget) === current) return;
     if (this.focusedAnchorId === current) this.focusedAnchorId = null;
     this.publishAnchorHighlight();
   };
