@@ -1,4 +1,13 @@
-import { Box3, Euler, Material, Mesh, Vector3 } from 'three';
+import {
+  Box3,
+  BoxGeometry,
+  Euler,
+  Group,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
   PLAYER_LAYOUT_RADIUS,
@@ -8,9 +17,13 @@ import {
 } from '../src/world/ShipLayout';
 import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 import { createShipFurniture } from '../src/world/ShipFurniture';
+import { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import { createShip, isShipSurfaceStandingPointVisible } from '../src/world/Ship';
 import { createShipMaterials } from '../src/world/ShipMaterials';
-import { SHIP_FURNITURE_MODEL_SPECS } from '../src/world/shipFurnitureManifest';
+import {
+  SHIP_FURNITURE_MODEL_IDS,
+  SHIP_FURNITURE_MODEL_SPECS,
+} from '../src/world/shipFurnitureManifest';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 
 const overlap = (
@@ -20,6 +33,52 @@ const overlap = (
   && left.minZ < right.maxZ && left.maxZ > right.minZ;
 
 describe('ship furniture', () => {
+  it('generates normals for models that omit them', async () => {
+    const modelIdByUrl = new Map(
+      SHIP_FURNITURE_MODEL_IDS.map((modelId) => [
+        SHIP_FURNITURE_MODEL_SPECS[modelId].url,
+        modelId,
+      ]),
+    );
+    const library = await ShipFurnitureLibrary.load({
+      load: async (url) => {
+        const modelId = modelIdByUrl.get(url)!;
+        const size = SHIP_FURNITURE_MODEL_SPECS[modelId].canonicalSize;
+        const geometry = new BoxGeometry(...size);
+        geometry.deleteAttribute('normal');
+        const mesh = new Mesh(geometry, new MeshStandardMaterial());
+        mesh.position.y = size[1] / 2;
+        const root = new Group();
+        root.add(mesh);
+        return root;
+      },
+    });
+
+    library.clone('crewWallArt').traverse((object) => {
+      if (object instanceof Mesh) {
+        expect(object.geometry.getAttribute('normal')).toBeDefined();
+      }
+    });
+    library.dispose();
+  });
+
+  it('clones room decorations without turning them into colliders', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+
+    for (const decoration of SHIP_LAYOUT.decorations) {
+      const root = build.root.getObjectByName(`decoration:${decoration.id}`);
+      expect(root, decoration.id).toBeDefined();
+      expect(root!.userData.modelId).toBe(decoration.modelId);
+      expect(build.colliderByFurnitureId.has(decoration.id)).toBe(false);
+    }
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
   it('includes opaque furniture in AO depth while keeping glass transparent', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 1);
@@ -48,7 +107,9 @@ describe('ship furniture', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();
     const build = createShipFurniture(materials, library);
-    expect(build.surfaces).toHaveLength(28);
+    expect(build.surfaces).toHaveLength(
+      SHIP_LAYOUT.furniture.reduce((total, fixture) => total + fixture.surfaces.length, 0),
+    );
     const colliders = SHIP_LAYOUT.furniture.map((placement) => ({
       id: placement.id,
       box: build.colliders.find((box) => box.furnitureId === placement.id)!,

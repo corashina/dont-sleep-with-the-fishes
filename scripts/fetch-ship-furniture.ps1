@@ -16,9 +16,19 @@ $expectedFiles = @(
   'cargoBox.glb'
   'cargoCrate.glb'
   'chairDesk.glb'
+  'crewCabinet.glb'
+  'crewCeilingLight.glb'
+  'crewDesk.glb'
+  'crewNightStand.glb'
+  'crewTable.glb'
+  'crewWallArt.glb'
+  'crewWallPainting.glb'
   'desk.glb'
-  'sideTableDrawers.glb'
   'table.glb'
+  'wheelhouseCorkboard.glb'
+  'workroomCardboardBox.glb'
+  'workroomPallet.glb'
+  'workroomStorageShelf.glb'
 )
 
 . (Join-Path $PSScriptRoot 'item-model-publication.ps1')
@@ -95,7 +105,7 @@ try {
   $stagedFiles = @($stagedEntries | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
   $entryDifference = @(Compare-Object -ReferenceObject $expectedFiles -DifferenceObject $stagedFiles)
   if ($stagedEntries.Count -ne $expectedFiles.Count -or $entryDifference.Count -ne 0) {
-    throw 'Staged ship furniture directory does not contain exactly the ten approved GLBs'
+    throw 'Staged ship furniture directory does not contain exactly the approved GLBs'
   }
 
   Push-Location $repositoryRoot

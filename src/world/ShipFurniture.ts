@@ -265,6 +265,17 @@ export function createShipFurniture(
     colliderByFurnitureId.set(placementSpec.id, collider);
     surfaces.push(...transformedSurfaces(placementSpec, placementRoot));
   }
+  for (const decorationSpec of layout.decorations) {
+    const decorationRoot = new Group();
+    decorationRoot.name = `decoration:${decorationSpec.id}`;
+    decorationRoot.position.set(...decorationSpec.position);
+    decorationRoot.rotation.set(...decorationSpec.rotation);
+    decorationRoot.scale.set(...decorationSpec.scale);
+    decorationRoot.userData.decorationId = decorationSpec.id;
+    decorationRoot.userData.modelId = decorationSpec.modelId;
+    decorationRoot.add(library.clone(decorationSpec.modelId));
+    root.add(decorationRoot);
+  }
   const reachableStandingPoints = new Set(
     analyzeShipNavigation(layout).reachableSurfaceStandingPointIds,
   );

@@ -15,7 +15,6 @@ export const KENNEY_SHIP_FURNITURE_RECIPES = Object.freeze({
   chairDesk: recipe('Models/GLTF format/chairDesk.glb', 588),
   bookcaseClosedDoors: recipe('Models/GLTF format/bookcaseClosedDoors.glb', 296),
   table: recipe('Models/GLTF format/table.glb', 120),
-  sideTableDrawers: recipe('Models/GLTF format/sideTableDrawers.glb', 238),
 });
 
 export const KENNEY_SHIP_FURNITURE_PACK = Object.freeze({
