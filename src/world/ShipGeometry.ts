@@ -574,6 +574,17 @@ function roomWallHeight(_zoneId: ShipZoneId): number {
   return ROOM_WALL_HEIGHT;
 }
 
+function wallUvOffsets(
+  segment: WallSegmentSpec,
+  centerY: number,
+): readonly [number, number] {
+  const horizontalCenter = (segment.min + segment.max) / 2;
+  return [
+    segment.orientation === 'x' ? horizontalCenter : -horizontalCenter,
+    centerY,
+  ];
+}
+
 function portholesForSegment(segment: WallSegmentSpec): readonly PortholeSpec[] {
   if (segment.orientation !== 'x' || segment.zoneId === 'wheelhouse') return [];
   return PORTHOLE_SPECS.filter((porthole) =>
@@ -623,7 +634,10 @@ function addPortholeWallPanel(
     steps: 1,
   });
   geometry.translate(0, 0, -WALL_HALF_THICKNESS);
-  applyWallPlanarUvs(geometry, 0, 0);
+  applyWallPlanarUvs(
+    geometry,
+    ...wallUvOffsets(segment, wallBottomY + height / 2),
+  );
   const mesh = new Mesh(geometry, material);
   mesh.name = name;
   mesh.position.set(
@@ -774,13 +788,13 @@ function addWallSegments(
       const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
       shellColliders.push(toCollisionBox(wall.position, wall.size));
       const length = segment.max - segment.min;
+      const wallCenterY = wallBottomY + height / 2;
       const geometry = createWallBoxGeometry(
         geometries,
         length - 0.00002,
         height - 0.00002,
         WALL_THICKNESS,
-        0,
-        0,
+        ...wallUvOffsets(segment, wallCenterY),
       );
       const mesh = new Mesh(geometry, material);
       mesh.name = name;
@@ -907,6 +921,10 @@ function addWheelhousePane(
   );
   pane.rotation.y = Math.atan2(-dz, dx);
   facade.add(pane);
+  const horizontalOffset = (
+    pane.position.x * dx
+    + pane.position.z * dz
+  ) / width;
 
   ([
     ['sill', WINDOW_SILL_HEIGHT, WINDOW_SILL_HEIGHT / 2],
@@ -917,8 +935,8 @@ function addWheelhousePane(
       width,
       height,
       WALL_THICKNESS,
-      0,
-      0,
+      horizontalOffset,
+      FREIGHTER_DIMENSIONS.deckY + centerY,
     );
     const mesh = new Mesh(geometry, materials.paintedPanel);
     mesh.name = `${pane.name}:${part}`;
