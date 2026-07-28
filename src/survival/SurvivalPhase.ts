@@ -82,6 +82,10 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
   return TERMINAL_STATES.includes(state);
 }
 
+function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
+  return value === 'barrel' || value === 'crate';
+}
+
 export function formatFishingResult(
   result: FishingTerminalResult,
   outcome: ActionOutcome,
@@ -898,8 +902,8 @@ export class SurvivalPhase implements GamePhase {
     if (this.eventPresentation !== 'choosing' || !this.isContinuationActive(generation)) return;
     const pending = this.session.snapshot();
     if (pending.pendingEventId !== 'drifting-loot') return;
-    if (pending.pendingDriftingLootVariant === null) {
-      this.ui.showFeedback?.(this.missingDriftingLootVariantOutcome());
+    if (!isDriftingLootVariant(pending.pendingDriftingLootVariant)) {
+      this.rejectMissingDriftingLootVariant();
       return;
     }
 
@@ -1109,17 +1113,16 @@ export class SurvivalPhase implements GamePhase {
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
-    if (event.id === 'drifting-loot' && current.pendingDriftingLootVariant === null) {
-      this.rejectMissingDriftingLootVariant();
-      return;
+    let driftingLootVariant: DriftingLootVariant | null = null;
+    if (event.id === 'drifting-loot') {
+      if (!isDriftingLootVariant(current.pendingDriftingLootVariant)) {
+        this.rejectMissingDriftingLootVariant();
+        return;
+      }
+      driftingLootVariant = current.pendingDriftingLootVariant;
     }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
-    this.world.stageEvent?.(
-      event.id,
-      event.id === 'drifting-loot'
-        ? current.pendingDriftingLootVariant
-        : null,
-    );
+    this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
