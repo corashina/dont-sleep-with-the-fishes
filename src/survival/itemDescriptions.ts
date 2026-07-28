@@ -20,4 +20,5 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   flashlight: 'Improves visibility in darkness and while diving.',
   harpoonGun: 'Provides one defensive harpoon shot.',
   energyBar: `Restores energy to ${SURVIVAL_BALANCE.actions.maximumEnergy} once.`,
+  captainWhiskers: 'A warm, watchful scrap of company in a very large sea.',
 };

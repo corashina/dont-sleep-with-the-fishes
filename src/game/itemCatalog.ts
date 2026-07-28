@@ -2,7 +2,7 @@ export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
-  'energyBar',
+  'energyBar', 'captainWhiskers',
 ] as const;
 
 export type ItemId = typeof ITEM_IDS[number];
@@ -11,7 +11,7 @@ export type ItemDayAction =
   | 'dive' | 'eat' | 'treat' | 'repairItem'
   | 'sendMessage' | 'useEnergyBar' | null;
 export type ShipPlacementCategory =
-  | 'provisions' | 'navigation' | 'workshop' | 'deckGear';
+  | 'provisions' | 'navigation' | 'workshop' | 'deckGear' | 'comfort';
 
 export interface ItemDefinition {
   readonly label: string;
@@ -61,6 +61,9 @@ const rawDefinitions = {
   flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null, 'workshop'),
   harpoonGun: define('HARPOON GUN', 2, 1, 1, false, false, null, 'workshop'),
   energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar', 'provisions'),
+  captainWhiskers: define(
+    'CAPTAIN WHISKERS', 2, 1, null, true, false, null, 'comfort',
+  ),
 } satisfies Record<ItemId, ItemDefinition>;
 
 export const ITEM_DEFINITIONS = Object.freeze(Object.fromEntries(
@@ -89,6 +92,7 @@ const APPROVED_SPAWN_COUNTS = {
   flashlight: 1,
   harpoonGun: 1,
   energyBar: 1,
+  captainWhiskers: 1,
 } as const satisfies Record<ItemId, number>;
 
 export const ITEM_LABELS = Object.freeze(Object.fromEntries(
@@ -151,7 +155,7 @@ export function validateItemCatalog(
     (sum, id) => sum + (definitions[id]?.spawnCount ?? 0),
     0,
   );
-  if (total !== 21) errors.push(`catalog must create exactly 21 instances, received ${total}`);
+  if (total !== 22) errors.push(`catalog must create exactly 22 instances, received ${total}`);
   if (errors.length > 0) throw new Error(`Invalid item catalog: ${errors.join('; ')}`);
 }
 
