@@ -47,7 +47,10 @@ import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
-import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type {
+  ActionOutcome,
+  SurvivalSnapshot,
+} from '../src/survival/survivalTypes';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import type { SkyPalette } from '../src/world/skyPalette';
 import {
@@ -133,6 +136,15 @@ function snapshot(
     seed: 8,
     ...overrides,
   };
+}
+
+async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
+  let settled = false;
+  void promise.then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  return !settled;
 }
 
 function expectedSurvivalPose(
@@ -288,6 +300,154 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('owns and routes the full Shower Night reveal before restoring the base camera', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const basePosition = cameraRig.position.toArray();
+    const baseQuaternion = cameraRig.quaternion.toArray();
+
+    world.stageEvent('shower-night');
+
+    expect(world.scene.getObjectByName('weather-event-world')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeDefined();
+    const reveal = world.revealEvent('shower-night');
+    world.update(3.39, 3.39);
+    expect(await remainsPending(reveal)).toBe(true);
+    expect(cameraRig.quaternion.toArray()).not.toEqual(baseQuaternion);
+
+    world.update(3.4, 0.01);
+    await reveal;
+    expect(cameraRig.position.toArray()).toEqual(basePosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses event-specific Bucket choreography and retains generic fallback', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
+
+    const showerUse = world.playEventItemUse(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+    world.update(0.66, 0.66);
+    expect(await remainsPending(showerUse)).toBe(true);
+    expect(bucketGroup.position.toArray()).not.toEqual([0, 0, 0]);
+    world.update(2, 2);
+    await showerUse;
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+
+    const fallback = world.playEventItemUse(
+      'strange-noise',
+      'bucket',
+      bucket.instanceId,
+    );
+    await Promise.resolve();
+    world.update(3, 0.65);
+    await fallback;
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles active weather animation handles on clear and dispose', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+
+    const reveal = world.revealEvent('windy-night');
+    world.update(1, 1);
+    expect(await remainsPending(reveal)).toBe(true);
+    world.clearEvent();
+    await reveal;
+    expect(world.scene.getObjectByName('boat-camera-rig')?.rotation.y).toBe(0);
+
+    const itemUse = world.playEventItemUse(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+    world.update(1.2, 0.2);
+    expect(await remainsPending(itemUse)).toBe(true);
+    world.clearEvent();
+    await Promise.resolve();
+    expect(await remainsPending(itemUse)).toBe(false);
+
+    const response = {
+      choiceId: 'bucket',
+      instanceId: bucket.instanceId,
+      condition: 'usable' as const,
+    };
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The rain is managed.',
+      deltas: {},
+      cue: 'none',
+    };
+    const reaction = world.reactToEventOutcome(
+      'shower-night',
+      outcome,
+      response,
+    );
+    world.update(2, 0.2);
+    expect(await remainsPending(reaction)).toBe(true);
+    world.dispose();
+    await reaction;
+    expect(world.scene.getObjectByName('weather-event-world')).toBeUndefined();
+    propModels.dispose();
+  });
+
+  it('keeps Restless Waves buoyancy and ocean rendering on one wave scale', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
+    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
+    const profile = presentationWeatherProfile('waves');
+
+    try {
+      world.stageEvent('restless-waves');
+      world.setPresentationWeather('waves');
+      world.update(1.4, 1.4);
+
+      expect(buoyancySample.mock.calls.at(-1)?.[4]).toBe(profile.waveScale);
+      expect(oceanUpdate.mock.calls.at(-1)?.[1]).toBe(profile.waveScale);
+    } finally {
+      buoyancySample.mockRestore();
+      oceanUpdate.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('shows a newly gained supply without allocating a model during inventory sync', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'create');
@@ -331,7 +491,12 @@ describe('BoatWorld helpers', () => {
     const group = world.scene.getObjectByName('boat-supply:energyBar')!;
     const copy = world.scene.getObjectByName('boat-supply:energyBar:copy-1')!;
     const expected = boatSupplyTransform('energyBar', 0);
-    const pending = world.playEventItemUse(item.instanceId);
+    const pending = world.playEventItemUse(
+      'strange-noise',
+      'energyBar',
+      item.instanceId,
+    );
+    await Promise.resolve();
 
     world.update(1, 1);
     await pending;
