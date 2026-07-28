@@ -91,7 +91,7 @@ const SURFACE_SPECS: Record<SurfaceKind, SurfaceSpec> = {
     roughness: 224,
     bump: 128,
     bumpScale: 0.014,
-    repeat: [5, 4],
+    repeat: [1, 1],
     seedOffset: 0xbb67ae85,
   },
 };

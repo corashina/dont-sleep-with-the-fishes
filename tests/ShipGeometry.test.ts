@@ -174,6 +174,16 @@ describe('freighter geometry', () => {  interface PointXZ {
     return mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrix);
   };
 
+  const wheelhousePaneIds = [
+    'front-center',
+    'front-port-chamfer',
+    'front-starboard-chamfer',
+    'port-side',
+    'starboard-side',
+    'aft-port',
+    'aft-starboard',
+  ] as const;
+
   it('separates white structure, timber floors, lower hull, and canvas', () => {
     const materials = createShipMaterials();
     try {
@@ -310,6 +320,111 @@ describe('freighter geometry', () => {  interface PointXZ {
         new Box3().setFromObject(rail).min.x,
         rail.name,
       ).toBeGreaterThanOrEqual(timberDeckBounds.max.x));
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  const verticalFaceUvScale = (mesh: Mesh): readonly [number, number] => {
+    const positions = mesh.geometry.getAttribute('position');
+    const normals = mesh.geometry.getAttribute('normal');
+    const uvs = mesh.geometry.getAttribute('uv');
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (let index = 0; index < positions.count; index += 1) {
+      if (Math.abs(normals.getZ(index)) < 0.9) continue;
+      minX = Math.min(minX, positions.getX(index));
+      maxX = Math.max(maxX, positions.getX(index));
+      minY = Math.min(minY, positions.getY(index));
+      maxY = Math.max(maxY, positions.getY(index));
+      minU = Math.min(minU, uvs.getX(index));
+      maxU = Math.max(maxU, uvs.getX(index));
+      minV = Math.min(minV, uvs.getY(index));
+      maxV = Math.max(maxV, uvs.getY(index));
+    }
+    return [(maxU - minU) / (maxX - minX), (maxV - minV) / (maxY - minY)];
+  };
+
+  const verticalFaceUvOffset = (mesh: Mesh): readonly [number, number] => {
+    const positions = mesh.geometry.getAttribute('position');
+    const normals = mesh.geometry.getAttribute('normal');
+    const uvs = mesh.geometry.getAttribute('uv');
+    for (let index = 0; index < positions.count; index += 1) {
+      if (Math.abs(normals.getZ(index)) < 0.9) continue;
+      return [
+        uvs.getX(index) - positions.getX(index),
+        uvs.getY(index) - positions.getY(index),
+      ];
+    }
+    throw new Error(`Expected an upright face for ${mesh.name}`);
+  };
+
+  it('uses each room finish consistently with metre-scaled upright wall UVs', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const crewWalls: Mesh[] = [];
+      const storageWalls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        if (object.name.startsWith('crew-cabin-wall-')) crewWalls.push(object);
+        if (object.name.startsWith('storage-workroom-wall-')) storageWalls.push(object);
+      });
+
+      expect(crewWalls.length).toBeGreaterThan(0);
+      expect(storageWalls.length).toBeGreaterThan(0);
+      crewWalls.forEach((wall) => {
+        expect(wall.material).toBe(materials.paintedPanel);
+        const [uScale, vScale] = verticalFaceUvScale(wall);
+        expect(uScale).toBeCloseTo(1, 5);
+        expect(vScale).toBeCloseTo(1, 5);
+        const [uOffset, vOffset] = verticalFaceUvOffset(wall);
+        expect(uOffset).toBeCloseTo(
+          wall.rotation.y === 0 ? wall.position.x : -wall.position.z,
+          5,
+        );
+        expect(vOffset).toBeCloseTo(wall.position.y, 5);
+      });
+      storageWalls.forEach((wall) => {
+        expect(wall.material).toBe(materials.plainPaintedSteel);
+        const [uScale, vScale] = verticalFaceUvScale(wall);
+        expect(uScale).toBeCloseTo(1, 5);
+        expect(vScale).toBeCloseTo(1, 5);
+        const [uOffset, vOffset] = verticalFaceUvOffset(wall);
+        expect(uOffset).toBeCloseTo(
+          wall.rotation.y === 0 ? wall.position.x : -wall.position.z,
+          5,
+        );
+        expect(vOffset).toBeCloseTo(wall.position.y, 5);
+      });
+      wheelhousePaneIds.forEach((paneId) => {
+        const pane = build.root.getObjectByName(`wheelhouse-pane:${paneId}`)!;
+        const horizontalOffset = pane.position.x * Math.cos(pane.rotation.y)
+          - pane.position.z * Math.sin(pane.rotation.y);
+        (['sill', 'header'] as const).forEach((part) => {
+          const mesh = pane.getObjectByName(`wheelhouse-pane:${paneId}:${part}`) as Mesh;
+          const [uScale, vScale] = verticalFaceUvScale(mesh);
+          expect(uScale, `${paneId} ${part} u scale`).toBeCloseTo(1, 5);
+          expect(vScale, `${paneId} ${part} v scale`).toBeCloseTo(1, 5);
+          const [uOffset, vOffset] = verticalFaceUvOffset(mesh);
+          expect(uOffset, `${paneId} ${part} u phase`).toBeCloseTo(
+            horizontalOffset + mesh.position.x,
+            5,
+          );
+          expect(vOffset, `${paneId} ${part} v phase`).toBeCloseTo(
+            pane.position.y + mesh.position.y,
+            5,
+          );
+        });
+      });
+      expect(materials.paintedPanel.map!.repeat.toArray()).toEqual([1, 1]);
     } finally {
       build.disposeGeometry();
       materials.dispose();
@@ -596,12 +711,13 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('builds flush enclosed-room corners without protruding cap colliders or mesh overlap', () => {
+  it('seals every enclosed room into adjacent structure without entering openings', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
       const prefix = zone.id === 'crewCabin' ? 'crew-cabin'
-        : zone.id === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
+        : zone.id === 'storageWorkroom' ? 'storage-workroom'
+          : 'wheelhouse-pane:';
       const roof = build.root.getObjectByName(`${zone.id}-roof`)!;
       const roofBounds = new Box3().setFromObject(roof);
       const roofOverhang = zone.id === 'wheelhouse' ? 0.28 : 0;
@@ -652,32 +768,187 @@ describe('freighter geometry', () => {  interface PointXZ {
         zone.bounds.maxZ,
       );
 
-      const structuralMeshes = build.root.children.filter((object): object is Mesh =>
-        object instanceof Mesh
-        && (
-          object.name.startsWith(`${prefix}-wall-`)
-          || object.name === `${zone.id}-roof`
-          || (zone.id === 'wheelhouse'
-            && (
-              object.name.startsWith('wheelhouse-front-pillar-')
-              || object.name.startsWith('wheelhouse-front-window-')
-            ))
-        ));
-      structuralMeshes.forEach((left, index) => {
-        structuralMeshes.slice(index + 1).forEach((right) => {
-          expect(
-            overlappingVolume(left, right),
-            `${left.name} overlaps ${right.name}`,
-          ).toBeLessThan(1e-8);
-        });
+      const walls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (object instanceof Mesh && object.name.startsWith(prefix)) walls.push(object);
       });
+      const bounds = walls.map((wall) => new Box3().setFromObject(wall));
+      const wallBottomY = FREIGHTER_DIMENSIONS.deckY;
+      const wallTopY = wallBottomY + SHIP_ROOM_WALL_HEIGHT;
+      expect(Math.min(...bounds.map(({ min }) => min.y))).toBeCloseTo(wallBottomY - 0.01);
+      expect(Math.max(...bounds.map(({ max }) => max.y))).toBeCloseTo(wallTopY + 0.01);
       zone.polygon.forEach((_, index) => {
         expect(build.root.getObjectByName(`${zone.id}-corner-${index}`)).toBeUndefined();
       });
     });
 
+    SHIP_LAYOUT.doors.forEach((door) => {
+      for (const axis of doorAxisSamples(door)) {
+        expect(wallRenderBlockers(build, renderedWallPoint(door, axis))).toEqual([]);
+      }
+    });
+
     build.disposeGeometry();
     materials.dispose();
+  });
+
+  it('uses 0.01 m visual overlaps at room and wheelhouse structural seams', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    const seamOverlap = 0.01;
+    try {
+      (['crewCabin', 'storageWorkroom'] as const).forEach((zoneId) => {
+        const zone = SHIP_LAYOUT.zones.find(({ id }) => id === zoneId)!;
+        const prefix = zoneId === 'crewCabin' ? 'crew-cabin' : 'storage-workroom';
+        const walls: Mesh[] = [];
+        build.root.traverse((object) => {
+          if (object instanceof Mesh && object.name.startsWith(`${prefix}-wall-`)) {
+            walls.push(object);
+          }
+        });
+        const wallAt = (
+          edge: 'port' | 'starboard',
+          end: 'aft' | 'forward',
+        ) => {
+          const match = walls.find((wall) => {
+            if (!wall.name.startsWith(`${prefix}-wall-${edge}-`)) return false;
+            const bounds = new Box3().setFromObject(wall);
+            return end === 'aft'
+              ? Math.abs(bounds.min.z - zone.bounds.minZ) < 1e-6
+              : Math.abs(bounds.max.z - zone.bounds.maxZ) < 1e-6;
+          });
+          expect(match, `${zoneId} ${edge} ${end} structural wall`).toBeDefined();
+          return new Box3().setFromObject(match!);
+        };
+
+        const portAft = wallAt('port', 'aft');
+        const portForward = wallAt('port', 'forward');
+        const starboardAft = wallAt('starboard', 'aft');
+        const starboardForward = wallAt('starboard', 'forward');
+        const aft = new Box3().setFromObject(walls.find((wall) =>
+          wall.name.startsWith(`${prefix}-wall-aft-`))!);
+        const forward = new Box3().setFromObject(walls.find((wall) =>
+          wall.name.startsWith(`${prefix}-wall-forward-`))!);
+
+        expect(portAft.min.z, `${zoneId} port aft silhouette`)
+          .toBeCloseTo(zone.bounds.minZ, 6);
+        expect(portForward.max.z, `${zoneId} port forward silhouette`)
+          .toBeCloseTo(zone.bounds.maxZ, 6);
+        expect(starboardAft.min.z, `${zoneId} starboard aft silhouette`)
+          .toBeCloseTo(zone.bounds.minZ, 6);
+        expect(starboardForward.max.z, `${zoneId} starboard forward silhouette`)
+          .toBeCloseTo(zone.bounds.maxZ, 6);
+        walls.forEach((wall) => {
+          const wallBounds = new Box3().setFromObject(wall);
+          expect(wallBounds.min.x, `${wall.name} minX silhouette`)
+            .toBeGreaterThanOrEqual(zone.bounds.minX - 1e-6);
+          expect(wallBounds.max.x, `${wall.name} maxX silhouette`)
+            .toBeLessThanOrEqual(zone.bounds.maxX + 1e-6);
+          expect(wallBounds.min.z, `${wall.name} minZ silhouette`)
+            .toBeGreaterThanOrEqual(zone.bounds.minZ - 1e-6);
+          expect(wallBounds.max.z, `${wall.name} maxZ silhouette`)
+            .toBeLessThanOrEqual(zone.bounds.maxZ + 1e-6);
+        });
+        expect(portAft.max.x - aft.min.x, `${zoneId} port aft corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(aft.max.x - starboardAft.min.x, `${zoneId} starboard aft corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(portForward.max.x - forward.min.x, `${zoneId} port forward corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+        expect(forward.max.x - starboardForward.min.x, `${zoneId} starboard forward corner overlap`)
+          .toBeCloseTo(seamOverlap, 6);
+
+        SHIP_LAYOUT.doors.filter((door) => door.zoneId === zoneId).forEach((door) => {
+          const openingMin = door.center[1] - door.width / 2;
+          const openingMax = door.center[1] + door.width / 2;
+          const sideWalls = walls.filter((wall) =>
+            wall.name.startsWith(`${prefix}-wall-${door.side}-`));
+          const beforeOpening = sideWalls.find((wall) =>
+            Math.abs(new Box3().setFromObject(wall).max.z - openingMin) < 1e-6);
+          const afterOpening = sideWalls.find((wall) =>
+            Math.abs(new Box3().setFromObject(wall).min.z - openingMax) < 1e-6);
+          expect(beforeOpening, `${door.id} wall before opening`).toBeDefined();
+          expect(afterOpening, `${door.id} wall after opening`).toBeDefined();
+          expect(new Box3().setFromObject(beforeOpening!).max.z, `${door.id} before opening`)
+            .toBeCloseTo(openingMin, 6);
+          expect(new Box3().setFromObject(afterOpening!).min.z, `${door.id} after opening`)
+            .toBeCloseTo(openingMax, 6);
+        });
+      });
+
+      ([
+        ['front-center', true, true],
+        ['front-port-chamfer', true, true],
+        ['front-starboard-chamfer', true, true],
+        ['port-side', false, false],
+        ['starboard-side', true, false],
+        ['aft-port', false, true],
+        ['aft-starboard', true, false],
+      ] as const).forEach(([paneId, sealsStart, sealsEnd]) => {
+        const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!;
+        const wheelhousePolygon = wheelhouse.polygon.map(([x, z]) => ({ x, z }));
+        const polygonOrientation = Math.sign(signedAreaXZ(wheelhousePolygon)) || 1;
+        const startFrame = build.root.getObjectByName(
+          `wheelhouse-pane:${paneId}:frame-start`,
+        ) as Mesh;
+        const endFrame = build.root.getObjectByName(
+          `wheelhouse-pane:${paneId}:frame-end`,
+        ) as Mesh;
+        const startFrameBounds = localMeshBounds(startFrame);
+        const endFrameBounds = localMeshBounds(endFrame);
+        (['sill', 'header'] as const).forEach((part) => {
+          const structuralPart = build.root.getObjectByName(
+            `wheelhouse-pane:${paneId}:${part}`,
+          ) as Mesh;
+          const partBounds = localMeshBounds(structuralPart);
+          expect(partBounds.min.x, `${paneId} ${part} visible start`)
+            .toBeCloseTo(startFrameBounds.min.x, 6);
+          expect(partBounds.max.x, `${paneId} ${part} visible end`)
+            .toBeCloseTo(endFrameBounds.max.x, 6);
+          ([
+            ['start', sealsStart, partBounds.min.x],
+            ['end', sealsEnd, partBounds.max.x],
+          ] as const).forEach(([end, sealed, visibleEndpoint]) => {
+            const seal = build.root.getObjectByName(
+              `wheelhouse-pane:${paneId}:${part}-seal-${end}`,
+            ) as Mesh | undefined;
+            expect(Boolean(seal), `${paneId} ${part} ${end} seal presence`).toBe(sealed);
+            if (!seal) return;
+            const sealBounds = localMeshBounds(seal);
+            expect(seal.material, `${paneId} ${part} ${end} material`)
+              .toBe(materials.paintedPanel);
+            expect(seal.castShadow, `${paneId} ${part} ${end} shadow caster`).toBe(true);
+            expect(sealBounds.max.z, `${paneId} ${part} ${end} exterior inset`)
+              .toBeLessThanOrEqual(-seamOverlap + 1e-8);
+            expect(
+              end === 'start'
+                ? visibleEndpoint - sealBounds.min.x
+                : sealBounds.max.x - visibleEndpoint,
+              `${paneId} ${part} ${end} hidden overlap`,
+            ).toBeCloseTo(seamOverlap, 6);
+            seal.updateMatrixWorld(true);
+            const positions = seal.geometry.getAttribute('position');
+            for (let index = 0; index < positions.count; index += 1) {
+              const world = seal.localToWorld(
+                new Vector3().fromBufferAttribute(positions, index),
+              );
+              wheelhousePolygon.forEach((edgeStart, edgeIndex) => {
+                const edgeEnd = wheelhousePolygon[
+                  (edgeIndex + 1) % wheelhousePolygon.length
+                ]!;
+                expect(
+                  polygonOrientation * edgeSide(edgeStart, edgeEnd, world),
+                  `${paneId} ${part} ${end} vertex ${index} inside facade`,
+                ).toBeGreaterThanOrEqual(-1e-6);
+              });
+            }
+          });
+        });
+      });
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
   });
 
   it('keeps room roofs and chimney-housing parts flush without intersecting volumes', () => {
@@ -714,17 +985,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const facade = build.root.getObjectByName('wheelhouse-facade')!;
-    const paneIds = [
-      'front-center',
-      'front-port-chamfer',
-      'front-starboard-chamfer',
-      'port-side',
-      'starboard-side',
-      'aft-port',
-      'aft-starboard',
-    ] as const;
-
-    paneIds.forEach((id) => {
+    wheelhousePaneIds.forEach((id) => {
       const pane = facade.getObjectByName(`wheelhouse-pane:${id}`)!;
       const glass = pane.getObjectByName(`wheelhouse-pane:${id}:glass`) as Mesh;
       const sill = pane.getObjectByName(`wheelhouse-pane:${id}:sill`) as Mesh;
