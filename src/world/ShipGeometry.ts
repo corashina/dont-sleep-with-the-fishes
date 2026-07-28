@@ -548,8 +548,8 @@ function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
         orientation: edge.orientation,
         fixed: edge.fixed,
         ...segment,
-        sealMin: segment.min === edge.min,
-        sealMax: segment.max === edge.max,
+        sealMin: edge.orientation === 'x' && segment.min === edge.min,
+        sealMax: edge.orientation === 'x' && segment.max === edge.max,
       })));
   });
   return result;
@@ -882,7 +882,7 @@ function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpe
       id: 'port-side',
       start: [wheelhouse.minX, wheelhouse.minZ],
       end: [wheelhouse.minX, portDoorMinZ],
-      sealStart: true,
+      sealStart: false,
       sealEnd: false,
     },
     {
@@ -890,7 +890,7 @@ function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpe
       start: [wheelhouse.maxX, frontSideZ],
       end: [wheelhouse.maxX, wheelhouse.minZ],
       sealStart: true,
-      sealEnd: true,
+      sealEnd: false,
     },
     {
       id: 'aft-port',
@@ -952,10 +952,6 @@ function addWheelhousePane(
   const dx = spec.end[0] - spec.start[0];
   const dz = spec.end[1] - spec.start[1];
   const width = Math.hypot(dx, dz);
-  const sealStart = spec.sealStart ? ROOM_SEAM_OVERLAP : 0;
-  const sealEnd = spec.sealEnd ? ROOM_SEAM_OVERLAP : 0;
-  const sealedWidth = width + sealStart + sealEnd;
-  const sealedCenterX = (sealEnd - sealStart) / 2;
   const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
   const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
   const pane = new Group();
@@ -970,7 +966,7 @@ function addWheelhousePane(
   const horizontalOffset = (
     pane.position.x * dx
     + pane.position.z * dz
-  ) / width + sealedCenterX;
+  ) / width;
 
   ([
     ['sill', WINDOW_SILL_HEIGHT + ROOM_SEAM_OVERLAP, WINDOW_SILL_HEIGHT / 2 - ROOM_SEAM_OVERLAP / 2],
@@ -978,7 +974,7 @@ function addWheelhousePane(
   ] as const).forEach(([part, height, centerY]) => {
     const geometry = createWallBoxGeometry(
       geometries,
-      sealedWidth,
+      width,
       height,
       WALL_THICKNESS,
       horizontalOffset,
@@ -986,10 +982,36 @@ function addWheelhousePane(
     );
     const mesh = new Mesh(geometry, materials.paintedPanel);
     mesh.name = `${pane.name}:${part}`;
-    mesh.position.set(sealedCenterX, centerY, -WALL_HALF_THICKNESS);
+    mesh.position.set(0, centerY, -WALL_HALF_THICKNESS);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     pane.add(mesh);
+
+    ([
+      ['start', spec.sealStart, -1],
+      ['end', spec.sealEnd, 1],
+    ] as const).forEach(([end, sealed, direction]) => {
+      if (!sealed) return;
+      const sealCenterX = direction * (width / 2 + ROOM_SEAM_OVERLAP / 2);
+      const sealGeometry = createWallBoxGeometry(
+        geometries,
+        ROOM_SEAM_OVERLAP,
+        height,
+        WALL_THICKNESS - ROOM_SEAM_OVERLAP,
+        horizontalOffset + sealCenterX,
+        FREIGHTER_DIMENSIONS.deckY + centerY,
+      );
+      const seal = new Mesh(sealGeometry, materials.paintedPanel);
+      seal.name = `${pane.name}:${part}-seal-${end}`;
+      seal.position.set(
+        sealCenterX,
+        centerY,
+        -(WALL_THICKNESS + ROOM_SEAM_OVERLAP) / 2,
+      );
+      seal.castShadow = true;
+      seal.receiveShadow = true;
+      pane.add(seal);
+    });
   });
   addBlock(pane, geometries, [], {
     name: `${pane.name}:frame-start`,
