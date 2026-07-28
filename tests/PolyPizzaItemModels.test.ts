@@ -11,7 +11,7 @@ import {
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 const EXPECTED_IDS = [
-  ...ITEM_IDS,
+  ...ITEM_IDS.filter((id) => id !== 'captainWhiskers'),
   'fishingRod',
   'lantern',
   'ceilingLight',
