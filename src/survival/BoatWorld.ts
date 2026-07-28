@@ -77,6 +77,10 @@ import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
 import {
+  WeatherEventAnimator,
+  type EventPhysicalResponsePresentation,
+} from './WeatherEventAnimator';
+import {
   createSurvivalLantern,
   type SurvivalLantern,
 } from './SurvivalLantern';
@@ -367,6 +371,7 @@ export class BoatWorld {
   private readonly sky: Skybox;
   private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
+  private readonly cueCameraRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
   private readonly lantern: SurvivalLantern;
@@ -402,6 +407,7 @@ export class BoatWorld {
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly toolHoverOutline = new HoverOutline();
+  private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
@@ -468,6 +474,7 @@ export class BoatWorld {
   private phase: 'day' | 'night' = 'day';
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
+  private weatherEventOperation = 0;
   private disposed = false;
 
   constructor(
@@ -526,6 +533,11 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
     );
+    this.weatherEventAnimator = new WeatherEventAnimator(
+      this.cameraRig,
+      this.supplyDisplay,
+    );
+    this.boat.add(this.weatherEventAnimator.boatRoot);
 
     const repairTools = createRepairToolbox();
     repairTools.position.set(-1.05, 0.225, 0.78);
@@ -549,8 +561,10 @@ export class BoatWorld {
     collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);
 
     this.motionRig.name = 'boat-motion-rig';
+    this.cueCameraRig.name = 'boat-cue-camera-rig';
     this.cameraRig.name = 'boat-camera-rig';
-    this.motionRig.add(this.boat, this.cameraRig);
+    this.motionRig.add(this.boat, this.cueCameraRig);
+    this.cueCameraRig.add(this.cameraRig);
     this.cameraRig.add(camera);
     camera.position.set(0, 0.88, 1.72);
     camera.lookAt(this.baseCameraLookTarget);
@@ -586,6 +600,7 @@ export class BoatWorld {
       this.key,
       this.key.target,
       this.eventPresentation.root,
+      this.weatherEventAnimator.worldRoot,
       ...(this.driftingLootPresentation === null
         ? []
         : [this.driftingLootPresentation.root]),
@@ -637,29 +652,46 @@ export class BoatWorld {
     this.supplyDisplay.setEventSelectedItem(instanceId);
   }
 
-  playEventItemUse(instanceId: ItemInstanceId): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
-      : this.supplyDisplay.playEventItemUse(instanceId);
+  async playEventItemUse(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+  ): Promise<void> {
+    if (this.disposed) return;
+    const operation = ++this.weatherEventOperation;
+    if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+      return;
+    }
+    if (this.disposed || operation !== this.weatherEventOperation) return;
+    await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
   stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
     if (this.disposed) return;
+    this.weatherEventOperation += 1;
     if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
       if (variant === null) throw new Error('Drifting loot requires a variant.');
       this.eventPresentation.clear();
+      this.weatherEventAnimator.clear();
       this.driftingLootPresentation.stage(variant);
       return;
     }
     this.driftingLootPresentation?.clear();
     this.eventPresentation.stage(eventId);
+    this.weatherEventAnimator.stage(eventId);
   }
 
-  revealEvent(eventId: string): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    return eventId === 'drifting-loot' && this.driftingLootPresentation !== null
-      ? this.driftingLootPresentation.reveal()
-      : this.eventPresentation.reveal(eventId);
+  async revealEvent(eventId: string): Promise<void> {
+    if (this.disposed) return;
+    this.weatherEventOperation += 1;
+    if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
+      await this.driftingLootPresentation.reveal();
+      return;
+    }
+    await Promise.all([
+      this.eventPresentation.reveal(eventId),
+      this.weatherEventAnimator.reveal(eventId),
+    ]);
   }
 
   retrieveDriftingLoot(): Promise<void> {
@@ -680,16 +712,35 @@ export class BoatWorld {
     return this.driftingLootPresentation.projectHeld(this.camera, width, height);
   }
 
-  reactToEventOutcome(eventId: string, outcome: ActionOutcome): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
-      : this.eventPresentation.react(eventId, outcome);
+  async reactToEventOutcome(
+    eventId: string,
+    outcome: ActionOutcome,
+    response: EventPhysicalResponsePresentation | null = null,
+  ): Promise<void> {
+    if (this.disposed) return;
+    this.weatherEventOperation += 1;
+    await Promise.all([
+      this.eventPresentation.react(eventId, outcome),
+      this.weatherEventAnimator.react(eventId, outcome, response),
+    ]);
   }
 
   clearEvent(): void {
     if (this.disposed) return;
+    this.weatherEventOperation += 1;
     this.eventPresentation.clear();
     this.driftingLootPresentation?.clear();
+    this.weatherEventAnimator.clear();
+    this.supplyDisplay.clearEventMotion();
+  }
+
+  setDocumentHidden(hidden: boolean): void {
+    if (this.disposed || !hidden) return;
+    this.weatherEventOperation += 1;
+    this.skipSequence();
+    this.eventPresentation.settleForVisibilityChange();
+    this.weatherEventAnimator.settleForVisibilityChange();
+    this.supplyDisplay.settleEventItemUse();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1082,6 +1133,7 @@ export class BoatWorld {
     this.advanceFishingPresentation(delta);
     this.eventPresentation.update(time, delta);
     this.driftingLootPresentation?.update(time, delta);
+    this.weatherEventAnimator.update(time, delta);
     this.supplyDisplay.update(delta);
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
@@ -1115,8 +1167,12 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.setHighlightedItem(null),
-      () => { this.disposed = true; },
+      () => {
+        this.disposed = true;
+        this.weatherEventOperation += 1;
+      },
       () => this.cancelActiveSequence(),
+      () => this.weatherEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
       () => this.eventPresentation.dispose(),
@@ -1158,6 +1214,8 @@ export class BoatWorld {
       SURVIVAL_BOAT_ANCHOR.z + this.boatPose.driftZ,
     );
     this.motionRig.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
+    this.cueCameraRig.position.set(0, 0, 0);
+    this.cueCameraRig.rotation.set(0, 0, 0);
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.position.copy(this.baseCameraPosition);
@@ -1507,7 +1565,7 @@ export class BoatWorld {
         this.rodPivot.rotation.x = this.baseRodPivotRotationX - eased * 0.12;
         break;
       case 'dive':
-        this.cameraRig.position.y -= pulse * 0.72;
+        this.cueCameraRig.position.y -= pulse * 0.72;
         (this.scene.fog as FogExp2).density += pulse * 0.035;
         this.sky.setTint(DIVE_SKY_TINT, pulse * 0.8);
         if (this.scene.background instanceof Color) {
@@ -1528,7 +1586,7 @@ export class BoatWorld {
         break;
       case 'impact':
         this.motionRig.rotation.x += pulse * 0.075;
-        this.cameraRig.position.z -= pulse * 0.08;
+        this.cueCameraRig.position.z -= pulse * 0.08;
         break;
       case 'darkness':
         this.ambient.intensity *= 1 - eased * 0.68;

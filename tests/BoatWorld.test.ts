@@ -35,6 +35,7 @@ import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { BoatWorld, FISHING_PLAYER_SEAT } from '../src/survival/BoatWorld';
+import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
@@ -47,7 +48,10 @@ import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
-import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type {
+  ActionOutcome,
+  SurvivalSnapshot,
+} from '../src/survival/survivalTypes';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import type { SkyPalette } from '../src/world/skyPalette';
 import {
@@ -135,6 +139,15 @@ function snapshot(
     seed: 8,
     ...overrides,
   };
+}
+
+async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
+  let settled = false;
+  void promise.then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  return !settled;
 }
 
 function expectedSurvivalPose(
@@ -362,6 +375,341 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('owns and routes the full Shower Night reveal before restoring the base camera', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const basePosition = cameraRig.position.toArray();
+    const baseQuaternion = cameraRig.quaternion.toArray();
+
+    world.stageEvent('shower-night');
+
+    expect(world.scene.getObjectByName('weather-event-world')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeDefined();
+    const reveal = world.revealEvent('shower-night');
+    world.update(3.39, 3.39);
+    expect(await remainsPending(reveal)).toBe(true);
+    expect(cameraRig.quaternion.toArray()).not.toEqual(baseQuaternion);
+
+    world.update(3.4, 0.01);
+    await reveal;
+    expect(cameraRig.position.toArray()).toEqual(basePosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses event-specific Bucket choreography and retains generic fallback', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
+
+    const showerUse = world.playEventItemUse(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+    world.update(0.66, 0.66);
+    expect(await remainsPending(showerUse)).toBe(true);
+    expect(bucketGroup.position.toArray()).not.toEqual([0, 0, 0]);
+    world.update(2, 2);
+    await showerUse;
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+
+    const fallback = world.playEventItemUse(
+      'strange-noise',
+      'bucket',
+      bucket.instanceId,
+    );
+    await Promise.resolve();
+    world.update(3, 0.65);
+    await fallback;
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the generic impact cue visible during an event-specific reaction', async () => {
+    const anchor = savedItem('anchor');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [anchor],
+    );
+    world.syncInventory(snapshot([anchor]));
+
+    const impact = world.play('impact');
+    const reaction = world.reactToEventOutcome(
+      'restless-waves',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The anchor checks the drift.',
+        deltas: { hull: -5 },
+        cue: 'impact',
+      },
+      {
+        choiceId: 'anchor',
+        instanceId: anchor.instanceId,
+        condition: 'usable',
+      },
+    );
+
+    world.update(0.4, 0.4);
+    const cueCameraRig = world.scene.getObjectByName('boat-cue-camera-rig');
+    expect(cueCameraRig).toBeDefined();
+    expect(cueCameraRig!.position.z).toBeLessThan(-0.05);
+
+    world.skipSequence();
+    world.clearEvent();
+    await Promise.all([impact, reaction]);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles active weather animation handles on clear and dispose', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+
+    const reveal = world.revealEvent('windy-night');
+    world.update(1, 1);
+    expect(await remainsPending(reveal)).toBe(true);
+    world.clearEvent();
+    await reveal;
+    expect(world.scene.getObjectByName('boat-camera-rig')?.rotation.y).toBe(0);
+
+    const itemUse = world.playEventItemUse(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+    world.update(1.2, 0.2);
+    expect(await remainsPending(itemUse)).toBe(true);
+    world.clearEvent();
+    await Promise.resolve();
+    expect(await remainsPending(itemUse)).toBe(false);
+
+    const response = {
+      choiceId: 'bucket',
+      instanceId: bucket.instanceId,
+      condition: 'usable' as const,
+    };
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The rain is managed.',
+      deltas: {},
+      cue: 'none',
+    };
+    const reaction = world.reactToEventOutcome(
+      'shower-night',
+      outcome,
+      response,
+    );
+    world.update(2, 0.2);
+    expect(await remainsPending(reaction)).toBe(true);
+    world.dispose();
+    await reaction;
+    expect(world.scene.getObjectByName('weather-event-world')).toBeUndefined();
+    propModels.dispose();
+  });
+
+  it('settles reveal, item-use, and reaction handles when the document becomes hidden', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
+
+    const reveal = world.revealEvent('windy-night');
+    world.update(1, 0.4);
+    world.setDocumentHidden(true);
+    await reveal;
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+
+    const itemUse = world.playEventItemUse(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+    world.update(2, 0.25);
+    world.setDocumentHidden(true);
+    await itemUse;
+    expect(bucketRoot.position.toArray()).toEqual([0, 0, 0]);
+
+    const reaction = world.reactToEventOutcome(
+      'shower-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The rain is managed.',
+        deltas: { hull: -10 },
+        cue: 'impact',
+      },
+      { choiceId: 'bucket', instanceId: bucket.instanceId, condition: 'usable' },
+    );
+    world.update(3, 0.2);
+    world.setDocumentHidden(true);
+    await reaction;
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('cancels a generic item-use fallback when the event is cleared', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    const fallback = world.playEventItemUse(
+      'strange-noise',
+      'bucket',
+      bucket.instanceId,
+    );
+    await Promise.resolve();
+    world.update(1, 0.2);
+
+    world.clearEvent();
+    await Promise.resolve();
+    const stillPending = await remainsPending(fallback);
+    world.dispose();
+    await fallback;
+    expect(stillPending).toBe(false);
+    propModels.dispose();
+  });
+
+  it('applies the canonical supply restore and event pose once per frame', () => {
+    const propModels = createTestPropModels();
+    const updateSupply = vi.spyOn(BoatSupplyDisplay.prototype, 'update');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    updateSupply.mockClear();
+
+    world.stageEvent('windy-night');
+    void world.revealEvent('windy-night');
+    world.update(1, 0.25);
+
+    expect(updateSupply).toHaveBeenCalledOnce();
+    updateSupply.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps a selected lost duplicate visible through its terminal reaction', async () => {
+    const maps = [savedItem('map', 1), savedItem('map', 2)] as const;
+    const inventory = new SurvivalInventoryState(maps);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      maps,
+    );
+    world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
+    world.setEventSelectedItem(maps[1].instanceId);
+    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+    const base = mapRoot.position.clone();
+
+    const use = world.playEventItemUse(
+      'windy-night',
+      'map',
+      maps[1].instanceId,
+    );
+    world.update(1, 1.45);
+    await use;
+    inventory.lose(maps[1].instanceId);
+    world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
+    expect(mapRoot.visible).toBe(true);
+
+    const reaction = world.reactToEventOutcome(
+      'windy-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The map is lost.',
+        deltas: {},
+        cue: 'none',
+      },
+      { choiceId: 'map', instanceId: maps[1].instanceId, condition: 'lost' },
+    );
+    world.update(2, 0.84);
+    await reaction;
+    expect(mapRoot.visible).toBe(true);
+    expect(mapRoot.position.x).toBeLessThan(base.x - 1);
+
+    world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
+    expect(mapRoot.visible).toBe(true);
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps Restless Waves buoyancy and ocean rendering on one wave scale', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
+    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
+    const profile = presentationWeatherProfile('waves');
+
+    try {
+      world.stageEvent('restless-waves');
+      world.setPresentationWeather('waves');
+      world.update(1.4, 1.4);
+
+      expect(buoyancySample.mock.calls.at(-1)?.[4]).toBe(profile.waveScale);
+      expect(oceanUpdate.mock.calls.at(-1)?.[1]).toBe(profile.waveScale);
+    } finally {
+      buoyancySample.mockRestore();
+      oceanUpdate.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('shows a newly gained supply without allocating a model during inventory sync', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'createPresentation');
@@ -430,7 +778,12 @@ describe('BoatWorld helpers', () => {
     const group = world.scene.getObjectByName('boat-supply:energyBar')!;
     const copy = world.scene.getObjectByName('boat-supply:energyBar:copy-1')!;
     const expected = boatSupplyTransform('energyBar', 0);
-    const pending = world.playEventItemUse(item.instanceId);
+    const pending = world.playEventItemUse(
+      'strange-noise',
+      'energyBar',
+      item.instanceId,
+    );
+    await Promise.resolve();
 
     world.update(1, 1);
     await pending;

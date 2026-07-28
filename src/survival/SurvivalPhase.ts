@@ -44,6 +44,7 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -195,6 +196,7 @@ export class SurvivalPhase implements GamePhase {
   };
   private busy = false;
   private paused = false;
+  private visibilityPauseActive = false;
   private disposed = false;
   private started = false;
   private restartRequested = false;
@@ -215,6 +217,7 @@ export class SurvivalPhase implements GamePhase {
   private forcedWeather: PresentationWeatherId | null = null;
   private effectivePresentationWeather: PresentationWeatherId = 'calm';
   private lifecycleGeneration = 0;
+  private readonly visibilityResumeWaiters = new Set<() => void>();
 
   constructor(
     context: PhaseContext,
@@ -296,7 +299,11 @@ export class SurvivalPhase implements GamePhase {
     if (typeof document !== 'undefined') {
       this.visibilityDocument = document;
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
-      if (document.hidden) this.setPaused(true);
+      if (document.hidden) {
+        this.visibilityPauseActive = true;
+        this.setPaused(true);
+        this.world.setDocumentHidden?.(true);
+      }
     }
   }
 
@@ -387,7 +394,9 @@ export class SurvivalPhase implements GamePhase {
   setPaused(paused: boolean): void {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
+    if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
+    if (!paused) this.releaseVisibilityResumeWaiters();
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -404,6 +413,7 @@ export class SurvivalPhase implements GamePhase {
     this.clearEventPresentation();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
+    this.releaseVisibilityResumeWaiters();
     this.onRestart();
   }
 
@@ -412,6 +422,7 @@ export class SurvivalPhase implements GamePhase {
     this.clearEventPresentation();
     this.disposed = true;
     this.lifecycleGeneration += 1;
+    this.releaseVisibilityResumeWaiters();
     this.activeFishing = null;
     this.fishingPresentation = 'idle';
     this.fishingSettlementInProgress = false;
@@ -866,19 +877,26 @@ export class SurvivalPhase implements GamePhase {
     instanceId: ItemInstanceId,
     generation: number,
   ): Promise<void> {
+    const pending = this.session.snapshot();
+    const eventId = pending.pendingEventId;
+    if (eventId === null) return;
+    const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
     this.ui.setEventUsing?.(instanceId);
     this.world.setEventSelectedItem?.(instanceId);
-    await (this.world.playEventItemUse?.(instanceId) ?? Promise.resolve());
+    await (
+      this.world.playEventItemUse?.(eventId, choiceId, instanceId)
+      ?? Promise.resolve()
+    );
     if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
     this.eventPresentation = 'resolving';
-    const pending = this.session.snapshot();
-    const eventState = pending.state;
-    const eventId = pending.pendingEventId;
-    if (eventId === null) return;
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
-    if (outcome === undefined) return;
+    if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
@@ -887,7 +905,16 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation);
+    const resolved = this.session.snapshot();
+    const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
+    this.syncPresentation(resolved);
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      { choiceId, instanceId, condition },
+    );
   }
 
   private async resolveContextualChoice(
@@ -916,7 +943,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, pending.state, generation);
+    await this.runEventResolution(eventId, outcome, pending.state, generation, null);
   }
 
   private async resolveDriftingLootChoice(
@@ -1003,7 +1030,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation);
+    await this.runEventResolution(eventId, outcome, eventState, generation, null);
   }
 
   private async runEventResolution(
@@ -1011,13 +1038,19 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
+    physicalResponse: EventPhysicalResponsePresentation | null = null,
   ): Promise<void> {
     this.setBusy(true);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve(),
+      this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
+        ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
     const terminal = this.session.snapshot();
     this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
@@ -1151,11 +1184,21 @@ export class SurvivalPhase implements GamePhase {
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
-    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
+    if (event.id === 'drifting-loot') {
+      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
+    if (event.id !== 'drifting-loot') {
+      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
 
     const revealed = this.session.snapshot();
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
@@ -1324,6 +1367,36 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private readonly handleVisibilityChange = (): void => {
-    if (this.visibilityDocument?.hidden) this.setPaused(true);
+    const hidden = this.visibilityDocument?.hidden === true;
+    if (hidden) {
+      this.visibilityPauseActive = true;
+      this.setPaused(true);
+    }
+    this.world.setDocumentHidden?.(hidden);
   };
+
+  private waitForEventResume(generation: number): Promise<boolean> {
+    if (!this.isContinuationActive(generation)) return Promise.resolve(false);
+    if (!this.visibilityPauseActive && !this.documentIsHidden()) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const resume = () => {
+        this.visibilityResumeWaiters.delete(resume);
+        resolve(
+          this.isContinuationActive(generation)
+          && !this.visibilityPauseActive
+          && !this.documentIsHidden()
+        );
+      };
+      this.visibilityResumeWaiters.add(resume);
+    });
+  }
+
+  private releaseVisibilityResumeWaiters(): void {
+    if (this.visibilityResumeWaiters.size === 0) return;
+    const waiters = [...this.visibilityResumeWaiters];
+    this.visibilityResumeWaiters.clear();
+    for (const resume of waiters) resume();
+  }
 }
