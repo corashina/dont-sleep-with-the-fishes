@@ -217,6 +217,8 @@ export interface EventContextChoice {
   readonly id: EventResponseId;
   readonly label: string;
   readonly unavailableReason: string | null;
+  readonly anchorId?: string;
+  readonly energyCost?: number;
 }
 
 interface PendingFade {
@@ -564,7 +566,9 @@ export class SurvivalUI {
       button.hidden = !anchor.visible;
       button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
       const itemTarget = anchor.itemType !== null;
-      button.dataset.targetKind = itemTarget ? 'item' : 'tool';
+      button.dataset.targetKind = itemTarget
+        ? 'item'
+        : anchor.eventChoiceId === undefined ? 'tool' : 'event';
       const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
       const targetWidth = Math.round(hitArea.width);
       const targetHeight = Math.round(hitArea.height);
@@ -1112,9 +1116,11 @@ export class SurvivalUI {
   }
 
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
-    const backingInstanceId = anchor.backingInstanceId ?? (
-      anchor.id.startsWith('supply:') ? null : anchor.id as ItemInstanceId
-    );
+    const backingInstanceId = anchor.backingInstanceId !== undefined
+      ? anchor.backingInstanceId
+      : anchor.id.startsWith('supply:') || anchor.eventChoiceId !== undefined
+        ? null
+        : anchor.id as ItemInstanceId;
     const item = backingInstanceId === null
       ? undefined
       : this.currentSnapshot?.inventory[backingInstanceId];
@@ -1130,28 +1136,33 @@ export class SurvivalUI {
     const lanternSleep = anchor.toolId === 'lantern'
       ? this.eventLanternChoice()
       : undefined;
+    const anchoredChoice = this.eventPresentationActive && anchor.eventChoiceId !== undefined
+      ? this.contextualEventChoices.find(({ id }) => id === anchor.eventChoiceId)
+      : undefined;
     const toolCopy = lanternSleep === undefined
       ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
       : {
           label: 'SLEEP',
           description: 'Douse the lantern to sleep through the current event.',
         };
-    const itemLabel = anchor.itemType === null
+    const itemLabel = anchor.label ?? (anchor.itemType === null
       ? anchor.supplyGroupId === 'repairMaterial'
         ? quantityLabel('REPAIR MATERIAL', quantity)
         : toolCopy?.label ?? 'UNKNOWN TOOL'
-      : quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
-    const itemDescription = anchor.itemType === null
+      : quantityLabel(ITEM_LABELS[anchor.itemType], quantity));
+    const itemDescription = anchor.description ?? (anchor.itemType === null
       ? anchor.supplyGroupId === 'repairMaterial'
         ? 'Recovered timber, fasteners, and rope for hull repairs.'
         : toolCopy?.description ?? 'Permanent lifeboat equipment.'
-      : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
-    const action = lanternSleep !== undefined || anchor.action === null
+      : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType]);
+    const action = lanternSleep !== undefined || anchoredChoice !== undefined || anchor.action === null
       ? null
       : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = lanternSleep === undefined
-      ? this.anchorUnavailableReason(anchor)
-      : lanternSleep.unavailableReason;
+    const reason = anchoredChoice !== undefined
+      ? anchoredChoice.unavailableReason
+      : lanternSleep === undefined
+        ? this.anchorUnavailableReason(anchor)
+        : lanternSleep.unavailableReason;
     const state = brokenQuantity > 0 && usableQuantity > 0
       ? `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`
       : brokenQuantity > 0 ? 'BROKEN'
@@ -1165,7 +1176,7 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleLabel = anchor.itemType !== null
+    const visibleLabel = anchor.label ?? (anchor.itemType !== null
       ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
         ? quantityLabel('REPAIR MATERIAL', quantity)
@@ -1173,13 +1184,19 @@ export class SurvivalUI {
           ? 'Fishing rod'
           : anchor.toolId === 'repairTools'
             ? 'REPAIR TOOLBOX'
-            : itemLabel;
-    const energyCost = action?.energyCost ?? 0;
-    const energyIndicator = '⚡'.repeat(energyCost);
+            : itemLabel);
+    const energyCost = anchoredChoice?.energyCost ?? action?.energyCost ?? 0;
+    const energyIndicator = anchoredChoice === undefined
+      ? '⚡'.repeat(energyCost)
+      : energyCost <= 0
+        ? reason === null ? '' : 'UNAVAILABLE'
+        : `${energyCost} ENERGY${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
     const tooltipNodes = this.anchorTooltipNodes.get(button);
     if (tooltipNodes === undefined) throw new Error('Anchor tooltip nodes are missing');
     if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
-    const separator = energyIndicator === '' ? '' : ' ';
+    const separator = energyIndicator === ''
+      ? ''
+      : anchoredChoice === undefined ? ' ' : ' — ';
     if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
     if (tooltipNodes.energy.textContent !== energyIndicator) {
       tooltipNodes.energy.textContent = energyIndicator;
@@ -1194,7 +1211,15 @@ export class SurvivalUI {
     else button.dataset.backingInstanceId = backingInstanceId;
     if (item === undefined) delete button.dataset.condition;
     else button.dataset.condition = item.condition;
-    button.setAttribute('aria-label', spokenCost === null ? visibleLabel : `${visibleLabel}, ${spokenCost}`);
+    const spokenUnavailable = anchoredChoice !== undefined && reason !== null
+      ? ', insufficient energy'
+      : '';
+    button.setAttribute(
+      'aria-label',
+      spokenCost === null
+        ? `${visibleLabel}${spokenUnavailable}`
+        : `${visibleLabel}, ${spokenCost}${spokenUnavailable}`,
+    );
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     button.removeAttribute('aria-keyshortcuts');
@@ -1262,6 +1287,30 @@ export class SurvivalUI {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
       delete button.dataset.eventChoice;
+      const anchoredChoice = this.eventPresentationActive
+        ? this.contextualEventChoices.find(({ anchorId }) => anchorId === id)
+        : undefined;
+      if (anchor !== undefined && anchoredChoice !== undefined) {
+        button.dataset.eventChoice = anchoredChoice.id;
+        if (anchoredChoice.unavailableReason === null) {
+          delete button.dataset.unavailableReason;
+        } else {
+          button.dataset.unavailableReason = anchoredChoice.unavailableReason;
+        }
+        button.dataset.eventState = this.eventSelectedChoiceId === anchoredChoice.id
+          ? 'selected'
+          : 'eligible';
+        button.disabled = false;
+        button.setAttribute(
+          'aria-disabled',
+          anchoredChoice.unavailableReason === null
+            && !this.busy
+            && this.eventSelectedChoiceId === null
+            ? 'false'
+            : 'true',
+        );
+        return;
+      }
       if (
         this.eventPresentationActive
         && anchor?.toolId === 'lantern'
@@ -1334,7 +1383,7 @@ export class SurvivalUI {
 
   private renderContextualEventChoices(): void {
     const choices = this.contextualEventChoices
-      .filter((choice) => choice.id !== 'sleep')
+      .filter((choice) => choice.id !== 'sleep' && choice.anchorId === undefined)
       .map((choice) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -1365,7 +1414,8 @@ export class SurvivalUI {
   private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
     return anchor.itemType !== null
       || anchor.toolId === 'repairTools'
-      || anchor.toolId === 'lantern';
+      || anchor.toolId === 'lantern'
+      || anchor.eventChoiceId !== undefined;
   }
 
   private highlightAnchorId(target: EventTarget | null): string | null {
@@ -1643,6 +1693,7 @@ export class SurvivalUI {
     return [...this.anchorButtons.values()].find((button) => (
       (
         button.dataset.action !== ''
+        || button.dataset.eventChoice !== undefined
         || this.eventEligibility?.has(
           button.dataset.backingInstanceId as ItemInstanceId,
         ) === true
@@ -1909,7 +1960,10 @@ export class SurvivalUI {
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
       const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
-      if (choice !== null && this.eventChoices.contains(choice)) {
+      if (
+        choice !== null
+        && (this.eventChoices.contains(choice) || this.anchorLayer.contains(choice))
+      ) {
         event.preventDefault();
         this.activateEventChoice(choice);
         return;

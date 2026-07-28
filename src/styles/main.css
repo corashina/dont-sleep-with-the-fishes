@@ -710,7 +710,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 
 .boat-anchor[data-target-kind="item"],
-.boat-anchor[data-target-kind="tool"] {
+.boat-anchor[data-target-kind="tool"],
+.boat-anchor[data-target-kind="event"] {
   border-color: transparent;
   border-radius: 0;
   background: transparent;
