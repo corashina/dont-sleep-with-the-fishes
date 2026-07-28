@@ -45,6 +45,18 @@ export interface BoatSupplyPresentationRecord {
   readonly backingInstanceId: ItemInstanceId | null;
 }
 
+export interface SupplyAdditivePose {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly yaw: number;
+  readonly pitch: number;
+  readonly roll: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  readonly scaleZ: number;
+}
+
 interface MutableRecord {
   readonly groupId: BoatSupplyGroupId;
   readonly root: Group;
@@ -77,8 +89,6 @@ interface HighlightState {
 
 interface ActiveAnimation {
   readonly root: Group;
-  readonly basePosition: Vector3;
-  readonly baseQuaternion: Quaternion;
   elapsed: number;
   readonly duration: number;
   readonly resolve: () => void;
@@ -210,6 +220,20 @@ export class BoatSupplyDisplay {
   private highlightedGroupId: BoatSupplyGroupId | null = null;
   private readonly hoverOutline = new HoverOutline();
   private activeAnimation: ActiveAnimation | null = null;
+  private eventAmbientRoll = 0;
+  private eventAmbientLift = 0;
+  private eventItemId: ItemInstanceId | null = null;
+  private readonly eventItemPose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
   private disposed = false;
 
   constructor(
@@ -354,8 +378,6 @@ export class BoatSupplyDisplay {
     return new Promise((resolve) => {
       this.activeAnimation = {
         root: record.root,
-        basePosition: this.basePositionById.get(groupId)!,
-        baseQuaternion: this.baseQuaternionById.get(groupId)!,
         elapsed: 0,
         duration,
         resolve,
@@ -363,23 +385,61 @@ export class BoatSupplyDisplay {
     });
   }
 
+  applyEventAmbientPose(roll: number, lift: number): void {
+    if (this.disposed) return;
+    this.eventAmbientRoll = roll;
+    this.eventAmbientLift = lift;
+  }
+
+  applyEventItemPose(instanceId: ItemInstanceId, pose: SupplyAdditivePose): boolean {
+    if (this.disposed) return false;
+    const groupId = this.groupByInstanceId.get(instanceId);
+    if (groupId === undefined || this.recordsById.get(groupId)?.visibleCopies === 0) return false;
+    this.eventItemId = instanceId;
+    this.eventItemPose.x = pose.x;
+    this.eventItemPose.y = pose.y;
+    this.eventItemPose.z = pose.z;
+    this.eventItemPose.yaw = pose.yaw;
+    this.eventItemPose.pitch = pose.pitch;
+    this.eventItemPose.roll = pose.roll;
+    this.eventItemPose.scaleX = pose.scaleX;
+    this.eventItemPose.scaleY = pose.scaleY;
+    this.eventItemPose.scaleZ = pose.scaleZ;
+    return true;
+  }
+
+  clearEventMotion(): void {
+    this.eventAmbientRoll = 0;
+    this.eventAmbientLift = 0;
+    this.eventItemId = null;
+    this.eventItemPose.x = 0;
+    this.eventItemPose.y = 0;
+    this.eventItemPose.z = 0;
+    this.eventItemPose.yaw = 0;
+    this.eventItemPose.pitch = 0;
+    this.eventItemPose.roll = 0;
+    this.eventItemPose.scaleX = 1;
+    this.eventItemPose.scaleY = 1;
+    this.eventItemPose.scaleZ = 1;
+    this.restoreEventMotionBase();
+  }
+
   update(deltaSeconds: number): void {
+    if (this.disposed) return;
+    this.applyEventMotion();
     const animation = this.activeAnimation;
-    if (animation === null || this.disposed) return;
+    if (animation === null) return;
     animation.elapsed = Math.min(
       animation.duration,
       animation.elapsed + Math.max(0, deltaSeconds),
     );
     const progress = animation.elapsed / animation.duration;
     const eased = progress * progress * (3 - 2 * progress);
-    animation.root.position.copy(animation.basePosition);
     animation.root.position.y += Math.sin(Math.PI * eased) * 0.28;
-    animation.root.quaternion.copy(animation.baseQuaternion);
     animation.root.rotateZ(Math.sin(Math.PI * eased) * 0.16);
     if (progress < 1) return;
     this.activeAnimation = null;
-    animation.root.position.copy(animation.basePosition);
-    animation.root.quaternion.copy(animation.baseQuaternion);
+    this.applyEventMotion();
     animation.resolve();
   }
 
@@ -387,6 +447,7 @@ export class BoatSupplyDisplay {
     if (this.disposed) return;
     this.setHighlighted(null);
     this.hoverOutline.dispose();
+    this.clearEventMotion();
     this.cancelActiveAnimation();
     this.disposed = true;
     for (const record of this.recordsById.values()) record.root.removeFromParent();
@@ -498,8 +559,41 @@ export class BoatSupplyDisplay {
     const animation = this.activeAnimation;
     if (animation === null) return;
     this.activeAnimation = null;
-    animation.root.position.copy(animation.basePosition);
-    animation.root.quaternion.copy(animation.baseQuaternion);
+    this.applyEventMotion();
     animation.resolve();
+  }
+
+  private applyEventMotion(): void {
+    let index = 0;
+    const selectedGroupId = this.eventItemId === null
+      ? undefined
+      : this.groupByInstanceId.get(this.eventItemId);
+    for (const [groupId, record] of this.recordsById) {
+      const root = record.root;
+      root.position.copy(this.basePositionById.get(groupId)!);
+      root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
+      root.scale.set(1, 1, 1);
+      root.position.y += this.eventAmbientLift;
+      root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
+      if (groupId === selectedGroupId) {
+        const pose = this.eventItemPose;
+        root.position.x += pose.x;
+        root.position.y += pose.y;
+        root.position.z += pose.z;
+        root.rotateY(pose.yaw);
+        root.rotateX(pose.pitch);
+        root.rotateZ(pose.roll);
+        root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+      }
+      index += 1;
+    }
+  }
+
+  private restoreEventMotionBase(): void {
+    for (const [groupId, record] of this.recordsById) {
+      record.root.position.copy(this.basePositionById.get(groupId)!);
+      record.root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
+      record.root.scale.set(1, 1, 1);
+    }
   }
 }
