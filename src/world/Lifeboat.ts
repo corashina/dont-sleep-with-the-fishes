@@ -45,6 +45,19 @@ const HULL_STATIONS = [
 
 const FLOOR_EDGE_INSET = 0.06;
 const FLOOR_HEIGHT = -0.38;
+export const LIFEBOAT_FLOOR_SURFACE_Y = FLOOR_HEIGHT + 0.0655;
+export const LIFEBOAT_DISPLAY_SHELF_SURFACE_Y = 0.22;
+export const LIFEBOAT_FLOOR_RIB_DEPTH = 0.105;
+export const LIFEBOAT_FLOOR_RIB_CENTERS_Z = Object.freeze([
+  -2.18,
+  -1.45,
+  -0.68,
+  0.12,
+  0.92,
+  1.72,
+  2.30,
+]);
+const DISPLAY_BENCH_Z = -1.58;
 
 export function lifeboatHullHalfWidthAt(z: number): number | null {
   for (let index = 0; index < HULL_STATIONS.length - 1; index += 1) {
@@ -156,10 +169,10 @@ function addFloor(target: Group, materials: LifeboatMaterials): void {
 function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void {
   const ribs = new Group();
   ribs.name = 'survival-ribs';
-  for (const [index, z] of [-2.18, -1.45, -0.68, 0.12, 0.92, 1.72, 2.30].entries()) {
+  for (const [index, z] of LIFEBOAT_FLOOR_RIB_CENTERS_Z.entries()) {
     const halfWidth = Math.max(0.48, (lifeboatHullHalfWidthAt(z) ?? 1.4) - 0.15);
     const rib = new Mesh(
-      new BoxGeometry(halfWidth * 2, 0.085, 0.105),
+      new BoxGeometry(halfWidth * 2, 0.085, LIFEBOAT_FLOOR_RIB_DEPTH),
       materials.cutWood,
     );
     rib.name = `survival-rib-${index}`;
@@ -170,15 +183,19 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
 
   const benches = new Group();
   benches.name = 'survival-benches';
-  [0.78, 1.48, 2.14].forEach((z, index) => {
+  const createBench = (
+    name: string,
+    seatName: string,
+    z: number,
+  ): Group => {
     const halfWidth = (lifeboatHullHalfWidthAt(z) ?? 1.5) - 0.17;
     const bench = new Group();
-    bench.name = `survival-bench-${index}`;
+    bench.name = name;
     const seat = new Mesh(
       new BoxGeometry(halfWidth * 2, 0.12, 0.48),
       materials.timber,
     );
-    seat.name = `survival-bench-seat-${index}`;
+    seat.name = seatName;
     seat.position.y = 0.16;
     const frontRail = new Mesh(
       new BoxGeometry(halfWidth * 1.8, 0.12, 0.09),
@@ -189,8 +206,20 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     backRail.position.z = 0.18;
     bench.add(seat, frontRail, backRail);
     bench.position.z = z;
-    benches.add(bench);
+    return bench;
+  };
+  [0.78, 1.48, 2.14].forEach((z, index) => {
+    benches.add(createBench(
+      `survival-bench-${index}`,
+      `survival-bench-seat-${index}`,
+      z,
+    ));
   });
+  benches.add(createBench(
+    'lifeboat-display-bench',
+    'lifeboat-display-bench-seat',
+    DISPLAY_BENCH_Z,
+  ));
   target.add(benches);
 }
 

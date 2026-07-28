@@ -6,7 +6,7 @@ import {
   type ProjectedScreenBounds,
 } from '../rendering/projectScreenBounds';
 import type { DayActionId } from './survivalTypes';
-import type { BoatSupplyGroupId } from '../world/BoatSupplyLayout';
+import type { BoatSupplyGroupId } from '../world/BoatStorage';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
   ITEM_IDS.flatMap((id) => {
