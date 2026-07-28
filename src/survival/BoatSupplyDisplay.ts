@@ -34,6 +34,7 @@ import type {
   ItemCondition,
   SurvivalSnapshot,
 } from './survivalTypes';
+import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 
 export interface BoatSupplyPresentationRecord {
   readonly groupId: BoatSupplyGroupId;
@@ -104,11 +105,7 @@ function materialList(material: Material | Material[]): readonly Material[] {
 
 function brokenMaterial(material: Material): Material {
   const clone = material.clone();
-  if (clone instanceof MeshStandardMaterial) {
-    clone.color.lerp(new Color(0x384243), 0.68);
-    clone.roughness = Math.max(0.82, clone.roughness);
-    clone.metalness *= 0.45;
-  }
+  applyBrokenMaterialTreatment(clone);
   return clone;
 }
 
