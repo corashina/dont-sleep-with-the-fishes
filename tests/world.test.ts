@@ -778,9 +778,19 @@ describe('world builders', () => {
     ]);
     expect(scene.getObjectByName('sea-spray')).toBeUndefined();
     expect(scene.getObjectByName('lifeboat-waterline-foam')).toBeUndefined();
-    world.saveItem({ instanceId: 'flareGun-1', type: 'flareGun' });
+    const flareGun = { instanceId: 'flareGun-1', type: 'flareGun' } as const;
+    world.saveItem(flareGun);
     world.loseItem('ductTape-1');
-    expect(world.itemObjects.get('flareGun-1')!.parent?.name).toBe('lifeboat-storage');
+    const storedFlareGun = world.itemObjects.get('flareGun-1')!;
+    const expectedFlareGun = boatStorageTransform(flareGun);
+    expect(storedFlareGun.parent?.name).toBe('lifeboat-storage');
+    expect(storedFlareGun.position.toArray()).toEqual(expectedFlareGun.position.toArray());
+    expect(storedFlareGun.rotation.toArray()).toEqual(expectedFlareGun.rotation.toArray());
+    expect(storedFlareGun.scale.toArray()).toEqual([
+      expectedFlareGun.scale,
+      expectedFlareGun.scale,
+      expectedFlareGun.scale,
+    ]);
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
     expect(world.itemObjects.get('cannedFood-1')!.parent).toBe(world.ship);
     world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));

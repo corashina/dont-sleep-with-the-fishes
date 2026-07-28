@@ -1,4 +1,9 @@
-import { Euler, Vector3 } from 'three';
+import {
+  Box3,
+  Euler,
+  Matrix4,
+  Vector3,
+} from 'three';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
@@ -39,18 +44,28 @@ const restingSlot = (
   z: number,
   yaw: number,
   scale = 0.5,
+  pitch = 0,
+  roll = 0,
 ): SlotSpec => {
   const supportY = surface === 'shelf'
     ? LIFEBOAT_DISPLAY_SHELF_SURFACE_Y
     : LIFEBOAT_FLOOR_SURFACE_Y;
+  const rotation = [pitch, yaw, roll] as const;
+  const modelBounds = ITEM_MODEL_SPECS[id].normalizedBounds;
+  const rotatedBounds = new Box3(
+    new Vector3(...modelBounds.min),
+    new Vector3(...modelBounds.max),
+  ).applyMatrix4(
+    new Matrix4().makeRotationFromEuler(new Euler(...rotation)),
+  );
   return {
     surface,
     position: [
       x,
-      supportY - ITEM_MODEL_SPECS[id].normalizedBounds.min[1] * scale,
+      supportY - rotatedBounds.min.y * scale,
       z,
     ],
-    rotation: [0, yaw, 0],
+    rotation,
     scale,
   };
 };
@@ -71,15 +86,15 @@ const BOAT_STORAGE_SLOTS = {
   medicalKit: [restingSlot('shelf', 'medicalKit', -1.17, -1.35, 0.10)],
   spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, 0.14)],
   fishingNet: [restingSlot('floor', 'fishingNet', -0.82, -0.38, 0.18)],
-  bucket: [restingSlot('floor', 'bucket', -1.16, 0.20, -0.12)],
+  bucket: [restingSlot('floor', 'bucket', -1.10, 0.16, -0.12)],
   flareGun: [restingSlot('shelf', 'flareGun', 0.59, -1.72, -0.18)],
   scubaSet: [restingSlot('floor', 'scubaSet', -0.42, -0.72, -0.12)],
-  anchor: [restingSlot('floor', 'anchor', 0, -0.88, 0.08)],
+  anchor: [restingSlot('floor', 'anchor', 0, -0.88, 0.08, 0.5, Math.PI / 2)],
   bottledPaper: [restingSlot('shelf', 'bottledPaper', 1.17, -1.34, -0.10)],
   umbrella: [restingSlot('floor', 'umbrella', 0.88, -0.42, 0.14)],
-  swimRing: [restingSlot('floor', 'swimRing', 1.16, 0.20, -0.08)],
+  swimRing: [restingSlot('floor', 'swimRing', 0.95, -0.08, -0.08, 0.5, Math.PI / 2)],
   flashlight: [restingSlot('shelf', 'flashlight', 1.10, -1.74, 0.10)],
-  harpoonGun: [restingSlot('floor', 'harpoonGun', 0.52, -0.70, -0.18)],
+  harpoonGun: [restingSlot('floor', 'harpoonGun', 0.50, -0.72, -0.18)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
