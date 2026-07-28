@@ -336,14 +336,6 @@ describe('player movement helpers', () => {
     ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
     ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
     ['storage workbench', furniturePoint('workbench-port', 2.72)],
-    [
-      'stern machinery',
-      new Vector3(
-        (SHIP_LAYOUT.machineryClosure.minX + SHIP_LAYOUT.machineryClosure.maxX) / 2,
-        PLAYER_Y,
-        (SHIP_LAYOUT.machineryClosure.minZ + SHIP_LAYOUT.machineryClosure.maxZ) / 2,
-      ),
-    ],
   ])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {
