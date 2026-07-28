@@ -7,10 +7,24 @@ import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
-import { formatFishingResult, SurvivalPhase } from '../src/survival/SurvivalPhase';
+import {
+  formatDriftingLootResult,
+  formatFishingResult,
+  SurvivalPhase,
+} from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import type { SurvivalInventorySnapshot, SurvivalItemState, SurvivalSnapshot } from '../src/survival/survivalTypes';
-import type { FishingResultView, FishingUiState, SurvivalUI } from '../src/ui/SurvivalUI';
+import type {
+  RewardSummary,
+  SurvivalInventorySnapshot,
+  SurvivalItemState,
+  SurvivalSnapshot,
+} from '../src/survival/survivalTypes';
+import type {
+  DriftingLootResultView,
+  FishingResultView,
+  FishingUiState,
+  SurvivalUI,
+} from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { sequenceRandom } from './helpers/random';
 
@@ -26,6 +40,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
     rescueProgress: 0, weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
+    pendingDriftingLootVariant: null,
     lastOutcome: null, seed: 8, ...overrides,
   };
 }
@@ -347,6 +362,698 @@ async function flushPromises(): Promise<void> {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it.each([
+    [{ kind: 'resource', id: 'food', quantity: 2 }, '+2 FOOD'],
+    [{ kind: 'resource', id: 'bait', quantity: 2 }, '+2 BAIT'],
+    [{ kind: 'resource', id: 'repairMaterial', quantity: 2 }, '+2 REPAIR MATERIAL'],
+    [{ kind: 'item', id: 'energyBar', quantity: 1 }, 'ENERGY BAR'],
+    [{ kind: 'resource', id: 'food', quantity: 1 }, '+1 FOOD'],
+  ] satisfies readonly [RewardSummary, string][])(
+    'formats the applied Drifting Loot reward %#',
+    (reward, title) => {
+      expect(formatDriftingLootResult(reward)).toEqual({
+        caption: 'SALVAGE RECOVERED',
+        title,
+        detail: '−3 ENERGY',
+        target: null,
+      });
+    },
+  );
+
+  it('orchestrates covered dawn retrieval, held result, and one-shot same-day Continue', async () => {
+    const calls: string[] = [];
+    const retrieval = deferred();
+    const realSession = new SurvivalSession([], {
+      seed: 17,
+      random: sequenceRandom([0, 0, 0, 0]),
+      initial: { day: 2 },
+    });
+    const session = {
+      snapshot: vi.fn(realSession.snapshot.bind(realSession)),
+      availableReason: vi.fn(realSession.availableReason.bind(realSession)),
+      perform: vi.fn(realSession.perform.bind(realSession)),
+      beginDawn: vi.fn(realSession.beginDawn.bind(realSession)),
+      resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
+    };
+    const clearEvent = vi.fn(() => calls.push('clear'));
+    const retrieveDriftingLoot = vi.fn(() => {
+      expect(realSession.snapshot()).toMatchObject({
+        state: 'day',
+        day: 3,
+        energy: 0,
+        food: 2,
+        pendingEventId: null,
+      });
+      calls.push('retrieve');
+      return retrieval.promise;
+    });
+    const resultTarget = Object.freeze({
+      x: 410, y: 260, width: 100, height: 80, depth: 1, visible: true,
+    });
+    let resultView: DriftingLootResultView | null = null;
+    const setBusy = vi.fn((busy: boolean) => calls.push(busy ? 'lock' : 'unlock'));
+    const restoreCommandFocus = vi.fn(() => calls.push('focus'));
+    const hideDriftingLootResult = vi.fn(() => calls.push('hide-result'));
+    const world = {
+      scene: new Scene(),
+      play: vi.fn((cue: string) => {
+        calls.push(cue);
+        return Promise.resolve();
+      }),
+      stageEvent: vi.fn((id: string, variant?: 'barrel' | 'crate' | null) => {
+        calls.push(`stage:${id}:${variant}`);
+      }),
+      revealEvent: vi.fn((id: string) => {
+        calls.push(`reveal:${id}`);
+        return Promise.resolve();
+      }),
+      retrieveDriftingLoot,
+      projectDriftingLoot: vi.fn(() => {
+        calls.push('project');
+        return resultTarget;
+      }),
+      clearEvent,
+      dispose: vi.fn(),
+    };
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(() => calls.push('begin-event')),
+      setSleepCovered: vi.fn((covered) => {
+        calls.push(covered ? 'cover' : 'uncover');
+        return Promise.resolve();
+      }),
+      holdSleep: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      settleCoveredScene: vi.fn(() => {
+        calls.push('settle');
+        return Promise.resolve();
+      }),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      clearEventPresentation: vi.fn(),
+      showDriftingLootResult: vi.fn((view) => {
+        resultView = view;
+        calls.push('result');
+      }),
+      hideDriftingLootResult,
+      setBusy,
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      restoreCommandFocus,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world,
+      ui,
+      sceneRenderer: {
+        render: vi.fn(() => calls.push('render')),
+        resize: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    await flushPromises();
+
+    expect(calls.filter((call) => [
+      'nightfall',
+      'cover',
+      'dawn',
+      'begin-event',
+      'stage:drifting-loot:barrel',
+      'reveal:drifting-loot',
+      'render',
+      'settle',
+      'uncover',
+    ].includes(call))).toEqual([
+      'nightfall',
+      'cover',
+      'dawn',
+      'begin-event',
+      'stage:drifting-loot:barrel',
+      'reveal:drifting-loot',
+      'render',
+      'settle',
+      'uncover',
+    ]);
+
+    calls.length = 0;
+    setBusy.mockClear();
+    restoreCommandFocus.mockClear();
+    hideDriftingLootResult.mockClear();
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    expect(calls).toContain('retrieve');
+    phase.handleAction('eat');
+    expect(session.perform).toHaveBeenCalledOnce();
+
+    retrieval.resolve();
+    await flushPromises();
+    expect(calls).toContain('project');
+    expect(resultView).toEqual({
+      caption: 'SALVAGE RECOVERED',
+      title: '+2 FOOD',
+      detail: '−3 ENERGY',
+      target: resultTarget,
+    });
+    expect(clearEvent).not.toHaveBeenCalled();
+    phase.handleAction('eat');
+    expect(session.perform).toHaveBeenCalledOnce();
+
+    ui.onDriftingLootContinue?.();
+    ui.onDriftingLootContinue?.();
+
+    expect(clearEvent).toHaveBeenCalledOnce();
+    expect(hideDriftingLootResult).toHaveBeenCalledOnce();
+    expect(setBusy.mock.calls.filter(([busy]) => busy === false)).toHaveLength(1);
+    expect(restoreCommandFocus).toHaveBeenCalledOnce();
+    expect(realSession.snapshot()).toMatchObject({ state: 'day', day: 3 });
+  });
+
+  it('lets Drifting Loot recede without a result and resumes the same day', async () => {
+    let current = snapshot({
+      state: 'dayEvent',
+      day: 4,
+      pendingEventId: 'drifting-loot',
+      pendingDriftingLootVariant: 'crate',
+    });
+    const recedeDriftingLoot = vi.fn(() => Promise.resolve());
+    const clearEvent = vi.fn();
+    const showDriftingLootResult = vi.fn();
+    const restoreCommandFocus = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      clearEventPresentation: vi.fn(),
+      hideDriftingLootResult: vi.fn(),
+      showDriftingLootResult,
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      restoreCommandFocus,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'day', day: 4 });
+          return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
+        }),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        recedeDriftingLoot,
+        clearEvent,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(recedeDriftingLoot).toHaveBeenCalledOnce();
+    expect(showDriftingLootResult).not.toHaveBeenCalled();
+    expect(clearEvent).toHaveBeenCalledOnce();
+    expect(restoreCommandFocus).toHaveBeenCalledOnce();
+    expect(current).toMatchObject({ state: 'day', day: 4 });
+  });
+
+  it.each([
+    ['null', null],
+    ['unexpected', 'buoy' as unknown as SurvivalSnapshot['pendingDriftingLootVariant']],
+  ] as const)(
+    'keeps an invalid dawn loot snapshot covered for a %s variant',
+    async (_label, invalidVariant) => {
+    let current = snapshot({ state: 'nightEvent', day: 2 });
+    const setSleepCovered = vi.fn(() => Promise.resolve());
+    const showFeedback = vi.fn();
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        perform: vi.fn(() => accepted({ code: 'quiet-night', cue: 'nightfall' })),
+        beginDawn: vi.fn(() => {
+          current = snapshot({
+            state: 'dayEvent',
+            day: 3,
+            pendingEventId: 'drifting-loot',
+            pendingDriftingLootVariant: invalidVariant,
+          });
+          return accepted({ code: 'dawn', cue: 'dawn' });
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        setSleepCovered,
+        holdSleep: vi.fn(() => Promise.resolve()),
+        beginEventPresentation: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        hideDriftingLootResult: vi.fn(),
+        showFeedback,
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    await flushPromises();
+
+    expect(stageEvent).not.toHaveBeenCalled();
+    expect(setSleepCovered).toHaveBeenCalledWith(true);
+    expect(setSleepCovered).not.toHaveBeenCalledWith(false);
+    expect(showFeedback).toHaveBeenCalledWith({
+      accepted: false,
+      code: 'drifting-loot-variant-missing',
+      message: 'The drifting loot could not be staged.',
+      deltas: {},
+      cue: 'none',
+    });
+    },
+  );
+
+  it.each([
+    ['null', null],
+    ['unexpected', 'buoy' as unknown as SurvivalSnapshot['pendingDriftingLootVariant']],
+  ] as const)(
+    'rejects a %s Drifting Loot variant before choice resolution or animation',
+    async (_label, invalidVariant) => {
+      let current = snapshot({
+        state: 'dayEvent',
+        day: 3,
+        pendingEventId: 'drifting-loot',
+        pendingDriftingLootVariant: 'barrel',
+      });
+      const resolveEvent = vi.fn();
+      const playEventChoiceBeat = vi.fn(() => Promise.resolve());
+      const retrieveDriftingLoot = vi.fn(() => Promise.resolve());
+      const recedeDriftingLoot = vi.fn(() => Promise.resolve());
+      const stageEvent = vi.fn();
+      const showDriftingLootResult = vi.fn();
+      const showFeedback = vi.fn();
+      const ui: Partial<SurvivalUI> = {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        playEventChoiceBeat,
+        clearEventPresentation: vi.fn(),
+        hideDriftingLootResult: vi.fn(),
+        showDriftingLootResult,
+        showFeedback,
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session: { snapshot: vi.fn(() => current), resolveEvent },
+        world: {
+          stageEvent,
+          revealEvent: vi.fn(() => Promise.resolve()),
+          retrieveDriftingLoot,
+          recedeDriftingLoot,
+          clearEvent: vi.fn(),
+          dispose: vi.fn(),
+        },
+        ui,
+      });
+
+      phase.start();
+      await flushPromises();
+      current = snapshot({
+        state: 'dayEvent',
+        day: 3,
+        pendingEventId: 'drifting-loot',
+        pendingDriftingLootVariant: invalidVariant,
+      });
+      ui.onEventChoice?.('retrieve');
+      await flushPromises();
+
+      expect(showFeedback).toHaveBeenCalledWith({
+        accepted: false,
+        code: 'drifting-loot-variant-missing',
+        message: 'The drifting loot could not be staged.',
+        deltas: {},
+        cue: 'none',
+      });
+      expect(resolveEvent).not.toHaveBeenCalled();
+      expect(stageEvent).toHaveBeenCalledOnce();
+      expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'barrel');
+      expect(playEventChoiceBeat).not.toHaveBeenCalled();
+      expect(retrieveDriftingLoot).not.toHaveBeenCalled();
+      expect(recedeDriftingLoot).not.toHaveBeenCalled();
+      expect(showDriftingLootResult).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps a real insufficient-energy Drifting Loot encounter choosing without mutation', async () => {
+    const realSession = new SurvivalSession([], {
+      seed: 28,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 2 },
+      initialEventId: 'drifting-loot',
+    });
+    const before = realSession.snapshot();
+    const retrieveDriftingLoot = vi.fn(() => Promise.resolve());
+    const showDriftingLootResult = vi.fn();
+    const setEventSelection = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection,
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      showFeedback: vi.fn(),
+      setBusy: vi.fn(),
+      showDriftingLootResult,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(realSession.snapshot.bind(realSession)),
+        resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        retrieveDriftingLoot,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('retrieve');
+    await flushPromises();
+
+    expect(realSession.snapshot()).toMatchObject({
+      state: before.state,
+      day: before.day,
+      energy: before.energy,
+      food: before.food,
+      bait: before.bait,
+      repairMaterial: before.repairMaterial,
+      inventory: before.inventory,
+      pendingEventId: 'drifting-loot',
+      pendingDriftingLootVariant: 'barrel',
+    });
+    expect(setEventSelection).toHaveBeenCalledTimes(2);
+    expect(retrieveDriftingLoot).not.toHaveBeenCalled();
+    expect(showDriftingLootResult).not.toHaveBeenCalled();
+  });
+
+  it('reveals Drifting Loot after resolving a non-terminal night event', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      day: 2,
+      pendingEventId: 'drifting-bottle',
+    });
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'nightEvent', day: 2 });
+          return accepted({ code: 'event-resolved', cue: 'none' });
+        }),
+        beginDawn: vi.fn(() => {
+          current = snapshot({
+            state: 'dayEvent',
+            day: 3,
+            pendingEventId: 'drifting-loot',
+            pendingDriftingLootVariant: 'crate',
+          });
+          return accepted({ code: 'dawn', cue: 'dawn' });
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent,
+        revealEvent: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        showFeedback: vi.fn(),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        beginEventPresentation: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    stageEvent.mockClear();
+    phase.handleEndure();
+    await flushPromises();
+    await flushPromises();
+
+    expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'crate');
+    expect(current).toMatchObject({ state: 'dayEvent', day: 3 });
+  });
+
+  it.each(['dispose', 'restart'] as const)(
+    'cancels a stale Drifting Loot retrieval after %s',
+    async (teardown) => {
+      let current = snapshot({
+        state: 'dayEvent',
+        day: 3,
+        energy: 3,
+        pendingEventId: 'drifting-loot',
+        pendingDriftingLootVariant: 'barrel',
+      });
+      const retrieval = deferred();
+      const showDriftingLootResult = vi.fn();
+      const restoreCommandFocus = vi.fn();
+      const onRestart = vi.fn();
+      const ui: Partial<SurvivalUI> = {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        hideDriftingLootResult: vi.fn(),
+        showDriftingLootResult,
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        restoreCommandFocus,
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent: vi.fn(() => {
+            current = snapshot({ state: 'day', day: 3, energy: 0, food: 2 });
+            return accepted({
+              code: 'event-resolved',
+              cue: 'none',
+              deltas: { energy: -3, food: 2 },
+              rewardSummary: { kind: 'resource', id: 'food', quantity: 2 },
+            });
+          }),
+        },
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          retrieveDriftingLoot: vi.fn(() => retrieval.promise),
+          clearEvent: vi.fn(() => retrieval.resolve()),
+          dispose: vi.fn(() => retrieval.resolve()),
+        },
+        ui,
+        onRestart,
+      });
+
+      phase.start();
+      await flushPromises();
+      ui.onEventChoice?.('retrieve');
+      await flushPromises();
+      if (teardown === 'dispose') phase.dispose();
+      else phase.requestRestart();
+      await flushPromises();
+
+      expect(showDriftingLootResult).not.toHaveBeenCalled();
+      expect(restoreCommandFocus).not.toHaveBeenCalled();
+      expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
+    },
+  );
+
+  it.each(['dispose', 'restart'] as const)(
+    'cancels a Drifting Loot dawn reveal after %s without stale continuation',
+    async (teardown) => {
+      const realSession = new SurvivalSession([], {
+        seed: 29,
+        random: sequenceRandom([0, 0, 0]),
+        initial: { day: 2 },
+      });
+      const reveal = deferred();
+      const setSleepCovered = vi.fn(() => Promise.resolve());
+      const setEventSelection = vi.fn();
+      const setBusy = vi.fn();
+      const restoreCommandFocus = vi.fn();
+      const onRestart = vi.fn();
+      const clearEvent = vi.fn(() => reveal.resolve());
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(realSession.snapshot.bind(realSession)),
+          perform: vi.fn(realSession.perform.bind(realSession)),
+          beginDawn: vi.fn(realSession.beginDawn.bind(realSession)),
+        },
+        world: {
+          scene: new Scene(),
+          play: vi.fn(() => Promise.resolve()),
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => reveal.promise),
+          clearEvent,
+          dispose: vi.fn(() => reveal.resolve()),
+        },
+        ui: {
+          setSleepCovered,
+          holdSleep: vi.fn(() => Promise.resolve()),
+          beginEventPresentation: vi.fn(),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection,
+          clearEventPresentation: vi.fn(),
+          hideDriftingLootResult: vi.fn(),
+          settleCoveredScene: vi.fn(() => Promise.resolve()),
+          setBusy,
+          render: vi.fn(),
+          setJournalUnread: vi.fn(),
+          restoreCommandFocus,
+          dispose: vi.fn(),
+        },
+        onRestart,
+      });
+
+      phase.handleAction('endDay');
+      await flushPromises();
+      expect(realSession.snapshot()).toMatchObject({
+        state: 'dayEvent',
+        day: 3,
+        pendingEventId: 'drifting-loot',
+        pendingDriftingLootVariant: 'barrel',
+      });
+      expect(reveal.isSettled()).toBe(false);
+      setSleepCovered.mockClear();
+      setBusy.mockClear();
+      clearEvent.mockClear();
+
+      if (teardown === 'dispose') phase.dispose();
+      else phase.requestRestart();
+      const clearCount = clearEvent.mock.calls.length;
+      expect(clearCount).toBe(1);
+      await flushPromises();
+
+      expect(clearEvent).toHaveBeenCalledTimes(clearCount);
+      expect(setEventSelection).not.toHaveBeenCalled();
+      expect(setSleepCovered).not.toHaveBeenCalledWith(false);
+      expect(setBusy).not.toHaveBeenCalledWith(false);
+      expect(restoreCommandFocus).not.toHaveBeenCalled();
+      expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
+    },
+  );
+
+  it.each([
+    ['result', 'dispose'],
+    ['result', 'restart'],
+    ['receding', 'dispose'],
+    ['receding', 'restart'],
+  ] as const)(
+    'cancels Drifting Loot %s wait after %s without stale cleanup',
+    async (stage, teardown) => {
+      const realSession = new SurvivalSession([], {
+        seed: 30,
+        random: sequenceRandom([0]),
+        initial: { day: 3, energy: 3 },
+        initialEventId: 'drifting-loot',
+      });
+      const recession = deferred();
+      const clearEvent = vi.fn(() => recession.resolve());
+      const setBusy = vi.fn();
+      const restoreCommandFocus = vi.fn();
+      const showDriftingLootResult = vi.fn();
+      const onRestart = vi.fn();
+      const ui: Partial<SurvivalUI> = {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        hideDriftingLootResult: vi.fn(),
+        showDriftingLootResult,
+        setBusy,
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        restoreCommandFocus,
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(realSession.snapshot.bind(realSession)),
+          resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
+        },
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          retrieveDriftingLoot: vi.fn(() => Promise.resolve()),
+          projectDriftingLoot: vi.fn(() => null),
+          recedeDriftingLoot: vi.fn(() => recession.promise),
+          clearEvent,
+          dispose: vi.fn(() => recession.resolve()),
+        },
+        ui,
+        onRestart,
+      });
+
+      phase.start();
+      await flushPromises();
+      setBusy.mockClear();
+      restoreCommandFocus.mockClear();
+      clearEvent.mockClear();
+      ui.onEventChoice?.(stage === 'result' ? 'retrieve' : 'sleep');
+      await flushPromises();
+      const continueResult = ui.onDriftingLootContinue;
+      expect(showDriftingLootResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
+      if (stage === 'receding') expect(recession.isSettled()).toBe(false);
+
+      if (teardown === 'dispose') phase.dispose();
+      else phase.requestRestart();
+      const clearCount = clearEvent.mock.calls.length;
+      expect(clearCount).toBe(1);
+      continueResult?.();
+      continueResult?.();
+      await flushPromises();
+
+      expect(clearEvent).toHaveBeenCalledTimes(clearCount);
+      expect(showDriftingLootResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
+      expect(setBusy).not.toHaveBeenCalledWith(false);
+      expect(restoreCommandFocus).not.toHaveBeenCalled();
+      expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
+    },
+  );
+
   it('renders survival through sceneRenderer with night and squall state', () => {
     const scene = new Scene();
     const render = vi.fn();
@@ -1087,12 +1794,12 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
-  it('opens Drifting Loot after a resource-neutral day action and pays its successful cost', async () => {
+  it('excludes Drifting Loot from the post-action daytime presentation pool', async () => {
     const session = new SurvivalSession(
       [{ instanceId: 'cannedFood-1', type: 'cannedFood' }],
       {
         seed: 202,
-        random: sequenceRandom([0.999999, 0]),
+        random: sequenceRandom([0.999999, 0, 0]),
         initial: { day: 3, hunger: 35, energy: 3 },
       },
     );
@@ -1131,17 +1838,17 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       state: 'dayEvent',
-      pendingEventId: 'drifting-loot',
+      pendingEventId: 'dangerous-waters',
       energy: 3,
     });
     expect(setEventSelection).toHaveBeenCalled();
-    ui.onEventChoice?.('retrieve');
+    ui.onEndure?.();
     await flushPromises();
     expect(session.snapshot()).toMatchObject({
       state: 'day',
       pendingEventId: null,
-      energy: 0,
-      food: 2,
+      energy: 3,
+      food: 0,
     });
   });
 
@@ -1429,6 +2136,7 @@ describe('SurvivalPhase orchestration', () => {
     const current = snapshot({
       state: 'dayEvent',
       pendingEventId: event.id,
+      pendingDriftingLootVariant: 'barrel',
       energy: 3,
     });
     const rejected = { ...accepted(), accepted: false, code: 'requirements-unmet' };
@@ -1460,14 +2168,14 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(setEventSelection.mock.calls[1]![1]).toEqual([
-      { id: 'retrieve', label: 'Retrieve It', unavailableReason: null },
+      { id: 'retrieve', label: 'Retrieve It — 3 Energy', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
   });
 
   it('finishes the contextual press beat before resolving and reacting', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle')!;
     let current = snapshot({
       state: 'dayEvent',
       pendingEventId: event.id,
@@ -1514,7 +2222,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
-    ui.onEventChoice?.('retrieve');
+    ui.onEventChoice?.('sleep');
     await flushPromises();
     expect(calls).toEqual(['press']);
     expect(resolveEvent).not.toHaveBeenCalled();
@@ -1543,6 +2251,7 @@ describe('SurvivalPhase orchestration', () => {
         snapshot: vi.fn(() => snapshot({
           state: 'dayEvent',
           pendingEventId: event.id,
+          pendingDriftingLootVariant: 'barrel',
           energy: 3,
         })),
         resolveEvent,
@@ -1570,6 +2279,7 @@ describe('SurvivalPhase orchestration', () => {
         snapshot: vi.fn(() => snapshot({
           state: 'dayEvent',
           pendingEventId: event.id,
+          pendingDriftingLootVariant: 'barrel',
           energy: 2,
         })),
       },
@@ -1590,7 +2300,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setEventSelection.mock.calls[0]![1]).toEqual([
       {
         id: 'retrieve',
-        label: 'Retrieve It',
+        label: 'Retrieve It — 3 Energy',
         unavailableReason: 'Requires 3 energy; you have 2.',
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
@@ -2010,7 +2720,7 @@ describe('SurvivalPhase orchestration', () => {
       [{ instanceId: 'swimRing-1', type: 'swimRing' }],
       {
         seed: 201,
-        random: sequenceRandom([0, 0]),
+        random: sequenceRandom([0, 0.99]),
         initial: { day: 2 },
         initialEventId: 'drifting-bottle',
       },

@@ -10,6 +10,7 @@ import { createVisualQualityPreference } from '../rendering/visualQuality';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
+  type DriftingLootResultView,
   type EventContextChoice,
   type FishingResultView,
 } from '../ui/SurvivalUI';
@@ -36,8 +37,10 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
+  DriftingLootVariant,
   EventResponse,
   EventResponseId,
+  RewardSummary,
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
@@ -71,10 +74,17 @@ type EventPresentationState =
   | 'revealing'
   | 'choosing'
   | 'using'
-  | 'resolving';
+  | 'resolving'
+  | 'retrieving'
+  | 'result'
+  | 'receding';
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
+}
+
+function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
+  return value === 'barrel' || value === 'crate';
 }
 
 export function formatFishingResult(
@@ -119,6 +129,24 @@ export function formatFishingResult(
     title: result.catch.label.toLocaleUpperCase('en-US'),
     detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
     catchTarget: null,
+  };
+}
+
+export function formatDriftingLootResult(
+  reward: RewardSummary,
+): DriftingLootResultView {
+  const title = reward.kind === 'item'
+    ? 'ENERGY BAR'
+    : `+${reward.quantity} ${
+      reward.id === 'repairMaterial'
+        ? 'REPAIR MATERIAL'
+        : reward.id.toLocaleUpperCase('en-US')
+    }`;
+  return {
+    caption: 'SALVAGE RECOVERED',
+    title,
+    detail: '−3 ENERGY',
+    target: null,
   };
 }
 
@@ -181,6 +209,7 @@ export class SurvivalPhase implements GamePhase {
   private fishingPresentation: FishingPresentationState = 'idle';
   private fishingSettlementInProgress = false;
   private eventPresentation: EventPresentationState = 'idle';
+  private activeDriftingLootVariant: DriftingLootVariant | null = null;
   private eventEligibility = new Map<ItemInstanceId, EventResponseId>();
   private automaticWeather: PresentationWeatherId | null = null;
   private forcedWeather: PresentationWeatherId | null = null;
@@ -217,6 +246,7 @@ export class SurvivalPhase implements GamePhase {
           context.skyAssets.moonTexture,
           savedItems,
           context.lifeboatAssets,
+          context.shipFurniture,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -389,6 +419,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setFishingViewExitVisible?.(false);
     this.ui.onFishingResultContinue = null;
     this.ui.onFishingViewExit = null;
+    this.ui.onDriftingLootContinue = null;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -432,6 +463,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingReel = () => this.handleFishingReel();
     this.ui.onFishingResultContinue = () => this.continueFishingResult();
     this.ui.onFishingViewExit = () => this.exitReadyFishingView();
+    this.ui.onDriftingLootContinue = () => this.continueDriftingLootResult();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -815,6 +847,7 @@ export class SurvivalPhase implements GamePhase {
       if (!this.isContinuationActive(generation)) return;
       snapshot = await this.runDawn(generation);
       if (!this.isContinuationActive(generation)) return;
+      if (await this.revealDawnEvent(snapshot, generation)) return;
       if (!await this.renderAndSettleCoveredScene(generation)) return;
       await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
@@ -865,6 +898,10 @@ export class SurvivalPhase implements GamePhase {
     const pending = this.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
+    if (eventId === 'drifting-loot') {
+      await this.resolveDriftingLootChoice(choiceId, generation);
+      return;
+    }
     this.eventPresentation = 'using';
     this.setBusy(true);
     await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
@@ -880,6 +917,75 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     await this.runEventResolution(eventId, outcome, pending.state, generation);
+  }
+
+  private async resolveDriftingLootChoice(
+    choiceId: EventResponseId,
+    generation: number,
+  ): Promise<void> {
+    if (this.eventPresentation !== 'choosing' || !this.isContinuationActive(generation)) return;
+    const pending = this.session.snapshot();
+    if (pending.pendingEventId !== 'drifting-loot') return;
+    if (!isDriftingLootVariant(pending.pendingDriftingLootVariant)) {
+      this.rejectMissingDriftingLootVariant();
+      return;
+    }
+
+    this.activeDriftingLootVariant = pending.pendingDriftingLootVariant;
+    this.eventPresentation = 'using';
+    this.setBusy(true);
+    await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.eventPresentation = 'resolving';
+    const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
+    if (outcome === undefined || !this.isContinuationActive(generation)) return;
+    if (!outcome.accepted) {
+      this.ui.showFeedback?.(outcome);
+      this.eventPresentation = 'choosing';
+      this.restoreEventSelection();
+      this.setBusy(false);
+      return;
+    }
+
+    this.renderSnapshot(false, false);
+    this.eventEligibility.clear();
+    this.world.setEventSelectedItem?.(null);
+    this.world.setEventEligibleItems?.(null);
+    this.ui.clearEventPresentation?.();
+
+    if (choiceId === 'retrieve') {
+      if (outcome.rewardSummary === undefined) {
+        const feedback: ActionOutcome = {
+          accepted: false,
+          code: 'drifting-loot-reward-missing',
+          message: 'The recovered salvage could not be identified.',
+          deltas: {},
+          cue: 'none',
+        };
+        this.ui.showFeedback?.(feedback);
+        this.finishDriftingLootPresentation();
+        return;
+      }
+      this.eventPresentation = 'retrieving';
+      await (this.world.retrieveDriftingLoot?.() ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      this.eventPresentation = 'result';
+      const view = formatDriftingLootResult(outcome.rewardSummary);
+      this.ui.showDriftingLootResult?.({
+        ...view,
+        target: this.world.projectDriftingLoot?.(
+          this.viewportWidth,
+          this.viewportHeight,
+        ) ?? null,
+      });
+      return;
+    }
+
+    this.eventPresentation = 'receding';
+    await (this.world.recedeDriftingLoot?.() ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    this.finishDriftingLootPresentation();
   }
 
   private async resolveEndure(generation: number): Promise<void> {
@@ -934,6 +1040,7 @@ export class SurvivalPhase implements GamePhase {
       ? await this.runDawn(generation)
       : this.renderSnapshot(false, false);
     if (!this.isContinuationActive(generation)) return;
+    if (eventState === 'nightEvent' && await this.revealDawnEvent(snapshot, generation)) return;
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
@@ -949,6 +1056,16 @@ export class SurvivalPhase implements GamePhase {
     if (dawn?.accepted) await (this.world.play?.(dawn.cue) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return this.session.snapshot();
     return this.renderSnapshot(false, false);
+  }
+
+  private async revealDawnEvent(
+    snapshot: SurvivalSnapshot,
+    generation: number,
+  ): Promise<boolean> {
+    if (snapshot.pendingEventId !== 'drifting-loot') return false;
+    this.ui.beginEventPresentation?.();
+    await this.runPendingEventReveal(snapshot, generation, true);
+    return this.isContinuationActive(generation);
   }
 
   private latestJournalDay(snapshot: SurvivalSnapshot): number {
@@ -1020,8 +1137,16 @@ export class SurvivalPhase implements GamePhase {
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
+    let driftingLootVariant: DriftingLootVariant | null = null;
+    if (event.id === 'drifting-loot') {
+      if (!isDriftingLootVariant(current.pendingDriftingLootVariant)) {
+        this.rejectMissingDriftingLootVariant();
+        return;
+      }
+      driftingLootVariant = current.pendingDriftingLootVariant;
+    }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
-    this.world.stageEvent?.(event.id);
+    this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
@@ -1109,11 +1234,62 @@ export class SurvivalPhase implements GamePhase {
   private clearEventPresentation(): void {
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
+    this.activeDriftingLootVariant = null;
+    this.world.setEventSelectedItem?.(null);
+    this.world.setEventEligibleItems?.(null);
+    this.world.clearEvent?.();
+    this.ui.clearEventPresentation?.();
+    this.ui.hideDriftingLootResult?.();
+    this.setAutomaticWeather(null);
+  }
+
+  private finishDriftingLootPresentation(): void {
+    if (
+      this.activeDriftingLootVariant === null
+      || (this.eventPresentation !== 'result' && this.eventPresentation !== 'receding'
+        && this.eventPresentation !== 'resolving')
+      || !this.isContinuationActive()
+    ) return;
+    this.eventPresentation = 'idle';
+    this.ui.hideDriftingLootResult?.();
+    this.eventEligibility.clear();
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(null);
     this.world.clearEvent?.();
     this.ui.clearEventPresentation?.();
     this.setAutomaticWeather(null);
+    this.activeDriftingLootVariant = null;
+    this.renderSnapshot(false, false);
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
+  }
+
+  private continueDriftingLootResult(): void {
+    if (this.eventPresentation !== 'result' || !this.isContinuationActive()) return;
+    this.finishDriftingLootPresentation();
+  }
+
+  private missingDriftingLootVariantOutcome(): ActionOutcome {
+    return {
+      accepted: false,
+      code: 'drifting-loot-variant-missing',
+      message: 'The drifting loot could not be staged.',
+      deltas: {},
+      cue: 'none',
+    };
+  }
+
+  private rejectMissingDriftingLootVariant(): void {
+    this.eventEligibility.clear();
+    this.eventPresentation = 'idle';
+    this.activeDriftingLootVariant = null;
+    this.world.setEventSelectedItem?.(null);
+    this.world.setEventEligibleItems?.(null);
+    this.world.clearEvent?.();
+    this.ui.clearEventPresentation?.();
+    this.ui.hideDriftingLootResult?.();
+    this.setAutomaticWeather(null);
+    this.ui.showFeedback?.(this.missingDriftingLootVariantOutcome());
   }
 
   private setAutomaticWeather(id: PresentationWeatherId | null): void {
