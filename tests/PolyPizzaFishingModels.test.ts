@@ -28,7 +28,11 @@ describe('Poly Pizza fishing models', () => {
   it('pins each selected source once and excludes non-matching submissions', () => {
     expect(POLY_PIZZA_FISHING_MODEL_IDS).toEqual(EXPECTED_IDS);
     expect(FISHING_MODEL_CATCH_IDS).toEqual(EXPECTED_IDS);
-    expect(FISHING_CATCHES.map(({ id }) => id)).toEqual(EXPECTED_IDS);
+    expect(
+      FISHING_CATCHES
+        .filter(({ presentation }) => presentation.kind === 'fishing')
+        .map(({ id }) => id),
+    ).toEqual(EXPECTED_IDS);
 
     const publicIds = Object.values(POLY_PIZZA_FISHING_MODEL_SOURCES)
       .map(({ publicId }) => publicId);
@@ -54,8 +58,14 @@ describe('Poly Pizza fishing models', () => {
 
   it('matches runtime scale to existing food and catch size', () => {
     const catalog = new Map(FISHING_CATCHES.map((entry) => [entry.id, entry]));
-    expect(catalog.get('tuna')).toMatchObject({ food: 2, size: 'large' });
-    expect(catalog.get('squid')).toMatchObject({ food: 2, size: 'large' });
+    expect(catalog.get('tuna')).toMatchObject({
+      reward: { kind: 'food', amount: 2 },
+      size: 'large',
+    });
+    expect(catalog.get('squid')).toMatchObject({
+      reward: { kind: 'food', amount: 2 },
+      size: 'large',
+    });
     expect(FISHING_CATCH_MODEL_SPECS.tuna.targetLength)
       .toBeGreaterThan(FISHING_CATCH_MODEL_SPECS.cod.targetLength);
     expect(FISHING_CATCH_MODEL_SPECS.squid.targetLength)
