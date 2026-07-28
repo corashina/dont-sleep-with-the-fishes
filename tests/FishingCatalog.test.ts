@@ -64,7 +64,79 @@ describe('fishing utility catalog', () => {
     const invalid = [{
       ...FISHING_CATCHES.find(({ id }) => id === 'energyBar')!,
       reward: { kind: 'item', itemId: 'energyBar', condition: 'broken', unique: true } as const,
+      presentation: { kind: 'item', itemId: 'energyBar', condition: 'broken' } as const,
     }];
     expect(() => validateCatalog(invalid)).toThrow(/energyBar.*breakable/i);
+  });
+
+  it.each([
+    {
+      name: 'fish without a food reward',
+      sourceId: 'cod',
+      patch: { reward: { kind: 'none' } },
+      error: /cod.*fish.*food/i,
+    },
+    {
+      name: 'utility with a food reward',
+      sourceId: 'energyBar',
+      patch: { reward: { kind: 'food', amount: 1 } },
+      error: /energyBar.*utility.*reward/i,
+    },
+    {
+      name: 'fish with utility size',
+      sourceId: 'cod',
+      patch: { size: 'utility' },
+      error: /cod.*fish.*size/i,
+    },
+    {
+      name: 'utility with fishing presentation',
+      sourceId: 'energyBar',
+      patch: {
+        presentation: FISHING_CATCHES.find(({ id }) => id === 'cod')!.presentation,
+      },
+      error: /energyBar.*utility.*presentation/i,
+    },
+    {
+      name: 'mismatched item IDs',
+      sourceId: 'energyBar',
+      patch: {
+        presentation: { kind: 'item', itemId: 'compass', condition: 'usable' },
+      },
+      error: /energyBar.*item IDs.*match/i,
+    },
+    {
+      name: 'mismatched item conditions',
+      sourceId: 'brokenCompass',
+      patch: {
+        presentation: { kind: 'item', itemId: 'compass', condition: 'usable' },
+      },
+      error: /brokenCompass.*conditions.*match/i,
+    },
+    {
+      name: 'unknown usable reward item',
+      sourceId: 'energyBar',
+      patch: {
+        reward: {
+          kind: 'item', itemId: 'unknownItem', condition: 'usable', unique: true,
+        },
+      },
+      error: /energyBar.*unknown.*reward item.*unknownItem/i,
+    },
+    {
+      name: 'unknown usable presentation item',
+      sourceId: 'bait',
+      patch: {
+        presentation: {
+          kind: 'item', itemId: 'unknownItem', condition: 'usable',
+        },
+      },
+      error: /bait.*unknown.*presentation item.*unknownItem/i,
+    },
+  ])('rejects $name', ({ sourceId, patch, error }) => {
+    const source = FISHING_CATCHES.find(({ id }) => id === sourceId)!;
+    const invalid = [{ ...source, ...patch }];
+    expect(() => validateCatalog(
+      invalid as unknown as Parameters<typeof validateCatalog>[0],
+    )).toThrow(error);
   });
 });
