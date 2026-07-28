@@ -1,3 +1,4 @@
+import type { EventTestOption } from '../app/EventTest';
 import type { ItemAmbientOcclusionMode } from '../rendering/ItemAmbientOcclusion';
 import {
   formatPostProcessingValue,
@@ -33,6 +34,11 @@ export interface WeatherControls {
   setWeather(id: PresentationWeatherId): void;
 }
 
+export interface EventTestControls {
+  readonly options: readonly EventTestOption[];
+  enterEvent(id: string): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -59,6 +65,7 @@ export class PostProcessingConsole {
       null,
     ),
     private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
+    private readonly eventTestControls?: EventTestControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -115,6 +122,9 @@ export class PostProcessingConsole {
         </header>
         ${physicsControl}
         <section class="post-processing-console__section" data-visual-quality-control></section>
+        ${eventTestControls === undefined
+          ? ''
+          : '<section class="post-processing-console__section" data-event-test-control></section>'}
         <section class="post-processing-console__section">
           <strong>WEATHER</strong>
           <label class="post-processing-console__select">
@@ -149,6 +159,7 @@ export class PostProcessingConsole {
     this.requireElement('[data-visual-quality-control]').append(
       this.visualQualityControl.element,
     );
+    if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
     this.weatherSource = this.requireElement('[data-weather-source]');
     this.weatherSelect.value = weatherControls.selected;
@@ -215,6 +226,40 @@ export class PostProcessingConsole {
     }
   }
 
+  private buildEventTestControl(controls: EventTestControls): void {
+    const host = this.requireElement('[data-event-test-control]');
+    const heading = document.createElement('strong');
+    heading.textContent = 'EVENT TEST';
+
+    const control = document.createElement('div');
+    control.className = 'post-processing-console__event-test';
+    const select = document.createElement('select');
+    select.ariaLabel = 'Event test scene';
+    select.dataset.eventTestSelect = '';
+    for (const phase of ['day', 'night'] as const) {
+      const options = controls.options.filter((option) => option.phase === phase);
+      if (options.length === 0) continue;
+      const group = document.createElement('optgroup');
+      group.label = phase.toUpperCase();
+      for (const option of options) {
+        const element = document.createElement('option');
+        element.value = option.id;
+        element.textContent = option.title;
+        group.append(element);
+      }
+      select.append(group);
+    }
+    const enter = document.createElement('button');
+    enter.type = 'button';
+    enter.dataset.eventTestEnter = '';
+    enter.textContent = 'ENTER EVENT';
+    control.append(select, enter);
+
+    const note = document.createElement('small');
+    note.textContent = 'Starts a fresh survival run with every item usable.';
+    host.append(heading, control, note);
+  }
+
   private setOpen(open: boolean): void {
     if (this.disposed) return;
     if (this.panel.hidden === !open) return;
@@ -228,6 +273,18 @@ export class PostProcessingConsole {
 
   private readonly handleClick = (event: Event): void => {
     const target = event.target as Element | null;
+    if (target?.closest('[data-event-test-enter]')) {
+      const select = this.element.querySelector<HTMLSelectElement>('[data-event-test-select]');
+      const id = select?.value;
+      if (
+        id === undefined
+        || this.eventTestControls === undefined
+        || !this.eventTestControls.options.some((option) => option.id === id)
+      ) return;
+      this.setOpen(false);
+      this.eventTestControls.enterEvent(id);
+      return;
+    }
     if (target?.closest('[data-post-processing-close]')) {
       this.setOpen(false);
     }
