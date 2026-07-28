@@ -10,6 +10,7 @@ import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { SurvivalInventorySnapshot, SurvivalItemState, SurvivalSnapshot } from '../src/survival/survivalTypes';
 import type { FishingResultView, FishingUiState, SurvivalUI } from '../src/ui/SurvivalUI';
+import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { sequenceRandom } from './helpers/random';
 
 function inventory(
@@ -1154,6 +1155,167 @@ describe('SurvivalPhase orchestration', () => {
       'begin-event', 'nightfall', 'cover', 'stage', 'caption',
       'reveal-tableau', 'uncover', 'selection',
     ]);
+  });
+
+  it.each([
+    ['shower-night', 'rain'],
+    ['windy-night', 'wind'],
+    ['thunderstorm', 'thunderstorm'],
+    ['restless-waves', 'waves'],
+    ['man-in-the-fog', 'fog'],
+  ] as const)(
+    'applies %s event weather before staging and retains it until central cleanup',
+    async (eventId, expectedWeather) => {
+      const event = SURVIVAL_EVENTS.find(({ id }) => id === eventId)!;
+      let current = snapshot({
+        state: event.phase === 'day' ? 'dayEvent' : 'nightEvent',
+        pendingEventId: event.id,
+      });
+      const calls: string[] = [];
+      const holdOutcome = deferred();
+      let phase!: SurvivalPhase;
+      const setPresentationWeather = vi.fn((id: PresentationWeatherId) => {
+        calls.push(`weather:${id}`);
+      });
+      phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent: vi.fn(() => {
+            current = snapshot({
+              state: event.phase === 'day' ? 'day' : 'nightEvent',
+              pendingEventId: null,
+            });
+            return accepted({ code: 'event-resolved', cue: 'impact' });
+          }),
+          beginDawn: vi.fn(() => {
+            current = snapshot({ state: 'day', pendingEventId: null });
+            return accepted({ code: 'dawn', cue: 'dawn' });
+          }),
+        },
+        world: {
+          setPresentationWeather,
+          stageEvent: vi.fn(() => {
+            calls.push(`stage:${phase.getPresentationWeather()}`);
+          }),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          play: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          clearEvent: vi.fn(() => calls.push(`clear:${phase.getPresentationWeather()}`)),
+          dispose: vi.fn(),
+        },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => {
+            calls.push(`reveal:${phase.getPresentationWeather()}`);
+            return Promise.resolve();
+          }),
+          setEventSelection: vi.fn(() => {
+            calls.push(`selection:${phase.getPresentationWeather()}`);
+          }),
+          showFeedback: vi.fn(),
+          holdEventOutcome: vi.fn(() => {
+            calls.push(`outcome:${phase.getPresentationWeather()}`);
+            return holdOutcome.promise;
+          }),
+          setBusy: vi.fn(),
+          render: vi.fn(),
+          setJournalUnread: vi.fn(),
+          clearEventPresentation: vi.fn(),
+          restoreCommandFocus: vi.fn(),
+          dispose: vi.fn(),
+        },
+      });
+
+      phase.start();
+      await flushPromises();
+
+      expect(calls.indexOf(`weather:${expectedWeather}`))
+        .toBeLessThan(calls.indexOf(`stage:${expectedWeather}`));
+      expect(calls).toContain(`reveal:${expectedWeather}`);
+      expect(calls).toContain(`selection:${expectedWeather}`);
+      expect(phase.getPresentationWeather()).toBe(expectedWeather);
+
+      phase.handleEndure();
+      await flushPromises();
+      expect(calls).toContain(`outcome:${expectedWeather}`);
+      expect(phase.getPresentationWeather()).toBe(expectedWeather);
+
+      holdOutcome.resolve();
+      await flushPromises();
+      expect(calls).toContain(`clear:${expectedWeather}`);
+      expect(phase.getPresentationWeather()).toBe('calm');
+      expect(setPresentationWeather).toHaveBeenLastCalledWith('calm');
+      expect(setPresentationWeather.mock.calls.map(([id]) => id))
+        .not.toEqual(expect.arrayContaining(['overcast', 'squall']));
+      phase.dispose();
+    },
+  );
+
+  it('uses Calm for unrelated events', async () => {
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dayEvent',
+          pendingEventId: 'drifting-bottle',
+        })),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        setPresentationWeather: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(phase.getPresentationWeather()).toBe('calm');
+    phase.dispose();
+  });
+
+  it('keeps forced weather above automatic weather and restores the active event weather', async () => {
+    let phase!: SurvivalPhase;
+    const calls: string[] = [];
+    const setPresentationWeather = vi.fn((id: PresentationWeatherId) => {
+      calls.push(`weather:${id}`);
+    });
+    phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'thunderstorm',
+        })),
+      },
+      world: {
+        setPresentationWeather,
+        stageEvent: vi.fn(() => calls.push(`stage:${phase.getPresentationWeather()}`)),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.setWeatherOverride('fog');
+    phase.start();
+    await flushPromises();
+
+    expect(calls).toContain('stage:fog');
+    expect(phase.getPresentationWeather()).toBe('fog');
+    phase.setWeatherOverride(null);
+    expect(phase.getPresentationWeather()).toBe('thunderstorm');
+    expect(setPresentationWeather).toHaveBeenLastCalledWith('thunderstorm');
+    phase.dispose();
   });
 
   it('restores contextual choices when session resolution rejects the choice', async () => {

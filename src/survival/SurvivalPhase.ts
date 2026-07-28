@@ -18,6 +18,11 @@ import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { ShipAssets } from '../world/ShipAssets';
+import {
+  presentationWeatherForEvent,
+  resolvePresentationWeather,
+  type PresentationWeatherId,
+} from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
 import { survivalEventById } from './events';
 import type {
@@ -147,6 +152,9 @@ export class SurvivalPhase implements GamePhase {
   private fishingSettlementInProgress = false;
   private eventPresentation: EventPresentationState = 'idle';
   private eventEligibility = new Map<ItemInstanceId, EventResponseId>();
+  private automaticWeather: PresentationWeatherId | null = null;
+  private forcedWeather: PresentationWeatherId | null = null;
+  private effectivePresentationWeather: PresentationWeatherId = 'calm';
   private lifecycleGeneration = 0;
 
   constructor(
@@ -313,6 +321,15 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
     this.ui.setPaused?.(paused);
+  }
+
+  setWeatherOverride(id: PresentationWeatherId | null): void {
+    this.forcedWeather = id;
+    this.syncPresentationWeather();
+  }
+
+  getPresentationWeather(): PresentationWeatherId {
+    return this.effectivePresentationWeather;
   }
 
   requestRestart(): void {
@@ -931,6 +948,7 @@ export class SurvivalPhase implements GamePhase {
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
+    this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     this.world.stageEvent?.(event.id);
     this.eventPresentation = 'revealing';
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
@@ -1023,6 +1041,19 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventEligibleItems?.(null);
     this.world.clearEvent?.();
     this.ui.clearEventPresentation?.();
+    this.setAutomaticWeather(null);
+  }
+
+  private setAutomaticWeather(id: PresentationWeatherId | null): void {
+    this.automaticWeather = id;
+    this.syncPresentationWeather();
+  }
+
+  private syncPresentationWeather(): void {
+    const resolved = resolvePresentationWeather(this.automaticWeather, this.forcedWeather);
+    if (resolved.id === this.effectivePresentationWeather) return;
+    this.effectivePresentationWeather = resolved.id;
+    this.world.setPresentationWeather?.(resolved.id);
   }
 
   private presentTerminalOnce(snapshot: SurvivalSnapshot): void {
