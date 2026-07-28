@@ -11,6 +11,10 @@ import {
   LIFEBOAT_EQUIPMENT_IDS,
   LIFEBOAT_EQUIPMENT_MODEL_SPECS,
 } from '../../src/world/lifeboatEquipmentManifest';
+import {
+  PRACTICAL_LIGHT_MODEL_IDS,
+  PRACTICAL_LIGHT_MODEL_SPECS,
+} from '../../src/world/practicalLightModelManifest';
 
 export interface NormalizedPropBoundsFixture {
   readonly min: readonly [number, number, number];
@@ -26,6 +30,9 @@ class CheckedInItemModelLoader implements ItemModelLoader {
     const id = ITEM_IDS.find((itemId) => ITEM_MODEL_SPECS[itemId].url === url)
       ?? LIFEBOAT_EQUIPMENT_IDS.find(
         (equipmentId) => LIFEBOAT_EQUIPMENT_MODEL_SPECS[equipmentId].url === url,
+      )
+      ?? PRACTICAL_LIGHT_MODEL_IDS.find(
+        (lightId) => PRACTICAL_LIGHT_MODEL_SPECS[lightId].url === url,
       );
     if (!id) throw new Error(`Unknown checked-in runtime model URL: ${url}`);
     const bytes = await readFile(resolve('src', 'assets', 'models', 'items', `${id}.glb`));

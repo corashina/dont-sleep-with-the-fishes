@@ -46,6 +46,8 @@ describe('animated prop presentation', () => {
       instanceId: 'captainWhiskers-2',
       type: 'captainWhiskers',
     });
+    const parent = new Group();
+    parent.add(first.root, sameId.root, other.root);
 
     expect(first.animation!.time).toBe(sameId.animation!.time);
     expect(other.animation!.time).not.toBe(first.animation!.time);
