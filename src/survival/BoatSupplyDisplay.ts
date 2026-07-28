@@ -207,6 +207,7 @@ function createConditionBindings(
 
 export class BoatSupplyDisplay {
   private readonly recordsById = new Map<BoatSupplyGroupId, MutableRecord>();
+  private readonly eventMotionRecords: MutableRecord[] = [];
   private readonly copiesById = new Map<BoatSupplyGroupId, CopyBinding[]>();
   private readonly instancesByType = new Map<ItemId, readonly ItemInstance[]>();
   private readonly groupByInstanceId = new Map<ItemInstanceId, BoatSupplyGroupId>();
@@ -297,7 +298,7 @@ export class BoatSupplyDisplay {
         });
       }
       this.copiesById.set(groupId, copies);
-      this.recordsById.set(groupId, {
+      const record: MutableRecord = {
         groupId,
         root,
         quantity: 0,
@@ -305,7 +306,9 @@ export class BoatSupplyDisplay {
         brokenQuantity: 0,
         visibleCopies: 0,
         backingInstanceId: null,
-      });
+      };
+      this.recordsById.set(groupId, record);
+      this.eventMotionRecords.push(record);
     }
   }
 
@@ -564,11 +567,12 @@ export class BoatSupplyDisplay {
   }
 
   private applyEventMotion(): void {
-    let index = 0;
     const selectedGroupId = this.eventItemId === null
       ? undefined
       : this.groupByInstanceId.get(this.eventItemId);
-    for (const [groupId, record] of this.recordsById) {
+    for (let index = 0; index < this.eventMotionRecords.length; index += 1) {
+      const record = this.eventMotionRecords[index]!;
+      const groupId = record.groupId;
       const root = record.root;
       root.position.copy(this.basePositionById.get(groupId)!);
       root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
@@ -585,12 +589,13 @@ export class BoatSupplyDisplay {
         root.rotateZ(pose.roll);
         root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
       }
-      index += 1;
     }
   }
 
   private restoreEventMotionBase(): void {
-    for (const [groupId, record] of this.recordsById) {
+    for (let index = 0; index < this.eventMotionRecords.length; index += 1) {
+      const record = this.eventMotionRecords[index]!;
+      const groupId = record.groupId;
       record.root.position.copy(this.basePositionById.get(groupId)!);
       record.root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
       record.root.scale.set(1, 1, 1);
