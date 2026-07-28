@@ -40,6 +40,7 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -809,19 +810,22 @@ export class SurvivalPhase implements GamePhase {
     instanceId: ItemInstanceId,
     generation: number,
   ): Promise<void> {
+    const pending = this.session.snapshot();
+    const eventId = pending.pendingEventId;
+    if (eventId === null) return;
+    const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
     this.ui.setEventUsing?.(instanceId);
     this.world.setEventSelectedItem?.(instanceId);
-    await (this.world.playEventItemUse?.(instanceId) ?? Promise.resolve());
+    await (
+      this.world.playEventItemUse?.(eventId, choiceId, instanceId)
+      ?? Promise.resolve()
+    );
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
-    const pending = this.session.snapshot();
-    const eventState = pending.state;
-    const eventId = pending.pendingEventId;
-    if (eventId === null) return;
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
-    if (outcome === undefined) return;
+    if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
@@ -830,7 +834,15 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation);
+    const resolved = this.session.snapshot();
+    const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      { choiceId, instanceId, condition },
+    );
   }
 
   private async resolveContextualChoice(
@@ -855,7 +867,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, pending.state, generation);
+    await this.runEventResolution(eventId, outcome, pending.state, generation, null);
   }
 
   private async resolveEndure(generation: number): Promise<void> {
@@ -873,7 +885,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation);
+    await this.runEventResolution(eventId, outcome, eventState, generation, null);
   }
 
   private async runEventResolution(
@@ -881,11 +893,13 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
+    physicalResponse: EventPhysicalResponsePresentation | null = null,
   ): Promise<void> {
     this.setBusy(true);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(eventId, outcome) ?? Promise.resolve(),
+      this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
+        ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
     const terminal = this.session.snapshot();
