@@ -125,6 +125,34 @@ describe('DriftingLootPresentation', () => {
     rig.furniture.dispose();
   });
 
+  it('exposes only the floating variant as a physical interaction target', async () => {
+    const rig = createRig();
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
+    camera.position.set(0, 1.2, 5);
+    camera.lookAt(0, 0.5, 0);
+    rig.scene.add(camera);
+    rig.presentation.stage('crate');
+    rig.presentation.update(1, 1 / 60);
+    rig.scene.updateMatrixWorld(true);
+
+    expect(rig.presentation.projectInteraction(camera, 800, 600)).toEqual({
+      variant: 'crate',
+      bounds: expect.objectContaining({ visible: true }),
+    });
+    expect(rig.presentation.interactionRoot()).toBe(
+      rig.presentation.root.getObjectByName('drifting-loot:crate'),
+    );
+
+    const retrieve = rig.presentation.retrieve();
+    expect(rig.presentation.projectInteraction(camera, 800, 600)).toBeNull();
+    expect(rig.presentation.interactionRoot()).toBeNull();
+    rig.presentation.update(2, 1.1);
+    await retrieve;
+    expect(rig.presentation.projectInteraction(camera, 800, 600)).toBeNull();
+    rig.presentation.dispose();
+    rig.furniture.dispose();
+  });
+
   it('recedes for 0.8 seconds and hides the active root', async () => {
     const rig = createRig();
     rig.presentation.stage('crate');

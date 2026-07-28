@@ -329,8 +329,26 @@ describe('BoatWorld helpers', () => {
     world.update(1, 0.9);
     await reveal;
     expect(world.projectDriftingLoot(800, 600)).toBeNull();
+    const interaction = world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'drifting-loot');
+    expect(interaction).toEqual(expect.objectContaining({
+      id: 'drifting-loot',
+      label: 'CRATE',
+      description: 'Floating salvage within reach.',
+      eventChoiceId: 'retrieve',
+      visible: true,
+    }));
+    expect(interaction?.hitArea?.width).toBeGreaterThanOrEqual(64);
+    expect(interaction?.hitArea?.height).toBeGreaterThanOrEqual(64);
+
+    const crate = world.scene.getObjectByName('drifting-loot:crate')!;
+    world.setHighlightedItem('drifting-loot');
+    expect(crate.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     const retrieve = world.retrieveDriftingLoot();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'drifting-loot')).toBeUndefined();
+    expect(crate.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     world.update(2, 1.1);
     await retrieve;
     expect(world.projectDriftingLoot(800, 600)).not.toBeNull();

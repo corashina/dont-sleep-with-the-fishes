@@ -1204,6 +1204,7 @@ export class SurvivalPhase implements GamePhase {
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
     this.eventEligibility = this.eventEligibilityFor(event, revealed);
     this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
+    this.syncPresentation(revealed);
     this.ui.setEventSelection?.(
       this.eventEligibility,
       this.contextualChoicesFor(event, revealed),
@@ -1251,6 +1252,14 @@ export class SurvivalPhase implements GamePhase {
                   + `you have ${snapshot[resource]}.`
                 ))
                 .join(' '),
+          ...(event.id === 'drifting-loot' && choice.id === 'retrieve'
+            ? {
+                anchorId: 'drifting-loot',
+                energyCost: choice.requirements?.find(
+                  ({ resource }) => resource === 'energy',
+                )?.minimum ?? 0,
+              }
+            : {}),
         };
       });
   }

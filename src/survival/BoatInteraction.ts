@@ -5,7 +5,7 @@ import {
   projectScreenBounds,
   type ProjectedScreenBounds,
 } from '../rendering/projectScreenBounds';
-import type { DayActionId } from './survivalTypes';
+import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
@@ -27,6 +27,9 @@ export type BoatToolId = 'repairTools' | 'fishingRod' | 'lantern';
 
 export interface BoatInteractionAnchor {
   readonly id: string;
+  readonly label?: string;
+  readonly description?: string;
+  readonly eventChoiceId?: EventResponseId;
   readonly itemType: ItemId | null;
   readonly supplyGroupId?: BoatSupplyGroupId;
   readonly toolId: BoatToolId | null;
