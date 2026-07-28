@@ -498,6 +498,30 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('outlines the repair toolbox and lantern as physical interaction targets', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const repairTools = world.scene.getObjectByName('repair-toolbox')!;
+    const lantern = world.scene.getObjectByName('survival-lantern')!;
+
+    world.setHighlightedItem('repair-tools');
+    expect(repairTools.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+
+    world.setHighlightedItem('end-day-lantern');
+    expect(repairTools.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setHighlightedItem(null);
+    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('continues owned geometry, material, and texture cleanup and rethrows the first error', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(

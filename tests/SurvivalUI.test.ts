@@ -481,7 +481,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
   });
 
-  it('publishes item hover and focus through the nonmodal event presentation', () => {
+  it('publishes item, repair-toolbox, and lantern hover and focus', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -490,10 +490,21 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     const item = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
     const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
+    const lantern = mount.querySelector<HTMLButtonElement>('[data-anchor-id="end-day-lantern"]')!;
 
     repair.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('repair-tools');
     repair.focus();
-    expect(highlight).not.toHaveBeenCalled();
+    repair.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('repair-tools');
+    repair.blur();
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
+    lantern.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('end-day-lantern');
+    lantern.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith(null);
+
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     expect(highlight).toHaveBeenLastCalledWith('bucket-test');
     item.focus();
@@ -518,7 +529,7 @@ describe('SurvivalUI', () => {
     {
       state: 'tool',
       anchor: {
-        id: 'bucket-test', itemType: null, toolId: 'repairTools' as const, action: 'repair' as const, remainingUses: null,
+        id: 'bucket-test', itemType: null, toolId: 'fishingRod' as const, action: 'fish' as const, remainingUses: null,
         x: 140, y: 180, visible: true, depleted: false,
       },
     },
