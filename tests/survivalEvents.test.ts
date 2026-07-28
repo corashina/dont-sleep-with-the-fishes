@@ -258,6 +258,7 @@ describe('survival events', () => {
       cooldownDays: 0,
     });
     const retrieve = loot?.choices.find(({ id }) => id === 'retrieve');
+    expect(retrieve?.label).toBe('Retrieve It — 3 Energy');
     expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
     expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
   });
