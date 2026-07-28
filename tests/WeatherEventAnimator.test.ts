@@ -178,6 +178,31 @@ describe('WeatherEventAnimator', () => {
     safe.dispose();
   });
 
+  it('does not animate a null physical response even when Sleep damages the hull', async () => {
+    const scene = fixture();
+    scene.cameraRig.position.set(0.2, -0.1, 0.35);
+    scene.cameraRig.rotation.set(0.04, -0.06, 0.02);
+    const basePosition = scene.cameraRig.position.toArray();
+    const baseRotation = scene.cameraRig.rotation.toArray().slice(0, 3);
+    const reaction = scene.animator.react(
+      'thunderstorm',
+      outcome({ hull: -20 }),
+      null,
+    );
+    let settled = false;
+    void reaction.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(true);
+    scene.animator.update(1, 0.42);
+    expect(scene.cameraRig.position.toArray()).toEqual(basePosition);
+    expect(scene.cameraRig.rotation.toArray().slice(0, 3)).toEqual(baseRotation);
+    expect(scene.animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible).toBe(false);
+    scene.dispose();
+  });
+
   it('clears active work exactly once and restores all borrowed state', async () => {
     const scene = fixture();
     const clearMotion = vi.spyOn(scene.supplyDisplay, 'clearEventMotion');

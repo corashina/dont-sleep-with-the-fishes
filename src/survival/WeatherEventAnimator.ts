@@ -236,7 +236,6 @@ export class WeatherEventAnimator {
   private readonly anchorChain: Group;
   private readonly rainSplash: Group;
   private active: ActiveWeatherAnimation | null = null;
-  private stagedEventId: string | null = null;
   private disposed = false;
 
   constructor(
@@ -291,13 +290,12 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
   }
 
-  stage(eventId: string): void {
+  stage(_eventId: string): void {
     if (this.disposed) return;
     this.cancelActive();
     this.rememberCameraBase();
     this.supplyDisplay.clearEventMotion();
     this.hideTransientEffects();
-    this.stagedEventId = weatherRevealDuration(eventId) === null ? null : eventId;
   }
 
   reveal(eventId: string): Promise<void> {
@@ -308,7 +306,6 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventMotion();
     this.hideTransientEffects();
-    this.stagedEventId = eventId;
     return new Promise((resolve) => {
       this.active = {
         kind: 'reveal',
@@ -355,7 +352,11 @@ export class WeatherEventAnimator {
     outcome: ActionOutcome,
     response: EventPhysicalResponsePresentation | null,
   ): Promise<void> {
-    if (this.disposed || weatherRevealDuration(eventId) === null) {
+    if (
+      this.disposed
+      || response === null
+      || weatherRevealDuration(eventId) === null
+    ) {
       return Promise.resolve();
     }
     this.cancelActive();
@@ -406,7 +407,6 @@ export class WeatherEventAnimator {
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();
-    this.stagedEventId = null;
     this.restoreBorrowed();
     this.hideTransientEffects();
   }
