@@ -8,6 +8,7 @@ import type {
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import {
   PostProcessingConsole,
+  type EventTestControls,
   type WeatherControls,
 } from '../src/ui/PostProcessingConsole';
 
@@ -194,5 +195,53 @@ describe('PostProcessingConsole', () => {
     weather.value = 'wind';
     weather.dispatchEvent(new Event('change', { bubbles: true }));
     expect(setWeather).toHaveBeenCalledOnce();
+  });
+
+  it('groups event test scenes and enters only after explicit activation', () => {
+    const controls: PostProcessingControls = {
+      getState: vi.fn(() => state()),
+      setAmbientOcclusionMode: vi.fn(),
+      setNumeric: vi.fn(),
+    };
+    const enterEvent = vi.fn();
+    const eventTestControls: EventTestControls = {
+      options: [
+        { id: 'dangerous-waters', title: 'Dangerous Waters', phase: 'day' },
+        { id: 'shower-night', title: 'Shower Night', phase: 'night' },
+      ],
+      enterEvent,
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const consoleMenu = new PostProcessingConsole(
+      mount,
+      controls,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      eventTestControls,
+    );
+    const select = mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!;
+    const panel = mount.querySelector<HTMLElement>('[data-post-processing-panel]')!;
+
+    expect(Array.from(select.querySelectorAll('optgroup'), (group) => group.label))
+      .toEqual(['DAY', 'NIGHT']);
+    expect(Array.from(select.options, (option) => [option.value, option.text]))
+      .toEqual([
+        ['dangerous-waters', 'Dangerous Waters'],
+        ['shower-night', 'Shower Night'],
+      ]);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    select.value = 'shower-night';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(enterEvent).not.toHaveBeenCalled();
+
+    mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
+    expect(enterEvent).toHaveBeenCalledWith('shower-night');
+    expect(panel.hidden).toBe(true);
+
+    consoleMenu.dispose();
   });
 });
