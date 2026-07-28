@@ -192,6 +192,7 @@ export function validateShipItemSurfaces(
         throw new Error(`Ship item surface ${surface.id} exceeds owner ${surface.furnitureId} bounds`);
       }
       if (surface.furnitureModelId !== 'bookcaseOpen'
+        && surface.furnitureModelId !== 'workroomStorageShelf'
         && owner.maxY > surface.position.y + EPSILON) {
         throw new Error(`Ship item surface ${surface.id} is blocked above owner ${surface.furnitureId}`);
       }

@@ -53,16 +53,17 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 
 ## Runtime ship-furniture and deck-detail model ledger
 
-Six models come from [Kenney Furniture Kit 1.0](https://kenney.nl/assets/furniture-kit),
+Five models come from [Kenney Furniture Kit 1.0](https://kenney.nl/assets/furniture-kit),
 licensed [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 The verified archive SHA-256 is
 `E67652D0932CEE41683F74711C03D3E192A2AF9979EF8E6B237711F5482D46B0`;
 models are pruned, deduplicated, unpartitioned, and embedded without geometry scaling.
 
-The barrel and shelf come from Poly Pizza and are licensed
-[CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/). The crate and cargo
-box come from Poly Pizza under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-Their pinned source GLBs are pruned, deduplicated, unpartitioned, renamed, and embedded.
+The remaining room and cargo models come from Poly Pizza under
+[CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) or
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), as identified
+by their source credits. Their pinned source GLBs are pruned, deduplicated,
+unpartitioned, renamed, and embedded.
 The shelf is instanced once per open storage unit. The crate is fitted to the
 existing cargo colliders, while three differently rotated and scaled boxes
 provide secondary deck clutter.
@@ -78,13 +79,36 @@ provide secondary deck clutter.
 | cargoCrate | `cargoCrate.glb` | [Crate / Quaternius](https://poly.pizza/m/NlXe0ZJGUd) | `poly-pizza:56f2385f-285a-4df8-a00f-6837a711f5cc` | 264 | 264 | 2026-07-26 |
 | cargoBox | `cargoBox.glb` | [Box / Kay Lousberg](https://poly.pizza/m/ykZ23x9d6p) | `poly-pizza:f54e45d1-81ed-4323-9e35-8acd46533702` | 32 | 32 | 2026-07-26 |
 | table | `table.glb` | Table / Kenney | `furniture-kit@1.0:Models/GLTF format/table.glb` | 120 | 120 | 2026-07-15 |
-| sideTableDrawers | `sideTableDrawers.glb` | Side table with drawers / Kenney | `furniture-kit@1.0:Models/GLTF format/sideTableDrawers.glb` | 238 | 238 | 2026-07-15 |
+| crewNightStand | `crewNightStand.glb` | [Night Stand / Quaternius](https://poly.pizza/m/9LI73c5uFA) | `poly-pizza:deb08e3b-cd54-4252-b5b2-53f86f1c1d04` | 184 | 184 | 2026-07-28 |
+| crewDesk | `crewDesk.glb` | [Desk / CreativeTrio](https://poly.pizza/m/YJyJam67hJ) | `poly-pizza:b8d0347a-c711-4eb4-8b8b-cda390d3840f` | 166 | 166 | 2026-07-28 |
+| crewCabinet | `crewCabinet.glb` | [Cabinet / CreativeTrio](https://poly.pizza/m/wOiMrnUuhe) | `poly-pizza:57d9a5e8-3130-42eb-b436-28e1586facc0` | 324 | 324 | 2026-07-28 |
+| crewCeilingLight | `crewCeilingLight.glb` | [Ceiling Light / Quaternius](https://poly.pizza/m/sRNcgQFbLB) | `poly-pizza:7f5240a6-e02a-4084-b899-8b84784cd76d` | 196 | 196 | 2026-07-28 |
+| crewWallPainting | `crewWallPainting.glb` | [Wall painting / Poly by Google](https://poly.pizza/m/3dycV-ViQH-) | `poly-pizza:4ef69f1e-f03d-4e04-904c-0037b875306b` | 100 | 100 | 2026-07-28 |
+| crewWallArt | `crewWallArt.glb` | [Wall Art 06 / Jarlan Perez](https://poly.pizza/m/1U5roiXQZAM) | `poly-pizza:bcefd659-a484-47b4-a385-d35cefd55804` | 70 | 70 | 2026-07-28 |
+| crewTable | `crewTable.glb` | [Table / Zsky](https://poly.pizza/m/dwmBkQTulc) | `poly-pizza:7a32e3e5-316e-479a-a6cc-d6aab490be50` | 220 | 220 | 2026-07-28 |
+| wheelhouseCorkboard | `wheelhouseCorkboard.glb` | [Wall Corkboard / CreativeTrio](https://poly.pizza/m/U8yQZ9l0HZ) | `poly-pizza:09cf2ec1-8b2c-4543-b773-962fba13aac5` | 218 | 218 | 2026-07-28 |
+| workroomCardboardBox | `workroomCardboardBox.glb` | [Cardboard Box / Nick Slough](https://poly.pizza/m/j2u0dWIebu) | `poly-pizza:12b9bc45-0581-474d-87ad-0869c28e69ac` | 144 | 144 | 2026-07-28 |
+| workroomStorageShelf | `workroomStorageShelf.glb` | [Storage Shelf / Jarlan Perez](https://poly.pizza/m/6gKdASmfB9U) | `poly-pizza:9badb54d-f687-45cb-a5cd-0dde270d76ab` | 96 | 96 | 2026-07-28 |
+| workroomPallet | `workroomPallet.glb` | [Pallet / Kenney](https://poly.pizza/m/J6bhnc2wFP) | `poly-pizza:40dc910f-3ee1-4dde-a692-41ec82a9ae1f` | 108 | 108 | 2026-07-28 |
 
 Pinned Poly Pizza source SHA-256 values: barrel
 `452B5BDC6C7A07B37B95D38D942ADB7CEB2B07B240AAFF93646A6AE3E4B535C7`;
 shelf `FDA303ACFD2B118ED163735E10D04E2DF7A6745552CA4A2BC57183D76D576B39`;
 crate `30604302C679A2A9A2C83A28CD54EC8A5664989EC32A75C1F78299B3ABFAD669`;
 box `4B6F7B2D17997F75192C706B28E2F894B6DFF691BCED17963470D2B2CEDDBFF9`.
+
+Room source SHA-256 values: night stand
+`1C08A98905EA18850FC91932FAE9976A556AA30A564F7C45845C2F4F1BC5289A`;
+desk `C3C85D0A0848030DF3E6A5AA810066FCD8329E719726D1DBEF14C9A33CEF9717`;
+cabinet `E5226312183A51C5027F6E6C2E46873C0B0A7B3C9B4FF334C02CB03954B1B944`;
+ceiling light `5A429947D77AB820605844864C4E4C3177407CAACB373BC47359CAFD45812DD4`;
+painting `A5657C57B3406EB340E002B0E25419E46EAC0EAA703F42D6819E61311747B19D`;
+wall art `7D1D99021EC630FA1E6174DF92F7CEA59887702D89CED823F7BDAF14A17082B2`;
+table `33B58D3359CDC343AEB663534CBACE19EEB5BFB21D7CF93E33D13F9C2E57236E`;
+corkboard `251EF29E18DFAFF8D5ACA202AE21BB8DDD6D4D6CD601CC2AA09D394CF41ACA05`;
+cardboard box `81982A2F0CF2D04CB60B5194897D9CB76E688E01DB5A7F8FA757E5B55679D7C2`;
+storage shelf `5AB0C13CC921F63C16F07C63AD4D29B5FDE0E8E7F150114D406728B12DA9C667`;
+pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
 
 ## Runtime fishing-catch model ledger
 

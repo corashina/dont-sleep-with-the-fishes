@@ -73,6 +73,9 @@ function normalizeTemplate(
     if (!(object instanceof Mesh)) return;
     meshCount += 1;
     triangles += geometryTriangles(modelId, object.geometry);
+    if (!object.geometry.getAttribute('normal')) {
+      object.geometry.computeVertexNormals();
+    }
     object.castShadow = true;
     object.receiveShadow = true;
   });
