@@ -909,6 +909,96 @@ describe('SurvivalUI', () => {
     );
   });
 
+  it('shows the salvage result beside the held prop and issues Continue once', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const continued = vi.fn();
+    ui.onDriftingLootContinue = continued;
+    const target = {
+      x: 420,
+      y: 280,
+      width: 96,
+      height: 72,
+      depth: 2,
+      visible: true,
+    };
+    ui.showDriftingLootResult({
+      caption: 'SALVAGE RECOVERED',
+      title: '+2 FOOD',
+      detail: '−3 ENERGY',
+      target,
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
+    expect(result.dataset.anchorState).toBe('projected');
+    const projectedX = result.style.getPropertyValue('--routine-x');
+    target.x = 20;
+    ui.setAnchors([]);
+    expect(result.style.getPropertyValue('--routine-x')).toBe(projectedX);
+    expect(mount.querySelector('[data-drifting-loot-result-caption]')?.textContent)
+      .toBe('SALVAGE RECOVERED');
+    expect(mount.querySelector('[data-drifting-loot-result-title]')?.textContent)
+      .toBe('+2 FOOD');
+    expect(mount.querySelector('[data-drifting-loot-result-detail]')?.textContent)
+      .toBe('−3 ENERGY');
+
+    const button = mount.querySelector<HTMLButtonElement>(
+      '[data-drifting-loot-result-continue]',
+    )!;
+    expect(document.activeElement).toBe(button);
+    button.click();
+    button.click();
+    expect(continued).toHaveBeenCalledOnce();
+  });
+
+  it('uses safe placement for unavailable salvage, repositions it, and cleans it up', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const continued = vi.fn();
+    ui.onDriftingLootContinue = continued;
+    ui.showDriftingLootResult({
+      caption: 'SALVAGE RECOVERED',
+      title: 'ENERGY BAR',
+      detail: '−3 ENERGY',
+      target: null,
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
+    const button = mount.querySelector<HTMLButtonElement>('[data-drifting-loot-result-continue]')!;
+    expect(result.dataset.anchorState).toBe('fallback');
+    expect(result.style.getPropertyValue('--routine-width')).toBe('360px');
+    const initialX = result.style.getPropertyValue('--routine-x');
+    ui.setAnchors([]);
+    expect(result.style.getPropertyValue('--routine-x')).toBe(initialX);
+    vi.spyOn(mount.querySelector<HTMLElement>('.survival-ui')!, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600, width: 800, height: 600,
+      toJSON: () => ({}),
+    });
+    window.dispatchEvent(new Event('resize'));
+    expect(result.style.getPropertyValue('--routine-x')).not.toBe(initialX);
+
+    ui.hideDriftingLootResult();
+    expect(result.classList).not.toContain('is-visible');
+    expect(result.hasAttribute('inert')).toBe(true);
+    expect(result.getAttribute('aria-hidden')).toBe('true');
+    button.click();
+    expect(continued).not.toHaveBeenCalled();
+
+    ui.showDriftingLootResult({
+      caption: 'SALVAGE RECOVERED',
+      title: '+1 FOOD',
+      detail: '−3 ENERGY',
+      target: { x: 90, y: 180, width: 40, height: 40, depth: 2, visible: false },
+    });
+    expect(result.dataset.anchorState).toBe('fallback');
+    ui.dispose();
+    expect(mount.querySelector('.survival-ui')).toBeNull();
+    button.click();
+    expect(continued).not.toHaveBeenCalled();
+  });
+
   it('keeps the fishing Back control wide, transparent, and above fishing input', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
