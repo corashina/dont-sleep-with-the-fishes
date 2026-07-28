@@ -11,6 +11,9 @@ export const FISHING_MODEL_CATCH_IDS = [
   'bass',
   'redSnapper',
   'clownfish',
+  'seaweed',
+  'boot',
+  'plasticBottle',
 ] as const satisfies readonly FishingCatchId[];
 
 export type FishingModelCatchId = typeof FISHING_MODEL_CATCH_IDS[number];
@@ -34,6 +37,9 @@ const modelUrls: Readonly<Record<FishingModelCatchId, string>> = {
   bass: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
   redSnapper: new URL('../assets/models/fishing/redSnapper.glb', import.meta.url).href,
   clownfish: new URL('../assets/models/fishing/clownfish.glb', import.meta.url).href,
+  seaweed: new URL('../assets/models/fishing/seaweed.glb', import.meta.url).href,
+  boot: new URL('../assets/models/fishing/boot.glb', import.meta.url).href,
+  plasticBottle: new URL('../assets/models/fishing/plasticBottle.glb', import.meta.url).href,
 };
 
 const presentation: Readonly<Record<
@@ -49,6 +55,9 @@ const presentation: Readonly<Record<
   bass: { targetLength: 1.05, rotation: QUARTER_TURN_Y },
   redSnapper: { targetLength: 0.95, rotation: QUARTER_TURN_Y },
   clownfish: { targetLength: 0.58, rotation: NO_ROTATION },
+  seaweed: { targetLength: 0.62, rotation: NO_ROTATION },
+  boot: { targetLength: 0.72, rotation: NO_ROTATION },
+  plasticBottle: { targetLength: 0.3, rotation: NO_ROTATION },
 };
 
 export const FISHING_CATCH_MODEL_SPECS: Readonly<Record<

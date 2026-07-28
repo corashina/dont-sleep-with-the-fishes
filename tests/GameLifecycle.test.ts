@@ -15,7 +15,6 @@ import { ScavengeSession } from '../src/game/ScavengeSession';
 import type { ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
-import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import {
   ScavengePhase,
@@ -23,7 +22,9 @@ import {
   TITLE_CAMERA_TARGET,
 } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
+import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
 import { testPhysicsRuntime } from './helpers/physics';
@@ -31,6 +32,17 @@ import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
 const physicsRuntime = await testPhysicsRuntime();
+
+if (typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  });
+}
 
 vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/world/ShipItemPlacement')>();
@@ -57,6 +69,25 @@ function gamePhase(): GamePhase {
     update: vi.fn(),
     resize: vi.fn(),
     render: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
+function postProcessingSceneRenderer(): SceneRenderer {
+  const postProcessingControls: PostProcessingControls = {
+    getState: vi.fn(() => ({
+      ambientOcclusionAvailable: true,
+      ambientOcclusionMode: 'composite' as const,
+      ambientOcclusionIntensity: 1,
+      ambientOcclusionRadius: 0.5,
+    })),
+    setAmbientOcclusionMode: vi.fn(),
+    setNumeric: vi.fn(),
+  };
+  return {
+    postProcessingControls,
+    render: vi.fn(),
+    resize: vi.fn(),
     dispose: vi.fn(),
   };
 }
@@ -205,9 +236,9 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('continues simulation without player controls while the AO overlay is open', () => {
     const updateWorld = vi.fn();
+    const updatePlayer = vi.fn();
     const input = { pointerLocked: true, consumeLook: vi.fn() };
     const tick = vi.fn();
-    const updatePlayer = vi.fn();
     const updatePassivePlayer = vi.fn();
     const updateFlight = vi.fn();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
@@ -246,6 +277,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Vector3),
       true,
     );
+    expect(updatePlayer).toHaveBeenCalledWith(0.25, input);
 
     input.pointerLocked = false;
     tick.mockClear();
@@ -272,7 +304,7 @@ describe('ScavengePhase lifecycle integration', () => {
     );
     expect(tick).toHaveBeenCalledWith(0.25);
     expect(updatePlayer).not.toHaveBeenCalled();
-    expect(updatePassivePlayer).toHaveBeenCalledWith(0.25, expect.any(Number));
+    expect(updatePassivePlayer).toHaveBeenCalledWith(0.25);
     expect(updateFlight).toHaveBeenCalledOnce();
     expect(input.consumeLook).toHaveBeenCalled();
   });
@@ -442,6 +474,220 @@ describe('ScavengePhase lifecycle integration', () => {
       elapsedSeconds: 90,
       sinkingProgress: 0.75,
     });
+  });
+
+  it('forwards and reports scavenging presentation weather', () => {
+    const setPresentationWeather = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      world: { setPresentationWeather },
+    });
+
+    phase.setWeatherOverride('rain');
+
+    expect(setPresentationWeather).toHaveBeenLastCalledWith('rain');
+    expect(phase.getPresentationWeather()).toBe('rain');
+
+    phase.setWeatherOverride(null);
+
+    expect(setPresentationWeather).toHaveBeenLastCalledWith('calm');
+    expect(phase.getPresentationWeather()).toBe('calm');
+  });
+
+  it('persists a manual weather override across phase handoff and polls automatic weather', () => {
+    const order: string[] = [];
+    let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
+    let scavengeWeather: PresentationWeatherId = 'calm';
+    const scavengeSetWeather = vi.fn((id: PresentationWeatherId | null) => {
+      order.push(`scavenge-weather:${id}`);
+      if (id !== null) scavengeWeather = id;
+    });
+    const survivalSetWeather = vi.fn((id: PresentationWeatherId | null) => {
+      order.push(`survival-weather:${id}`);
+    });
+    const scavenge = {
+      ...gamePhase(),
+      update: vi.fn(() => order.push('scavenge-update')),
+      render: vi.fn(() => order.push('scavenge-render')),
+      setWeatherOverride: scavengeSetWeather,
+      getPresentationWeather: vi.fn(() => scavengeWeather),
+    };
+    const survival = {
+      ...gamePhase(),
+      resize: vi.fn(() => order.push('survival-resize')),
+      start: vi.fn(() => order.push('survival-start')),
+      render: vi.fn(() => order.push('survival-render')),
+      setWeatherOverride: survivalSetWeather,
+      getPresentationWeather: vi.fn(() => 'rain' as const),
+    };
+    const postProcessingControls: PostProcessingControls = {
+      getState: vi.fn(() => ({
+        ambientOcclusionAvailable: true,
+        ambientOcclusionMode: 'composite' as const,
+        ambientOcclusionIntensity: 1,
+        ambientOcclusionRadius: 0.5,
+      })),
+      setAmbientOcclusionMode: vi.fn(),
+      setNumeric: vi.fn(),
+    };
+    const sceneRenderer: SceneRenderer = {
+      postProcessingControls,
+      render: vi.fn(),
+      resize: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(17);
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createScavenge: (_context, onComplete) => {
+        complete = onComplete;
+        return scavenge;
+      },
+      createSurvival: () => survival,
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer,
+      mount,
+    });
+
+    try {
+      const weather = mount.querySelector<HTMLSelectElement>(
+        '[data-presentation-weather]',
+      )!;
+      const source = mount.querySelector<HTMLOutputElement>(
+        '[data-weather-source]',
+      )!;
+      expect((game as unknown as { weatherOverride: unknown }).weatherOverride).toBeNull();
+      expect(weather.value).toBe('calm');
+      expect(source.value).toBe('NORMAL');
+      expect(scavengeSetWeather).not.toHaveBeenCalled();
+
+      scavengeWeather = 'wind';
+      (game as unknown as { handleAnimationFrame(): void }).handleAnimationFrame();
+      expect(weather.value).toBe('wind');
+      expect(source.value).toBe('EVENT');
+
+      weather.value = 'rain';
+      weather.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(scavengeSetWeather).toHaveBeenCalledOnce();
+      expect(scavengeSetWeather).toHaveBeenLastCalledWith('rain');
+      expect(source.value).toBe('FORCED');
+
+      order.length = 0;
+      complete({ savedItems: [], elapsedSeconds: 2 });
+      expect(survivalSetWeather).toHaveBeenCalledOnce();
+      expect(survivalSetWeather).toHaveBeenCalledWith('rain');
+      expect(order).toEqual([
+        'survival-weather:rain',
+        'survival-resize',
+        'survival-start',
+      ]);
+
+      weather.value = 'fog';
+      weather.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(survivalSetWeather).toHaveBeenCalledTimes(2);
+      expect(survivalSetWeather).toHaveBeenLastCalledWith('fog');
+      expect(scavengeSetWeather).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+      requestFrame.mockRestore();
+    }
+  });
+
+  it('disposes a new scavenging phase when applying stored weather throws', () => {
+    const failure = new Error('scavenging weather failed');
+    const initialDispose = vi.fn();
+    const failedDispose = vi.fn();
+    const failedStart = vi.fn();
+    const failedRender = vi.fn();
+    let scavengeCount = 0;
+    const failedPhase: GamePhase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(() => { throw failure; }),
+      start: failedStart,
+      render: failedRender,
+      dispose: failedDispose,
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createScavenge: () => {
+        scavengeCount += 1;
+        return scavengeCount === 1
+          ? { ...gamePhase(), dispose: initialDispose }
+          : failedPhase;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+    });
+
+    const weather = mount.querySelector<HTMLSelectElement>(
+      '[data-presentation-weather]',
+    )!;
+    weather.value = 'rain';
+    weather.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(() => game.restart()).toThrow(failure);
+    game.dispose();
+
+    expect(initialDispose).toHaveBeenCalledOnce();
+    expect(failedDispose).toHaveBeenCalledOnce();
+    expect(failedStart).not.toHaveBeenCalled();
+    expect(failedRender).not.toHaveBeenCalled();
+  });
+
+  it('disposes a new survival phase when applying stored weather throws', () => {
+    const failure = new Error('survival weather failed');
+    const failedDispose = vi.fn();
+    const failedStart = vi.fn();
+    const failedRender = vi.fn();
+    let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
+    const failedPhase: GamePhase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(() => { throw failure; }),
+      start: failedStart,
+      render: failedRender,
+      dispose: failedDispose,
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createScavenge: (_context, onComplete) => {
+        complete = onComplete;
+        return gamePhase();
+      },
+      createSurvival: () => failedPhase,
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+    });
+
+    const weather = mount.querySelector<HTMLSelectElement>(
+      '[data-presentation-weather]',
+    )!;
+    weather.value = 'rain';
+    weather.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(() => complete({ savedItems: [], elapsedSeconds: 2 })).toThrow(failure);
+    game.dispose();
+
+    expect(failedDispose).toHaveBeenCalledOnce();
+    expect(failedStart).not.toHaveBeenCalled();
+    expect(failedRender).not.toHaveBeenCalled();
   });
 
   it('shares one scene renderer across phases and resizes it with the capped pixel ratio', () => {
@@ -941,6 +1187,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('samples thrown items against the visual world time', () => {
     let sampledHeight = Number.NaN;
+    const sampleFlightWaterHeight = vi.fn().mockReturnValue(17.25);
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       elapsed: 0,
@@ -958,15 +1205,15 @@ describe('ScavengePhase lifecycle integration', () => {
       world: {
         lifeboat: new Group(),
         lifeboatAcceptance: new Box3(),
+        sampleFlightWaterHeight,
       },
     });
 
     (phase as unknown as { updateFlight(delta: number, scale: number): void })
       .updateFlight(0.016, 0.75);
 
-    expect(sampledHeight).toBeCloseTo(
-      sampleWaveField(DEFAULT_WAVES, 4.5, 2, -3, 0.75).height,
-    );
+    expect(sampleFlightWaterHeight).toHaveBeenCalledWith(4.5, 2, -3, 0.75);
+    expect(sampledHeight).toBe(17.25);
   });
 
   it('passes the accepted item identity to world save', () => {

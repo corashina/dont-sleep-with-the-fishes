@@ -205,7 +205,7 @@ function createEmergencyStripeTexture(seed: number, anisotropy: number): DataTex
   for (let y = 0; y < TEXTURE_SIZE; y += 1) {
     for (let x = 0; x < TEXTURE_SIZE; x += 1) {
       const offset = (y * TEXTURE_SIZE + x) * 4;
-      const stripeColor = (x + y) % 32 < 16
+      const stripeColor = (x + y) % 64 < 32
         ? EMERGENCY_STRIPE_COLORS.yellow
         : EMERGENCY_STRIPE_COLORS.black;
       const wear = centeredNoise(textureByte(seed, x, y, 12), 8);

@@ -23,7 +23,7 @@ export interface BoatInteractionHitArea {
 
 export type ProjectedBoatBounds = ProjectedScreenBounds;
 
-export type BoatToolId = 'repairTools' | 'fishingRod';
+export type BoatToolId = 'repairTools' | 'fishingRod' | 'lantern';
 
 export interface BoatInteractionAnchor {
   readonly id: string;

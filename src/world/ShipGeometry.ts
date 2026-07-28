@@ -27,7 +27,6 @@ import {
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   SHIP_WHEELHOUSE_CHAMFER_SIZE,
-  deckHatchRect,
 } from './ShipLayout';
 import type {
   ShipBalconySpec,
@@ -98,7 +97,6 @@ const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
 const WHEELHOUSE_ROOF_OVERHANG = 0.28;
 const WHEELHOUSE_FRAME_WIDTH = 0.18;
-const WHEELHOUSE_COLLIDER_SEGMENT_LENGTH = 0.18;
 const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
 const PORTHOLE_GLASS_RADIUS = 0.46;
@@ -108,7 +106,6 @@ const PORTHOLE_BOLT_RADIUS = 0.045;
 const PORTHOLE_BOLT_ORBIT = 0.575;
 const PORTHOLE_SEGMENTS = 24;
 const MACHINERY_VISUAL_HEIGHT = 1.15;
-const MACHINERY_COLLIDER_HEIGHT = 2.4;
 const ROOM_ROOF_THICKNESS = 0.24;
 const STACK_X = 1.35;
 const STACK_OUTLET_Y = 7.1;
@@ -198,6 +195,34 @@ function toCollisionBox(
     maxY: position[1] + size[1] / 2,
     minZ: position[2] - size[2] / 2,
     maxZ: position[2] + size[2] / 2,
+  };
+}
+
+function toOrientedCollisionBox(
+  position: readonly [number, number, number],
+  size: readonly [number, number, number],
+  rotationY: number,
+): CollisionBox {
+  const halfWidth = size[0] / 2;
+  const halfDepth = size[2] / 2;
+  const cosine = Math.cos(rotationY);
+  const sine = Math.sin(rotationY);
+  const extentX = Math.abs(cosine) * halfWidth + Math.abs(sine) * halfDepth;
+  const extentZ = Math.abs(sine) * halfWidth + Math.abs(cosine) * halfDepth;
+  return {
+    minX: position[0] - extentX,
+    maxX: position[0] + extentX,
+    minY: position[1] - size[1] / 2,
+    maxY: position[1] + size[1] / 2,
+    minZ: position[2] - extentZ,
+    maxZ: position[2] + extentZ,
+    orientedFootprint: {
+      centerX: position[0],
+      centerZ: position[2],
+      halfWidth,
+      halfDepth,
+      rotationY,
+    },
   };
 }
 
@@ -373,31 +398,8 @@ function addFinishedFloors(
     geometries,
     'floor-lifeboatStation',
     rectangularFloorShape(lifeboat.minX, DECK_HALF_WIDTH, lifeboat.minZ, lifeboat.maxZ),
-    materials.timberFloor,
-  );
-
-  const stripeOuterInset = 0.1;
-  const stripeWidth = 0.2;
-  const stripeShape = rectangularFloorShape(
-    lifeboat.minX + stripeOuterInset,
-    DECK_HALF_WIDTH,
-    lifeboat.minZ + stripeOuterInset,
-    lifeboat.maxZ - stripeOuterInset,
-  );
-  stripeShape.holes.push(rectangularFloorHole(
-    lifeboat.minX + stripeOuterInset + stripeWidth,
-    DECK_HALF_WIDTH - stripeWidth,
-    lifeboat.minZ + stripeOuterInset + stripeWidth,
-    lifeboat.maxZ - stripeOuterInset - stripeWidth,
-  ));
-  const stripe = addFloorSurface(
-    root,
-    geometries,
-    'lifeboat-station-emergency-border',
-    stripeShape,
     materials.emergencyStripe,
   );
-  stripe.position.y += 0.008;
 }
 
 function addRoundedPrism(
@@ -918,29 +920,22 @@ function addWheelhousePaneColliders(
   const dz = spec.end[1] - spec.start[1];
   const length = Math.hypot(dx, dz);
   const isDiagonal = Math.abs(dx) > Number.EPSILON && Math.abs(dz) > Number.EPSILON;
-  const segmentCount = isDiagonal
-    ? Math.ceil(length / WHEELHOUSE_COLLIDER_SEGMENT_LENGTH)
-    : 1;
-  const segmentDx = dx / segmentCount;
-  const segmentDz = dz / segmentCount;
   const rotationY = Math.atan2(-dz, dx);
   const normalX = Math.sin(rotationY);
   const normalZ = Math.cos(rotationY);
-
-  for (let index = 0; index < segmentCount; index += 1) {
-    const centerX = spec.start[0] + segmentDx * (index + 0.5)
-      - normalX * WALL_HALF_THICKNESS;
-    const centerZ = spec.start[1] + segmentDz * (index + 0.5)
-      - normalZ * WALL_HALF_THICKNESS;
-    shellColliders.push(toCollisionBox(
-      [centerX, wallBottomY + ROOM_WALL_HEIGHT / 2, centerZ],
-      [
-        Math.abs(segmentDx) + Math.abs(normalX) * WALL_THICKNESS,
-        ROOM_WALL_HEIGHT,
-        Math.abs(segmentDz) + Math.abs(normalZ) * WALL_THICKNESS,
-      ],
-    ));
-  }
+  const position = [
+    (spec.start[0] + spec.end[0]) / 2 - normalX * WALL_HALF_THICKNESS,
+    wallBottomY + ROOM_WALL_HEIGHT / 2,
+    (spec.start[1] + spec.end[1]) / 2 - normalZ * WALL_HALF_THICKNESS,
+  ] as const;
+  const size = [length, ROOM_WALL_HEIGHT, WALL_THICKNESS] as const;
+  shellColliders.push(isDiagonal
+    ? toOrientedCollisionBox(position, size, rotationY)
+    : toCollisionBox(position, [
+      Math.abs(dx) + Math.abs(normalX) * WALL_THICKNESS,
+      ROOM_WALL_HEIGHT,
+      Math.abs(dz) + Math.abs(normalZ) * WALL_THICKNESS,
+    ]));
 }
 
 function addWheelhousePane(
@@ -1238,7 +1233,6 @@ function addRoofBalconies(
           run.position[1],
         ],
         material: materials.darkMetal,
-        collider: true,
       });
     });
   });
@@ -1403,17 +1397,12 @@ function addExteriorConstructionDetails(
   stem.receiveShadow = true;
   root.add(stem);
   geometries.add(stemGeometry);
-  shellColliders.push(toCollisionBox(
-    [stem.position.x, stem.position.y, stem.position.z],
-    [0.92, stemHeight, 0.92],
-  ));
 
   addBlock(root, geometries, shellColliders, {
     name: 'stern-transom',
     size: [5.4, 1.08, 0.42],
     position: [0, 1.59, cargo.minZ + 0.16],
     material: materials.upperHull,
-    collider: true,
   });
   addBlock(root, geometries, shellColliders, {
     name: 'stern-transom-waterline',
@@ -1423,7 +1412,6 @@ function addExteriorConstructionDetails(
   });
 
   const hatch = layout.deckHatch;
-  const hatchBounds = deckHatchRect(hatch);
   addRotatedBlock(root, geometries, shellColliders, {
     name: hatch.id,
     size: hatch.size,
@@ -1434,14 +1422,6 @@ function addExteriorConstructionDetails(
     ],
     material: materials.darkMetal,
   }, hatch.rotationY);
-  shellColliders.push({
-    minX: hatchBounds.minX,
-    maxX: hatchBounds.maxX,
-    minY: hatch.position[1],
-    maxY: hatch.position[1] + hatch.colliderSize[1],
-    minZ: hatchBounds.minZ,
-    maxZ: hatchBounds.maxZ,
-  });
   addRotatedBlock(root, geometries, shellColliders, {
     name: 'deck-hatch-timber-panel',
     size: [
@@ -1514,11 +1494,8 @@ function addMachineryAndStacks(
     size: [machineryWidth, MACHINERY_VISUAL_HEIGHT, machineryLength],
     position: [machineryX, FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT / 2, machineryZ],
     material: materials.paintedSteel,
+    collider: true,
   });
-  shellColliders.push(toCollisionBox(
-    [machineryX, FREIGHTER_DIMENSIONS.deckY + MACHINERY_COLLIDER_HEIGHT / 2, machineryZ],
-    [machineryWidth, MACHINERY_COLLIDER_HEIGHT, machineryLength],
-  ));
   const stackBaseY = FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT;
   const stackShaftBaseY = stackBaseY + STACK_COLLAR_HEIGHT;
   const stackHeight = STACK_OUTLET_Y - stackShaftBaseY;

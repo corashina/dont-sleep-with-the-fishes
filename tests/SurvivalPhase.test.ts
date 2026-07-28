@@ -92,6 +92,10 @@ function createFishingRig(options: FishingRigOptions = {}) {
     calls.push('finishFishing');
     return realSession.finishFishing(...args);
   });
+  const cancelFishing = vi.fn((...args: Parameters<SurvivalSession['cancelFishing']>) => {
+    calls.push('cancelFishing');
+    return realSession.cancelFishing(...args);
+  });
   const requestDayEvent = vi.fn(() => {
     calls.push('requestDayEvent');
     return {
@@ -107,6 +111,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
     availableReason: vi.fn(realSession.availableReason.bind(realSession)),
     perform: vi.fn(realSession.perform.bind(realSession)),
     beginFishing,
+    cancelFishing,
     finishFishing,
     requestDayEvent,
     resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
@@ -131,6 +136,9 @@ function createFishingRig(options: FishingRigOptions = {}) {
   const biteTarget: ProjectedBoatBounds = Object.freeze({
     x: 320, y: 180, width: 64, height: 48, depth: 2, visible: true,
   });
+  const catchTarget: ProjectedBoatBounds = Object.freeze({
+    x: 410, y: 290, width: 96, height: 54, depth: 1.8, visible: true,
+  });
   const world = {
     scene: new Scene(),
     update: vi.fn(),
@@ -153,6 +161,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
       calls.push(`bite:${point.x},${point.z}`);
     }),
     projectFishingBite: vi.fn(() => biteTarget),
+    projectFishingCatch: vi.fn(() => catchTarget),
     playFishingReel: vi.fn((catchId: string) => {
       calls.push(`playFishingReel:${catchId}`);
       return startAnimation('reel');
@@ -195,6 +204,9 @@ function createFishingRig(options: FishingRigOptions = {}) {
       calls.push(`result:${view.title}:${view.detail}`);
     }),
     hideFishingResult: vi.fn(() => calls.push('hideFishingResult')),
+    setFishingViewExitVisible: vi.fn((visible: boolean) => {
+      calls.push(visible ? 'showFishingViewExit' : 'hideFishingViewExit');
+    }),
     restoreCommandFocus: vi.fn(() => calls.push('restoreCommandFocus')),
     dispose: vi.fn(() => {
       for (const handle of animations.fade) handle.resolve();
@@ -216,6 +228,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
     animations,
     castPoint,
     biteTarget,
+    catchTarget,
     updateFishingBiteTarget,
   };
 }
@@ -253,6 +266,9 @@ async function settleFishingReturn(
   await flushPromises();
   rig.ui.onFishingResultContinue?.();
   rig.ui.onFishingResultContinue?.();
+  expect(rig.animations.exit).toHaveLength(0);
+  rig.ui.onFishingViewExit?.();
+  rig.ui.onFishingViewExit?.();
   expect(rig.animations.exit).toHaveLength(1);
   rig.animations.exit[0]!.resolve();
   await flushPromises();
@@ -294,6 +310,7 @@ async function reachFishingTeardownStage(
   await flushPromises();
   if (stage === 'result') return;
   rig.ui.onFishingResultContinue?.();
+  rig.ui.onFishingViewExit?.();
   if (stage === 'returning') return;
   rig.animations.exit.at(-1)!.resolve();
   await flushPromises();
@@ -468,6 +485,28 @@ describe('SurvivalPhase orchestration', () => {
       message: 'CLICK THE WATER TO CAST',
       biteTarget: null,
     });
+    expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(true);
+  });
+
+  it('cancels from aiming, restores energy, and returns without casting', async () => {
+    const rig = createFishingRig();
+    rig.phase.start();
+    rig.phase.handleAction('fish');
+    await settleFishingEntry(rig);
+
+    rig.ui.onFishingViewExit?.();
+    rig.ui.onFishingViewExit?.();
+
+    expect(rig.session.cancelFishing).toHaveBeenCalledOnce();
+    expect(rig.world.playFishingCast).not.toHaveBeenCalled();
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 3, actedToday: false });
+    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
+      mode: 'hidden', message: '', biteTarget: null,
+    });
+    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
+    rig.animations.exit.at(-1)!.resolve();
+    await flushPromises();
+    expect(rig.calls.at(-1)).toBe('restoreCommandFocus');
   });
 
   it('ignores an outside-water mouse point, accepts the retry, and gates duplicate casts', async () => {
@@ -486,6 +525,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(cast({ x: 240, y: 180 })).toBe(true);
     expect(cast({ x: 240, y: 180 })).toBe(false);
+    expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(false);
     expect(rig.world.castFishingAtScreenPoint).toHaveBeenCalledWith(240, 180, 1, 1);
     expect(rig.world.playFishingCast).toHaveBeenCalledOnce();
     expect(rig.world.playFishingCast).toHaveBeenCalledWith(rig.castPoint);
@@ -690,6 +730,13 @@ describe('SurvivalPhase orchestration', () => {
     rig.animations.reel.at(-1)!.resolve();
     await flushPromises();
     expect(rig.calls).toContain('result:COD:+1 FOOD');
+    expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
+      caption: 'SMALL CATCH',
+      title: 'COD',
+      detail: '+1 FOOD',
+      catchTarget: rig.catchTarget,
+    });
+    expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1, 1);
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'result', message: '', biteTarget: null,
     });
@@ -698,19 +745,22 @@ describe('SurvivalPhase orchestration', () => {
     rig.ui.onFishingResultContinue?.();
     rig.ui.onFishingResultContinue?.();
     expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
+    expect(rig.world.clearFishingPresentation).toHaveBeenCalledOnce();
+    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
+    rig.ui.onFishingViewExit?.();
+    rig.ui.onFishingViewExit?.();
     expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
     rig.animations.exit.at(-1)!.resolve();
     await flushPromises();
 
     const exitIndex = rig.calls.indexOf('exitFishingView');
-    const unlockIndex = rig.calls.indexOf('unlock');
+    const unlockIndex = rig.calls.lastIndexOf('unlock');
     expect(presentationIndex).toBeLessThan(exitIndex);
     expect(rig.calls.indexOf('playFishingReel:cod'))
       .toBeLessThan(rig.calls.indexOf('result:COD:+1 FOOD'));
     expect(rig.calls.indexOf('result:COD:+1 FOOD'))
       .toBeLessThan(rig.calls.indexOf('exitFishingView'));
     expect(exitIndex).toBeLessThan(unlockIndex);
-    expect(rig.world.clearFishingPresentation).toHaveBeenCalledOnce();
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'hidden', message: '', biteTarget: null,
     });
@@ -723,7 +773,7 @@ describe('SurvivalPhase orchestration', () => {
 
   it.each([
     {
-      label: 'baited tuna', options: { withBait: true, day: 3, catchRoll: 0.19 },
+      label: 'baited tuna', options: { withBait: true, day: 3, catchRoll: 0.17 },
       resultAnimation: 'reel' as const, expected: 'result:TUNA:+2 FOOD - 1 BAIT USED',
     },
     {
@@ -758,8 +808,12 @@ describe('SurvivalPhase orchestration', () => {
 
     rig.ui.onFishingResultContinue?.();
     rig.ui.onFishingResultContinue?.();
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
+    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
     expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
+    expect(rig.world.clearFishingPresentation).toHaveBeenCalledOnce();
+    rig.ui.onFishingViewExit?.();
+    rig.ui.onFishingViewExit?.();
+    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
     rig.animations.exit.at(-1)!.resolve();
     await flushPromises();
     expect(rig.session.requestDayEvent).not.toHaveBeenCalled();

@@ -114,10 +114,8 @@ pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
 
 These models are loaded only for a successful catch reveal and disposed when
 that presentation ends. Runtime length follows the existing catch catalog:
-tuna and squid remain large two-food catches; the other mapped catches remain
-small one-food catches. Flounder, herring, mackerel, swordfish, and junk retain
-their procedural models. The supplied eel, lobster, and octopus were not used
-because the current catalog has no matching outcomes.
+tuna and squid remain large two-food catches; the other fish remain small
+one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 
 | Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source triangles | Committed triangles | Modifications | Downloaded |
 |---|---|---|---|---|---|---:|---:|---|---|
@@ -130,3 +128,6 @@ because the current catalog has no matching outcomes.
 | bass | `bass.glb` | Fish / Poly by Google | https://poly.pizza/m/aEyLrUMMoUK | `poly-pizza:55537d5f-d9f2-45f0-8740-6357ca7784df` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 506 | 506 | Source GLB SHA-256 `1F91914D26C1680EBB73A9BE87B7936528ADB5F2DDB32CC787EF4E73C32F8BDF`; selected from its bass/seabass tags; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-26 |
 | redSnapper | `redSnapper.glb` | Fish / Quaternius | https://poly.pizza/m/XWl86YFtpF | `poly-pizza:311a79f6-ba3e-47aa-80ce-04185fc76b2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 544 | 544 | Source GLB SHA-256 `BFEA34878B92EB05D9B2C584C3A9E97ABE2B402141B9C7B4B3F1ECB55A29DF02`; selected for its reddish body; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-26 |
 | clownfish | `clownfish.glb` | Fish / Kenney | https://poly.pizza/m/bJs4f0SFlO | `poly-pizza:72d5414c-2748-4862-b7ae-d4192be9e806` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 233 | 233 | Source GLB SHA-256 `78A8C5ABCF26C698E2C51AF21312455928AA7B9D9A531FAD508327DBE1567143`; selected for its orange palette and normalized to the smallest catalog length; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-26 |
+| seaweed | `seaweed.glb` | Kelp / Poly by Google | https://poly.pizza/m/4cFllH6Iazk | `poly-pizza:8c51572a-1938-4c61-b971-63c3b69f3ea7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 784 | 784 | Source GLB SHA-256 `3D8E3071C69E6F701A7061AB820293F63E96023CED132C559CC0CDB12542C7C6`; used for the seaweed junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
+| boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
+| plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |

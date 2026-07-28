@@ -63,6 +63,8 @@ interface Rejection {
 interface ActiveFishingTransaction {
   readonly attempt: FishingSession;
   readonly capturedBait: boolean;
+  readonly previousActedToday: boolean;
+  readonly previousDayActivity: DayActivity;
 }
 
 type DayActivity = 'none' | 'fishing' | 'other';
@@ -206,6 +208,8 @@ export class SurvivalSession {
     if (rejection !== null) return { accepted: false, outcome: rejection };
 
     const capturedBait = this.bait > 0;
+    const previousActedToday = this.actedToday;
+    const previousDayActivity = this.dayActivity;
     const attempt = new FishingSession({
       id: `fishing-${this.day}-${++this.fishingCounter}`,
       day: this.day,
@@ -220,8 +224,37 @@ export class SurvivalSession {
     );
     this.actedToday = true;
     this.dayActivity = 'fishing';
-    this.activeFishing = { attempt, capturedBait };
+    this.activeFishing = {
+      attempt,
+      capturedBait,
+      previousActedToday,
+      previousDayActivity,
+    };
     return { accepted: true, outcome, attempt };
+  }
+
+  cancelFishing(attemptId: string): ActionOutcome {
+    const transaction = this.activeFishing;
+    if (transaction === null) {
+      return this.reject('no-fishing-attempt', 'There is no active fishing attempt.');
+    }
+    const snapshot = transaction.attempt.snapshot();
+    if (snapshot.id !== attemptId) {
+      return this.reject('fishing-attempt-mismatch', 'That fishing attempt is no longer active.');
+    }
+    if (snapshot.state !== 'aiming') {
+      return this.reject('fishing-already-cast', 'The line is already in the water.');
+    }
+
+    this.activeFishing = null;
+    this.actedToday = transaction.previousActedToday;
+    this.dayActivity = transaction.previousDayActivity;
+    return this.commit(
+      'fishing-cancelled',
+      'You lower the rod without casting.',
+      { energy: SURVIVAL_BALANCE.actions.fishEnergy },
+      'none',
+    );
   }
 
   finishFishing(attemptId: string, result: FishingTerminalResult): ActionOutcome {
@@ -437,8 +470,7 @@ export class SurvivalSession {
     this.pendingEventTargetId = null;
     this.state = 'day';
 
-    const weatherRoll = this.random.next();
-    this.weather = weatherRoll < 0.60 ? 'calm' : weatherRoll < 0.85 ? 'overcast' : 'squall';
+    this.weather = 'calm';
 
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,

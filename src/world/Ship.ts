@@ -1,6 +1,7 @@
 import { Group, Vector3 } from 'three';
 import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
 import {
+  circleOverlapsCollisionFootprint,
   segmentBoxInterval,
   type CollisionArc,
   type CollisionBox,
@@ -108,10 +109,7 @@ export function isShipSurfaceStandingPointVisible(
   if (standingPoint.distanceTo(surface.position) > 2.2 + 1e-6) return false;
   const outsideInflatedColliders = colliders.every((collider) => {
     if (collider.maxY <= standingPoint.y + 1e-6) return true;
-    const closestX = Math.max(collider.minX, Math.min(standingPoint.x, collider.maxX));
-    const closestZ = Math.max(collider.minZ, Math.min(standingPoint.z, collider.maxZ));
-    return (standingPoint.x - closestX) ** 2 + (standingPoint.z - closestZ) ** 2
-      >= 0.35 ** 2 - 1e-6;
+    return !circleOverlapsCollisionFootprint(standingPoint, 0.35 - 1e-6, collider);
   });
   if (!outsideInflatedColliders) return false;
   const eye = standingPoint.clone();

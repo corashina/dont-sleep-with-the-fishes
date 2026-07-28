@@ -45,6 +45,7 @@ import {
 import { ScavengePhysicsDebugView } from '../physics/ScavengePhysicsDebugView';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
+import type { PresentationWeatherId } from '../weather/presentationWeather';
 import { boatStorageTransform } from './BoatStorage';
 import { BoatDepositSmoke } from './BoatDepositSmoke';
 import { Environment } from './Environment';
@@ -210,6 +211,12 @@ export class World {
     driftX: 0,
     driftZ: 0,
   };
+  private readonly flightWaveSample: WaveSample = {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normal: { x: 0, y: 1, z: 0 },
+  };
   private disposed = false;
 
   constructor(
@@ -231,7 +238,15 @@ export class World {
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
     this.ship.position.y = -FREIGHTER_DRAFT;
-    this.colliders = this.shipBuild.colliders;
+    const barrelSpecs = SHIP_LAYOUT.details.filter(({ kind }) => kind === 'barrel');
+    const dynamicBarrelColliders = new Set(
+      barrelSpecs.map(({ id }) => this.shipBuild.detailColliderById.get(id)),
+    );
+    this.colliders = this.physicsMode === 'off'
+      ? this.shipBuild.colliders
+      : this.shipBuild.colliders.filter(
+        (collider) => !dynamicBarrelColliders.has(collider),
+      );
     this.interactionOccluders = this.shipBuild.interactionOccluders;
     this.arcColliders = this.shipBuild.arcColliders;
     this.climbZones = this.shipBuild.climbZones;
@@ -247,7 +262,6 @@ export class World {
       scene.add(this.ship);
       rollback.push(() => scene.remove(this.ship));
       this.ship.updateMatrixWorld(true);
-      const barrelSpecs = SHIP_LAYOUT.details.filter(({ kind }) => kind === 'barrel');
       this.physicsBarrels = barrelSpecs.map(({ id }) => {
         const barrel = this.ship.getObjectByName(`detail:${id}`);
         if (!(barrel instanceof Group)) throw new Error(`Missing ship barrel detail ${id}`);
@@ -261,13 +275,9 @@ export class World {
         this.shipPhysicsTranslation,
         this.shipPhysicsRotation,
       );
-      const dynamicBarrelColliders = new Set(
-        barrelSpecs.map(({ id }) => this.shipBuild.detailColliderById.get(id)),
-      );
       const physicsConfig = {
-        colliders: this.shipBuild.colliders.filter(
-          (collider) => !dynamicBarrelColliders.has(collider),
-        ),
+        colliders: this.colliders,
+        arcColliders: this.shipBuild.arcColliders,
         safeBounds: this.playerNavigationBounds.safe,
         deckY: this.deckY,
         shipWidth: FREIGHTER_DIMENSIONS.width,
@@ -462,12 +472,14 @@ export class World {
     simulatePhysics: boolean,
   ): void {
     if (this.disposed) return;
+    const weatherWaveScale = sinking.waveAmplitudeScale
+      * this.environment.weatherProfile.waveScale;
     this.freighterBuoyancy.sampleTargetInto(
       this.freighterTargetPose,
       time,
       0,
       0,
-      sinking.waveAmplitudeScale,
+      weatherWaveScale,
     );
     smoothBoatPoseInto(
       this.freighterPose,
@@ -505,7 +517,7 @@ export class World {
       time,
       this.boatAnchor.x,
       this.boatAnchor.z,
-      sinking.waveAmplitudeScale,
+      weatherWaveScale,
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     this.lifeboat.position.set(
@@ -515,6 +527,7 @@ export class World {
     );
     this.lifeboat.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.environment.update(
+      time,
       delta,
       cameraPosition,
     );
@@ -526,8 +539,8 @@ export class World {
     this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
     this.ocean.update(
       time,
-      sinking.waveAmplitudeScale,
-      atmosphere.fogDensity,
+      weatherWaveScale,
+      atmosphere.fogDensity * this.environment.weatherProfile.fogDensityScale,
       this.oceanAtmosphere,
     );
     this.ocean.follow(cameraPosition.x, cameraPosition.z);
@@ -548,6 +561,28 @@ export class World {
         this.waterExclusion.minimumLocalY,
       ),
     ]);
+  }
+
+  setPresentationWeather(id: PresentationWeatherId): void {
+    if (this.disposed) return;
+    this.environment.setWeather(id);
+  }
+
+  sampleFlightWaterHeight(
+    time: number,
+    x: number,
+    z: number,
+    sinkingWaveScale: number,
+  ): number {
+    sampleWaveFieldInto(
+      this.flightWaveSample,
+      DEFAULT_WAVES,
+      time,
+      x,
+      z,
+      sinkingWaveScale * this.environment.weatherProfile.waveScale,
+    );
+    return this.flightWaveSample.height;
   }
 
   saveItem(instance: ItemInstance): void {
@@ -660,4 +695,5 @@ export class World {
       ),
     ]);
   }
+
 }

@@ -53,6 +53,7 @@ const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 
 type FishingPresentationState =
   | 'idle'
+  | 'ready'
   | 'entering'
   | 'aiming'
   | 'casting'
@@ -80,15 +81,27 @@ export function formatFishingResult(
   outcome: ActionOutcome,
 ): FishingResultView {
   if (result.kind === 'miss') {
-    return { title: 'IT GOT AWAY', detail: 'NO CATCH' };
+    return {
+      caption: 'EMPTY HOOK',
+      title: 'IT GOT AWAY',
+      detail: 'NO CATCH',
+      catchTarget: null,
+    };
   }
   if (result.catch.kind === 'junk') {
-    return { title: result.catch.label.toLocaleUpperCase('en-US'), detail: 'NO FOOD' };
+    return {
+      caption: 'DRIFTING JUNK',
+      title: result.catch.label.toLocaleUpperCase('en-US'),
+      detail: 'NO FOOD',
+      catchTarget: null,
+    };
   }
   const bait = outcome.deltas.bait === -1 ? ' - 1 BAIT USED' : '';
   return {
+    caption: `${result.catch.size.toLocaleUpperCase('en-US')} CATCH`,
     title: result.catch.label.toLocaleUpperCase('en-US'),
     detail: `+${result.catch.food} FOOD${bait}`,
+    catchTarget: null,
   };
 }
 
@@ -183,7 +196,7 @@ export class SurvivalPhase implements GamePhase {
           savedItems,
           context.lifeboatAssets,
         ),
-        new SurvivalUI(context.mount, context.visualQuality),
+        new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
       );
@@ -349,7 +362,9 @@ export class SurvivalPhase implements GamePhase {
     this.fishingPresentation = 'idle';
     this.fishingSettlementInProgress = false;
     this.ui.hideFishingResult?.();
+    this.ui.setFishingViewExitVisible?.(false);
     this.ui.onFishingResultContinue = null;
+    this.ui.onFishingViewExit = null;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -392,6 +407,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingCast = (point) => this.handleFishingCast(point);
     this.ui.onFishingReel = () => this.handleFishingReel();
     this.ui.onFishingResultContinue = () => this.continueFishingResult();
+    this.ui.onFishingViewExit = () => this.exitReadyFishingView();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -444,6 +460,7 @@ export class SurvivalPhase implements GamePhase {
     this.activeFishing = attempt;
     this.fishingPresentation = 'entering';
     this.fishingSettlementInProgress = false;
+    this.ui.setFishingViewExitVisible?.(false);
     this.setBusy(true);
     this.renderSnapshot(false, false);
     this.ui.setFishingState?.({
@@ -460,6 +477,7 @@ export class SurvivalPhase implements GamePhase {
       message: 'CLICK THE WATER TO CAST',
       biteTarget: null,
     });
+    this.ui.setFishingViewExitVisible?.(true);
   }
 
   private handleFishingCast(
@@ -487,6 +505,7 @@ export class SurvivalPhase implements GamePhase {
     const storedPoint = attempt.snapshot().castPoint;
     if (storedPoint === null) return false;
     const generation = this.lifecycleGeneration;
+    this.ui.setFishingViewExitVisible?.(false);
     this.fishingPresentation = 'casting';
     void this.completeFishingCast(attempt, storedPoint, generation);
     return true;
@@ -626,7 +645,16 @@ export class SurvivalPhase implements GamePhase {
 
     this.fishingPresentation = 'result';
     this.ui.setFishingState?.({ mode: 'result', message: '', biteTarget: null });
-    this.ui.showFishingResult?.(formatFishingResult(result, outcome));
+    const view = formatFishingResult(result, outcome);
+    this.ui.showFishingResult?.({
+      ...view,
+      catchTarget: result.kind === 'catch'
+        ? this.world.projectFishingCatch?.(
+          this.viewportWidth,
+          this.viewportHeight,
+        ) ?? null
+        : null,
+    });
   }
 
   private continueFishingResult(): void {
@@ -637,28 +665,49 @@ export class SurvivalPhase implements GamePhase {
       || this.fishingPresentation !== 'result'
       || !this.isContinuationActive(generation)
     ) return;
-    this.fishingPresentation = 'returning';
     this.ui.hideFishingResult?.();
-    void this.returnFromFishing(attempt, generation);
-  }
-
-  private async returnFromFishing(
-    attempt: FishingSession,
-    generation: number,
-  ): Promise<void> {
-    if (!await this.transitionFishingView('exit', generation)) return;
-    if (!this.isCurrentFishing(attempt, generation)) return;
-    this.completeFishingPresentation(generation);
-  }
-
-  private completeFishingPresentation(generation: number): void {
-    if (!this.isContinuationActive(generation)) return;
+    this.world.clearFishingPresentation?.();
     this.fishingSettlementInProgress = false;
-    this.fishingPresentation = 'idle';
+    this.fishingPresentation = 'ready';
     this.activeFishing = null;
     this.setBusy(false);
     this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
-    this.world.clearFishingPresentation?.();
+    this.ui.setFishingViewExitVisible?.(true);
+  }
+
+  private exitReadyFishingView(): void {
+    if (!this.isContinuationActive()) return;
+    if (this.fishingPresentation === 'aiming') {
+      const attempt = this.activeFishing;
+      if (attempt === null) return;
+      const outcome = this.session.cancelFishing?.(attempt.snapshot().id);
+      if (outcome === undefined || !outcome.accepted) {
+        if (outcome !== undefined) this.ui.showFeedback?.(outcome);
+        return;
+      }
+      this.activeFishing = null;
+      this.fishingSettlementInProgress = false;
+      this.renderSnapshot(false, false);
+      this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
+    } else if (
+      this.fishingPresentation !== 'ready'
+      || this.activeFishing !== null
+    ) {
+      return;
+    }
+    const generation = ++this.lifecycleGeneration;
+    this.fishingPresentation = 'returning';
+    this.ui.setFishingViewExitVisible?.(false);
+    this.setBusy(true);
+    void this.returnFromFishingView(generation);
+  }
+
+  private async returnFromFishingView(generation: number): Promise<void> {
+    if (!await this.transitionFishingView('exit', generation)) return;
+    if (!this.isContinuationActive(generation)) return;
+    this.fishingPresentation = 'idle';
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
   }
 
   private async transitionFishingView(

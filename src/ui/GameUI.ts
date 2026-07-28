@@ -1,13 +1,8 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
-import {
-  createVisualQualityPreference,
-  type VisualQualityPreference,
-} from '../rendering/visualQuality';
 import { formatDuration } from './formatDuration';
 import { itemArtwork, uiArtwork } from './uiArtwork';
-import { VisualQualityControl } from './VisualQualityControl';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -37,6 +32,8 @@ export class GameUI {
   private readonly timer: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly itemTooltip: HTMLElement;
+  private readonly crosshair: HTMLElement;
+  private readonly pickupPointer: HTMLElement;
   private readonly carriedItems: HTMLElement;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
@@ -45,22 +42,22 @@ export class GameUI {
   private readonly resumeButton: HTMLButtonElement;
   private readonly replayButton: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
-  private readonly visualQualityControl: VisualQualityControl;
   private disposed = false;
 
-  constructor(
-    mount: HTMLElement,
-    visualQuality: VisualQualityPreference = createVisualQualityPreference(
-      () => undefined,
-      null,
-    ),
-  ) {
+  constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'game-ui';
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="hud illustrated-hud ui-role-context">
-        <div class="crosshair" aria-hidden="true"></div>
+        <div class="crosshair" data-crosshair aria-hidden="true"></div>
+        <div class="pickup-pointer" data-pickup-pointer aria-hidden="true">
+          <svg class="pickup-pointer__art" viewBox="0 0 40 46" focusable="false">
+            <path class="pickup-pointer__hand" d="M14 27V7c0-3 1.7-5 4-5s4 2 4 5v12-8c0-2.5 1.6-4.3 3.8-4.3s3.8 1.8 3.8 4.3v10-6c0-2.4 1.5-4.1 3.5-4.1s3.6 1.7 3.6 4.1v11c0 9.4-6 16-15 16h-2c-6 0-10.3-3.1-13.2-8.2l-5-8.8c-1.2-2.2-.4-4.4 1.7-5.4 2-1 4.1-.2 5.3 1.8z"/>
+            <path class="pickup-pointer__cuff" d="M12 38c4 3.5 12.5 4.3 18.5.3l.5 6.2H12.5z"/>
+            <path class="pickup-pointer__crease" d="M17.8 10v15m7.9-10v9m7.4-6v7M9 27c3 0 5.8 1.4 7.8 4"/>
+          </svg>
+        </div>
         <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
         <div class="carried" data-carried>
@@ -74,15 +71,29 @@ export class GameUI {
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
           <div class="start-screen__top">
-            <p class="kicker ui-role-context">THE HULL HAS BEEN BREACHED</p>
             <h1 class="ui-role-display">DON'T SLEEP<br>WITH THE<br>FISHES</h1>
-            <p class="lead ui-role-narrative">The ship has two minutes left. Save what you can, then get to the lifeboat.</p>
-            <dl class="controls ui-role-context"><div><dt>MOVE</dt><dd>W A S D</dd></div><div><dt>LOOK</dt><dd>MOUSE</dd></div><div><dt>SPRINT</dt><dd>SHIFT</dd></div><div><dt>ACT</dt><dd>LEFT CLICK</dd></div></dl>
+            <dl class="controls ui-role-context" aria-label="Controls">
+              <div>
+                <dt>MOVE</dt>
+                <dd class="control-keys control-keys--move"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
+              </div>
+              <div>
+                <dt>LOOK</dt>
+                <dd class="control-keys"><kbd>MOUSE</kbd></dd>
+              </div>
+              <div>
+                <dt>SPRINT</dt>
+                <dd class="control-keys"><kbd>SHIFT</kbd></dd>
+              </div>
+              <div>
+                <dt>ACT</dt>
+                <dd class="control-keys"><kbd>LEFT CLICK</kbd></dd>
+              </div>
+            </dl>
           </div>
           <div class="start-screen__action">
-            <button type="button" class="primary-action salvage-action ui-role-context" data-start-button aria-label="Begin evacuation">
-              BEGIN EVACUATION
-              <span class="salvage-action__note" aria-hidden="true">LIFEBOAT ORDER 01</span>
+            <button type="button" class="primary-action salvage-action ui-role-context" data-start-button aria-label="Start">
+              START
             </button>
             <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
               ${uiArtwork('warning', 'illustrated-warning__art')}
@@ -96,10 +107,8 @@ export class GameUI {
           <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
           <h2 class="ui-role-display">Back to the deck?</h2>
           <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
-          <div data-visual-quality-control></div>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
-            <span class="salvage-action__note" aria-hidden="true">RETURN TO THE DECK</span>
           </button>
           <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
@@ -123,18 +132,11 @@ export class GameUI {
           <p class="result-items ui-role-numeral" data-result-items></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-replay-button aria-label="Try another route">
             TRY ANOTHER ROUTE
-            <span class="salvage-action__note" aria-hidden="true">RESET THE VOYAGE</span>
           </button>
         </div>
       </section>
     `;
     mount.append(this.root);
-    const visualQualityHost = requireElement(
-      this.root,
-      '[data-visual-quality-control]',
-    );
-    this.visualQualityControl = new VisualQualityControl(visualQuality);
-    visualQualityHost.append(this.visualQualityControl.element);
     this.hud = requireElement(this.root, '.hud');
     this.startLayer = requireElement(this.root, '[data-start]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
@@ -143,6 +145,8 @@ export class GameUI {
     this.timer = requireElement(this.root, '[data-timer]');
     this.prompt = requireElement(this.root, '[data-prompt]');
     this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
+    this.crosshair = requireElement(this.root, '[data-crosshair]');
+    this.pickupPointer = requireElement(this.root, '[data-pickup-pointer]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
@@ -204,6 +208,11 @@ export class GameUI {
     this.itemTooltip.classList.toggle('is-visible', visible);
   }
 
+  setPickupPointer(visible: boolean): void {
+    this.pickupPointer.classList.toggle('is-visible', visible);
+    this.crosshair.classList.toggle('is-pickup-hidden', visible);
+  }
+
   render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
     this.timer.textContent = formatDuration(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
@@ -260,7 +269,6 @@ export class GameUI {
     this.onStart = () => undefined;
     this.onResume = () => undefined;
     this.onReplay = () => undefined;
-    this.visualQualityControl.dispose();
     this.root.remove();
   }
 

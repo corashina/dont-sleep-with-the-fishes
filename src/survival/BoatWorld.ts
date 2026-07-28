@@ -5,7 +5,6 @@ import {
   BufferGeometry,
   Color,
   DirectionalLight,
-  DoubleSide,
   FogExp2,
   Group,
   Line,
@@ -14,18 +13,15 @@ import {
   MathUtils,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Plane,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
-  RingGeometry,
   Scene,
   SphereGeometry,
   Texture,
-  TorusGeometry,
   Vector2,
   Vector3,
 } from 'three';
@@ -47,6 +43,11 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
+import {
+  presentationWeatherProfile,
+  type PresentationWeatherId,
+  type PresentationWeatherProfile,
+} from '../weather/presentationWeather';
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
@@ -59,17 +60,18 @@ import {
 } from '../world/SceneResources';
 import { alignDirectionalLightWithSun } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
-import type { SkyPalette } from '../world/skyPalette';
+import { WeatherEffects } from '../world/WeatherEffects';
+import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
   ACTION_FOR_ITEM,
   projectBoatObjectBounds,
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
-import { BoatSpray } from './BoatSpray';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
+import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
 import {
   createSurvivalLantern,
@@ -116,12 +118,6 @@ const INITIAL_BOAT_POSE: BoatPose = {
   driftZ: 0,
 };
 
-function weatherAmplitudeScale(weather: WeatherId): number {
-  if (weather === 'squall') return 1.35;
-  if (weather === 'overcast') return 1;
-  return 0.78;
-}
-
 function sampleDefaultWaveInto(
   output: WaveSample,
   time: number,
@@ -161,6 +157,7 @@ type FishingPresentationPhase =
   | 'waiting'
   | 'bite'
   | 'reeling'
+  | 'landed'
   | 'missing'
   | 'returning';
 
@@ -180,10 +177,6 @@ interface FishingVisuals {
   readonly linePositionAttribute: BufferAttribute;
   readonly bobber: Group;
   readonly splash: Group;
-  readonly bubbles: Group;
-  readonly bubbleMaterials: readonly MeshBasicMaterial[];
-  readonly ripples: Group;
-  readonly rippleMaterials: readonly MeshBasicMaterial[];
   readonly catchDisplay: Group;
 }
 
@@ -207,15 +200,13 @@ const FISHING_CAST_MAX_Z = -4.8;
 const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 });
 const FISHING_ROD_LEAN = MathUtils.degToRad(-22);
 const FISHING_TARGET_SIZE = 52;
-const FISHING_BUBBLE_OFFSETS = Object.freeze([
-  [-0.17, -0.03],
-  [0.11, -0.14],
-  [0.24, 0.06],
-  [-0.06, 0.19],
-  [-0.28, 0.14],
-  [0.04, 0.31],
-  [0.31, -0.18],
-] as const);
+const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
+const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
+const FISHING_CATCH_BOW_REST = Object.freeze({
+  x: 0,
+  y: 0.43,
+  z: -2.52,
+});
 
 function addOwnedFishingMesh(
   root: Group,
@@ -344,59 +335,6 @@ function createFishingVisuals(
   splash.visible = false;
   root.add(splash);
 
-  const bubbles = new Group();
-  bubbles.name = 'fishing-bubbles';
-  const bubbleGeometry = new RingGeometry(0.043, 0.066, 18);
-  geometries.add(bubbleGeometry);
-  const bubbleMaterials: MeshBasicMaterial[] = [];
-  for (let index = 0; index < FISHING_BUBBLE_OFFSETS.length; index += 1) {
-    const material = new MeshBasicMaterial({
-      color: index % 2 === 0 ? 0xd9f4f1 : 0xbfe5e3,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    materials.add(material);
-    bubbleMaterials.push(material);
-    const bubble = new Mesh(bubbleGeometry, material);
-    bubble.name = `fishing-surface-bubble-${index}`;
-    bubble.rotation.x = -Math.PI / 2;
-    bubble.castShadow = false;
-    bubble.receiveShadow = false;
-    bubbles.add(bubble);
-  }
-  bubbles.visible = false;
-  root.add(bubbles);
-
-  const ripples = new Group();
-  ripples.name = 'fishing-ripples';
-  const rippleGeometry = new TorusGeometry(0.24, 0.018, 5, 18);
-  const rippleMaterials: MeshBasicMaterial[] = [];
-  for (let index = 0; index < 2; index += 1) {
-    const rippleMaterial = new MeshBasicMaterial({
-      color: 0xcde8e4,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
-    rippleMaterials.push(rippleMaterial);
-    const ripple = addOwnedFishingMesh(
-      ripples,
-      rippleGeometry,
-      rippleMaterial,
-      geometries,
-      materials,
-    );
-    ripple.name = `fishing-bite-ripple-${index}`;
-    ripple.castShadow = false;
-    ripple.receiveShadow = false;
-    ripple.rotation.x = Math.PI / 2;
-    ripple.position.y = 0.025 + index * 0.008;
-  }
-  ripples.visible = false;
-  root.add(ripples);
-
   const catchDisplay = new Group();
   catchDisplay.name = 'fishing-catch-display';
   catchDisplay.visible = false;
@@ -409,10 +347,6 @@ function createFishingVisuals(
     linePositionAttribute,
     bobber,
     splash,
-    bubbles,
-    bubbleMaterials,
-    ripples,
-    rippleMaterials,
     catchDisplay,
   };
 }
@@ -422,6 +356,7 @@ export class BoatWorld {
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
   private readonly sky: Skybox;
+  private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
@@ -462,7 +397,9 @@ export class BoatWorld {
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
+  private readonly fishingCatchRest = new Group();
   private readonly fishingCatches: FishingCatchLibrary;
+  private readonly fishingBiteParticles = new FishingBiteParticles();
   private readonly fishing: FishingVisuals;
   private readonly baseRodPivotRotationX: number;
   private readonly buoyancy = new BoatBuoyancy(
@@ -472,11 +409,6 @@ export class BoatWorld {
   );
   private readonly boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
-  private previousBowWorldY = 0;
-  private secondaryMotionInitialized = false;
-  private readonly spray = new BoatSpray();
-  private readonly bowAnchor = new Object3D();
-  private readonly bowWorldPosition = new Vector3();
   private readonly worldCameraPosition = new Vector3();
   private readonly fishingRaycaster = new Raycaster();
   private readonly fishingInteractionPlane = new Plane(new Vector3(0, 1, 0), 0);
@@ -484,6 +416,9 @@ export class BoatWorld {
   private readonly fishingRayHit = new Vector3();
   private readonly fishingLineOriginWorld = new Vector3();
   private readonly fishingLineEndWorld = new Vector3();
+  private readonly fishingReelStartWorld = new Vector3();
+  private readonly fishingCatchTargetWorld = new Vector3();
+  private readonly fishingCatchApproachWorld = new Vector3();
   private readonly fishingProjectionWorld = new Vector3();
   private readonly fishingProjectionCamera = new Vector3();
   private readonly fishingWaveSample: WaveSample = {
@@ -508,10 +443,17 @@ export class BoatWorld {
   private fishingCastOriginY = 0;
   private fishingWaveHeight = 0;
   private fishingSplashHoldRemaining = 0;
+  private fishingBiteParticleCooldown = 0;
+  private fishingBiteParticlesActive = false;
   private currentTime = 0;
-  private weather: WeatherId = 'calm';
+  private readonly skyState: SkyState = {
+    weather: 'calm',
+    phase: 'day',
+    severity: 0,
+  };
+  private weatherProfile: Readonly<PresentationWeatherProfile> =
+    presentationWeatherProfile('calm');
   private phase: 'day' | 'night' = 'day';
-  private sprayCooldown = 0;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private disposed = false;
@@ -526,9 +468,10 @@ export class BoatWorld {
     this.scene = new Scene();
     this.sky = new Skybox(
       this.scene,
-      { weather: 'calm', phase: 'day', severity: 0 },
+      this.skyState,
       moonTexture,
     );
+    this.weatherEffects = new WeatherEffects(this.scene);
     this.camera = camera;
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
@@ -548,6 +491,13 @@ export class BoatWorld {
     this.boat = build.root;
     this.waterExclusion = build.waterExclusion;
     collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+    this.fishingCatchRest.name = 'fishing-catch-bow-rest';
+    this.fishingCatchRest.position.set(
+      FISHING_CATCH_BOW_REST.x,
+      FISHING_CATCH_BOW_REST.y,
+      FISHING_CATCH_BOW_REST.z,
+    );
+    this.boat.add(this.fishingCatchRest);
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
 
@@ -598,10 +548,6 @@ export class BoatWorld {
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
     this.eventPresentation = new EventPresentationLayer();
 
-    this.bowAnchor.name = 'survival-bow-motion-anchor';
-    this.bowAnchor.position.set(0, 0.1, -2.75);
-    this.boat.add(this.bowAnchor);
-
     this.ocean = new OceanRenderer();
     this.key.target.position.set(0, 0, -3);
     alignDirectionalLightWithSun(this.key, 12);
@@ -610,12 +556,12 @@ export class BoatWorld {
     this.scene.add(
       this.motionRig,
       this.ocean.mesh,
-      this.spray.points,
       this.ambient,
       this.key,
       this.key.target,
       this.eventPresentation.root,
       this.fishing.root,
+      this.fishingBiteParticles.points,
     );
     this.applyBasePresentation();
   }
@@ -623,11 +569,18 @@ export class BoatWorld {
   setPhase(phase: 'day' | 'night'): void {
     if (this.disposed) return;
     this.phase = phase;
+    this.skyState.phase = phase;
   }
 
   setWeather(weather: WeatherId): void {
+    this.setPresentationWeather(weather);
+  }
+
+  setPresentationWeather(id: PresentationWeatherId): void {
     if (this.disposed) return;
-    this.weather = weather;
+    this.weatherProfile = presentationWeatherProfile(id);
+    this.skyState.weather = this.weatherProfile.skyWeather;
+    this.weatherEffects.setWeather(id);
   }
 
   syncInventory(snapshot: SurvivalSnapshot): void {
@@ -771,11 +724,47 @@ export class BoatWorld {
       backingInstanceId: null,
       hitArea: { width: hitWidth, height: hitHeight, depth },
     } satisfies BoatInteractionAnchor;
-    return [...itemAnchors, fishingAnchor, repairAnchor];
+    const lanternProjection = projectBoatObjectBounds(
+      this.lantern.root,
+      this.camera,
+      width,
+      height,
+    );
+    const {
+      width: lanternHitWidth,
+      height: lanternHitHeight,
+      depth: lanternDepth,
+      ...lanternPoint
+    } = lanternProjection;
+    const lanternAnchor = {
+      id: 'end-day-lantern',
+      itemType: null,
+      toolId: 'lantern',
+      action: 'endDay',
+      ...lanternPoint,
+      visible: this.lantern.root.visible && lanternPoint.visible,
+      depleted: false,
+      remainingUses: null,
+      quantity: 1,
+      usableQuantity: 1,
+      brokenQuantity: 0,
+      backingInstanceId: null,
+      hitArea: {
+        width: lanternHitWidth,
+        height: lanternHitHeight,
+        depth: lanternDepth,
+      },
+    } satisfies BoatInteractionAnchor;
+    return [...itemAnchors, fishingAnchor, repairAnchor, lanternAnchor];
   }
 
   enterFishingView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    if (this.fishingPhase === 'ready') {
+      this.applyBasePresentation();
+      this.applyFishingPhasePresentation();
+      return Promise.resolve();
+    }
     this.fishingCameraStartPosition.copy(this.camera.position);
     this.fishingCameraStartQuaternion.copy(this.camera.quaternion);
     this.fishingPhase = 'entering';
@@ -852,6 +841,7 @@ export class BoatWorld {
     this.fishingPhase = 'bite';
     this.updateFishingWave(this.currentTime);
     this.applyFishingPhasePresentation();
+    this.updateFishingBiteParticles(0);
   }
 
   projectFishingBite(width: number, height: number): ProjectedBoatBounds {
@@ -899,12 +889,38 @@ export class BoatWorld {
     if (!fishingCatch || this.disposed) return;
     this.activeFishingCatch = fishingCatch;
     this.activeFishingCatch.position.set(0, 0, 0);
-    this.activeFishingCatch.rotation.set(0, 0, 0);
+    this.activeFishingCatch.rotation.set(0, 0.08, -0.04);
+    this.activeFishingCatch.updateMatrixWorld(true);
+    const catchBounds = new Box3().setFromObject(this.activeFishingCatch, true);
+    this.activeFishingCatch.position.y = -catchBounds.min.y;
     this.fishing.catchDisplay.add(this.activeFishingCatch);
+    this.fishingReelStartWorld.set(
+      this.fishingCastPosition.x,
+      this.fishingWaveHeight,
+      this.fishingCastPosition.z,
+    );
+    this.fishing.catchDisplay.position.copy(this.fishingReelStartWorld);
     this.fishingPhase = 'reeling';
     await this.startFishingAnimation(
       'reel',
       FISHING_REEL_DURATION,
+    );
+  }
+
+  projectFishingCatch(width: number, height: number): ProjectedBoatBounds | null {
+    if (
+      this.disposed
+      || this.fishingPhase !== 'landed'
+      || this.activeFishingCatch === null
+      || width <= 0
+      || height <= 0
+    ) return null;
+    this.scene.updateMatrixWorld(true);
+    return projectBoatObjectBounds(
+      this.fishing.catchDisplay,
+      this.camera,
+      width,
+      height,
     );
   }
 
@@ -971,7 +987,7 @@ export class BoatWorld {
     if (typeof document !== 'undefined' && document.hidden) return;
 
     this.currentTime = time;
-    const amplitudeScale = weatherAmplitudeScale(this.weather);
+    const amplitudeScale = this.weatherProfile.waveScale;
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,
       time,
@@ -984,7 +1000,7 @@ export class BoatWorld {
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(
       delta,
-      { weather: this.weather, phase: this.phase, severity: 0 },
+      this.skyState,
       this.worldCameraPosition,
     );
     this.applyBaseLighting(this.sky.palette);
@@ -1005,10 +1021,9 @@ export class BoatWorld {
     this.advanceFishingPresentation(delta);
     this.eventPresentation.update(time, delta);
     this.supplyDisplay.update(delta);
-    this.updateFishingWave(time);
-    this.updateFishingEffects(time);
-
-    this.updateSecondaryMotion(delta);
+    this.updateFishingWave(time, amplitudeScale);
+    this.updateFishingEffects();
+    this.updateFishingBiteParticles(delta);
 
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
@@ -1030,6 +1045,7 @@ export class BoatWorld {
       ),
     ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
+    this.weatherEffects.update(time, delta, this.worldCameraPosition);
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
 
@@ -1045,16 +1061,17 @@ export class BoatWorld {
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),
-      () => this.spray.dispose(),
+      () => this.weatherEffects.dispose(),
+      () => this.fishingBiteParticles.dispose(),
       () => this.sky.dispose(),
       () => this.scene.remove(
         this.motionRig,
         this.ocean.mesh,
-        this.spray.points,
         this.ambient,
         this.key,
         this.key.target,
         this.fishing.root,
+        this.fishingBiteParticles.points,
       ),
       () => this.camera.removeFromParent(),
       () => this.camera.position.copy(this.originalCameraPosition),
@@ -1119,9 +1136,8 @@ export class BoatWorld {
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
     this.fishing.splash.visible = false;
-    this.fishing.bubbles.visible = false;
-    this.fishing.ripples.visible = false;
     this.fishing.catchDisplay.visible = false;
+    if (this.fishingPhase !== 'bite') this.clearFishingBiteParticles();
     if (this.fishingPhase === 'idle') return;
 
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
@@ -1130,15 +1146,16 @@ export class BoatWorld {
     this.camera.quaternion.copy(this.fishingCameraQuaternion);
     if (this.fishingPhase === 'ready') return;
 
+    if (this.fishingPhase === 'landed') {
+      this.fishing.catchDisplay.visible = this.activeFishingCatch !== null;
+      return;
+    }
     this.fishing.line.visible = true;
-    this.fishing.bobber.visible = true;
+    this.fishing.bobber.visible = this.fishingPhase !== 'reeling';
     if (this.fishingPhase === 'waiting' && this.fishingSplashHoldRemaining > 0) {
       this.fishing.splash.visible = true;
     }
-    if (this.fishingPhase === 'bite') {
-      this.fishing.bubbles.visible = true;
-      this.fishing.ripples.visible = true;
-    } else if (this.fishingPhase === 'reeling') {
+    if (this.fishingPhase === 'reeling') {
       this.fishing.catchDisplay.visible = this.activeFishingCatch !== null;
     }
   }
@@ -1189,16 +1206,28 @@ export class BoatWorld {
         this.rodPivot.rotation.x = this.baseRodPivotRotationX
           - Math.sin(Math.PI * normalized) * swing;
         if (this.activeFishingCatch) {
-          this.activeFishingCatch.position.set(0, 0, 0);
-          this.activeFishingCatch.rotation.z = Math.sin(normalized * Math.PI * 2) * 0.16
-            * (1 - normalized);
-          this.fishingLineOrigin.getWorldPosition(this.fishingLineOriginWorld);
-          this.fishing.catchDisplay.position.lerpVectors(
-            this.fishingCastPosition,
-            this.fishingLineOriginWorld,
-            eased * 0.82,
-          );
-          this.fishing.catchDisplay.position.y += Math.sin(Math.PI * eased) * 0.45;
+          this.fishingCatchRest.getWorldPosition(this.fishingCatchTargetWorld);
+          this.fishingCatchApproachWorld.copy(this.fishingCatchTargetWorld);
+          this.fishingCatchApproachWorld.y += 0.72;
+          if (normalized < 0.72) {
+            const haul = easeOut(normalized / 0.72);
+            this.fishing.catchDisplay.position.lerpVectors(
+              this.fishingReelStartWorld,
+              this.fishingCatchApproachWorld,
+              haul,
+            );
+            this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.58;
+          } else {
+            const drop = easeInOut((normalized - 0.72) / 0.28);
+            this.fishing.catchDisplay.position.lerpVectors(
+              this.fishingCatchApproachWorld,
+              this.fishingCatchTargetWorld,
+              drop,
+            );
+            this.fishing.catchDisplay.position.y -= Math.sin(Math.PI * drop) * 0.045;
+          }
+          this.fishing.catchDisplay.rotation.z =
+            Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
         }
         break;
       }
@@ -1221,6 +1250,11 @@ export class BoatWorld {
         this.fishingSplashHoldRemaining = FISHING_SPLASH_HOLD_DURATION;
         break;
       case 'reel':
+        this.fishingCatchRest.add(this.fishing.catchDisplay);
+        this.fishing.catchDisplay.position.set(0, 0, 0);
+        this.fishing.catchDisplay.rotation.set(0, 0, 0);
+        this.fishingPhase = 'landed';
+        break;
       case 'miss':
         break;
       case 'return':
@@ -1234,9 +1268,11 @@ export class BoatWorld {
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
     this.fishing.splash.visible = false;
-    this.fishing.bubbles.visible = false;
-    this.fishing.ripples.visible = false;
     this.fishing.catchDisplay.visible = false;
+    this.fishing.root.add(this.fishing.catchDisplay);
+    this.fishing.catchDisplay.position.set(0, 0, 0);
+    this.fishing.catchDisplay.rotation.set(0, 0, 0);
+    this.clearFishingBiteParticles();
     this.fishingCatches.hide();
     this.activeFishingCatch = null;
     this.hasFishingCast = false;
@@ -1263,14 +1299,17 @@ export class BoatWorld {
       && z <= FISHING_CAST_MAX_Z;
   }
 
-  private updateFishingWave(time: number): void {
+  private updateFishingWave(
+    time: number,
+    amplitudeScale = this.weatherProfile.waveScale,
+  ): void {
     if (!this.hasFishingCast) return;
     sampleDefaultWaveInto(
       this.fishingWaveSample,
       time,
       this.fishingCastPosition.x,
       this.fishingCastPosition.z,
-      weatherAmplitudeScale(this.weather),
+      amplitudeScale,
     );
     this.fishingWaveHeight = this.fishingWaveSample.height;
     if (this.fishingPhase === 'casting') {
@@ -1287,43 +1326,12 @@ export class BoatWorld {
       );
       this.fishing.splash.position.copy(this.fishing.bobber.position);
     }
-    this.fishing.bubbles.position.copy(this.fishing.bobber.position);
-    this.fishing.ripples.position.copy(this.fishing.bobber.position);
-    if (this.fishingPhase !== 'reeling') {
+    if (this.fishingPhase !== 'reeling' && this.fishingPhase !== 'landed') {
       this.fishing.catchDisplay.position.copy(this.fishing.bobber.position);
     }
   }
 
-  private updateFishingEffects(time: number): void {
-    if (this.fishing.bubbles.visible) {
-      const bubbleCount = this.fishing.bubbles.children.length;
-      for (let index = 0; index < bubbleCount; index += 1) {
-        const bubble = this.fishing.bubbles.children[index]!;
-        const material = this.fishing.bubbleMaterials[index]!;
-        const offset = FISHING_BUBBLE_OFFSETS[index]!;
-
-        const cycle = (time * 0.38 + index * 0.173) % 1;
-        const fadeIn = smootherStep(clamp(cycle / 0.18, 0, 1));
-        const fadeOut = 1 - smootherStep(clamp((cycle - 0.58) / 0.42, 0, 1));
-        const drift = time * 0.72 + index * 1.91;
-        bubble.position.set(
-          offset[0] + Math.sin(drift) * 0.012,
-          0.018 + cycle * 0.012,
-          offset[1] + Math.cos(drift * 0.83) * 0.012,
-        );
-        bubble.scale.setScalar((0.58 + cycle * 1.42) * (0.9 + (index % 3) * 0.08));
-        material.opacity = 0.46 * fadeIn * fadeOut;
-      }
-    }
-    if (this.fishing.ripples.visible) {
-      for (let index = 0; index < this.fishing.ripples.children.length; index += 1) {
-        const ripple = this.fishing.ripples.children[index]!;
-        const material = this.fishing.rippleMaterials[index]!;
-        const cycle = (time * 0.24 + index * 0.5) % 1;
-        ripple.scale.setScalar(0.65 + cycle * 1.55);
-        material.opacity = Math.sin(Math.PI * cycle) * 0.24;
-      }
-    }
+  private updateFishingEffects(): void {
     if (this.fishing.splash.visible && this.activeFishingAnimation?.kind === 'cast') {
       const progress = this.activeFishingAnimation.elapsed / this.activeFishingAnimation.duration;
       for (let index = 0; index < this.fishing.splash.children.length; index += 1) {
@@ -1331,6 +1339,30 @@ export class BoatWorld {
           + Math.sin(Math.PI * progress) * (0.14 + (index % 2) * 0.1);
       }
     }
+  }
+
+  private updateFishingBiteParticles(delta: number): void {
+    if (this.fishingPhase !== 'bite') {
+      this.clearFishingBiteParticles();
+      return;
+    }
+    this.fishingBiteParticlesActive = true;
+    this.fishingBiteParticles.update(delta);
+    const dt = Math.min(0.1, Math.max(0, delta));
+    this.fishingBiteParticleCooldown = Math.max(0, this.fishingBiteParticleCooldown - dt);
+    if (this.fishingBiteParticleCooldown > 0) return;
+    this.fishingBiteParticles.emit(
+      this.fishing.bobber.position,
+      FISHING_BITE_PARTICLE_INTENSITY,
+    );
+    this.fishingBiteParticleCooldown = FISHING_BITE_PARTICLE_INTERVAL_SECONDS;
+  }
+
+  private clearFishingBiteParticles(): void {
+    if (!this.fishingBiteParticlesActive) return;
+    this.fishingBiteParticles.reset();
+    this.fishingBiteParticlesActive = false;
+    this.fishingBiteParticleCooldown = 0;
   }
 
   private updateFishingLine(): void {
@@ -1377,30 +1409,13 @@ export class BoatWorld {
     this.fishing.linePositionAttribute.needsUpdate = true;
   }
 
-  private updateSecondaryMotion(delta: number): void {
-    this.spray.update(delta);
-    this.scene.updateMatrixWorld(true);
-    this.bowAnchor.getWorldPosition(this.bowWorldPosition);
-    const dt = Math.min(delta, 0.1);
-    const bowVelocity = this.secondaryMotionInitialized && dt > 0
-      ? (this.bowWorldPosition.y - this.previousBowWorldY) / dt : 0;
-    const bowImpact = clamp((bowVelocity - 0.2) / 0.8, 0, 1);
-    this.previousBowWorldY = this.bowWorldPosition.y;
-    this.secondaryMotionInitialized = true;
-    this.sprayCooldown = Math.max(0, this.sprayCooldown - Math.min(delta, 0.1));
-    if (bowImpact >= 0.25 && this.sprayCooldown === 0) {
-      this.spray.emit(this.bowWorldPosition, bowImpact);
-      this.sprayCooldown = this.weather === 'squall' ? 0.18 : 0.35;
-    }
-
-  }
-
   private applyBaseLighting(atmosphere: Readonly<SkyPalette>): void {
+    const lightScale = this.weatherProfile.lightIntensityScale;
     this.ambient.color.copy(atmosphere.ambientLightColor);
-    this.ambient.intensity = atmosphere.ambientLightIntensity;
+    this.ambient.intensity = atmosphere.ambientLightIntensity * lightScale;
     this.key.color.copy(atmosphere.keyLightColor);
-    this.key.intensity = atmosphere.keyLightIntensity;
-    this.lantern.light.intensity = this.phase === 'night' ? 4.2 : 2.8;
+    this.key.intensity = atmosphere.keyLightIntensity * lightScale;
+    this.lantern.light.intensity = this.phase === 'night' ? 5.4 : 3.8;
     if (this.scene.background instanceof Color) {
       this.scene.background.copy(atmosphere.horizonColor);
     } else {
@@ -1408,9 +1423,13 @@ export class BoatWorld {
     }
     if (this.scene.fog instanceof FogExp2) {
       this.scene.fog.color.copy(atmosphere.fogColor);
-      this.scene.fog.density = atmosphere.fogDensity;
+      this.scene.fog.density = atmosphere.fogDensity
+        * this.weatherProfile.fogDensityScale;
     } else {
-      this.scene.fog = new FogExp2(atmosphere.fogColor, atmosphere.fogDensity);
+      this.scene.fog = new FogExp2(
+        atmosphere.fogColor,
+        atmosphere.fogDensity * this.weatherProfile.fogDensityScale,
+      );
     }
   }
 

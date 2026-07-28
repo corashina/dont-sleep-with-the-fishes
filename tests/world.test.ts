@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   Box3,
-  BufferAttribute,
   BufferGeometry,
   Color,
   DirectionalLight,
@@ -24,7 +23,7 @@ import {
   Vector4,
 } from 'three';
 import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
-import { getSinkingState, type SinkingState } from '../src/game/sinking';
+import { getSinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
@@ -35,6 +34,7 @@ import {
 import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { Environment } from '../src/world/Environment';
@@ -156,6 +156,94 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('uses one resolved weather amplitude for both vessels and the ocean', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
+    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
+    const sinking = {
+      ...getSinkingState(30, 120),
+      waveAmplitudeScale: 1.2,
+    };
+    const expectedAmplitude = sinking.waveAmplitudeScale
+      * presentationWeatherProfile('waves').waveScale;
+
+    try {
+      world.setPresentationWeather('waves');
+      world.update(4, 1 / 60, sinking, new Vector3(), false);
+
+      expect(buoyancySample.mock.calls.slice(-2).map((call) => call[4]))
+        .toEqual([expectedAmplitude, expectedAmplitude]);
+      expect(oceanUpdate.mock.calls.at(-1)?.[1]).toBe(expectedAmplitude);
+      expect(world.sampleFlightWaterHeight(4, 2, -3, sinking.waveAmplitudeScale))
+        .toBeCloseTo(sampleWaveField(DEFAULT_WAVES, 4, 2, -3, expectedAmplitude).height);
+    } finally {
+      buoyancySample.mockRestore();
+      oceanUpdate.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('scales copied fog and light values and restores the calm atmosphere', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const environment = (world as unknown as { environment: Environment }).environment;
+    const internals = environment as unknown as {
+      fillLight: HemisphereLight;
+      keyLight: DirectionalLight;
+      weatherEffects: {
+        state: { profile: ReturnType<typeof presentationWeatherProfile> };
+      };
+    };
+    const sinking = getSinkingState(0, 120);
+
+    try {
+      world.setPresentationWeather('fog');
+      world.update(1, 2, sinking, new Vector3(), false);
+
+      const fogProfile = presentationWeatherProfile('fog');
+      const fogBase = skyPaletteFor({
+        weather: fogProfile.skyWeather,
+        phase: 'day',
+        severity: 0,
+      });
+      expect(environment.weatherProfile).toBe(fogProfile);
+      expect(internals.weatherEffects.state.profile).toBe(fogProfile);
+      expect((scene.fog as FogExp2).density)
+        .toBeCloseTo(fogBase.fogDensity * fogProfile.fogDensityScale);
+      expect(internals.fillLight.intensity)
+        .toBeCloseTo(fogBase.ambientLightIntensity * fogProfile.lightIntensityScale);
+      expect(internals.keyLight.intensity)
+        .toBeCloseTo(fogBase.keyLightIntensity * fogProfile.lightIntensityScale);
+      expect(environment.atmosphere.fogDensity).toBeCloseTo(fogBase.fogDensity);
+      expect(environment.atmosphere.ambientLightIntensity)
+        .toBeCloseTo(fogBase.ambientLightIntensity);
+
+      world.setPresentationWeather('calm');
+      world.update(3, 2, sinking, new Vector3(), false);
+
+      const calmProfile = presentationWeatherProfile('calm');
+      const calmBase = skyPaletteFor({
+        weather: calmProfile.skyWeather,
+        phase: 'day',
+        severity: 0,
+      });
+      expect(environment.weatherProfile).toBe(calmProfile);
+      expect((scene.fog as FogExp2).density)
+        .toBeCloseTo(calmBase.fogDensity * calmProfile.fogDensityScale);
+      expect(internals.fillLight.intensity)
+        .toBeCloseTo(calmBase.ambientLightIntensity * calmProfile.lightIntensityScale);
+      expect(internals.keyLight.intensity)
+        .toBeCloseTo(calmBase.keyLightIntensity * calmProfile.lightIntensityScale);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('uses both authored barrels as aligned physics visuals without diagnostic objects', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -175,9 +263,18 @@ describe('world builders', () => {
     world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));
     expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
     expect(scene.getObjectByName('physics-test-ball')).toBeUndefined();
-    const physics = (world as unknown as {
+    const internals = world as unknown as {
       scavengePhysics: ScavengePhysics;
-    }).scavengePhysics;
+      shipBuild: {
+        detailColliderById: ReadonlyMap<string, unknown>;
+      };
+    };
+    const physics = internals.scavengePhysics;
+    SHIP_LAYOUT.details
+      .filter(({ kind }) => kind === 'barrel')
+      .forEach(({ id }) => {
+        expect(world.colliders).not.toContain(internals.shipBuild.detailColliderById.get(id));
+      });
     world.physicsBarrels.forEach((barrel, index) => {
       expect(physics.barrelPoses[index]!.translation.y - barrel.position.y)
         .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
@@ -202,6 +299,9 @@ describe('world builders', () => {
     const internals = world as unknown as {
       scavengePhysics: ScavengePhysics | null;
       physicsDebugView: unknown;
+      shipBuild: {
+        detailColliderById: ReadonlyMap<string, unknown>;
+      };
     };
 
     expect(world.physicsMode).toBe('off');
@@ -211,6 +311,11 @@ describe('world builders', () => {
       expect(barrel.parent).not.toBe(scene);
       expect(world.ship.getObjectByName(barrel.name)).toBe(barrel);
     });
+    SHIP_LAYOUT.details
+      .filter(({ kind }) => kind === 'barrel')
+      .forEach(({ id }) => {
+        expect(world.colliders).toContain(internals.shipBuild.detailColliderById.get(id));
+      });
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
     expect(world.ship.getObjectByName('physics-debug-static')).toBeUndefined();
     expect(() => world.update(
@@ -359,7 +464,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('does not add ceiling fixtures or localized room lights to the scavenging ship', () => {
+  it('keeps the decorative ceiling fixture separate from localized room lighting', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const createPracticalLight = vi.spyOn(propModels, 'createPracticalLight');
@@ -371,6 +476,7 @@ describe('world builders', () => {
 
     expect(scene.getObjectByName('ship-room-lights')).toBeUndefined();
     expect(world.ship.getObjectByName('room-lamp:crew-cabin')).toBeUndefined();
+    expect(world.ship.getObjectByName('decoration:cabin-ceiling-light')).toBeDefined();
     expect(spotLights).toEqual([]);
     expect(createPracticalLight).not.toHaveBeenCalled();
 

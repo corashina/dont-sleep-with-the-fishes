@@ -1,5 +1,5 @@
 import type RAPIER from '@dimforge/rapier3d-deterministic-compat';
-import type { CollisionBox } from '../player/collisions';
+import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { FixedStepClock } from './FixedStepClock';
 import type { PhysicsRuntime, PhysicsVector3 } from './PhysicsRuntime';
@@ -7,8 +7,7 @@ import type { PhysicsRuntime, PhysicsVector3 } from './PhysicsRuntime';
 const PHYSICS_STEP_SECONDS = 1 / 60;
 const MAX_PHYSICS_SUBSTEPS = 3;
 const DECK_THICKNESS = 0.2;
-const BARRIER_THICKNESS = 0.25;
-const BARRIER_HEIGHT = 2;
+const ARC_COLLIDER_SEGMENTS = 8;
 export const SCAVENGE_BARREL_RADIUS = 0.565;
 export const SCAVENGE_BARREL_HALF_HEIGHT = 0.575;
 const BARREL_MASS = 35;
@@ -49,6 +48,7 @@ export interface PhysicsPose {
 
 export interface ScavengePhysicsConfig {
   readonly colliders: readonly CollisionBox[];
+  readonly arcColliders: readonly CollisionArc[];
   readonly safeBounds: PlayerNavigationBounds['safe'];
   readonly deckY: number;
   readonly shipWidth: number;
@@ -66,27 +66,34 @@ export interface ScavengePhysicsController {
 export interface PhysicsCuboid {
   center: PhysicsVector3;
   halfExtents: PhysicsVector3;
+  rotation?: PhysicsQuaternion;
 }
 
 export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
-  const width = box.maxX - box.minX;
+  const footprint = box.orientedFootprint;
+  const width = footprint ? footprint.halfWidth * 2 : box.maxX - box.minX;
   const height = box.maxY - box.minY;
-  const length = box.maxZ - box.minZ;
+  const length = footprint ? footprint.halfDepth * 2 : box.maxZ - box.minZ;
   if (
     !Number.isFinite(width)
     || !Number.isFinite(height)
     || !Number.isFinite(length)
+    || (footprint && (
+      !Number.isFinite(footprint.centerX)
+      || !Number.isFinite(footprint.centerZ)
+      || !Number.isFinite(footprint.rotationY)
+    ))
     || width <= 0
     || height <= 0
     || length <= 0
   ) {
     throw new Error('Physics collider must have finite positive extents');
   }
-  return {
+  const cuboid: PhysicsCuboid = {
     center: {
-      x: (box.minX + box.maxX) / 2,
+      x: footprint ? footprint.centerX : (box.minX + box.maxX) / 2,
       y: (box.minY + box.maxY) / 2,
-      z: (box.minZ + box.maxZ) / 2,
+      z: footprint ? footprint.centerZ : (box.minZ + box.maxZ) / 2,
     },
     halfExtents: {
       x: width / 2,
@@ -94,20 +101,79 @@ export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
       z: length / 2,
     },
   };
+  if (footprint) {
+    cuboid.rotation = {
+      x: 0,
+      y: Math.sin(footprint.rotationY / 2),
+      z: 0,
+      w: Math.cos(footprint.rotationY / 2),
+    };
+  }
+  return cuboid;
+}
+
+export function collisionArcToCuboids(arc: CollisionArc): readonly PhysicsCuboid[] {
+  const height = arc.maxY - arc.minY;
+  if (
+    ![
+      arc.centerX,
+      arc.centerZ,
+      arc.radiusX,
+      arc.radiusZ,
+      arc.thickness,
+      arc.minY,
+      arc.maxY,
+    ].every(Number.isFinite)
+    || arc.radiusX <= 0
+    || arc.radiusZ <= 0
+    || arc.thickness <= 0
+    || height <= 0
+  ) {
+    throw new Error('Physics arc collider must have finite positive extents');
+  }
+  const direction = arc.end === 'bow' ? 1 : -1;
+  const pointAt = (index: number): PhysicsVector3 => {
+    const angle = Math.PI * index / ARC_COLLIDER_SEGMENTS;
+    return {
+      x: arc.centerX + arc.radiusX * Math.cos(angle),
+      y: (arc.minY + arc.maxY) / 2,
+      z: arc.centerZ + direction * arc.radiusZ * Math.sin(angle),
+    };
+  };
+  return Array.from({ length: ARC_COLLIDER_SEGMENTS }, (_, index) => {
+    const start = pointAt(index);
+    const end = pointAt(index + 1);
+    const deltaX = end.x - start.x;
+    const deltaZ = end.z - start.z;
+    const rotationY = Math.atan2(deltaX, deltaZ);
+    return {
+      center: {
+        x: (start.x + end.x) / 2,
+        y: start.y,
+        z: (start.z + end.z) / 2,
+      },
+      halfExtents: {
+        x: arc.thickness / 2,
+        y: height / 2,
+        z: Math.hypot(deltaX, deltaZ) / 2,
+      },
+      rotation: {
+        x: 0,
+        y: Math.sin(rotationY / 2),
+        z: 0,
+        w: Math.cos(rotationY / 2),
+      },
+    };
+  });
 }
 
 export function createScavengeStaticCuboids(
   config: Pick<
     ScavengePhysicsConfig,
-    'colliders' | 'safeBounds' | 'deckY' | 'shipWidth' | 'shipLength'
+    'colliders' | 'arcColliders' | 'deckY' | 'shipWidth' | 'shipLength'
   >,
 ): readonly PhysicsCuboid[] {
-  const { safeBounds: bounds, deckY } = config;
-  const width = bounds.maxX - bounds.minX;
-  const length = bounds.maxZ - bounds.minZ;
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-  const centerY = deckY + BARRIER_HEIGHT / 2;
+  const { deckY } = config;
   return [
     {
       center: { x: 0, y: deckY - DECK_THICKNESS / 2, z: 0 },
@@ -118,54 +184,7 @@ export function createScavengeStaticCuboids(
       },
     },
     ...config.colliders.map(collisionBoxToCuboid),
-    {
-      center: {
-        x: bounds.minX + BARRIER_THICKNESS / 2,
-        y: centerY,
-        z: centerZ,
-      },
-      halfExtents: {
-        x: BARRIER_THICKNESS / 2,
-        y: BARRIER_HEIGHT / 2,
-        z: length / 2,
-      },
-    },
-    {
-      center: {
-        x: bounds.maxX - BARRIER_THICKNESS / 2,
-        y: centerY,
-        z: centerZ,
-      },
-      halfExtents: {
-        x: BARRIER_THICKNESS / 2,
-        y: BARRIER_HEIGHT / 2,
-        z: length / 2,
-      },
-    },
-    {
-      center: {
-        x: centerX,
-        y: centerY,
-        z: bounds.minZ + BARRIER_THICKNESS / 2,
-      },
-      halfExtents: {
-        x: width / 2,
-        y: BARRIER_HEIGHT / 2,
-        z: BARRIER_THICKNESS / 2,
-      },
-    },
-    {
-      center: {
-        x: centerX,
-        y: centerY,
-        z: bounds.maxZ - BARRIER_THICKNESS / 2,
-      },
-      halfExtents: {
-        x: width / 2,
-        y: BARRIER_HEIGHT / 2,
-        z: BARRIER_THICKNESS / 2,
-      },
-    },
+    ...config.arcColliders.flatMap(collisionArcToCuboids),
   ];
 }
 
@@ -329,9 +348,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
         .setRotation(config.initialShipPose.rotation),
     );
 
-    staticCuboids.forEach((cuboid) => {
-      this.addCuboid(cuboid.center, cuboid.halfExtents, runtime);
-    });
+    staticCuboids.forEach((cuboid) => this.addCuboid(cuboid, runtime));
 
     this.barrelSpawns = config.barrelSpawns.map((spawn) => ({ ...spawn }));
     this.barrelSpawnWorlds = this.barrelSpawns.map(() => ({ x: 0, y: 0, z: 0 }));
@@ -404,13 +421,17 @@ export class ScavengePhysics implements ScavengePhysicsController {
   }
 
   private addCuboid(
-    center: PhysicsVector3,
-    halfExtents: PhysicsVector3,
+    cuboid: PhysicsCuboid,
     runtime: PhysicsRuntime,
   ): void {
+    const descriptor = runtime.rapier.ColliderDesc.cuboid(
+      cuboid.halfExtents.x,
+      cuboid.halfExtents.y,
+      cuboid.halfExtents.z,
+    ).setTranslation(cuboid.center.x, cuboid.center.y, cuboid.center.z);
+    if (cuboid.rotation) descriptor.setRotation(cuboid.rotation);
     this.world.createCollider(
-      runtime.rapier.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
-        .setTranslation(center.x, center.y, center.z),
+      descriptor,
       this.shipBody,
     );
   }

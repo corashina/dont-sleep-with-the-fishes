@@ -122,6 +122,36 @@ describe('player movement helpers', () => {
     expect(result.z).toBeCloseTo(0.65);
   });
 
+  it('slides along a single oriented wall box', () => {
+    const rotationY = Math.PI / 4;
+    const halfWidth = 2;
+    const halfDepth = 0.1;
+    const extent = (halfWidth + halfDepth) / Math.SQRT2;
+    const result = resolveLocalMovement(
+      { x: -1 / Math.SQRT2, y: 3.7, z: -1 / Math.SQRT2 },
+      { x: 1 / Math.SQRT2, y: 3.7, z: -1 / Math.SQRT2 },
+      0.35,
+      [{
+        minX: -extent,
+        maxX: extent,
+        minY: 2,
+        maxY: 5,
+        minZ: -extent,
+        maxZ: extent,
+        orientedFootprint: {
+          centerX: 0,
+          centerZ: 0,
+          halfWidth,
+          halfDepth,
+          rotationY,
+        },
+      }],
+    );
+
+    expect(result.x).toBeCloseTo((1 - 0.45) / Math.SQRT2);
+    expect(result.z).toBeCloseTo((-1 - 0.45) / Math.SQRT2);
+  });
+
   it('does not collide with vertically separate boxes', () => {
     const result = resolveLocalMovement(
       { x: 0, y: 3.7, z: 0 },

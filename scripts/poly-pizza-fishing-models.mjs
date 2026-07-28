@@ -14,6 +14,7 @@ function source({
   license,
   sha256,
   sourceTriangles,
+  downloadedOn = '2026-07-26',
 }) {
   return Object.freeze({
     id,
@@ -28,7 +29,7 @@ function source({
     licenseUrl: license === 'CC0 1.0' ? CC0 : CC_BY_3,
     sha256,
     sourceTriangles,
-    downloadedOn: '2026-07-26',
+    downloadedOn,
     maxTriangles: 2_000,
   });
 }
@@ -96,6 +97,27 @@ export const POLY_PIZZA_FISHING_MODEL_SOURCES = Object.freeze({
     title: 'Fish', creator: 'Kenney', license: 'CC0 1.0',
     sha256: '78A8C5ABCF26C698E2C51AF21312455928AA7B9D9A531FAD508327DBE1567143',
     sourceTriangles: 233,
+  }),
+  seaweed: source({
+    id: 'seaweed', publicId: '4cFllH6Iazk',
+    resourceId: '8c51572a-1938-4c61-b971-63c3b69f3ea7',
+    title: 'Kelp', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '3D8E3071C69E6F701A7061AB820293F63E96023CED132C559CC0CDB12542C7C6',
+    sourceTriangles: 784, downloadedOn: '2026-07-27',
+  }),
+  boot: source({
+    id: 'boot', publicId: '7HbqG8RwRcA',
+    resourceId: '888317ad-20f0-4b0d-ba01-0bdd017adfd8',
+    title: 'Boots', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94',
+    sourceTriangles: 154, downloadedOn: '2026-07-27',
+  }),
+  plasticBottle: source({
+    id: 'plasticBottle', publicId: 'dha06wFxUwA',
+    resourceId: '31674c92-502a-453a-a484-6da95ae4f13c',
+    title: 'Water bottle', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211',
+    sourceTriangles: 480, downloadedOn: '2026-07-27',
   }),
 });
 

@@ -132,18 +132,6 @@ function buildOrdinaryFish(root: Group, context: TemplateBuildContext): void {
   eye.position.set(0.51, 0.09, 0.27);
 }
 
-function buildFlatfish(root: Group, context: TemplateBuildContext): void {
-  addFishBody(root, context, 'flatfish', [1.34, 0.35, 1.06]);
-  const eye = addMesh(
-    root,
-    context,
-    'fishing-catch:flatfish:eye',
-    new SphereGeometry(0.052, 6, 4),
-    context.accent,
-  );
-  eye.position.set(0.37, 0.19, 0.17);
-}
-
 function buildCrab(root: Group, context: TemplateBuildContext): void {
   const body = addMesh(
     root,
@@ -206,19 +194,6 @@ function buildSquid(root: Group, context: TemplateBuildContext): void {
     tentacle.position.set(-0.68 - index * 0.035, (index - 1.5) * 0.09, (index % 2) * 0.12 - 0.06);
     tentacle.rotation.z = Math.PI / 2 + (index - 1.5) * 0.08;
   }
-}
-
-function buildSwordfish(root: Group, context: TemplateBuildContext): void {
-  addFishBody(root, context, 'swordfish', [1.5, 0.72, 0.62]);
-  const sword = addMesh(
-    root,
-    context,
-    'fishing-catch:swordfish:sword',
-    new ConeGeometry(0.065, 0.94, 6),
-    context.accent,
-  );
-  sword.position.x = 1.16;
-  sword.rotation.z = -Math.PI / 2;
 }
 
 function buildSeaweed(root: Group, context: TemplateBuildContext): void {
@@ -305,10 +280,8 @@ function buildFamily(
 
   switch (family) {
     case 'ordinaryFish': buildOrdinaryFish(root, context); break;
-    case 'flatfish': buildFlatfish(root, context); break;
     case 'crab': buildCrab(root, context); break;
     case 'squid': buildSquid(root, context); break;
-    case 'swordfish': buildSwordfish(root, context); break;
     case 'seaweed': buildSeaweed(root, context); break;
     case 'boot': buildBoot(root, context); break;
     case 'bottle': buildBottle(root, context); break;

@@ -22,7 +22,7 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number) {
   const session = new SurvivalSession(saved(), {
     seed: 1,
-    random: sequenceRandom([0, 0, rescueRoll]),
+    random: sequenceRandom([0, rescueRoll]),
     initial: { day, rescueProgress },
   });
   session.perform('endDay');
@@ -507,6 +507,36 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
+  it('cancels only an uncast attempt and restores its reserved action state', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0, 0, 0]),
+      initial: { energy: 3 },
+    });
+    const first = beginFishing(session);
+
+    expect(session.cancelFishing(first.snapshot().id)).toMatchObject({
+      accepted: true,
+      code: 'fishing-cancelled',
+      deltas: { energy: 1 },
+      cue: 'none',
+    });
+    expect(session.snapshot()).toMatchObject({
+      energy: 3,
+      actedToday: false,
+    });
+    expect(session.perform('eat')).toMatchObject({ accepted: false, code: 'no-food' });
+
+    const cast = beginFishing(session);
+    expect(cast.cast({ x: 4, z: -2 }).accepted).toBe(true);
+    const beforeRejectedCancel = session.snapshot();
+    expect(session.cancelFishing(cast.snapshot().id)).toMatchObject({
+      accepted: false,
+      code: 'fishing-already-cast',
+    });
+    expect(session.snapshot()).toEqual(beforeRejectedCancel);
+  });
+
   it('does not mix fishing with another main daytime activity', () => {
     const afterOther = new SurvivalSession(saved('energyBar'), {
       seed: 1,
@@ -621,14 +651,15 @@ describe('SurvivalSession daytime actions', () => {
     expect(cod.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
     expect(cod.snapshot().inventory['baitTin-2']?.condition).toBe('usable');
 
-    const swordfish = new SurvivalSession(saved(), {
+    const tuna = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.47]),
+      random: sequenceRandom([0, 0.12]),
+      initial: { day: 3 },
     });
-    const swordfishAttempt = beginFishing(swordfish);
-    const swordfishResult = reelCatch(swordfishAttempt);
-    expect(swordfishResult).toMatchObject({ kind: 'catch', catch: { id: 'swordfish', food: 2 } });
-    expect(swordfish.finishFishing(swordfishAttempt.snapshot().id, swordfishResult)).toMatchObject({
+    const tunaAttempt = beginFishing(tuna);
+    const tunaResult = reelCatch(tunaAttempt);
+    expect(tunaResult).toMatchObject({ kind: 'catch', catch: { id: 'tuna', food: 2 } });
+    expect(tuna.finishFishing(tunaAttempt.snapshot().id, tunaResult)).toMatchObject({
       deltas: { food: 2 },
       cue: 'none',
     });
@@ -765,7 +796,7 @@ describe('SurvivalSession daytime actions', () => {
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
     const session = new SurvivalSession(saved('baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0, 0, 0, 0.99, 0.3]),
+      random: sequenceRandom([0, 0, 0, 0, 0, 0.3]),
       initial: { energy: 3 },
     });
 
@@ -824,6 +855,18 @@ describe('SurvivalSession daytime actions', () => {
     expect(recover(20)).toBe(3);
     expect(recover(53)).toBe(2);
     expect(recover(73)).toBe(1);
+  });
+
+  it('keeps normal dawns calm without drawing random weather', () => {
+    const next = vi.fn(() => 0);
+    const session = new SurvivalSession(saved(), { seed: 1, random: { next } });
+
+    session.perform('endDay');
+    const drawsBeforeDawn = next.mock.calls.length;
+    expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'dawn' });
+
+    expect(next).toHaveBeenCalledTimes(drawsBeforeDawn);
+    expect(session.snapshot()).toMatchObject({ weather: 'calm' });
   });
 
   it('uses the one Medkit charge and marks its instance consumed', () => {
@@ -943,7 +986,7 @@ describe('SurvivalSession daytime actions', () => {
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.99, 0, 0.99]),
+      random: sequenceRandom([0, 0]),
       initial: { hunger: 95, health: 20, hull: 5, energy: 0 },
     });
     session.perform('endDay');
@@ -1070,7 +1113,7 @@ describe('SurvivalSession daytime actions', () => {
   it('caps rescue probability at 0.85 after progress', () => {
     const rescued = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0.849]),
+      random: sequenceRandom([0, 0.849]),
       initial: { day: 20, rescueProgress: 100 },
       initialEventId: 'shower-night',
     });
@@ -1080,7 +1123,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const missed = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0.851]),
+      random: sequenceRandom([0, 0.851]),
       initial: { day: 20, rescueProgress: 100 },
       initialEventId: 'shower-night',
     });

@@ -8,6 +8,7 @@ import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { ShipAssets } from '../world/ShipAssets';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
+import type { PresentationWeatherId } from '../weather/presentationWeather';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -31,5 +32,7 @@ export interface GamePhase {
   resize(width: number, height: number): void;
   render(): void;
   setOverlayActive?(active: boolean): void;
+  setWeatherOverride?(id: PresentationWeatherId | null): void;
+  getPresentationWeather?(): PresentationWeatherId;
   dispose(): void;
 }

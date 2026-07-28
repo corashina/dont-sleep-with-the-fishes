@@ -3,6 +3,7 @@ import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
+/** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'

@@ -3,6 +3,7 @@ import {
   Group,
   Material,
   Mesh,
+  MeshStandardMaterial,
   PointLight,
 } from 'three';
 import {
@@ -25,6 +26,7 @@ export function createSurvivalLantern(model: Group): SurvivalLantern {
 
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
+  const glowingMaterials = new Set<MeshStandardMaterial>();
   model.name = 'survival-lantern:model';
   model.traverse((object) => {
     if (!(object instanceof Mesh)) return;
@@ -32,10 +34,20 @@ export function createSurvivalLantern(model: Group): SurvivalLantern {
     // nearby boat supplies still cast shadows.
     object.castShadow = false;
     object.receiveShadow = true;
+    const meshMaterials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    meshMaterials.forEach((material) => {
+      if (!(material instanceof MeshStandardMaterial) || glowingMaterials.has(material)) return;
+      glowingMaterials.add(material);
+      material.emissive.setHex(0xffc56a);
+      material.emissiveIntensity = 1.35;
+      material.emissiveMap = material.map;
+    });
   });
   collectMeshResources(model, geometries, materials);
 
-  const light = new PointLight(0xffb261, 2.8, 4, 2);
+  const light = new PointLight(0xffb261, 3.8, 4, 2);
   light.name = 'survival-lantern:light';
   light.position.y = 0.25;
   light.castShadow = true;

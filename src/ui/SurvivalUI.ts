@@ -1,8 +1,4 @@
 import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
-import {
-  createVisualQualityPreference,
-  type VisualQualityPreference,
-} from '../rendering/visualQuality';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -20,12 +16,10 @@ import type {
 } from '../survival/survivalTypes';
 import { formatDuration } from './formatDuration';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
-import { VisualQualityControl } from './VisualQualityControl';
 
 interface ActionDefinition {
   id: DayActionId;
   label: string;
-  shortcut: string;
   cost: string;
   energyCost: number;
   effect: string;
@@ -47,6 +41,10 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
   fishingRod: {
     label: 'FISH',
     description: 'Cast from the bow to find food or drifting junk. Bait is used automatically when available.',
+  },
+  lantern: {
+    label: 'END DAY',
+    description: 'Douse the lantern to end the current day. Energy is restored at dawn.',
   },
 });
 
@@ -70,15 +68,15 @@ interface MeterDefinition {
 }
 
 const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', shortcut: '1', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
-  { id: 'dive', label: 'DIVE', shortcut: '2', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
-  { id: 'eat', label: 'EAT', shortcut: '3', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', shortcut: '4', cost: '2 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
-  { id: 'treat', label: 'TREAT', shortcut: '5', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'endDay', label: 'END DAY', shortcut: '7', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
-  { id: 'repairItem', label: 'REPAIR ITEM', shortcut: '', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
-  { id: 'sendMessage', label: 'SEND MESSAGE', shortcut: '', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', shortcut: '', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
+  { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
+  { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
+  { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', cost: '2 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
+  { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
+  { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
+  { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
+  { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
+  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
 ];
 
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
@@ -191,8 +189,10 @@ export interface FishingUiState {
 }
 
 export interface FishingResultView {
+  readonly caption: string;
   readonly title: string;
   readonly detail: string;
+  readonly catchTarget: ProjectedBoatBounds | null;
 }
 
 export interface EventContextChoice {
@@ -225,6 +225,7 @@ export class SurvivalUI {
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
+  onFishingViewExit: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -233,7 +234,6 @@ export class SurvivalUI {
   private readonly topControls: HTMLElement;
   private readonly journalMarker: HTMLButtonElement;
   private readonly journalUnread: HTMLElement;
-  private readonly endDayButton: HTMLButtonElement;
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
@@ -247,9 +247,11 @@ export class SurvivalUI {
   private readonly fishingBiteTarget: HTMLButtonElement;
   private readonly fishingFade: HTMLElement;
   private readonly fishingResultLayer: HTMLElement;
+  private readonly fishingResultCaption: HTMLElement;
   private readonly fishingResultTitle: HTMLElement;
   private readonly fishingResultDetail: HTMLElement;
   private readonly fishingResultContinue: HTMLButtonElement;
+  private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
   private readonly repairTargets: HTMLElement;
@@ -271,7 +273,6 @@ export class SurvivalUI {
   private readonly restartButton: HTMLButtonElement;
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
-  private readonly visualQualityControl: VisualQualityControl;
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
@@ -315,19 +316,14 @@ export class SurvivalUI {
   private pendingEventOutcomeHold: PendingFade | null = null;
   private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
+  private fishingResultTarget: ProjectedBoatBounds | null = null;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
 
-  constructor(
-    private readonly mount: HTMLElement,
-    visualQuality: VisualQualityPreference = createVisualQualityPreference(
-      () => undefined,
-      null,
-    ),
-  ) {
+  constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
@@ -346,33 +342,26 @@ export class SurvivalUI {
             <span class="survival-status__detail ui-role-context"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
           </section>
         </div>
-        <button type="button" class="end-day-button ui-role-context" data-action="endDay" aria-keyshortcuts="7" aria-label="End day">
-          <span class="end-day-button__cord" aria-hidden="true"></span>
-          ${uiArtwork('lantern', 'end-day-button__art')}
-          <span class="end-day-button__tag" aria-hidden="true">
-            <strong>END DAY</strong>
-            <small>7 · DOUSE LAMP</small>
-          </span>
-        </button>
       </div>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
-        <div class="fishing-reticle" data-fishing-reticle aria-hidden="true"></div>
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
+        <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
+          <span class="fishing-view-exit__arrow" aria-hidden="true"></span>
+        </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
       <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
         <div class="routine-dialog__card fishing-result-card">
-          <p class="eyebrow ui-role-context">FISHING RESULT</p>
+          <p class="eyebrow ui-role-context" data-fishing-result-caption></p>
           <h2 class="ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
           <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
             CONTINUE
-            <span class="salvage-action__note" aria-hidden="true">BACK TO THE BOAT</span>
           </button>
         </div>
       </section>
@@ -384,7 +373,6 @@ export class SurvivalUI {
           <div class="repair-targets" data-repair-targets></div>
           <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel aria-label="Cancel repair">
             CANCEL
-            <span class="salvage-action__note" aria-hidden="true">KEEP THE TAPE</span>
           </button>
         </div>
       </section>
@@ -394,7 +382,6 @@ export class SurvivalUI {
       </section>
       <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
         ENDURE
-        <span class="salvage-action__note" aria-hidden="true">TAKE THE HIT</span>
       </button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <div class="journal-book" data-journal-book>
@@ -422,10 +409,8 @@ export class SurvivalUI {
           <p class="eyebrow ui-role-context">PAUSED</p>
           <h2 class="ui-role-display">Hold Fast</h2>
           <p class="ui-role-narrative">The sea will wait until you return.</p>
-          <div data-visual-quality-control></div>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
             RESUME
-            <span class="salvage-action__note" aria-hidden="true">RETURN TO THE BOAT</span>
           </button>
         </div>
       </section>
@@ -437,18 +422,11 @@ export class SurvivalUI {
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
             START FROM THE SHIP
-            <span class="salvage-action__note" aria-hidden="true">NEW EVACUATION</span>
           </button>
         </div>
       </section>
     `;
     mount.append(this.root);
-    const visualQualityHost = requireElement(
-      this.root,
-      '[data-visual-quality-control]',
-    );
-    this.visualQualityControl = new VisualQualityControl(visualQuality);
-    visualQualityHost.append(this.visualQualityControl.element);
 
     this.day = requireElement(this.root, '[data-day]');
     this.weather = requireElement(this.root, '[data-weather]');
@@ -456,7 +434,6 @@ export class SurvivalUI {
     this.topControls = requireElement(this.root, '[data-survival-top]');
     this.journalMarker = requireElement(this.root, '[data-journal-open]');
     this.journalUnread = requireElement(this.root, '[data-journal-unread]');
-    this.endDayButton = requireElement(this.root, '[data-action="endDay"]');
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
@@ -470,9 +447,11 @@ export class SurvivalUI {
     this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
     this.fishingFade = requireElement(this.root, '[data-fishing-fade]');
     this.fishingResultLayer = requireElement(this.root, '[data-fishing-result]');
+    this.fishingResultCaption = requireElement(this.root, '[data-fishing-result-caption]');
     this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
     this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
     this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
+    this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
     this.repairTargets = requireElement(this.root, '[data-repair-targets]');
@@ -795,8 +774,12 @@ export class SurvivalUI {
   showFishingResult(view: FishingResultView): void {
     if (this.disposed) return;
     this.fishingResultContinueIssued = false;
+    this.fishingResultCaption.textContent = view.caption;
     this.fishingResultTitle.textContent = view.title;
     this.fishingResultDetail.textContent = view.detail;
+    this.fishingResultTarget = view.catchTarget === null
+      ? null
+      : Object.freeze({ ...view.catchTarget });
     this.showLayer(this.fishingResultLayer);
     this.fishingResultContinue.focus();
   }
@@ -804,6 +787,14 @@ export class SurvivalUI {
   hideFishingResult(): void {
     if (this.disposed) return;
     this.hideLayer(this.fishingResultLayer);
+    this.fishingResultTarget = null;
+  }
+
+  setFishingViewExitVisible(visible: boolean): void {
+    if (this.disposed) return;
+    this.fishingViewExit.hidden = !visible;
+    this.root.dataset.fishingExitVisible = String(visible);
+    if (visible) this.clearAnchorHighlight();
   }
 
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
@@ -993,7 +984,7 @@ export class SurvivalUI {
     this.onFishingCast = null;
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
-    this.visualQualityControl.dispose();
+    this.onFishingViewExit = null;
     this.root.remove();
   }
 
@@ -1089,7 +1080,7 @@ export class SurvivalUI {
     const stateText = state === null ? '' : ` — ${state}`;
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
-      : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} [${action.shortcut}] — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
+      : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     const visibleLabel = anchor.itemType !== null
       ? `${ITEM_LABELS[anchor.itemType]} ×${quantity}`
       : anchor.supplyGroupId === 'repairMaterial'
@@ -1122,8 +1113,7 @@ export class SurvivalUI {
     button.setAttribute('aria-label', spokenCost === null ? visibleLabel : `${visibleLabel}, ${spokenCost}`);
     button.setAttribute('aria-description', text);
     button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
-    if (action !== null) button.setAttribute('aria-keyshortcuts', action.shortcut);
-    else button.removeAttribute('aria-keyshortcuts');
+    button.removeAttribute('aria-keyshortcuts');
   }
 
   private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
@@ -1183,15 +1173,6 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
-    this.endDayButton.hidden = this.eventPresentationActive;
-    const endDayReason = this.actionReasons.get('endDay') ?? null;
-    this.endDayButton.disabled = this.busy;
-    this.endDayButton.setAttribute('aria-disabled', endDayReason === null ? 'false' : 'true');
-    this.endDayButton.setAttribute(
-      'aria-description',
-      endDayReason ?? 'Rest and end the current day. Energy is restored at dawn.',
-    );
-    this.endDayButton.title = endDayReason ?? 'End the current day';
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
@@ -1217,7 +1198,10 @@ export class SurvivalUI {
       }
       delete button.dataset.eventState;
       button.disabled = this.busy;
-      button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
+      button.setAttribute(
+        'aria-disabled',
+        reason === null && !this.eventPresentationActive ? 'false' : 'true',
+      );
     });
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
@@ -1320,7 +1304,11 @@ export class SurvivalUI {
   private showLayer(layer: HTMLElement): void {
     this.clearAnchorHighlight();
     if (layer === this.fishingResultLayer) {
-      this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.fishing);
+      this.positionRoutineDialog(
+        layer,
+        ROUTINE_DIALOG_PLACEMENTS.fishing,
+        this.fishingResultTarget,
+      );
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
@@ -1335,7 +1323,11 @@ export class SurvivalUI {
 
   private positionOpenRoutineDialogs(): void {
     if (this.fishingResultLayer.classList.contains('is-visible')) {
-      this.positionRoutineDialog(this.fishingResultLayer, ROUTINE_DIALOG_PLACEMENTS.fishing);
+      this.positionRoutineDialog(
+        this.fishingResultLayer,
+        ROUTINE_DIALOG_PLACEMENTS.fishing,
+        this.fishingResultTarget,
+      );
     }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
       this.positionRoutineDialog(this.repairOptionsLayer, ROUTINE_DIALOG_PLACEMENTS.repair);
@@ -1345,6 +1337,7 @@ export class SurvivalUI {
   private positionRoutineDialog(
     layer: HTMLElement,
     placement: RoutineDialogPlacement,
+    target: ProjectedBoatBounds | null = null,
   ): void {
     const rootBounds = this.root.getBoundingClientRect();
     const viewportWidth = Math.max(
@@ -1359,10 +1352,14 @@ export class SurvivalUI {
     const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
     const cardWidth = Math.min(placement.width, maximumWidth);
     const cardHeight = Math.min(placement.height, maximumHeight);
-    const projectedAnchor = this.anchors.get(placement.anchorId);
+    const projectedTarget = target?.visible === true ? target : null;
+    const projectedAnchor = projectedTarget
+      ?? this.anchors.get(placement.anchorId);
     const isProjected = projectedAnchor?.visible === true;
     const hitArea = isProjected
-      ? projectedAnchor.hitArea ?? { width: 54, height: 54, depth: 0 }
+      ? projectedTarget ?? (
+        projectedAnchor as BoatInteractionAnchor
+      ).hitArea ?? { width: 54, height: 54, depth: 0 }
       : { width: 0, height: 0, depth: 0 };
     const anchorX = isProjected
       ? projectedAnchor.x
@@ -1510,7 +1507,7 @@ export class SurvivalUI {
         ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
           .find((button) => this.isUsableCommand(button))
           ?? (this.isUsableCommand(this.endureButton) ? this.endureButton : null)
-        : this.isUsableCommand(this.endDayButton) ? this.endDayButton : null);
+        : null);
   }
 
   private resolveCommandOrigin(): HTMLElement | null {
@@ -1627,6 +1624,10 @@ export class SurvivalUI {
     if (!(target instanceof Element)) return;
     const topmostModal = this.topmostModal();
     if (this.fishingLayer.contains(target) && topmostModal === this.fishingLayer) {
+      if (target.closest('[data-fishing-view-exit]') !== null) {
+        this.onFishingViewExit?.();
+        return;
+      }
       if (target.closest('[data-fishing-bite]') !== null) {
         this.issueFishingReel();
         return;
@@ -1695,6 +1696,10 @@ export class SurvivalUI {
       this.onFishingResultContinue?.();
       return;
     }
+    if (button.hasAttribute('data-fishing-view-exit')) {
+      this.onFishingViewExit?.();
+      return;
+    }
     if (action !== undefined) {
       if (this.overlayOpen() || this.eventPresentationActive) return;
       this.activateDayAction(action.id, button);
@@ -1757,21 +1762,6 @@ export class SurvivalUI {
         return;
       }
     }
-    if (this.overlayOpen() || this.busy || this.eventPresentationActive) return;
-    const action = ACTIONS.find(({ shortcut }) => shortcut === event.key);
-    if (action === undefined) return;
-    if (this.showUnavailableActionFeedback(action.id)) {
-      event.preventDefault();
-      return;
-    }
-    event.preventDefault();
-    const button = action.id === 'endDay'
-      ? this.endDayButton
-      : [...this.anchorButtons.values()].find((candidate) => (
-        candidate.dataset.action === action.id && this.isUsableCommand(candidate)
-      )) ?? null;
-    button?.focus();
-    this.activateDayAction(action.id, button);
   };
 
   private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {
@@ -1843,6 +1833,7 @@ export class SurvivalUI {
     if (!(target instanceof Element)
       || !this.fishingLayer.contains(target)
       || target.closest('[data-fishing-bite]') !== null
+      || target.closest('[data-fishing-view-exit]') !== null
       || this.topmostModal() !== this.fishingLayer
       || this.fishingMode !== 'aiming') return;
     this.suppressFishingClick = true;

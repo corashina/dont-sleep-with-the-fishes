@@ -32,6 +32,10 @@ const rodAnchor: BoatInteractionAnchor = {
   id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null,
   x: 360, y: 220, visible: true, depleted: false,
 };
+const lanternAnchor: BoatInteractionAnchor = {
+  id: 'end-day-lantern', itemType: null, toolId: 'lantern', action: 'endDay',
+  remainingUses: null, x: 460, y: 220, visible: true, depleted: false,
+};
 
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
@@ -49,10 +53,10 @@ describe('SurvivalPhase focus synchronization', () => {
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
     const session = new SurvivalSession([can], { seed: 1, initial: { hunger: 80 } });
-    let anchors: BoatInteractionAnchor[] = [canAnchor];
+    let anchors: BoatInteractionAnchor[] = [canAnchor, lanternAnchor];
     const world = {
       syncInventory(current: SurvivalSnapshot) {
-        anchors = current.food > 0 ? [canAnchor] : [];
+        anchors = current.food > 0 ? [canAnchor, lanternAnchor] : [lanternAnchor];
       },
       projectInteractionAnchors: () => anchors,
       play: () => Promise.resolve(),
@@ -126,7 +130,7 @@ describe('SurvivalPhase focus synchronization', () => {
     }));
     const world = {
       syncInventory: () => undefined,
-      projectInteractionAnchors: () => [scubaAnchor, rodAnchor],
+      projectInteractionAnchors: () => [scubaAnchor, rodAnchor, lanternAnchor],
       enterFishingView: vi.fn(() => enter),
       centeredFishingCast: vi.fn(() => ({ x: 4, z: -2 })),
       playFishingCast: vi.fn(() => cast),
@@ -218,15 +222,20 @@ describe('SurvivalPhase focus synchronization', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.disabled).toBe(true);
     resultContinue.click();
     resultContinue.click();
-    expect(world.exitFishingView).toHaveBeenCalledOnce();
-    finishExit();
-    await flushPromises();
-
+    const fishingViewExit = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    expect(world.exitFishingView).not.toHaveBeenCalled();
+    expect(world.clearFishingPresentation).toHaveBeenCalledOnce();
+    expect(fishingViewExit.hidden).toBe(false);
     expect(mount.querySelector('[data-fishing]')?.classList).not.toContain('is-visible');
     expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!.disabled).toBe(false);
     expect(document.activeElement).toBe(
       mount.querySelector('[data-anchor-id="fishing-tools"]'),
     );
+    fish.click();
+    expect(world.enterFishingView).toHaveBeenCalledTimes(2);
+    expect(world.exitFishingView).not.toHaveBeenCalled();
+    expect(fishingViewExit.hidden).toBe(true);
+    expect(mount.querySelector('[data-fishing]')?.classList).toContain('is-visible');
     expect(requestDayEvent).not.toHaveBeenCalled();
     phase.dispose();
   });
@@ -257,7 +266,7 @@ describe('SurvivalPhase focus synchronization', () => {
     }));
     const world = {
       syncInventory: () => undefined,
-      projectInteractionAnchors: () => [rodAnchor],
+      projectInteractionAnchors: () => [rodAnchor, lanternAnchor],
       enterFishingView: vi.fn(() => enter),
       centeredFishingCast: vi.fn(() => ({ x: 4, z: -2 })),
       playFishingCast: vi.fn(() => cast),
@@ -330,6 +339,12 @@ describe('SurvivalPhase focus synchronization', () => {
     expect(world.exitFishingView).not.toHaveBeenCalled();
     resultContinue.click();
     resultContinue.click();
+    const fishingViewExit = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    expect(world.clearFishingPresentation).toHaveBeenCalledOnce();
+    expect(world.exitFishingView).not.toHaveBeenCalled();
+    expect(fishingViewExit.hidden).toBe(false);
+    fishingViewExit.click();
+    fishingViewExit.click();
     expect(world.exitFishingView).toHaveBeenCalledOnce();
     finishExit();
     await flushPromises();
@@ -352,7 +367,7 @@ describe('SurvivalPhase focus synchronization', () => {
     const nightfall = new Promise<void>((resolve) => { finishNightfall = resolve; });
     const world = {
       syncInventory: () => undefined,
-      projectInteractionAnchors: () => [],
+      projectInteractionAnchors: () => [lanternAnchor],
       play: () => nightfall,
       dispose: () => undefined,
     };

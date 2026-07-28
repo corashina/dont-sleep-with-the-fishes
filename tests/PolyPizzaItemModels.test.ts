@@ -8,6 +8,7 @@ import {
   POLY_PIZZA_MODEL_IDS,
   POLY_PIZZA_MODEL_SOURCES,
 } from '../scripts/poly-pizza-models.mjs';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 const EXPECTED_IDS = [
   ...ITEM_IDS,
@@ -60,7 +61,12 @@ describe('Poly Pizza item models', () => {
     expect(POLY_PIZZA_MODEL_SOURCES.fishingNet!.simplifyRatio).toBeUndefined();
     expect(POLY_PIZZA_MODEL_SOURCES.scubaSet!).toMatchObject({
       publicId: '4GhtCNARi8c',
-      components: [{ publicId: '4YCjSY3U6H' }],
+      components: [{
+        publicId: '4YCjSY3U6H',
+        translation: [0.00025044, 0.185, -0.06384998],
+        rotation: [1, 0, 0, 0],
+        scale: [0.16, 0.16, 0.16],
+      }],
     });
     expect(POLY_PIZZA_MODEL_SOURCES.ductTape!.publicId).toBe('dLlslRdbHfs');
     expect(POLY_PIZZA_MODEL_SOURCES.umbrella!.publicId).toBe('ez4MoDQFgXz');
@@ -68,6 +74,11 @@ describe('Poly Pizza item models', () => {
     expect(POLY_PIZZA_MODEL_SOURCES.flashlight!.publicId).toBe('8t1DZLLvofk');
     expect(POLY_PIZZA_MODEL_SOURCES.harpoonGun!.publicId).toBe('neEjwx9bBJ');
     expect(POLY_PIZZA_MODEL_SOURCES.bottledPaper!.publicId).toBe('arIYNl9gMyr');
+  });
+
+  it('presents the scuba gear upright with its base at the placement origin', () => {
+    expect(ITEM_MODEL_SPECS.scubaSet.rotation).toEqual([0, 0, 0]);
+    expect(ITEM_MODEL_SPECS.scubaSet.normalizedBounds.min[1]).toBeCloseTo(0);
   });
 
   it('rejects source bytes that do not match a pinned model', async () => {

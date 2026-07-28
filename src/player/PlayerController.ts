@@ -72,7 +72,7 @@ export class PlayerController {
     this.floorEyeHeight = start.y;
   }
 
-  update(delta: number, input: InputController, cameraShake = 0): void {
+  update(delta: number, input: InputController): void {
     const look = input.consumeLook();
     this.yaw -= look.x * LOOK_SENSITIVITY;
     this.pitch = Math.max(
@@ -113,19 +113,19 @@ export class PlayerController {
         ladderTraversal.floorEyeY,
         ladderTraversal.position.z,
       );
-      this.placeCamera(cameraShake);
+      this.placeCamera();
       return;
     }
 
-    this.integrate(delta, input.consumeJump(), cameraShake);
+    this.integrate(delta, input.consumeJump());
   }
 
-  updatePassive(delta: number, cameraShake = 0): void {
+  updatePassive(delta: number): void {
     this.movement.set(0, 0, 0);
-    this.integrate(delta, false, cameraShake);
+    this.integrate(delta, false);
   }
 
-  private integrate(delta: number, jumpRequested: boolean, cameraShake: number): void {
+  private integrate(delta: number, jumpRequested: boolean): void {
     const currentSupport = findSupportEyeHeight(
       this.localPosition,
       0.35,
@@ -193,14 +193,14 @@ export class PlayerController {
       this.onFall();
     }
 
-    this.placeCamera(cameraShake);
+    this.placeCamera();
   }
 
-  placeCamera(cameraShake = 0): void {
+  placeCamera(): void {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
     this.camera.position.copy(this.worldPosition);
-    this.localView.setFromEuler(new Euler(this.pitch + cameraShake, this.yaw, 0, 'YXZ'));
+    this.localView.setFromEuler(new Euler(this.pitch, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(this.ship.quaternion).multiply(this.localView);
     this.camera.updateMatrixWorld(true);
   }

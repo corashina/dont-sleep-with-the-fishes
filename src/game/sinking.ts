@@ -5,7 +5,6 @@ export interface SinkingState {
   sinkOffset: number;
   alarmRate: number;
   waveAmplitudeScale: number;
-  cameraShake: number;
 }
 
 function clamp01(value: number): number {
@@ -29,6 +28,5 @@ export function getSinkingState(elapsedSeconds: number, durationSeconds: number)
     sinkOffset: 0,
     alarmRate: 0.7 + 1.3 * finalRush,
     waveAmplitudeScale: 1 + 0.35 * eased,
-    cameraShake: 0.003 + 0.018 * finalRush,
   };
 }

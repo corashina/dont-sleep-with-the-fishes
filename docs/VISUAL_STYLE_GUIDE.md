@@ -138,7 +138,7 @@ pointer, selected state should remain distinct from hover, and disabled styling
 must not erase legibility. Contextual UI should explain constraints where the
 player encounters them rather than hiding the reason in a distant panel.
 
-### Motion and reduced motion
+### Motion
 
 For UI reveals, journal movement, activity gestures, event staging, and short
 camera beats, use a small anticipation, decisive action, restrained overshoot
@@ -146,10 +146,11 @@ or impact, an imperfect settled held pose, and clean return to the authored
 base state. Match the beat to material and mass: paper snaps or flutters,
 timber shifts heavily, and metal lands sharply.
 
-When `prefers-reduced-motion` is active, preserve state order and clarity but
-replace travel, jolts, and decorative loops with direct poses or short fades.
-Do not use constant idle wobble, identical easing, long floaty transitions, or
-exaggerated squash-and-stretch as the default interaction language.
+This project does not implement alternate reduced-motion behavior. Do not add
+`prefers-reduced-motion` variants unless the project owner explicitly changes
+that direction. Avoid constant idle wobble, identical easing, long floaty
+transitions, or exaggerated squash-and-stretch as the default interaction
+language.
 
 ## Models and shape language
 
@@ -259,7 +260,7 @@ is the primary guidance need and shares the player's attention with play.
 
 Choose methods appropriate to the feature; do not turn this document into a
 local exception or universal numeric rule. Existing gameplay rules,
-accessibility, keyboard operation, reduced-motion behavior, deterministic
-systems, explicit resource ownership, desktop scope, and shared-wave contracts
-remain authoritative. Update this guide only when the intended identity
-changes; record local variations in the feature specification instead.
+accessibility, keyboard operation, deterministic systems, explicit resource
+ownership, desktop scope, and shared-wave contracts remain authoritative.
+Update this guide only when the intended identity changes; record local
+variations in the feature specification instead.

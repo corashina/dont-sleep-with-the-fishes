@@ -28,7 +28,13 @@ import type { SkyAssets } from './world/SkyAssets';
 import { LifeboatAssets } from './world/LifeboatAssets';
 import { ShipAssets } from './world/ShipAssets';
 import type { PhysicsRuntime } from './physics/PhysicsRuntime';
-import type { PhysicsMode } from './physics/PhysicsOptions';
+import {
+  scavengePhysicsDebugMeshes,
+  setScavengePhysicsDebugMeshes,
+  setScavengePhysicsEnabled,
+  type PhysicsMode,
+} from './physics/PhysicsOptions';
+import type { PresentationWeatherId } from './weather/presentationWeather';
 
 export interface GameFactories {
   createScavenge(
@@ -108,6 +114,7 @@ export class Game {
   private activePhase: GamePhase | null = null;
   private performanceStats: PerformanceStats | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
+  private weatherOverride: PresentationWeatherId | null = null;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -332,6 +339,7 @@ export class Game {
       this.activePhase = null;
       this.performanceStats = null;
       this.postProcessingConsole = null;
+      this.weatherOverride = null;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
@@ -345,6 +353,26 @@ export class Game {
           mount,
           sceneRenderer.postProcessingControls,
           (open) => this.activePhase?.setOverlayActive?.(open),
+          {
+            enabled: physicsMode !== 'off',
+            debugMeshes: scavengePhysicsDebugMeshes(),
+            setEnabled: (enabled) => {
+              if (enabled === (physicsMode !== 'off')) return;
+              setScavengePhysicsEnabled(enabled);
+              window.location.reload();
+            },
+            setDebugMeshes: (enabled) => {
+              if (enabled === scavengePhysicsDebugMeshes()) return;
+              setScavengePhysicsDebugMeshes(enabled);
+              window.location.reload();
+            },
+          },
+          visualQuality,
+          {
+            selected: 'calm',
+            source: 'normal',
+            setWeather: (id) => this.setWeatherOverride(id),
+          },
         );
       }
       this.seed = this.createSeed();
@@ -394,7 +422,9 @@ export class Game {
       phase.dispose();
       return;
     }
+    this.applyWeatherOverrideOrDispose(phase);
     this.activePhase = phase;
+    this.synchronizeWeatherState();
     if (start) {
       phase.resize(window.innerWidth, window.innerHeight);
       phase.start();
@@ -431,7 +461,9 @@ export class Game {
       survival.dispose();
       return;
     }
+    this.applyWeatherOverrideOrDispose(survival);
     this.activePhase = survival;
+    this.synchronizeWeatherState();
     survival.resize(window.innerWidth, window.innerHeight);
     survival.start();
   }
@@ -473,6 +505,39 @@ export class Game {
     if (document.pointerLockElement) document.exitPointerLock();
   }
 
+  private setWeatherOverride(id: PresentationWeatherId): void {
+    this.weatherOverride = id;
+    this.postProcessingConsole?.setWeatherState(id, 'forced');
+    this.activePhase?.setWeatherOverride?.(id);
+  }
+
+  private applyWeatherOverrideOrDispose(phase: GamePhase): void {
+    if (this.weatherOverride === null) return;
+    try {
+      phase.setWeatherOverride?.(this.weatherOverride);
+    } catch (error) {
+      try {
+        phase.dispose();
+      } catch {
+        // Preserve the override failure that prevented phase ownership.
+      }
+      throw error;
+    }
+  }
+
+  private synchronizeWeatherState(): void {
+    if (this.postProcessingConsole === null) return;
+    const effectiveWeather = this.activePhase?.getPresentationWeather?.() ?? 'calm';
+    if (this.weatherOverride !== null) {
+      this.postProcessingConsole.setWeatherState(this.weatherOverride, 'forced');
+      return;
+    }
+    this.postProcessingConsole.setWeatherState(
+      effectiveWeather,
+      effectiveWeather === 'calm' ? 'normal' : 'event',
+    );
+  }
+
   private handleResize(): void {
     if (this.disposed) return;
     const width = window.innerWidth;
@@ -491,6 +556,7 @@ export class Game {
     const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
     this.elapsed += deltaSeconds;
     this.activePhase?.update(this.elapsed, deltaSeconds);
+    this.synchronizeWeatherState();
     this.activePhase?.render();
     this.animationFrame = requestAnimationFrame(this.animate);
   }

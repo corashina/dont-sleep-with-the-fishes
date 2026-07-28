@@ -7,7 +7,6 @@ import type { JournalEntry } from '../src/survival/journal';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 import type { SurvivalEventDefinition, SurvivalSnapshot } from '../src/survival/survivalTypes';
-import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 
 const activeUIs: SurvivalUI[] = [];
@@ -60,6 +59,11 @@ function createUI(mount: HTMLElement): SurvivalUI {
       hitArea: { width: 96, height: 52, depth: 2.4 },
     },
     { id: 'medicalKit-test', itemType: 'medicalKit', toolId: null, action: 'treat', remainingUses: 2, x: 540, y: 250, visible: true, depleted: false },
+    {
+      id: 'end-day-lantern', itemType: null, toolId: 'lantern', action: 'endDay',
+      remainingUses: null, x: 640, y: 280, visible: true, depleted: false,
+      hitArea: { width: 62, height: 84, depth: 2.4 },
+    },
   ]);
   activeUIs.push(ui);
   return ui;
@@ -130,30 +134,14 @@ function openContextualEvent(ui: SurvivalUI): void {
 }
 
 describe('SurvivalUI', () => {
-  it('owns a visual quality control inside the pause overlay', () => {
+  it('keeps visual quality controls out of the pause overlay', () => {
     const mount = document.createElement('main');
-    const apply = vi.fn();
-    const preference = createVisualQualityPreference(apply, null);
-    const ui = new SurvivalUI(mount, preference);
+    const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-visual-quality="high"]',
-    )!;
-    const control = mount.querySelector('[data-visual-quality-control]');
 
-    high.click();
-
-    expect(preference.get()).toBe('high');
-    expect(apply).toHaveBeenCalledWith('high');
-    expect(control).not.toBeNull();
-    expect(mount.querySelector('[data-pause]')?.contains(control)).toBe(true);
-    expect(mount.querySelector('[data-survival-top]')?.contains(control)).toBe(false);
-    expect(mount.querySelector('[data-journal]')?.contains(control)).toBe(false);
-    expect(mount.querySelector('[data-ending]')?.contains(control)).toBe(false);
-
+    expect(mount.querySelector('[data-pause] [data-visual-quality-control]')).toBeNull();
+    expect(mount.querySelector('[data-pause] [data-visual-quality]')).toBeNull();
     ui.dispose();
-    high.click();
-    expect(apply).toHaveBeenCalledOnce();
   });
 
 
@@ -360,6 +348,7 @@ describe('SurvivalUI', () => {
     ui.setAnchors([
       { id: 'bucket-1', itemType: 'bucket', toolId: null, action: null, remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
       { id: 'umbrella-2', itemType: 'umbrella', toolId: null, action: null, remainingUses: null, x: 240, y: 180, visible: true, depleted: false },
+      { id: 'end-day-lantern', itemType: null, toolId: 'lantern', action: 'endDay', remainingUses: null, x: 640, y: 280, visible: true, depleted: false },
     ]);
     const selected = vi.fn();
     const endureEvent = vi.fn();
@@ -367,7 +356,8 @@ describe('SurvivalUI', () => {
     ui.onEndure = endureEvent;
 
     ui.beginEventPresentation();
-    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(true);
+    expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(false);
+    expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('true');
     const reveal = ui.showEventReveal(testEvent(['bucket']));
     await vi.runAllTimersAsync();
     await reveal;
@@ -405,6 +395,7 @@ describe('SurvivalUI', () => {
 
     ui.clearEventPresentation();
     expect(mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')?.hidden).toBe(false);
+    expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('false');
   });
 
   it.each([
@@ -690,7 +681,23 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.hidden).toBe(false);
   });
 
-  it('emits fishing directly from the rod and shortcut regardless of bait', () => {
+  it('routes the projected boat lantern to End Day', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(snapshot(), () => null);
+
+    const lantern = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="end-day-lantern"]',
+    )!;
+    lantern.click();
+
+    expect(action).toHaveBeenCalledOnce();
+    expect(action).toHaveBeenCalledWith('endDay', undefined);
+  });
+
+  it('emits fishing directly from the rod and ignores number keys', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -701,10 +708,8 @@ describe('SurvivalUI', () => {
     mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
 
-    expect(action.mock.calls).toEqual([
-      ['fish', undefined],
-      ['fish', undefined],
-    ]);
+    expect(action).toHaveBeenCalledOnce();
+    expect(action).toHaveBeenCalledWith('fish', undefined);
     expect(mount.querySelector('[data-action-options]')).toBeNull();
   });
 
@@ -811,7 +816,10 @@ describe('SurvivalUI', () => {
     Object.assign(target, { x: 220, y: 130, width: 72, height: 48, depth: 2 });
     ui.updateFishingBiteTarget(target);
     expect(bite.style.transform).toBe('translate(220px, 130px)');
-    expect(mainStyles).not.toMatch(/@keyframes fishing-bite-pulse\s*\{[^}]*transform/s);
+    expect(mainStyles).toMatch(
+      /\.fishing-bite-target\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,
+    );
+    expect(mainStyles).not.toContain('fishing-bite-pulse');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true }));
     bite.click();
@@ -872,6 +880,74 @@ describe('SurvivalUI', () => {
 
     observer.disconnect();
     expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
+  });
+
+  it('places catch information beside the landed bow display', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const result = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+
+    ui.showFishingResult({
+      caption: 'LARGE CATCH',
+      title: 'TUNA',
+      detail: '+2 FOOD',
+      catchTarget: {
+        x: 260, y: 240, width: 110, height: 70, depth: 2, visible: true,
+      },
+    });
+
+    expect(result.dataset.anchorState).toBe('projected');
+    expect(mount.querySelector('[data-fishing-result-caption]')?.textContent).toBe('LARGE CATCH');
+    expect(mount.querySelector('[data-fishing-result-title]')?.textContent).toBe('TUNA');
+    expect(mount.querySelector('[data-fishing-result-detail]')?.textContent).toBe('+2 FOOD');
+    expect(mainStyles).toMatch(
+      /\.routine-dialog--fishing \.routine-dialog__card > \*\s*\{[^}]*justify-self:\s*center;/s,
+    );
+    expect(document.activeElement).toBe(
+      mount.querySelector('[data-fishing-result-continue]'),
+    );
+  });
+
+  it('keeps the fishing Back control wide, transparent, and above fishing input', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const exit = vi.fn();
+    const cast = vi.fn(() => true);
+    ui.onFishingViewExit = exit;
+    ui.onFishingCast = cast;
+    ui.setFishingState({ mode: 'aiming', message: 'Cast your line.', biteTarget: null });
+    ui.setFishingViewExitVisible(true);
+    const button = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    const rule = mainStyles.match(/\.fishing-view-exit\s*\{([^}]*)\}/s)?.[1] ?? '';
+
+    expect(button.hidden).toBe(false);
+    expect(button.closest('[data-fishing]')).not.toBeNull();
+    expect(button.closest('[inert]')).toBeNull();
+    expect(button.textContent?.trim()).toBe('');
+    expect(button.getAttribute('aria-label')).toBe('Return to boat view');
+    expect(mount.querySelector('.survival-ui')?.getAttribute('data-fishing-exit-visible')).toBe('true');
+    expect(rule).toMatch(/z-index:\s*19/);
+    expect(rule).toMatch(/width:\s*min\(36rem,\s*calc\(100% - 32px\)\)/);
+    expect(rule).toMatch(/min-height:\s*84px/);
+    expect(rule).toMatch(/border:\s*0/);
+    expect(rule).toMatch(/background:\s*transparent/);
+    expect(rule).not.toContain('border-radius');
+    expect(mainStyles).toMatch(
+      /\.boat-anchors\s*\{[^}]*z-index:\s*10;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.survival-ui\[data-fishing-exit-visible="true"\] \.boat-tooltip\s*\{[^}]*visibility:\s*hidden;/s,
+    );
+
+    button.dispatchEvent(new MouseEvent('pointerup', {
+      bubbles: true,
+      clientX: 100,
+      clientY: 100,
+    }));
+    button.click();
+    expect(exit).toHaveBeenCalledOnce();
+    expect(cast).not.toHaveBeenCalled();
   });
 
   it('uses the authored fishing-fade duration while preserving supersession', async () => {
@@ -1005,7 +1081,7 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(fish);
   });
 
-  it('shows one visible rejection for an unavailable numeric shortcut without locking or moving focus', async () => {
+  it('does not bind numbered keys to survival actions or expose shortcut metadata', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1023,53 +1099,25 @@ describe('SurvivalUI', () => {
     const feedback = mount.querySelector<HTMLElement>('[data-survival-feedback]')!;
 
     fish.focus();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    for (const key of ['1', '2', '3', '4', '5', '6', '7']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
     await Promise.resolve();
     await Promise.resolve();
 
     observer.disconnect();
-    expect(feedback.textContent).toBe(reason);
-    expect(feedback.classList).toContain('is-visible');
-    expect(feedback.dataset.accepted).toBe('false');
-    expect(publications.filter((message) => message === reason)).toHaveLength(1);
+    expect(feedback.classList).not.toContain('is-visible');
+    expect(publications).toEqual([]);
     expect(action).not.toHaveBeenCalled();
-    expect(mount.querySelector('.survival-ui')?.hasAttribute('aria-busy')).toBe(false);
-    expect(fish.disabled).toBe(false);
     expect(document.activeElement).toBe(fish);
-  });
-
-  it('announces unavailable numeric shortcuts, including repeated reasons', async () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = createUI(mount);
-    const session = new SurvivalSession(saved(), { seed: 7, initial: { energy: 0 } });
-    const action = vi.fn();
-    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
-    const publications: string[] = [];
-    const observer = new MutationObserver(() => {
-      if (announcer.textContent) publications.push(announcer.textContent);
+    mount.querySelectorAll('[data-action]').forEach((button) => {
+      expect(button.hasAttribute('aria-keyshortcuts')).toBe(false);
+      expect(button.getAttribute('aria-description')).not.toContain('[1]');
+      expect(button.getAttribute('aria-description')).not.toContain('[7]');
     });
-    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
-    ui.onAction = action;
-    ui.render(session.snapshot(), (id) => session.availableReason(id));
-
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
-    await Promise.resolve();
-    await Promise.resolve();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
-    await Promise.resolve();
-    await Promise.resolve();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    observer.disconnect();
-    expect(publications.filter((message) => message === 'Fishing requires one energy.')).toHaveLength(2);
-    expect(publications).toContain('Diving requires a recovered scuba set.');
-    expect(action).not.toHaveBeenCalled();
   });
 
-  it('restores direct-click and numeric-shortcut command origins after cues', () => {
+  it('restores direct-click command origins after cues', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1082,7 +1130,7 @@ describe('SurvivalUI', () => {
     ui.restoreCommandFocus();
     expect(document.activeElement).toBe(dive);
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '7' }));
+    endDay.click();
     ui.restoreCommandFocus();
     expect(document.activeElement).toBe(endDay);
 
@@ -1108,7 +1156,7 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(dive);
   });
 
-  it('uses number shortcuts only when no overlay is open', () => {
+  it('keeps number keys inactive while Escape retains its overlay behavior', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1119,14 +1167,13 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
-    expect(action).toHaveBeenLastCalledWith('fish', undefined);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', repeat: true }));
-    expect(action).toHaveBeenCalledOnce();
+    expect(action).not.toHaveBeenCalled();
 
     void ui.showEventReveal(testEvent());
     ui.setEventSelection(new Map());
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
-    expect(action).toHaveBeenCalledOnce();
+    expect(action).not.toHaveBeenCalled();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(pause).toHaveBeenCalledWith(true);
   });
@@ -1244,7 +1291,7 @@ describe('SurvivalUI', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
-  it('separates journal, status, and stable End Day controls', () => {
+  it('keeps status controls separate from the physical End Day lantern anchor', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot(), () => null);
@@ -1252,17 +1299,21 @@ describe('SurvivalUI', () => {
     const top = mount.querySelector('[data-survival-top]')!;
     const status = top.querySelector('[data-survival-status]')!;
     const journal = top.querySelector('[data-journal-open]')!;
-    const endDay = top.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
+    const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
 
     expect(status.querySelector('[data-day]')?.textContent).toBe('DAY 1');
     expect(status.querySelector('[data-phase]')?.textContent).toBe('DAYLIGHT');
     expect(status.querySelector('[data-weather]')?.textContent).toBe('CALM');
     expect(status.querySelector('[data-ui-artwork="journal"]')).toBeNull();
     expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
-    expect(endDay.closest('[data-boat-anchors]')).toBeNull();
-    expect(endDay.classList.contains('salvage-action')).toBe(false);
-    expect(endDay.querySelector('[data-ui-artwork="lantern"]')).not.toBeNull();
-    expect(endDay.getAttribute('aria-keyshortcuts')).toBe('7');
+    expect(top.querySelector('[data-action="endDay"]')).toBeNull();
+    expect(endDay.closest('[data-boat-anchors]')).not.toBeNull();
+    expect(endDay.dataset.anchorId).toBe('end-day-lantern');
+    expect(endDay.dataset.tool).toBe('lantern');
+    expect(endDay.querySelector('[role="tooltip"]')?.textContent).toBe('END DAY');
+    expect(endDay.getAttribute('aria-description')).toContain('Douse the lantern');
+    expect(endDay.hasAttribute('aria-keyshortcuts')).toBe(false);
+    expect(mount.querySelector('[data-ui-artwork="lantern"]')).toBeNull();
     ui.dispose();
   });
 
