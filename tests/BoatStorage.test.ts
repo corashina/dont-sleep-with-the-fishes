@@ -54,6 +54,7 @@ const FLOOR_IDS = new Set<ItemId>([
   'swimRing',
   'harpoonGun',
   'medicalKit',
+  'captainWhiskers',
 ]);
 
 function productionBounds(instance: ItemInstance): Box3 {
@@ -121,6 +122,8 @@ describe('boat item layout', () => {
     expect(transform('swimRing').position.x).toBeGreaterThan(0.80);
     expect(transform('swimRing').position.x).toBeLessThan(1.20);
     expect(transform('swimRing').position.z).toBeLessThan(-0.85);
+    expect(transform('captainWhiskers').position.z).toBeGreaterThan(0.3);
+    expect(transform('captainWhiskers').scale).toBeGreaterThan(0.5);
   });
 
   it('keeps bait closest to the fishing rod', () => {

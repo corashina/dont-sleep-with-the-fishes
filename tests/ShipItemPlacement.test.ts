@@ -89,7 +89,7 @@ async function measuredNormalizedBounds(id: ItemId): Promise<Box3> {
 }
 
 describe('ship item placement', () => {
-  it('places all twenty-one Dorothy instances on unique compatible slots', () => {
+  it('places all twenty-two Dorothy instances on unique compatible slots', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     try {
@@ -102,10 +102,10 @@ describe('ship item placement', () => {
         mulberry32(421),
         ship.colliders,
       );
-      expect(assignments.size).toBe(21);
-      expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(21);
+      expect(assignments.size).toBe(22);
+      expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
       expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-        .toBe(21);
+        .toBe(22);
       for (const instance of createItemInstances()) {
         expect(assignments.has(instance.instanceId), instance.instanceId).toBe(true);
       }
@@ -275,7 +275,7 @@ describe('ship item placement', () => {
       .usedFallbackSurface).toBe(false);
   });
 
-  it('assigns the production catalog for 64 seeds without wall overlap, beds, chairs, or slot reuse', () => {
+  it('assigns the production catalog for 64 seeds without wall overlap, chairs, or slot reuse', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     const byId = new Map(ship.itemSurfaces.map((candidate) => [candidate.id, candidate]));
@@ -289,10 +289,10 @@ describe('ship item placement', () => {
           mulberry32(seed),
           ship.colliders,
         );
-        expect(assignments.size, `seed ${seed}`).toBe(21);
-        expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(21);
+        expect(assignments.size, `seed ${seed}`).toBe(22);
+        expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
         expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-          .toBe(21);
+          .toBe(22);
         expect([...assignments.values()].every(({ usedFallbackSurface }) => !usedFallbackSurface))
           .toBe(true);
         for (const [instanceId, assignment] of assignments) {
@@ -302,7 +302,11 @@ describe('ship item placement', () => {
           const bounds = rotatedNormalizedBounds(instance.type, assignment.rotation);
           const size = bounds.getSize(new Vector3()).multiplyScalar(assignment.scale);
           expect(assignedSurface.standingPoints.length).toBeGreaterThan(0);
-          expect(assignedSurface.furnitureModelId).not.toMatch(/bedBunk|chairDesk/);
+          if (instance.type === 'captainWhiskers') {
+            expect(assignedSurface.furnitureModelId).toBe('bedBunk');
+          } else {
+            expect(assignedSurface.furnitureModelId).not.toMatch(/bedBunk|chairDesk/);
+          }
           expect(size.x).toBeLessThanOrEqual(assignedSurface.footprint.width + 1e-6);
           expect(size.z).toBeLessThanOrEqual(assignedSurface.footprint.depth + 1e-6);
           expect(size.y).toBeLessThanOrEqual(assignedSurface.clearanceHeight + 1e-6);
@@ -374,11 +378,36 @@ describe('ship item placement', () => {
           ship.itemSurfaces,
           () => sample,
           ship.colliders,
-        ).size).toBe(21);
+        ).size).toBe(22);
       } finally {
         ship.dispose();
         library.dispose();
       }
     },
   );
+
+  it('reserves the port crew bunk for Captain Whiskers', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    try {
+      const assignments = assignShipItems(
+        createItemInstances(),
+        ship.itemSurfaces,
+        mulberry32(421),
+        ship.colliders,
+      );
+      const whiskers = assignments.get('captainWhiskers-1');
+
+      expect(whiskers).toMatchObject({
+        furnitureId: 'cabin-bunk-port',
+        surfaceId: 'cabin-bunk-port:top-comfort',
+        usedFallbackSurface: false,
+      });
+      expect(ship.itemSurfaces.find(({ id }) => id === whiskers!.surfaceId)?.categories)
+        .toEqual(['comfort']);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
 });
