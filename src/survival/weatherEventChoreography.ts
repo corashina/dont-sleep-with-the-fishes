@@ -109,7 +109,7 @@ export function sampleWeatherReveal(
   if (!isWeatherEventId(eventId)) return false;
 
   const t = clamp01(progress);
-  if (t === 1) return true;
+  if (t === 0 || t === 1) return true;
   const sweep = Math.sin(Math.PI * t);
 
   switch (eventId) {
@@ -151,6 +151,19 @@ export function sampleWeatherReveal(
       break;
   }
 
+  const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
+  output.cameraX *= returnEnvelope;
+  output.cameraY *= returnEnvelope;
+  output.cameraZ *= returnEnvelope;
+  output.cameraYaw *= returnEnvelope;
+  output.cameraPitch *= returnEnvelope;
+  output.cameraRoll *= returnEnvelope;
+  output.supplyRoll *= returnEnvelope;
+  output.supplyLift *= returnEnvelope;
+  output.figureVisibility *= returnEnvelope;
+  output.figureDistance *= returnEnvelope;
+  output.lightningEmphasis *= returnEnvelope;
+
   return true;
 }
 
@@ -169,7 +182,7 @@ export function sampleWeatherItemUse(
   if (weatherItemUseDuration(eventId, choiceId) === null) return false;
 
   const t = clamp01(progress);
-  if (t === 1) return true;
+  if (t === 0 || t === 1) return true;
   const up = smoothstep(Math.min(1, t / 0.42));
   const down = 1 - smoothstep(Math.max(0, (t - 0.58) / 0.42));
   const hold = Math.min(up, down);
@@ -244,11 +257,23 @@ export function sampleWeatherItemUse(
       break;
     case 'flashlight':
       output.y = 0.3 * hold;
-      output.yaw = -0.7 + 1.4 * smoothstep(t / 0.85);
+      output.yaw = 0.7 * Math.sin(2 * Math.PI * t);
       output.pitch = -0.2 * hold;
       output.effect = pulse(t, 0.1, 0.5, 0.95);
       break;
   }
+
+  const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
+  output.x *= returnEnvelope;
+  output.y *= returnEnvelope;
+  output.z *= returnEnvelope;
+  output.yaw *= returnEnvelope;
+  output.pitch *= returnEnvelope;
+  output.roll *= returnEnvelope;
+  output.scaleX = 1 + (output.scaleX - 1) * returnEnvelope;
+  output.scaleY = 1 + (output.scaleY - 1) * returnEnvelope;
+  output.scaleZ = 1 + (output.scaleZ - 1) * returnEnvelope;
+  output.effect *= returnEnvelope;
 
   return true;
 }
