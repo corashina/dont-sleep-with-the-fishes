@@ -167,6 +167,24 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('uses a level default survival camera pitch', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const direction = camera.getWorldDirection(new Vector3());
+
+    expect(direction.x).toBeCloseTo(0);
+    expect(direction.y).toBeCloseTo(0);
+    expect(direction.z).toBeCloseTo(-1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('uses canonical supply transforms without the old slatted platform', () => {
     const savedItems = createItemInstances();
     const propModels = createTestPropModels();

@@ -393,7 +393,7 @@ export class BoatWorld {
   private readonly originalCameraQuaternion: Quaternion;
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
-  private readonly baseCameraLookTarget = new Vector3(0, -0.18, -1.55);
+  private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
   private readonly fishingCameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
     FISHING_PLAYER_SEAT.y,

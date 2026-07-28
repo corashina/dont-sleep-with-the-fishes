@@ -25,6 +25,7 @@ import {
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
+import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
 import type {
@@ -218,6 +219,7 @@ export class SurvivalPhase implements GamePhase {
   private effectivePresentationWeather: PresentationWeatherId = 'calm';
   private lifecycleGeneration = 0;
   private readonly visibilityResumeWaiters = new Set<() => void>();
+  private cameraLook: SurvivalCameraLook | null = null;
 
   constructor(
     context: PhaseContext,
@@ -255,6 +257,7 @@ export class SurvivalPhase implements GamePhase {
         scavengeElapsedSeconds,
         onRestart,
       );
+      this.cameraLook = new SurvivalCameraLook(context.mount, context.camera);
       return;
     }
     this.initialize(
@@ -311,6 +314,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed || this.paused || this.documentIsHidden()) return;
     this.elapsedSeconds = time;
     this.world.update?.(time, deltaSeconds);
+    this.cameraLook?.update(deltaSeconds);
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
@@ -394,6 +398,7 @@ export class SurvivalPhase implements GamePhase {
   setPaused(paused: boolean): void {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
+    if (paused) this.cameraLook?.cancel();
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
     if (!paused) this.releaseVisibilityResumeWaiters();
@@ -435,6 +440,8 @@ export class SurvivalPhase implements GamePhase {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
     }
+    this.cameraLook?.dispose();
+    this.cameraLook = null;
     this.world.dispose?.();
     this.ui.dispose?.();
   }
