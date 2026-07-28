@@ -25,6 +25,7 @@ import {
   LIFEBOAT_FLOOR_RIB_CENTERS_Z,
   LIFEBOAT_FLOOR_RIB_DEPTH,
   LIFEBOAT_FLOOR_SURFACE_Y,
+  LIFEBOAT_GUNWALE_SURFACE_Y,
   lifeboatHullHalfWidthAt,
 } from '../src/world/Lifeboat';
 import {
@@ -54,8 +55,9 @@ const FLOOR_IDS = new Set<ItemId>([
   'swimRing',
   'harpoonGun',
   'medicalKit',
-  'captainWhiskers',
 ]);
+
+const GUNWALE_IDS = new Set<ItemId>(['captainWhiskers']);
 
 function productionBounds(instance: ItemInstance): Box3 {
   const fixture = PRODUCTION_NORMALIZED_PROP_BOUNDS[instance.type];
@@ -84,10 +86,13 @@ describe('boat item layout', () => {
   it('classifies every item on the approved support surface', () => {
     for (const instance of createItemInstances()) {
       expect(boatStorageSurface(instance)).toBe(
-        SHELF_IDS.has(instance.type) ? 'shelf' : 'floor',
+        SHELF_IDS.has(instance.type)
+          ? 'shelf'
+          : GUNWALE_IDS.has(instance.type) ? 'gunwale' : 'floor',
       );
     }
-    expect(new Set([...SHELF_IDS, ...FLOOR_IDS])).toEqual(new Set(ITEM_IDS));
+    expect(new Set([...SHELF_IDS, ...FLOOR_IDS, ...GUNWALE_IDS]))
+      .toEqual(new Set(ITEM_IDS));
   });
 
   it('uses canonical instance transforms for survival copies', () => {
@@ -122,8 +127,21 @@ describe('boat item layout', () => {
     expect(transform('swimRing').position.x).toBeGreaterThan(0.80);
     expect(transform('swimRing').position.x).toBeLessThan(1.20);
     expect(transform('swimRing').position.z).toBeLessThan(-0.85);
-    expect(transform('captainWhiskers').position.z).toBeGreaterThan(0.3);
+    expect(transform('captainWhiskers').position.x).toBeGreaterThan(1.55);
+    expect(transform('captainWhiskers').position.z).toBeLessThan(0.3);
+    expect(transform('captainWhiskers').rotation.y).toBeCloseTo(Math.PI / 2);
     expect(transform('captainWhiskers').scale).toBeGreaterThan(0.5);
+  });
+
+  it('keeps Captain Whiskers visible beyond the nearest bench silhouette', () => {
+    const whiskers = {
+      instanceId: 'captainWhiskers-1',
+      type: 'captainWhiskers',
+    } as const satisfies ItemInstance;
+    const bounds = productionBounds(whiskers);
+    const nearestBenchRightEdge = lifeboatHullHalfWidthAt(0.78)! - 0.17;
+
+    expect(bounds.min.x).toBeGreaterThan(nearestBenchRightEdge);
   });
 
   it('keeps bait closest to the fishing rod', () => {
@@ -191,7 +209,9 @@ describe('boat item layout', () => {
       const surface = boatStorageSurface(instance);
       const supportY = surface === 'shelf'
         ? LIFEBOAT_DISPLAY_SHELF_SURFACE_Y
-        : LIFEBOAT_FLOOR_SURFACE_Y;
+        : surface === 'gunwale'
+          ? LIFEBOAT_GUNWALE_SURFACE_Y
+          : LIFEBOAT_FLOOR_SURFACE_Y;
       const bounds = productionBounds(instance);
       expect(bounds.min.y, instance.instanceId).toBeCloseTo(supportY, 5);
 
@@ -199,6 +219,11 @@ describe('boat item layout', () => {
         lifeboatHullHalfWidthAt(bounds.min.z) ?? 0,
         lifeboatHullHalfWidthAt(bounds.max.z) ?? 0,
       );
+      if (surface === 'gunwale') {
+        expect(bounds.min.x, instance.instanceId).toBeLessThan(minimumHalfWidth);
+        expect(bounds.max.x, instance.instanceId).toBeGreaterThan(minimumHalfWidth);
+        continue;
+      }
       expect(bounds.min.x, instance.instanceId)
         .toBeGreaterThan(-minimumHalfWidth + 0.03);
       expect(bounds.max.x, instance.instanceId)
