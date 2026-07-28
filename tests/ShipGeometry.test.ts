@@ -696,12 +696,13 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('builds flush enclosed-room corners without protruding cap colliders or mesh overlap', () => {
+  it('seals every enclosed room into adjacent structure without entering openings', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     SHIP_LAYOUT.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
       const prefix = zone.id === 'crewCabin' ? 'crew-cabin'
-        : zone.id === 'storageWorkroom' ? 'storage-workroom' : 'wheelhouse';
+        : zone.id === 'storageWorkroom' ? 'storage-workroom'
+          : 'wheelhouse-pane:';
       const roof = build.root.getObjectByName(`${zone.id}-roof`)!;
       const roofBounds = new Box3().setFromObject(roof);
       const roofOverhang = zone.id === 'wheelhouse' ? 0.28 : 0;
@@ -752,28 +753,24 @@ describe('freighter geometry', () => {  interface PointXZ {
         zone.bounds.maxZ,
       );
 
-      const structuralMeshes = build.root.children.filter((object): object is Mesh =>
-        object instanceof Mesh
-        && (
-          object.name.startsWith(`${prefix}-wall-`)
-          || object.name === `${zone.id}-roof`
-          || (zone.id === 'wheelhouse'
-            && (
-              object.name.startsWith('wheelhouse-front-pillar-')
-              || object.name.startsWith('wheelhouse-front-window-')
-            ))
-        ));
-      structuralMeshes.forEach((left, index) => {
-        structuralMeshes.slice(index + 1).forEach((right) => {
-          expect(
-            overlappingVolume(left, right),
-            `${left.name} overlaps ${right.name}`,
-          ).toBeLessThan(1e-8);
-        });
+      const walls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (object instanceof Mesh && object.name.startsWith(prefix)) walls.push(object);
       });
+      const bounds = walls.map((wall) => new Box3().setFromObject(wall));
+      const wallBottomY = FREIGHTER_DIMENSIONS.deckY;
+      const wallTopY = wallBottomY + SHIP_ROOM_WALL_HEIGHT;
+      expect(Math.min(...bounds.map(({ min }) => min.y))).toBeCloseTo(wallBottomY - 0.01);
+      expect(Math.max(...bounds.map(({ max }) => max.y))).toBeCloseTo(wallTopY + 0.01);
       zone.polygon.forEach((_, index) => {
         expect(build.root.getObjectByName(`${zone.id}-corner-${index}`)).toBeUndefined();
       });
+    });
+
+    SHIP_LAYOUT.doors.forEach((door) => {
+      for (const axis of doorAxisSamples(door)) {
+        expect(wallRenderBlockers(build, renderedWallPoint(door, axis))).toEqual([]);
+      }
     });
 
     build.disposeGeometry();

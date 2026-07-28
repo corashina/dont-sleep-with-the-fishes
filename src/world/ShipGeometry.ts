@@ -92,6 +92,7 @@ const WATERLINE_HEIGHT = 0.14;
 const WATERLINE_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_BASE_HEIGHT + 0.03;
 const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
+const ROOM_SEAM_OVERLAP = 0.01;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
@@ -484,6 +485,8 @@ interface WallSegmentSpec {
   readonly fixed: number;
   readonly min: number;
   readonly max: number;
+  readonly sealMin: boolean;
+  readonly sealMax: boolean;
 }
 
 type PortholeZoneId = 'crewCabin' | 'storageWorkroom';
@@ -539,7 +542,15 @@ function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
       { edge: 'forward' as const, orientation: 'x' as const, fixed: bounds.maxZ, min: bounds.minX + WALL_THICKNESS, max: bounds.maxX - WALL_THICKNESS, doors: [] as ShipDoorSpec[], axis: 0 as const },
     ];
     edges.forEach((edge) => subtractDoorIntervals(edge.min, edge.max, edge.doors, edge.axis)
-      .forEach((segment) => result.push({ zoneId, edge: edge.edge, orientation: edge.orientation, fixed: edge.fixed, ...segment })));
+      .forEach((segment) => result.push({
+        zoneId,
+        edge: edge.edge,
+        orientation: edge.orientation,
+        fixed: edge.fixed,
+        ...segment,
+        sealMin: segment.min === edge.min,
+        sealMax: segment.max === edge.max,
+      })));
   });
   return result;
 }
@@ -576,9 +587,9 @@ function roomWallHeight(_zoneId: ShipZoneId): number {
 
 function wallUvOffsets(
   segment: WallSegmentSpec,
+  horizontalCenter: number,
   centerY: number,
 ): readonly [number, number] {
-  const horizontalCenter = (segment.min + segment.max) / 2;
   return [
     segment.orientation === 'x' ? horizontalCenter : -horizontalCenter,
     centerY,
@@ -604,10 +615,13 @@ function addPortholeWallPanel(
   material: Material,
 ): void {
   const height = roomWallHeight(segment.zoneId);
-  const renderHeight = height - 0.00002;
-  const length = segment.max - segment.min;
-  const renderLength = length - 0.00002;
-  const horizontalCenter = (segment.min + segment.max) / 2;
+  const sealBefore = segment.sealMin ? ROOM_SEAM_OVERLAP : 0;
+  const sealAfter = segment.sealMax ? ROOM_SEAM_OVERLAP : 0;
+  const renderHeight = height + ROOM_SEAM_OVERLAP * 2;
+  const renderLength = segment.max - segment.min + sealBefore + sealAfter;
+  const horizontalCenter = (
+    segment.min - sealBefore + segment.max + sealAfter
+  ) / 2;
   const shape = new Shape();
   shape.moveTo(-renderLength / 2, -renderHeight / 2);
   shape.lineTo(renderLength / 2, -renderHeight / 2);
@@ -636,7 +650,7 @@ function addPortholeWallPanel(
   geometry.translate(0, 0, -WALL_HALF_THICKNESS);
   applyWallPlanarUvs(
     geometry,
-    ...wallUvOffsets(segment, wallBottomY + height / 2),
+    ...wallUvOffsets(segment, horizontalCenter, wallBottomY + height / 2),
   );
   const mesh = new Mesh(geometry, material);
   mesh.name = name;
@@ -789,16 +803,28 @@ function addWallSegments(
       shellColliders.push(toCollisionBox(wall.position, wall.size));
       const length = segment.max - segment.min;
       const wallCenterY = wallBottomY + height / 2;
+      const sealBefore = segment.sealMin ? ROOM_SEAM_OVERLAP : 0;
+      const sealAfter = segment.sealMax ? ROOM_SEAM_OVERLAP : 0;
+      const renderLength = length + sealBefore + sealAfter;
+      const horizontalCenter = (
+        segment.min - sealBefore + segment.max + sealAfter
+      ) / 2;
+      const renderHeight = height + ROOM_SEAM_OVERLAP * 2;
       const geometry = createWallBoxGeometry(
         geometries,
-        length - 0.00002,
-        height - 0.00002,
+        renderLength,
+        renderHeight,
         WALL_THICKNESS,
-        ...wallUvOffsets(segment, wallCenterY),
+        ...wallUvOffsets(segment, horizontalCenter, wallCenterY),
       );
       const mesh = new Mesh(geometry, material);
       mesh.name = name;
-      mesh.position.set(...segmentTransform(segment, height, wallBottomY + height / 2).position);
+      const transform = segmentTransform(segment, height, wallCenterY);
+      mesh.position.set(
+        segment.orientation === 'x' ? horizontalCenter : transform.position[0],
+        transform.position[1],
+        segment.orientation === 'z' ? horizontalCenter : transform.position[2],
+      );
       if (segment.orientation === 'z') mesh.rotation.y = Math.PI / 2;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -813,6 +839,8 @@ interface WheelhousePaneSpec {
   readonly id: string;
   readonly start: readonly [number, number];
   readonly end: readonly [number, number];
+  readonly sealStart: boolean;
+  readonly sealEnd: boolean;
 }
 
 function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpec[] {
@@ -833,36 +861,50 @@ function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpe
       id: 'front-center',
       start: [frontCenterMinX, wheelhouse.maxZ],
       end: [frontCenterMaxX, wheelhouse.maxZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'front-port-chamfer',
       start: [wheelhouse.minX, frontSideZ],
       end: [frontCenterMinX, wheelhouse.maxZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'front-starboard-chamfer',
       start: [frontCenterMaxX, wheelhouse.maxZ],
       end: [wheelhouse.maxX, frontSideZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'port-side',
       start: [wheelhouse.minX, wheelhouse.minZ],
       end: [wheelhouse.minX, portDoorMinZ],
+      sealStart: true,
+      sealEnd: false,
     },
     {
       id: 'starboard-side',
       start: [wheelhouse.maxX, frontSideZ],
       end: [wheelhouse.maxX, wheelhouse.minZ],
+      sealStart: true,
+      sealEnd: true,
     },
     {
       id: 'aft-port',
       start: [aftDoorMinX, wheelhouse.minZ],
       end: [wheelhouse.minX + WALL_THICKNESS, wheelhouse.minZ],
+      sealStart: false,
+      sealEnd: true,
     },
     {
       id: 'aft-starboard',
       start: [wheelhouse.maxX - WALL_THICKNESS, wheelhouse.minZ],
       end: [aftDoorMaxX, wheelhouse.minZ],
+      sealStart: true,
+      sealEnd: false,
     },
   ];
 }
@@ -910,6 +952,10 @@ function addWheelhousePane(
   const dx = spec.end[0] - spec.start[0];
   const dz = spec.end[1] - spec.start[1];
   const width = Math.hypot(dx, dz);
+  const sealStart = spec.sealStart ? ROOM_SEAM_OVERLAP : 0;
+  const sealEnd = spec.sealEnd ? ROOM_SEAM_OVERLAP : 0;
+  const sealedWidth = width + sealStart + sealEnd;
+  const sealedCenterX = (sealEnd - sealStart) / 2;
   const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
   const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
   const pane = new Group();
@@ -924,15 +970,15 @@ function addWheelhousePane(
   const horizontalOffset = (
     pane.position.x * dx
     + pane.position.z * dz
-  ) / width;
+  ) / width + sealedCenterX;
 
   ([
-    ['sill', WINDOW_SILL_HEIGHT, WINDOW_SILL_HEIGHT / 2],
-    ['header', WINDOW_HEADER_HEIGHT, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2],
+    ['sill', WINDOW_SILL_HEIGHT + ROOM_SEAM_OVERLAP, WINDOW_SILL_HEIGHT / 2 - ROOM_SEAM_OVERLAP / 2],
+    ['header', WINDOW_HEADER_HEIGHT + ROOM_SEAM_OVERLAP, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2 + ROOM_SEAM_OVERLAP / 2],
   ] as const).forEach(([part, height, centerY]) => {
     const geometry = createWallBoxGeometry(
       geometries,
-      width,
+      sealedWidth,
       height,
       WALL_THICKNESS,
       horizontalOffset,
@@ -940,7 +986,7 @@ function addWheelhousePane(
     );
     const mesh = new Mesh(geometry, materials.paintedPanel);
     mesh.name = `${pane.name}:${part}`;
-    mesh.position.set(0, centerY, -WALL_HALF_THICKNESS);
+    mesh.position.set(sealedCenterX, centerY, -WALL_HALF_THICKNESS);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     pane.add(mesh);
@@ -1675,6 +1721,7 @@ export function createShipGeometry(
       (zone.bounds.minZ + zone.bounds.maxZ) / 2,
     ),
   ]));
+  root.updateMatrixWorld(true);
   let disposed = false;
 
   return {
