@@ -51,6 +51,7 @@ import {
 import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
+import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatStorage';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
@@ -69,6 +70,7 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
@@ -79,6 +81,7 @@ import {
 } from './SurvivalLantern';
 import type {
   ActionOutcome,
+  DriftingLootVariant,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -206,6 +209,11 @@ const FISHING_CATCH_BOW_REST = Object.freeze({
   x: 0,
   y: 0.43,
   z: -2.52,
+});
+const DRIFTING_LOOT_STERN_REST = Object.freeze({
+  x: 0.72,
+  y: 0.58,
+  z: 1.05,
 });
 
 function addOwnedFishingMesh(
@@ -393,6 +401,8 @@ export class BoatWorld {
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly eventPresentation: EventPresentationLayer;
+  private readonly driftingLootSternRest = new Object3D();
+  private readonly driftingLootPresentation: DriftingLootPresentation | null;
   private readonly repairTools: Object3D;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
@@ -464,6 +474,7 @@ export class BoatWorld {
     moonTexture: Texture,
     savedItems: readonly ItemInstance[] = [],
     lifeboatAssets?: LifeboatAssets,
+    shipFurniture?: ShipFurnitureLibrary,
   ) {
     this.scene = new Scene();
     this.sky = new Skybox(
@@ -498,6 +509,13 @@ export class BoatWorld {
       FISHING_CATCH_BOW_REST.z,
     );
     this.boat.add(this.fishingCatchRest);
+    this.driftingLootSternRest.name = 'drifting-loot-stern-rest';
+    this.driftingLootSternRest.position.set(
+      DRIFTING_LOOT_STERN_REST.x,
+      DRIFTING_LOOT_STERN_REST.y,
+      DRIFTING_LOOT_STERN_REST.z,
+    );
+    this.boat.add(this.driftingLootSternRest);
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
 
@@ -547,6 +565,12 @@ export class BoatWorld {
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
     this.eventPresentation = new EventPresentationLayer();
+    this.driftingLootPresentation = shipFurniture === undefined
+      ? null
+      : new DriftingLootPresentation({
+          barrel: shipFurniture.clone('barrel'),
+          crate: shipFurniture.clone('cargoCrate'),
+        }, this.driftingLootSternRest);
 
     this.ocean = new OceanRenderer();
     this.key.target.position.set(0, 0, -3);
@@ -560,6 +584,9 @@ export class BoatWorld {
       this.key,
       this.key.target,
       this.eventPresentation.root,
+      ...(this.driftingLootPresentation === null
+        ? []
+        : [this.driftingLootPresentation.root]),
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
@@ -609,15 +636,41 @@ export class BoatWorld {
       : this.supplyDisplay.playEventItemUse(instanceId);
   }
 
-  stageEvent(eventId: string): void {
+  stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
     if (this.disposed) return;
+    if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
+      if (variant === null) throw new Error('Drifting loot requires a variant.');
+      this.eventPresentation.clear();
+      this.driftingLootPresentation.stage(variant);
+      return;
+    }
+    this.driftingLootPresentation?.clear();
     this.eventPresentation.stage(eventId);
   }
 
   revealEvent(eventId: string): Promise<void> {
-    return this.disposed
-      ? Promise.resolve()
+    if (this.disposed) return Promise.resolve();
+    return eventId === 'drifting-loot' && this.driftingLootPresentation !== null
+      ? this.driftingLootPresentation.reveal()
       : this.eventPresentation.reveal(eventId);
+  }
+
+  retrieveDriftingLoot(): Promise<void> {
+    return this.disposed || this.driftingLootPresentation === null
+      ? Promise.resolve()
+      : this.driftingLootPresentation.retrieve();
+  }
+
+  recedeDriftingLoot(): Promise<void> {
+    return this.disposed || this.driftingLootPresentation === null
+      ? Promise.resolve()
+      : this.driftingLootPresentation.recede();
+  }
+
+  projectDriftingLoot(width: number, height: number): ProjectedBoatBounds | null {
+    if (this.disposed || this.driftingLootPresentation === null) return null;
+    this.scene.updateMatrixWorld(true);
+    return this.driftingLootPresentation.projectHeld(this.camera, width, height);
   }
 
   reactToEventOutcome(eventId: string, outcome: ActionOutcome): Promise<void> {
@@ -629,6 +682,7 @@ export class BoatWorld {
   clearEvent(): void {
     if (this.disposed) return;
     this.eventPresentation.clear();
+    this.driftingLootPresentation?.clear();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1020,6 +1074,7 @@ export class BoatWorld {
 
     this.advanceFishingPresentation(delta);
     this.eventPresentation.update(time, delta);
+    this.driftingLootPresentation?.update(time, delta);
     this.supplyDisplay.update(delta);
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
@@ -1057,6 +1112,7 @@ export class BoatWorld {
       () => this.cancelActiveSequence(),
       () => this.supplyDisplay.dispose(),
       () => this.eventPresentation.dispose(),
+      () => this.driftingLootPresentation?.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
