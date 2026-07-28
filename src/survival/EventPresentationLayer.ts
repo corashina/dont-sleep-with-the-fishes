@@ -348,6 +348,21 @@ export class EventPresentationLayer {
     }
   }
 
+  settleForVisibilityChange(): void {
+    if (this.disposed) return;
+    const animation = this.activeAnimation;
+    if (animation === null) return;
+    this.activeAnimation = null;
+    this.held = true;
+    const tableau = this.tableaus.get(animation.eventId)!;
+    tableau.heldReactionTilt = animation.kind === 'react'
+      ? this.reactionDirection * 0.035
+      : 0;
+    this.resetTableauPose(tableau);
+    this.applyRevealPose(tableau, 1, tableau.heldReactionTilt);
+    animation.resolve();
+  }
+
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
     this.rescueProgress = progress === null ? null : Math.min(1, Math.max(0, progress));

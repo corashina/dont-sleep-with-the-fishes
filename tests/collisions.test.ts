@@ -339,7 +339,10 @@ describe('player movement helpers', () => {
   ])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {
-      expect(ship.colliders.some((box) => pointInside(point, box))).toBe(true);
+      const blocksPlayer = _label === 'stern machinery'
+        ? ship.colliders.some((box) => playerOverlaps(point, PLAYER_LAYOUT_RADIUS, box))
+        : ship.colliders.some((box) => pointInside(point, box));
+      expect(blocksPlayer).toBe(true);
     } finally {
       ship.dispose();
     }
