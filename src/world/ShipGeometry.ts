@@ -154,6 +154,38 @@ function sharedBoxGeometry(root: Group, geometries: Set<BufferGeometry>): BoxGeo
   return geometry;
 }
 
+function applyWallPlanarUvs(
+  geometry: BufferGeometry,
+  horizontalOffset: number,
+  verticalOffset: number,
+): void {
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    const normalX = Math.abs(normals.getX(index));
+    const normalZ = Math.abs(normals.getZ(index));
+    const u = normalZ >= normalX ? positions.getX(index) : positions.getZ(index);
+    const v = positions.getY(index);
+    uvs.setXY(index, u + horizontalOffset, v + verticalOffset);
+  }
+  uvs.needsUpdate = true;
+}
+
+function createWallBoxGeometry(
+  geometries: Set<BufferGeometry>,
+  width: number,
+  height: number,
+  depth: number,
+  horizontalOffset: number,
+  verticalOffset: number,
+): BoxGeometry {
+  const geometry = new BoxGeometry(width, height, depth);
+  applyWallPlanarUvs(geometry, horizontalOffset, verticalOffset);
+  geometries.add(geometry);
+  return geometry;
+}
+
 function toCollisionBox(
   position: readonly [number, number, number],
   size: readonly [number, number, number],
@@ -591,6 +623,7 @@ function addPortholeWallPanel(
     steps: 1,
   });
   geometry.translate(0, 0, -WALL_HALF_THICKNESS);
+  applyWallPlanarUvs(geometry, 0, 0);
   const mesh = new Mesh(geometry, material);
   mesh.name = name;
   mesh.position.set(
@@ -740,11 +773,22 @@ function addWallSegments(
     } else {
       const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
       shellColliders.push(toCollisionBox(wall.position, wall.size));
-      addBlock(root, geometries, shellColliders, {
-        name,
-        ...segmentTransform(segment, height, wallBottomY + height / 2),
-        material,
-      });
+      const length = segment.max - segment.min;
+      const geometry = createWallBoxGeometry(
+        geometries,
+        length - 0.00002,
+        height - 0.00002,
+        WALL_THICKNESS,
+        0,
+        0,
+      );
+      const mesh = new Mesh(geometry, material);
+      mesh.name = name;
+      mesh.position.set(...segmentTransform(segment, height, wallBottomY + height / 2).position);
+      if (segment.orientation === 'z') mesh.rotation.y = Math.PI / 2;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      root.add(mesh);
     }
   });
   wheelhousePaneSpecs(layout).forEach((spec) =>
@@ -864,17 +908,24 @@ function addWheelhousePane(
   pane.rotation.y = Math.atan2(-dz, dx);
   facade.add(pane);
 
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:sill`,
-    size: [width, WINDOW_SILL_HEIGHT, WALL_THICKNESS],
-    position: [0, WINDOW_SILL_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
-  });
-  addBlock(pane, geometries, [], {
-    name: `${pane.name}:header`,
-    size: [width, WINDOW_HEADER_HEIGHT, WALL_THICKNESS],
-    position: [0, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2, -WALL_HALF_THICKNESS],
-    material: materials.paintedPanel,
+  ([
+    ['sill', WINDOW_SILL_HEIGHT, WINDOW_SILL_HEIGHT / 2],
+    ['header', WINDOW_HEADER_HEIGHT, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2],
+  ] as const).forEach(([part, height, centerY]) => {
+    const geometry = createWallBoxGeometry(
+      geometries,
+      width,
+      height,
+      WALL_THICKNESS,
+      0,
+      0,
+    );
+    const mesh = new Mesh(geometry, materials.paintedPanel);
+    mesh.name = `${pane.name}:${part}`;
+    mesh.position.set(0, centerY, -WALL_HALF_THICKNESS);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    pane.add(mesh);
   });
   addBlock(pane, geometries, [], {
     name: `${pane.name}:frame-start`,

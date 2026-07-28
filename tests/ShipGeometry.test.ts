@@ -316,6 +316,61 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
+  const verticalFaceUvScale = (mesh: Mesh): readonly [number, number] => {
+    const positions = mesh.geometry.getAttribute('position');
+    const normals = mesh.geometry.getAttribute('normal');
+    const uvs = mesh.geometry.getAttribute('uv');
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (let index = 0; index < positions.count; index += 1) {
+      if (Math.abs(normals.getZ(index)) < 0.9) continue;
+      minX = Math.min(minX, positions.getX(index));
+      maxX = Math.max(maxX, positions.getX(index));
+      minY = Math.min(minY, positions.getY(index));
+      maxY = Math.max(maxY, positions.getY(index));
+      minU = Math.min(minU, uvs.getX(index));
+      maxU = Math.max(maxU, uvs.getX(index));
+      minV = Math.min(minV, uvs.getY(index));
+      maxV = Math.max(maxV, uvs.getY(index));
+    }
+    return [(maxU - minU) / (maxX - minX), (maxV - minV) / (maxY - minY)];
+  };
+
+  it('uses each room finish consistently with metre-scaled upright wall UVs', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const crewWalls: Mesh[] = [];
+      const storageWalls: Mesh[] = [];
+      build.root.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        if (object.name.startsWith('crew-cabin-wall-')) crewWalls.push(object);
+        if (object.name.startsWith('storage-workroom-wall-')) storageWalls.push(object);
+      });
+
+      expect(crewWalls.length).toBeGreaterThan(0);
+      expect(storageWalls.length).toBeGreaterThan(0);
+      crewWalls.forEach((wall) => {
+        expect(wall.material).toBe(materials.paintedPanel);
+        expect(verticalFaceUvScale(wall)).toEqual([1, 1]);
+      });
+      storageWalls.forEach((wall) => {
+        expect(wall.material).toBe(materials.plainPaintedSteel);
+        expect(verticalFaceUvScale(wall)).toEqual([1, 1]);
+      });
+      expect(materials.paintedPanel.map!.repeat.toArray()).toEqual([1, 1]);
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('renders room panels as textured weathered warm white', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
