@@ -96,6 +96,7 @@ const BOAT_STORAGE_SLOTS = {
   flashlight: [restingSlot('shelf', 'flashlight', 1.10, -1.74, 0.10)],
   harpoonGun: [restingSlot('floor', 'harpoonGun', 0.50, -1.05, Math.PI / 2 - 0.18)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
+  captainWhiskers: [restingSlot('floor', 'captainWhiskers', 0.92, 0.48, Math.PI, 0.6)],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
 const BAIT_OVERFLOW_SLOT = restingSlot(

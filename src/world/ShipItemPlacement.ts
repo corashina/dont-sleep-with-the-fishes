@@ -51,7 +51,7 @@ export class ShipItemPlacementError extends Error {
 }
 
 const ITEM_CATEGORIES = new Set<ShipItemCategory>([
-  'provisions', 'navigation', 'workshop', 'deckGear',
+  'provisions', 'navigation', 'workshop', 'deckGear', 'comfort',
 ]);
 const MAX_INTERACTION_DISTANCE = 2.2;
 const MIN_UNIFORM_SCALE = 0.75;
