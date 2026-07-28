@@ -113,8 +113,9 @@ describe('boat item layout', () => {
     expect(transform('map').rotation.x).toBeCloseTo(Math.PI / 2);
     expect(transform('ductTape').rotation.x).toBeCloseTo(Math.PI / 2);
     expect(transform('harpoonGun').rotation.y).toBeGreaterThan(1.2);
-    expect(Math.abs(transform('umbrella').rotation.x)).toBeGreaterThan(0.1);
-    expect(Math.abs(transform('umbrella').rotation.z)).toBeGreaterThan(0.05);
+    expect(Math.abs(transform('umbrella').rotation.x)).toBeGreaterThan(0.35);
+    expect(Math.abs(transform('umbrella').rotation.z)).toBeGreaterThan(0.25);
+    expect(transform('swimRing').rotation.x).toBeCloseTo(0);
     expect(transform('swimRing').position.z).toBeLessThan(-0.45);
   });
 
