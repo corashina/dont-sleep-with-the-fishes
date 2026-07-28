@@ -343,7 +343,12 @@ export class FishingCatchLibrary {
     if (spec) {
       try {
         const root = await this.loader.load(spec.url);
-        active = prepareLoadedCatch(root, catchId, spec);
+        active = prepareLoadedCatch(
+          root,
+          catchId,
+          spec,
+          definition.presentation.kind === 'item',
+        );
         if (definition.presentation.kind === 'item') {
           active.root.userData.fishingModelSource = 'item-model';
           active.root.userData.fishingItemId = definition.presentation.itemId;
@@ -449,6 +454,7 @@ function prepareLoadedCatch(
   sourceRoot: Object3D,
   catchId: FishingCatchId,
   spec: FishingCatchModelSpec,
+  normalizeByLongestDimension = false,
 ): ActiveCatch {
   const root = new Group();
   root.name = `fishing-catch:${catchId}:model`;
@@ -473,7 +479,10 @@ function prepareLoadedCatch(
     throw new Error(`Fishing model ${catchId} has invalid bounds.`);
   }
   sourceRoot.position.sub(center);
-  root.scale.setScalar(spec.targetLength / size.x);
+  const normalizationDimension = normalizeByLongestDimension
+    ? Math.max(size.x, size.y, size.z)
+    : size.x;
+  root.scale.setScalar(spec.targetLength / normalizationDimension);
 
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;

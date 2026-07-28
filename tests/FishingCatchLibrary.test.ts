@@ -5,9 +5,9 @@ import {
   type FishingCatchModelLoader,
 } from '../src/survival/FishingCatchLibrary';
 
-function testModel() {
+function testModel(width = 4, height = 1, depth = 1) {
   const root = new Group();
-  const geometry = new BoxGeometry(4, 1, 1);
+  const geometry = new BoxGeometry(width, height, depth);
   const material = new MeshStandardMaterial();
   root.add(new Mesh(geometry, material));
   return { geometry, material, root };
@@ -61,6 +61,17 @@ describe('FishingCatchLibrary', () => {
     expect(loader.load).toHaveBeenCalledWith(expect.stringContaining('energyBar.glb'));
     expect(prepared?.userData.fishingModelSource).toBe('item-model');
     expect(prepared?.userData.fishingItemId).toBe('energyBar');
+    library.dispose();
+  });
+
+  it('normalizes utility models by their longest dimension', async () => {
+    const model = testModel(1, 4, 1);
+    const library = new FishingCatchLibrary({ load: async () => model.root });
+
+    const prepared = await library.prepare('energyBar');
+
+    const size = new Box3().setFromObject(prepared!).getSize(new Vector3());
+    expect(Math.max(size.x, size.y, size.z)).toBeCloseTo(0.48);
     library.dispose();
   });
 
