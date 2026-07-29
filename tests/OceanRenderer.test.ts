@@ -28,6 +28,9 @@ describe('OceanRenderer', () => {
     expect(shader).toContain('float profileProgress = clamp(');
     expect(shader).toContain('mix(lowerHalfWidth, exclusionHalfWidth, profileProgress)');
     expect(shader).toContain('exclusionLocal.y >= uExclusionMinimumLocalYs[i]');
+    expect(shader).toContain(
+      'exclusionLocal.y <= uExclusionUpperLocalYs[i]',
+    );
 
     ocean.dispose();
   });
