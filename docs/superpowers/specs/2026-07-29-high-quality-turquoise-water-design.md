@@ -33,12 +33,18 @@ geometry density, detail distance, foam, reflections, and GPU cost.
 High keeps the four shared gameplay waves. It improves only ocean rendering:
 
 - denser nearby geometry creates smoother wave silhouettes;
-- layered wind ripples add medium and fine normal detail;
-- turquoise body color gains clearer crest transmission and trough depth;
-- sky reflections gain more normal variation;
+- crossed wind ripples add strong medium and fine normal detail;
+- ripple strength stays clearly visible beside Low during calm daylight;
+- turquoise body color gains stronger crest transmission and trough depth;
+- sky reflections gain clearer normal variation and surface contrast;
 - sun glints stretch into restrained wind-aligned highlights;
-- crest foam gains finer breakup without covering the water;
+- crest caps use lower High-only thresholds to produce more foam;
+- broken foam streaks trail from crests and drift with the wind;
+- layered noise breaks foam edges and prevents regular bands;
 - small detail fades before the horizon to prevent shimmer and wasted work.
+
+The High setting must change surface structure, foam coverage, reflections,
+and depth. A color-only difference does not meet the design.
 
 High water reads as an authored, illustrated sea. It does not use a photo
 texture, screen-space reflection, scene-depth refraction, or simulated
@@ -105,13 +111,17 @@ Automated tests cover:
 - Low keeps the current ocean configuration;
 - High selects denser geometry, longer detail range, turquoise colors, and the
   high shader define;
+- High uses visibly stronger crossed ripple normals than Low;
+- High uses separate foam thresholds and adds drifting foam streaks;
 - equal quality values do not rebuild resources;
 - a quality change disposes replaced geometry once;
 - final disposal cleans the active geometry and material once;
 - water quality does not change the shared wave data.
 
 Run the focused unit tests, full test suite, type check, and production build.
-Visually compare Low and High in daylight, storm, fog, and night scenes.
+Visually compare Low and High in calm daylight, storm, fog, and night scenes.
+The calm comparison must show more than a palette change. High must show
+stronger ripples, more crest foam, broken foam streaks, and deeper troughs.
 
 ## Out of scope
 
