@@ -240,6 +240,7 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.position,
       simulatePhysics,
     );
+    if (simulatePhysics) this.player.placeCamera();
     this.ui.render(next, sinking);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'

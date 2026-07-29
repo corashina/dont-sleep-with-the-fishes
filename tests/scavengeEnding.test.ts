@@ -8,6 +8,8 @@ import {
   sampleScavengeCinematicFrameInto,
   SINKING_CINEMATIC_SECONDS,
 } from '../src/game/scavengeEnding';
+import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
+import { getSinkingState } from '../src/game/sinking';
 
 describe('scavenge ending', () => {
   it('advances through exact cinematic and hold boundaries', () => {
@@ -27,6 +29,12 @@ describe('scavenge ending', () => {
       4,
     );
     expect(state).toEqual({ stage: 'menuReady', elapsedSeconds: 0 });
+  });
+
+  it('keeps playing after successful scavenging', () => {
+    const playing = createScavengeEndingState();
+
+    expect(advanceScavengeEnding(playing, 'success', 12)).toBe(playing);
   });
 
   it('clamps negative deltas and leaves menu readiness terminal', () => {
@@ -50,6 +58,20 @@ describe('scavenge ending', () => {
     expect(end.sinking.sinkOffset).toBeLessThan(-10);
     expect(end.blackout).toBe(1);
     expect(end.cameraPosition).not.toEqual(start.cameraPosition);
+  });
+
+  it('continues the shared wave scale at the cinematic boundary', () => {
+    const gameplayEnd = getSinkingState(
+      SCAVENGE_DURATION_SECONDS,
+      SCAVENGE_DURATION_SECONDS,
+    );
+    const cinematicStart = getScavengeCinematicFrame(0);
+    const cinematicEnd = getScavengeCinematicFrame(SINKING_CINEMATIC_SECONDS);
+
+    expect(cinematicStart.sinking.waveAmplitudeScale)
+      .toBe(gameplayEnd.waveAmplitudeScale);
+    expect(cinematicEnd.sinking.waveAmplitudeScale)
+      .toBeGreaterThan(cinematicStart.sinking.waveAmplitudeScale);
   });
 
   it('samples cinematic output into one caller-owned frame', () => {

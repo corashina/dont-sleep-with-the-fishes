@@ -15,6 +15,8 @@ import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSessio
 import {
   createScavengeCinematicFrame,
   createScavengeEndingState,
+  ENDING_HOLD_SECONDS,
+  SINKING_CINEMATIC_SECONDS,
 } from '../src/game/scavengeEnding';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
@@ -119,7 +121,11 @@ function createUpdateHarness(
       update: updateWorld,
       evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
     },
-    player: { update: vi.fn(), localPosition: new Vector3(8.9, 0, 0) },
+    player: {
+      update: vi.fn(),
+      placeCamera: vi.fn(),
+      localPosition: new Vector3(8.9, 0, 0),
+    },
     ui: {
       render: vi.fn(),
       renderEnding: vi.fn(),
@@ -271,6 +277,7 @@ describe('ScavengePhase lifecycle integration', () => {
       player: {
         update: updatePlayer,
         updatePassive: updatePassivePlayer,
+        placeCamera: vi.fn(),
         localPosition: new Vector3(8.9, 0, 0),
       },
       ui: { render: vi.fn(), renderEnding: vi.fn(), setPrompt: vi.fn() },
@@ -354,6 +361,26 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Vector3),
       false,
     );
+  });
+
+  it('places the gameplay camera after the world moves Dorothy', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, updateWorld } = createUpdateHarness(session);
+    const order: string[] = [];
+    const player = (phase as unknown as {
+      player: {
+        update: ReturnType<typeof vi.fn>;
+        placeCamera: ReturnType<typeof vi.fn>;
+      };
+    }).player;
+    player.update.mockImplementation(() => order.push('player'));
+    updateWorld.mockImplementation(() => order.push('world'));
+    player.placeCamera.mockImplementation(() => order.push('camera'));
+
+    phase.update(0.25, 0.25);
+
+    expect(order).toEqual(['player', 'world', 'camera']);
   });
 
   it('disables physics while the document is hidden', () => {
@@ -518,6 +545,72 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(secondPhysics.barrelPoses).toEqual(initialPoses);
     } finally {
       game.dispose();
+    }
+  });
+
+  it('runs the complete failure timeline and restarts once at a fresh title', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const phases: ScavengePhase[] = [];
+    const createScavenge = vi.fn((context, onComplete, onRestart) => {
+      const phase = new ScavengePhase(context, onComplete, onRestart);
+      phases.push(phase);
+      return phase;
+    });
+    const game = Game.forTest({
+      createScavenge,
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      physicsMode: 'off',
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+    });
+
+    try {
+      const first = phases[0]!;
+      const firstInternals = first as unknown as {
+        session: ScavengeSession;
+        player: { localPosition: Vector3 };
+        ending: { stage: string; elapsedSeconds: number };
+      };
+      firstInternals.session.start();
+      firstInternals.player.localPosition.set(0, firstInternals.player.localPosition.y, 0);
+      first.setOverlayActive(true);
+
+      first.update(0, SCAVENGE_DURATION_SECONDS);
+      expect(firstInternals.ending).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
+
+      first.update(0, SINKING_CINEMATIC_SECONDS);
+      expect(firstInternals.ending).toEqual({ stage: 'endingHold', elapsedSeconds: 0 });
+      const action = mount.querySelector<HTMLButtonElement>('[data-ending-action]')!;
+      expect(action.hidden).toBe(true);
+
+      first.update(0, ENDING_HOLD_SECONDS);
+      expect(firstInternals.ending).toEqual({ stage: 'menuReady', elapsedSeconds: 0 });
+      expect(action.hidden).toBe(false);
+
+      action.click();
+      action.click();
+
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      const fresh = phases[1] as unknown as {
+        session: ScavengeSession;
+        presentation: string;
+      };
+      expect(fresh.session.snapshot()).toMatchObject({
+        status: 'idle',
+        remainingSeconds: SCAVENGE_DURATION_SECONDS,
+      });
+      expect(fresh.presentation).toBe('title');
+      expect(mount.querySelector('[data-start]')?.classList).toContain('is-visible');
+      expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
+    } finally {
+      game.dispose();
+      mount.remove();
     }
   });
 
