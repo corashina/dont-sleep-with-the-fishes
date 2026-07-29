@@ -107,8 +107,10 @@ function createUpdateHarness(
   phase: ScavengePhase;
   input: { pointerLocked: boolean; consumeLook: ReturnType<typeof vi.fn> };
   updateWorld: ReturnType<typeof vi.fn>;
+  attachPhysicsBarrelsToShip: ReturnType<typeof vi.fn>;
 } {
   const updateWorld = vi.fn();
+  const attachPhysicsBarrelsToShip = vi.fn();
   const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
   Object.assign(phase, {
     disposed: false,
@@ -119,6 +121,7 @@ function createUpdateHarness(
     input,
     world: {
       update: updateWorld,
+      attachPhysicsBarrelsToShip,
       evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
     },
     player: {
@@ -149,7 +152,7 @@ function createUpdateHarness(
     updateInteraction: vi.fn(),
     updateFlight: vi.fn(),
   });
-  return { phase, input, updateWorld };
+  return { phase, input, updateWorld, attachPhysicsBarrelsToShip };
 }
 
 describe('ScavengePhase lifecycle integration', () => {
@@ -466,6 +469,38 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(cameraPosition.x).toBeCloseTo(44, 3);
       expect(cameraPosition.y).toBeCloseTo(15, 3);
       expect(cameraPosition.z).toBeCloseTo(34, 3);
+    } finally {
+      if (originalExitPointerLock) {
+        Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
+      } else {
+        delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+      }
+    }
+  });
+
+  it('attaches paused barrels and disables their physics when failure starts', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, attachPhysicsBarrelsToShip, updateWorld } = createUpdateHarness(session);
+    const player = (phase as unknown as { player: { localPosition: Vector3 } }).player;
+    player.localPosition.set(0, player.localPosition.y, 0);
+    const originalExitPointerLock = Object.getOwnPropertyDescriptor(document, 'exitPointerLock');
+    Object.defineProperty(document, 'exitPointerLock', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    try {
+      phase.update(0, SCAVENGE_DURATION_SECONDS);
+
+      expect(attachPhysicsBarrelsToShip).toHaveBeenCalledOnce();
+      expect(updateWorld).toHaveBeenLastCalledWith(
+        expect.any(Number),
+        expect.any(Number),
+        expect.any(Object),
+        expect.any(Vector3),
+        false,
+      );
     } finally {
       if (originalExitPointerLock) {
         Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
