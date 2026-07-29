@@ -23,6 +23,10 @@ import {
   createVisualQualityPreference,
   type VisualQualityPreference,
 } from './rendering/visualQuality';
+import {
+  createWaterQualityPreference,
+  type WaterQualityPreference,
+} from './rendering/waterQuality';
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
@@ -94,6 +98,7 @@ export interface GameTestOptions {
   renderer?: WebGLRenderer;
   sceneRenderer?: SceneRenderer;
   visualQuality?: VisualQualityPreference;
+  waterQuality?: WaterQualityPreference;
 }
 
 function createRandomSeed(): number {
@@ -150,6 +155,9 @@ export class Game {
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);
     });
+    const waterQuality = createWaterQualityPreference((quality) => {
+      this.activePhase?.setWaterQuality?.(quality);
+    });
     let initializationStarted = false;
     try {
       renderer.outputColorSpace = SRGBColorSpace;
@@ -170,6 +178,7 @@ export class Game {
         renderer,
         sceneRenderer,
         visualQuality,
+        waterQuality,
         camera,
         clock,
         propModels,
@@ -219,11 +228,16 @@ export class Game {
       null,
     );
     const game = Object.create(Game.prototype) as Game;
+    const waterQuality = options.waterQuality ?? createWaterQualityPreference(
+      (quality) => game.activePhase?.setWaterQuality?.(quality),
+      null,
+    );
     game.initialize(
       mount,
       renderer,
       sceneRenderer,
       visualQuality,
+      waterQuality,
       new PerspectiveCamera(
         GAME_CAMERA.fov,
         1,
@@ -296,6 +310,7 @@ export class Game {
     renderer: WebGLRenderer,
     sceneRenderer: SceneRenderer,
     visualQuality: VisualQualityPreference,
+    waterQuality: WaterQualityPreference,
     camera: PerspectiveCamera,
     clock: GameClock,
     propModels: PropModelLibrary,
@@ -333,6 +348,7 @@ export class Game {
         renderer,
         sceneRenderer,
         visualQuality,
+        waterQuality,
         camera,
         propModels,
         shipFurniture,
@@ -384,6 +400,7 @@ export class Game {
             options: EVENT_TEST_OPTIONS,
             enterEvent: (id) => this.enterTestEvent(id),
           },
+          waterQuality,
         );
       }
       this.seed = this.createSeed();
