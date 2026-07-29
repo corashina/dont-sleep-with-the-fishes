@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   advanceScavengeEnding,
+  createScavengeCinematicFrame,
   createScavengeEndingState,
   ENDING_HOLD_SECONDS,
   getScavengeCinematicFrame,
+  sampleScavengeCinematicFrameInto,
   SINKING_CINEMATIC_SECONDS,
 } from '../src/game/scavengeEnding';
 
@@ -48,5 +50,21 @@ describe('scavenge ending', () => {
     expect(end.sinking.sinkOffset).toBeLessThan(-10);
     expect(end.blackout).toBe(1);
     expect(end.cameraPosition).not.toEqual(start.cameraPosition);
+  });
+
+  it('samples cinematic output into one caller-owned frame', () => {
+    const frame = createScavengeCinematicFrame();
+    const startPosition = frame.cameraPosition;
+    const startTarget = frame.cameraTarget;
+    const startSinking = frame.sinking;
+
+    expect(sampleScavengeCinematicFrameInto(frame, 0)).toBe(frame);
+    sampleScavengeCinematicFrameInto(frame, SINKING_CINEMATIC_SECONDS);
+
+    expect(frame.cameraPosition).toBe(startPosition);
+    expect(frame.cameraTarget).toBe(startTarget);
+    expect(frame.sinking).toBe(startSinking);
+    expect(frame.sinking.sinkOffset).toBeLessThan(-10);
+    expect(frame.blackout).toBe(1);
   });
 });

@@ -12,7 +12,10 @@ import {
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
-import { createScavengeEndingState } from '../src/game/scavengeEnding';
+import {
+  createScavengeCinematicFrame,
+  createScavengeEndingState,
+} from '../src/game/scavengeEnding';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
@@ -133,6 +136,7 @@ function createUpdateHarness(
     contextAction: { type: 'none', prompt: '' },
     ending: createScavengeEndingState(),
     endingStarted: false,
+    cinematicFrame: createScavengeCinematicFrame(),
     cinematicCameraTarget: new Vector3(),
     completionReported: false,
     onComplete: vi.fn(),
@@ -281,6 +285,7 @@ describe('ScavengePhase lifecycle integration', () => {
       contextAction: { type: 'none', prompt: '' },
       ending: createScavengeEndingState(),
       endingStarted: false,
+      cinematicFrame: createScavengeCinematicFrame(),
       cinematicCameraTarget: new Vector3(),
       updateInteraction: vi.fn(),
       updateFlight,
