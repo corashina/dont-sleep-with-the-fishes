@@ -90,6 +90,27 @@ describe('GameUI carry HUD', () => {
     );
   });
 
+  it('uses large fluid carry slots that remain phone-safe', () => {
+    expect(mainStyles).toMatch(
+      /\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3, clamp\(68px, 15vw, 192px\)\);/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.weight-circle\s*\{[^}]*width:\s*clamp\(68px, 15vw, 192px\);[^}]*height:\s*clamp\(68px, 15vw, 192px\);/s,
+    );
+  });
+
+  it('pops new thumbnails and their circle rims together', () => {
+    expect(mainStyles).toMatch(
+      /\.weight-circle\.is-filled\s*\{[^}]*animation:\s*carry-slot-pop 180ms/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.weight-circle__thumbnail\s*\{[^}]*animation:\s*carry-thumbnail-pop 180ms/s,
+    );
+    expect(mainStyles).toMatch(
+      /@keyframes carry-thumbnail-pop\s*\{[^}]*scale\(\.55\)[\s\S]*scale\(1\.08\)[\s\S]*scale\(1\)/s,
+    );
+  });
+
   it('resets the timer block transform on the anchored watch', () => {
     expect(mainStyles).toMatch(
       /\.pocket-watch\s*\{[^}]*transform:\s*none;/s,
@@ -155,8 +176,10 @@ describe('GameUI carry HUD', () => {
     const session = runningSession(['cannedFood']);
     render(ui, session);
     const before = [...mount.querySelectorAll('[data-weight-circle]')];
+    const imageBefore = mount.querySelector('[data-weight-circle] img');
     render(ui, session);
     expect([...mount.querySelectorAll('[data-weight-circle]')]).toEqual(before);
+    expect(mount.querySelector('[data-weight-circle] img')).toBe(imageBefore);
     ui.dispose();
   });
 
