@@ -1,6 +1,7 @@
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { ScavengeEndingStage } from '../game/scavengeEnding';
+import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
 import type { SinkingState } from '../game/sinking';
 import { formatDuration } from './formatDuration';
 import { itemArtwork, uiArtwork } from './uiArtwork';
@@ -63,7 +64,7 @@ export class GameUI {
           <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
           <div class="timer-block pocket-watch">
             ${uiArtwork('watch', 'pocket-watch__art')}
-            <strong class="ui-role-numeral" data-timer>02:00</strong>
+            <strong class="ui-role-numeral" data-timer>${formatDuration(SCAVENGE_DURATION_SECONDS)}</strong>
           </div>
         </div>
       </div>

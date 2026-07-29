@@ -458,12 +458,12 @@ describe('ScavengePhase lifecycle integration', () => {
       input.pointerLocked = false;
     });
 
-    phase.update(120, 120);
+    phase.update(SCAVENGE_DURATION_SECONDS, SCAVENGE_DURATION_SECONDS);
 
     expect(session.snapshot().status).toBe('failure');
     expect(updateWorld).toHaveBeenLastCalledWith(
-      121,
-      120,
+      SCAVENGE_DURATION_SECONDS + 1,
+      SCAVENGE_DURATION_SECONDS,
       expect.anything(),
       expect.any(Vector3),
       false,
@@ -495,7 +495,7 @@ describe('ScavengePhase lifecycle integration', () => {
         firstWorld.update(
           step / 60,
           1 / 60,
-          getSinkingState(30, 120),
+          getSinkingState(SCAVENGE_DURATION_SECONDS / 2, SCAVENGE_DURATION_SECONDS),
           new Vector3(),
           true,
         );
@@ -522,6 +522,7 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it('renders scavenging through sceneRenderer with current sinking progress', () => {
+    const elapsed = SCAVENGE_DURATION_SECONDS * 0.75;
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     const render = vi.fn();
@@ -532,7 +533,7 @@ describe('ScavengePhase lifecycle integration', () => {
     Object.assign(phase, {
       disposed: false,
       scene,
-      elapsed: 90,
+      elapsed,
       visualState,
       context: {
         camera,
@@ -541,12 +542,12 @@ describe('ScavengePhase lifecycle integration', () => {
     });
 
     (phase as unknown as { syncVisualState(state: ReturnType<typeof getSinkingState>): void })
-      .syncVisualState(getSinkingState(90, 120));
+      .syncVisualState(getSinkingState(elapsed, SCAVENGE_DURATION_SECONDS));
     phase.render();
 
     expect(render).toHaveBeenCalledWith(scene, camera, {
       kind: 'scavenge',
-      elapsedSeconds: 90,
+      elapsedSeconds: elapsed,
       sinkingProgress: 0.75,
     });
   });

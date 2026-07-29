@@ -216,8 +216,16 @@ export class ScavengePhase implements GamePhase {
       sampleScavengeCinematicFrameInto(this.cinematicFrame, cinematicElapsed);
       sinking = this.cinematicFrame.sinking;
       blackout = this.cinematicFrame.blackout;
-      this.context.camera.position.set(...this.cinematicFrame.cameraPosition);
-      this.cinematicCameraTarget.set(...this.cinematicFrame.cameraTarget);
+      this.context.camera.position.set(
+        this.cinematicFrame.cameraPosition[0],
+        this.cinematicFrame.cameraPosition[1],
+        this.cinematicFrame.cameraPosition[2],
+      );
+      this.cinematicCameraTarget.set(
+        this.cinematicFrame.cameraTarget[0],
+        this.cinematicFrame.cameraTarget[1],
+        this.cinematicFrame.cameraTarget[2],
+      );
       this.context.camera.lookAt(this.cinematicCameraTarget);
       this.context.camera.updateMatrixWorld(true);
     }
