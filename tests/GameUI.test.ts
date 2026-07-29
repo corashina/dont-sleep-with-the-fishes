@@ -95,6 +95,12 @@ describe('GameUI carry HUD', () => {
     expect(mainStyles).not.toMatch(/\.weight-circle\s*\{[^}]*opacity:/s);
   });
 
+  it('keeps the filled circle paint translucent behind its opaque thumbnail', () => {
+    expect(mainStyles).toMatch(
+      /\.weight-circle\.is-filled\s*\{[^}]*background:\s*radial-gradient\(circle at 45% 38%, #33445880, #111925b8 76%\);/s,
+    );
+  });
+
   it('keeps three empty carry circles', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
