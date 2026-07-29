@@ -3,6 +3,10 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import {
+  CAPTAIN_WHISKERS_IDLE_CLIP,
+  CAPTAIN_WHISKERS_SOURCE,
+} from './captain-whiskers-model.mjs';
 import { POLY_PIZZA_MODEL_SOURCES } from './poly-pizza-models.mjs';
 
 export const MODEL_LIMIT = 3_000;
@@ -301,10 +305,10 @@ function verifyLedgerRow(ledger, itemId, measurement) {
     const expected = [
       'captainWhiskers',
       '`captainWhiskers.glb`',
-      'Captain Whiskers / project original',
-      'https://unoffdontsleepwiththefishes.fandom.com/wiki/Characters#Captain_Whiskers',
-      '`original:captain-whiskers`',
-      'Project-owned',
+      `${CAPTAIN_WHISKERS_SOURCE.title} / ${CAPTAIN_WHISKERS_SOURCE.creator}`,
+      CAPTAIN_WHISKERS_SOURCE.pageUrl,
+      `\`${CAPTAIN_WHISKERS_SOURCE.sourceAssetId}\``,
+      `[${CAPTAIN_WHISKERS_SOURCE.license}](${CAPTAIN_WHISKERS_SOURCE.licenseUrl})`,
       String(measurement.triangles),
       String(measurement.triangles),
     ];
@@ -312,8 +316,9 @@ function verifyLedgerRow(ledger, itemId, measurement) {
     if (
       actual.length !== 10
       || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
-      || !actual[8].includes('CaptainWhiskersIdle')
-      || actual[9] !== '2026-07-28'
+      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.sha256)
+      || !actual[8].includes(CAPTAIN_WHISKERS_IDLE_CLIP)
+      || actual[9] !== CAPTAIN_WHISKERS_SOURCE.downloadedOn
     ) {
       throw new Error('ATTRIBUTION.md: captainWhiskers row does not match the expected record');
     }

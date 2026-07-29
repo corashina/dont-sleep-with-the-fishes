@@ -19,11 +19,14 @@ describe('ship rigging', () => {
       expect(rigging.root.getObjectByName('sail:staysail')).toBeInstanceOf(Mesh);
       expect(SHIP_LAYOUT.rigging.masts[0]!.sails.every(({ furled }) => furled)).toBe(true);
       const mast = SHIP_LAYOUT.rigging.masts[0]!;
+      const expectedSailMountOffset = mast.baseDiameter / 2 + 0.11 / 2;
       for (const id of ['mainsail', 'staysail']) {
         const sail = rigging.root.getObjectByName(`sail:${id}`) as Mesh;
         expect(sail.rotation.y).toBe(Math.PI / 2);
-        expect(sail.position.z).toBe(0);
+        expect(sail.position.z).toBeCloseTo(expectedSailMountOffset);
       }
+      const boom = rigging.root.getObjectByName('boom:mainmast') as Mesh;
+      expect(boom.position.z - boom.scale.z / 2).toBeCloseTo(mast.baseDiameter / 2);
       expect(rigging.colliders).toHaveLength(1);
 
       expect(mast.stays).toHaveLength(4);

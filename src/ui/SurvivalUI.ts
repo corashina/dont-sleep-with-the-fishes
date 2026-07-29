@@ -1,7 +1,7 @@
 import { ITEM_DEFINITIONS, ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
-import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
+import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type {
   ActionOutcome,
@@ -26,7 +26,12 @@ interface ActionDefinition {
   risk: 'safe' | 'uncertain' | 'dangerous';
 }
 
-interface ActionPreview { cost: string; effect: string; risk: ActionDefinition['risk'] }
+interface ActionPreview {
+  cost: string;
+  energyCost: number;
+  effect: string;
+  risk: ActionDefinition['risk'];
+}
 
 interface BoatToolCopy {
   label: string;
@@ -35,7 +40,7 @@ interface BoatToolCopy {
 
 const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze({
   repairTools: {
-    label: 'REPAIR TOOLBOX',
+    label: 'REPAIR',
     description: 'Use the open repair toolbox to repair the lifeboat.',
   },
   fishingRod: {
@@ -71,7 +76,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
   { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', cost: '2 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', cost: 'ENERGY + MATERIAL', energyCost: 0, effect: 'HULL +25 (tape +15)', risk: 'safe' },
   { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
@@ -96,13 +101,15 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
     case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
     case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
     case 'repair': {
+      const energyCost = repairEnergyCost(snapshot.hull);
       const useTape = snapshot.repairMaterial < 1
         && Object.values(snapshot.inventory).some(
           (item) => item?.type === 'ductTape' && item.condition === 'usable',
         );
       return {
         ...definition,
-        cost: useTape ? '2 ENERGY + TAPE' : '2 ENERGY + MATERIAL',
+        cost: `${energyCost} ENERGY + ${useTape ? 'TAPE' : 'MATERIAL'}`,
+        energyCost,
         effect: `HULL +${Math.min(useTape ? 15 : 25, missingHull)}`,
       };
     }
@@ -1183,14 +1190,14 @@ export class SurvivalUI {
         : anchor.toolId === 'fishingRod'
           ? 'Fishing rod'
           : anchor.toolId === 'repairTools'
-            ? 'REPAIR TOOLBOX'
+            ? 'REPAIR'
             : itemLabel);
-    const energyCost = anchoredChoice?.energyCost ?? action?.energyCost ?? 0;
+    const energyCost = anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
     const energyIndicator = anchoredChoice === undefined
       ? '⚡'.repeat(energyCost)
       : energyCost <= 0
         ? reason === null ? '' : 'UNAVAILABLE'
-        : `${energyCost} ENERGY${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
+        : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
     const tooltipNodes = this.anchorTooltipNodes.get(button);
     if (tooltipNodes === undefined) throw new Error('Anchor tooltip nodes are missing');
     if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;

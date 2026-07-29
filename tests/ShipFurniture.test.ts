@@ -310,6 +310,28 @@ describe('ship furniture', () => {
     library.dispose();
   });
 
+  it('gives all three center cargo racks the hatch wood finish', () => {
+    const materials = createShipMaterials();
+    const library = createTestShipFurniture();
+    const build = createShipFurniture(materials, library);
+
+    for (const rackId of [
+      'cargo-rack-port',
+      'cargo-rack-starboard',
+      'cargo-rod-rack-port',
+    ]) {
+      const top = build.root
+        .getObjectByName(`furniture:${rackId}`)!
+        .getObjectByName('cargo-rack-top') as Mesh;
+      expect(top.material).toBe(materials.hatchTimber);
+      expect(top.material).not.toBe(materials.cargoFloor);
+    }
+
+    build.disposeGeometry();
+    materials.dispose();
+    library.dispose();
+  });
+
   it('never disposes shared library resources', () => {
     const materials = createShipMaterials();
     const library = createTestShipFurniture();

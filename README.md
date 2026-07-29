@@ -57,7 +57,7 @@ Open the local URL printed by Vite and select **Start**. The scavenging phase us
 | `Shift` | Sprint |
 | `Space` | Jump |
 | Left mouse click | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
-| `Escape` | Pause and release the mouse |
+| `Escape` | Pause or resume, and release the mouse while paused |
 
 Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The weathered wooden lifeboat has unlimited storage, so every supply thrown aboard is retained and no full-boat state exists.
 
@@ -136,7 +136,7 @@ audit, and atomically publish the complete set.
 Source pages, licenses, resource IDs, hashes, and processing records are listed
 in [the asset ledger](src/assets/ATTRIBUTION.md).
 
-Dorothy's timber fitting texture was initially found at [Poly Haven — Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck). Her structural steel uses untextured authored materials.
+Dorothy's main cargo deck uses [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). All room floors use [Poly Haven — Blue Painted Planks](https://polyhaven.com/a/blue_painted_planks), interior and exterior room walls use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C), and the exterior hull sides and waterline use [ambientCG — Painted Metal 006](https://ambientcg.com/view?id=PaintedMetal006). Windows, roofs, machinery, rails, ropes, safety markings, canvas, and small hardware retain distinct authored materials for readability.
 
 ## Commands
 
@@ -170,7 +170,7 @@ and cleanup.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — category-compatible item profiles, anchor validation, and randomized assignment to authored surfaces.
-- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed timber maps, untextured steel, procedural secondary surfaces, ship materials, and explicit texture ownership.
+- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
 - `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.

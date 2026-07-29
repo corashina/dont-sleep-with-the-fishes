@@ -401,6 +401,10 @@ export class Game {
             enterEvent: (id) => this.enterTestEvent(id),
           },
           waterQuality,
+          {
+            visible: this.performanceStats.isVisible(),
+            setVisible: (visible) => this.performanceStats?.setVisible(visible),
+          },
         );
       }
       this.seed = this.createSeed();

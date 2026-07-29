@@ -159,6 +159,9 @@ export class GameUI {
 
   setPaused(paused: boolean): void {
     this.pauseLayer.classList.toggle('is-visible', paused);
+    this.pauseLayer.setAttribute('aria-hidden', String(!paused));
+    this.pauseLayer.toggleAttribute('inert', !paused);
+    if (paused) this.resumeButton.focus();
   }
 
   clearPointerLockError(): void {
@@ -200,15 +203,9 @@ export class GameUI {
     this.crosshair.classList.toggle('is-pickup-hidden', visible);
   }
 
-  render(snapshot: ScavengeSnapshot, sinking: SinkingState): void {
+  render(snapshot: ScavengeSnapshot): void {
     this.timer.textContent = formatDuration(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
-    const severity = sinking.progress >= 0.75
-      ? 'critical'
-      : sinking.progress >= 0.4
-        ? 'danger'
-        : 'stable';
-    this.root.dataset.sinkingSeverity = severity;
     this.renderCarry(snapshot);
   }
 
@@ -217,7 +214,7 @@ export class GameUI {
     const revealAction = stage === 'menuReady';
     this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
     this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation === 'title';
-    this.pauseLayer.classList.remove('is-visible');
+    if (stage !== 'playing') this.setPaused(false);
     this.endingLayer.classList.toggle('is-visible', visible);
     this.endingLayer.setAttribute('aria-hidden', String(!visible));
     this.endingLayer.toggleAttribute('inert', !visible);

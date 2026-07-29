@@ -9,28 +9,46 @@ $downloadDirectory = Join-Path $temporaryRoot 'downloads'
 $stagingDirectory = Join-Path $temporaryRoot 'runtime'
 $userAgent = 'dont-sleep-with-the-fishes/0.1 asset-pipeline'
 
-$woodSources = @(
+$directSources = @(
   @{
-    Name = 'wood_floor_deck_diff_1k.jpg'
-    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_diff_1k.jpg'
-    Sha256 = '1F2C623E87B0EE905F6F4EC8664DD19B4B135207C96E86198FF2919770B47166'
+    Name = 'dark_wooden_planks_diff_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_diff_1k.jpg'
+    Sha256 = 'E8216BAA6B2D701B5523FCB904D45570ACF7B96D160EF815E96E2DBFA82BDD9B'
   },
   @{
-    Name = 'wood_floor_deck_rough_1k.jpg'
-    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_rough_1k.jpg'
-    Sha256 = '5754D2C2A91A288BB257E0FA8C697D97B48472C9FB77C4C7F0FFCC302F3F60A2'
+    Name = 'dark_wooden_planks_rough_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_rough_1k.jpg'
+    Sha256 = 'A10EA0B52FE395A7AD205CACFD28BD1AEA48EF8545D171209F528DCF58D0A8D3'
   },
   @{
-    Name = 'wood_floor_deck_nor_gl_1k.jpg'
-    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_nor_gl_1k.jpg'
-    Sha256 = '2FA427B9196099C0FF72D1A1AB472E2A79CA2A76906A5C46D134F8A86E086D23'
+    Name = 'dark_wooden_planks_nor_gl_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_nor_gl_1k.jpg'
+    Sha256 = '87A7B26BC674477865D4589C6589200BFA649A6461422BF56F5600C05A470206'
+  },
+  @{
+    Name = 'white_planks_clean_diff_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_planks_clean/white_planks_clean_diff_1k.jpg'
+    Sha256 = '1BE65E3940B59A4E7EB902F47DA5D00DDB2B427B5EF18E7959FD82F17A3AFB2C'
+  },
+  @{
+    Name = 'white_planks_clean_rough_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_planks_clean/white_planks_clean_rough_1k.jpg'
+    Sha256 = 'A707C6FFC7CFA8F354E0E62E351009E1CED71A6150738D39EB20FAA814AC39F1'
+  },
+  @{
+    Name = 'white_planks_clean_nor_gl_1k.jpg'
+    Url = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_planks_clean/white_planks_clean_nor_gl_1k.jpg'
+    Sha256 = '8D9CEEF61DBC4BD567BA1B10691C890CAF74CDDB9861B576F194533B7089FF7E'
   }
 )
 
 $runtimeFiles = @(
-  'deck-wood-color.webp',
-  'deck-wood-normal.webp',
-  'deck-wood-roughness.webp'
+  'dark-wood-color.webp',
+  'dark-wood-normal.webp',
+  'dark-wood-roughness.webp',
+  'room-painted-wood-color.webp',
+  'room-painted-wood-normal.webp',
+  'room-painted-wood-roughness.webp'
 )
 
 function Assert-ContainedPath {
@@ -51,7 +69,7 @@ try {
     $stagingDirectory
   ) | Out-Null
 
-  foreach ($source in $woodSources) {
+  foreach ($source in $directSources) {
     $destination = Join-Path $downloadDirectory $source.Name
     Invoke-WebRequest -Uri $source.Url -OutFile $destination -Headers @{
       'User-Agent' = $userAgent
@@ -63,9 +81,12 @@ try {
   }
 
   & node (Join-Path $PSScriptRoot 'process-ship-textures.mjs') `
-    (Join-Path $downloadDirectory 'wood_floor_deck_diff_1k.jpg') `
-    (Join-Path $downloadDirectory 'wood_floor_deck_rough_1k.jpg') `
-    (Join-Path $downloadDirectory 'wood_floor_deck_nor_gl_1k.jpg') `
+    (Join-Path $downloadDirectory 'dark_wooden_planks_diff_1k.jpg') `
+    (Join-Path $downloadDirectory 'dark_wooden_planks_rough_1k.jpg') `
+    (Join-Path $downloadDirectory 'dark_wooden_planks_nor_gl_1k.jpg') `
+    (Join-Path $downloadDirectory 'white_planks_clean_diff_1k.jpg') `
+    (Join-Path $downloadDirectory 'white_planks_clean_rough_1k.jpg') `
+    (Join-Path $downloadDirectory 'white_planks_clean_nor_gl_1k.jpg') `
     $stagingDirectory
   if ($LASTEXITCODE -ne 0) {
     throw "Texture processing failed with exit code $LASTEXITCODE"

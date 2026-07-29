@@ -105,7 +105,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       }
       outlinePass = new OutlinePass(this.size, new Scene(), new PerspectiveCamera());
       outlinePass.visibleEdgeColor.setHex(0xffffff);
-      outlinePass.hiddenEdgeColor.setHex(0x000000);
+      outlinePass.hiddenEdgeColor.setHex(0xffffff);
       outlinePass.edgeStrength = 5;
       outlinePass.edgeThickness = 4;
       outlinePass.edgeGlow = 0;

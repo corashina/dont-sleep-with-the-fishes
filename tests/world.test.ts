@@ -541,6 +541,28 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
+  it('triggers local smoke at an item base before pickup', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const item = world.itemObjects.get('flashlight-1')!;
+    const expectedBounds = new Box3().setFromObject(item, true);
+    const expectedPosition = expectedBounds.getCenter(new Vector3());
+    expectedPosition.y = expectedBounds.min.y;
+    world.ship.worldToLocal(expectedPosition);
+
+    world.showItemPickupSmoke('flashlight-1');
+
+    const smoke = world.ship.getObjectByName('item-pickup-smoke') as Points;
+    expect(smoke.visible).toBe(true);
+    expect(smoke.position.x).toBeCloseTo(expectedPosition.x);
+    expect(smoke.position.y).toBeCloseTo(expectedPosition.y);
+    expect(smoke.position.z).toBeCloseTo(expectedPosition.z);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the decorative ceiling fixture separate from localized room lighting', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();

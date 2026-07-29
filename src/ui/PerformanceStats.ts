@@ -14,8 +14,27 @@ export class PerformanceStats {
     mount.append(this.element);
   }
 
+  isVisible(): boolean {
+    return !this.element.hidden;
+  }
+
+  setVisible(visible: boolean): void {
+    if (this.disposed || visible === this.isVisible()) return;
+    this.element.hidden = !visible;
+    this.reset();
+    if (visible) {
+      this.element.textContent = 'FPS --';
+      this.element.setAttribute('aria-label', 'Rendering performance: waiting for FPS data');
+    }
+  }
+
   recordFrame(deltaSeconds: number): void {
-    if (this.disposed || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
+    if (
+      this.disposed
+      || !this.isVisible()
+      || !Number.isFinite(deltaSeconds)
+      || deltaSeconds <= 0
+    ) return;
     if (deltaSeconds > 0.25) {
       this.reset();
       return;

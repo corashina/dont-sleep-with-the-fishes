@@ -317,8 +317,12 @@ export class SurvivalPhase implements GamePhase {
   }
 
   update(time: number, deltaSeconds: number): void {
-    if (this.disposed || this.paused || this.documentIsHidden()) return;
+    if (this.disposed || this.documentIsHidden()) return;
     this.elapsedSeconds = time;
+    if (this.paused) {
+      this.world.updateAmbient?.(time, deltaSeconds);
+      return;
+    }
     this.world.update?.(time, deltaSeconds);
     this.cameraLook?.update(deltaSeconds);
     const snapshot = this.session.snapshot();

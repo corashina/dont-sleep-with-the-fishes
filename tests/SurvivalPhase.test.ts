@@ -3380,6 +3380,26 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps ambient boat motion active while gameplay is paused', () => {
+    const update = vi.fn();
+    const updateAmbient = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        update,
+        updateAmbient,
+        dispose: vi.fn(),
+      },
+      ui: { render: vi.fn(), setPaused: vi.fn(), dispose: vi.fn() },
+    });
+
+    phase.setPaused(true);
+    phase.update(4, 0.016);
+
+    expect(updateAmbient).toHaveBeenCalledWith(4, 0.016);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('settles a hidden event reveal but keeps choices locked until explicit resume', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {

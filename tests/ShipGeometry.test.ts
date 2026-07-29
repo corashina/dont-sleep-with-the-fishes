@@ -4,6 +4,7 @@ import {
   ExtrudeGeometry,
   Mesh,
   MeshStandardMaterial,
+  Texture,
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +15,7 @@ import {
   resolveLocalMovement,
 } from '../src/player/collisions';
 import { createShipGeometry } from '../src/world/ShipGeometry';
+import { ShipAssets } from '../src/world/ShipAssets';
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
@@ -183,24 +185,61 @@ describe('freighter geometry', () => {  interface PointXZ {
     'aft-starboard',
   ] as const;
 
-  it('separates white structure, timber floors, lower hull, and canvas', () => {
+  it('shares the white wall finish with the hull and keeps timber floors separate', () => {
     const materials = createShipMaterials();
     try {
-      expect(materials.upperHull.color.getHex()).toBe(0xd8dedb);
       expect(materials.paintedSteel.color.getHex()).toBe(0xd5dbd8);
       expect(materials.plainPaintedSteel.color.getHex()).toBe(0xcbd2cf);
-      expect(materials.darkHull.color.getHex()).toBe(0x172b38);
-      expect(materials.waterline.color.getHex()).toBe(0x243f4c);
+      expect(materials.darkHull).toBe(materials.paintedPanel);
+      expect(materials.upperHull).toBe(materials.paintedPanel);
+      expect(materials.waterline).toBe(materials.paintedPanel);
       expect(materials.canvas.color.getHex()).toBe(0xb9cad0);
       expect(materials.canvasEdge.color.getHex()).toBe(0x647b82);
       expect(materials.timberFloor.metalness).toBe(0);
       expect(materials.crewFloor).toBe(materials.timberFloor);
-      expect(materials.wheelhouseFloor).toBe(materials.timberFloor);
       expect(materials.cargoFloor).toBe(materials.timberFloor);
+      expect(materials.wheelhouseFloor).toBe(materials.timberFloor);
       expect(materials.storageFloor).toBe(materials.timberFloor);
       expect(materials.lifeboatFloor).not.toBe(materials.timberFloor);
     } finally {
       materials.dispose();
+    }
+  });
+
+  it('maps the selected PBR sets to the cargo deck, rooms, and hull', () => {
+    const assets = ShipAssets.fromTextures(
+      new Texture(),
+      new Texture(),
+      new Texture(),
+    );
+    const materials = createShipMaterials(0x51f15e, 1, assets);
+    try {
+      expect(materials.timberFloor.map).toBe(assets.darkWoodColor);
+      expect(materials.cargoFloor).toBe(materials.timberFloor);
+      expect(materials.crewFloor).toBe(materials.timberFloor);
+      expect(materials.wheelhouseFloor).toBe(materials.timberFloor);
+      expect(materials.storageFloor).toBe(materials.timberFloor);
+      [
+        materials.plainPaintedSteel,
+        materials.paintedPanel,
+      ].forEach((material) => {
+        expect(material.map).toBe(assets.roomWallColor);
+        expect(material.metalness).toBe(0);
+      });
+      expect(materials.plainTimber.map).toBe(assets.darkWoodColor);
+      expect(materials.paintedSteel.map).toBeNull();
+      [
+        materials.darkHull,
+        materials.upperHull,
+        materials.waterline,
+      ].forEach((material) => {
+        expect(material).toBe(materials.paintedPanel);
+        expect(material.map).toBe(assets.roomWallColor);
+        expect(material.metalness).toBe(0);
+      });
+    } finally {
+      materials.dispose();
+      assets.dispose();
     }
   });
 
@@ -209,13 +248,17 @@ describe('freighter geometry', () => {  interface PointXZ {
     const build = createShipGeometry(materials, SHIP_LAYOUT);
     try {
       const deck = build.root.getObjectByName('floor-cargoDeck') as Mesh;
+      const wheelhouseFloor = build.root.getObjectByName('floor-wheelhouse') as Mesh;
+      const storageFloor = build.root.getObjectByName('floor-storageWorkroom') as Mesh;
       const lowerHull = build.root.getObjectByName('main-hull-body') as Mesh;
       const upperHull = build.root.getObjectByName('upper-hull') as Mesh;
       const waterline = build.root.getObjectByName('waterline-band') as Mesh;
       const size = new Box3().setFromObject(build.root).getSize(new Vector3());
       expect(size.x).toBeGreaterThanOrEqual(20);
       expect(size.z).toBeGreaterThanOrEqual(55);
-      expect(deck.material).toBe(materials.timberFloor);
+      expect(deck.material).toBe(materials.cargoFloor);
+      expect(wheelhouseFloor.material).toBe(materials.wheelhouseFloor);
+      expect(storageFloor.material).toBe(materials.storageFloor);
       expect(upperHull.material).toBe(materials.upperHull);
       expect(waterline.material).toBe(materials.waterline);
       const upperHullBounds = new Box3().setFromObject(upperHull);
@@ -302,7 +345,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(cargoFloorBounds.min.z).toBeCloseTo(timberDeckBounds.min.z);
       expect(cargoFloorBounds.max.z).toBeCloseTo(timberDeckBounds.max.z);
       expect(stationFloorBounds.max.x).toBeCloseTo(timberDeckBounds.max.x);
-      expect(stationFloor.material).toBe(materials.emergencyStripe);
+      expect(stationFloor.material).toBe(materials.dropoffArea);
       expect(build.root.getObjectByName('lifeboat-station-emergency-border')).toBeUndefined();
 
       const portRails = build.root.children.filter(({ name }) => name.startsWith('rail-port-'));
@@ -316,6 +359,35 @@ describe('freighter geometry', () => {  interface PointXZ {
         new Box3().setFromObject(rail).min.x,
         rail.name,
       ).toBeGreaterThanOrEqual(timberDeckBounds.max.x));
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('marks the lifeboat station center with large painted footprints', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials, SHIP_LAYOUT);
+    try {
+      const station = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!.bounds;
+      const stationFloor = build.root.getObjectByName('floor-lifeboatStation') as Mesh;
+      const left = build.root.getObjectByName('lifeboat-station-footprint-left') as Mesh;
+      const right = build.root.getObjectByName('lifeboat-station-footprint-right') as Mesh;
+      const pairBounds = new Box3().setFromObject(left).union(new Box3().setFromObject(right));
+      const pairCenter = pairBounds.getCenter(new Vector3());
+      const pairSize = pairBounds.getSize(new Vector3());
+
+      expect(materials.dropoffArea.transparent).toBe(true);
+      expect(materials.dropoffArea.opacity).toBeCloseTo(0.35);
+      expect(left.material).toBe(materials.emergencyFootprint);
+      expect(right.material).toBe(materials.emergencyFootprint);
+      expect(materials.emergencyFootprint.transparent).toBe(true);
+      expect(materials.emergencyFootprint.opacity).toBeCloseTo(0.6);
+      expect(pairCenter.x).toBeCloseTo((station.minX + station.maxX) / 2, 1);
+      expect(pairCenter.z).toBeCloseTo((station.minZ + station.maxZ) / 2, 1);
+      expect(pairSize.x).toBeGreaterThan(1.4);
+      expect(pairSize.z).toBeGreaterThan(1.1);
+      expect(left.position.y).toBeGreaterThan(stationFloor.position.y);
     } finally {
       build.disposeGeometry();
       materials.dispose();
@@ -360,6 +432,32 @@ describe('freighter geometry', () => {  interface PointXZ {
       ];
     }
     throw new Error(`Expected an upright face for ${mesh.name}`);
+  };
+
+  const horizontalFaceUvScale = (mesh: Mesh): readonly [number, number] => {
+    const positions = mesh.geometry.getAttribute('position');
+    const normals = mesh.geometry.getAttribute('normal');
+    const uvs = mesh.geometry.getAttribute('uv');
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (let index = 0; index < positions.count; index += 1) {
+      if (Math.abs(normals.getY(index)) < 0.9) continue;
+      minX = Math.min(minX, positions.getX(index));
+      maxX = Math.max(maxX, positions.getX(index));
+      minZ = Math.min(minZ, positions.getZ(index));
+      maxZ = Math.max(maxZ, positions.getZ(index));
+      minU = Math.min(minU, uvs.getX(index));
+      maxU = Math.max(maxU, uvs.getX(index));
+      minV = Math.min(minV, uvs.getY(index));
+      maxV = Math.max(maxV, uvs.getY(index));
+    }
+    return [(maxU - minU) / (maxX - minX), (maxV - minV) / (maxZ - minZ)];
   };
 
   it('uses each room finish consistently with metre-scaled upright wall UVs', () => {
@@ -427,18 +525,13 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
-  it('uses broad alternating bands for the lifeboat station paint', () => {
+  it('uses a plain dark transparent lifeboat station surface', () => {
     const materials = createShipMaterials();
     try {
-      const texture = materials.emergencyStripe.map!;
-      const bytes = texture.image.data as Uint8Array;
-      const redAt = (x: number, y: number): number =>
-        bytes[(y * texture.image.width + x) * 4]!;
-
-      expect(redAt(0, 0)).toBeGreaterThan(100);
-      expect(redAt(31, 0)).toBeGreaterThan(100);
-      expect(redAt(32, 0)).toBeLessThan(100);
-      expect(redAt(63, 0)).toBeLessThan(100);
+      expect(materials.dropoffArea.map).toBeNull();
+      expect(materials.dropoffArea.color.getHex()).toBe(0x252b29);
+      expect(materials.dropoffArea.transparent).toBe(true);
+      expect(materials.dropoffArea.opacity).toBeCloseTo(0.35);
     } finally {
       materials.dispose();
     }
@@ -495,6 +588,9 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(hatch.position.y).toBeCloseTo(2.3);
       expect(hatch.position.z).toBe(-6.5);
       expect(hatch.scale.toArray()).toEqual([1.2, 0.16, 1.6]);
+      const hatchPanel = build.root.getObjectByName('deck-hatch-timber-panel') as Mesh;
+      expect(hatchPanel.material).toBe(materials.hatchTimber);
+      expect(materials.hatchTimber.map).not.toBe(materials.cargoFloor.map);
       const collider = build.shellColliders.find((candidate) =>
         candidate.minX > 3.6 && candidate.maxX < 4.8
         && candidate.minZ < -7.2 && candidate.maxZ > -5.8);
@@ -706,7 +802,68 @@ describe('freighter geometry', () => {  interface PointXZ {
       point.z >= box.minZ && point.z <= box.maxZ)).toBe(true);
     build.disposeGeometry();
     materials.dispose();
-  });it.each(SHIP_LAYOUT.doors)('$id leaves all player-radius doorway samples open and keeps both jambs solid', (door) => {
+  });
+
+  it('projects room door frames on both wall faces and leaves the wheelhouse unframed', () => {
+    const materials = createShipMaterials();
+    const build = createShipGeometry(materials);
+    try {
+      SHIP_LAYOUT.doors.forEach((door) => {
+        const hasFrame = door.zoneId !== 'wheelhouse';
+        ['jamb-left', 'jamb-right', 'header'].forEach((part) => {
+          const frame = build.root.getObjectByName(`door-frame:${door.id}:${part}`);
+          expect(Boolean(frame), `${door.id}:${part}`).toBe(hasFrame);
+          if (!(frame instanceof Mesh)) return;
+          expect(frame.material).toBe(materials.plainTimber);
+        });
+        const header = build.root.getObjectByName(
+          `door-frame:${door.id}:header`,
+        ) as Mesh | undefined;
+        const infill = build.root.getObjectByName(
+          `door-wall:${door.id}:header-infill`,
+        ) as Mesh;
+        const headerBounds = header ? new Box3().setFromObject(header) : undefined;
+        const infillBounds = new Box3().setFromObject(infill);
+        expect(infill.material).toBe(
+          door.zoneId === 'storageWorkroom'
+            ? materials.plainPaintedSteel
+            : materials.paintedPanel,
+        );
+        expect(infillBounds.min.y).toBeCloseTo(
+          headerBounds?.max.y
+            ?? FREIGHTER_DIMENSIONS.deckY + 2.35,
+        );
+        expect(infillBounds.max.y).toBeCloseTo(
+          FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT,
+        );
+        const room = SHIP_LAYOUT.zones.find(({ id }) => id === door.zoneId)!;
+        if (door.orientation === 'side' && door.side === 'port') {
+          expect(infillBounds.min.x).toBeCloseTo(room.bounds.minX);
+          if (headerBounds) {
+            expect(headerBounds.min.x).toBeLessThan(infillBounds.min.x);
+            expect(headerBounds.max.x).toBeGreaterThan(infillBounds.max.x);
+          }
+        } else if (door.orientation === 'side') {
+          expect(infillBounds.max.x).toBeCloseTo(room.bounds.maxX);
+          if (headerBounds) {
+            expect(headerBounds.min.x).toBeLessThan(infillBounds.min.x);
+            expect(headerBounds.max.x).toBeGreaterThan(infillBounds.max.x);
+          }
+        } else {
+          expect(infillBounds.min.z).toBeCloseTo(room.bounds.minZ);
+          if (headerBounds) {
+            expect(headerBounds.min.z).toBeLessThan(infillBounds.min.z);
+            expect(headerBounds.max.z).toBeGreaterThan(infillBounds.max.z);
+          }
+        }
+      });
+    } finally {
+      build.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it.each(SHIP_LAYOUT.doors)('$id leaves all player-radius doorway samples open and keeps both jambs solid', (door) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
 
@@ -1182,15 +1339,24 @@ describe('freighter geometry', () => {  interface PointXZ {
     materials.dispose();
   });
 
-  it('turns only the two inner room roofs into timber balconies', () => {
+  it('uses one wall-finished roof slab for each room', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
 
-    expect((build.root.getObjectByName('balcony:crew-balcony:deck') as Mesh).material)
-      .toBe(materials.timberFloor);
-    expect((build.root.getObjectByName('balcony:storage-balcony:deck') as Mesh).material)
-      .toBe(materials.timberFloor);
-    expect(build.root.getObjectByName('balcony:wheelhouse:deck')).toBeUndefined();
+    ([
+      ['crewCabin-roof', materials.paintedPanel],
+      ['storageWorkroom-roof', materials.plainPaintedSteel],
+      ['wheelhouse-roof', materials.paintedPanel],
+    ] as const).forEach(([name, material]) => {
+      const roof = build.root.getObjectByName(name) as Mesh;
+      expect(roof.material).toBe(material);
+      const [uScale, vScale] = horizontalFaceUvScale(roof);
+      expect(uScale, `${name} u scale`).toBeCloseTo(1, 5);
+      expect(vScale, `${name} v scale`).toBeCloseTo(1, 5);
+    });
+    SHIP_LAYOUT.balconies.forEach((balcony) => {
+      expect(build.root.getObjectByName(`balcony:${balcony.id}:deck`)).toBeUndefined();
+    });
 
     build.disposeGeometry();
     materials.dispose();
@@ -1258,10 +1424,10 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(gapMax).toBeCloseTo(balcony.openingWidth / 2);
       expect(gapMax - gapMin).toBeGreaterThanOrEqual(PLAYER_LAYOUT_RADIUS * 2);
 
-      const deck = build.root.getObjectByName(`${prefix}deck`) as Mesh;
-      const deckBounds = new Box3().setFromObject(deck);
-      const railSampleY = deckBounds.max.y + balcony.coamingHeight / 2;
-      const clearSampleY = deckBounds.max.y + PLAYER_BODY_HEIGHT / 2;
+      const roof = build.root.getObjectByName(`${balcony.zoneId}-roof`) as Mesh;
+      const roofBounds = new Box3().setFromObject(roof);
+      const railSampleY = roofBounds.max.y + balcony.coamingHeight / 2;
+      const clearSampleY = roofBounds.max.y + PLAYER_BODY_HEIGHT / 2;
       const openingZ = balcony.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
       const oppositeZ = balcony.edge === 'aft' ? zone.bounds.maxZ : zone.bounds.minZ;
       const railSamples = [
@@ -1311,8 +1477,8 @@ describe('freighter geometry', () => {  interface PointXZ {
         object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:bracket:`));
       const grabRails = ladder.children.filter((object): object is Mesh =>
         object instanceof Mesh && object.name.startsWith(`ladder:${ladderSpec.id}:grab-rail:`));
-      const deck = build.root.getObjectByName(`balcony:${balcony.id}:deck`) as Mesh;
-      const deckBounds = new Box3().setFromObject(deck);
+      const roof = build.root.getObjectByName(`${balcony.zoneId}-roof`) as Mesh;
+      const roofBounds = new Box3().setFromObject(roof);
       const zone = build.climbZones.find(({ id }) => id === ladderSpec.id)!;
       const room = SHIP_LAYOUT.zones.find(({ id }) => id === ladderSpec.zoneId)!;
       const wallZ = ladderSpec.edge === 'aft' ? room.bounds.minZ : room.bounds.maxZ;
@@ -1340,7 +1506,7 @@ describe('freighter geometry', () => {  interface PointXZ {
       expect(grabRails).toHaveLength(2);
       expect(grabRails.every(({ material }) => material === materials.exposedMetal)).toBe(true);
       expect(zone.bottomEyeY).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + PLAYER_BODY_HEIGHT);
-      expect(zone.topEyeY).toBeCloseTo(deckBounds.max.y + PLAYER_BODY_HEIGHT);
+      expect(zone.topEyeY).toBeCloseTo(roofBounds.max.y + PLAYER_BODY_HEIGHT);
       expect(zone.topFloor).toEqual(room.bounds);
       expect(zone.climbX).toBeCloseTo(ladder.position.x);
       expect((zone.climbZ - ladder.position.z) * outwardZ)
@@ -1363,7 +1529,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     },
   );
 
-  it('keeps balcony layers, rails, room roofs, and chimney volumes flush or separate', () => {
+  it('keeps balcony rails, room roofs, and chimney volumes flush or separate', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
     const chimneyParts = build.root.children.filter((object): object is Mesh =>
@@ -1372,7 +1538,6 @@ describe('freighter geometry', () => {  interface PointXZ {
 
     SHIP_LAYOUT.balconies.forEach((balcony) => {
       const roof = build.root.getObjectByName(`${balcony.zoneId}-roof`) as Mesh;
-      const deck = build.root.getObjectByName(`balcony:${balcony.id}:deck`) as Mesh;
       const rails = build.root.children.filter((object): object is Mesh =>
         object instanceof Mesh
         && (
@@ -1381,9 +1546,8 @@ describe('freighter geometry', () => {  interface PointXZ {
           || object.name.startsWith(`balcony:${balcony.id}:top-rail:`)
         ));
 
-      expect(overlappingVolume(roof, deck)).toBeLessThan(1e-8);
       rails.forEach((rail) => {
-        expect(overlappingVolume(deck, rail), `${deck.name} overlaps ${rail.name}`)
+        expect(overlappingVolume(roof, rail), `${roof.name} overlaps ${rail.name}`)
           .toBeLessThan(1e-8);
         chimneyParts.forEach((chimney) => {
           expect(overlappingVolume(rail, chimney), `${rail.name} overlaps ${chimney.name}`)

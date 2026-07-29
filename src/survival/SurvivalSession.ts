@@ -22,7 +22,7 @@ import type {
   JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
-import { SURVIVAL_BALANCE } from './survivalBalance';
+import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
   BeginFishingResult,
@@ -593,8 +593,15 @@ export class SurvivalSession {
         if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
           return { code: 'hull-full', message: 'The hull needs no repair.' };
         }
-        if (this.energy < SURVIVAL_BALANCE.actions.repairEnergy) {
-          return { code: 'not-enough-energy', message: 'Repairing requires two energy.' };
+        {
+          const energyCost = repairEnergyCost(this.hull);
+          if (this.energy < energyCost) {
+            const energyWord = ['', 'one', 'two', 'three'][energyCost];
+            return {
+              code: 'not-enough-energy',
+              message: `Repairing requires ${energyWord} energy.`,
+            };
+          }
         }
         if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
           if (!this.inventory.hasUsable('ductTape')) {
@@ -698,12 +705,13 @@ export class SurvivalSession {
   }
 
   private repair(option?: DayActionOption): ActionOutcome {
+    const energyCost = repairEnergyCost(this.hull);
     if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
       this.inventory.consume('ductTape', 1);
       return this.commit(
         'repaired-with-duct-tape',
         'The emergency patch holds for now.',
-        { energy: -SURVIVAL_BALANCE.actions.repairEnergy, hull: SURVIVAL_BALANCE.actions.tapeHull },
+        { energy: -energyCost, hull: SURVIVAL_BALANCE.actions.tapeHull },
         'repair',
       );
     }
@@ -712,7 +720,7 @@ export class SurvivalSession {
       'repaired',
       'You reinforce the damaged hull.',
       {
-        energy: -SURVIVAL_BALANCE.actions.repairEnergy,
+        energy: -energyCost,
         hull: SURVIVAL_BALANCE.actions.repairHull,
         repairMaterial: -1,
       },

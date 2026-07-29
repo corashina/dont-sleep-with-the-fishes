@@ -24,6 +24,8 @@ export interface ShipRiggingBuild {
   disposeGeometry(): void;
 }
 
+const BOOM_DIAMETER = 0.11;
+
 function createSailGeometry(spec: ShipSailSpec): BufferGeometry {
   const zMid = spec.clewZ * 0.5;
   const yMid = spec.footY + (spec.topY - spec.footY) * 0.48;
@@ -327,7 +329,7 @@ export function createShipRigging(
     mast.name = `mast:${mastSpec.id}`;
     mast.position.set(...mastSpec.position);
     const sailMastClearance = mastSpec.baseDiameter / 2;
-    const sailMountOffset = 0;
+    const sailMountOffset = mastSpec.baseDiameter / 2 + BOOM_DIAMETER / 2;
 
     addCylinder(
       mast,
@@ -359,7 +361,7 @@ export function createShipRigging(
         `boom:${mastSpec.id}`,
         [-halfBoom, boomSail.footY, sailMountOffset],
         [halfBoom, boomSail.footY, sailMountOffset],
-        0.11,
+        BOOM_DIAMETER,
       );
     }
 

@@ -44,6 +44,11 @@ export interface EventTestControls {
   enterEvent(id: string): void;
 }
 
+export interface PerformanceStatsControls {
+  readonly visible: boolean;
+  setVisible(visible: boolean): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -76,6 +81,7 @@ export class PostProcessingConsole {
       () => undefined,
       null,
     ),
+    private readonly performanceStatsControls?: PerformanceStatsControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -116,6 +122,27 @@ export class PostProcessingConsole {
           </label>
         </section>
       `;
+    const performanceStatsControl = performanceStatsControls === undefined
+      ? ''
+      : `
+        <section class="post-processing-console__section">
+          <strong>DISPLAY</strong>
+          <label class="post-processing-console__toggle">
+            <span>
+              Frame rate
+              <small id="performance-stats-note">Shows current frames per second during play</small>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-performance-stats-enabled
+              aria-describedby="performance-stats-note"
+              ${performanceStatsControls.visible ? 'checked' : ''}
+            >
+            <output data-performance-stats-state>${performanceStatsControls.visible ? 'ON' : 'OFF'}</output>
+          </label>
+        </section>
+      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
@@ -131,6 +158,7 @@ export class PostProcessingConsole {
           <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
         </header>
         ${physicsControl}
+        ${performanceStatsControl}
         <section class="post-processing-console__section" data-ao-quality-control></section>
         <section class="post-processing-console__section" data-water-quality-control></section>
         ${eventTestControls === undefined
@@ -308,6 +336,17 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-performance-stats-enabled]')
+    ) {
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-performance-stats-state]',
+      );
+      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      this.performanceStatsControls?.setVisible(target.checked);
+      return;
+    }
     if (
       target instanceof HTMLInputElement
       && target.matches('[data-physics-enabled]')

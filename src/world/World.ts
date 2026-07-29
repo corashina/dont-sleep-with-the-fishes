@@ -169,6 +169,7 @@ export class World {
   private readonly boatStorage: Group;
   private readonly boatDepositSmoke!: BoatDepositSmoke;
   private readonly groundDropSmoke!: BoatDepositSmoke;
+  private readonly itemPickupSmoke!: BoatDepositSmoke;
   private readonly buoyancy: BoatBuoyancy;
   private scavengePhysics: ScavengePhysics | null = null;
   private physicsDebugView: ScavengePhysicsDebugView | null = null;
@@ -184,6 +185,8 @@ export class World {
   private readonly animatedItemPresentations = new Map<ItemInstanceId, PropPresentation>();
   private readonly itemDropPosition = new Vector3();
   private readonly itemDropRotation = new Quaternion();
+  private readonly itemPickupBounds = new Box3();
+  private readonly itemPickupPosition = new Vector3();
   private readonly shipPhysicsTranslation = new Vector3();
   private readonly shipPhysicsRotation = new Quaternion();
   private readonly barrelVisualOffset = new Vector3();
@@ -401,6 +404,12 @@ export class World {
         this.groundDropSmoke.points.removeFromParent();
         this.groundDropSmoke.dispose();
       });
+      this.itemPickupSmoke = new BoatDepositSmoke('item-pickup-smoke');
+      this.ship.add(this.itemPickupSmoke.points);
+      rollback.push(() => {
+        this.itemPickupSmoke.points.removeFromParent();
+        this.itemPickupSmoke.dispose();
+      });
 
       const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
         new Texture(),
@@ -534,6 +543,7 @@ export class World {
     }
     this.boatDepositSmoke.update(delta);
     this.groundDropSmoke.update(delta);
+    this.itemPickupSmoke.update(delta);
 
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,
@@ -671,6 +681,19 @@ export class World {
     this.itemObjects.get(instanceId)?.removeFromParent();
   }
 
+  showItemPickupSmoke(instanceId: ItemInstanceId): void {
+    if (this.disposed) return;
+    const item = this.itemObjects.get(instanceId);
+    if (!item) return;
+    this.itemPickupBounds.setFromObject(item, true);
+    if (this.itemPickupBounds.isEmpty()) return;
+    this.itemPickupBounds.getCenter(this.itemPickupPosition);
+    this.itemPickupPosition.y = this.itemPickupBounds.min.y;
+    this.ship.worldToLocal(this.itemPickupPosition);
+    this.itemPickupSmoke.points.position.copy(this.itemPickupPosition);
+    this.itemPickupSmoke.trigger();
+  }
+
   landItem(instanceId: ItemInstanceId): void {
     const item = this.itemObjects.get(instanceId);
     if (!item) return;
@@ -720,6 +743,7 @@ export class World {
       ),
       () => this.boatDepositSmoke.dispose(),
       () => this.groundDropSmoke.dispose(),
+      () => this.itemPickupSmoke.dispose(),
       () => this.physicsDebugView?.dispose(),
       () => this.scavengePhysics?.dispose(),
       () => {

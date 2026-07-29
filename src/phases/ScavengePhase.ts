@@ -75,6 +75,7 @@ export class ScavengePhase implements GamePhase {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private overlayActive = false;
+  private escapeResumeArmed = false;
   private presentationWeather: PresentationWeatherId = 'calm';
 
   constructor(
@@ -142,6 +143,8 @@ export class ScavengePhase implements GamePhase {
     this.started = true;
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    document.addEventListener('keydown', this.onKeyDown);
+    document.addEventListener('keyup', this.onKeyUp);
   }
 
   update(_time: number, deltaSeconds: number): void {
@@ -244,7 +247,7 @@ export class ScavengePhase implements GamePhase {
       simulatePhysics,
     );
     if (simulatePhysics) this.player.placeCamera();
-    this.ui.render(next, sinking);
+    this.ui.render(next);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'
       && this.input.pointerLocked
@@ -319,6 +322,8 @@ export class ScavengePhase implements GamePhase {
     this.disposed = true;
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    document.removeEventListener('keydown', this.onKeyDown);
+    document.removeEventListener('keyup', this.onKeyUp);
     if (this.input.pointerLocked) document.exitPointerLock();
     this.carry.reset();
     this.input.dispose();
@@ -391,6 +396,7 @@ export class ScavengePhase implements GamePhase {
     if (action.type === 'pickUp') {
       const object = this.world.itemObjects.get(action.item.instanceId);
       if (object && this.session.pickUp(action.item.instanceId)) {
+        this.world.showItemPickupSmoke(action.item.instanceId);
         this.carry.pickUp(action.item, object);
       }
     } else if (action.type === 'depositBundle') {
@@ -444,10 +450,12 @@ export class ScavengePhase implements GamePhase {
       this.ui.hideStart();
       this.session.start();
     } else if (transition === 'resume') {
+      this.escapeResumeArmed = false;
       this.session.resume();
       this.ui.clearPointerLockError();
       this.ui.setPaused(false);
     } else if (transition === 'pause') {
+      this.escapeResumeArmed = false;
       this.session.pause();
       this.ui.setPaused(true);
     }
@@ -470,6 +478,34 @@ export class ScavengePhase implements GamePhase {
       if (document.pointerLockElement) document.exitPointerLock();
     }
   };
+
+  private handleKeyDown(event: KeyboardEvent): void {
+    if (
+      event.key !== 'Escape'
+      || event.repeat
+      || !this.escapeResumeArmed
+      || this.overlayActive
+      || document.hidden
+      || this.session.snapshot().status !== 'paused'
+    ) return;
+    event.preventDefault();
+    void this.requestPointerLock();
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => this.handleKeyDown(event);
+
+  private handleKeyUp(event: KeyboardEvent): void {
+    if (
+      event.key === 'Escape'
+      && !this.overlayActive
+      && !document.hidden
+      && this.session.snapshot().status === 'paused'
+    ) {
+      this.escapeResumeArmed = true;
+    }
+  }
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => this.handleKeyUp(event);
 
   private async requestPointerLock(): Promise<void> {
     const acquired = await this.input.requestPointerLock();

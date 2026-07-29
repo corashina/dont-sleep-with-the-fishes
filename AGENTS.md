@@ -1,6 +1,10 @@
 # Repository Guidance
 
-Be Brief. Do not use the Superpowers plugin unless I have explicitly requested it at least once earlier in the current conversation. If I have not explicitly asked to use Superpowers, assume it should not be used.
+Be Brief. Use ASD-STE100 Simplified Technical English. Use one word for one idea. Do not use two words for the same thing. Write short sentences. Use 20 words or less for instructions.
+Use active voice. Write "Turn the switch", not "The switch must be turned". Write short paragraphs. Keep one topic in each paragraph. The goal is easy reading. Many readers are not native English speakers. Clear text helps them do the work in a safe and correct way. 
+
+Do not use the Superpowers plugin unless I have explicitly requested it at least once earlier in the current conversation. If I have not explicitly asked to use Superpowers, assume it should not be used. 
+
 
 ## Visual direction
 

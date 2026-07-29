@@ -195,6 +195,10 @@ describe('post-processing pipeline', () => {
     pipeline.render(scene, camera, { kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0 });
     expect(postProcessingMocks.outlinePasses[0]?.renderScene).toBe(scene);
     expect(postProcessingMocks.outlinePasses[0]?.renderCamera).toBe(camera);
+    expect(postProcessingMocks.outlinePasses[0]?.visibleEdgeColor.setHex)
+      .toHaveBeenCalledWith(0xffffff);
+    expect(postProcessingMocks.outlinePasses[0]?.hiddenEdgeColor.setHex)
+      .toHaveBeenCalledWith(0xffffff);
   });
 
   it('changes only AO quality at runtime', () => {

@@ -16,7 +16,10 @@ import {
   UNBOUNDED_MINIMUM_LOCAL_Y,
   type WaterExclusionRegion,
 } from './WaterExclusion';
-import { SUN_DIRECTION } from '../world/celestialLight';
+import {
+  SUN_DIRECTION,
+  type CelestialDirection,
+} from '../world/celestialLight';
 import type { WaterQuality } from '../rendering/waterQuality';
 
 const MAX_EXCLUSIONS = 2;
@@ -645,7 +648,10 @@ export class OceanRenderer {
   private quality: WaterQuality;
   private disposed = false;
 
-  constructor(quality: WaterQuality = 'low') {
+  constructor(
+    quality: WaterQuality = 'low',
+    lightDirection: CelestialDirection = SUN_DIRECTION,
+  ) {
     this.quality = quality;
     const surfaceQuality = OCEAN_SURFACE_QUALITY[quality];
     const colors = OCEAN_COLORS[quality];
@@ -679,7 +685,7 @@ export class OceanRenderer {
         uSunColor: { value: new Color(0xfff1cf) },
         uDirectLightStrength: { value: 1 },
         uFogDensity: { value: 0.018 },
-        uLightDirection: { value: new Vector3(...SUN_DIRECTION).normalize() },
+        uLightDirection: { value: new Vector3(...lightDirection).normalize() },
         uExclusionCount: { value: 0 },
         uExclusionWorldToLocal: { value: [new Matrix4(), new Matrix4()] },
         uExclusionBounds: { value: [new Vector4(), new Vector4()] },

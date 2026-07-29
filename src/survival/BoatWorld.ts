@@ -83,6 +83,8 @@ import {
 } from './WeatherEventAnimator';
 import {
   createSurvivalLantern,
+  SURVIVAL_LANTERN_DAY_INTENSITY,
+  SURVIVAL_LANTERN_NIGHT_INTENSITY,
   type SurvivalLantern,
 } from './SurvivalLantern';
 import type {
@@ -92,6 +94,12 @@ import type {
   SurvivalSnapshot,
   WeatherId,
 } from './survivalTypes';
+
+export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
+  0,
+  0.24,
+  -1,
+] as const);
 
 export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
 
@@ -492,6 +500,10 @@ export class BoatWorld {
       this.scene,
       this.skyState,
       moonTexture,
+      {
+        sun: SURVIVAL_CELESTIAL_DIRECTION,
+        moon: SURVIVAL_CELESTIAL_DIRECTION,
+      },
     );
     this.weatherEffects = new WeatherEffects(this.scene);
     this.camera = camera;
@@ -590,9 +602,16 @@ export class BoatWorld {
           crate: shipFurniture.clone('cargoCrate'),
         }, this.driftingLootSternRest);
 
-    this.ocean = new OceanRenderer(waterQuality);
+    this.ocean = new OceanRenderer(
+      waterQuality,
+      SURVIVAL_CELESTIAL_DIRECTION,
+    );
     this.key.target.position.set(0, 0, -3);
-    alignDirectionalLightWithSun(this.key, 12);
+    alignDirectionalLightWithSun(
+      this.key,
+      12,
+      SURVIVAL_CELESTIAL_DIRECTION,
+    );
     this.key.castShadow = true;
 
     this.scene.add(
@@ -1142,6 +1161,14 @@ export class BoatWorld {
   }
 
   update(time: number, delta: number): void {
+    this.updateScene(time, delta, true);
+  }
+
+  updateAmbient(time: number, delta: number): void {
+    this.updateScene(time, delta, false);
+  }
+
+  private updateScene(time: number, delta: number, advancePresentation: boolean): void {
     if (this.disposed || delta <= 0) return;
     if (typeof document !== 'undefined' && document.hidden) return;
 
@@ -1165,26 +1192,28 @@ export class BoatWorld {
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
 
-    const sequence = this.activeSequence;
-    if (sequence) {
-      sequence.elapsed = Math.min(sequence.duration, sequence.elapsed + delta);
-      const progress = sequence.elapsed / sequence.duration;
-      this.applyCue(sequence.cue, progress, sequence.elapsed);
-      if (progress >= 1) {
-        this.activeSequence = null;
-        this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
-        sequence.resolve();
+    if (advancePresentation) {
+      const sequence = this.activeSequence;
+      if (sequence) {
+        sequence.elapsed = Math.min(sequence.duration, sequence.elapsed + delta);
+        const progress = sequence.elapsed / sequence.duration;
+        this.applyCue(sequence.cue, progress, sequence.elapsed);
+        if (progress >= 1) {
+          this.activeSequence = null;
+          this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
+          sequence.resolve();
+        }
       }
-    }
 
-    this.advanceFishingPresentation(delta);
-    this.eventPresentation.update(time, delta);
-    this.driftingLootPresentation?.update(time, delta);
-    this.weatherEventAnimator.update(time, delta);
-    this.supplyDisplay.update(delta);
+      this.advanceFishingPresentation(delta);
+      this.eventPresentation.update(time, delta);
+      this.driftingLootPresentation?.update(time, delta);
+      this.weatherEventAnimator.update(time, delta);
+      this.supplyDisplay.update(delta);
+      this.updateFishingBiteParticles(delta);
+    }
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
-    this.updateFishingBiteParticles(delta);
 
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
@@ -1584,7 +1613,9 @@ export class BoatWorld {
     this.ambient.intensity = atmosphere.ambientLightIntensity * lightScale;
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
-    this.lantern.light.intensity = this.phase === 'night' ? 5.4 : 3.8;
+    this.lantern.light.intensity = this.phase === 'night'
+      ? SURVIVAL_LANTERN_NIGHT_INTENSITY
+      : SURVIVAL_LANTERN_DAY_INTENSITY;
     if (this.scene.background instanceof Color) {
       this.scene.background.copy(atmosphere.horizonColor);
     } else {

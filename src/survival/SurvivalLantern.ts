@@ -12,6 +12,9 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
+export const SURVIVAL_LANTERN_DAY_INTENSITY = 3.8;
+export const SURVIVAL_LANTERN_NIGHT_INTENSITY = 5.4;
+
 export interface SurvivalLantern {
   readonly root: Group;
   readonly light: PointLight;
@@ -47,7 +50,12 @@ export function createSurvivalLantern(model: Group): SurvivalLantern {
   });
   collectMeshResources(model, geometries, materials);
 
-  const light = new PointLight(0xffb261, 3.8, 4, 2);
+  const light = new PointLight(
+    0xffb261,
+    SURVIVAL_LANTERN_DAY_INTENSITY,
+    4,
+    2,
+  );
   light.name = 'survival-lantern:light';
   light.position.y = 0.25;
   light.castShadow = true;

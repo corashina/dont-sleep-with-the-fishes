@@ -100,7 +100,7 @@ const BOAT_STORAGE_SLOTS = {
   harpoonGun: [restingSlot('floor', 'harpoonGun', 0.50, -1.05, Math.PI / 2 - 0.18)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
   captainWhiskers: [
-    restingSlot('gunwale', 'captainWhiskers', 1.62, 0.10, Math.PI / 2, 0.6),
+    restingSlot('gunwale', 'captainWhiskers', 1.58, -1.75, 0, 0.68),
   ],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
