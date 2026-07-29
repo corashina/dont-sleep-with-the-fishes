@@ -81,21 +81,27 @@ describe('GameUI scavenging item tooltip', () => {
 });
 
 describe('GameUI carry HUD', () => {
-  it('anchors the watch to the right of the centered carry slots', () => {
+  it('keeps the carry row centered and anchors the watch in the top-right corner', () => {
     expect(mainStyles).toMatch(
       /\.carried\s*\{[^}]*display:\s*grid;[^}]*justify-items:\s*center;/s,
     );
     expect(mainStyles).toMatch(
-      /\.pocket-watch\s*\{[^}]*position:\s*absolute;[^}]*left:\s*calc\(100% \+ 16px\);/s,
+      /\.pocket-watch\s*\{[^}]*position:\s*absolute;[^}]*top:\s*clamp\(16px, 2vw, 24px\);[^}]*right:\s*clamp\(8px, 2\.35vw, 30px\);[^}]*left:\s*auto;/s,
     );
   });
 
-  it('uses large fluid carry slots that remain phone-safe', () => {
+  it('uses one large fluid size for the carry slots and watch', () => {
     expect(mainStyles).toMatch(
-      /\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3, clamp\(68px, 15vw, 192px\)\);/s,
+      /\.illustrated-hud\s*\{[^}]*--carry-slot-size:\s*clamp\(68px, 15vw, 192px\);/s,
     );
     expect(mainStyles).toMatch(
-      /\.weight-circle\s*\{[^}]*width:\s*clamp\(68px, 15vw, 192px\);[^}]*height:\s*clamp\(68px, 15vw, 192px\);/s,
+      /\.weight-circles__row\s*\{[^}]*grid-template-columns:\s*repeat\(3, var\(--carry-slot-size\)\);/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.weight-circle\s*\{[^}]*width:\s*var\(--carry-slot-size\);[^}]*height:\s*var\(--carry-slot-size\);/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.pocket-watch\s*\{[^}]*width:\s*var\(--carry-slot-size\);[^}]*height:\s*var\(--carry-slot-size\);/s,
     );
   });
 
@@ -149,25 +155,22 @@ describe('GameUI carry HUD', () => {
     ui.dispose();
   });
 
-  it('shows and clears the full-hand status', () => {
+  it('does not render full-hand guidance below the carry slots', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
-    const session = runningSession(['anchor']);
-    render(ui, session);
-    expect(mount.querySelector('[data-carry-full]')?.textContent)
-      .toBe('HANDS FULL - RETURN TO THE BOAT');
-    session.saveCarriedBundle();
-    render(ui, session);
-    expect(mount.querySelector('[data-carry-full]')?.textContent).toBe('');
+    render(ui, runningSession(['anchor']));
+    expect(mount.querySelector('[data-carry-full]')).toBeNull();
+    expect(mount.textContent).not.toContain('HANDS FULL');
     ui.dispose();
   });
 
-  it('keeps the empty full-hand status available without reserved space', () => {
-    const emptyRule = mainStyles.match(/\.carry-full:empty\s*\{([^}]*)\}/)?.[1] ?? '';
-
-    expect(emptyRule).toMatch(/margin-top:\s*0;/);
-    expect(emptyRule).not.toMatch(/display:\s*none;/);
-    expect(emptyRule).not.toMatch(/visibility:\s*hidden;/);
+  it('keeps the top-right watch outside the centered carry container', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const carried = mount.querySelector('[data-carried]')!;
+    const watch = mount.querySelector('.pocket-watch')!;
+    expect(carried.contains(watch)).toBe(false);
+    ui.dispose();
   });
 
   it('reuses unchanged carry slot nodes', () => {
