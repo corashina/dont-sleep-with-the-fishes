@@ -156,6 +156,21 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('clones the lifeboat station bounds for deadline evacuation', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const lifeboatStation = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
+
+    try {
+      expect(world.evacuationBounds).toEqual(lifeboatStation.bounds);
+      expect(world.evacuationBounds).not.toBe(lifeboatStation.bounds);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('uses one resolved weather amplitude for both vessels and the ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -396,6 +411,53 @@ describe('world builders', () => {
       );
       expect(barrel.position.distanceTo(colliderCenter))
         .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
+    });
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('attaches paused physics barrels to Dorothy without changing their deck poses', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const camera = new PerspectiveCamera();
+    const savedPoses = world.physicsBarrels.map((barrel) => ({
+      position: barrel.getWorldPosition(new Vector3()),
+      quaternion: barrel.getWorldQuaternion(new Quaternion()),
+    }));
+
+    world.attachPhysicsBarrelsToShip();
+
+    world.physicsBarrels.forEach((barrel, index) => {
+      const savedPose = savedPoses[index]!;
+      expect(barrel.parent).toBe(world.ship);
+      expect(barrel.getWorldPosition(new Vector3())).toEqual(savedPose.position);
+      expect(barrel.getWorldQuaternion(new Quaternion())).toEqual(savedPose.quaternion);
+    });
+
+    world.update(1, 1 / 60, {
+      ...getSinkingState(30, 120),
+      sinkOffset: -4,
+      pitchRadians: 0.1,
+      rollRadians: -0.2,
+    }, camera.position, false);
+    world.physicsBarrels.forEach((barrel, index) => {
+      expect(barrel.getWorldPosition(new Vector3()))
+        .not.toEqual(savedPoses[index]!.position);
+      expect(barrel.getWorldQuaternion(new Quaternion()))
+        .not.toEqual(savedPoses[index]!.quaternion);
+    });
+
+    const attachedLocalPoses = world.physicsBarrels.map((barrel) => ({
+      position: barrel.position.clone(),
+      quaternion: barrel.quaternion.clone(),
+    }));
+    world.attachPhysicsBarrelsToShip();
+    world.physicsBarrels.forEach((barrel, index) => {
+      expect(barrel.parent).toBe(world.ship);
+      expect(barrel.position).toEqual(attachedLocalPoses[index]!.position);
+      expect(barrel.quaternion.toArray()).toEqual(attachedLocalPoses[index]!.quaternion.toArray());
     });
 
     world.dispose();

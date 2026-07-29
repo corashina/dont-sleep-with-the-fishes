@@ -6,7 +6,7 @@ import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 const BLOCKED_STATE_SETUPS = [
   { name: 'paused', enter: (session: ScavengeSession) => session.pause() },
   { name: 'after success', enter: (session: ScavengeSession) => session.evacuate() },
-  { name: 'after failure', enter: (session: ScavengeSession) => session.tick(120) },
+  { name: 'after failure', enter: (session: ScavengeSession) => session.tick(60) },
 ] as const;
 
 const ITEM_MUTATIONS = [
@@ -26,10 +26,10 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().items['energyBar-1']).toBeUndefined();
   });
 
-  it('starts at 120 seconds and fails exactly once at expiry', () => {
+  it('starts at 60 seconds and fails exactly once at expiry', () => {
     const session = new ScavengeSession();
     session.start();
-    session.tick(119.5);
+    session.tick(59.5);
     expect(session.snapshot().remainingSeconds).toBeCloseTo(0.5);
     session.tick(0.5);
     expect(session.snapshot().status).toBe('failure');
@@ -43,10 +43,10 @@ describe('ScavengeSession', () => {
     session.tick(10);
     session.pause();
     session.tick(40);
-    expect(session.snapshot().remainingSeconds).toBe(110);
+    expect(session.snapshot().remainingSeconds).toBe(50);
     session.resume();
     session.tick(1);
-    expect(session.snapshot().remainingSeconds).toBe(109);
+    expect(session.snapshot().remainingSeconds).toBe(49);
   });
 
   it('carries repeatable instances up to total weight three', () => {
@@ -189,6 +189,22 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().status).toBe('success');
   });
 
+  it('auto-evacuates when eligible on the deadline-crossing tick', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.tick(59.75, false);
+    session.tick(1, true);
+    expect(session.snapshot()).toMatchObject({ status: 'success', remainingSeconds: 0 });
+    expect(session.result()?.elapsedSeconds).toBe(60);
+  });
+
+  it('fails when ineligible on the deadline-crossing tick', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.tick(60, false);
+    expect(session.snapshot()).toMatchObject({ status: 'failure', remainingSeconds: 0 });
+  });
+
   it('returns frozen snapshot clones instead of exposing session state', () => {
     const instances: readonly ItemInstance[] = [
       { instanceId: 'cannedFood-1', type: 'cannedFood' },
@@ -244,7 +260,7 @@ describe('ScavengeSession', () => {
   it('does not return a result after failure', () => {
     const session = new ScavengeSession();
     session.start();
-    session.tick(120);
+    session.tick(60);
 
     expect(session.result()).toBeNull();
   });
@@ -253,7 +269,7 @@ describe('ScavengeSession', () => {
     const session = new ScavengeSession();
     session.start();
     session.penalize(5);
-    expect(session.snapshot().remainingSeconds).toBe(115);
+    expect(session.snapshot().remainingSeconds).toBe(55);
     session.penalize(500);
     expect(session.snapshot().remainingSeconds).toBe(0);
     expect(session.snapshot().status).toBe('failure');

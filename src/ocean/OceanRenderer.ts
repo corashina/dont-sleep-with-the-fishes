@@ -12,6 +12,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
 import {
+  UNBOUNDED_MAXIMUM_LOCAL_Y,
   UNBOUNDED_MINIMUM_LOCAL_Y,
   type WaterExclusionRegion,
 } from './WaterExclusion';
@@ -281,6 +282,7 @@ const fragmentShader = `
           * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
         if (
           exclusionLocal.y >= uExclusionMinimumLocalYs[i]
+          && exclusionLocal.y <= uExclusionUpperLocalYs[i]
           && exclusionAbsZ <= localHalfLength
           && abs(exclusionLocal.x) <= localHalfWidth
         ) {
@@ -445,7 +447,7 @@ export class OceanRenderer {
           value: [UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y],
         },
         uExclusionUpperLocalYs: {
-          value: [UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y],
+          value: [UNBOUNDED_MAXIMUM_LOCAL_Y, UNBOUNDED_MAXIMUM_LOCAL_Y],
         },
       },
     });
@@ -502,7 +504,7 @@ export class OceanRenderer {
       taperStarts[index] = 0;
       lowerTaperStarts[index] = 0;
       minimumLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
-      upperLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
+      upperLocalYs[index] = UNBOUNDED_MAXIMUM_LOCAL_Y;
     }
     for (let index = 0; index < activeCount; index += 1) {
       worldToLocal[index]!.copy(regions[index]!.worldToLocal);

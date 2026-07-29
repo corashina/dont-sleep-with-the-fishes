@@ -414,10 +414,31 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .result-items { white-space: pre-line; line-height: 1.8; }
 .input-error { min-height: 1.2em; margin: 0; color: #d78a75; font-size: 0.72rem; opacity: 0; }
 .input-error.is-visible { opacity: 1; }
-.pause-screen, .failure-screen, .result-screen { background: #172227f2; justify-items: center; text-align: center; }
-.failure-screen.is-visible { animation: failure-lurch 1.25s cubic-bezier(0.2, 0.75, 0.25, 1) both; }
+.pause-screen { background: #172227f2; justify-items: center; text-align: center; }
+.game-ui::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: #020405;
+  opacity: var(--scavenge-ending-blackout, 0);
+  pointer-events: none;
+}
+.scavenge-ending-screen {
+  z-index: 4;
+  background:
+    repeating-linear-gradient(176deg, transparent 0 11px, #e5ddc908 12px, #03050514 13px),
+    radial-gradient(circle at 50% 46%, #26353af2, #0a1012f7 62%, #020303 100%);
+}
+.scavenge-ending-screen .screen__content {
+  width: min(700px, calc(100vw - 48px));
+  padding: clamp(30px, 6vw, 72px);
+  border: 2px solid #756f61;
+  background: #101719e8;
+  box-shadow: inset 0 0 0 2px #050708, 8px 10px 0 #020303b8;
+  clip-path: polygon(1% 3%, 98% 0, 100% 94%, 96% 100%, 2% 97%, 0 8%);
+}
 @keyframes timer-pulse { 50% { opacity: 0.58; } }
-@keyframes failure-lurch { 0% { background: #17222766; } 35% { transform: translate(0.4%, 0.7%); } 100% { background: #10191d; transform: translate(0); } }
 
 /* Lifeboat survival phase */
 .survival-ui {

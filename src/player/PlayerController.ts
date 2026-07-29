@@ -49,6 +49,7 @@ export class PlayerController {
   private yaw = DEFAULT_YAW;
   private pitch = 0;
   private readonly localView = new Quaternion();
+  private readonly localViewEuler = new Euler();
   private readonly worldPosition = new Vector3();
   private readonly movement = new Vector3();
   private readonly baseDeckEyeHeight: number;
@@ -200,7 +201,8 @@ export class PlayerController {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
     this.camera.position.copy(this.worldPosition);
-    this.localView.setFromEuler(new Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    this.localViewEuler.set(this.pitch, this.yaw, 0, 'YXZ');
+    this.localView.setFromEuler(this.localViewEuler);
     this.camera.quaternion.copy(this.ship.quaternion).multiply(this.localView);
     this.camera.updateMatrixWorld(true);
   }

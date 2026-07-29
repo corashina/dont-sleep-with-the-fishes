@@ -1,6 +1,7 @@
 import { Matrix4, type Object3D, Vector4 } from 'three';
 
 export const UNBOUNDED_MINIMUM_LOCAL_Y = -1_000_000;
+export const UNBOUNDED_MAXIMUM_LOCAL_Y = 1_000_000;
 
 export interface WaterExclusionHeightProfile {
   readonly lowerHalfWidth: number;
@@ -37,7 +38,6 @@ export function createWaterExclusion(
     lowerHalfWidth: heightProfile?.lowerHalfWidth ?? halfWidth,
     lowerHalfLength: heightProfile?.lowerHalfLength ?? halfLength,
     lowerTaperStart: heightProfile?.lowerTaperStart ?? taperStart,
-    upperLocalY: heightProfile?.upperLocalY
-      ?? (minimumLocalY ?? UNBOUNDED_MINIMUM_LOCAL_Y),
+    upperLocalY: heightProfile?.upperLocalY ?? UNBOUNDED_MAXIMUM_LOCAL_Y,
   };
 }
