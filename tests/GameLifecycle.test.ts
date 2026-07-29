@@ -12,6 +12,8 @@ import {
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game } from '../src/Game';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
+import { createScavengeEndingState } from '../src/game/scavengeEnding';
+import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
@@ -110,13 +112,15 @@ function createUpdateHarness(
     presentation: 'playing',
     session,
     input,
-    world: { update: updateWorld },
-    player: { update: vi.fn() },
+    world: {
+      update: updateWorld,
+      evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
+    },
+    player: { update: vi.fn(), localPosition: new Vector3(8.9, 0, 0) },
     ui: {
       render: vi.fn(),
+      renderEnding: vi.fn(),
       setPrompt: vi.fn(),
-      showFailureSequence: vi.fn(),
-      showFailureResult: vi.fn(),
     },
     visualState: {
       kind: 'scavenge',
@@ -127,8 +131,11 @@ function createUpdateHarness(
       camera: new PerspectiveCamera(),
     },
     contextAction: { type: 'none', prompt: '' },
-    terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
+    ending: createScavengeEndingState(),
+    endingStarted: false,
+    cinematicCameraTarget: new Vector3(),
     completionReported: false,
+    onComplete: vi.fn(),
     updateInteraction: vi.fn(),
     updateFlight: vi.fn(),
   });
@@ -170,7 +177,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
     expect(internals.session.snapshot()).toMatchObject({
       status: 'idle',
-      remainingSeconds: 120,
+      remainingSeconds: SCAVENGE_DURATION_SECONDS,
     });
     expect(updateWorld).toHaveBeenCalledWith(
       0.25,
@@ -249,13 +256,20 @@ describe('ScavengePhase lifecycle integration', () => {
       worldTime: 1,
       presentation: 'playing',
       session: {
-        snapshot: () => ({ status: 'running', remainingSeconds: 120 }),
+        snapshot: () => ({ status: 'running', remainingSeconds: SCAVENGE_DURATION_SECONDS }),
         tick,
       },
       input,
-      world: { update: updateWorld },
-      player: { update: updatePlayer, updatePassive: updatePassivePlayer },
-      ui: { render: vi.fn(), setPrompt: vi.fn() },
+      world: {
+        update: updateWorld,
+        evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
+      },
+      player: {
+        update: updatePlayer,
+        updatePassive: updatePassivePlayer,
+        localPosition: new Vector3(8.9, 0, 0),
+      },
+      ui: { render: vi.fn(), renderEnding: vi.fn(), setPrompt: vi.fn() },
       visualState: {
         kind: 'scavenge',
         elapsedSeconds: 0,
@@ -265,7 +279,9 @@ describe('ScavengePhase lifecycle integration', () => {
         camera: new PerspectiveCamera(),
       },
       contextAction: { type: 'none', prompt: '' },
-      terminalPresentation: { phase: 'playing', remainingSeconds: 0 },
+      ending: createScavengeEndingState(),
+      endingStarted: false,
+      cinematicCameraTarget: new Vector3(),
       updateInteraction: vi.fn(),
       updateFlight,
     });
@@ -303,7 +319,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Vector3),
       true,
     );
-    expect(tick).toHaveBeenCalledWith(0.25);
+    expect(tick).toHaveBeenCalledWith(0.25, true);
     expect(updatePlayer).not.toHaveBeenCalled();
     expect(updatePassivePlayer).toHaveBeenCalledWith(0.25);
     expect(updateFlight).toHaveBeenCalledOnce();
@@ -372,6 +388,59 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Vector3),
       false,
     );
+  });
+
+  it('evacuates at the deadline from inside the lifeboat bounds', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase } = createUpdateHarness(session);
+    const player = (phase as unknown as { player: { localPosition: Vector3 } }).player;
+    player.localPosition.set(8.9, player.localPosition.y, 0);
+
+    phase.update(0, SCAVENGE_DURATION_SECONDS);
+
+    expect(session.snapshot().status).toBe('success');
+  });
+
+  it('sinks at the deadline outside the lifeboat bounds and keeps the cinematic active', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, updateWorld } = createUpdateHarness(session);
+    const internals = phase as unknown as {
+      player: { localPosition: Vector3 };
+      ui: { renderEnding: ReturnType<typeof vi.fn> };
+    };
+    internals.player.localPosition.set(0, internals.player.localPosition.y, 0);
+    const exitPointerLock = vi.fn();
+    const originalExitPointerLock = Object.getOwnPropertyDescriptor(document, 'exitPointerLock');
+    Object.defineProperty(document, 'exitPointerLock', {
+      configurable: true,
+      value: exitPointerLock,
+    });
+
+    try {
+      phase.update(0, SCAVENGE_DURATION_SECONDS);
+
+      expect(session.snapshot().status).toBe('failure');
+      expect(internals.ui.renderEnding).toHaveBeenCalledWith('sinking', expect.any(Number));
+      expect(exitPointerLock).toHaveBeenCalledOnce();
+
+      phase.update(1, 1);
+
+      const [worldTime, , sinking, cameraPosition, simulatePhysics] = updateWorld.mock.calls.at(-1)!;
+      expect(worldTime).toBe(SCAVENGE_DURATION_SECONDS + 2);
+      expect(sinking.sinkOffset).toBeLessThan(0);
+      expect(simulatePhysics).toBe(false);
+      expect(cameraPosition.x).toBeCloseTo(44, 3);
+      expect(cameraPosition.y).toBeCloseTo(15, 3);
+      expect(cameraPosition.z).toBeCloseTo(34, 3);
+    } finally {
+      if (originalExitPointerLock) {
+        Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
+      } else {
+        delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+      }
+    }
   });
 
   it('disables physics when the session becomes terminal during tick', () => {

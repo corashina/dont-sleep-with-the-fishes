@@ -62,7 +62,7 @@ import { createShip, type ShipBuild } from './Ship';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from './ShipLayout';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT, type Rect2 } from './ShipLayout';
 
 export type WorldConstructionStage =
   | 'physics'
@@ -159,6 +159,7 @@ export class World {
   readonly climbZones: readonly LadderClimbZone[];
   readonly playerStart: Vector3;
   readonly evacuationPoint: Vector3;
+  readonly evacuationBounds: Rect2;
   readonly playerNavigationBounds: PlayerNavigationBounds;
   readonly deckY = FREIGHTER_DIMENSIONS.deckY;
   readonly lifeboatAcceptance: Box3;
@@ -256,6 +257,14 @@ export class World {
     this.climbZones = this.shipBuild.climbZones;
     this.playerStart = this.shipBuild.playerStart.clone();
     this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
+    const lifeboatStation = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation');
+    if (!lifeboatStation) throw new Error('Missing lifeboat station deposit zone');
+    this.evacuationBounds = {
+      minX: lifeboatStation.bounds.minX,
+      maxX: lifeboatStation.bounds.maxX,
+      minZ: lifeboatStation.bounds.minZ,
+      maxZ: lifeboatStation.bounds.maxZ,
+    };
     this.playerNavigationBounds = this.shipBuild.playerNavigationBounds;
     this.boatAnchor = this.shipBuild.lifeboatAnchor.clone();
     const initialSceneChildren = new Set(scene.children);
@@ -314,10 +323,8 @@ export class World {
       }
       construction.checkpoint?.('physics');
 
-      const depositZone = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation');
-      if (!depositZone) throw new Error('Missing lifeboat station deposit zone');
-      const depositWidth = depositZone.bounds.maxX - depositZone.bounds.minX;
-      const depositLength = depositZone.bounds.maxZ - depositZone.bounds.minZ;
+      const depositWidth = lifeboatStation.bounds.maxX - lifeboatStation.bounds.minX;
+      const depositLength = lifeboatStation.bounds.maxZ - lifeboatStation.bounds.minZ;
       const depositGeometry = new BoxGeometry(depositWidth, 0.08, depositLength);
       const depositMaterial = new MeshBasicMaterial({
         colorWrite: false,
@@ -339,9 +346,9 @@ export class World {
       this.boatDepositTarget.name = 'lifeboat-deposit-target';
       this.boatDepositTarget.userData.boatDepositTarget = true;
       this.boatDepositTarget.position.set(
-        (depositZone.bounds.minX + depositZone.bounds.maxX) / 2,
+        (lifeboatStation.bounds.minX + lifeboatStation.bounds.maxX) / 2,
         FREIGHTER_DIMENSIONS.deckY + 0.04,
-        (depositZone.bounds.minZ + depositZone.bounds.maxZ) / 2,
+        (lifeboatStation.bounds.minZ + lifeboatStation.bounds.maxZ) / 2,
       );
       this.ship.add(this.boatDepositTarget);
       rollback.push(() => this.boatDepositTarget.removeFromParent());
