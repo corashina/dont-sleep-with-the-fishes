@@ -15,7 +15,7 @@ import type { ShipZoneId } from '../src/world/ShipLayout';
 
 describe('scavenging ship layout', () => {
   it('defines the approved enlarged single-level plan', () => {
-    expect(FREIGHTER_DIMENSIONS).toEqual({ width: 20, length: 55, deckY: 2.22 });
+    expect(FREIGHTER_DIMENSIONS).toEqual({ width: 16.25, length: 55, deckY: 2.22 });
 
     const zone = (id: ShipZoneId) =>
       SHIP_LAYOUT.zones.find((candidate) => candidate.id === id)!.bounds;
@@ -37,6 +37,47 @@ describe('scavenging ship layout', () => {
     ]);
     expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'helm-desk-forward')).toBeUndefined();
     expect(FREIGHTER_DIMENSIONS.deckY).toBe(2.22);
+  });
+
+  it('keeps fixed rooms while reducing both exterior walkways by about half', () => {
+    const zone = (id: ShipZoneId) =>
+      SHIP_LAYOUT.zones.find((candidate) => candidate.id === id)!.bounds;
+    const crew = zone('crewCabin');
+    const storage = zone('storageWorkroom');
+    const wheelhouse = zone('wheelhouse');
+    const cargo = zone('cargoDeck');
+    const lifeboat = zone('lifeboatStation');
+    const exterior = SHIP_LAYOUT.lanes.filter(({ id }) => id.endsWith('exterior-main'));
+    const evacuation = SHIP_LAYOUT.targets.find(({ kind }) => kind === 'evacuation');
+
+    expect(crew).toEqual({ minX: -5.75, maxX: 5.75, minZ: 4.5, maxZ: 13.5 });
+    expect(storage).toEqual({
+      minX: -5.75,
+      maxX: 5.75,
+      minZ: -17.4,
+      maxZ: -10.65,
+    });
+    expect(wheelhouse).toEqual({ minX: -5.5, maxX: 5.5, minZ: 17, maxZ: 22 });
+    expect(SHIP_LAYOUT.rail.innerFaceX).toBeCloseTo(7.875);
+    expect(SHIP_LAYOUT.rail.innerFaceX - crew.maxX).toBeCloseTo(2.125);
+    expect(SHIP_LAYOUT.rail.innerFaceX - wheelhouse.maxX).toBeCloseTo(2.375);
+    expect(cargo.minX).toBeCloseTo(-7.725);
+    expect(cargo.maxX).toBeCloseTo(7.725);
+    expect(exterior).toHaveLength(2);
+    exterior.forEach((lane) => {
+      expect(lane.className).toBe('secondary');
+      expect(lane.clearWidth).toBeCloseTo(1.4);
+    });
+    expect(lifeboat.minX).toBeCloseTo(4.925);
+    expect(lifeboat.maxX).toBeCloseTo(7.725);
+    expect(lifeboat.minZ).toBe(-2);
+    expect(lifeboat.maxZ).toBe(2);
+    expect(evacuation?.position[0]).toBeCloseTo(7.025);
+    expect(evacuation?.position[1]).toBe(0);
+    expect(SHIP_LAYOUT.evacuationRect.minX).toBeCloseTo(6.675);
+    expect(SHIP_LAYOUT.evacuationRect.maxX).toBeCloseTo(7.375);
+    expect(SHIP_LAYOUT.evacuationRect.minZ).toBe(-0.35);
+    expect(SHIP_LAYOUT.evacuationRect.maxZ).toBe(0.35);
   });
 
   it('adds the selected room dressing without replacing retained fixtures', () => {

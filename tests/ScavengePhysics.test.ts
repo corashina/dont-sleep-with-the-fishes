@@ -203,7 +203,13 @@ describe('ScavengePhysics', () => {
       translation: { x: 0, y: -0.76, z: 0 },
       rotation,
     };
-    const safeBounds = { minX: -9.65, maxX: 9.65, minZ: -26.7, maxZ: 26.7 };
+    const shipHalfWidth = FREIGHTER_DIMENSIONS.width / 2;
+    const safeBounds = {
+      minX: -shipHalfWidth + 0.35,
+      maxX: shipHalfWidth - 0.35,
+      minZ: -26.7,
+      maxZ: 26.7,
+    };
     const physics = new ScavengePhysics(runtime, {
       colliders: ship.shellColliders,
       arcColliders: ship.arcColliders,
