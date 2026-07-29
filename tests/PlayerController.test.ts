@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects player movement and recovery.
 import { describe, expect, it, vi } from 'vitest';
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';

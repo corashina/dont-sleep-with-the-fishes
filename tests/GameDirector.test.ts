@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 5/5. Protects phase lifecycle and ownership.
 
 import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase } from '../src/app/GamePhase';

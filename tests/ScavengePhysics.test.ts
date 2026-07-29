@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects deterministic scavenging physics.
 import { Euler, Quaternion } from 'three';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {

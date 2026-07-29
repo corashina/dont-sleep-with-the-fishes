@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 4/5. Protects construction rollback and ownership.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropModelLibrary } from '../src/world/PropModelLibrary';

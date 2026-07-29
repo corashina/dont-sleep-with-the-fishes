@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects the canonical scavenging roster.
 import { describe, expect, it } from 'vitest';
 import {
   createItemInstances,

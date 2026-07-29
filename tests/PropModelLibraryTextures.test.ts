@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects shared texture ownership.
 import { describe, expect, it, vi } from 'vitest';
 import {
   BoxGeometry,

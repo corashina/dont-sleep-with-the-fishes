@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects the scavenging state machine.
 import { describe, expect, it } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';

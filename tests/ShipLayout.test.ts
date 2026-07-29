@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects reachable ship layout constraints.
 import { describe, expect, it } from 'vitest';
 import {
   FREIGHTER_DIMENSIONS,

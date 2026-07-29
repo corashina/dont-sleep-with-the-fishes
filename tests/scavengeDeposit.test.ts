@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects atomic deposit state.
 import { describe, expect, it, vi } from 'vitest';
 import { Group, PerspectiveCamera, Scene } from 'three';
 import { ScavengeSession } from '../src/game/ScavengeSession';

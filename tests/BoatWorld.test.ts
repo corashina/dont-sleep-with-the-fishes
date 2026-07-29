@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects survival world integration and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import {
   Box3,

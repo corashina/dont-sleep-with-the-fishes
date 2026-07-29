@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects core survival rules and state.
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';

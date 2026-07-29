@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects exact resource ownership and cleanup.
 import {
   BoxGeometry,
   type BufferGeometry,

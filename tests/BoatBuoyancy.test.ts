@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects shared-wave vessel motion.
 import { describe, expect, it } from 'vitest';
 import {
   BoatBuoyancy,

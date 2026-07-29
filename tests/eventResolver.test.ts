@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects deterministic event outcomes.
 import { describe, expect, it } from 'vitest';
 import { resolveWeightedOutcome } from '../src/survival/eventResolver';
 import type { EventChoiceDefinition } from '../src/survival/survivalTypes';

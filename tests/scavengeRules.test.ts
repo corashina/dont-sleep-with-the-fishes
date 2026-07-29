@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects scavenging limits and bounds.
 import { describe, expect, it } from 'vitest';
 import { containsPointXZ, SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 

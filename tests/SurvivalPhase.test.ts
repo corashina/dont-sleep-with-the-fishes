@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects survival orchestration and lifecycle.
 import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
