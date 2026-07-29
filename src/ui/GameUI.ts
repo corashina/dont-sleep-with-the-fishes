@@ -211,38 +211,6 @@ export class GameUI {
     this.renderCarry(snapshot);
   }
 
-  /* Legacy failure overlays are replaced by the staged ending panel.
-  showFailureResult(snapshot: ScavengeSnapshot): void {
-    this.resultTitle.textContent = 'Taken by the Sea';
-    this.resultBody.textContent = 'The deck disappeared before you reached the lifeboat.';
-    const savedCounts = Object.values(snapshot.items).reduce<Partial<Record<ItemId, number>>>((counts, item) => {
-      if (typeof item !== 'string' && item.status === 'saved') {
-        counts[item.type] = (counts[item.type] ?? 0) + 1;
-      }
-      return counts;
-    }, {});
-    const savedItems = ITEM_IDS.flatMap((id) => {
-      const count = savedCounts[id] ?? 0;
-      return count === 0 ? [] : [`${ITEM_LABELS[id]}${count > 1 ? ` x${count}` : ''}`];
-    });
-    const elapsedSeconds = 120 - snapshot.remainingSeconds;
-    this.resultItems.textContent = [
-      `${snapshot.savedCount} SUPPLIES SAVED`,
-      `SAVED — ${savedItems.length > 0 ? savedItems.join(' · ') : 'NONE'}`,
-      `${formatDuration(elapsedSeconds)} ELAPSED`,
-    ].join('\n');
-    this.pauseLayer.classList.remove('is-visible');
-    this.failureLayer.classList.remove('is-visible');
-    this.resultLayer.classList.add('is-visible');
-  }
-
-  showFailureSequence(): void {
-    this.pauseLayer.classList.remove('is-visible');
-    this.failureLayer.classList.add('is-visible');
-  }
-
-  */
-
   renderEnding(stage: ScavengeEndingStage, blackout: number): void {
     const visible = stage === 'endingHold' || stage === 'menuReady';
     const revealAction = stage === 'menuReady';
