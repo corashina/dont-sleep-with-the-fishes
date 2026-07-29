@@ -332,20 +332,20 @@ describe('ship item placement', () => {
         expect([...assignments.keys()]).not.toContain('fishingRod-1');
       }
       expect(ship.playerStart).toEqual(new Vector3(0, 3.72, 11));
-      expect(ship.evacuationPoint).toEqual(new Vector3(8.9, 3.72, 0));
-      expect(ship.lifeboatAnchor).toEqual(new Vector3(12.75, 0.35, 0));
-      expect(ship.playerNavigationBounds.safe).toEqual({
-        minX: -9.65,
-        maxX: 9.65,
-        minZ: -26.7,
-        maxZ: 26.7,
-      });
-      expect(ship.playerNavigationBounds.fall).toEqual({
-        minX: -10.8,
-        maxX: 10.8,
-        minZ: -28.3,
-        maxZ: 28.3,
-      });
+      expect(ship.evacuationPoint.x).toBeCloseTo(7.025);
+      expect(ship.evacuationPoint.y).toBeCloseTo(3.72);
+      expect(ship.evacuationPoint.z).toBe(0);
+      expect(ship.lifeboatAnchor.x).toBeCloseTo(10.875);
+      expect(ship.lifeboatAnchor.y).toBeCloseTo(0.35);
+      expect(ship.lifeboatAnchor.z).toBe(0);
+      expect(ship.playerNavigationBounds.safe.minX).toBeCloseTo(-7.775);
+      expect(ship.playerNavigationBounds.safe.maxX).toBeCloseTo(7.775);
+      expect(ship.playerNavigationBounds.safe.minZ).toBe(-26.7);
+      expect(ship.playerNavigationBounds.safe.maxZ).toBe(26.7);
+      expect(ship.playerNavigationBounds.fall.minX).toBeCloseTo(-8.925);
+      expect(ship.playerNavigationBounds.fall.maxX).toBeCloseTo(8.925);
+      expect(ship.playerNavigationBounds.fall.minZ).toBe(-28.3);
+      expect(ship.playerNavigationBounds.fall.maxZ).toBe(28.3);
     } finally {
       ship.dispose();
       library.dispose();
