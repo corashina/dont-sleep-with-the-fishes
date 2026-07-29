@@ -21,14 +21,50 @@ import type { WaterQuality } from '../rendering/waterQuality';
 
 const MAX_EXCLUSIONS = 2;
 
+export interface OceanSurfaceQuality {
+  segments: number;
+  detailFadeNear: number;
+  detailFadeFar: number;
+  surfaceExtent: number;
+  horizonHalfExtent: number;
+  horizonRadialSegments: number;
+}
+
 export const OCEAN_SURFACE_QUALITY = Object.freeze({
-  segments: 192,
-  detailFadeNear: 28,
-  detailFadeFar: 92,
-  surfaceExtent: 180,
-  horizonHalfExtent: 1100,
-  horizonRadialSegments: 48,
-});
+  low: Object.freeze({
+    segments: 192,
+    detailFadeNear: 28,
+    detailFadeFar: 92,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 48,
+  }),
+  high: Object.freeze({
+    segments: 288,
+    detailFadeNear: 40,
+    detailFadeFar: 128,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 72,
+  }),
+}) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
+
+const OCEAN_COLORS = Object.freeze({
+  low: Object.freeze({
+    deep: 0x162c35,
+    shallow: 0x42656a,
+    foam: 0xb7b7a5,
+  }),
+  high: Object.freeze({
+    deep: 0x073844,
+    shallow: 0x35a6a0,
+    foam: 0xd4ded4,
+  }),
+}) satisfies Readonly<Record<WaterQuality, Readonly<{
+  deep: number;
+  shallow: number;
+  foam: number;
+}>>>;
 
 export interface OceanAtmosphere {
   fogColor: Color;
@@ -150,6 +186,33 @@ const fragmentShader = `
     float weatherStrength = clamp(0.92 + (uAmplitudeScale - 1.0) * 0.32, 0.78, 1.18);
     return slope * distanceFade * weatherStrength;
   }
+
+  #ifdef HIGH_QUALITY_WATER
+  vec2 highQualityRippleSlope(vec2 worldPosition) {
+    vec2 wind = normalize(vec2(0.83, 0.56));
+    vec2 crossWind = vec2(-wind.y, wind.x);
+    vec2 quartering = normalize(vec2(-0.31, 0.95));
+    vec2 warped = worldPosition + windWarp(worldPosition) * 0.58;
+
+    float bandA = cos(dot(warped, wind) * 15.4 + uTime * 3.35);
+    float bandB = cos(dot(warped, crossWind) * 22.8 - uTime * 4.10);
+    float bandC = cos(dot(warped, quartering) * 36.2 + uTime * 5.45);
+    vec2 slope = wind * bandA * 0.0095
+      + crossWind * bandB * 0.0054
+      + quartering * bandC * 0.0028;
+    float distanceFade = 1.0 - smoothstep(
+      uDetailFade.x * 0.66,
+      uDetailFade.y * 0.84,
+      vViewDepth
+    );
+    float weatherStrength = clamp(
+      0.88 + (uAmplitudeScale - 1.0) * 0.24,
+      0.74,
+      1.12
+    );
+    return slope * distanceFade * weatherStrength;
+  }
+  #endif
 
   float hash21(vec2 position) {
     vec2 seed = fract(position * vec2(123.34, 456.21));
@@ -292,6 +355,9 @@ const fragmentShader = `
       }
     }
     vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
+    #ifdef HIGH_QUALITY_WATER
+    detailSlope += highQualityRippleSlope(vWorldPosition.xz);
+    #endif
     vec3 normal = normalize(vWorldNormal + vec3(-detailSlope.x, 0.0, -detailSlope.y));
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     vec3 lightDirection = normalize(uLightDirection);
@@ -312,6 +378,16 @@ const fragmentShader = `
     float forwardScatter = pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 4.0);
     waterBody += uShallowColor * forwardScatter * uDirectLightStrength
       * (0.055 + vWaveSlope * 0.12);
+    #ifdef HIGH_QUALITY_WATER
+    float daylight = smoothstep(0.08, 0.92, uDirectLightStrength);
+    vec3 weatherTint = mix(uFogColor * 0.78, uHorizonColor * 0.64, 0.42);
+    float turquoiseRetention = mix(0.34, 0.92, daylight);
+    waterBody = mix(weatherTint, waterBody, turquoiseRetention);
+    float crestTransmission = smoothstep(-0.18, 0.58, vHeight)
+      * pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 2.0);
+    waterBody += uShallowColor * crestTransmission
+      * uDirectLightStrength * 0.075;
+    #endif
     float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
     vec3 color = mix(waterBody, reflectedColor, reflectionStrength);
 
@@ -323,9 +399,21 @@ const fragmentShader = `
     ));
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
+    #ifdef HIGH_QUALITY_WATER
+    sunCore += pow(specularFacing, 420.0)
+      * mix(0.20, 0.38, windAlignment);
+    sunSheen += pow(specularFacing, 74.0)
+      * mix(0.08, 0.18, windAlignment);
+    #endif
 
     float ribbonNoise = foamRibbonNoise(vWorldPosition.xz);
     float edgeNoise = foamEdgeNoise(vWorldPosition.xz);
+    #ifdef HIGH_QUALITY_WATER
+    float fineFoamNoise = valueNoise(
+      vWorldPosition.xz * 2.15 + vec2(uTime * 0.11, -uTime * 0.08)
+    );
+    edgeNoise = mix(edgeNoise, fineFoamNoise, 0.34);
+    #endif
     float fineDetailFade = 1.0 - smoothstep(
       uDetailFade.x * 0.72,
       uDetailFade.x,
@@ -380,18 +468,33 @@ function createOceanPanel(
   return panel;
 }
 
-function createHorizonGeometry(): BufferGeometry {
-  const innerHalfExtent = OCEAN_SURFACE_QUALITY.surfaceExtent / 2;
-  const outerHalfExtent = OCEAN_SURFACE_QUALITY.horizonHalfExtent;
+function createSurfaceGeometry(
+  quality: Readonly<OceanSurfaceQuality>,
+): PlaneGeometry {
+  const geometry = new PlaneGeometry(
+    quality.surfaceExtent,
+    quality.surfaceExtent,
+    quality.segments,
+    quality.segments,
+  );
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+function createHorizonGeometry(
+  quality: Readonly<OceanSurfaceQuality>,
+): BufferGeometry {
+  const innerHalfExtent = quality.surfaceExtent / 2;
+  const outerHalfExtent = quality.horizonHalfExtent;
   const ringSpan = outerHalfExtent - innerHalfExtent;
   const ringCenter = innerHalfExtent + ringSpan / 2;
-  const edgeSegments = OCEAN_SURFACE_QUALITY.segments;
-  const radialSegments = OCEAN_SURFACE_QUALITY.horizonRadialSegments;
+  const edgeSegments = quality.segments;
+  const radialSegments = quality.horizonRadialSegments;
   const panels = [
-    createOceanPanel(OCEAN_SURFACE_QUALITY.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, ringCenter),
-    createOceanPanel(OCEAN_SURFACE_QUALITY.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, -ringCenter),
-    createOceanPanel(ringSpan, OCEAN_SURFACE_QUALITY.surfaceExtent, radialSegments, edgeSegments, ringCenter, 0),
-    createOceanPanel(ringSpan, OCEAN_SURFACE_QUALITY.surfaceExtent, radialSegments, edgeSegments, -ringCenter, 0),
+    createOceanPanel(quality.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, ringCenter),
+    createOceanPanel(quality.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, -ringCenter),
+    createOceanPanel(ringSpan, quality.surfaceExtent, radialSegments, edgeSegments, ringCenter, 0),
+    createOceanPanel(ringSpan, quality.surfaceExtent, radialSegments, edgeSegments, -ringCenter, 0),
     createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, ringCenter),
     createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, -ringCenter),
     createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, -ringCenter, ringCenter),
@@ -412,27 +515,32 @@ export class OceanRenderer {
 
   constructor(quality: WaterQuality = 'low') {
     this.quality = quality;
+    const surfaceQuality = OCEAN_SURFACE_QUALITY[quality];
+    const colors = OCEAN_COLORS[quality];
     const payload = createWaveUniformPayload(DEFAULT_WAVES);
     this.material = new ShaderMaterial({
       vertexShader,
       fragmentShader,
       transparent: false,
+      ...(quality === 'high'
+        ? { defines: { HIGH_QUALITY_WATER: 1 } }
+        : {}),
       uniforms: {
         uTime: { value: 0 },
         uAmplitudeScale: { value: 1 },
         uOrigin: { value: new Vector2() },
         uDetailFade: {
           value: new Vector2(
-            OCEAN_SURFACE_QUALITY.detailFadeNear,
-            OCEAN_SURFACE_QUALITY.detailFadeFar,
+            surfaceQuality.detailFadeNear,
+            surfaceQuality.detailFadeFar,
           ),
         },
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
-        uDeepColor: { value: new Color(0x162c35) },
-        uShallowColor: { value: new Color(0x42656a) },
-        uFoamColor: { value: new Color(0xb7b7a5) },
+        uDeepColor: { value: new Color(colors.deep) },
+        uShallowColor: { value: new Color(colors.shallow) },
+        uFoamColor: { value: new Color(colors.foam) },
         uFogColor: { value: new Color(0x27343b) },
         uSkyColor: { value: new Color(0x496b75) },
         uHorizonColor: { value: new Color(0x6f8587) },
@@ -454,18 +562,15 @@ export class OceanRenderer {
         },
       },
     });
-    const geometry = new PlaneGeometry(
-      OCEAN_SURFACE_QUALITY.surfaceExtent,
-      OCEAN_SURFACE_QUALITY.surfaceExtent,
-      OCEAN_SURFACE_QUALITY.segments,
-      OCEAN_SURFACE_QUALITY.segments,
-    );
-    geometry.rotateX(-Math.PI / 2);
+    const geometry = createSurfaceGeometry(surfaceQuality);
     this.mesh = new Mesh(geometry, this.material);
     this.mesh.name = 'procedural-ocean';
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;
-    this.horizonMesh = new Mesh(createHorizonGeometry(), this.material);
+    this.horizonMesh = new Mesh(
+      createHorizonGeometry(surfaceQuality),
+      this.material,
+    );
     this.horizonMesh.name = 'procedural-ocean-horizon';
     this.horizonMesh.frustumCulled = false;
     this.mesh.add(this.horizonMesh);
@@ -473,6 +578,41 @@ export class OceanRenderer {
 
   setQuality(value: WaterQuality): void {
     if (this.disposed || value === this.quality) return;
+    const surfaceQuality = OCEAN_SURFACE_QUALITY[value];
+    const nextSurface = createSurfaceGeometry(surfaceQuality);
+    let nextHorizon: BufferGeometry;
+    try {
+      nextHorizon = createHorizonGeometry(surfaceQuality);
+    } catch (error) {
+      nextSurface.dispose();
+      throw error;
+    }
+    const previousSurface = this.mesh.geometry;
+    const previousHorizon = this.horizonMesh.geometry;
+    this.mesh.geometry = nextSurface;
+    this.horizonMesh.geometry = nextHorizon;
+    previousSurface.dispose();
+    previousHorizon.dispose();
+
+    const colors = OCEAN_COLORS[value];
+    (this.material.uniforms.uDetailFade!.value as Vector2).set(
+      surfaceQuality.detailFadeNear,
+      surfaceQuality.detailFadeFar,
+    );
+    (this.material.uniforms.uDeepColor!.value as Color).setHex(colors.deep);
+    (this.material.uniforms.uShallowColor!.value as Color).setHex(colors.shallow);
+    (this.material.uniforms.uFoamColor!.value as Color).setHex(colors.foam);
+    if (value === 'high') {
+      this.material.defines = {
+        ...this.material.defines,
+        HIGH_QUALITY_WATER: 1,
+      };
+    } else if (this.material.defines !== undefined) {
+      const defines = { ...this.material.defines };
+      delete defines.HIGH_QUALITY_WATER;
+      this.material.defines = defines;
+    }
+    this.material.needsUpdate = true;
     this.quality = value;
   }
 
