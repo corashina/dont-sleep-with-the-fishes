@@ -36,10 +36,8 @@ export class GameUI {
   private readonly crosshair: HTMLElement;
   private readonly pickupPointer: HTMLElement;
   private readonly carrySlots: readonly HTMLElement[];
-  private readonly carryFull: HTMLElement;
   private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
     [null, null, null];
-  private carryWasFull = false;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
   private readonly resultItems: HTMLElement;
@@ -67,11 +65,10 @@ export class GameUI {
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
         <div class="carried" data-carried>
           <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
-          <p class="carry-full ui-role-context" data-carry-full aria-live="polite"></p>
-          <div class="timer-block pocket-watch">
-            ${uiArtwork('watch', 'pocket-watch__art')}
-            <strong class="ui-role-numeral" data-timer>02:00</strong>
-          </div>
+        </div>
+        <div class="timer-block pocket-watch">
+          ${uiArtwork('watch', 'pocket-watch__art')}
+          <strong class="ui-role-numeral" data-timer>02:00</strong>
         </div>
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
@@ -155,7 +152,6 @@ export class GameUI {
     this.pickupPointer = requireElement(this.root, '[data-pickup-pointer]');
     this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
     if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
-    this.carryFull = requireElement(this.root, '[data-carry-full]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
     this.resultItems = requireElement(this.root, '[data-result-items]');
@@ -291,12 +287,6 @@ export class GameUI {
     while (slotIndex < 3) {
       this.updateCarrySlot(slotIndex, null);
       slotIndex += 1;
-    }
-
-    const isFull = snapshot.carriedWeight === 3;
-    if (isFull !== this.carryWasFull) {
-      this.carryWasFull = isFull;
-      this.carryFull.textContent = isFull ? 'HANDS FULL - RETURN TO THE BOAT' : '';
     }
   }
 
