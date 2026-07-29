@@ -171,6 +171,7 @@ export class World {
   private readonly buoyancy: BoatBuoyancy;
   private scavengePhysics: ScavengePhysics | null = null;
   private physicsDebugView: ScavengePhysicsDebugView | null = null;
+  private physicsBarrelsAttachedToShip = false;
   private readonly freighterBuoyancy = new BoatBuoyancy(
     sampleDefaultWave,
     FREIGHTER_BUOYANCY_FOOTPRINT,
@@ -524,7 +525,7 @@ export class World {
       this.shipPhysicsRotation,
     );
     this.scavengePhysics?.update(this.shipPhysicsPose, delta, simulatePhysics);
-    this.syncPhysicsObjects();
+    if (!this.physicsBarrelsAttachedToShip) this.syncPhysicsObjects();
     this.shipBuild.updateEffects(delta, sinking.progress);
     for (const presentation of this.animatedItemPresentations.values()) {
       presentation.update(delta);
@@ -586,6 +587,13 @@ export class World {
   setPresentationWeather(id: PresentationWeatherId): void {
     if (this.disposed) return;
     this.environment.setWeather(id);
+  }
+
+  attachPhysicsBarrelsToShip(): void {
+    if (this.disposed || this.physicsBarrelsAttachedToShip) return;
+    this.ship.updateMatrixWorld(true);
+    this.physicsBarrels.forEach((barrel) => this.ship.attach(barrel));
+    this.physicsBarrelsAttachedToShip = true;
   }
 
   sampleFlightWaterHeight(
