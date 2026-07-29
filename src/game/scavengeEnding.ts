@@ -30,7 +30,7 @@ export function createScavengeCinematicFrame(): ScavengeCinematicFrame {
       pitchRadians: 0,
       sinkOffset: 0,
       alarmRate: 1.2,
-      waveAmplitudeScale: 1.2,
+      waveAmplitudeScale: 1.35,
     },
     cameraPosition: [44, 15, 34],
     cameraTarget: [0, 3.4, 0],
@@ -52,9 +52,6 @@ export function advanceScavengeEnding(
   if (stage === 'playing') {
     if (status === 'failure') {
       stage = 'sinking';
-      elapsedSeconds = 0;
-    } else if (status === 'success') {
-      stage = 'endingHold';
       elapsedSeconds = 0;
     } else {
       return state;
@@ -96,7 +93,7 @@ export function sampleScavengeCinematicFrameInto(
   output.sinking.pitchRadians = 0.04 * anticipation + 0.22 * descent;
   output.sinking.sinkOffset = -2.5 * descent - 13.5 * finalRush || 0;
   output.sinking.alarmRate = 1.2 + 1.1 * finalRush;
-  output.sinking.waveAmplitudeScale = 1.2 + 0.35 * descent;
+  output.sinking.waveAmplitudeScale = 1.35 + 0.35 * descent;
   output.cameraPosition[0] = lerp(44, 42, descent);
   output.cameraPosition[1] = lerp(15, 13.5, descent);
   output.cameraPosition[2] = lerp(34, 36, descent);
