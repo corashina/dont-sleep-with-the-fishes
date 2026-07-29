@@ -2,7 +2,8 @@ import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/It
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { SinkingState } from '../game/sinking';
 import { formatDuration } from './formatDuration';
-import { itemArtwork, uiArtwork } from './uiArtwork';
+import { itemThumbnailUrl } from './itemThumbnailManifest';
+import { uiArtwork } from './uiArtwork';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -34,7 +35,11 @@ export class GameUI {
   private readonly itemTooltip: HTMLElement;
   private readonly crosshair: HTMLElement;
   private readonly pickupPointer: HTMLElement;
-  private readonly carriedItems: HTMLElement;
+  private readonly carrySlots: readonly HTMLElement[];
+  private readonly carryFull: HTMLElement;
+  private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
+    [null, null, null];
+  private carryWasFull = false;
   private readonly resultTitle: HTMLElement;
   private readonly resultBody: HTMLElement;
   private readonly resultItems: HTMLElement;
@@ -62,6 +67,7 @@ export class GameUI {
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
         <div class="carried" data-carried>
           <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
+          <p class="carry-full ui-role-context" data-carry-full aria-live="polite"></p>
           <div class="timer-block pocket-watch">
             ${uiArtwork('watch', 'pocket-watch__art')}
             <strong class="ui-role-numeral" data-timer>02:00</strong>
@@ -147,7 +153,9 @@ export class GameUI {
     this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
     this.crosshair = requireElement(this.root, '[data-crosshair]');
     this.pickupPointer = requireElement(this.root, '[data-pickup-pointer]');
-    this.carriedItems = requireElement(this.root, '[data-carried-items]');
+    this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
+    if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
+    this.carryFull = requireElement(this.root, '[data-carry-full]');
     this.resultTitle = requireElement(this.root, '[data-result-title]');
     this.resultBody = requireElement(this.root, '[data-result-body]');
     this.resultItems = requireElement(this.root, '[data-result-items]');
@@ -273,23 +281,48 @@ export class GameUI {
   }
 
   private renderCarry(snapshot: ScavengeSnapshot): void {
-    const filled = snapshot.carriedItems.flatMap(({ type }) => (
-      Array.from({ length: ITEM_DEFINITIONS[type].weight }, () => type)
-    )).slice(0, 3);
-    const slots: Array<ItemId | null> = [...filled];
-    while (slots.length < 3) slots.push(null);
-
-    this.carriedItems.replaceChildren(...slots.map((type) => {
-      const circle = document.createElement('span');
-      circle.className = 'weight-circle';
-      circle.dataset.weightCircle = '';
-      if (type !== null) {
-        circle.classList.add('is-filled');
-        circle.dataset.itemType = type;
-        circle.innerHTML = itemArtwork(type, 'weight-circle__art');
+    let slotIndex = 0;
+    for (const { type } of snapshot.carriedItems) {
+      for (let unit = 0; unit < ITEM_DEFINITIONS[type].weight && slotIndex < 3; unit += 1) {
+        this.updateCarrySlot(slotIndex, type);
+        slotIndex += 1;
       }
-      return circle;
-    }));
+    }
+    while (slotIndex < 3) {
+      this.updateCarrySlot(slotIndex, null);
+      slotIndex += 1;
+    }
+
+    const isFull = snapshot.carriedWeight === 3;
+    if (isFull !== this.carryWasFull) {
+      this.carryWasFull = isFull;
+      this.carryFull.textContent = isFull ? 'HANDS FULL - RETURN TO THE BOAT' : '';
+    }
+  }
+
+  private updateCarrySlot(index: number, type: ItemId | null): void {
+    if (this.carryTypes[index] === type) return;
+    this.carryTypes[index] = type;
+    const circle = this.carrySlots[index]!;
+    circle.replaceChildren();
+    circle.classList.toggle('is-filled', type !== null);
+    circle.classList.remove('has-image-error');
+    if (type === null) {
+      delete circle.dataset.itemType;
+      return;
+    }
+    circle.dataset.itemType = type;
+    const image = document.createElement('img');
+    image.className = 'weight-circle__thumbnail';
+    image.src = itemThumbnailUrl(type);
+    image.alt = '';
+    image.decoding = 'async';
+    image.draggable = false;
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      circle.classList.add('has-image-error');
+    }, { once: true });
+    circle.append(image);
   }
 
   private readonly handleStart = (): void => this.onStart();
