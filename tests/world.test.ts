@@ -156,6 +156,21 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('clones the lifeboat station bounds for deadline evacuation', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const lifeboatStation = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
+
+    try {
+      expect(world.evacuationBounds).toEqual(lifeboatStation.bounds);
+      expect(world.evacuationBounds).not.toBe(lifeboatStation.bounds);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('uses one resolved weather amplitude for both vessels and the ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
