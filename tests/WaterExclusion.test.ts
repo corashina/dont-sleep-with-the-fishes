@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
   createWaterExclusion,
+  UNBOUNDED_MAXIMUM_LOCAL_Y,
   UNBOUNDED_MINIMUM_LOCAL_Y,
 } from '../src/ocean/WaterExclusion';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
@@ -105,6 +106,32 @@ describe('water exclusions', () => {
     expect(pointInWaterExclusion(new Vector3(0, 1, 3), region)).toBe(true);
   });
 
+  it('stops a profiled exclusion above its upper local height', () => {
+    const vessel = new Group();
+    const region = createWaterExclusion(
+      vessel,
+      2,
+      4,
+      3,
+      -1,
+      {
+        lowerHalfWidth: 1,
+        lowerHalfLength: 2,
+        lowerTaperStart: 2,
+        upperLocalY: 1,
+      },
+    );
+
+    expect(pointInWaterExclusion(new Vector3(0, 1, 0), region)).toBe(true);
+    expect(pointInWaterExclusion(new Vector3(0, 1.001, 0), region)).toBe(false);
+  });
+
+  it('keeps an unprofiled exclusion open above its lower limit', () => {
+    const region = createWaterExclusion(new Group(), 1, 2, 2, -0.5);
+
+    expect(pointInWaterExclusion(new Vector3(0, 100, 0), region)).toBe(true);
+  });
+
   it('starts with explicit inactive fixed-size uniform defaults', () => {
     const ocean = new OceanRenderer();
 
@@ -128,7 +155,7 @@ describe('water exclusions', () => {
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y]);
     expect(ocean.material.uniforms.uExclusionUpperLocalYs!.value)
-      .toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y]);
+      .toEqual([UNBOUNDED_MAXIMUM_LOCAL_Y, UNBOUNDED_MAXIMUM_LOCAL_Y]);
     ocean.dispose();
   });
 
@@ -167,7 +194,7 @@ describe('water exclusions', () => {
     const upperLocalYs = ocean.material.uniforms.uExclusionUpperLocalYs!.value as number[];
     expect(lowerBounds[0]!.toArray()).toEqual([-1, 1, -2, 2]);
     expect(lowerTaperStarts).toEqual([2, 10.2]);
-    expect(upperLocalYs).toEqual([1, UNBOUNDED_MINIMUM_LOCAL_Y]);
+    expect(upperLocalYs).toEqual([1, UNBOUNDED_MAXIMUM_LOCAL_Y]);
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([-0.38, UNBOUNDED_MINIMUM_LOCAL_Y]);
     ocean.dispose();
@@ -194,6 +221,8 @@ describe('water exclusions', () => {
     expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y]);
+    expect(ocean.material.uniforms.uExclusionUpperLocalYs!.value)
+      .toEqual([UNBOUNDED_MAXIMUM_LOCAL_Y, UNBOUNDED_MAXIMUM_LOCAL_Y]);
     ocean.dispose();
   });
 

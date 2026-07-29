@@ -6,6 +6,7 @@ import {
   type ItemStatus,
 } from './ItemState';
 import { createScavengeItemInstances } from './scavengeCatalog';
+import { SCAVENGE_DURATION_SECONDS } from './scavengeRules';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'success' | 'failure';
 
@@ -29,12 +30,11 @@ export interface ScavengeResult {
   elapsedSeconds: number;
 }
 
-const RUN_SECONDS = 120;
 const CARRY_CAPACITY = 3;
 
 export class ScavengeSession {
   private status: SessionStatus = 'idle';
-  private remainingSeconds = RUN_SECONDS;
+  private remainingSeconds = SCAVENGE_DURATION_SECONDS;
   private readonly items: Record<ItemInstanceId, ScavengeItemState>;
   private readonly carriedIds: ItemInstanceId[] = [];
   private savedCount = 0;
@@ -57,10 +57,12 @@ export class ScavengeSession {
     if (this.status === 'idle') this.status = 'running';
   }
 
-  tick(deltaSeconds: number): void {
+  tick(deltaSeconds: number, evacuateAtDeadline = false): void {
     if (this.status !== 'running') return;
     this.remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, deltaSeconds));
-    if (this.remainingSeconds === 0) this.finish('failure');
+    if (this.remainingSeconds === 0) {
+      this.finish(evacuateAtDeadline ? 'success' : 'failure');
+    }
   }
 
   penalize(seconds: number): void {
@@ -156,7 +158,7 @@ export class ScavengeSession {
       .map((item) => Object.freeze({ instanceId: item.instanceId, type: item.type }));
     return Object.freeze({
       savedItems: Object.freeze(savedItems),
-      elapsedSeconds: RUN_SECONDS - this.remainingSeconds,
+      elapsedSeconds: SCAVENGE_DURATION_SECONDS - this.remainingSeconds,
     });
   }
 

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { GameUI } from '../src/ui/GameUI';
+import { formatDuration } from '../src/ui/formatDuration';
 
 describe('GameUI scavenging item tooltip', () => {
   it('uses the survival tooltip treatment at the projected item edge', () => {
@@ -54,6 +56,69 @@ describe('GameUI scavenging item tooltip', () => {
 
     expect(pointer.classList).not.toContain('is-visible');
     expect(crosshair.classList).not.toContain('is-pickup-hidden');
+    ui.dispose();
+  });
+});
+
+describe('GameUI scavenging ending', () => {
+  it('renders the ending stages and exposes the main-menu action only when ready', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new GameUI(mount);
+    const uiRoot = mount.querySelector<HTMLElement>('.game-ui')!;
+
+    ui.renderEnding('sinking', 0.4);
+    expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
+    expect(mount.querySelector('[data-ending]')?.classList.contains('is-visible')).toBe(false);
+    expect((mount.querySelector('[data-ending-action]') as HTMLButtonElement).hidden).toBe(true);
+    expect(uiRoot.style.getPropertyValue('--scavenge-ending-blackout')).toBe('0.4');
+
+    ui.renderEnding('endingHold', 1);
+    expect(mount.querySelector('[data-ending]')?.classList.contains('is-visible')).toBe(true);
+    expect((mount.querySelector('[data-ending-action]') as HTMLButtonElement).hidden).toBe(true);
+
+    ui.renderEnding('menuReady', 1);
+    const action = mount.querySelector('[data-ending-action]') as HTMLButtonElement;
+    expect(action.hidden).toBe(false);
+    expect(document.activeElement).toBe(action);
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('SUNK WITH DOROTHY');
+    ui.dispose();
+    mount.remove();
+  });
+
+  it('calls replay once and removes the ending action listener on disposal', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const onReplay = vi.fn();
+    ui.onReplay = onReplay;
+    ui.renderEnding('menuReady', 1);
+    const action = mount.querySelector<HTMLButtonElement>('[data-ending-action]')!;
+
+    action.click();
+    action.click();
+    expect(onReplay).toHaveBeenCalledOnce();
+
+    ui.dispose();
+    action.click();
+    expect(onReplay).toHaveBeenCalledOnce();
+  });
+
+  it('preserves title-screen ownership when playing is rendered before the game starts', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    ui.renderEnding('playing', 0);
+
+    expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
+    ui.dispose();
+  });
+
+  it('initializes the watch from the scavenging duration rule', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('[data-timer]')?.textContent)
+      .toBe(formatDuration(SCAVENGE_DURATION_SECONDS));
     ui.dispose();
   });
 });
