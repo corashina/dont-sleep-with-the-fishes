@@ -7,6 +7,10 @@ import {
 } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
 import { createVisualQualityPreference } from '../rendering/visualQuality';
+import {
+  createWaterQualityPreference,
+  type WaterQuality,
+} from '../rendering/waterQuality';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
@@ -169,6 +173,7 @@ function testContext(
     renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
     sceneRenderer,
     visualQuality: createVisualQualityPreference(() => undefined, null),
+    waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
     shipFurniture: {} as ShipFurnitureLibrary,
@@ -252,6 +257,7 @@ export class SurvivalPhase implements GamePhase {
           savedItems,
           context.lifeboatAssets,
           context.shipFurniture,
+          context.waterQuality?.get() ?? 'low',
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -407,6 +413,11 @@ export class SurvivalPhase implements GamePhase {
   setWeatherOverride(id: PresentationWeatherId | null): void {
     this.forcedWeather = id;
     this.syncPresentationWeather();
+  }
+
+  setWaterQuality(value: WaterQuality): void {
+    if (this.disposed) return;
+    this.world.setWaterQuality?.(value);
   }
 
   getPresentationWeather(): PresentationWeatherId {

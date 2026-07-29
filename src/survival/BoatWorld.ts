@@ -31,6 +31,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
+import type { WaterQuality } from '../rendering/waterQuality';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
 import {
@@ -484,6 +485,7 @@ export class BoatWorld {
     savedItems: readonly ItemInstance[] = [],
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
+    waterQuality: WaterQuality = 'low',
   ) {
     this.scene = new Scene();
     this.sky = new Skybox(
@@ -588,7 +590,7 @@ export class BoatWorld {
           crate: shipFurniture.clone('cargoCrate'),
         }, this.driftingLootSternRest);
 
-    this.ocean = new OceanRenderer();
+    this.ocean = new OceanRenderer(waterQuality);
     this.key.target.position.set(0, 0, -3);
     alignDirectionalLightWithSun(this.key, 12);
     this.key.castShadow = true;
@@ -625,6 +627,11 @@ export class BoatWorld {
     this.weatherProfile = presentationWeatherProfile(id);
     this.skyState.weather = this.weatherProfile.skyWeather;
     this.weatherEffects.setWeather(id);
+  }
+
+  setWaterQuality(value: WaterQuality): void {
+    if (this.disposed) return;
+    this.ocean.setQuality(value);
   }
 
   syncInventory(snapshot: SurvivalSnapshot): void {
