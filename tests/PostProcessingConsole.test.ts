@@ -6,6 +6,7 @@ import type {
   PostProcessingControls,
 } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import { createWaterQualityPreference } from '../src/rendering/waterQuality';
 import {
   PostProcessingConsole,
   type EventTestControls,
@@ -49,6 +50,8 @@ describe('PostProcessingConsole', () => {
     const setDebugMeshes = vi.fn();
     const applyVisualQuality = vi.fn();
     const visualQuality = createVisualQualityPreference(applyVisualQuality, null);
+    const applyWaterQuality = vi.fn();
+    const waterQuality = createWaterQualityPreference(applyWaterQuality, null);
     const consoleMenu = new PostProcessingConsole(
       mount,
       controls,
@@ -60,6 +63,9 @@ describe('PostProcessingConsole', () => {
         setDebugMeshes,
       },
       visualQuality,
+      undefined,
+      undefined,
+      waterQuality,
     );
     const panel = mount.querySelector<HTMLElement>('[data-post-processing-panel]')!;
 
@@ -72,15 +78,23 @@ describe('PostProcessingConsole', () => {
 
     expect(panel.textContent).not.toContain('Color grade');
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2);
-    const qualityControl = panel.querySelector('[data-visual-quality-control]');
-    const highQuality = panel.querySelector<HTMLButtonElement>(
-      '[data-visual-quality="high"]',
+    const qualityControl = panel.querySelector('[data-ao-quality-control]');
+    const highQuality = qualityControl?.querySelector<HTMLButtonElement>(
+      '[data-quality="high"]',
+    )!;
+    const waterQualityControl = panel.querySelector('[data-water-quality-control]');
+    const highWaterQuality = waterQualityControl?.querySelector<HTMLButtonElement>(
+      '[data-quality="high"]',
     )!;
     expect(qualityControl).not.toBeNull();
     expect(panel.contains(qualityControl)).toBe(true);
+    expect(waterQualityControl).not.toBeNull();
     highQuality.click();
     expect(visualQuality.get()).toBe('high');
     expect(applyVisualQuality).toHaveBeenCalledWith('high');
+    highWaterQuality.click();
+    expect(waterQuality.get()).toBe('high');
+    expect(applyWaterQuality).toHaveBeenCalledWith('high');
 
     const physics = panel.querySelector<HTMLInputElement>('[data-physics-enabled]')!;
     expect(physics.checked).toBe(true);
@@ -129,6 +143,8 @@ describe('PostProcessingConsole', () => {
     expect(consoleMenu.element.isConnected).toBe(false);
     highQuality.click();
     expect(applyVisualQuality).toHaveBeenCalledOnce();
+    highWaterQuality.click();
+    expect(applyWaterQuality).toHaveBeenCalledOnce();
     expect(onOpenChange).toHaveBeenLastCalledWith(false);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
     expect(consoleMenu.element.dataset.open).toBe('false');
