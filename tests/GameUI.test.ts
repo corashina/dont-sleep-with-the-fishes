@@ -90,6 +90,12 @@ describe('GameUI carry HUD', () => {
     );
   });
 
+  it('resets the timer block transform on the anchored watch', () => {
+    expect(mainStyles).toMatch(
+      /\.pocket-watch\s*\{[^}]*transform:\s*none;/s,
+    );
+  });
+
   it('keeps thumbnail opacity separate from the translucent circle treatment', () => {
     expect(mainStyles).toMatch(/\.weight-circle__thumbnail\s*\{[^}]*opacity:\s*1;/s);
     expect(mainStyles).not.toMatch(/\.weight-circle\s*\{[^}]*opacity:/s);

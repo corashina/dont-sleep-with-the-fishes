@@ -1130,6 +1130,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   left: calc(100% + 16px);
   width: 116px;
   height: 88px;
+  transform: none;
 }
 .pocket-watch__art { position: absolute; inset: -5px auto auto 14px; width: 88px; color: #d2a24f; }
 .pocket-watch [data-timer] {
