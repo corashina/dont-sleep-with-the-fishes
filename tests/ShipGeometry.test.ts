@@ -243,7 +243,7 @@ describe('freighter geometry', () => {  interface PointXZ {
     }
   });
 
-  it('builds a 20 by 55 layered hull with timber deck', () => {
+  it('builds the narrowed 16.25 by 55 layered hull with timber deck', () => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials, SHIP_LAYOUT);
     try {
@@ -254,8 +254,8 @@ describe('freighter geometry', () => {  interface PointXZ {
       const upperHull = build.root.getObjectByName('upper-hull') as Mesh;
       const waterline = build.root.getObjectByName('waterline-band') as Mesh;
       const size = new Box3().setFromObject(build.root).getSize(new Vector3());
-      expect(size.x).toBeGreaterThanOrEqual(20);
-      expect(size.z).toBeGreaterThanOrEqual(55);
+      expect(size.x).toBeGreaterThanOrEqual(FREIGHTER_DIMENSIONS.width);
+      expect(size.z).toBeGreaterThanOrEqual(FREIGHTER_DIMENSIONS.length);
       expect(deck.material).toBe(materials.cargoFloor);
       expect(wheelhouseFloor.material).toBe(materials.wheelhouseFloor);
       expect(storageFloor.material).toBe(materials.storageFloor);
@@ -297,10 +297,14 @@ describe('freighter geometry', () => {  interface PointXZ {
         .sort(([firstY], [secondY]) => secondY - firstY);
 
       expect(profile).toHaveLength(3);
-      expect(profile[0]![1].maxX - profile[0]![1].minX).toBeCloseTo(20);
-      expect(profile[1]![1].maxX - profile[1]![1].minX).toBeGreaterThan(13);
-      expect(profile[1]![1].maxX - profile[1]![1].minX).toBeLessThan(16);
-      expect(profile[2]![1].maxX - profile[2]![1].minX).toBeLessThan(3.5);
+      expect(profile[0]![1].maxX - profile[0]![1].minX)
+        .toBeCloseTo(FREIGHTER_DIMENSIONS.width);
+      expect(profile[1]![1].maxX - profile[1]![1].minX)
+        .toBeGreaterThan(FREIGHTER_DIMENSIONS.width * 0.65);
+      expect(profile[1]![1].maxX - profile[1]![1].minX)
+        .toBeLessThan(FREIGHTER_DIMENSIONS.width * 0.8);
+      expect(profile[2]![1].maxX - profile[2]![1].minX)
+        .toBeLessThan(FREIGHTER_DIMENSIONS.width * 0.175);
       expect(profile[0]![0] - profile[2]![0]).toBeGreaterThanOrEqual(4.5);
       expect(build.waterExclusion.minimumLocalY).toBeCloseTo(
         hull.position.y + profile[2]![0],
@@ -791,8 +795,8 @@ describe('freighter geometry', () => {  interface PointXZ {
   });
 
   it.each([
-    new Vector3(-9.75, 2.72, 0),
-    new Vector3(9.75, 2.72, 4),
+    new Vector3(-SHIP_LAYOUT.rail.innerFaceX, 2.72, 0),
+    new Vector3(SHIP_LAYOUT.rail.innerFaceX, 2.72, 4),
   ])('blocks passage through the waist-height outer rail at %s', (point) => {
     const materials = createShipMaterials();
     const build = createShipGeometry(materials);
@@ -1687,8 +1691,8 @@ describe('freighter geometry', () => {  interface PointXZ {
       new Box3(),
     );
     const size = bounds.getSize(new Vector3());
-    expect(size.x).toBeGreaterThan(19.8);
-    expect(size.x).toBeLessThan(20.1);
+    expect(size.x).toBeGreaterThan(FREIGHTER_DIMENSIONS.width - 0.2);
+    expect(size.x).toBeLessThan(FREIGHTER_DIMENSIONS.width + 0.1);
     expect(size.y).toBeCloseTo(0.14);
     expect(size.z).toBeGreaterThan(5.1);
     expect(Math.abs(direction > 0 ? bounds.max.z : bounds.min.z)).toBeGreaterThan(27);
