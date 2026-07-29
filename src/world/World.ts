@@ -26,6 +26,7 @@ import {
   type BoatPose,
 } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
+import type { WaterQuality } from '../rendering/waterQuality';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import {
   DEFAULT_WAVES,
@@ -237,6 +238,7 @@ export class World {
     construction: WorldConstructionDependencies = {},
     lifeboatAssets?: LifeboatAssets,
     shipAssets?: ShipAssets,
+    waterQuality: WaterQuality = 'low',
   ) {
     this.physicsMode = construction.physicsMode ?? 'enabled';
     const rollback: (() => void)[] = [];
@@ -453,7 +455,7 @@ export class World {
       rollback.push(() => scene.remove(this.lifeboat));
       construction.checkpoint?.('lifeboat');
 
-      this.ocean = new OceanRenderer();
+      this.ocean = new OceanRenderer(waterQuality);
       rollback.push(() => this.ocean.dispose());
       scene.add(this.ocean.mesh);
       rollback.push(() => scene.remove(this.ocean.mesh));
@@ -594,6 +596,11 @@ export class World {
     this.ship.updateMatrixWorld(true);
     this.physicsBarrels.forEach((barrel) => this.ship.attach(barrel));
     this.physicsBarrelsAttachedToShip = true;
+  }
+
+  setWaterQuality(value: WaterQuality): void {
+    if (this.disposed) return;
+    this.ocean.setQuality(value);
   }
 
   sampleFlightWaterHeight(

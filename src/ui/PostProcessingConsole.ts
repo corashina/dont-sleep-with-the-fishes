@@ -12,12 +12,17 @@ import {
   type VisualQualityPreference,
 } from '../rendering/visualQuality';
 import {
+  createWaterQualityPreference,
+  type WaterQualityPreference,
+} from '../rendering/waterQuality';
+import {
   PRESENTATION_WEATHER_IDS,
   presentationWeatherProfile,
   type PresentationWeatherId,
   type WeatherControlSource,
 } from '../weather/presentationWeather';
 import { VisualQualityControl } from './VisualQualityControl';
+import { WaterQualityControl } from './WaterQualityControl';
 
 const PANEL_ID = 'post-processing-console-panel';
 
@@ -49,6 +54,7 @@ export class PostProcessingConsole {
   readonly element = document.createElement('aside');
   private readonly panel: HTMLElement;
   private readonly visualQualityControl: VisualQualityControl;
+  private readonly waterQualityControl: WaterQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
   private weatherId: PresentationWeatherId;
@@ -66,6 +72,10 @@ export class PostProcessingConsole {
     ),
     private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
     private readonly eventTestControls?: EventTestControls,
+    waterQuality: WaterQualityPreference = createWaterQualityPreference(
+      () => undefined,
+      null,
+    ),
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -121,7 +131,8 @@ export class PostProcessingConsole {
           <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
         </header>
         ${physicsControl}
-        <section class="post-processing-console__section" data-visual-quality-control></section>
+        <section class="post-processing-console__section" data-ao-quality-control></section>
+        <section class="post-processing-console__section" data-water-quality-control></section>
         ${eventTestControls === undefined
           ? ''
           : '<section class="post-processing-console__section" data-event-test-control></section>'}
@@ -156,8 +167,12 @@ export class PostProcessingConsole {
     `;
     this.panel = this.requireElement('[data-post-processing-panel]');
     this.visualQualityControl = new VisualQualityControl(visualQuality);
-    this.requireElement('[data-visual-quality-control]').append(
+    this.requireElement('[data-ao-quality-control]').append(
       this.visualQualityControl.element,
+    );
+    this.waterQualityControl = new WaterQualityControl(waterQuality);
+    this.requireElement('[data-water-quality-control]').append(
+      this.waterQualityControl.element,
     );
     if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
@@ -197,6 +212,7 @@ export class PostProcessingConsole {
     this.element.removeEventListener('change', this.handleChange);
     this.element.removeEventListener('input', this.handleInput);
     this.visualQualityControl.dispose();
+    this.waterQualityControl.dispose();
     this.element.dataset.open = 'false';
     this.element.remove();
   }

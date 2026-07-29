@@ -1,6 +1,10 @@
 import type { PerspectiveCamera, WebGLRenderer } from 'three';
 import type { SceneRenderer } from '../rendering/SceneRenderer';
 import type { VisualQualityPreference } from '../rendering/visualQuality';
+import type {
+  WaterQuality,
+  WaterQualityPreference,
+} from '../rendering/waterQuality';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
@@ -15,6 +19,7 @@ export interface PhaseContext {
   renderer: WebGLRenderer;
   sceneRenderer: SceneRenderer;
   visualQuality: VisualQualityPreference;
+  waterQuality: WaterQualityPreference;
   camera: PerspectiveCamera;
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
@@ -32,6 +37,7 @@ export interface GamePhase {
   resize(width: number, height: number): void;
   render(): void;
   setOverlayActive?(active: boolean): void;
+  setWaterQuality?(value: WaterQuality): void;
   setWeatherOverride?(id: PresentationWeatherId | null): void;
   getPresentationWeather?(): PresentationWeatherId;
   dispose(): void;
