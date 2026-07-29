@@ -215,16 +215,24 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   from { opacity: 0; transform: translate(-50%, 1px) scale(.78); }
   to { opacity: 1; transform: translate(-50%, -4px) scale(1); }
 }
+@keyframes carry-thumbnail-pop {
+  0% { opacity: 0; transform: scale(.55) rotate(-4deg); }
+  65% { opacity: 1; transform: scale(1.08) rotate(1.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes carry-slot-pop {
+  0% { border-color: #e1b760; filter: brightness(1.45); }
+  65% { border-color: #b88a45; filter: brightness(1.18); }
+  100% { border-color: #07121fcc; filter: none; }
+}
 .prompt { position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%) translateY(8px); padding: 10px 14px; border: 1px solid #d0c9b55c; background: #172227d9; color: #eee7d4; opacity: 0; transition: opacity 160ms ease, transform 160ms ease; }
 .prompt.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 .carried {
   position: absolute;
   top: 16px;
   left: 50%;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  justify-items: center;
   transform: translateX(-50%);
 }
 .weight-circles__row { display: grid; grid-template-columns: repeat(3, 88px); gap: 12px; }
@@ -248,8 +256,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   content: '';
   pointer-events: none;
 }
-.weight-circle.is-filled { background: radial-gradient(circle at 45% 38%, #334458, #111925 76%); }
-.weight-circle__art { z-index: 1; width: 88%; height: 88%; }
+.weight-circle.is-filled {
+  background: radial-gradient(circle at 45% 38%, #33445880, #111925b8 76%);
+  animation: carry-slot-pop 180ms cubic-bezier(.2, .9, .25, 1);
+}
 .screen {
   position: absolute;
   inset: 0;
@@ -1147,33 +1157,41 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   .screen { background: linear-gradient(0deg, #172227fa 0 58%, #17222773 82%, transparent); }
 }
 /* Illustrated scavenging presentation */
-.illustrated-hud { padding: 24px 30px; }
-.pocket-watch {
-  position: relative;
-  top: auto;
-  right: auto;
-  left: auto;
-  flex: none;
-  width: 116px;
-  height: 88px;
-  margin-top: 0;
+.illustrated-hud {
+  --carry-slot-size: clamp(68px, 15vw, 192px);
+  padding: 24px 30px;
 }
-.pocket-watch__art { position: absolute; inset: -5px auto auto 14px; width: 88px; color: #d2a24f; }
+.pocket-watch {
+  position: absolute;
+  top: clamp(16px, 2vw, 24px);
+  right: clamp(8px, 2.35vw, 30px);
+  left: auto;
+  width: var(--carry-slot-size);
+  height: var(--carry-slot-size);
+  transform: none;
+}
+.pocket-watch__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: #d2a24f;
+}
 .pocket-watch [data-timer] {
   position: absolute;
-  top: 34px;
+  top: 59%;
   left: 50%;
   z-index: 1;
-  min-width: 68px;
-  padding: 3px 5px;
+  min-width: clamp(50px, 8vw, 104px);
+  padding: clamp(2px, .35vw, 5px) clamp(4px, .55vw, 8px);
   border-radius: 4px;
   background: #090b0ce6;
   color: var(--ink-bone);
-  font: 600 1.28rem/1 var(--font-numeral);
+  font: 600 clamp(.94rem, 2.2vw, 2rem)/1 var(--font-numeral);
   font-variant-numeric: tabular-nums;
   text-align: center;
   text-shadow: 1px 1px 0 var(--ink-outline);
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 .pocket-watch [data-timer].is-critical { color: var(--ink-red-bright); animation: watch-jolt .65s steps(2, end) infinite; }
 .prompt { bottom: 82px; max-width: min(520px, calc(100vw - 48px)); text-align: center; }
@@ -1198,19 +1216,20 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   transform: translate(-50%, 12px);
 }
 .weight-circles__row {
-  grid-template-columns: repeat(3, 96px);
-  gap: 13px;
+  grid-template-columns: repeat(3, var(--carry-slot-size));
+  gap: clamp(7px, 1.25vw, 16px);
 }
 .weight-circle {
-  width: 96px;
-  height: 96px;
-  border-width: 5px;
+  width: var(--carry-slot-size);
+  height: var(--carry-slot-size);
+  border-width: clamp(3px, .55vw, 7px);
+  border-color: #07121fcc;
   border-radius: 49% 46% 52% 47% / 46% 52% 48% 51%;
-  background: radial-gradient(circle at 42% 34%, #2b4055aa, #080d16ef 72%);
+  background: radial-gradient(circle at 42% 34%, #2b405580, #080d16b8 72%);
   box-shadow:
-    inset 0 0 0 2px #70869a55,
-    inset 5px -6px 0 #02050955,
-    3px 5px 0 #020509aa;
+    inset 0 0 0 2px #70869a44,
+    inset 5px -6px 0 #0205093d,
+    3px 5px 0 #02050980;
 }
 .weight-circle:nth-child(2) {
   border-radius: 46% 52% 47% 51% / 51% 46% 52% 48%;
@@ -1218,18 +1237,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .weight-circle:nth-child(3) {
   border-radius: 52% 47% 49% 45% / 47% 51% 46% 52%;
 }
-.weight-circle__art {
+.weight-circle__thumbnail {
   z-index: 1;
   width: 92%;
   height: 92%;
-  filter: drop-shadow(3px 4px 0 #020407dd);
-}
-.weight-circle__art .item-artwork__primary,
-.weight-circle__art .item-artwork__secondary,
-.weight-circle__art .item-artwork__light,
-.weight-circle__art .item-artwork__ink,
-.weight-circle__art .item-artwork__cutout {
-  stroke-width: 5;
+  object-fit: contain;
+  opacity: 1;
+  filter: drop-shadow(3px 4px 0 #020407b8);
+  transform-origin: center;
+  animation: carry-thumbnail-pop 180ms cubic-bezier(.2, .9, .25, 1);
 }
 .poster-screen {
   justify-items: center;
@@ -1302,7 +1318,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .illustrated-warning__art { width: 34px; flex: 0 0 auto; color: var(--ink-red-bright); }
 .illustrated-warning.is-visible { opacity: 1; visibility: visible; }
 .poster-screen.has-compatibility-error .illustrated-warning { opacity: 1; visibility: visible; }
-@keyframes watch-jolt { 50% { transform: translateX(-50%) scale(1.06); } }
+@keyframes watch-jolt { 50% { transform: translate(-50%, -50%) scale(1.06); } }
+@keyframes critical-vignette { 50% { opacity: .82; transform: scale(1.025); } }
 
 /* Illustrated survival status and projected actions */
 .survival-ui { color: var(--ink-bone); font-family: var(--font-narrative); }
@@ -1812,10 +1829,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   .start-screen__top { gap: 6px; }
 }
 @media (max-width: 820px) {
-  .carried { gap: 8px; }
-  .weight-circles__row { grid-template-columns: repeat(3, 70px); gap: 9px; }
-  .weight-circle { width: 70px; height: 70px; border-width: 4px; }
-  .pocket-watch { width: 96px; height: 72px; }
-  .pocket-watch__art { inset: -4px auto auto 12px; width: 72px; }
-  .pocket-watch [data-timer] { top: 27px; min-width: 58px; font-size: 1.08rem; }
+  .weight-circles__row { gap: clamp(7px, 1.25vw, 10px); }
+  .weight-circle { border-width: 4px; }
+}
+@media (max-width: 430px) {
+  .weight-circles__row { gap: 7px; }
+  .weight-circle { border-width: 3px; }
 }
