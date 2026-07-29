@@ -138,4 +138,23 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
+  it('adds strong crossed ripples and separate High foam fields', () => {
+    const ocean = new OceanRenderer('high');
+    const shader = ocean.material.fragmentShader;
+
+    expect(shader).toContain('float bandD = cos(');
+    expect(shader).toContain('wind * bandA * 0.028');
+    expect(shader).toContain('crossWind * bandB * 0.022');
+    expect(shader).toContain('highQualityFoamCoverage(');
+    expect(shader).toContain('highQualityCrestCap(');
+    expect(shader).toContain('float highFoamDistanceFade = 1.0 - smoothstep(');
+    expect(shader).toContain('bodyFoam = max(bodyFoam, highFoam * 0.86);');
+    expect(shader).toContain('capFoam = max(capFoam, highCapFoam);');
+    expect(shader).toContain('float highFoamLayer = clamp(');
+    expect(shader).toContain('color = mix(color, highFoamColor, highFoamLayer * 0.78);');
+    expect(shader).toContain('waterBody *= 1.0 - trough * 0.18;');
+
+    ocean.dispose();
+  });
+
 });
