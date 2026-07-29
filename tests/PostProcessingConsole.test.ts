@@ -48,6 +48,7 @@ describe('PostProcessingConsole', () => {
     document.body.append(mount);
     const setPhysicsEnabled = vi.fn();
     const setDebugMeshes = vi.fn();
+    const setPerformanceStatsVisible = vi.fn();
     const applyVisualQuality = vi.fn();
     const visualQuality = createVisualQualityPreference(applyVisualQuality, null);
     const applyWaterQuality = vi.fn();
@@ -66,6 +67,10 @@ describe('PostProcessingConsole', () => {
       undefined,
       undefined,
       waterQuality,
+      {
+        visible: false,
+        setVisible: setPerformanceStatsVisible,
+      },
     );
     const panel = mount.querySelector<HTMLElement>('[data-post-processing-panel]')!;
 
@@ -95,6 +100,20 @@ describe('PostProcessingConsole', () => {
     highWaterQuality.click();
     expect(waterQuality.get()).toBe('high');
     expect(applyWaterQuality).toHaveBeenCalledWith('high');
+
+    const performanceStats = panel.querySelector<HTMLInputElement>(
+      '[data-performance-stats-enabled]',
+    )!;
+    expect(performanceStats.checked).toBe(false);
+    expect(
+      panel.querySelector<HTMLOutputElement>('[data-performance-stats-state]')?.value,
+    ).toBe('OFF');
+    performanceStats.checked = true;
+    performanceStats.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(setPerformanceStatsVisible).toHaveBeenCalledWith(true);
+    expect(
+      panel.querySelector<HTMLOutputElement>('[data-performance-stats-state]')?.value,
+    ).toBe('ON');
 
     const physics = panel.querySelector<HTMLInputElement>('[data-physics-enabled]')!;
     expect(physics.checked).toBe(true);

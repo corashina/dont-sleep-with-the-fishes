@@ -358,7 +358,7 @@ describe('SurvivalSession daytime actions', () => {
     const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 3 } });
     (repairing as unknown as { repairMaterial: number }).repairMaterial = 1;
     expect(repairing.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).deltas)
-      .toEqual({ energy: -2, hull: 10, repairMaterial: -1 });
+      .toEqual({ energy: -1, hull: 10, repairMaterial: -1 });
   });
 
   it('rejects unowned or exhausted event items without changing the event', () => {
@@ -1052,6 +1052,45 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
       .toMatchObject({ deltas: { energy: -2, hull: 15 } });
     expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
+  });
+
+  it.each([
+    [99, 1],
+    [67, 1],
+    [66, 2],
+    [34, 2],
+    [33, 3],
+    [1, 3],
+  ] as const)('charges the repair tier at %i hull: %i energy', (hull, energyCost) => {
+    const session = new SurvivalSession(saved('ductTape'), {
+      seed: 1,
+      initial: { hull, energy: 3 },
+    });
+
+    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+      .toMatchObject({ accepted: true, deltas: { energy: -energyCost } });
+  });
+
+  it('rejects full-hull repairs and repairs above the available energy tier', () => {
+    const full = new SurvivalSession(saved('ductTape'), {
+      seed: 1,
+      initial: { hull: 100, energy: 3 },
+    });
+    const fullSnapshot = full.snapshot();
+    expect(full.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+      .toMatchObject({ accepted: false, code: 'hull-full' });
+    expect(full.snapshot()).toEqual(fullSnapshot);
+
+    const exhausted = new SurvivalSession(saved('ductTape'), {
+      seed: 1,
+      initial: { hull: 33, energy: 2 },
+    });
+    expect(exhausted.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+      .toMatchObject({
+        accepted: false,
+        code: 'not-enough-energy',
+        message: 'Repairing requires three energy.',
+      });
   });
 
   it('starts at three energy and restores energy through End Day dawn tiers', () => {

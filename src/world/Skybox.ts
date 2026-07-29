@@ -15,9 +15,19 @@ import {
   type SkyPalette,
   type SkyState,
 } from './skyPalette';
-import { SUN_DIRECTION } from './celestialLight';
+import {
+  SUN_DIRECTION,
+  type CelestialDirection,
+} from './celestialLight';
 
 const TRANSITION_SECONDS = 1.5;
+const MOON_DIRECTION: CelestialDirection = [0.46, 0.52, -0.72];
+
+export interface SkyboxCelestialDirections {
+  readonly sun: CelestialDirection;
+  readonly moon: CelestialDirection;
+}
+
 const clamp01 = (value: number): number => Number.isFinite(value)
   ? Math.min(1, Math.max(0, value))
   : 0;
@@ -41,6 +51,8 @@ const fragmentShader = `
   uniform vec3 uSunColor;
   uniform vec3 uMoonColor;
   uniform vec3 uStarColor;
+  uniform vec3 uSunDirection;
+  uniform vec3 uMoonDirection;
   uniform vec3 uTintColor;
   uniform sampler2D uMoonMap;
   uniform float uSunVisibility;
@@ -180,7 +192,7 @@ const fragmentShader = `
       * uHorizonBandStrength;
     color = mix(color, vec3(1.0), clamp(horizonBand, 0.0, 1.0));
 
-    vec3 sunDirection = normalize(vec3(${SUN_DIRECTION.join(', ')}));
+    vec3 sunDirection = normalize(uSunDirection);
     float sunSeparation = 1.0 - clamp(dot(direction, sunDirection), 0.0, 1.0);
     float sunDisc = 1.0 - smoothstep(0.00003, 0.00022, sunSeparation);
     float sunBloom = exp(-sunSeparation * 720.0);
@@ -192,7 +204,7 @@ const fragmentShader = `
       + sunHalo * mix(0.035, 0.075, uHaze)
     );
 
-    vec3 moonDirection = normalize(vec3(0.46, 0.52, -0.72));
+    vec3 moonDirection = normalize(uMoonDirection);
     float moonRadialDistance;
     vec4 moonSample = sampleMoon(direction, moonDirection, moonRadialDistance);
     float moonClarity = 1.0 - uHaze * 0.72;
@@ -243,6 +255,10 @@ export class Skybox {
     private readonly scene: Scene,
     initialState: SkyState,
     moonTexture: Texture,
+    celestialDirections: SkyboxCelestialDirections = {
+      sun: SUN_DIRECTION,
+      moon: MOON_DIRECTION,
+    },
   ) {
     this.current = skyPaletteFor(initialState);
     this.blendFrom = cloneSkyPalette(this.current);
@@ -262,6 +278,12 @@ export class Skybox {
         uMoonColor: { value: this.current.moonColor.clone() },
         uMoonMap: { value: moonTexture },
         uStarColor: { value: this.current.starColor.clone() },
+        uSunDirection: {
+          value: new Vector3(...celestialDirections.sun).normalize(),
+        },
+        uMoonDirection: {
+          value: new Vector3(...celestialDirections.moon).normalize(),
+        },
         uTintColor: { value: new Color() },
         uSunVisibility: { value: this.current.sunVisibility },
         uMoonVisibility: { value: this.current.moonVisibility },

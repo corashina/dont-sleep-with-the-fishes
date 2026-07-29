@@ -518,19 +518,6 @@ function compactTopSurface(
   )];
 }
 
-function bunkComfortSurface(furnitureId: string): readonly ShipItemSurfaceSpec[] {
-  return [itemSurface(
-    furnitureId,
-    'top-comfort',
-    ['comfort'],
-    [0, 1.708, 0],
-    { width: 0.72, depth: 1.05 },
-    1.10,
-    [[1.25, 0, 0]],
-    { localRotation: [0, -PI_OVER_TWO, 0] },
-  )];
-}
-
 function crewDeskSurfaces(furnitureId: string): readonly ShipItemSurfaceSpec[] {
   return ([-0.35, 0.35] as const).map((x, index) => itemSurface(
     furnitureId,
@@ -604,7 +591,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     [crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.147 / 2, 2.22, 10.5],
     0,
     [1.147, 1.708, 2.2],
-    bunkComfortSurface('cabin-bunk-port'),
+    [],
   ),
   placement('cabin-bunk-starboard', 'bedBunk', 'crewCabin', [crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.147 / 2, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
   placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.908 / 2], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
@@ -621,13 +608,15 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 0.81829 / 2,
     2.22,
     12.5,
-  ], PI_OVER_TWO, [1.36025, 1.35, 0.81829], compactTopSurface(
+  ], PI_OVER_TWO, [1.36025, 1.35, 0.81829], [itemSurface(
     'cabin-cabinet-port-forward',
-    CABIN_ITEM_CATEGORIES,
+    'top',
+    ['comfort'],
+    [0, 1.35, 0.05],
+    { width: 1.05, depth: 0.70 },
     1.35,
-    { width: 1.05, depth: 0.55 },
     [[0, 0, 1.15]],
-  )),
+  )]),
   placement('cabin-table-starboard-center', 'crewTable', 'crewCabin', [0, 2.22, 9], 0, [1.836937, 0.72, 1.836937], crewTableSurfaces('cabin-table-starboard-center')),
   placement('chart-table-port', 'table', 'wheelhouse', [-3.3, 2.22, 18], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 3)),
   placement('chart-table-forward', 'table', 'wheelhouse', [-3.3, 2.22, 20.6], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-forward', WHEELHOUSE_ITEM_CATEGORIES, 3)),
@@ -706,10 +695,10 @@ const decorations: readonly ShipRoomDecorationSpec[] = [
     scale: [1, 1, 1],
   },
   {
-    id: 'wheelhouse-corkboard-aft',
+    id: 'workroom-corkboard-aft',
     modelId: 'wheelhouseCorkboard',
-    zoneId: 'wheelhouse',
-    position: [3.45, 3.45, wheelhouseBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
+    zoneId: 'storageWorkroom',
+    position: [0, 3.45, storageBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
     rotation: [0, PI, 0],
     scale: [1, 1, 1],
   },

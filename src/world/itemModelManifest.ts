@@ -61,9 +61,9 @@ const presentation = {
   harpoonGun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
   energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
   captainWhiskers: {
-    targetLongestDimension: 1.08,
+    targetLongestDimension: 0.95,
     rotation: [0, 0, 0],
-    offset: [0, 0.54, 0],
+    offset: [0, 0.475, 0],
   },
 } as const satisfies Readonly<Record<ItemId, Presentation>>;
 

@@ -303,9 +303,9 @@ describe('ship item placement', () => {
           const size = bounds.getSize(new Vector3()).multiplyScalar(assignment.scale);
           expect(assignedSurface.standingPoints.length).toBeGreaterThan(0);
           if (instance.type === 'captainWhiskers') {
-            expect(assignedSurface.furnitureModelId).toBe('bedBunk');
+            expect(assignedSurface.furnitureModelId).toBe('crewCabinet');
           } else {
-            expect(assignedSurface.furnitureModelId).not.toMatch(/bedBunk|chairDesk/);
+            expect(assignedSurface.furnitureModelId).not.toMatch(/bedBunk|chairDesk|crewCabinet/);
           }
           expect(size.x).toBeLessThanOrEqual(assignedSurface.footprint.width + 1e-6);
           expect(size.z).toBeLessThanOrEqual(assignedSurface.footprint.depth + 1e-6);
@@ -386,7 +386,7 @@ describe('ship item placement', () => {
     },
   );
 
-  it('reserves the port crew bunk for Captain Whiskers', () => {
+  it('reserves the port cabin cupboard for Captain Whiskers', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     try {
@@ -399,10 +399,11 @@ describe('ship item placement', () => {
       const whiskers = assignments.get('captainWhiskers-1');
 
       expect(whiskers).toMatchObject({
-        furnitureId: 'cabin-bunk-port',
-        surfaceId: 'cabin-bunk-port:top-comfort',
+        furnitureId: 'cabin-cabinet-port-forward',
+        surfaceId: 'cabin-cabinet-port-forward:top',
         usedFallbackSurface: false,
       });
+      expect(whiskers!.rotation.y).toBeCloseTo(Math.PI / 2);
       expect(ship.itemSurfaces.find(({ id }) => id === whiskers!.surfaceId)?.categories)
         .toEqual(['comfort']);
     } finally {

@@ -230,7 +230,7 @@ describe('SurvivalUI', () => {
       '[data-anchor-id="drifting-loot"]',
     )!;
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('CRATE — 3 ENERGY');
+      .toBe('CRATE — ⚡⚡⚡');
     expect(loot.dataset.eventChoice).toBe('retrieve');
     expect(loot.dataset.backingInstanceId).toBeUndefined();
     expect(loot.getAttribute('aria-disabled')).toBe('false');
@@ -281,7 +281,7 @@ describe('SurvivalUI', () => {
       '[data-anchor-id="drifting-loot"]',
     )!;
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('BARREL — 3 ENERGY — INSUFFICIENT ENERGY');
+      .toBe('BARREL — ⚡⚡⚡ — INSUFFICIENT ENERGY');
     expect(loot.disabled).toBe(false);
     expect(loot.getAttribute('aria-disabled')).toBe('true');
     loot.click();
@@ -565,6 +565,41 @@ describe('SurvivalUI', () => {
     expect(
       mount.querySelector('[data-anchor-id="cannedFood-test"] [role="tooltip"]')?.textContent,
     ).toBe('FOOD ×2');
+  });
+
+  it.each([
+    [99, 1],
+    [67, 1],
+    [66, 2],
+    [34, 2],
+    [33, 3],
+  ] as const)('shows the repair tooltip tier at %i hull: %i energy', (hull, energyCost) => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ hull }), () => null);
+
+    const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
+    expect(repair.querySelector('[role="tooltip"]')?.textContent)
+      .toBe(`REPAIR ${'\u26a1'.repeat(energyCost)}`);
+    expect(repair.getAttribute('aria-label'))
+      .toBe(`REPAIR, ${['', 'one', 'two', 'three'][energyCost]} energy`);
+  });
+
+  it('keeps full-hull repair visible but unavailable', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(
+      snapshot({ hull: 100 }),
+      (id) => id === 'repair' ? 'The hull needs no repair.' : null,
+    );
+
+    const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
+    expect(repair.querySelector('[role="tooltip"]')?.textContent).toBe('REPAIR');
+    expect(repair.getAttribute('aria-disabled')).toBe('true');
+    repair.click();
+    expect(action).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -88,7 +88,7 @@ function createCargoRack(
   addBox(
     parent,
     geometry,
-    materials.timber,
+    materials.hatchTimber,
     'cargo-rack-top',
     [size[0], topHeight, size[2]],
     [0, size[1] - topHeight / 2, 0],

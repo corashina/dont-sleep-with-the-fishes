@@ -341,6 +341,60 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(input.consumeLook).toHaveBeenCalled();
   });
 
+  it('freezes shared-wave time with player movement while gameplay is paused', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pause();
+    const { phase, updateWorld } = createUpdateHarness(
+      session,
+      { pointerLocked: false, consumeLook: vi.fn() },
+    );
+
+    phase.update(2, 0.25);
+
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1,
+      0.25,
+      expect.any(Object),
+      expect.any(Vector3),
+      false,
+    );
+    expect(session.snapshot().remainingSeconds).toBe(SCAVENGE_DURATION_SECONDS);
+  });
+
+  it('waits for Escape release before the next Escape resumes', () => {
+    const requestPointerLock = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      overlayActive: false,
+      escapeResumeArmed: false,
+      session: { snapshot: () => ({ status: 'paused' }) },
+      requestPointerLock,
+    });
+    const firstPress = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      cancelable: true,
+    });
+
+    const internals = phase as unknown as {
+      handleKeyDown: (event: KeyboardEvent) => void;
+      handleKeyUp: (event: KeyboardEvent) => void;
+    };
+    internals.handleKeyDown(firstPress);
+    expect(firstPress.defaultPrevented).toBe(false);
+    expect(requestPointerLock).not.toHaveBeenCalled();
+
+    internals.handleKeyUp(new KeyboardEvent('keyup', { key: 'Escape' }));
+    const resumePress = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      cancelable: true,
+    });
+    internals.handleKeyDown(resumePress);
+
+    expect(resumePress.defaultPrevented).toBe(true);
+    expect(requestPointerLock).toHaveBeenCalledOnce();
+  });
+
   it('advances the visual clock during active play and freezes it while inactive', () => {
     const session = new ScavengeSession();
     session.start();
@@ -1446,6 +1500,8 @@ describe('ScavengePhase lifecycle integration', () => {
       ui: { dispose: disposeUI },
       onPointerLockChange: vi.fn(),
       onVisibilityChange: vi.fn(),
+      onKeyDown: vi.fn(),
+      onKeyUp: vi.fn(),
     });
 
     phase.dispose();
@@ -1457,9 +1513,11 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(disposeInteraction).toHaveBeenCalledOnce();
     expect(disposeWorld).toHaveBeenCalledOnce();
     expect(disposeUI).toHaveBeenCalledOnce();
-    expect(removeEventListener).toHaveBeenCalledTimes(2);
+    expect(removeEventListener).toHaveBeenCalledTimes(4);
     expect(removeEventListener).toHaveBeenCalledWith('pointerlockchange', expect.any(Function));
     expect(removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('keyup', expect.any(Function));
     removeEventListener.mockRestore();
   });
 
@@ -1657,6 +1715,37 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(world.saveItems).not.toHaveBeenCalled();
     expect(world.landItem).not.toHaveBeenCalled();
     expect(world.loseItem).not.toHaveBeenCalled();
+  });
+
+  it('shows item smoke when pickup succeeds', () => {
+    const instance: ItemInstance = {
+      instanceId: 'flashlight-1',
+      type: 'flashlight',
+    };
+    const object = new Group();
+    const session = { pickUp: vi.fn().mockReturnValue(true) };
+    const carry = { pickUp: vi.fn().mockReturnValue(true) };
+    const world = {
+      itemObjects: new Map([[instance.instanceId, object]]),
+      showItemPickupSmoke: vi.fn(),
+    };
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, { session, carry, world });
+
+    (phase as unknown as {
+      performAction: (action: {
+        type: 'pickUp';
+        item: ItemInstance;
+        prompt: string;
+      }) => void;
+    }).performAction({
+      type: 'pickUp',
+      item: instance,
+      prompt: 'LEFT CLICK — PICK UP FLASHLIGHT',
+    });
+
+    expect(world.showItemPickupSmoke).toHaveBeenCalledWith(instance.instanceId);
+    expect(carry.pickUp).toHaveBeenCalledWith(instance, object);
   });
 
   it('reports pointer-lock rejection through the UI', async () => {

@@ -3,7 +3,7 @@ export const SURVIVAL_BALANCE = {
   dawn: { hungerIncrease: 18, starvationDamage: 15, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
-    fishEnergy: 1, diveEnergy: 3, repairEnergy: 2,
+    fishEnergy: 1, diveEnergy: 3,
     foodHunger: -35, repairHull: 25, tapeHull: 15, treatmentHealth: 30,
     bottledPaperEnergy: 1, bottledPaperRescueProgress: 15, maximumEnergy: 3,
   },
@@ -23,3 +23,12 @@ export const SURVIVAL_BALANCE = {
     driftingLoot: { firstDay: 3, chance: 0.25, barrelChance: 0.5 },
   },
 } as const;
+
+export type RepairEnergyCost = 0 | 1 | 2 | 3;
+
+export function repairEnergyCost(hull: number): RepairEnergyCost {
+  if (hull >= SURVIVAL_BALANCE.thresholds.maximum) return 0;
+  if (hull >= 67) return 1;
+  if (hull >= 34) return 2;
+  return 3;
+}

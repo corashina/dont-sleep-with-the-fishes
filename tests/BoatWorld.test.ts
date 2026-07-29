@@ -34,7 +34,11 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
-import { BoatWorld, FISHING_PLAYER_SEAT } from '../src/survival/BoatWorld';
+import {
+  BoatWorld,
+  FISHING_PLAYER_SEAT,
+  SURVIVAL_CELESTIAL_DIRECTION,
+} from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
@@ -43,7 +47,6 @@ import {
   boatStorageTransform,
   boatSupplyTransform,
 } from '../src/world/BoatStorage';
-import { SUN_DIRECTION } from '../src/world/celestialLight';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
@@ -201,6 +204,46 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps both celestial bodies in the upper center of survival view', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.scene.updateMatrixWorld(true);
+    camera.updateProjectionMatrix();
+
+    const expected = new Vector3(...SURVIVAL_CELESTIAL_DIRECTION).normalize();
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+    const key = world.scene.children.find(
+      (object): object is DirectionalLight => object instanceof DirectionalLight,
+    )!;
+    const screenPosition = expected.clone()
+      .multiplyScalar(50)
+      .add(camera.getWorldPosition(new Vector3()))
+      .project(camera);
+
+    expect(sky.material.uniforms.uSunDirection!.value).toEqual(expected);
+    expect(sky.material.uniforms.uMoonDirection!.value).toEqual(expected);
+    expect(ocean.material.uniforms.uLightDirection!.value).toEqual(expected);
+    expect(key.position.clone().sub(key.target.position).normalize()).toEqual(expected);
+    expect(screenPosition.x).toBeCloseTo(0);
+    expect(screenPosition.y).toBeGreaterThan(0);
+    expect(screenPosition.y).toBeLessThan(0.5);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('uses canonical supply transforms without the old slatted platform', () => {
     const savedItems = createItemInstances();
     const propModels = createTestPropModels();
@@ -274,6 +317,35 @@ describe('BoatWorld helpers', () => {
         .toBeCloseTo(internals.sky.palette.keyLightIntensity * profile.lightIntensityScale);
       expect(internals.sky.palette.fogDensity).toBeCloseTo(0.027);
       expect(internals.sky.palette.ambientLightIntensity).toBeCloseTo(0.44);
+    } finally {
+      buoyancySample.mockRestore();
+      oceanUpdate.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('keeps ocean and boat on the shared wave field during ambient pause updates', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
+    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
+
+    try {
+      world.updateAmbient(7, 0.25);
+
+      expect(buoyancySample).toHaveBeenLastCalledWith(
+        expect.any(Object),
+        7,
+        0,
+        0,
+        presentationWeatherProfile('calm').waveScale,
+      );
+      expect(oceanUpdate.mock.calls.at(-1)?.[0]).toBe(7);
     } finally {
       buoyancySample.mockRestore();
       oceanUpdate.mockRestore();
@@ -804,7 +876,7 @@ describe('BoatWorld helpers', () => {
     try {
       world.syncInventory(snapshot([whiskers]));
       const copy = world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1')!;
-      const head = copy.getObjectByName('WhiskersHead')!;
+      const head = copy.getObjectByName('Head_CatArmature')!;
       const before = head.quaternion.clone();
 
       world.update(0.5, 0.5);
@@ -850,7 +922,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses the imported lantern model with a restrained shadow-casting light', () => {
+  it('uses the imported lantern model with a shadow-casting light', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -868,9 +940,14 @@ describe('BoatWorld helpers', () => {
     expect(material.emissiveIntensity).toBe(1.35);
     expect(material.emissiveMap).toBe(material.map);
     expect(light).toBeInstanceOf(PointLight);
+    expect(light.color.getHex()).toBe(0xffb261);
     expect(light.intensity).toBe(3.8);
     expect(light.distance).toBe(4);
     expect(light.castShadow).toBe(true);
+    expect(light.shadow.mapSize.toArray()).toEqual([512, 512]);
+    world.setPhase('night');
+    world.update(1, 0.1);
+    expect(light.intensity).toBe(5.4);
     expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'end-day-lantern',

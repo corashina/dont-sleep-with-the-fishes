@@ -23,11 +23,13 @@ export interface ShipMaterials {
   cargoFloor: MeshStandardMaterial;
   storageFloor: MeshStandardMaterial;
   lifeboatFloor: MeshStandardMaterial;
-  emergencyStripe: MeshStandardMaterial;
+  dropoffArea: MeshStandardMaterial;
+  emergencyFootprint: MeshStandardMaterial;
   upperHull: MeshStandardMaterial;
   waterline: MeshStandardMaterial;
   plainPaintedSteel: MeshStandardMaterial;
   plainTimber: MeshStandardMaterial;
+  hatchTimber: MeshStandardMaterial;
   paintedPanel: MeshStandardMaterial;
   paintedSteel: MeshStandardMaterial;
   darkHull: MeshStandardMaterial;
@@ -65,10 +67,6 @@ interface SurfaceTextureSet {
 }
 
 const TEXTURE_SIZE = 64;
-const EMERGENCY_STRIPE_COLORS = {
-  yellow: [196, 147, 35],
-  black: [24, 29, 29],
-} as const;
 const SURFACE_SPECS: Record<SurfaceKind, SurfaceSpec> = {
   warmWood: {
     color: [96, 66, 48],
@@ -200,42 +198,6 @@ function createSurfaceTextureSet(
   };
 }
 
-function createEmergencyStripeTexture(seed: number, anisotropy: number): DataTexture {
-  const bytes = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * 4);
-  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
-    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
-      const offset = (y * TEXTURE_SIZE + x) * 4;
-      const stripeColor = (x + y) % 64 < 32
-        ? EMERGENCY_STRIPE_COLORS.yellow
-        : EMERGENCY_STRIPE_COLORS.black;
-      const wear = centeredNoise(textureByte(seed, x, y, 12), 8);
-      const edgeScuff = (x + y) % 16 < 2 ? -12 : 0;
-      for (let channel = 0; channel < 3; channel += 1) {
-        bytes[offset + channel] = clampByte(stripeColor[channel]! + wear + edgeScuff);
-      }
-      bytes[offset + 3] = 255;
-    }
-  }
-  const texture = new DataTexture(
-    bytes,
-    TEXTURE_SIZE,
-    TEXTURE_SIZE,
-    RGBAFormat,
-    UnsignedByteType,
-  );
-  texture.name = 'emergencyStripe-color';
-  texture.wrapS = RepeatWrapping;
-  texture.wrapT = RepeatWrapping;
-  texture.repeat.set(4, 6);
-  texture.minFilter = LinearMipmapLinearFilter;
-  texture.magFilter = LinearFilter;
-  texture.generateMipmaps = true;
-  texture.anisotropy = anisotropy;
-  texture.colorSpace = SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
 function createSurfaceMaterial(
   textures: SurfaceTextureSet,
   options: { color?: number; roughness?: number; metalness?: number } = {},
@@ -255,11 +217,13 @@ function createAssetMaterial(
   colorMap: Texture,
   roughnessMap: Texture,
   normalMap: Texture,
+  metalnessMap: Texture | undefined,
   options: {
     color?: number;
     roughness?: number;
     metalness?: number;
     normalScale?: number;
+    flatShading?: boolean;
   } = {},
 ): MeshStandardMaterial {
   const normalScale = options.normalScale ?? 0.35;
@@ -271,6 +235,8 @@ function createAssetMaterial(
     normalMap,
     normalScale: new Vector2(normalScale, normalScale),
     metalness: options.metalness ?? 0,
+    flatShading: options.flatShading ?? false,
+    ...(metalnessMap ? { metalnessMap } : {}),
   });
 }
 
@@ -281,17 +247,18 @@ export function createShipMaterials(
 ): ShipMaterials {
   const anisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   const warmWood = createSurfaceTextureSet(seed, 'warmWood', anisotropy);
+  const hatchWood = createSurfaceTextureSet(seed ^ 0x3c6ef372, 'warmWood', anisotropy);
   const industrialFloor = createSurfaceTextureSet(seed, 'industrialFloor', anisotropy);
   const paintedPanelTextures = createSurfaceTextureSet(seed, 'paintedPanel', anisotropy);
-  const emergencyStripeTexture = createEmergencyStripeTexture(seed ^ 0xa54ff53a, anisotropy);
 
   const timber = (
     assets
       ? createAssetMaterial(
-        assets.woodColor,
-        assets.woodRoughness,
-        assets.woodNormal,
-        { color: 0xb88759, roughness: 0.94, metalness: 0, normalScale: 0.42 },
+        assets.darkWoodColor,
+        assets.darkWoodRoughness,
+        assets.darkWoodNormal,
+        undefined,
+        { roughness: 0.96, metalness: 0, normalScale: 0.42 },
       )
       : createSurfaceMaterial(warmWood, {
         color: 0xb88759,
@@ -301,49 +268,87 @@ export function createShipMaterials(
   );
   const timberFloor = timber;
   const crewFloor = timberFloor;
-  const wheelhouseFloor = timberFloor;
   const cargoFloor = timberFloor;
+  const wheelhouseFloor = timberFloor;
   const storageFloor = timberFloor;
   const lifeboatFloor = createSurfaceMaterial(industrialFloor, {
     color: 0xcbd1cf,
     roughness: 0.9,
     metalness: 0.36,
   });
-  const emergencyStripe = new MeshStandardMaterial({
-    color: 0xffffff,
-    map: emergencyStripeTexture,
-    roughness: 0.9,
-    metalness: 0.2,
-  });
-  const plainPaintedSteel = new MeshStandardMaterial({
-    color: 0xcbd2cf,
-    roughness: 0.9,
-    metalness: 0.24,
-    flatShading: true,
-  });
-  const plainTimber = new MeshStandardMaterial({
-    color: 0x60442f,
-    roughness: 0.96,
+  const dropoffArea = new MeshStandardMaterial({
+    color: 0x252b29,
+    roughness: 1,
     metalness: 0,
-    flatShading: true,
+    opacity: 0.35,
+    transparent: true,
   });
-  const paintedPanel = createSurfaceMaterial(paintedPanelTextures, {
-    color: 0xf5f0e5,
-    roughness: 0.94,
-    metalness: 0.12,
+  const emergencyFootprint = new MeshStandardMaterial({
+    color: 0xd8d0b8,
+    roughness: 1,
+    metalness: 0,
+    opacity: 0.6,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+    transparent: true,
   });
+  const roomWallMaterial = assets
+    ? createAssetMaterial(
+        assets.roomWallColor,
+        assets.roomWallRoughness,
+        assets.roomWallNormal,
+        undefined,
+        {
+          roughness: 0.94,
+          metalness: 0,
+          normalScale: 0.32,
+          flatShading: true,
+        },
+      )
+    : undefined;
+  const plainPaintedSteel = roomWallMaterial ?? new MeshStandardMaterial({
+      color: 0xcbd2cf,
+      roughness: 0.9,
+      metalness: 0.24,
+      flatShading: true,
+    });
+  const plainTimber = assets
+    ? createAssetMaterial(
+        assets.darkWoodColor,
+        assets.darkWoodRoughness,
+        assets.darkWoodNormal,
+        undefined,
+        {
+          roughness: 0.96,
+          metalness: 0,
+          normalScale: 0.36,
+          flatShading: true,
+        },
+      )
+    : new MeshStandardMaterial({
+        color: 0x60442f,
+        roughness: 0.96,
+        metalness: 0,
+        flatShading: true,
+      });
+  const hatchTimber = createSurfaceMaterial(hatchWood, {
+    color: 0x9a765d,
+    roughness: 0.98,
+    metalness: 0,
+  });
+  const paintedPanel = roomWallMaterial ?? createSurfaceMaterial(paintedPanelTextures, {
+      color: 0xf5f0e5,
+      roughness: 0.94,
+      metalness: 0.12,
+    });
   const paintedSteel = new MeshStandardMaterial({
-    color: 0xd5dbd8,
-    roughness: 0.86,
-    metalness: 0.32,
-    flatShading: true,
-  });
-  const darkHull = new MeshStandardMaterial({
-    color: 0x172b38,
-    roughness: 0.9,
-    metalness: 0.28,
-    flatShading: true,
-  });
+      color: 0xd5dbd8,
+      roughness: 0.86,
+      metalness: 0.32,
+      flatShading: true,
+    });
+  const darkHull = paintedPanel;
   const darkMetal = new MeshStandardMaterial({ color: 0x2f3435, roughness: 0.84, metalness: 0.55, flatShading: true });
   const exposedMetal = new MeshStandardMaterial({ color: 0x81796c, roughness: 0.68, metalness: 0.62, flatShading: true });
   const rust = new MeshStandardMaterial({ color: 0x7a3d28, roughness: 0.95, metalness: 0.08, flatShading: true });
@@ -356,18 +361,8 @@ export function createShipMaterials(
     metalness: 0,
     side: DoubleSide,
   });
-  const upperHull = new MeshStandardMaterial({
-    color: 0xd8dedb,
-    roughness: 0.84,
-    metalness: 0.18,
-    flatShading: true,
-  });
-  const waterline = new MeshStandardMaterial({
-    color: 0x243f4c,
-    roughness: 0.88,
-    metalness: 0.24,
-    flatShading: true,
-  });
+  const upperHull = paintedPanel;
+  const waterline = paintedPanel;
   const canvasEdge = new MeshStandardMaterial({
     color: 0x647b82,
     roughness: 0.98,
@@ -377,12 +372,18 @@ export function createShipMaterials(
 
   const ownedMaterials = new Set<Material>([
     timber,
+    crewFloor,
+    wheelhouseFloor,
+    cargoFloor,
+    storageFloor,
     lifeboatFloor,
-    emergencyStripe,
+    dropoffArea,
+    emergencyFootprint,
     upperHull,
     waterline,
     plainPaintedSteel,
     plainTimber,
+    hatchTimber,
     paintedPanel,
     paintedSteel,
     darkHull,
@@ -399,13 +400,15 @@ export function createShipMaterials(
     warmWood.color,
     warmWood.roughness,
     warmWood.bump,
+    hatchWood.color,
+    hatchWood.roughness,
+    hatchWood.bump,
     industrialFloor.color,
     industrialFloor.roughness,
     industrialFloor.bump,
     paintedPanelTextures.color,
     paintedPanelTextures.roughness,
     paintedPanelTextures.bump,
-    emergencyStripeTexture,
   ] as const;
   let disposed = false;
 
@@ -417,11 +420,13 @@ export function createShipMaterials(
     cargoFloor,
     storageFloor,
     lifeboatFloor,
-    emergencyStripe,
+    dropoffArea,
+    emergencyFootprint,
     upperHull,
     waterline,
     plainPaintedSteel,
     plainTimber,
+    hatchTimber,
     paintedPanel,
     paintedSteel,
     darkHull,

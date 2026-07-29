@@ -41,6 +41,42 @@ describe('GameUI scavenging item tooltip', () => {
     ui.dispose();
   });
 
+  it('focuses the resume control when the pause screen opens', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new GameUI(mount);
+    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+    const resume = mount.querySelector<HTMLButtonElement>('[data-resume-button]')!;
+
+    ui.setPaused(true);
+
+    expect(pause.getAttribute('aria-hidden')).toBe('false');
+    expect(pause.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(resume);
+
+    ui.setPaused(false);
+    expect(pause.getAttribute('aria-hidden')).toBe('true');
+    expect(pause.hasAttribute('inert')).toBe(true);
+    ui.dispose();
+    mount.remove();
+  });
+
+  it('keeps the pause screen open during normal gameplay frames', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new GameUI(mount);
+    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+
+    ui.setPaused(true);
+    ui.renderEnding('playing', 0);
+
+    expect(pause.classList).toContain('is-visible');
+    expect(pause.getAttribute('aria-hidden')).toBe('false');
+    expect(pause.hasAttribute('inert')).toBe(false);
+    ui.dispose();
+    mount.remove();
+  });
+
   it('replaces the crosshair with a pickup hand for a valid pickup target', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);

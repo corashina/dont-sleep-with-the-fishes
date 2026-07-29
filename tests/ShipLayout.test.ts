@@ -388,7 +388,7 @@ describe('scavenging ship layout', () => {
 
   it('aligns beds and desks exactly against interior wall faces', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
-    const wheelhouse = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
     const fixtureRect = (id: string) => furnitureRect(
       SHIP_LAYOUT.furniture.find((fixture) => fixture.id === id)!,
     );
@@ -408,8 +408,13 @@ describe('scavenging ship layout', () => {
     expect(cabinTable.position[2]).toBeCloseTo((crew.minZ + crew.maxZ) / 2);
     expect(SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === 'wheelhouse'))
       .toHaveLength(2);
-    expect(SHIP_LAYOUT.decorations.find(({ id }) => id === 'wheelhouse-corkboard-aft')?.position[2])
-      .toBeCloseTo(wheelhouse.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02);
+    const workroomCorkboard = SHIP_LAYOUT.decorations.find(
+      ({ id }) => id === 'workroom-corkboard-aft',
+    )!;
+    expect(workroomCorkboard.zoneId).toBe('storageWorkroom');
+    expect(workroomCorkboard.position[0]).toBe(0);
+    expect(workroomCorkboard.position[2])
+      .toBeCloseTo(storage.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02);
     expect(SHIP_LAYOUT.decorations.find(({ id }) => id === 'cabin-wall-painting-aft')?.position[0])
       .toBe(0);
     expect(SHIP_LAYOUT.decorations.find(({ id }) => id === 'cabin-wall-art-starboard')?.rotation[1])

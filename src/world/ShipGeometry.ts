@@ -92,6 +92,9 @@ const WATERLINE_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_BASE_HEIGHT + 0.03;
 const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const ROOM_SEAM_OVERLAP = 0.01;
+const DOOR_FRAME_WIDTH = 0.16;
+const DOOR_FRAME_DEPTH = WALL_THICKNESS + 0.16;
+const DOOR_FRAME_CLEAR_HEIGHT = 2.35;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
@@ -113,7 +116,6 @@ const STACK_RADIUS = 0.58;
 const STACK_COLLAR_RADIUS = 0.72;
 const STACK_COLLAR_HEIGHT = 0.22;
 
-const BALCONY_DECK_THICKNESS = 0.1;
 const BALCONY_RAIL_MEMBER_THICKNESS = 0.12;
 
 const LADDER_RAIL_WIDTH = 0.08;
@@ -166,6 +168,33 @@ function applyWallPlanarUvs(
     const u = normalZ >= normalX ? positions.getX(index) : positions.getZ(index);
     const v = positions.getY(index);
     uvs.setXY(index, u + horizontalOffset, v + verticalOffset);
+  }
+  uvs.needsUpdate = true;
+}
+
+function applyRoofPlanarUvs(
+  geometry: BufferGeometry,
+  xOffset: number,
+  zOffset: number,
+): void {
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    const normalX = Math.abs(normals.getX(index));
+    const normalY = Math.abs(normals.getY(index));
+    const normalZ = Math.abs(normals.getZ(index));
+    if (normalY >= normalX && normalY >= normalZ) {
+      uvs.setXY(
+        index,
+        positions.getX(index) + xOffset,
+        positions.getZ(index) + zOffset,
+      );
+    } else if (normalZ >= normalX) {
+      uvs.setXY(index, positions.getX(index) + xOffset, positions.getY(index));
+    } else {
+      uvs.setXY(index, positions.getZ(index) + zOffset, positions.getY(index));
+    }
   }
   uvs.needsUpdate = true;
 }
@@ -355,6 +384,46 @@ function addFloorSurface(
   return mesh;
 }
 
+function createStationFootprintShape(): Shape {
+  const shape = new Shape();
+  shape.moveTo(-0.66, -0.14);
+  shape.bezierCurveTo(-0.67, -0.23, -0.50, -0.25, -0.31, -0.20);
+  shape.bezierCurveTo(-0.12, -0.15, 0.04, -0.23, 0.24, -0.27);
+  shape.bezierCurveTo(0.51, -0.31, 0.70, -0.19, 0.71, 0);
+  shape.bezierCurveTo(0.70, 0.19, 0.51, 0.31, 0.24, 0.27);
+  shape.bezierCurveTo(0.04, 0.23, -0.12, 0.15, -0.31, 0.20);
+  shape.bezierCurveTo(-0.50, 0.25, -0.67, 0.23, -0.66, 0.14);
+  shape.closePath();
+  return shape;
+}
+
+function addStationFootprints(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  station: ShipZoneSpec['bounds'],
+): void {
+  const centerX = (station.minX + DECK_HALF_WIDTH) / 2;
+  const centerZ = (station.minZ + station.maxZ) / 2;
+  const shape = createStationFootprintShape();
+  const placements = [
+    { name: 'left', x: centerX - 0.18, z: centerZ - 0.38, rotationY: 0.06 },
+    { name: 'right', x: centerX - 0.02, z: centerZ + 0.38, rotationY: -0.06 },
+  ] as const;
+
+  placements.forEach((placement) => {
+    const geometry = new ShapeGeometry(shape, 20);
+    geometry.rotateX(-Math.PI / 2);
+    const mesh = new Mesh(geometry, materials.emergencyFootprint);
+    mesh.name = `lifeboat-station-footprint-${placement.name}`;
+    mesh.position.set(placement.x, FINISHED_FLOOR_Y + 0.012, placement.z);
+    mesh.rotation.y = placement.rotationY;
+    mesh.receiveShadow = true;
+    root.add(mesh);
+    geometries.add(geometry);
+  });
+}
+
 function addFinishedFloors(
   root: Group,
   geometries: Set<BufferGeometry>,
@@ -370,36 +439,37 @@ function addFinishedFloors(
     geometries,
     'floor-crewCabin',
     rectangularFloorShape(crew.minX, crew.maxX, crew.minZ, crew.maxZ),
-    materials.timberFloor,
+    materials.crewFloor,
   );
   addFloorSurface(
     root,
     geometries,
     'floor-wheelhouse',
     rectangularFloorShape(wheelhouse.minX, wheelhouse.maxX, wheelhouse.minZ, wheelhouse.maxZ),
-    materials.timberFloor,
+    materials.wheelhouseFloor,
   );
   addFloorSurface(
     root,
     geometries,
     'floor-cargoDeck',
     cargoFloorShape(layout),
-    materials.timberFloor,
+    materials.cargoFloor,
   );
   addFloorSurface(
     root,
     geometries,
     'floor-storageWorkroom',
     rectangularFloorShape(storage.minX, storage.maxX, storage.minZ, storage.maxZ),
-    materials.timberFloor,
+    materials.storageFloor,
   );
   addFloorSurface(
     root,
     geometries,
     'floor-lifeboatStation',
     rectangularFloorShape(lifeboat.minX, DECK_HALF_WIDTH, lifeboat.minZ, lifeboat.maxZ),
-    materials.emergencyStripe,
+    materials.dropoffArea,
   );
+  addStationFootprints(root, geometries, materials, lifeboat);
 }
 
 function addRoundedPrism(
@@ -585,6 +655,15 @@ function segmentColliderTransform(
 
 function roomWallHeight(_zoneId: ShipZoneId): number {
   return ROOM_WALL_HEIGHT;
+}
+
+function roomSurfaceMaterial(
+  materials: ShipMaterials,
+  zoneId: ShipZoneId,
+): Material {
+  return zoneId === 'storageWorkroom'
+    ? materials.plainPaintedSteel
+    : materials.paintedPanel;
 }
 
 function wallUvOffsets(
@@ -784,9 +863,7 @@ function addWallSegments(
       return;
     }
     const height = roomWallHeight(segment.zoneId);
-    const material = segment.zoneId === 'crewCabin'
-      ? materials.paintedPanel
-      : materials.plainPaintedSteel;
+    const material = roomSurfaceMaterial(materials, segment.zoneId);
     const portholes = portholesForSegment(segment);
     if (portholes.length > 0) {
       const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
@@ -835,6 +912,90 @@ function addWallSegments(
   });
   wheelhousePaneSpecs(layout).forEach((spec) =>
     addWheelhousePaneColliders(shellColliders, spec, wallBottomY));
+}
+
+function addDoorFrames(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: ShipMaterials,
+  layout: ShipLayoutSpec,
+): void {
+  const jambHeight = DOOR_FRAME_CLEAR_HEIGHT;
+  const jambCenterY = FINISHED_FLOOR_Y + jambHeight / 2;
+  const headerCenterY = FINISHED_FLOOR_Y
+    + DOOR_FRAME_CLEAR_HEIGHT
+    + DOOR_FRAME_WIDTH / 2;
+
+  layout.doors.forEach((door) => {
+    const framePrefix = `door-frame:${door.id}`;
+    const axisCenter = door.orientation === 'side' ? door.center[1] : door.center[0];
+    const fixed = door.orientation === 'side' ? door.center[0] : door.center[1];
+    const wallFixed = door.orientation === 'side'
+      ? fixed + (door.side === 'port' ? WALL_HALF_THICKNESS : -WALL_HALF_THICKNESS)
+      : fixed + WALL_HALF_THICKNESS;
+    const hasFrame = door.zoneId !== 'wheelhouse';
+    const jambOffsets = [
+      -door.width / 2 + DOOR_FRAME_WIDTH / 2,
+      door.width / 2 - DOOR_FRAME_WIDTH / 2,
+    ] as const;
+
+    if (hasFrame) {
+      jambOffsets.forEach((offset, index) => {
+        const position = door.orientation === 'side'
+          ? [wallFixed, jambCenterY, axisCenter + offset] as const
+          : [axisCenter + offset, jambCenterY, wallFixed] as const;
+        const size = door.orientation === 'side'
+          ? [DOOR_FRAME_DEPTH, jambHeight, DOOR_FRAME_WIDTH] as const
+          : [DOOR_FRAME_WIDTH, jambHeight, DOOR_FRAME_DEPTH] as const;
+        addBlock(root, geometries, [], {
+          name: `${framePrefix}:jamb-${index === 0 ? 'left' : 'right'}`,
+          size,
+          position,
+          material: materials.plainTimber,
+        });
+      });
+
+      addBlock(root, geometries, [], {
+        name: `${framePrefix}:header`,
+        size: door.orientation === 'side'
+          ? [DOOR_FRAME_DEPTH, DOOR_FRAME_WIDTH, door.width] as const
+          : [door.width, DOOR_FRAME_WIDTH, DOOR_FRAME_DEPTH] as const,
+        position: door.orientation === 'side'
+          ? [wallFixed, headerCenterY, axisCenter] as const
+          : [axisCenter, headerCenterY, wallFixed] as const,
+        material: materials.plainTimber,
+      });
+    }
+
+    const infillBottomY = FINISHED_FLOOR_Y
+      + DOOR_FRAME_CLEAR_HEIGHT
+      + (hasFrame ? DOOR_FRAME_WIDTH : 0);
+    const wallTopY = FINISHED_FLOOR_Y + roomWallHeight(door.zoneId);
+    const infillHeight = wallTopY - infillBottomY;
+    const infillCenterY = infillBottomY + infillHeight / 2;
+    const geometry = createWallBoxGeometry(
+      geometries,
+      door.width,
+      infillHeight,
+      WALL_THICKNESS,
+      door.orientation === 'side' ? -axisCenter : axisCenter,
+      infillCenterY,
+    );
+    const infill = new Mesh(
+      geometry,
+      roomSurfaceMaterial(materials, door.zoneId),
+    );
+    infill.name = `door-wall:${door.id}:header-infill`;
+    infill.position.set(
+      door.orientation === 'side' ? wallFixed : axisCenter,
+      infillCenterY,
+      door.orientation === 'side' ? axisCenter : wallFixed,
+    );
+    if (door.orientation === 'side') infill.rotation.y = Math.PI / 2;
+    infill.castShadow = true;
+    infill.receiveShadow = true;
+    root.add(infill);
+  });
 }
 
 interface WheelhousePaneSpec {
@@ -1053,7 +1214,6 @@ function addWheelhouseFacade(
 function addRoomRoofs(
   root: Group,
   geometries: Set<BufferGeometry>,
-  shellColliders: CollisionBox[],
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
@@ -1098,7 +1258,8 @@ function addRoomRoofs(
         steps: 1,
       });
       geometry.rotateX(Math.PI / 2);
-      const roof = new Mesh(geometry, materials.paintedSteel);
+      applyRoofPlanarUvs(geometry, 0, 0);
+      const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
       roof.name = 'wheelhouse-roof';
       roof.position.y = wallTopY + ROOM_ROOF_THICKNESS;
       roof.castShadow = true;
@@ -1107,22 +1268,21 @@ function addRoomRoofs(
       geometries.add(geometry);
       return;
     }
-    addBlock(root, geometries, shellColliders, {
-      name: `${zone.id}-roof`,
-      size: [
-        width,
-        ROOM_ROOF_THICKNESS,
-        length,
-      ],
-      position: [
-        (zone.bounds.minX + zone.bounds.maxX) / 2,
-        wallTopY + ROOM_ROOF_THICKNESS / 2,
-        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
-      ],
-      material: zone.id === 'storageWorkroom'
-        ? materials.plainPaintedSteel
-        : materials.paintedSteel,
-    });
+    const centerX = (zone.bounds.minX + zone.bounds.maxX) / 2;
+    const centerZ = (zone.bounds.minZ + zone.bounds.maxZ) / 2;
+    const geometry = new BoxGeometry(width, ROOM_ROOF_THICKNESS, length);
+    applyRoofPlanarUvs(geometry, centerX, centerZ);
+    const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
+    roof.name = `${zone.id}-roof`;
+    roof.position.set(
+      centerX,
+      wallTopY + ROOM_ROOF_THICKNESS / 2,
+      centerZ,
+    );
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    root.add(roof);
+    geometries.add(geometry);
   });
 }
 
@@ -1136,8 +1296,7 @@ interface BalconyRun {
 function balconyDeckTopY(zoneId: ShipZoneId): number {
   return FREIGHTER_DIMENSIONS.deckY
     + roomWallHeight(zoneId)
-    + ROOM_ROOF_THICKNESS
-    + BALCONY_DECK_THICKNESS;
+    + ROOM_ROOF_THICKNESS;
 }
 
 function balconyRuns(
@@ -1208,19 +1367,7 @@ function addRoofBalconies(
 ): void {
   layout.balconies.forEach((balcony) => {
     const zone = requiredZone(layout, balcony.zoneId);
-    const width = zone.bounds.maxX - zone.bounds.minX;
-    const length = zone.bounds.maxZ - zone.bounds.minZ;
     const deckTopY = balconyDeckTopY(zone.id);
-    addBlock(root, geometries, shellColliders, {
-      name: `balcony:${balcony.id}:deck`,
-      size: [width, BALCONY_DECK_THICKNESS, length],
-      position: [
-        (zone.bounds.minX + zone.bounds.maxX) / 2,
-        deckTopY - BALCONY_DECK_THICKNESS / 2,
-        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
-      ],
-      material: materials.timberFloor,
-    });
 
     const runs = balconyRuns(balcony, zone);
     runs.forEach((run) => {
@@ -1434,7 +1581,7 @@ function addExteriorConstructionDetails(
       hatch.position[1] + hatch.size[1] + 0.02,
       hatch.position[2],
     ],
-    material: materials.plainTimber,
+    material: materials.hatchTimber,
   }, hatch.rotationY);
 
   const hawseGeometry = new RingGeometry(0.24, 0.38, 16);
@@ -1703,8 +1850,9 @@ export function createShipGeometry(
 
   addWallSegments(root, geometries, shellColliders, materials, layout);
   addWheelhouseFacade(root, geometries, materials, layout);
+  addDoorFrames(root, geometries, materials, layout);
   addPortholeDetails(root, geometries, materials, layout);
-  addRoomRoofs(root, geometries, shellColliders, materials, layout);
+  addRoomRoofs(root, geometries, materials, layout);
   addRoofBalconies(root, geometries, shellColliders, materials, layout);
   const climbZones = addLadders(root, geometries, materials, layout);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);

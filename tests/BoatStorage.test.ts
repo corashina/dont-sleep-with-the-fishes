@@ -127,21 +127,22 @@ describe('boat item layout', () => {
     expect(transform('swimRing').position.x).toBeGreaterThan(0.80);
     expect(transform('swimRing').position.x).toBeLessThan(1.20);
     expect(transform('swimRing').position.z).toBeLessThan(-0.85);
-    expect(transform('captainWhiskers').position.x).toBeGreaterThan(1.55);
+    expect(transform('captainWhiskers').position.x).toBeGreaterThan(1.50);
     expect(transform('captainWhiskers').position.z).toBeLessThan(0.3);
-    expect(transform('captainWhiskers').rotation.y).toBeCloseTo(Math.PI / 2);
+    expect(transform('captainWhiskers').rotation.y).toBeCloseTo(0);
     expect(transform('captainWhiskers').scale).toBeGreaterThan(0.5);
   });
 
-  it('keeps Captain Whiskers visible beyond the nearest bench silhouette', () => {
+  it('keeps Captain Whiskers supported on the forward starboard gunwale', () => {
     const whiskers = {
       instanceId: 'captainWhiskers-1',
       type: 'captainWhiskers',
     } as const satisfies ItemInstance;
-    const bounds = productionBounds(whiskers);
-    const nearestBenchRightEdge = lifeboatHullHalfWidthAt(0.78)! - 0.17;
+    const perch = boatStorageTransform(whiskers);
+    const gunwaleX = lifeboatHullHalfWidthAt(perch.position.z)!;
 
-    expect(bounds.min.x).toBeGreaterThan(nearestBenchRightEdge);
+    expect(perch.position.z).toBeLessThan(-1.5);
+    expect(Math.abs(perch.position.x - gunwaleX)).toBeLessThan(0.1);
   });
 
   it('keeps bait closest to the fishing rod', () => {

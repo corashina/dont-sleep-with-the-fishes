@@ -12,23 +12,22 @@ const MODEL_PATH = resolve(
 );
 
 describe('Captain Whiskers model', () => {
-  it('is an authored seated item model within the normal geometry budget', async () => {
+  it('uses the lightweight Stripe model without viewer presentation nodes', async () => {
     const document = await new NodeIO().read(MODEL_PATH);
     const root = document.getRoot();
     const nodeNames = root.listNodes().map((node) => node.getName());
     const metadata = metadataJson.captainWhiskers;
 
-    expect(metadata.triangles).toBeGreaterThan(1_000);
+    expect(metadata.triangles).toBe(1_960);
     expect(metadata.triangles).toBeLessThanOrEqual(3_000);
     expect(nodeNames).toEqual(expect.arrayContaining([
-      'CaptainWhiskers',
-      'Body',
-      'WhiteBib',
-      'WhiskersHead',
-      'Collar',
-      'CaptainTag',
-      'WhiteTailTip',
+      'Sketchfab_model',
+      'CatArmature',
+      'Head_CatArmature',
+      'StripeCat_LOD0_0',
     ]));
+    expect(nodeNames).not.toContain('Camera');
+    expect(nodeNames).not.toContain('Lamp');
   });
 
   it('contains the required restrained idle animation', async () => {
@@ -37,18 +36,17 @@ describe('Captain Whiskers model', () => {
       .find((candidate) => candidate.getName() === 'CaptainWhiskersIdle');
 
     expect(animation).toBeDefined();
-    expect(animation!.listChannels()).toHaveLength(4);
+    expect(animation!.listChannels()).toHaveLength(37);
     expect(animation!.listChannels().map((channel) => channel.getTargetNode()?.getName()))
       .toEqual(expect.arrayContaining([
-        'WhiskersBreath',
-        'WhiskersHead',
-        'WhiskersLeftEar',
-        'WhiskersTailTip',
+        'Head_CatArmature',
+        'SpineIK_CatArmature',
+        'Tail1.003_CatArmature',
       ]));
     expect(metadataJson.captainWhiskers.animations).toEqual([{
       name: 'CaptainWhiskersIdle',
-      duration: 6,
-      channels: 4,
+      duration: 4.5,
+      channels: 37,
     }]);
   });
 });
