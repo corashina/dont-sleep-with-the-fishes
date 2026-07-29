@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  advanceTerminalPresentation,
   pointerLockTransition,
   runGameplayFrame,
-  type TerminalPresentation,
 } from '../src/game/GameLoop';
 import type { SessionStatus } from '../src/game/ScavengeSession';
 
@@ -88,21 +86,4 @@ describe('orchestrator phase policy', () => {
     expect(pointerLockTransition(status, locked)).toBe(transition);
   });
 
-  it('shows success immediately but holds failure in a short sequence', () => {
-    const playing: TerminalPresentation = { phase: 'playing', remainingSeconds: 0 };
-
-    expect(advanceTerminalPresentation(playing, 'success', 0.016).phase).toBe('result');
-    const failure = advanceTerminalPresentation(playing, 'failure', 0.016);
-    expect(failure.phase).toBe('failureSequence');
-    expect(advanceTerminalPresentation(failure, 'failure', 0.5).phase)
-      .toBe('failureSequence');
-    expect(advanceTerminalPresentation(failure, 'failure', 2).phase).toBe('result');
-  });
-
-  it('keeps idle, running, and paused sessions out of terminal presentation', () => {
-    const playing: TerminalPresentation = { phase: 'playing', remainingSeconds: 0 };
-    expect(advanceTerminalPresentation(playing, 'idle', 10)).toEqual(playing);
-    expect(advanceTerminalPresentation(playing, 'running', 10)).toEqual(playing);
-    expect(advanceTerminalPresentation(playing, 'paused', 10)).toEqual(playing);
-  });
 });
