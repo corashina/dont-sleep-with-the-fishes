@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 import { getSinkingState } from '../src/game/sinking';
 import { GameUI } from '../src/ui/GameUI';
 import { itemThumbnailUrl } from '../src/ui/itemThumbnailManifest';
+
+const mainStyles = readFileSync('src/styles/main.css', 'utf8');
 
 function runningSession(types: readonly ItemId[]): ScavengeSession {
   const items = types.map((type, index): ItemInstance => ({
@@ -78,6 +81,20 @@ describe('GameUI scavenging item tooltip', () => {
 });
 
 describe('GameUI carry HUD', () => {
+  it('anchors the watch to the right of the centered carry slots', () => {
+    expect(mainStyles).toMatch(
+      /\.carried\s*\{[^}]*display:\s*grid;[^}]*justify-items:\s*center;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.pocket-watch\s*\{[^}]*position:\s*absolute;[^}]*left:\s*calc\(100% \+ 16px\);/s,
+    );
+  });
+
+  it('keeps thumbnail opacity separate from the translucent circle treatment', () => {
+    expect(mainStyles).toMatch(/\.weight-circle__thumbnail\s*\{[^}]*opacity:\s*1;/s);
+    expect(mainStyles).not.toMatch(/\.weight-circle\s*\{[^}]*opacity:/s);
+  });
+
   it('keeps three empty carry circles', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
