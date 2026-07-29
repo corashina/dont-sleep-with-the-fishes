@@ -17,6 +17,7 @@ import {
   type WaterExclusionRegion,
 } from './WaterExclusion';
 import { SUN_DIRECTION } from '../world/celestialLight';
+import type { WaterQuality } from '../rendering/waterQuality';
 
 const MAX_EXCLUSIONS = 2;
 
@@ -406,9 +407,11 @@ export class OceanRenderer {
   readonly material: ShaderMaterial;
   readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
   readonly horizonMesh: Mesh<BufferGeometry, ShaderMaterial>;
+  private quality: WaterQuality;
   private disposed = false;
 
-  constructor() {
+  constructor(quality: WaterQuality = 'low') {
+    this.quality = quality;
     const payload = createWaveUniformPayload(DEFAULT_WAVES);
     this.material = new ShaderMaterial({
       vertexShader,
@@ -466,6 +469,11 @@ export class OceanRenderer {
     this.horizonMesh.name = 'procedural-ocean-horizon';
     this.horizonMesh.frustumCulled = false;
     this.mesh.add(this.horizonMesh);
+  }
+
+  setQuality(value: WaterQuality): void {
+    if (this.disposed || value === this.quality) return;
+    this.quality = value;
   }
 
   update(

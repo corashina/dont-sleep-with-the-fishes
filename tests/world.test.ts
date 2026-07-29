@@ -156,6 +156,21 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('forwards water quality to its owned ocean', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const setQuality = vi.spyOn(OceanRenderer.prototype, 'setQuality');
+
+    try {
+      world.setWaterQuality('high');
+      expect(setQuality).toHaveBeenCalledWith('high');
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('clones the lifeboat station bounds for deadline evacuation', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();

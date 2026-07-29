@@ -167,6 +167,22 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('forwards water quality to its owned ocean', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const setQuality = vi.spyOn(OceanRenderer.prototype, 'setQuality');
+
+    world.setWaterQuality('high');
+    expect(setQuality).toHaveBeenCalledWith('high');
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('uses a level default survival camera pitch', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();

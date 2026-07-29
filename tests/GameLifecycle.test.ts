@@ -1035,6 +1035,40 @@ describe('ScavengePhase lifecycle integration', () => {
     game.dispose();
   });
 
+  it('applies water quality changes to the active phase', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const setWaterQuality = vi.fn();
+    let received!: PhaseContext;
+    const phase = {
+      ...gamePhase(),
+      setWaterQuality,
+    };
+    const game = Game.forTest({
+      createScavenge: (context) => {
+        received = context;
+        return phase;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      mount,
+      sceneRenderer: postProcessingSceneRenderer(),
+    });
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-water-quality-control] [data-quality="high"]',
+    )!;
+
+    high.click();
+
+    expect(received.waterQuality.get()).toBe('high');
+    expect(setWaterQuality).toHaveBeenCalledWith('high');
+    game.dispose();
+  });
+
   it('uses one long-range camera without changing its near view', () => {
     const received: PhaseContext[] = [];
     const game = Game.forTest({

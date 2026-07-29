@@ -36,6 +36,7 @@ import {
   type ScavengePresentation,
 } from '../ui/GameUI';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
+import type { WaterQuality } from '../rendering/waterQuality';
 import { World } from '../world/World';
 import { commitBoatDeposit } from './scavengeDeposit';
 
@@ -97,6 +98,7 @@ export class ScavengePhase implements GamePhase {
       { physicsMode: context.physicsMode },
       context.lifeboatAssets,
       context.shipAssets,
+      context.waterQuality?.get() ?? 'low',
     );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
@@ -286,6 +288,11 @@ export class ScavengePhase implements GamePhase {
   setWeatherOverride(id: PresentationWeatherId | null): void {
     this.presentationWeather = id ?? 'calm';
     this.world.setPresentationWeather(this.presentationWeather);
+  }
+
+  setWaterQuality(value: WaterQuality): void {
+    if (this.disposed) return;
+    this.world.setWaterQuality(value);
   }
 
   getPresentationWeather(): PresentationWeatherId {
