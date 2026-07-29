@@ -1,5 +1,6 @@
-import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, type ItemId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
+import type { ScavengeEndingStage } from '../game/scavengeEnding';
 import type { SinkingState } from '../game/sinking';
 import { formatDuration } from './formatDuration';
 import { itemArtwork, uiArtwork } from './uiArtwork';
@@ -27,29 +28,27 @@ export class GameUI {
   private readonly hud: HTMLElement;
   private readonly startLayer: HTMLElement;
   private readonly pauseLayer: HTMLElement;
-  private readonly failureLayer: HTMLElement;
-  private readonly resultLayer: HTMLElement;
+  private readonly endingLayer: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly itemTooltip: HTMLElement;
   private readonly crosshair: HTMLElement;
   private readonly pickupPointer: HTMLElement;
   private readonly carriedItems: HTMLElement;
-  private readonly resultTitle: HTMLElement;
-  private readonly resultBody: HTMLElement;
-  private readonly resultItems: HTMLElement;
   private readonly startButton: HTMLButtonElement;
   private readonly resumeButton: HTMLButtonElement;
-  private readonly replayButton: HTMLButtonElement;
+  private readonly endingAction: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
   private disposed = false;
+  private replayHandled = false;
+  private endingStage: ScavengeEndingStage = 'playing';
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'game-ui';
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
-      <div class="hud illustrated-hud ui-role-context">
+      <div class="hud illustrated-hud ui-role-context" data-hud>
         <div class="crosshair" data-crosshair aria-hidden="true"></div>
         <div class="pickup-pointer" data-pickup-pointer aria-hidden="true">
           <svg class="pickup-pointer__art" viewBox="0 0 40 46" focusable="false">
@@ -116,23 +115,14 @@ export class GameUI {
           </p>
         </div>
       </section>
-      <section class="screen failure-screen poster-screen" data-failure aria-live="assertive">
+      <section class="screen scavenge-ending-screen poster-screen"
+        data-ending role="dialog" aria-modal="true" aria-hidden="true" inert>
         <div class="screen__content">
-          ${uiArtwork('warning', 'failure-mark')}
-          <p class="kicker ui-role-context">EVACUATION FAILED</p>
-          <h2 class="ui-role-display">The ship is going under.</h2>
-          <p class="lead ui-role-narrative">Hold on...</p>
-        </div>
-      </section>
-      <section class="screen result-screen poster-screen" data-result>
-        <div class="screen__content">
-          <p class="kicker ui-role-context">THE SEA KEEPS SCORE</p>
-          <h2 class="ui-role-display" data-result-title></h2>
-          <p class="lead ui-role-narrative" data-result-body></p>
-          <p class="result-items ui-role-numeral" data-result-items></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-replay-button aria-label="Try another route">
-            TRY ANOTHER ROUTE
-          </button>
+          <p class="kicker ui-role-context">ENDING I</p>
+          <h2 class="ui-role-display" data-ending-title tabindex="-1">SUNK WITH DOROTHY</h2>
+          <p class="lead ui-role-narrative">You stayed aboard for one trip too many.</p>
+          <button type="button" class="primary-action salvage-action ui-role-context"
+            data-ending-action hidden>BACK TO MAIN MENU</button>
         </div>
       </section>
     `;
@@ -140,24 +130,20 @@ export class GameUI {
     this.hud = requireElement(this.root, '.hud');
     this.startLayer = requireElement(this.root, '[data-start]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
-    this.failureLayer = requireElement(this.root, '[data-failure]');
-    this.resultLayer = requireElement(this.root, '[data-result]');
+    this.endingLayer = requireElement(this.root, '[data-ending]');
     this.timer = requireElement(this.root, '[data-timer]');
     this.prompt = requireElement(this.root, '[data-prompt]');
     this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
     this.crosshair = requireElement(this.root, '[data-crosshair]');
     this.pickupPointer = requireElement(this.root, '[data-pickup-pointer]');
     this.carriedItems = requireElement(this.root, '[data-carried-items]');
-    this.resultTitle = requireElement(this.root, '[data-result-title]');
-    this.resultBody = requireElement(this.root, '[data-result-body]');
-    this.resultItems = requireElement(this.root, '[data-result-items]');
     this.startButton = requireElement(this.root, '[data-start-button]');
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
-    this.replayButton = requireElement(this.root, '[data-replay-button]');
+    this.endingAction = requireElement(this.root, '[data-ending-action]');
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.startButton.addEventListener('click', this.handleStart);
     this.resumeButton.addEventListener('click', this.handleResume);
-    this.replayButton.addEventListener('click', this.handleReplay);
+    this.endingAction.addEventListener('click', this.handleReplay);
     this.setPresentation('title');
   }
 
@@ -225,6 +211,7 @@ export class GameUI {
     this.renderCarry(snapshot);
   }
 
+  /* Legacy failure overlays are replaced by the staged ending panel.
   showFailureResult(snapshot: ScavengeSnapshot): void {
     this.resultTitle.textContent = 'Taken by the Sea';
     this.resultBody.textContent = 'The deck disappeared before you reached the lifeboat.';
@@ -254,6 +241,22 @@ export class GameUI {
     this.failureLayer.classList.add('is-visible');
   }
 
+  */
+
+  renderEnding(stage: ScavengeEndingStage, blackout: number): void {
+    const visible = stage === 'endingHold' || stage === 'menuReady';
+    const revealAction = stage === 'menuReady';
+    this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
+    this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation === 'title';
+    this.pauseLayer.classList.remove('is-visible');
+    this.endingLayer.classList.toggle('is-visible', visible);
+    this.endingLayer.setAttribute('aria-hidden', String(!visible));
+    this.endingLayer.toggleAttribute('inert', !visible);
+    this.endingAction.hidden = !revealAction;
+    if (revealAction && this.endingStage !== 'menuReady') this.endingAction.focus();
+    this.endingStage = stage;
+  }
+
   showCompatibilityError(message: string): void {
     this.startLayer.classList.add('is-visible', 'has-compatibility-error');
     requireElement<HTMLElement>(this.startLayer, '.lead').textContent = message;
@@ -265,7 +268,7 @@ export class GameUI {
     this.disposed = true;
     this.startButton.removeEventListener('click', this.handleStart);
     this.resumeButton.removeEventListener('click', this.handleResume);
-    this.replayButton.removeEventListener('click', this.handleReplay);
+    this.endingAction.removeEventListener('click', this.handleReplay);
     this.onStart = () => undefined;
     this.onResume = () => undefined;
     this.onReplay = () => undefined;
@@ -294,5 +297,9 @@ export class GameUI {
 
   private readonly handleStart = (): void => this.onStart();
   private readonly handleResume = (): void => this.onResume();
-  private readonly handleReplay = (): void => this.onReplay();
+  private readonly handleReplay = (): void => {
+    if (this.replayHandled) return;
+    this.replayHandled = true;
+    this.onReplay();
+  };
 }
