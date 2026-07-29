@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects event eligibility and schema rules.
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import {

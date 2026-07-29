@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects event action choreography mappings.
 import { describe, expect, it } from 'vitest';
 import {
   sampleWeatherItemUse,

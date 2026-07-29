@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 4/5. Protects startup failure handling and ownership.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';

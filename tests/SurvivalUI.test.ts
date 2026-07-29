@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 4/5. Protects survival commands and access.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';

@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects world integration and resource ownership.
 import { describe, expect, it, vi } from 'vitest';
 import {
   Box3,

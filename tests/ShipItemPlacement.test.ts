@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects valid deterministic item placement.
 import { NodeIO } from '@gltf-transform/core';
 import { resolve } from 'node:path';
 import { Box3, Euler, Matrix4, Vector3 } from 'three';

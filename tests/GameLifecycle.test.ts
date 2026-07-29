@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 5/5. Protects full game lifecycle integration.
 
 import { describe, expect, it, vi } from 'vitest';
 import {

@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects terminal scavenging flow.
 import { describe, expect, it } from 'vitest';
 import {
   advanceScavengeEnding,
