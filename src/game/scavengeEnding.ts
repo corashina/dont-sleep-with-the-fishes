@@ -12,14 +12,30 @@ export interface ScavengeEndingState {
 }
 
 export interface ScavengeCinematicFrame {
-  readonly sinking: SinkingState;
-  readonly cameraPosition: readonly [number, number, number];
-  readonly cameraTarget: readonly [number, number, number];
-  readonly blackout: number;
+  sinking: SinkingState;
+  cameraPosition: [number, number, number];
+  cameraTarget: [number, number, number];
+  blackout: number;
 }
 
 export function createScavengeEndingState(): ScavengeEndingState {
   return { stage: 'playing', elapsedSeconds: 0 };
+}
+
+export function createScavengeCinematicFrame(): ScavengeCinematicFrame {
+  return {
+    sinking: {
+      progress: 0,
+      rollRadians: 0,
+      pitchRadians: 0,
+      sinkOffset: 0,
+      alarmRate: 1.2,
+      waveAmplitudeScale: 1.2,
+    },
+    cameraPosition: [44, 15, 34],
+    cameraTarget: [0, 3.4, 0],
+    blackout: 0,
+  };
 }
 
 export function advanceScavengeEnding(
@@ -63,28 +79,32 @@ export function advanceScavengeEnding(
 }
 
 export function getScavengeCinematicFrame(elapsedSeconds: number): ScavengeCinematicFrame {
+  return sampleScavengeCinematicFrameInto(createScavengeCinematicFrame(), elapsedSeconds);
+}
+
+export function sampleScavengeCinematicFrameInto(
+  output: ScavengeCinematicFrame,
+  elapsedSeconds: number,
+): ScavengeCinematicFrame {
   const progress = clamp01(elapsedSeconds / SINKING_CINEMATIC_SECONDS);
   const anticipation = smootherStep(clamp01(progress / 0.16));
   const descent = smootherStep(clamp01((progress - 0.12) / 0.88));
   const finalRush = smootherStep(clamp01((progress - 0.62) / 0.38));
 
-  return {
-    sinking: {
-      progress,
-      rollRadians: -0.08 * anticipation - 0.4 * descent,
-      pitchRadians: 0.04 * anticipation + 0.22 * descent,
-      sinkOffset: -2.5 * descent - 13.5 * finalRush || 0,
-      alarmRate: 1.2 + 1.1 * finalRush,
-      waveAmplitudeScale: 1.2 + 0.35 * descent,
-    },
-    cameraPosition: [
-      lerp(44, 42, descent),
-      lerp(15, 13.5, descent),
-      lerp(34, 36, descent),
-    ],
-    cameraTarget: [0, lerp(3.4, -1.5, descent), 0],
-    blackout: smootherStep(clamp01((progress - 0.88) / 0.12)),
-  };
+  output.sinking.progress = progress;
+  output.sinking.rollRadians = -0.08 * anticipation - 0.4 * descent;
+  output.sinking.pitchRadians = 0.04 * anticipation + 0.22 * descent;
+  output.sinking.sinkOffset = -2.5 * descent - 13.5 * finalRush || 0;
+  output.sinking.alarmRate = 1.2 + 1.1 * finalRush;
+  output.sinking.waveAmplitudeScale = 1.2 + 0.35 * descent;
+  output.cameraPosition[0] = lerp(44, 42, descent);
+  output.cameraPosition[1] = lerp(15, 13.5, descent);
+  output.cameraPosition[2] = lerp(34, 36, descent);
+  output.cameraTarget[0] = 0;
+  output.cameraTarget[1] = lerp(3.4, -1.5, descent);
+  output.cameraTarget[2] = 0;
+  output.blackout = smootherStep(clamp01((progress - 0.88) / 0.12));
+  return output;
 }
 
 function clamp01(value: number): number {

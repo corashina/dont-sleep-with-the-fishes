@@ -1,13 +1,11 @@
 import { Box3, Scene, Vector3 } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
-import {
-  pointerLockTransition,
-  runGameplayFrame,
-} from '../game/GameLoop';
+import { pointerLockTransition } from '../game/GameLoop';
 import {
   advanceScavengeEnding,
+  createScavengeCinematicFrame,
   createScavengeEndingState,
-  getScavengeCinematicFrame,
+  sampleScavengeCinematicFrameInto,
   SINKING_CINEMATIC_SECONDS,
 } from '../game/scavengeEnding';
 import { containsPointXZ, SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
@@ -68,6 +66,7 @@ export class ScavengePhase implements GamePhase {
   };
   private ending = createScavengeEndingState();
   private endingStarted = false;
+  private readonly cinematicFrame = createScavengeCinematicFrame();
   private readonly cinematicCameraTarget = new Vector3();
   private contextAction: ContextAction = { type: 'none', prompt: '' };
   private itemTooltip: ScavengeItemTooltip | null = null;
@@ -160,32 +159,33 @@ export class ScavengePhase implements GamePhase {
       this.worldTime += deltaSeconds;
     }
     let sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-    const synchronizeElapsed = (): void => {
-      const nextElapsed = SCAVENGE_DURATION_SECONDS - this.session.snapshot().remainingSeconds;
-      if (nextElapsed === this.elapsed) return;
-      this.elapsed = nextElapsed;
-      sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-    };
-    const eligibleAtDeadline = (): boolean => containsPointXZ(
-      this.world.evacuationBounds,
-      this.player.localPosition,
-    );
 
     if (directControlActive) {
-      runGameplayFrame(true, {
-        tick: () => this.session.tick(deltaSeconds, eligibleAtDeadline()),
-        afterTick: synchronizeElapsed,
-        move: () => this.player.update(deltaSeconds, this.input),
-        afterMove: synchronizeElapsed,
-        interact: () => this.updateInteraction(),
-        flight: () => this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale),
-        isRunning: () => this.session.snapshot().status === 'running',
-      });
+      this.session.tick(deltaSeconds, containsPointXZ(
+        this.world.evacuationBounds,
+        this.player.localPosition,
+      ));
+      this.synchronizeElapsed();
+      if (this.session.snapshot().status === 'running') {
+        this.player.update(deltaSeconds, this.input);
+        this.synchronizeElapsed();
+        if (this.session.snapshot().status === 'running') {
+          this.updateInteraction();
+          if (this.session.snapshot().status === 'running') {
+            sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
+            this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
+          }
+        }
+      }
     } else if (overlaySimulationActive) {
-      this.session.tick(deltaSeconds, eligibleAtDeadline());
-      synchronizeElapsed();
+      this.session.tick(deltaSeconds, containsPointXZ(
+        this.world.evacuationBounds,
+        this.player.localPosition,
+      ));
+      this.synchronizeElapsed();
       if (this.session.snapshot().status === 'running') {
         this.player.updatePassive(deltaSeconds);
+        sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
       }
       this.input.consumeLook();
@@ -193,6 +193,7 @@ export class ScavengePhase implements GamePhase {
       this.input.consumeLook();
     }
 
+    sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
     const next = this.session.snapshot();
     const failureStarted = !this.endingStarted && next.status === 'failure';
     this.ending = advanceScavengeEnding(
@@ -212,11 +213,11 @@ export class ScavengePhase implements GamePhase {
       const cinematicElapsed = this.ending.stage === 'sinking'
         ? this.ending.elapsedSeconds
         : SINKING_CINEMATIC_SECONDS;
-      const frame = getScavengeCinematicFrame(cinematicElapsed);
-      sinking = frame.sinking;
-      blackout = frame.blackout;
-      this.context.camera.position.set(...frame.cameraPosition);
-      this.cinematicCameraTarget.set(...frame.cameraTarget);
+      sampleScavengeCinematicFrameInto(this.cinematicFrame, cinematicElapsed);
+      sinking = this.cinematicFrame.sinking;
+      blackout = this.cinematicFrame.blackout;
+      this.context.camera.position.set(...this.cinematicFrame.cameraPosition);
+      this.cinematicCameraTarget.set(...this.cinematicFrame.cameraTarget);
       this.context.camera.lookAt(this.cinematicCameraTarget);
       this.context.camera.updateMatrixWorld(true);
     }
@@ -289,6 +290,11 @@ export class ScavengePhase implements GamePhase {
   private syncVisualState(sinking: Readonly<ReturnType<typeof getSinkingState>>): void {
     this.visualState.elapsedSeconds = this.elapsed;
     this.visualState.sinkingProgress = sinking.progress;
+  }
+
+  private synchronizeElapsed(): void {
+    const nextElapsed = SCAVENGE_DURATION_SECONDS - this.session.snapshot().remainingSeconds;
+    if (nextElapsed !== this.elapsed) this.elapsed = nextElapsed;
   }
 
   dispose(): void {
