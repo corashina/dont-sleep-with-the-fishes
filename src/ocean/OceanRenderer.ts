@@ -192,14 +192,17 @@ const fragmentShader = `
     vec2 wind = normalize(vec2(0.83, 0.56));
     vec2 crossWind = vec2(-wind.y, wind.x);
     vec2 quartering = normalize(vec2(-0.31, 0.95));
+    vec2 opposing = normalize(vec2(0.91, -0.41));
     vec2 warped = worldPosition + windWarp(worldPosition) * 0.58;
 
-    float bandA = cos(dot(warped, wind) * 15.4 + uTime * 3.35);
-    float bandB = cos(dot(warped, crossWind) * 22.8 - uTime * 4.10);
-    float bandC = cos(dot(warped, quartering) * 36.2 + uTime * 5.45);
-    vec2 slope = wind * bandA * 0.0095
-      + crossWind * bandB * 0.0054
-      + quartering * bandC * 0.0028;
+    float bandA = cos(dot(warped, wind) * 9.6 + uTime * 2.55);
+    float bandB = cos(dot(warped, crossWind) * 15.4 - uTime * 3.35);
+    float bandC = cos(dot(warped, quartering) * 24.8 + uTime * 4.35);
+    float bandD = cos(dot(warped, opposing) * 36.2 - uTime * 5.45);
+    vec2 slope = wind * bandA * 0.028
+      + crossWind * bandB * 0.022
+      + quartering * bandC * 0.015
+      + opposing * bandD * 0.009;
     float distanceFade = 1.0 - smoothstep(
       uDetailFade.x * 0.66,
       uDetailFade.y * 0.84,
@@ -308,6 +311,89 @@ const fragmentShader = `
     return clamp(bodyFoam * crest * breaking * ribbonCore * strength, 0.0, 1.0);
   }
 
+  #ifdef HIGH_QUALITY_WATER
+  float highQualityFoamCoverage(
+    vec2 worldPosition,
+    float waveHeight,
+    float waveSlope,
+    float fineFade
+  ) {
+    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
+    vec2 wind = normalize(vec2(0.83, 0.56));
+    vec2 crossWind = vec2(-wind.y, wind.x);
+    vec2 drifted = worldPosition + wind * uTime * 0.38;
+    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
+    float broadWarp = valueNoise(
+      windSpace * vec2(0.055, 0.13) + vec2(4.7, -8.3)
+    );
+    float crossWarp = valueNoise(
+      windSpace * vec2(0.12, 0.19) + vec2(-11.2, 5.4)
+    );
+    vec2 warpedSpace = windSpace + vec2(
+      (broadWarp - 0.5) * 4.6,
+      (crossWarp - 0.5) * 2.3
+    );
+    float longBand = valueNoise(
+      warpedSpace * vec2(0.14, 0.62) + vec2(1.8, 7.1)
+    );
+    float brokenBand = valueNoise(
+      warpedSpace * vec2(0.31, 1.28) + vec2(-6.4, 12.9)
+    );
+    float streakField = clamp(longBand * 0.62 + brokenBand * 0.38, 0.0, 1.0);
+    float streaks = smoothstep(
+      mix(0.57, 0.47, weather),
+      mix(0.77, 0.66, weather),
+      streakField
+    );
+
+    float crestStart = mix(0.12, 0.01, weather);
+    float crest = smoothstep(crestStart, crestStart + 0.25, waveHeight);
+    float slopeStart = mix(0.07, 0.035, weather);
+    float breaking = smoothstep(slopeStart, slopeStart + 0.15, waveSlope);
+    float crestEnvelope = crest * mix(0.46, 1.0, breaking);
+    float trailingEnvelope = smoothstep(-0.04, 0.17, waveHeight)
+      * (1.0 - smoothstep(0.52, 0.83, waveHeight));
+
+    float edgeBreak = smoothstep(
+      0.18,
+      0.52,
+      valueNoise(warpedSpace * vec2(0.48, 1.70) + vec2(9.6, -2.7))
+    );
+    float brokenMask = mix(0.42, 1.0, max(streaks, edgeBreak * 0.75));
+    float foamEnvelope = max(
+      crestEnvelope,
+      trailingEnvelope * streaks * 0.48
+    );
+    float strength = mix(0.86, 1.16, weather);
+    return clamp(foamEnvelope * brokenMask * strength * fineFade, 0.0, 1.0);
+  }
+
+  float highQualityCrestCap(
+    vec2 worldPosition,
+    float waveHeight,
+    float waveSlope,
+    float highFoam,
+    float fineFade
+  ) {
+    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
+    float crestStart = mix(0.34, 0.17, weather);
+    float slopeStart = mix(0.13, 0.065, weather);
+    float crest = smoothstep(crestStart, crestStart + 0.17, waveHeight);
+    float breaking = smoothstep(slopeStart, slopeStart + 0.13, waveSlope);
+    vec2 drifted = worldPosition + vec2(0.83, 0.56) * uTime * 0.44;
+    float capNoise = valueNoise(
+      drifted * vec2(1.16, 1.84) + vec2(-3.7, 15.2)
+    );
+    float brokenCap = mix(0.52, 1.0, smoothstep(0.24, 0.68, capNoise));
+    float capEnvelope = max(crest * breaking, highFoam * crest * 0.58);
+    return clamp(
+      capEnvelope * brokenCap * mix(0.90, 1.14, weather) * fineFade,
+      0.0,
+      1.0
+    );
+  }
+  #endif
+
   void main() {
     for (int i = 0; i < 2; i++) {
       if (i < uExclusionCount) {
@@ -387,8 +473,17 @@ const fragmentShader = `
       * pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 2.0);
     waterBody += uShallowColor * crestTransmission
       * uDirectLightStrength * 0.075;
+    waterBody *= 1.0 - trough * 0.18;
     #endif
     float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
+    #ifdef HIGH_QUALITY_WATER
+    float microFacet = clamp(length(detailSlope) * 2.6, 0.0, 1.0);
+    reflectionStrength = clamp(
+      reflectionStrength + microFacet * 0.11,
+      0.0,
+      0.97
+    );
+    #endif
     vec3 color = mix(waterBody, reflectedColor, reflectionStrength);
 
     vec3 halfDirection = normalize(lightDirection + viewDirection);
@@ -432,7 +527,31 @@ const fragmentShader = `
       vViewDepth
     );
     bodyFoam *= bodyDistanceFade;
+    #ifdef HIGH_QUALITY_WATER
+    float highFoamDistanceFade = 1.0 - smoothstep(
+      uDetailFade.y * 0.42,
+      uDetailFade.y * 0.88,
+      vViewDepth
+    );
+    float highFoam = highQualityFoamCoverage(
+      vWorldPosition.xz,
+      vHeight,
+      vWaveSlope,
+      highFoamDistanceFade
+    );
+    bodyFoam = max(bodyFoam, highFoam * 0.86);
+    #endif
     float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam, ribbonNoise);
+    #ifdef HIGH_QUALITY_WATER
+    float highCapFoam = highQualityCrestCap(
+      vWorldPosition.xz,
+      vHeight,
+      vWaveSlope,
+      highFoam,
+      highFoamDistanceFade
+    );
+    capFoam = max(capFoam, highCapFoam);
+    #endif
     float capDistanceFade = 1.0 - smoothstep(
       uDetailFade.y * 0.48,
       uDetailFade.y * 0.74,
@@ -445,6 +564,19 @@ const fragmentShader = `
     vec3 capFoamColor = mix(uFoamColor, uSunColor, 0.08 * uDirectLightStrength);
     color = mix(color, uFoamColor, bodyFoam * 0.64);
     color = mix(color, capFoamColor, capFoam * 0.90);
+    #ifdef HIGH_QUALITY_WATER
+    float highFoamLayer = clamp(
+      highFoam * 0.78 + highCapFoam * capDistanceFade * 0.86,
+      0.0,
+      1.0
+    );
+    vec3 highFoamColor = mix(
+      uFoamColor,
+      vec3(0.96, 1.0, 0.98),
+      0.46
+    );
+    color = mix(color, highFoamColor, highFoamLayer * 0.78);
+    #endif
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
