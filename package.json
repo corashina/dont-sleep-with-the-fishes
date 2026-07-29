@@ -21,7 +21,9 @@
     "textures:check:lifeboat": "node scripts/check-lifeboat-textures.mjs",
     "textures:fetch:ship": "powershell -ExecutionPolicy Bypass -File scripts/fetch-ship-textures.ps1",
     "textures:check:ship": "node scripts/check-ship-textures.mjs",
-    "models:check": "bun run models:check:items && bun run models:check:ship && bun run models:check:fishing && bun run textures:check:lifeboat && bun run textures:check:ship"
+    "models:check": "bun run models:check:items && bun run models:check:ship && bun run models:check:fishing && bun run textures:check:lifeboat && bun run textures:check:ship",
+    "thumbnails:generate": "node scripts/generate-item-thumbnails.mjs",
+    "thumbnails:check": "node scripts/check-item-thumbnails.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.19.3",
