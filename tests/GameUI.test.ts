@@ -141,6 +141,14 @@ describe('GameUI carry HUD', () => {
     ui.dispose();
   });
 
+  it('keeps the empty full-hand status available without reserved space', () => {
+    const emptyRule = mainStyles.match(/\.carry-full:empty\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(emptyRule).toMatch(/margin-top:\s*0;/);
+    expect(emptyRule).not.toMatch(/display:\s*none;/);
+    expect(emptyRule).not.toMatch(/visibility:\s*hidden;/);
+  });
+
   it('reuses unchanged carry slot nodes', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
