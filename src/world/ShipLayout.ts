@@ -5,7 +5,7 @@ import {
 } from './shipFurnitureManifest';
 
 export const PLAYER_LAYOUT_RADIUS = 0.35;
-export const FREIGHTER_DIMENSIONS = { width: 20, length: 55, deckY: 2.22 } as const;
+export const FREIGHTER_DIMENSIONS = { width: 16.25, length: 55, deckY: 2.22 } as const;
 export const SHIP_ROOM_WALL_HEIGHT = 3.4;
 export const SHIP_ROOM_WALL_THICKNESS = 0.22;
 
@@ -320,6 +320,17 @@ function aftDoor(
   };
 }
 
+const RAIL_INNER_FACE_X = FREIGHTER_DIMENSIONS.width / 2 - 0.25;
+const CARGO_SIDE_X = RAIL_INNER_FACE_X - 0.15;
+const HULL_END_SHOULDER_X = 5.55;
+const EXTERIOR_LANE_INNER_X = 6.3;
+const EXTERIOR_LANE_OUTER_X = RAIL_INNER_FACE_X - 0.175;
+const EXTERIOR_LANE_CENTER_X = (
+  EXTERIOR_LANE_INNER_X + EXTERIOR_LANE_OUTER_X
+) / 2;
+const LIFEBOAT_STATION_WIDTH = 2.8;
+const EVACUATION_X = CARGO_SIDE_X - 0.7;
+
 const crewBounds = rect(-5.75, 5.75, 4.5, 13.5);
 const wheelhouseBounds = rect(-5.5, 5.5, 17, 22);
 const wheelhousePolygon = [
@@ -331,8 +342,19 @@ const wheelhousePolygon = [
   [wheelhouseBounds.minX, wheelhouseBounds.maxZ - SHIP_WHEELHOUSE_CHAMFER_SIZE],
 ] as const;
 const storageBounds = rect(-5.75, 5.75, -17.4, -10.65);
-const lifeboatBounds = rect(6.8, 9.6, -2, 2);
-const cargoBounds = rect(-9.6, 9.6, -27.1, 27.1);
+const lifeboatBounds = rect(
+  CARGO_SIDE_X - LIFEBOAT_STATION_WIDTH,
+  CARGO_SIDE_X,
+  -2,
+  2,
+);
+const cargoBounds = rect(-CARGO_SIDE_X, CARGO_SIDE_X, -27.1, 27.1);
+const evacuationBounds = rect(
+  EVACUATION_X - 0.35,
+  EVACUATION_X + 0.35,
+  -0.35,
+  0.35,
+);
 const DECK_HATCH_WIDTH = 1.45;
 const DECK_HATCH_DEPTH = 1.8;
 const DECK_HATCH_Z = -7;
@@ -792,10 +814,10 @@ function navigationTargets(
 ): readonly ShipNavigationTargetSpec[] {
   const result: ShipNavigationTargetSpec[] = [
     { id: 'start', position: [0, 11], kind: 'start' },
-    { id: 'port-loop-forward', position: [-8.1, 10.2], kind: 'loop' },
-    { id: 'port-loop-aft', position: [-8.1, -12.5], kind: 'loop' },
-    { id: 'starboard-loop-forward', position: [8.1, 10.2], kind: 'loop' },
-    { id: 'starboard-loop-aft', position: [8.1, -12.5], kind: 'loop' },
+    { id: 'port-loop-forward', position: [-EXTERIOR_LANE_CENTER_X, 10.2], kind: 'loop' },
+    { id: 'port-loop-aft', position: [-EXTERIOR_LANE_CENTER_X, -12.5], kind: 'loop' },
+    { id: 'starboard-loop-forward', position: [EXTERIOR_LANE_CENTER_X, 10.2], kind: 'loop' },
+    { id: 'starboard-loop-aft', position: [EXTERIOR_LANE_CENTER_X, -12.5], kind: 'loop' },
     { id: 'bow-port', position: [-4.1, 25.8], kind: 'endDeck' },
     { id: 'bow-center', position: [0, 25.8], kind: 'endDeck' },
     { id: 'bow-starboard', position: [4.1, 25.8], kind: 'endDeck' },
@@ -805,7 +827,7 @@ function navigationTargets(
   ];
   result.push(...doorNavigationTargets(doorSpecs));
   result.push(...surfaceNavigationTargets(furnitureSpecs));
-  result.push({ id: 'evacuation', position: [8.9, 0], kind: 'evacuation' });
+  result.push({ id: 'evacuation', position: [EVACUATION_X, 0], kind: 'evacuation' });
   return result;
 }
 
@@ -834,8 +856,12 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       id: 'cargoDeck',
       bounds: cargoBounds,
       polygon: [
-        [-9.6, -21.9], [-6.79, -25.58], [0, -27.1], [6.79, -25.58], [9.6, -21.9],
-        [9.6, 21.9], [6.79, 25.58], [0, 27.1], [-6.79, 25.58], [-9.6, 21.9],
+        [-CARGO_SIDE_X, -21.9], [-HULL_END_SHOULDER_X, -25.58],
+        [0, -27.1],
+        [HULL_END_SHOULDER_X, -25.58], [CARGO_SIDE_X, -21.9],
+        [CARGO_SIDE_X, 21.9], [HULL_END_SHOULDER_X, 25.58],
+        [0, 27.1],
+        [-HULL_END_SHOULDER_X, 25.58], [-CARGO_SIDE_X, 21.9],
       ],
       excludedZoneIds: ['crewCabin', 'wheelhouse', 'storageWorkroom', 'lifeboatStation'],
       enclosed: false,
@@ -858,14 +884,34 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       furniturePolicy: {
         maxFixtures: 0,
         allowedModelIds: [],
-        clearCenter: rect(8.55, 9.25, -0.35, 0.35),
+        clearCenter: evacuationBounds,
       },
     },
   ],
   doors,
   lanes: [
-    { id: 'port-exterior-main', className: 'primary', clearWidth: 3.275, bounds: rect(-9.575, -6.3, -21.8, 21.8) },
-    { id: 'starboard-exterior-main', className: 'primary', clearWidth: 3.275, bounds: rect(6.3, 9.575, -21.8, 21.8) },
+    {
+      id: 'port-exterior-main',
+      className: 'secondary',
+      clearWidth: 1.4,
+      bounds: rect(
+        -EXTERIOR_LANE_OUTER_X,
+        -EXTERIOR_LANE_INNER_X,
+        -21.8,
+        21.8,
+      ),
+    },
+    {
+      id: 'starboard-exterior-main',
+      className: 'secondary',
+      clearWidth: 1.4,
+      bounds: rect(
+        EXTERIOR_LANE_INNER_X,
+        EXTERIOR_LANE_OUTER_X,
+        -21.8,
+        21.8,
+      ),
+    },
     { id: 'cargo-aft-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, -10.65, DECK_HATCH_Z - DECK_HATCH_DEPTH / 2) },
     { id: 'cargo-aft-longitudinal-forward', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, DECK_HATCH_Z + DECK_HATCH_DEPTH / 2, -1.6) },
     { id: 'deck-hatch-port-bypass', className: 'primary', clearWidth: 2.5, bounds: rect(-deckHatchBypassOuterX, -deckHatchHalfWidthWithClearance, DECK_HATCH_Z - deckHatchHalfDepthWithClearance, DECK_HATCH_Z + deckHatchHalfDepthWithClearance) },
@@ -978,11 +1024,11 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   targets: navigationTargets(doors, furniture),
   rail: {
     height: 1.05,
-    innerFaceX: 9.75,
+    innerFaceX: RAIL_INNER_FACE_X,
     starboardOpening: { centerZ: 0, width: 4 },
   },
   machineryClosure: rect(-3.6, 3.6, -22.5, -18.2),
-  evacuationRect: rect(8.55, 9.25, -0.35, 0.35),
+  evacuationRect: evacuationBounds,
 };
 
 function positive(value: number): boolean {
