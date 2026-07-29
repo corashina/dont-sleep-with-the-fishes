@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
+import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { GameUI } from '../src/ui/GameUI';
+import { formatDuration } from '../src/ui/formatDuration';
 
 describe('GameUI scavenging item tooltip', () => {
   it('uses the survival tooltip treatment at the projected item edge', () => {
@@ -108,6 +110,15 @@ describe('GameUI scavenging ending', () => {
     ui.renderEnding('playing', 0);
 
     expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
+    ui.dispose();
+  });
+
+  it('initializes the watch from the scavenging duration rule', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    expect(mount.querySelector('[data-timer]')?.textContent)
+      .toBe(formatDuration(SCAVENGE_DURATION_SECONDS));
     ui.dispose();
   });
 });
