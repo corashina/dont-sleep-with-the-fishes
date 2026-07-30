@@ -18,6 +18,7 @@ import {
   SurvivalUI,
   type DriftingLootResultView,
   type EventContextChoice,
+  type EventResultView,
   type FishingResultView,
 } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -45,6 +46,7 @@ import type {
   DayActionId,
   DayActionOption,
   DriftingLootVariant,
+  EventPresentationKey,
   EventResponse,
   EventResponseId,
   RewardSummary,
@@ -52,6 +54,7 @@ import type {
   SurvivalState,
 } from './survivalTypes';
 import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
+import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -87,6 +90,23 @@ type EventPresentationState =
   | 'retrieving'
   | 'result'
   | 'receding';
+
+const EVENT_RESULT_CAPTIONS: Readonly<Partial<Record<EventPresentationKey, string>>> = {
+  'drifting-loot.food': 'Recovered',
+  'drifting-loot.bait': 'Recovered',
+  'drifting-loot.repair': 'Recovered',
+  'drifting-loot.energy-bar': 'Recovered',
+  'drifting-loot.drift': 'Slipped away',
+  'drifting-bottle.retrieve': 'Paper inside',
+  'drifting-bottle.lost': 'Lost in the wake',
+  'check-the-back.fish': 'A fish',
+  'check-the-back.empty': 'Only water',
+  'check-the-back.face': 'It was me',
+  'check-the-back.ignore': 'Left unseen',
+  'mystery-chest.safe': 'A real chest',
+  'mystery-chest.mimic': 'Teeth',
+  'mystery-chest.leave': 'Left below',
+};
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
@@ -144,17 +164,10 @@ export function formatFishingResult(
 export function formatDriftingLootResult(
   reward: RewardSummary,
 ): DriftingLootResultView {
-  const title = reward.kind === 'item'
-    ? ITEM_DEFINITIONS[reward.id].label
-    : `+${reward.quantity} ${
-      reward.id === 'repairMaterial'
-        ? 'REPAIR MATERIAL'
-        : reward.id.toLocaleUpperCase('en-US')
-    }`;
   return {
     caption: 'SALVAGE RECOVERED',
-    title,
-    detail: '−3 ENERGY',
+    reward,
+    energyCost: 3,
     target: null,
   };
 }
@@ -188,6 +201,7 @@ function testContext(
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
     audio,
+    eventModels: EMPTY_SURVIVAL_EVENT_MODELS,
   };
 }
 
@@ -214,8 +228,6 @@ export class SurvivalPhase implements GamePhase {
   private presentedTerminalState: SurvivalState | null = null;
   private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
-  private pendingDayEventDay: number | null = null;
-  private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
@@ -265,6 +277,7 @@ export class SurvivalPhase implements GamePhase {
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
+          context.eventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -390,8 +403,6 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     this.audio.action(action, selectedOption);
-    const day = this.session.snapshot().day;
-    if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     void this.runDayAction(outcome, action);
   }
 
@@ -497,7 +508,6 @@ export class SurvivalPhase implements GamePhase {
     this.onRestart = onRestart;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
-    this.requestedDayEventDays.clear();
     this.wireUI();
   }
 
@@ -789,8 +799,8 @@ export class SurvivalPhase implements GamePhase {
     this.fishingPresentation = 'ready';
     this.activeFishing = null;
     this.setBusy(false);
-    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.ui.setFishingViewExitVisible?.(true);
+    this.ui.setFishingState?.({ mode: 'ready', message: '', biteTarget: null });
   }
 
   private exitReadyFishingView(): void {
@@ -824,6 +834,7 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.transitionFishingView('exit', generation)) return;
     if (!this.isContinuationActive(generation)) return;
     this.fishingPresentation = 'idle';
+    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }
@@ -856,43 +867,15 @@ export class SurvivalPhase implements GamePhase {
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
     if (action === 'dive') this.audio.finishDive();
     if (this.disposed) return;
-    let snapshot = this.renderSnapshot(false, false);
+    const snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
     if (isTerminal(snapshot.state)) {
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
       return;
     }
-    snapshot = await this.openScheduledDayEvent(snapshot);
-    if (this.disposed) return;
-    if (snapshot.pendingEventId !== null) {
-      await this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
-      return;
-    }
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
-  }
-
-  private async openScheduledDayEvent(
-    snapshot: SurvivalSnapshot,
-    generation?: number,
-  ): Promise<SurvivalSnapshot> {
-    if (
-      this.pendingDayEventDay === null
-      || snapshot.day !== this.pendingDayEventDay
-      || snapshot.state !== 'day'
-    ) return snapshot;
-
-    const eventDay = this.pendingDayEventDay;
-    this.pendingDayEventDay = null;
-    this.requestedDayEventDays.add(eventDay);
-    const eventOutcome = this.session.requestDayEvent?.();
-    if (eventOutcome === undefined) return snapshot;
-    if (!eventOutcome.accepted) {
-      this.ui.showFeedback?.(eventOutcome);
-      return this.renderSnapshot(false, false);
-    }
-    return this.renderSnapshot(false, false);
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
@@ -1118,7 +1101,22 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    this.ui.showFeedback?.(outcome);
+    if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
+    const resultCaption = outcome.eventPresentationKey === undefined
+      ? undefined
+      : EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey];
+    if (eventId !== 'drifting-loot' && resultCaption !== undefined) {
+      const resultView: EventResultView = {
+        caption: resultCaption,
+        detail: outcome.message,
+        target: this.world.projectEventResultBounds?.(
+          eventId,
+          this.viewportWidth,
+          this.viewportHeight,
+        ) ?? null,
+      };
+      this.ui.showEventResult?.(resultView);
+    }
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
@@ -1254,20 +1252,13 @@ export class SurvivalPhase implements GamePhase {
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
-    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-
-    if (event.id === 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    if (event.id !== 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
+    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
@@ -1325,9 +1316,11 @@ export class SurvivalPhase implements GamePhase {
                   + `you have ${snapshot[resource]}.`
                 ))
                 .join(' '),
+          ...(this.eventChoiceAnchor(event.id, choice.id) === null
+            ? {}
+            : { anchorId: this.eventChoiceAnchor(event.id, choice.id)! }),
           ...(event.id === 'drifting-loot' && choice.id === 'retrieve'
             ? {
-                anchorId: 'drifting-loot',
                 energyCost: choice.requirements?.find(
                   ({ resource }) => resource === 'energy',
                 )?.minimum ?? 0,
@@ -1335,6 +1328,15 @@ export class SurvivalPhase implements GamePhase {
             : {}),
         };
       });
+  }
+
+  private eventChoiceAnchor(eventId: string, choiceId: string): string | null {
+    if (eventId === 'drifting-loot' && choiceId === 'retrieve') return 'drifting-loot';
+    if (eventId === 'drifting-bottle' && choiceId === 'sleep') return 'event:drifting-bottle';
+    if (eventId === 'check-the-back' && choiceId === 'check') return 'event:check-the-back';
+    if (eventId === 'mystery-chest' && choiceId === 'take') return 'event:mystery-chest';
+    if (eventId === 'flowers' && choiceId === 'sleep') return 'event:flowers';
+    return null;
   }
 
   private restoreEventSelection(): void {

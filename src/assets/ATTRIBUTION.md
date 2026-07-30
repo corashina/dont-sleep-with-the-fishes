@@ -136,6 +136,19 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 | boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 
+## Runtime survival-event model ledger
+
+These individual low-poly models show the five featured survival events.
+Runtime setup normalizes their scale and applies the game palette.
+
+| Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source triangles | Committed triangles | Modifications | Downloaded |
+|---|---|---|---|---|---|---:|---:|---|---|
+| driftingLootBarrel | `driftingLootBarrel.glb` | Barrel / Don Carson | https://poly.pizza/m/cu9GJ0j13fj | `poly-pizza:2244f3ae-5583-4ea0-b980-6fdd0084cee7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 282 | 282 | Source GLB SHA-256 `89031BAAA180FD8040C8C2A27F56AC479BD6FE8A7C4EC5495D1433D185840EF5`; committed without geometry changes. | 2026-07-30 |
+| driftingLootCrate | `driftingLootCrate.glb` | Crate / Quaternius | https://poly.pizza/m/3VGWnZPXmG | `poly-pizza:720097e2-63ed-4e5f-9b66-eb416942eea0` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 784 | 784 | Source GLB SHA-256 `4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E`; committed without geometry changes. | 2026-07-30 |
+| driftingBottle | `driftingBottle.glb` | Bottle of Wine / Jeremy | https://poly.pizza/m/13g9ucgxbHV | `poly-pizza:b1a8f402-de55-4e49-b63e-1439e5851c13` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 304 | 304 | Source GLB SHA-256 `5C1169A709CF2B897E9037771BC8B33EDE3C546A2CA872F33BF8A9348F112D54`; committed without geometry changes. | 2026-07-30 |
+| mysteryChest | `mysteryChest.glb` | Chest / Quaternius | https://poly.pizza/m/O72u4Drp8k | `poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1676 | 1676 | Source GLB SHA-256 `07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B`; committed without geometry changes. | 2026-07-30 |
+| flowers | `flowers.glb` | Lily Pad / Poly by Google | https://poly.pizza/m/0-_GjMekeob | `poly-pizza:856b7c36-4bd0-48f1-a308-529366b6a7fd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 728 | 728 | Source GLB SHA-256 `CC4BA073B2CC94B4CADA9BB25C15C3832052E2F3A018B3E2EB7F9429E6D2384B`; committed without geometry changes. | 2026-07-30 |
+
 ## Runtime audio ledger
 
 All audio in this ledger uses

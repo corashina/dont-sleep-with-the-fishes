@@ -8,15 +8,16 @@ import type {
   RandomSource,
   ResourceEffect,
   RiskLabel,
+  EventPresentationKey,
   SurvivalEventDefinition,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
 
 export const INCLUDED_EVENT_PHASES = Object.freeze({
-  'dangerous-waters': 'day', leak: 'day', 'school-of-fish': 'day',
-  snatcher: 'day', 'death-stare': 'day', 'swarm-of-anglerfish': 'day',
-  whirlpool: 'day', 'shark-men': 'day',
+  'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
+  snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
+  whirlpool: 'night', 'shark-men': 'night',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
@@ -97,6 +98,20 @@ const outcome = (
   message: string,
   outcomeEffects: WeightedEventOutcome['effects'] = {},
 ): WeightedEventOutcome => ({ weight, message, effects: outcomeEffects });
+
+const featuredOutcome = (
+  presentationKey: EventPresentationKey,
+  weight: number,
+  message: string,
+  outcomeEffects: WeightedEventOutcome['effects'] = {},
+  minimumPriorAppearances?: number,
+): WeightedEventOutcome => ({
+  weight,
+  message,
+  presentationKey,
+  ...(minimumPriorAppearances === undefined ? {} : { minimumPriorAppearances }),
+  effects: outcomeEffects,
+});
 
 function choice(
   id: string,
@@ -323,42 +338,51 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 0, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
-        outcome(45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
-        outcome(25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
-        outcome(20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
-        outcome(10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
+        featuredOutcome('drifting-loot.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
+        featuredOutcome('drifting-loot.bait', 25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
+        featuredOutcome('drifting-loot.repair', 20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
+        featuredOutcome('drifting-loot.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
-    contextualChoice('sleep', 'Let It Drift', outcome(1, 'The loot drifts out of reach.')),
+    contextualChoice('sleep', 'Let It Drift',
+      featuredOutcome('drifting-loot.drift', 1, 'The loot drifts out of reach.')),
   ]),
   event('drifting-bottle', 'Drifting Bottle', 'sighting', 30, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+      featuredOutcome('drifting-bottle.retrieve', 1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
-      outcome(1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'The bottle drifts away.')),
+      featuredOutcome('drifting-bottle.retrieve', 1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    contextualChoice('sleep', 'Sleep',
+      featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
   ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'Check the Back', 'fish', 35, 2, 35, [
     contextualChoice('check', 'Check the Back',
-      outcome(500, 'A fish has landed aboard.', effects([add('food', 1)])),
-      outcome(50, 'There is nothing there.'),
+      featuredOutcome('check-the-back.fish', 500, 'A fish has landed aboard.', effects([add('food', 1)])),
+      featuredOutcome('check-the-back.empty', 50, 'There is nothing there.'),
+      featuredOutcome('check-the-back.face', 1, 'You see yourself looking back.', {}, 1),
     ),
-    contextualChoice('sleep', 'Ignore', outcome(1, 'You leave the sound alone.')),
+    contextualChoice('sleep', 'Ignore',
+      featuredOutcome('check-the-back.ignore', 1, 'You leave the sound alone.')),
   ]),
   event('mystery-chest', 'Mystery Chest', 'impact', 45, 6, 33, [
     contextualChoice('take', 'Take the Chest',
-      outcome(1, 'You haul the closed chest aboard.', { chest: 'acquire' }),
+      featuredOutcome('mystery-chest.safe', 80, 'You haul the closed chest aboard.', { chest: 'acquire' }),
+      featuredOutcome('mystery-chest.mimic', 30, 'The chest bites your arm.', {
+        resources: [subtract('health', 25)],
+      }),
     ),
-    contextualChoice('sleep', 'Leave', outcome(1, 'The chest slips back under the water.')),
+    contextualChoice('sleep', 'Leave',
+      featuredOutcome('mystery-chest.leave', 1, 'The chest slips back under the water.')),
   ], undefined, { allowedChestStates: ['none'] }),
-  event('flowers', 'Flowers', 'sighting', 18, 2, 0, [
+  event('flowers', 'Flowers', 'sighting', 2, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      outcome(1, 'You lift the flowers aboard.', { flags: { set: ['flowers:collected'] } })),
+      featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.', { flags: { set: ['flowers:collected'] } })),
     choice('bucket', 'Use Bucket', 'bucket',
-      outcome(1, 'You gather the flowers in the bucket.', { flags: { set: ['flowers:collected'] } })),
-    contextualChoice('sleep', 'Let Them Drift', outcome(1, 'The flowers drift into the dark.')),
-  ], 13, { maximumAppearances: 1, maximumPressure: 1 }),
+      featuredOutcome('flowers.collect', 1, 'You gather the flowers in the bucket.', { flags: { set: ['flowers:collected'] } })),
+    contextualChoice('sleep', 'Let Them Drift',
+      featuredOutcome('flowers.drift', 1, 'The flowers drift into the dark.')),
+  ], 13, { maximumAppearances: 1 }),
   event('chest-attack', 'Chest Attack', 'impact', 1, 1, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(1, 'The net binds the chest shut.', { chest: 'close' })),
@@ -527,12 +551,22 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
     candidateOutcome,
     path,
     'outcome',
-    ['weight', 'message', 'effects'],
+    ['weight', 'message', 'presentationKey', 'minimumPriorAppearances', 'effects'],
     ['weight', 'message', 'effects'],
   );
   const outcomeEntry = candidateOutcome as unknown as WeightedEventOutcome;
   if (!Number.isFinite(outcomeEntry.weight) || outcomeEntry.weight <= 0) throw new Error(`${path} outcome weight is invalid`);
   if (typeof outcomeEntry.message !== 'string' || outcomeEntry.message.trim().length === 0) throw new Error(`${path} message is blank`);
+  if (outcomeEntry.presentationKey !== undefined
+    && (typeof outcomeEntry.presentationKey !== 'string'
+      || outcomeEntry.presentationKey.trim().length === 0)) {
+    throw new Error(`${path} presentation key is invalid`);
+  }
+  if (outcomeEntry.minimumPriorAppearances !== undefined
+    && (!Number.isInteger(outcomeEntry.minimumPriorAppearances)
+      || outcomeEntry.minimumPriorAppearances < 1)) {
+    throw new Error(`${path} minimum prior appearances is invalid`);
+  }
   const candidateEffects: unknown = outcomeEntry.effects;
   assertPlainObject(candidateEffects, `${path}.effects`);
   assertExactKeys(

@@ -58,11 +58,7 @@ interface MaritimeMaterials {
 type VectorTuple = readonly [number, number, number];
 
 const TABLEAU_EVENT_IDS = [
-  'drifting-bottle',
-  'check-the-back',
-  'mystery-chest',
   'chest-attack',
-  'flowers',
   'midnight-tour',
   'night-trader',
   'handyman',
@@ -346,11 +342,7 @@ export class EventPresentationLayer {
     this.root.name = 'event-presentation-layer';
     const materials = createMaterials();
     const tableaus = [
-      createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
-      createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
-      createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
       createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
-      createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
       createTableau('night-trader', traderTableau(materials), [4.4, 0.02, -7.2], [1.6, -0.38, -0.5]),
       createTableau('handyman', handTableau(materials), [-3.8, 0.05, -5.4], [-0.9, -0.52, 0.25]),

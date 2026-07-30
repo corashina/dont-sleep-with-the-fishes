@@ -199,6 +199,29 @@ export class DriftingLootPresentation {
       : this.roots[this.activeVariant];
   }
 
+  resultRoot(): Group | null {
+    return this.disposed || this.activeVariant === null
+      ? null
+      : this.roots[this.activeVariant];
+  }
+
+  settleForVisibilityChange(): void {
+    if (this.disposed || this.activeAnimation === null || this.activeVariant === null) return;
+    const animation = this.activeAnimation;
+    this.activeAnimation = null;
+    if (animation.kind === 'retrieve') {
+      this.state = 'held';
+      this.applySternPose(this.activeVariant);
+    } else if (animation.kind === 'recede') {
+      this.state = 'idle';
+      this.roots[this.activeVariant].visible = false;
+    } else {
+      this.state = 'floating';
+      this.applyFloatingPose(this.activeVariant, 0);
+    }
+    animation.resolve();
+  }
+
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();

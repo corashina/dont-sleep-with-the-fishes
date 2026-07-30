@@ -33,6 +33,37 @@ const choice = (overrides: Partial<EventChoiceDefinition> = {}): EventChoiceDefi
 });
 
 describe('resolveWeightedOutcome', () => {
+  it('returns the stable presentation key for the selected outcome', () => {
+    const resolved = resolveWeightedOutcome(choice({
+      outcomes: [{
+        weight: 1,
+        message: 'shown',
+        presentationKey: 'flowers.collect',
+        effects: {},
+      }],
+    }), sequenceRandom([0]));
+
+    expect(resolved.presentationKey).toBe('flowers.collect');
+  });
+
+  it('excludes outcomes that require an earlier appearance', () => {
+    const gated = choice({
+      outcomes: [
+        { weight: 1, message: 'common', effects: {} },
+        {
+          weight: 100,
+          message: 'rare',
+          presentationKey: 'check-the-back.face',
+          minimumPriorAppearances: 1,
+          effects: {},
+        },
+      ],
+    });
+
+    expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 0).message).toBe('common');
+    expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 1).message).toBe('rare');
+  });
+
   it('clones gain effects without mutating the catalog outcome', () => {
     const resolved = resolveWeightedOutcome(choice({
       outcomes: [{

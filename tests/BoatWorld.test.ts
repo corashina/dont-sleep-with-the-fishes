@@ -1014,6 +1014,32 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps the normal white outline on every event-eligible supply', () => {
+    const bucket = savedItem('bucket');
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket, map],
+    );
+    world.syncInventory(snapshot([bucket, map]));
+    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
+    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+
+    world.setEventEligibleItems(new Set([bucket.instanceId, map.instanceId]));
+
+    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setEventEligibleItems(null);
+    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('outlines the repair toolbox and lantern as physical interaction targets', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
