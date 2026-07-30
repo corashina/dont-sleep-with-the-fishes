@@ -22,6 +22,7 @@
     "textures:fetch:ship": "powershell -ExecutionPolicy Bypass -File scripts/fetch-ship-textures.ps1",
     "textures:check:ship": "node scripts/check-ship-textures.mjs",
     "models:check": "bun run models:check:items && bun run models:check:ship && bun run models:check:fishing && bun run textures:check:lifeboat && bun run textures:check:ship",
+    "audio:fetch": "node scripts/fetch-audio-assets.mjs",
     "thumbnails:generate": "node scripts/generate-item-thumbnails.mjs",
     "thumbnails:check": "node scripts/check-item-thumbnails.mjs"
   },
