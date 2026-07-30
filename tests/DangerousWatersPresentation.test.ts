@@ -29,6 +29,17 @@ function boatReaction(): DangerousWatersBoatReaction {
   };
 }
 
+function smoothstep(value: number): number {
+  const progress = Math.min(1, Math.max(0, value));
+  return progress * progress * (3 - 2 * progress);
+}
+
+function revealScale(progress: number): number {
+  const peek = smoothstep((progress - 0.42) / 0.2);
+  const sink = smoothstep((progress - 0.82) / 0.16);
+  return peek * (1 - sink);
+}
+
 describe('DangerousWatersPresentation', () => {
   it('builds an authored passage, lurker, foam, and fixed fragments', () => {
     const view = new DangerousWatersPresentation();
@@ -62,11 +73,11 @@ describe('DangerousWatersPresentation', () => {
 
     const reveal = view.reveal();
     view.update(1.2, 1.2);
-    expect(lurker.scale.y).toBeGreaterThan(0.6);
+    expect(lurker.scale.y).toBeCloseTo(revealScale(0.5));
     view.update(1.75, 0.55);
-    expect(lurker.scale.y).toBeGreaterThan(0.9);
+    expect(lurker.scale.y).toBeCloseTo(revealScale(1.75 / 2.4));
     view.update(2.1, 0.35);
-    expect(lurker.scale.y).toBeLessThan(0.8);
+    expect(lurker.scale.y).toBeCloseTo(revealScale(2.1 / 2.4));
     view.update(2.4, 0.3);
     await reveal;
     expect(lurker.scale.y).toBe(0);
@@ -228,9 +239,14 @@ describe('DangerousWatersPresentation', () => {
       accepted: true, code: 'event-resolved', message: 'Scrape.',
       deltas: { hull: -25 }, cue: 'impact',
     });
-    severe.update(0.9, 0.9);
+    for (const elapsed of [0.18, 0.36, 0.54, 0.72, 0.9]) {
+      severe.update(elapsed, 0.18);
+      expect(severeRock.position.distanceTo(severeBase)).toBeLessThanOrEqual(0.18);
+    }
+    severe.update(0.9, 0.1);
     await severeMotion;
     expect(severeRock.position.z).not.toBe(severeBase.z);
+    expect(severeRock.position.distanceTo(severeBase)).toBeLessThanOrEqual(0.18);
     damage.dispose();
     severe.dispose();
   });
