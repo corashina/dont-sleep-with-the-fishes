@@ -78,6 +78,7 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
@@ -421,6 +422,8 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly chestDisplay = new ChestDisplay();
+  private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
@@ -434,6 +437,7 @@ export class BoatWorld {
   private readonly fishingAnchorBounds: BoatObjectBoundsCache | null;
   private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
   private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
@@ -560,6 +564,7 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
     );
+    this.boat.add(this.chestDisplay.root);
     this.weatherEventAnimator = new WeatherEventAnimator(
       this.cameraRig,
       this.supplyDisplay,
@@ -650,6 +655,7 @@ export class BoatWorld {
     this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
     this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
     this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
+    this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
     this.applyBasePresentation();
   }
 
@@ -678,6 +684,8 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
+    this.chestState = snapshot.chest.state;
+    this.chestDisplay.sync(snapshot.chest);
   }
 
   setHighlightedItem(instanceId: string | null): void {
@@ -688,6 +696,8 @@ export class BoatWorld {
         ? this.repairTools
         : instanceId === 'end-day-lantern'
           ? this.lantern.root
+          : instanceId === 'persistent-chest'
+            ? this.chestDisplay.root
           : instanceId === 'drifting-loot'
             ? this.driftingLootPresentation?.interactionRoot() ?? null
             : null,
@@ -953,11 +963,48 @@ export class BoatWorld {
             depth: driftingLootProjection.bounds.depth,
           },
         } satisfies BoatInteractionAnchor;
+    const chestProjection = projectCachedBoatObjectBounds(
+      this.chestDisplay.root,
+      this.chestAnchorBounds,
+      this.camera,
+      width,
+      height,
+    );
+    const {
+      width: chestWidth,
+      height: chestHeight,
+      depth: chestDepth,
+      ...chestPoint
+    } = chestProjection;
+    const chestAnchor = {
+      id: 'persistent-chest',
+      label: 'CHEST',
+      description: 'A closed chest. Opening it costs three energy.',
+      itemType: null,
+      toolId: 'chest',
+      action: this.chestState === 'closed' ? 'openChest' : null,
+      ...chestPoint,
+      visible: this.chestState === 'closed'
+        && this.chestDisplay.root.visible
+        && chestPoint.visible,
+      depleted: false,
+      remainingUses: null,
+      quantity: 1,
+      usableQuantity: 1,
+      brokenQuantity: 0,
+      backingInstanceId: null,
+      hitArea: {
+        width: Math.max(54, chestWidth),
+        height: Math.max(54, chestHeight),
+        depth: chestDepth,
+      },
+    } satisfies BoatInteractionAnchor;
     return [
       ...itemAnchors,
       fishingAnchor,
       repairAnchor,
       lanternAnchor,
+      chestAnchor,
       ...(driftingLootAnchor === null ? [] : [driftingLootAnchor]),
     ];
   }
@@ -1276,6 +1323,7 @@ export class BoatWorld {
       () => this.cancelActiveSequence(),
       () => this.weatherEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
+      () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
       () => this.eventPresentation.dispose(),
       () => this.driftingLootPresentation?.dispose(),

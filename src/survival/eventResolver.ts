@@ -41,6 +41,19 @@ export function resolveWeightedOutcome(
       ...(selected.effects.items
         ? { items: selected.effects.items.map((mutation) => ({ ...mutation })) }
         : {}),
+      ...(selected.effects.chest !== undefined ? { chest: selected.effects.chest } : {}),
+      ...(selected.effects.flags !== undefined
+        ? {
+            flags: {
+              ...(selected.effects.flags.set === undefined
+                ? {}
+                : { set: [...selected.effects.flags.set] }),
+              ...(selected.effects.flags.clear === undefined
+                ? {}
+                : { clear: [...selected.effects.flags.clear] }),
+            },
+          }
+        : {}),
       ...(selected.effects.rescue !== undefined ? { rescue: selected.effects.rescue } : {}),
     },
   };

@@ -51,6 +51,10 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
     label: 'END DAY',
     description: 'Douse the lantern to end the current day. Energy is restored at dawn.',
   },
+  chest: {
+    label: 'CHEST',
+    description: 'Open the recovered chest. The task costs three energy.',
+  },
 });
 
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
@@ -82,6 +86,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
   { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
+  { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
 ];
 
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
@@ -1469,6 +1474,7 @@ export class SurvivalUI {
     return anchor.itemType !== null
       || anchor.toolId === 'repairTools'
       || anchor.toolId === 'lantern'
+      || anchor.toolId === 'chest'
       || anchor.eventChoiceId !== undefined;
   }
 

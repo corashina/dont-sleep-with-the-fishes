@@ -22,6 +22,12 @@ import type {
   JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
+import {
+  CHEST_OPEN_ENERGY,
+  drawChestReward,
+  shouldBecomeMimic,
+} from './chest';
+import { nightDamageMultiplier, pressureForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import type {
   ActionOutcome,
@@ -41,6 +47,8 @@ import type {
   SurvivalState,
   ResourceEffect,
   RewardSummary,
+  ChestSnapshot,
+  ChestState,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
@@ -52,9 +60,14 @@ export interface SurvivalSessionOptions {
   seed: number;
   random?: RandomSource;
   weather?: WeatherId;
-  initial?: Partial<Pick<SurvivalSnapshot, 'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'rescueProgress'>>;
+  initial?: Partial<Pick<
+    SurvivalSnapshot,
+    'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'pressure' | 'rescueProgress'
+  >>;
   initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
+  initialChest?: ChestSnapshot;
+  initialEventFlags?: readonly string[];
 }
 
 declare module './survivalTypes' {
@@ -83,6 +96,7 @@ type DayActivity = 'none' | 'fishing' | 'other';
 export class SurvivalSession {
   private state: SurvivalState = 'day';
   private day: number;
+  private pressure: number;
   private health: number;
   private hunger: number;
   private energy: number;
@@ -93,6 +107,9 @@ export class SurvivalSession {
   private recoveredBait = 0;
   private repairMaterial = 0;
   private rescueProgress: number;
+  private chestState: ChestState;
+  private chestAcquiredDay: number | null;
+  private readonly eventFlags: Set<string>;
   private weather: WeatherId;
   private actedToday = false;
   private dayActivity: DayActivity = 'none';
@@ -122,11 +139,17 @@ export class SurvivalSession {
     this.random = options.random ?? mulberry32(options.seed);
     this.weather = options.weather ?? 'calm';
     this.day = options.initial?.day ?? 1;
+    this.pressure = options.initial?.pressure ?? pressureForDay(this.day);
     this.health = options.initial?.health ?? SURVIVAL_BALANCE.start.health;
     this.hunger = options.initial?.hunger ?? SURVIVAL_BALANCE.start.hunger;
     this.energy = options.initial?.energy ?? SURVIVAL_BALANCE.start.energy;
     this.hull = options.initial?.hull ?? SURVIVAL_BALANCE.start.hull;
     this.rescueProgress = options.initial?.rescueProgress ?? 0;
+    this.chestState = options.initialChest?.state ?? 'none';
+    this.chestAcquiredDay = this.chestState === 'none'
+      ? null
+      : options.initialChest?.acquiredDay ?? this.day;
+    this.eventFlags = new Set(options.initialEventFlags ?? []);
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
     this.inventory = new SurvivalInventoryState(this.savedItems);
@@ -162,6 +185,7 @@ export class SurvivalSession {
     this.cachedSnapshot = Object.freeze({
       state: this.state,
       day: this.day,
+      pressure: this.pressure,
       health: this.health,
       hunger: this.hunger,
       energy: this.energy,
@@ -172,6 +196,11 @@ export class SurvivalSession {
       recoveredBait: this.recoveredBait,
       repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
+      chest: Object.freeze({
+        state: this.chestState,
+        acquiredDay: this.chestAcquiredDay,
+      }),
+      eventFlags: Object.freeze([...this.eventFlags].sort()),
       weather: this.weather,
       actedToday: this.actedToday,
       journalEntries: this.journalSnapshot(),
@@ -203,6 +232,7 @@ export class SurvivalSession {
       case 'treat': outcome = this.treat(); break;
       case 'sendMessage': outcome = this.sendMessage(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
+      case 'openChest': outcome = this.openChest(); break;
       case 'endDay': return this.endDay();
     }
     this.dayActivity = 'other';
@@ -363,6 +393,18 @@ export class SurvivalSession {
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
 
+    if (this.chestState === 'closed'
+      && this.chestAcquiredDay !== null
+      && shouldBecomeMimic(this.chestAcquiredDay, this.day, this.random)) {
+      this.chestState = 'mimic';
+    }
+    if (this.chestState === 'mimic') {
+      const attack = survivalEventById('chest-attack');
+      if (attack === undefined) throw new Error('Missing Chest Attack event definition.');
+      this.openEvent(attack);
+      return this.commit('event-opened', attack.prompt, {}, 'nightfall');
+    }
+
     if (this.random.next() < SURVIVAL_BALANCE.night.quietChance) {
       this.state = 'nightEvent';
       this.pendingJournalNighttime = { kind: 'quiet' };
@@ -441,6 +483,7 @@ export class SurvivalSession {
         effect,
         mutationExclusions,
         selectedInstanceId,
+        phase,
       ));
     }
     for (const mutation of resolved.effects.items ?? []) {
@@ -453,6 +496,8 @@ export class SurvivalSession {
       if (mutation.kind === 'gain' && concrete === null) fallbackFoodGranted = true;
       if (concrete !== null) inventoryMutations.push(concrete);
     }
+    this.applyChestEffect(resolved.effects.chest);
+    this.applyFlagEffects(resolved.effects.flags);
 
     if (resolved.effects.rescue === true) {
       this.state = 'rescued';
@@ -529,6 +574,10 @@ export class SurvivalSession {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
     };
+    const scheduledPressure = pressureForDay(this.day);
+    if (scheduledPressure > this.pressure) {
+      deltas.pressure = scheduledPressure - this.pressure;
+    }
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
@@ -660,6 +709,14 @@ export class SurvivalSession {
           return { code: 'energy-full', message: 'Your energy is already full.' };
         }
         return null;
+      case 'openChest':
+        if (this.chestState !== 'closed') {
+          return { code: 'no-closed-chest', message: 'There is no closed chest to open.' };
+        }
+        if (this.energy < CHEST_OPEN_ENERGY) {
+          return { code: 'not-enough-energy', message: 'Opening the chest requires three energy.' };
+        }
+        return null;
       case 'endDay':
         return null;
     }
@@ -772,6 +829,45 @@ export class SurvivalSession {
     }, 'none');
   }
 
+  private openChest(): ActionOutcome {
+    const activeItemIds = this.targetableItemIds();
+    const reward = drawChestReward(activeItemIds, this.random);
+    this.chestState = 'none';
+    this.chestAcquiredDay = null;
+
+    if (reward.kind === 'resource') {
+      const deltas: ResourceDelta = {
+        energy: -CHEST_OPEN_ENERGY,
+        [reward.resource]: reward.quantity,
+      };
+      return this.commit(
+        'chest-opened',
+        `The chest holds ${reward.quantity} ${reward.resource}.`,
+        deltas,
+        'impact',
+        { kind: 'resource', id: reward.resource, quantity: reward.quantity },
+      );
+    }
+
+    const gained = this.inventory.gain(reward.itemId);
+    if (gained === null) {
+      return this.commit(
+        'chest-opened',
+        'The item cannot fit, so you recover two food.',
+        { energy: -CHEST_OPEN_ENERGY, food: 2 },
+        'impact',
+        { kind: 'resource', id: 'food', quantity: 2 },
+      );
+    }
+    return this.commit(
+      'chest-opened',
+      `The chest holds ${ITEM_DEFINITIONS[reward.itemId].label.toLowerCase()}.`,
+      { energy: -CHEST_OPEN_ENERGY },
+      'impact',
+      { kind: 'item', id: reward.itemId, quantity: 1 },
+    );
+  }
+
   private drawEvent(
     phase: 'day' | 'night',
     excludedIds: ReadonlySet<string> = NO_EVENT_EXCLUSIONS,
@@ -786,6 +882,9 @@ export class SurvivalSession {
       appearanceCounts: this.appearanceCounts,
       inventoryItemIds: this.targetableItemIds(),
       rescueProgress: this.rescueProgress,
+      pressure: this.pressure,
+      eventFlags: this.eventFlags,
+      chestState: this.chestState,
     }).filter(({ id }) => !excludedIds.has(id));
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -974,7 +1073,13 @@ export class SurvivalSession {
     return this.reject('fishing-in-progress', 'Finish the active fishing attempt first.');
   }
 
-  private commit(code: string, message: string, deltas: ResourceDelta, cue: PresentationCue): ActionOutcome {
+  private commit(
+    code: string,
+    message: string,
+    deltas: ResourceDelta,
+    cue: PresentationCue,
+    rewardSummary?: RewardSummary,
+  ): ActionOutcome {
     const before = this.resourceValues();
     this.applyDeltas(deltas);
     this.resolveTerminal();
@@ -984,7 +1089,14 @@ export class SurvivalSession {
       return [resource, after[resource] - before[resource]];
     })) as ResourceDelta;
     const terminalCue = this.state === 'dead' ? 'death' : this.state === 'sunk' ? 'sinking' : this.state === 'rescued' ? 'rescue' : cue;
-    const outcome: ActionOutcome = { accepted: true, code, message, deltas: applied, cue: terminalCue };
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code,
+      message,
+      deltas: applied,
+      cue: terminalCue,
+      ...(rewardSummary === undefined ? {} : { rewardSummary }),
+    };
     this.lastOutcome = outcome;
     this.changed();
     return { ...outcome, deltas: { ...outcome.deltas } };
@@ -996,6 +1108,7 @@ export class SurvivalSession {
 
   private resourceValues(): Required<ResourceDelta> {
     return {
+      pressure: this.pressure,
       health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
       food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
       rescueProgress: this.rescueProgress,
@@ -1013,14 +1126,23 @@ export class SurvivalSession {
     effect: ResourceEffect,
     excludedInstanceIds: ReadonlySet<ItemInstanceId>,
     selectedInstanceId: ItemInstanceId | null,
+    phase: SurvivalEventDefinition['phase'],
   ): JournalInventoryMutation[] {
     if (typeof effect.value !== 'number') {
       throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
     }
     const current = this.resourceValues()[effect.resource];
-    const delta = effect.operation === 'set'
+    let delta = effect.operation === 'set'
       ? effect.value - current
       : effect.operation === 'add' ? effect.value : -effect.value;
+    if (effect.resource === 'pressure') {
+      delta = Math.max(0, delta);
+    }
+    if (phase === 'night'
+      && effect.operation === 'subtract'
+      && (effect.resource === 'health' || effect.resource === 'hull')) {
+      delta *= nightDamageMultiplier(this.day);
+    }
     return this.applyDeltas(
       { [effect.resource]: delta },
       excludedInstanceIds,
@@ -1097,6 +1219,23 @@ export class SurvivalSession {
     if (instanceIds.length === 0) return null;
     this.synchronizeRemovedResources(kind, instanceIds);
     return { kind, instanceIds };
+  }
+
+  private applyChestEffect(effect: WeightedEventOutcome['effects']['chest']): void {
+    if (effect === undefined) return;
+    if (effect === 'acquire' || effect === 'close') {
+      this.chestState = 'closed';
+      this.chestAcquiredDay = this.day;
+      return;
+    }
+    this.chestState = 'none';
+    this.chestAcquiredDay = null;
+  }
+
+  private applyFlagEffects(effects: WeightedEventOutcome['effects']['flags']): void {
+    if (effects === undefined) return;
+    for (const flag of effects.clear ?? []) this.eventFlags.delete(flag);
+    for (const flag of effects.set ?? []) this.eventFlags.add(flag);
   }
 
   private mutateMatchingInstances(
@@ -1176,6 +1315,7 @@ export class SurvivalSession {
     this.bait += adjustedDeltas.bait ?? 0;
     this.repairMaterial += adjustedDeltas.repairMaterial ?? 0;
     this.rescueProgress += adjustedDeltas.rescueProgress ?? 0;
+    this.pressure += adjustedDeltas.pressure ?? 0;
     this.clampMeters();
     const consumedFood = spentRecoveredFood > 0
       ? this.inventory.consumePreferred(
@@ -1239,6 +1379,7 @@ export class SurvivalSession {
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
     this.rescueProgress = Math.max(0, this.rescueProgress);
+    this.pressure = Math.min(4, Math.max(0, this.pressure));
   }
 
   private applyInitialConditions(

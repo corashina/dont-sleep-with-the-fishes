@@ -142,7 +142,7 @@ export function formatDriftingLootResult(
   reward: RewardSummary,
 ): DriftingLootResultView {
   const title = reward.kind === 'item'
-    ? 'ENERGY BAR'
+    ? ITEM_DEFINITIONS[reward.id].label
     : `+${reward.quantity} ${
       reward.id === 'repairMaterial'
         ? 'REPAIR MATERIAL'
