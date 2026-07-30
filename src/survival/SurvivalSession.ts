@@ -15,6 +15,7 @@ import { FishingSession, type FishingTerminalResult } from './FishingSession';
 import { SurvivalInventoryState } from './inventory';
 import type {
   JournalDayActionRecord,
+  JournalDaytimeRecord,
   JournalEntry,
   JournalEventRecord,
   JournalNightRecord,
@@ -54,7 +55,6 @@ import type {
 } from './survivalTypes';
 
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
-const POST_ACTION_EXCLUDED_EVENT_IDS: ReadonlySet<string> = new Set(['drifting-loot']);
 
 export interface SurvivalSessionOptions {
   seed: number;
@@ -68,6 +68,7 @@ export interface SurvivalSessionOptions {
   initialEventId?: string;
   initialChest?: ChestSnapshot;
   initialEventFlags?: readonly string[];
+  initialAppearanceCounts?: Readonly<Record<string, number>>;
 }
 
 declare module './survivalTypes' {
@@ -88,10 +89,7 @@ interface ActiveFishingTransaction {
   readonly attempt: FishingSession;
   readonly capturedBait: boolean;
   readonly previousActedToday: boolean;
-  readonly previousDayActivity: DayActivity;
 }
-
-type DayActivity = 'none' | 'fishing' | 'other';
 
 export class SurvivalSession {
   private state: SurvivalState = 'day';
@@ -112,8 +110,6 @@ export class SurvivalSession {
   private readonly eventFlags: Set<string>;
   private weather: WeatherId;
   private actedToday = false;
-  private dayActivity: DayActivity = 'none';
-  private dayEventOccurred = false;
   private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
   private pendingEventId: string | null;
@@ -124,7 +120,7 @@ export class SurvivalSession {
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
   private lastOutcome: ActionOutcome | null = null;
-  private pendingJournalDaytime: JournalEventRecord | null = null;
+  private pendingJournalDaytime: JournalDaytimeRecord | null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
   private pendingJournalActions: JournalDayActionRecord[] = [];
   private readonly journalEntries: JournalEntry[] = [];
@@ -139,6 +135,9 @@ export class SurvivalSession {
     this.random = options.random ?? mulberry32(options.seed);
     this.weather = options.weather ?? 'calm';
     this.day = options.initial?.day ?? 1;
+    this.pendingJournalDaytime = this.day === 1
+      ? Object.freeze({ kind: 'sinkingShip' })
+      : null;
     this.pressure = options.initial?.pressure ?? pressureForDay(this.day);
     this.health = options.initial?.health ?? SURVIVAL_BALANCE.start.health;
     this.hunger = options.initial?.hunger ?? SURVIVAL_BALANCE.start.hunger;
@@ -150,6 +149,12 @@ export class SurvivalSession {
       ? null
       : options.initialChest?.acquiredDay ?? this.day;
     this.eventFlags = new Set(options.initialEventFlags ?? []);
+    for (const [eventId, count] of Object.entries(options.initialAppearanceCounts ?? {})) {
+      if (!Number.isInteger(count) || count < 0) {
+        throw new Error(`Invalid initial appearance count for ${eventId}.`);
+      }
+      this.appearanceCounts.set(eventId, count);
+    }
     this.pendingEventId = null;
     this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
     this.inventory = new SurvivalInventoryState(this.savedItems);
@@ -160,7 +165,6 @@ export class SurvivalSession {
       if (initialEvent === undefined) throw new Error(`Unknown survival event: ${options.initialEventId}`);
       this.openEvent(initialEvent);
       if (initialEvent.id === 'drifting-loot') this.pendingDriftingLootVariant = 'barrel';
-      this.dayEventOccurred = initialEvent.phase === 'day';
     }
 
     this.recoveredFood = this.inventory.count('cannedFood', 'usable');
@@ -235,7 +239,6 @@ export class SurvivalSession {
       case 'openChest': outcome = this.openChest(); break;
       case 'endDay': return this.endDay();
     }
-    this.dayActivity = 'other';
     this.actedToday = true;
     return outcome;
   }
@@ -248,11 +251,6 @@ export class SurvivalSession {
       rejection = this.reject('terminal', 'The survival journey has already ended.');
     } else if (this.state !== 'day') {
       rejection = this.reject('not-daytime', 'Fishing is only available during the day.');
-    } else if (this.dayActivity === 'other') {
-      rejection = this.reject(
-        'fishing-activity-chosen',
-        'Another daytime activity has already been chosen.',
-      );
     } else if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
       rejection = this.reject('not-enough-energy', 'Fishing requires one energy.');
     }
@@ -265,7 +263,6 @@ export class SurvivalSession {
         .map((item) => item!.type),
     );
     const previousActedToday = this.actedToday;
-    const previousDayActivity = this.dayActivity;
     const attempt = new FishingSession({
       id: `fishing-${this.day}-${++this.fishingCounter}`,
       day: this.day,
@@ -280,12 +277,10 @@ export class SurvivalSession {
       'none',
     );
     this.actedToday = true;
-    this.dayActivity = 'fishing';
     this.activeFishing = {
       attempt,
       capturedBait,
       previousActedToday,
-      previousDayActivity,
     };
     return { accepted: true, outcome, attempt };
   }
@@ -305,7 +300,6 @@ export class SurvivalSession {
 
     this.activeFishing = null;
     this.actedToday = transaction.previousActedToday;
-    this.dayActivity = transaction.previousDayActivity;
     return this.commit(
       'fishing-cancelled',
       'You lower the rod without casting.',
@@ -370,22 +364,10 @@ export class SurvivalSession {
   }
 
   requestDayEvent(): ActionOutcome {
-    if (this.activeFishing !== null) return this.fishingInProgress();
-    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
-    if (this.state !== 'day') return this.reject('not-daytime', 'A day event cannot begin right now.');
-    if (this.dayActivity === 'fishing') {
-      return this.reject(
-        'fishing-day-event-disabled',
-        'Fishing results replace today\'s daytime event.',
-      );
-    }
-    if (!this.actedToday) return this.reject('act-first', 'Take a survival action before looking beyond the boat.');
-    if (this.dayEventOccurred) return this.reject('day-event-used', 'Today\'s event has already passed.');
-
-    const event = this.drawEvent('day', POST_ACTION_EXCLUDED_EVENT_IDS);
-    this.dayEventOccurred = true;
-    this.openEvent(event);
-    return this.commit('event-opened', event.prompt, {}, event.cue);
+    return this.reject(
+      'day-event-scheduled',
+      'Day events open only through their own schedule.',
+    );
   }
 
   endDay(): ActionOutcome {
@@ -475,7 +457,11 @@ export class SurvivalSession {
     const phase = event.phase;
     const pendingDriftingLootVariant = this.pendingDriftingLootVariant;
     const before = this.resourceValues();
-    const resolved = resolveWeightedOutcome(choice, this.random);
+    const resolved = resolveWeightedOutcome(
+      choice,
+      this.random,
+      this.appearanceCounts.get(event.id) ?? 0,
+    );
     const inventoryMutations: JournalInventoryMutation[] = [];
     let fallbackFoodGranted = false;
     for (const effect of resolved.effects.resources ?? []) {
@@ -523,6 +509,9 @@ export class SurvivalSession {
         : resolved.message,
       deltas,
       cue,
+      ...(resolved.presentationKey === undefined
+        ? {}
+        : { eventPresentationKey: resolved.presentationKey }),
       ...(rewardSummary === undefined ? {} : { rewardSummary }),
     };
     this.lastOutcome = outcome;
@@ -554,8 +543,6 @@ export class SurvivalSession {
     this.pendingJournalNighttime = null;
     this.pendingJournalActions = [];
     this.actedToday = false;
-    this.dayActivity = 'none';
-    this.dayEventOccurred = false;
     this.clearPendingEvent();
     this.state = 'day';
 
@@ -614,21 +601,8 @@ export class SurvivalSession {
     if (invalidOption !== null) return invalidOption;
     if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
     if (this.state !== 'day') return { code: 'not-daytime', message: 'That action is only available during the day.' };
-    if (action !== 'fish' && action !== 'endDay' && this.dayActivity === 'fishing') {
-      return {
-        code: 'fishing-activity-chosen',
-        message: 'Fishing is today\'s chosen activity.',
-      };
-    }
-
     switch (action) {
       case 'fish':
-        if (this.dayActivity === 'other') {
-          return {
-            code: 'fishing-activity-chosen',
-            message: 'Another daytime activity has already been chosen.',
-          };
-        }
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
           return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };
         }
@@ -647,6 +621,9 @@ export class SurvivalSession {
       case 'eat':
         if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
         if (this.hunger <= 0) return { code: 'not-hungry', message: 'You are not hungry.' };
+        if (this.energy < SURVIVAL_BALANCE.actions.eatEnergy) {
+          return { code: 'not-enough-energy', message: 'Eating requires one energy.' };
+        }
         return null;
       case 'repair':
         if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
@@ -766,7 +743,11 @@ export class SurvivalSession {
     return this.commit(
       'ate',
       'The food takes the edge off your hunger.',
-      { hunger: SURVIVAL_BALANCE.actions.foodHunger, food: -1 },
+      {
+        hunger: SURVIVAL_BALANCE.actions.foodHunger,
+        energy: -SURVIVAL_BALANCE.actions.eatEnergy,
+        food: -1,
+      },
       'none',
     );
   }
@@ -895,7 +876,6 @@ export class SurvivalSession {
     const event = survivalEventById('drifting-loot');
     if (event === undefined) throw new Error('Missing Drifting Loot event definition.');
     this.pendingDriftingLootVariant = this.random.next() < balance.barrelChance ? 'barrel' : 'crate';
-    this.dayEventOccurred = true;
     this.openEvent(event);
   }
 
@@ -938,6 +918,9 @@ export class SurvivalSession {
       resolution,
       outcomeCode: outcome.code,
       outcomeMessage: outcome.message,
+      ...(outcome.eventPresentationKey === undefined
+        ? {}
+        : { eventPresentationKey: outcome.eventPresentationKey }),
       inventoryMutations: this.cloneInventoryMutations(inventoryMutations),
     };
     if (event.phase === 'day') {
@@ -970,7 +953,9 @@ export class SurvivalSession {
     return Object.freeze(this.journalEntries.map((entry) => Object.freeze({
       ...entry,
       actions: this.cloneJournalActions(entry.actions),
-      daytime: entry.daytime === null ? null : this.cloneJournalRecord(entry.daytime),
+      daytime: entry.daytime === null
+        ? null
+        : this.cloneJournalDaytime(entry.daytime),
       nighttime: Object.freeze(this.cloneJournalNight(entry.nighttime)),
     })));
   }
@@ -1219,6 +1204,12 @@ export class SurvivalSession {
     if (instanceIds.length === 0) return null;
     this.synchronizeRemovedResources(kind, instanceIds);
     return { kind, instanceIds };
+  }
+
+  private cloneJournalDaytime(record: JournalDaytimeRecord): JournalDaytimeRecord {
+    return 'kind' in record
+      ? Object.freeze({ kind: 'sinkingShip' })
+      : this.cloneJournalRecord(record);
   }
 
   private applyChestEffect(effect: WeightedEventOutcome['effects']['chest']): void {
