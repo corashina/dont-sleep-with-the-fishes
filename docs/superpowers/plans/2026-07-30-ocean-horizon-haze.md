@@ -1,28 +1,26 @@
-# Ocean Horizon Haze Implementation Plan
+# Ocean Distance Continuity Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hide the coarse ocean grid join with a low-cost horizon haze ramp.
+**Goal:** Keep ocean waves coherent from the near grid to the true horizon.
 
-**Architecture:** `OceanRenderer` owns reusable haze and detail uniforms. The shader keeps subtle distant ripples and moves far fog toward the sky horizon color.
+**Architecture:** Grade the existing horizon vertices toward the near-grid density. Preserve middle-distance wave contrast, then complete fog near the true horizon.
 
 **Tech Stack:** TypeScript, Three.js GLSL, Vitest, Vite
 
 ## Global Constraints
 
-Add no geometry, texture, render pass, draw call, or frame allocation.
+Add no vertices, panels, materials, textures, render passes, or draw calls.
 
-Keep the current shared wave field unchanged.
+Keep the shared wave field unchanged.
 
-Use low haze settings `85`, `260`, and `1`.
+Use radial exponent `1.75`.
 
-Use high haze settings `100`, `320`, and `1`.
+Use low fog settings `150`, `650`, and `0.86`.
 
-Use detail floors `0.11` for low and `0.08` for high.
+Use high fog settings `180`, `750`, and `0.82`.
 
-Blend the fog target toward the horizon color.
-
-Keep existing fog strength and ordered dither.
+Do not add frame-loop allocations.
 
 Do not add reduced-motion behavior.
 
@@ -31,90 +29,34 @@ Do not add reduced-motion behavior.
 ## File Structure
 
 - Modify `src/ocean/OceanRenderer.ts`.
-  It owns water quality values, uniforms, shader code, and resource disposal.
-- Create `tests/OceanRenderer.test.ts`.
-  It protects haze settings, uniform reuse, and safe disposal.
+  It owns ocean geometry, shader settings, quality changes, and disposal.
+- Modify `tests/OceanRenderer.test.ts`.
+  It protects seam density, vertex budget, fog settings, and ownership.
 
-### Task 1: Add the horizon haze ramp
+### Task 1: Grade horizon geometry and preserve distant contrast
 
 **Files:**
-- Modify: `src/ocean/OceanRenderer.ts:20-824`
-- Create: `tests/OceanRenderer.test.ts`
+- Modify: `src/ocean/OceanRenderer.ts`
+- Modify: `tests/OceanRenderer.test.ts`
 
 **Interfaces:**
-- Consumes: `WaterQuality`, `OceanRenderer.material`, and `OceanRenderer.setQuality`.
-- Produces: `OceanSurfaceQuality.horizonHazeStart: number`.
-- Produces: `OceanSurfaceQuality.horizonHazeEnd: number`.
-- Produces: `OceanSurfaceQuality.horizonHazeStrength: number`.
-- Produces: `OceanSurfaceQuality.distantDetailStrength: number`.
-- Produces: shader uniform `uHorizonHaze: Vector3`.
-- Produces: shader uniform `uDistantDetailStrength: number`.
+- Produces: `OceanSurfaceQuality.horizonRadialExponent: number`.
+- Produces: `OceanSurfaceQuality.horizonFogStart: number`.
+- Produces: `OceanSurfaceQuality.horizonFogEnd: number`.
+- Produces: `OceanSurfaceQuality.horizonFogLimit: number`.
+- Produces: shader uniform `uHorizonFog: Vector3`.
 
-- [x] **Step 1: Write failing quality and ownership tests**
+- [x] **Step 1: Write the failing geometry test**
 
-Create `tests/OceanRenderer.test.ts`:
+Read centerline radial positions from `horizonMesh.geometry`.
 
-```ts
-// Importance: 4/5. Protects the cheap horizon transition and uniform ownership.
-import { Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
-import {
-  OCEAN_SURFACE_QUALITY,
-  OceanRenderer,
-} from '../src/ocean/OceanRenderer';
+Require the first horizon cell to stay within 1.5 near-grid cells.
 
-describe('OceanRenderer horizon haze', () => {
-  it.each([
-    ['low', [85, 260, 1], 0.11],
-    ['high', [100, 320, 1], 0.08],
-  ] as const)('uses the %s quality distance settings', (
-    quality,
-    expectedHaze,
-    expectedDetail,
-  ) => {
-    const ocean = new OceanRenderer(quality);
+Require the first cell to remain smaller than the last cell.
 
-    expect([
-      OCEAN_SURFACE_QUALITY[quality].horizonHazeStart,
-      OCEAN_SURFACE_QUALITY[quality].horizonHazeEnd,
-      OCEAN_SURFACE_QUALITY[quality].horizonHazeStrength,
-    ]).toEqual(expectedHaze);
-    expect(
-      OCEAN_SURFACE_QUALITY[quality].distantDetailStrength,
-    ).toBe(expectedDetail);
-    expect(
-      (ocean.material.uniforms.uHorizonHaze!.value as Vector3).toArray(),
-    ).toEqual(expectedHaze);
-    expect(
-      ocean.material.uniforms.uDistantDetailStrength!.value,
-    ).toBe(expectedDetail);
+Require the old horizon vertex count for each quality.
 
-    ocean.dispose();
-  });
-
-  it('updates the existing haze uniform when quality changes', () => {
-    const ocean = new OceanRenderer('low');
-    const haze = ocean.material.uniforms.uHorizonHaze!.value as Vector3;
-
-    ocean.setQuality('high');
-
-    expect(ocean.material.uniforms.uHorizonHaze!.value).toBe(haze);
-    expect(haze.toArray()).toEqual([100, 320, 1]);
-    expect(ocean.material.uniforms.uDistantDetailStrength!.value).toBe(0.08);
-    ocean.dispose();
-  });
-
-  it('disposes safely after a quality change', () => {
-    const ocean = new OceanRenderer('low');
-
-    ocean.setQuality('high');
-    expect(() => ocean.dispose()).not.toThrow();
-    expect(() => ocean.dispose()).not.toThrow();
-  });
-});
-```
-
-- [x] **Step 2: Run the focused test and confirm failure**
+- [x] **Step 2: Run the geometry test and confirm failure**
 
 Run:
 
@@ -122,108 +64,81 @@ Run:
 bunx vitest run tests/OceanRenderer.test.ts
 ```
 
-Expected: fail because haze quality fields and `uHorizonHaze` do not exist.
+Expected before implementation:
 
-- [x] **Step 3: Add exact quality settings**
-
-Add these fields to `OceanSurfaceQuality`:
-
-```ts
-horizonHazeStart: number;
-horizonHazeEnd: number;
-horizonHazeStrength: number;
-distantDetailStrength: number;
+```text
+Low first cell: about 21.04; maximum: 1.41.
+High first cell: about 14.03; maximum: 0.94.
 ```
 
-Add these low settings:
+- [x] **Step 3: Grade every horizon panel**
+
+After panel rotation and translation, remap each radial coordinate:
 
 ```ts
-horizonHazeStart: 85,
-horizonHazeEnd: 260,
-horizonHazeStrength: 1,
-distantDetailStrength: 0.11,
+const distance = direction * value;
+const progress = Math.min(
+  1,
+  Math.max(0, (distance - innerHalfExtent) / span),
+);
+const graded = direction * (
+  innerHalfExtent + span * Math.pow(progress, 1.75)
+);
 ```
 
-Add these high settings:
+Grade one axis for edge panels.
 
-```ts
-horizonHazeStart: 100,
-horizonHazeEnd: 320,
-horizonHazeStrength: 1,
-distantDetailStrength: 0.08,
-```
+Grade both axes for corner panels.
 
-- [x] **Step 4: Add the shader uniform and blend**
+Keep all existing segment counts.
 
-Add this fragment shader uniform:
+- [x] **Step 4: Write the failing fog ownership test**
+
+Require low uniform values `[150, 650, 0.86]`.
+
+Require high uniform values `[180, 750, 0.82]`.
+
+Require `setQuality` to update the existing uniform.
+
+- [x] **Step 5: Preserve contrast and finish horizon fog**
+
+Add the uniform:
 
 ```glsl
-uniform vec3 uHorizonHaze;
-uniform float uDistantDetailStrength;
+uniform vec3 uHorizonFog;
 ```
 
-Add this code immediately before the current exponential fog:
+Replace the final fog blend with:
 
 ```glsl
-float horizonHaze = smoothstep(
-  uHorizonHaze.x,
-  uHorizonHaze.y,
-  vViewDepth
-) * uHorizonHaze.z;
 float fogFactor = 1.0 - exp(
   -uFogDensity * uFogDensity * vViewDepth * vViewDepth
 );
-vec3 distanceFogColor = mix(uFogColor, uHorizonColor, horizonHaze);
-color = mix(color, distanceFogColor, clamp(fogFactor, 0.0, 1.0));
-```
-
-Keep ordered dither after this blend.
-
-Retain medium ripple detail with:
-
-```glsl
-float distanceBlend = 1.0 - smoothstep(
-  uDetailFade.x,
-  uDetailFade.y,
+float horizonFogProgress = smoothstep(
+  uHorizonFog.x,
+  uHorizonFog.y,
   vViewDepth
 );
-float distanceFade = mix(
-  uDistantDetailStrength,
+float distanceFogFactor = mix(
+  min(fogFactor, uHorizonFog.z),
   1.0,
-  distanceBlend
+  horizonFogProgress
+);
+vec3 distanceFogColor = mix(
+  uFogColor,
+  uHorizonColor,
+  horizonFogProgress
+);
+color = mix(
+  color,
+  distanceFogColor,
+  clamp(distanceFogFactor, 0.0, 1.0)
 );
 ```
 
-- [x] **Step 5: Create and update the uniform without frame allocations**
+Create one `Vector3` in the constructor.
 
-Add this constructor uniform:
-
-```ts
-uHorizonHaze: {
-  value: new Vector3(
-    surfaceQuality.horizonHazeStart,
-    surfaceQuality.horizonHazeEnd,
-    surfaceQuality.horizonHazeStrength,
-  ),
-},
-uDistantDetailStrength: {
-  value: surfaceQuality.distantDetailStrength,
-},
-```
-
-Add this in-place update to `setQuality`:
-
-```ts
-(this.material.uniforms.uHorizonHaze!.value as Vector3).set(
-  surfaceQuality.horizonHazeStart,
-  surfaceQuality.horizonHazeEnd,
-  surfaceQuality.horizonHazeStrength,
-);
-this.material.uniforms.uDistantDetailStrength!.value =
-  surfaceQuality.distantDetailStrength;
-```
-
-Do not add work to `update`, `follow`, or `dispose`.
+Update it in place during `setQuality`.
 
 - [x] **Step 6: Run focused tests**
 
@@ -233,7 +148,7 @@ Run:
 bunx vitest run tests/OceanRenderer.test.ts tests/WaveField.test.ts tests/BoatWorld.test.ts
 ```
 
-Expected: all focused tests pass.
+Expected: 47 tests pass.
 
 - [x] **Step 7: Run all automated checks**
 
@@ -244,9 +159,9 @@ bun run test
 bun run build
 ```
 
-Expected: all tests pass. TypeScript and Vite builds pass.
+Expected: all tests, TypeScript, and Vite build pass.
 
-- [x] **Step 8: Check the clear-day horizon**
+- [x] **Step 8: Inspect the clear-day horizon**
 
 Run:
 
@@ -254,19 +169,15 @@ Run:
 bun run dev -- --host 127.0.0.1
 ```
 
-Open the starting screen at the local Vite URL.
+Confirm wave structure continues into the middle distance.
 
-Confirm the near water keeps its waves, foam, and contrast.
+Confirm the fog completes only near the true horizon.
 
-Confirm haze begins before the coarse grid join.
+Confirm no flat cyan slab remains.
 
-Confirm the flat distant band is not visible.
-
-Confirm the horizon fades into the current sky palette.
-
-- [x] **Step 9: Commit the implementation**
+- [x] **Step 9: Commit the revision**
 
 ```powershell
 git add -- src/ocean/OceanRenderer.ts tests/OceanRenderer.test.ts
-git commit -m "fix: blend ocean into horizon haze"
+git commit -m "fix: grade ocean horizon geometry"
 ```
