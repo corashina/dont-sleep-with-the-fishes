@@ -158,6 +158,23 @@ describe('weather event choreography', () => {
     expect(Math.abs(impact.cameraRoll)).toBeGreaterThan(Math.abs(settle.cameraRoll));
   });
 
+  it('skips the Thunderstorm hull kick without hull damage', () => {
+    const output = reaction();
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 0, null, 0, 0.38, output);
+    expect(output.cameraX).toBe(0);
+    expect(output.cameraY).toBe(0);
+    expect(output.cameraPitch).toBe(0);
+    expect(output.cameraRoll).toBe(0);
+  });
+
+  it('scales the Thunderstorm hull kick with damage magnitude', () => {
+    const light = reaction();
+    const heavy = reaction();
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 0, null, -10, 0.38, light);
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 0, null, -40, 0.38, heavy);
+    expect(Math.abs(heavy.cameraRoll)).toBeGreaterThan(Math.abs(light.cameraRoll));
+  });
+
   it('authors bearing, optical push, and wave-anchor stabilization as named beats', () => {
     const compass = item();
     const spyglass = item();
