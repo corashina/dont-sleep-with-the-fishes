@@ -233,6 +233,12 @@ export interface EventContextChoice {
   readonly energyCost?: number;
 }
 
+export interface EventResultView {
+  readonly caption: string;
+  readonly detail: string;
+  readonly target: ProjectedBoatBounds | null;
+}
+
 interface PendingFade {
   readonly finish: () => void;
 }
@@ -291,6 +297,9 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
+  private readonly eventResult: HTMLElement;
+  private readonly eventResultCaption: HTMLElement;
+  private readonly eventResultDetail: HTMLElement;
   private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
@@ -447,6 +456,10 @@ export class SurvivalUI {
         <h2 class="ui-role-display" data-event-title></h2>
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
+      <section class="event-result" data-event-result aria-hidden="true" aria-live="polite">
+        <strong class="ui-role-display" data-event-result-caption></strong>
+        <span class="ui-role-narrative" data-event-result-detail></span>
+      </section>
       <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
         ENDURE
       </button>
@@ -507,6 +520,9 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
+    this.eventResult = requireElement(this.root, '[data-event-result]');
+    this.eventResultCaption = requireElement(this.root, '[data-event-result-caption]');
+    this.eventResultDetail = requireElement(this.root, '[data-event-result-detail]');
     this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
@@ -686,6 +702,25 @@ export class SurvivalUI {
     return Promise.resolve();
   }
 
+  showEventResult(view: EventResultView): void {
+    if (this.disposed) return;
+    this.eventResultCaption.textContent = view.caption;
+    this.eventResultDetail.textContent = view.detail;
+    const target = view.target?.visible === true ? view.target : null;
+    const x = target?.x ?? Math.max(24, this.mount.clientWidth * 0.5);
+    const y = target?.y ?? Math.max(120, this.mount.clientHeight * 0.68);
+    this.eventResult.style.setProperty('--event-result-x', `${x}px`);
+    this.eventResult.style.setProperty('--event-result-y', `${y}px`);
+    this.eventResult.classList.add('is-visible');
+    this.eventResult.setAttribute('aria-hidden', 'false');
+  }
+
+  hideEventResult(): void {
+    if (this.disposed) return;
+    this.eventResult.classList.remove('is-visible');
+    this.eventResult.setAttribute('aria-hidden', 'true');
+  }
+
   setEventSelection(
     eligible: ReadonlyMap<ItemInstanceId, EventResponseId>,
     contextualChoices: readonly EventContextChoice[] = [],
@@ -756,6 +791,7 @@ export class SurvivalUI {
     this.eventSelectedInstanceId = null;
     this.eventSelectedChoiceId = null;
     this.eventPresentationActive = false;
+    this.hideEventResult();
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
     this.eventCaption.removeAttribute('aria-label');

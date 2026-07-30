@@ -1034,6 +1034,41 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .event-caption[data-danger="dangerous"] h2 { color: var(--ink-red-bright); }
 .event-caption[data-danger="safe"] h2 { color: var(--ink-green); }
+.event-result {
+  position: absolute;
+  left: var(--event-result-x, 50%);
+  top: var(--event-result-y, 68%);
+  z-index: 19;
+  display: grid;
+  gap: 3px;
+  min-width: 190px;
+  max-width: min(330px, calc(100vw - 32px));
+  padding: 11px 16px 13px;
+  border-left: 3px solid var(--ink-yellow);
+  background: linear-gradient(95deg, #080b0df2, #171a1be8 82%, transparent);
+  clip-path: polygon(0 4%, 97% 0, 100% 84%, 5% 100%, 0 62%);
+  color: var(--ink-bone);
+  opacity: 0;
+  transform: translate(18px, -50%);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms steps(3, end);
+}
+.event-result.is-visible {
+  opacity: 1;
+  transform: translate(12px, -50%);
+}
+.event-result strong {
+  color: var(--ink-yellow);
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.event-result span {
+  color: #c6c0ad;
+  font-size: .78rem;
+  line-height: 1.3;
+}
 .event-choices {
   display: flex;
   flex-wrap: wrap;

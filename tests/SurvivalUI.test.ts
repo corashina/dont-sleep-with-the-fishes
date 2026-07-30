@@ -1678,6 +1678,26 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
     ui.dispose();
   });
+
+  it('shows and clears a compact event result beside its scene subject', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showEventResult({
+      caption: 'TEETH',
+      detail: 'The chest bites your arm.',
+      target: { x: 430, y: 310, width: 90, height: 70, depth: 2, visible: true },
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-event-result]')!;
+    expect(result.classList).toContain('is-visible');
+    expect(result.textContent).toContain('TEETH');
+    expect(result.style.getPropertyValue('--event-result-x')).toBe('430px');
+
+    ui.clearEventPresentation();
+    expect(result.classList).not.toContain('is-visible');
+    ui.dispose();
+  });
+
   it('removes document and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
