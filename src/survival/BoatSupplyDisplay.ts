@@ -61,6 +61,14 @@ export interface SupplyAdditivePose {
   readonly scaleZ: number;
 }
 
+export interface BorrowedSupplyActor {
+  readonly instanceId: ItemInstanceId;
+  readonly root: Group;
+  applyPose(pose: SupplyAdditivePose): void;
+  releaseOnNextSync(): void;
+  release(): void;
+}
+
 interface MutableRecord {
   readonly groupId: BoatSupplyGroupId;
   readonly root: Group;
@@ -216,6 +224,7 @@ export class BoatSupplyDisplay {
   private readonly ownedMaterials = new Set<Material>();
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
+  private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -420,13 +429,38 @@ export class BoatSupplyDisplay {
     return true;
   }
 
+  borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
+    if (!this.pinEventActor(instanceId)) return null;
+    const existing = this.borrowedActors.get(instanceId);
+    if (existing !== undefined) return existing;
+    const groupId = this.groupByInstanceId.get(instanceId)!;
+    const root = this.recordsById.get(groupId)!.root;
+    const actor: BorrowedSupplyActor = {
+      instanceId,
+      root,
+      applyPose: (pose) => {
+        if (this.pinnedEventActorId !== instanceId) return;
+        this.applyEventItemPose(instanceId, pose);
+      },
+      releaseOnNextSync: () => {
+        if (this.pinnedEventActorId !== instanceId) return;
+        this.releaseEventActorOnNextSync();
+      },
+      release: () => {
+        if (this.pinnedEventActorId !== instanceId) return;
+        this.releaseEventActor();
+      },
+    };
+    this.borrowedActors.set(instanceId, actor);
+    return actor;
+  }
+
   pinEventActor(instanceId: ItemInstanceId): boolean {
     if (this.disposed) return false;
     if (this.pinnedEventActorId === instanceId) {
       this.releasePinnedActorOnSync = false;
       return true;
     }
-    if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined) return false;
     if (this.currentSnapshot !== null) {
@@ -439,6 +473,7 @@ export class BoatSupplyDisplay {
       || record.visibleCopies === 0
       || record.backingInstanceId !== instanceId
     ) return false;
+    if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
     this.pinnedEventActorId = instanceId;
     this.pinnedEventGroupId = groupId;
     this.releasePinnedActorOnSync = false;
@@ -521,6 +556,7 @@ export class BoatSupplyDisplay {
       for (const copy of copies) copy.presentation?.dispose();
     }
     for (const record of this.recordsById.values()) record.root.removeFromParent();
+    this.borrowedActors.clear();
     disposeResourceSets(
       this.ownedGeometries,
       this.ownedMaterials,
