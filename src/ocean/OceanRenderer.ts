@@ -28,13 +28,13 @@ export interface OceanSurfaceQuality {
   segments: number;
   detailFadeNear: number;
   detailFadeFar: number;
-  distantDetailStrength: number;
-  horizonHazeStart: number;
-  horizonHazeEnd: number;
-  horizonHazeStrength: number;
   surfaceExtent: number;
   horizonHalfExtent: number;
   horizonRadialSegments: number;
+  horizonRadialExponent: number;
+  horizonFogStart: number;
+  horizonFogEnd: number;
+  horizonFogLimit: number;
 }
 
 export const OCEAN_SURFACE_QUALITY = Object.freeze({
@@ -42,25 +42,25 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 192,
     detailFadeNear: 28,
     detailFadeFar: 92,
-    distantDetailStrength: 0.11,
-    horizonHazeStart: 85,
-    horizonHazeEnd: 260,
-    horizonHazeStrength: 1,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 48,
+    horizonRadialExponent: 1.75,
+    horizonFogStart: 150,
+    horizonFogEnd: 650,
+    horizonFogLimit: 0.86,
   }),
   high: Object.freeze({
     segments: 288,
     detailFadeNear: 40,
     detailFadeFar: 128,
-    distantDetailStrength: 0.08,
-    horizonHazeStart: 100,
-    horizonHazeEnd: 320,
-    horizonHazeStrength: 1,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 72,
+    horizonRadialExponent: 1.75,
+    horizonFogStart: 180,
+    horizonFogEnd: 750,
+    horizonFogLimit: 0.82,
   }),
 }) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
@@ -137,14 +137,13 @@ const fragmentShader = `
   uniform float uTime;
   uniform float uAmplitudeScale;
   uniform vec2 uDetailFade;
-  uniform float uDistantDetailStrength;
   uniform vec3 uDeepColor;
   uniform vec3 uShallowColor;
   uniform vec3 uFoamColor;
   uniform vec3 uFogColor;
   uniform vec3 uSkyColor;
   uniform vec3 uHorizonColor;
-  uniform vec3 uHorizonHaze;
+  uniform vec3 uHorizonFog;
   uniform vec3 uSunColor;
   uniform float uDirectLightStrength;
   uniform float uFogDensity;
@@ -199,16 +198,7 @@ const fragmentShader = `
       + crossWind * mediumB * 0.042
       + quartering * fineA * 0.021
       + opposing * fineB * 0.011;
-    float distanceBlend = 1.0 - smoothstep(
-      uDetailFade.x,
-      uDetailFade.y,
-      vViewDepth
-    );
-    float distanceFade = mix(
-      uDistantDetailStrength,
-      1.0,
-      distanceBlend
-    );
+    float distanceFade = 1.0 - smoothstep(uDetailFade.x, uDetailFade.y, vViewDepth);
     float weatherStrength = clamp(0.92 + (uAmplitudeScale - 1.0) * 0.32, 0.78, 1.18);
     return slope * distanceFade * weatherStrength;
   }
@@ -604,14 +594,23 @@ const fragmentShader = `
     color = mix(color, highFoamColor, highFoamLayer * 0.78);
     #endif
 
-    float horizonHaze = smoothstep(
-      uHorizonHaze.x,
-      uHorizonHaze.y,
-      vViewDepth
-    ) * uHorizonHaze.z;
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
-    vec3 distanceFogColor = mix(uFogColor, uHorizonColor, horizonHaze);
-    color = mix(color, distanceFogColor, clamp(fogFactor, 0.0, 1.0));
+    float horizonFogProgress = smoothstep(
+      uHorizonFog.x,
+      uHorizonFog.y,
+      vViewDepth
+    );
+    float distanceFogFactor = mix(
+      min(fogFactor, uHorizonFog.z),
+      1.0,
+      horizonFogProgress
+    );
+    vec3 distanceFogColor = mix(
+      uFogColor,
+      uHorizonColor,
+      horizonFogProgress
+    );
+    color = mix(color, distanceFogColor, clamp(distanceFogFactor, 0.0, 1.0));
     gl_FragColor = vec4(color, 0.98);
     #include <colorspace_fragment>
     gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);
@@ -625,10 +624,47 @@ function createOceanPanel(
   depthSegments: number,
   centerX: number,
   centerZ: number,
+  grading?: Readonly<{
+    xDirection?: -1 | 1;
+    zDirection?: -1 | 1;
+    innerHalfExtent: number;
+    outerHalfExtent: number;
+    exponent: number;
+  }>,
 ): PlaneGeometry {
   const panel = new PlaneGeometry(width, depth, widthSegments, depthSegments);
   panel.rotateX(-Math.PI / 2);
   panel.translate(centerX, 0, centerZ);
+  if (grading) {
+    const positions = panel.getAttribute('position');
+    const span = grading.outerHalfExtent - grading.innerHalfExtent;
+    const grade = (value: number, direction: -1 | 1): number => {
+      const distance = direction * value;
+      const progress = Math.min(
+        1,
+        Math.max(0, (distance - grading.innerHalfExtent) / span),
+      );
+      return direction * (
+        grading.innerHalfExtent
+        + span * Math.pow(progress, grading.exponent)
+      );
+    };
+    for (let index = 0; index < positions.count; index += 1) {
+      if (grading.xDirection) {
+        positions.setX(
+          index,
+          grade(positions.getX(index), grading.xDirection),
+        );
+      }
+      if (grading.zDirection) {
+        positions.setZ(
+          index,
+          grade(positions.getZ(index), grading.zDirection),
+        );
+      }
+    }
+    positions.needsUpdate = true;
+  }
   return panel;
 }
 
@@ -654,15 +690,49 @@ function createHorizonGeometry(
   const ringCenter = innerHalfExtent + ringSpan / 2;
   const edgeSegments = quality.segments;
   const radialSegments = quality.horizonRadialSegments;
+  const grade = (
+    xDirection?: -1 | 1,
+    zDirection?: -1 | 1,
+  ) => ({
+    xDirection,
+    zDirection,
+    innerHalfExtent,
+    outerHalfExtent,
+    exponent: quality.horizonRadialExponent,
+  });
   const panels = [
-    createOceanPanel(quality.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, ringCenter),
-    createOceanPanel(quality.surfaceExtent, ringSpan, edgeSegments, radialSegments, 0, -ringCenter),
-    createOceanPanel(ringSpan, quality.surfaceExtent, radialSegments, edgeSegments, ringCenter, 0),
-    createOceanPanel(ringSpan, quality.surfaceExtent, radialSegments, edgeSegments, -ringCenter, 0),
-    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, ringCenter),
-    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, ringCenter, -ringCenter),
-    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, -ringCenter, ringCenter),
-    createOceanPanel(ringSpan, ringSpan, radialSegments, radialSegments, -ringCenter, -ringCenter),
+    createOceanPanel(
+      quality.surfaceExtent, ringSpan, edgeSegments, radialSegments,
+      0, ringCenter, grade(undefined, 1),
+    ),
+    createOceanPanel(
+      quality.surfaceExtent, ringSpan, edgeSegments, radialSegments,
+      0, -ringCenter, grade(undefined, -1),
+    ),
+    createOceanPanel(
+      ringSpan, quality.surfaceExtent, radialSegments, edgeSegments,
+      ringCenter, 0, grade(1),
+    ),
+    createOceanPanel(
+      ringSpan, quality.surfaceExtent, radialSegments, edgeSegments,
+      -ringCenter, 0, grade(-1),
+    ),
+    createOceanPanel(
+      ringSpan, ringSpan, radialSegments, radialSegments,
+      ringCenter, ringCenter, grade(1, 1),
+    ),
+    createOceanPanel(
+      ringSpan, ringSpan, radialSegments, radialSegments,
+      ringCenter, -ringCenter, grade(1, -1),
+    ),
+    createOceanPanel(
+      ringSpan, ringSpan, radialSegments, radialSegments,
+      -ringCenter, ringCenter, grade(-1, 1),
+    ),
+    createOceanPanel(
+      ringSpan, ringSpan, radialSegments, radialSegments,
+      -ringCenter, -ringCenter, grade(-1, -1),
+    ),
   ];
   const geometry = mergeGeometries(panels);
   panels.forEach((panel) => panel.dispose());
@@ -702,16 +772,6 @@ export class OceanRenderer {
             surfaceQuality.detailFadeFar,
           ),
         },
-        uHorizonHaze: {
-          value: new Vector3(
-            surfaceQuality.horizonHazeStart,
-            surfaceQuality.horizonHazeEnd,
-            surfaceQuality.horizonHazeStrength,
-          ),
-        },
-        uDistantDetailStrength: {
-          value: surfaceQuality.distantDetailStrength,
-        },
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
@@ -721,6 +781,13 @@ export class OceanRenderer {
         uFogColor: { value: new Color(0x27343b) },
         uSkyColor: { value: new Color(0x496b75) },
         uHorizonColor: { value: new Color(0x6f8587) },
+        uHorizonFog: {
+          value: new Vector3(
+            surfaceQuality.horizonFogStart,
+            surfaceQuality.horizonFogEnd,
+            surfaceQuality.horizonFogLimit,
+          ),
+        },
         uSunColor: { value: new Color(0xfff1cf) },
         uDirectLightStrength: { value: 1 },
         uFogDensity: { value: 0.018 },
@@ -776,13 +843,11 @@ export class OceanRenderer {
       surfaceQuality.detailFadeNear,
       surfaceQuality.detailFadeFar,
     );
-    (this.material.uniforms.uHorizonHaze!.value as Vector3).set(
-      surfaceQuality.horizonHazeStart,
-      surfaceQuality.horizonHazeEnd,
-      surfaceQuality.horizonHazeStrength,
+    (this.material.uniforms.uHorizonFog!.value as Vector3).set(
+      surfaceQuality.horizonFogStart,
+      surfaceQuality.horizonFogEnd,
+      surfaceQuality.horizonFogLimit,
     );
-    this.material.uniforms.uDistantDetailStrength!.value =
-      surfaceQuality.distantDetailStrength;
     (this.material.uniforms.uDeepColor!.value as Color).setHex(colors.deep);
     (this.material.uniforms.uShallowColor!.value as Color).setHex(colors.shallow);
     (this.material.uniforms.uFoamColor!.value as Color).setHex(colors.foam);
