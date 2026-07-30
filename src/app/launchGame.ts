@@ -35,6 +35,7 @@ import {
   AudioLoadError,
   AudioSystem,
 } from '../audio/AudioSystem';
+import { SurvivalEventModelLibrary } from '../survival/SurvivalEventModelLibrary';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -49,6 +50,7 @@ export interface LaunchDependencies {
   loadShipAssets(): Promise<ShipAssets>;
   loadPhysicsRuntime(): Promise<PhysicsRuntime>;
   loadAudio?(): Promise<AudioSystem>;
+  loadEventModels?(): Promise<SurvivalEventModelLibrary>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
@@ -59,6 +61,7 @@ export interface LaunchDependencies {
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audio: AudioSystem,
+    eventModels?: SurvivalEventModelLibrary,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -70,6 +73,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadShipAssets: () => ShipAssets.load(),
   loadPhysicsRuntime,
   loadAudio: () => AudioSystem.load(),
+  loadEventModels: () => SurvivalEventModelLibrary.load(),
   createGame: (
     mount,
     models,
@@ -80,6 +84,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     physicsRuntime,
     physicsMode,
     audio,
+    eventModels,
   ) => (
     new Game(
       mount,
@@ -91,6 +96,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       physicsRuntime,
       physicsMode,
       audio,
+      eventModels,
     )
   ),
 };
@@ -103,6 +109,7 @@ interface LoadedGameAssets {
   shipAssets: ShipAssets;
   physicsRuntime: PhysicsRuntime | null;
   audio: AudioSystem;
+  eventModels: SurvivalEventModelLibrary | null;
 }
 
 async function loadGameAssets(
@@ -120,6 +127,7 @@ async function loadGameAssets(
     shipAssets,
     physicsRuntime,
     audio,
+    eventModels,
   ] =
     await Promise.allSettled([
       dependencies.loadModels(),
@@ -129,6 +137,7 @@ async function loadGameAssets(
       dependencies.loadShipAssets(),
       physicsRuntimePromise,
       dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
+      dependencies.loadEventModels?.() ?? Promise.resolve(null),
     ]);
   const assetResults = [
     models,
@@ -137,6 +146,7 @@ async function loadGameAssets(
     lifeboatAssets,
     shipAssets,
     audio,
+    eventModels,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
   const firstFailure = results.find(
@@ -146,7 +156,7 @@ async function loadGameAssets(
     for (const result of assetResults) {
       if (result.status !== 'fulfilled') continue;
       try {
-        result.value.dispose();
+        result.value?.dispose();
       } catch {
         // Preserve deterministic dependency failure precedence while cleaning every sibling.
       }
@@ -161,6 +171,7 @@ async function loadGameAssets(
     || shipAssets.status !== 'fulfilled'
     || physicsRuntime.status !== 'fulfilled'
     || audio.status !== 'fulfilled'
+    || eventModels.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
@@ -172,6 +183,7 @@ async function loadGameAssets(
     shipAssets: shipAssets.value,
     physicsRuntime: physicsRuntime.value,
     audio: audio.value,
+    eventModels: eventModels.value,
   };
 }
 
@@ -191,7 +203,11 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
           try {
             assets.shipAssets.dispose();
           } finally {
-            assets.audio.dispose();
+            try {
+              assets.audio.dispose();
+            } finally {
+              assets.eventModels?.dispose();
+            }
           }
         }
       }
@@ -385,17 +401,30 @@ export function launchGame(
 
     try {
       loading.remove();
-      const createdGame = dependencies.createGame(
-        mount,
-        unownedAssets.models,
-        unownedAssets.shipFurniture,
-        unownedAssets.skyAssets,
-        unownedAssets.lifeboatAssets,
-        unownedAssets.shipAssets,
-        unownedAssets.physicsRuntime,
-        physicsMode,
-        unownedAssets.audio,
-      );
+      const createdGame = unownedAssets.eventModels === null
+        ? dependencies.createGame(
+          mount,
+          unownedAssets.models,
+          unownedAssets.shipFurniture,
+          unownedAssets.skyAssets,
+          unownedAssets.lifeboatAssets,
+          unownedAssets.shipAssets,
+          unownedAssets.physicsRuntime,
+          physicsMode,
+          unownedAssets.audio,
+        )
+        : dependencies.createGame(
+          mount,
+          unownedAssets.models,
+          unownedAssets.shipFurniture,
+          unownedAssets.skyAssets,
+          unownedAssets.lifeboatAssets,
+          unownedAssets.shipAssets,
+          unownedAssets.physicsRuntime,
+          physicsMode,
+          unownedAssets.audio,
+          unownedAssets.eventModels,
+        );
       game = createdGame;
       unownedAssets = null;
 
