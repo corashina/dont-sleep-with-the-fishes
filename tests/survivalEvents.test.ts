@@ -6,6 +6,7 @@ import {
   SURVIVAL_EVENTS,
   drawWeightedEvent,
   eligibleEvents,
+  survivalEventById,
   validateSurvivalEventCatalog,
 } from '../src/survival/events';
 import { sequenceRandom } from './helpers/random';
@@ -199,6 +200,20 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
+
+  it('sets the six night-event rule constraints', () => {
+    const leak = survivalEventById('leak')!;
+    const school = survivalEventById('school-of-fish')!;
+    const death = survivalEventById('death-stare')!;
+    const swarm = survivalEventById('swarm-of-anglerfish')!;
+    const whirlpool = survivalEventById('whirlpool')!;
+
+    expect(leak.maximumAppearances).toBe(1);
+    expect(school.minimumPressure).toBe(1);
+    expect(death.minimumPressure).toBe(1);
+    expect(swarm.minimumPressure).toBe(1);
+    expect(whirlpool.minimumPressure).toBe(1);
+  });
 
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
