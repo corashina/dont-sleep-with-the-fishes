@@ -10,19 +10,32 @@ One source can serve several related actions.
 
 Deferred sounds are not in this list.
 
-The audio files are not downloaded yet.
+The audio files are committed in `src/assets/audio`.
+
+Run `node scripts/fetch-audio-assets.mjs` to verify and restore them.
 
 ## License
 
 Each linked source page stated CC0 on July 30, 2026.
 
-Freesound can require an account for downloads.
+The restore script uses public Freesound previews.
 
 CC0 labels do not prove that each uploader owned the source recording.
 
 Reject any file with unclear origin or protected source material.
 
 Keep source records after download.
+
+## Runtime
+
+`AudioSystem` owns the Web Audio backend and the master setting.
+
+Each game phase owns one audio scope. Scope disposal stops its loops and effects.
+
+Scavenging uses music and ship room tone. Survival crossfades ocean, wind, rain,
+and boat creak layers.
+
+System Tuning stores master volume and mute in local storage.
 
 ## Music and ambience
 
@@ -120,10 +133,8 @@ Keep source records after download.
 
 The thunder source contains a clean, close strike without a full weather loop.
 
-Trim the bed-sheet recording to the 2.5-second sleep cover.
-
 The nightfall source uses processed breath, which keeps the transition tactile.
 
-Use a short opening fragment from the dawn source.
+The dawn file contains the first eight seconds of its source.
 
 The dawn cue must remain quiet beneath the ocean and music layers.

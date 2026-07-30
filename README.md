@@ -92,7 +92,13 @@ Utility catches neither consume bait nor receive bait's fish-weight bonus.
 
 ### System tuning
 
-Press <code>`</code> (backquote) in either scavenging or lifeboat survival to open **System Tuning**, then select a presentation weather profile. The menu offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. A selection is a forced visual override: it takes precedence over event weather, carries across the scavenging-to-survival handoff, and remains active until the page reloads.
+Press <code>`</code> (backquote) in either phase to open **System Tuning**.
+Use **Master Volume** and **Mute** to control all audio. The setting persists
+between sessions.
+
+The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
+**Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
+carries across the phase handoff, and remains active until the page reloads.
 
 Normal gameplay is always **Calm**. Only five authored events change presentation weather while they are staged and resolved: **Shower Night → Rain**, **Windy Night → Wind**, **Thunderstorm → Thunderstorm**, **Restless Waves → Waves**, and **Man in the Fog → Fog**. All other events return to Calm after their presentation ends.
 
