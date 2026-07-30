@@ -80,14 +80,15 @@ resources. It disposes each resource once.
 
 1. Cover the scene.
 2. Stage the event.
-3. Reveal the scene.
-4. Run the event reveal.
-5. Unlock choices.
-6. Resolve the selected outcome.
-7. Run the physical result.
-8. Hold the result.
-9. Cover and clear the scene.
-10. Reveal dawn.
+3. Render and settle the staged scene.
+4. Remove the cover.
+5. Run the visible event reveal.
+6. Unlock choices.
+7. Resolve the selected outcome.
+8. Run the physical result.
+9. Hold the result.
+10. Cover and clear the scene.
+11. Reveal dawn.
 
 ## Outcome data
 
@@ -365,4 +366,3 @@ Add phase tests for:
 
 Run visual checks at normal desktop size. Confirm subject framing, label
 placement, silhouette contrast, and result readability for every outcome.
-
