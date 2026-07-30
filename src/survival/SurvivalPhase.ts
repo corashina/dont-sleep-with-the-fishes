@@ -30,7 +30,10 @@ import {
   resolvePresentationWeather,
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
-import { BoatWorld } from './BoatWorld';
+import {
+  BoatWorld,
+  createEmptyEventModelLibraryForTest,
+} from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
@@ -180,6 +183,7 @@ function testContext(
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
+    eventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
@@ -265,6 +269,7 @@ export class SurvivalPhase implements GamePhase {
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
+          context.eventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,

@@ -7,6 +7,8 @@ import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
 import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 import type { ShipAssets } from '../src/world/ShipAssets';
+import type { PhaseContext } from '../src/app/GamePhase';
+import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const physicsRuntime = await testPhysicsRuntime();
@@ -61,6 +63,7 @@ describe('Game construction rollback', () => {
       new Game(
         document.createElement('main'),
         {} as PropModelLibrary,
+        {} as EventModelLibrary,
         {} as ShipFurnitureLibrary,
         {} as SkyAssets,
         {} as LifeboatAssets,
@@ -77,5 +80,52 @@ describe('Game construction rollback', () => {
     expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('shares and disposes the loaded event model library once', async () => {
+    const canvas = document.createElement('canvas');
+    const renderer = {
+      domElement: canvas,
+      capabilities: { getMaxAnisotropy: () => 1 },
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const eventModels = {
+      create: vi.fn(),
+      animations: vi.fn(() => []),
+      dispose: vi.fn(),
+    } as unknown as EventModelLibrary;
+    let phaseContext: PhaseContext | undefined;
+    const { Game } = await import('../src/Game');
+    const game = Game.forTest({
+      createScavenge: (context) => {
+        phaseContext = context;
+        return {
+          start: vi.fn(),
+          update: vi.fn(),
+          resize: vi.fn(),
+          render: vi.fn(),
+          dispose: vi.fn(),
+        };
+      },
+      createSurvival: () => {
+        throw new Error('Unexpected survival construction');
+      },
+    }, {
+      propModels: { dispose: vi.fn() } as unknown as PropModelLibrary,
+      eventModels,
+      shipFurniture: { dispose: vi.fn() } as unknown as ShipFurnitureLibrary,
+      skyAssets: { dispose: vi.fn() } as unknown as SkyAssets,
+      physicsRuntime,
+      mount: document.createElement('main'),
+      renderer: renderer as never,
+    });
+
+    expect(phaseContext?.eventModels).toBe(eventModels);
+    game.dispose();
+    game.dispose();
+    expect(eventModels.dispose).toHaveBeenCalledOnce();
   });
 });

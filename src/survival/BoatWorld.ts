@@ -81,6 +81,7 @@ import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import type { EventModelLibrary } from './EventModelLibrary';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -380,6 +381,14 @@ function createFishingVisuals(
   };
 }
 
+export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
+  return {
+    create: () => new Group(),
+    animations: () => [],
+    dispose: () => undefined,
+  } as unknown as EventModelLibrary;
+}
+
 export class BoatWorld {
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
@@ -502,6 +511,7 @@ export class BoatWorld {
   private settledCue: PresentationCue | null = null;
   private weatherEventOperation = 0;
   private disposed = false;
+  private readonly eventModels: EventModelLibrary;
 
   constructor(
     camera: PerspectiveCamera,
@@ -511,7 +521,9 @@ export class BoatWorld {
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
     waterQuality: WaterQuality = 'low',
+    eventModels?: EventModelLibrary,
   ) {
+    this.eventModels = eventModels ?? createEmptyEventModelLibraryForTest();
     this.scene = new Scene();
     this.sky = new Skybox(
       this.scene,

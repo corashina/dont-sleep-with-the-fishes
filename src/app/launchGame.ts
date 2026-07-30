@@ -35,6 +35,7 @@ import {
   AudioLoadError,
   AudioSystem,
 } from '../audio/AudioSystem';
+import { EventModelLibrary } from '../survival/EventModelLibrary';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -43,6 +44,7 @@ export interface LaunchHandle {
 
 export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
+  loadEventModels(): Promise<EventModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
@@ -52,6 +54,7 @@ export interface LaunchDependencies {
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
+    eventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
@@ -64,6 +67,7 @@ export interface LaunchDependencies {
 
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
+  loadEventModels: () => EventModelLibrary.load(),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
@@ -73,6 +77,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   createGame: (
     mount,
     models,
+    eventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
@@ -84,6 +89,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     new Game(
       mount,
       models,
+      eventModels,
       shipFurniture,
       skyAssets,
       lifeboatAssets,
@@ -97,6 +103,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
 
 interface LoadedGameAssets {
   models: PropModelLibrary;
+  eventModels: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
@@ -114,6 +121,7 @@ async function loadGameAssets(
     : dependencies.loadPhysicsRuntime();
   const [
     models,
+    eventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
@@ -123,6 +131,7 @@ async function loadGameAssets(
   ] =
     await Promise.allSettled([
       dependencies.loadModels(),
+      dependencies.loadEventModels(),
       dependencies.loadShipFurniture(),
       dependencies.loadSkyAssets(),
       dependencies.loadLifeboatAssets(),
@@ -132,6 +141,7 @@ async function loadGameAssets(
     ]);
   const assetResults = [
     models,
+    eventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
@@ -155,6 +165,7 @@ async function loadGameAssets(
   }
   if (
     models.status !== 'fulfilled'
+    || eventModels.status !== 'fulfilled'
     || shipFurniture.status !== 'fulfilled'
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
@@ -166,6 +177,7 @@ async function loadGameAssets(
   }
   return {
     models: models.value,
+    eventModels: eventModels.value,
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
@@ -180,18 +192,22 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
     assets.models.dispose();
   } finally {
     try {
-      assets.shipFurniture.dispose();
+      assets.eventModels.dispose();
     } finally {
       try {
-        assets.skyAssets.dispose();
+        assets.shipFurniture.dispose();
       } finally {
         try {
-          assets.lifeboatAssets.dispose();
+          assets.skyAssets.dispose();
         } finally {
           try {
-            assets.shipAssets.dispose();
+            assets.lifeboatAssets.dispose();
           } finally {
-            assets.audio.dispose();
+            try {
+              assets.shipAssets.dispose();
+            } finally {
+              assets.audio.dispose();
+            }
           }
         }
       }
@@ -388,6 +404,7 @@ export function launchGame(
       const createdGame = dependencies.createGame(
         mount,
         unownedAssets.models,
+        unownedAssets.eventModels,
         unownedAssets.shipFurniture,
         unownedAssets.skyAssets,
         unownedAssets.lifeboatAssets,
