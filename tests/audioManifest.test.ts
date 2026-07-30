@@ -6,9 +6,17 @@ import {
 
 describe('audio manifest', () => {
   it('contains every approved sound exactly once', () => {
-    expect(SOUND_IDS).toHaveLength(46);
-    expect(new Set(SOUND_IDS).size).toBe(46);
+    expect(SOUND_IDS).toHaveLength(47);
+    expect(new Set(SOUND_IDS).size).toBe(47);
     expect(Object.keys(AUDIO_MANIFEST).sort()).toEqual([...SOUND_IDS].sort());
+  });
+
+  it('registers the Eerie Melody ambience as one loop', () => {
+    expect(SOUND_IDS).toContain('eerieMelody');
+    expect(AUDIO_MANIFEST.eerieMelody).toMatchObject({
+      loop: true,
+      maxVoices: 1,
+    });
   });
 
   it('uses build assets and valid playback settings', () => {
