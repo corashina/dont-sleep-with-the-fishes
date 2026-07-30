@@ -48,8 +48,30 @@ class GltfEventModelLoader implements EventModelLoader {
   }
 }
 
-function materialTextures(material: Material): readonly Texture[] {
-  return Object.values(material).filter((value): value is Texture => value instanceof Texture);
+function collectTextureValue(
+  value: unknown,
+  textures: Set<Texture>,
+  visited: Set<object>,
+): void {
+  if (value instanceof Texture) {
+    textures.add(value);
+    return;
+  }
+  if (typeof value !== 'object' || value === null || visited.has(value)) return;
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return;
+  visited.add(value);
+  Object.values(value).forEach((child) => collectTextureValue(child, textures, visited));
+}
+
+function materialTextures(material: Material): Set<Texture> {
+  const textures = new Set<Texture>();
+  const visited = new Set<object>();
+  Object.entries(material).forEach(([key, value]) => {
+    if (value instanceof Texture || key === 'uniforms') {
+      collectTextureValue(value, textures, visited);
+    }
+  });
+  return textures;
 }
 
 function collectSkeletons(root: Group): Set<Skeleton> {
@@ -75,11 +97,11 @@ function disposeTemplateRoots(roots: Iterable<Group>): void {
   disposeResourceSets(geometries, textures, materials, skeletons);
 }
 
-function disposeOwnedEventRoot(root: Group): void {
+function disposeOwnedEventRoot(root: Group, textures: Set<Texture>): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   collectMeshResources(root, geometries, materials);
-  disposeResourceSets(geometries, materials, collectSkeletons(root));
+  disposeResourceSets(geometries, textures, materials, collectSkeletons(root));
 }
 
 function attemptCleanup(action: () => void): void {
@@ -194,18 +216,116 @@ function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec):
   return triangles;
 }
 
-function cloneOwnedEventTemplate(template: Group): Group {
+interface TextureCloneResult {
+  readonly value: unknown;
+  readonly changed: boolean;
+}
+
+function cloneTextureValue(
+  source: unknown,
+  cloned: unknown,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): TextureCloneResult {
+  if (source instanceof Texture) {
+    const existing = textureClones.get(source);
+    if (existing) {
+      if (cloned instanceof Texture && cloned !== source && cloned !== existing) {
+        discardedTextures.add(cloned);
+      }
+      return { value: existing, changed: cloned !== existing };
+    }
+    const owned = cloned instanceof Texture && cloned !== source ? cloned : source.clone();
+    textureClones.set(source, owned);
+    return { value: owned, changed: cloned !== owned };
+  }
+  if (Array.isArray(source)) {
+    const target = Array.isArray(cloned) ? [...cloned] : [...source];
+    let changed = false;
+    source.forEach((value, index) => {
+      const result = cloneTextureValue(
+        value,
+        target[index],
+        textureClones,
+        discardedTextures,
+      );
+      if (!result.changed) return;
+      target[index] = result.value;
+      changed = true;
+    });
+    return { value: changed ? target : cloned, changed };
+  }
+  if (
+    typeof source === 'object'
+    && source !== null
+    && Object.getPrototypeOf(source) === Object.prototype
+  ) {
+    const sourceRecord = source as Record<string, unknown>;
+    const clonedRecord = (
+      typeof cloned === 'object'
+      && cloned !== null
+      && Object.getPrototypeOf(cloned) === Object.prototype
+    ) ? cloned as Record<string, unknown> : { ...sourceRecord };
+    const target = { ...clonedRecord };
+    let changed = false;
+    Object.entries(sourceRecord).forEach(([key, value]) => {
+      const result = cloneTextureValue(
+        value,
+        clonedRecord[key],
+        textureClones,
+        discardedTextures,
+      );
+      if (!result.changed) return;
+      target[key] = result.value;
+      changed = true;
+    });
+    return { value: changed ? target : cloned, changed };
+  }
+  return { value: cloned, changed: false };
+}
+
+function cloneOwnedMaterial(
+  material: Material,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): Material {
+  const clone = material.clone();
+  const cloneProperties = clone as unknown as Record<string, unknown>;
+  Object.entries(material).forEach(([key, value]) => {
+    if (!(value instanceof Texture) && key !== 'uniforms') return;
+    const result = cloneTextureValue(
+      value,
+      cloneProperties[key],
+      textureClones,
+      discardedTextures,
+    );
+    if (result.changed) cloneProperties[key] = result.value;
+  });
+  return clone;
+}
+
+interface OwnedEventTemplateClone {
+  readonly root: Group;
+  readonly textures: Set<Texture>;
+}
+
+function cloneOwnedEventTemplate(template: Group): OwnedEventTemplateClone {
   const clone = cloneSkeleton(template) as Group;
+  const textureClones = new Map<Texture, Texture>();
+  const discardedTextures = new Set<Texture>();
   clone.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.geometry = object.geometry.clone();
     object.material = Array.isArray(object.material)
-      ? object.material.map((material) => material.clone())
-      : object.material.clone();
+      ? object.material.map((material) => (
+        cloneOwnedMaterial(material, textureClones, discardedTextures)
+      ))
+      : cloneOwnedMaterial(object.material, textureClones, discardedTextures);
     object.castShadow = true;
     object.receiveShadow = true;
   });
-  return clone;
+  disposeResourceSets(discardedTextures);
+  return { root: clone, textures: new Set(textureClones.values()) };
 }
 
 interface LoadedTemplate {
@@ -276,14 +396,14 @@ export class EventModelLibrary {
     if (this.disposed) throw new Error('Event model library is disposed');
     const template = this.templates.get(id);
     if (!template) throw new Error(`Missing event model template: ${id}`);
-    const root = cloneOwnedEventTemplate(template);
+    const { root, textures } = cloneOwnedEventTemplate(template);
     let disposed = false;
     return {
       root,
       dispose(): void {
         if (disposed) return;
         disposed = true;
-        disposeOwnedEventRoot(root);
+        disposeOwnedEventRoot(root, textures);
       },
     };
   }
