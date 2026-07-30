@@ -75,12 +75,15 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
 });
 
 class FakeBoatSupplyDisplay {
+  readonly pinCalls: ItemInstanceId[] = [];
   readonly pinHistory: ItemInstanceId[] = [];
   readonly poses = new Map<ItemInstanceId, SupplyAdditivePose>();
   ambientRoll = 0;
   ambientLift = 0;
   clearCount = 0;
   private pinnedActor: ItemInstanceId | null = null;
+
+  constructor(private readonly rejectedActorId: ItemInstanceId | null = null) {}
 
   applyEventAmbientPose(roll: number, lift: number): void {
     this.ambientRoll = roll;
@@ -93,6 +96,8 @@ class FakeBoatSupplyDisplay {
   }
 
   pinEventActor(instanceId: ItemInstanceId): boolean {
+    this.pinCalls.push(instanceId);
+    if (instanceId === this.rejectedActorId) return false;
     if (instanceId !== this.pinnedActor) {
       this.pinnedActor = instanceId;
       this.pinHistory.push(instanceId);
@@ -652,10 +657,44 @@ describe('BoatWorld helpers', () => {
         ],
       },
     );
+    expect(supplies.pinHistory).toEqual(['map-1', 'umbrella-1']);
+    const pinCallCount = supplies.pinCalls.length;
+
     animator.update(0.4, 0.4);
     animator.update(1.1, 0.7);
 
     expect(supplies.pinHistory).toEqual(['map-1', 'umbrella-1']);
+    expect(supplies.pinCalls).toHaveLength(pinCallCount);
+    animator.dispose();
+  });
+
+  it('does not retry a failed actor pin from the update path', () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay('map-1');
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    void animator.react(
+      'windy-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The wind breaks the map.',
+        deltas: {},
+        cue: 'none',
+      },
+      {
+        choiceId: 'sleep',
+        actors: [{ instanceId: 'map-1', condition: 'broken' }],
+      },
+    );
+    animator.update(0.2, 0.2);
+    animator.update(0.4, 0.2);
+    animator.update(0.6, 0.2);
+
+    expect(supplies.pinCalls).toEqual(['map-1']);
     animator.dispose();
   });
 

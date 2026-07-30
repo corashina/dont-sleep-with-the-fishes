@@ -34,7 +34,10 @@ import { BoatWorld } from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
-import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
+import {
+  deriveEventPhysicalResponse,
+  type EventPhysicalResponsePresentation,
+} from './EventPhysicalResponse';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -965,14 +968,18 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     const resolved = this.session.snapshot();
-    const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
-    this.syncPresentation(resolved);
+    const response = deriveEventPhysicalResponse(
+      choiceId,
+      pending.inventory,
+      resolved.inventory,
+      instanceId,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
       eventState,
       generation,
-      { choiceId, actors: [{ instanceId, condition }] },
+      response,
     );
   }
 
@@ -1005,7 +1012,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, pending.state, generation, null);
+    const resolved = this.session.snapshot();
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      pending.state,
+      generation,
+      deriveEventPhysicalResponse(
+        choiceId,
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
+    );
   }
 
   private async resolveDriftingLootChoice(
@@ -1096,7 +1115,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation, null);
+    const resolved = this.session.snapshot();
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      deriveEventPhysicalResponse(
+        'endure',
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
+    );
   }
 
   private async runEventResolution(
@@ -1104,7 +1135,7 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
-    physicalResponse: EventPhysicalResponsePresentation | null = null,
+    physicalResponse: EventPhysicalResponsePresentation,
   ): Promise<void> {
     this.setBusy(true);
     await Promise.all([
