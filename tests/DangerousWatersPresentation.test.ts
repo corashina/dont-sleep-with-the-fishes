@@ -16,7 +16,17 @@ function pose(): DangerousWatersItemPose {
 }
 
 function boatReaction(): DangerousWatersBoatReaction {
-  return { pitch: 0, yaw: 0, roll: 0, cameraZ: 0, lightScale: 1 };
+  return {
+    driftX: 0,
+    pitch: 0,
+    yaw: 0,
+    roll: 0,
+    cameraYaw: 0,
+    cameraZ: 0,
+    lightScale: 1,
+    supplyRoll: 0,
+    supplyLift: 0,
+  };
 }
 
 describe('DangerousWatersPresentation', () => {
@@ -35,9 +45,16 @@ describe('DangerousWatersPresentation', () => {
     view.dispose();
   });
 
-  it('reveals the passage before the lurker and holds the final pose', async () => {
+  it('reveals the lurker, then sinks it beneath the shared-wave passage', async () => {
     const view = new DangerousWatersPresentation();
     const lurker = view.root.getObjectByName('dangerous-waters-lurker')!;
+    const rocks = ['foreground', 'port', 'starboard'].map((name) => (
+      view.root.getObjectByName(`dangerous-waters-rock:${name}`)!
+    ));
+    const bases = rocks.map((rock) => ({
+      position: rock.position.clone(),
+      rotation: rock.rotation.clone(),
+    }));
 
     view.stage();
     expect(view.root.visible).toBe(true);
@@ -45,10 +62,26 @@ describe('DangerousWatersPresentation', () => {
 
     const reveal = view.reveal();
     view.update(1.2, 1.2);
-    expect(lurker.scale.y).toBeLessThan(0.5);
-    view.update(2.4, 1.2);
+    expect(lurker.scale.y).toBeGreaterThan(0.6);
+    view.update(1.75, 0.55);
+    expect(lurker.scale.y).toBeGreaterThan(0.9);
+    view.update(2.1, 0.35);
+    expect(lurker.scale.y).toBeLessThan(0.8);
+    view.update(2.4, 0.3);
     await reveal;
-    expect(lurker.scale.y).toBe(1);
+    expect(lurker.scale.y).toBe(0);
+
+    view.update(1, 0);
+    view.update(2, 0);
+    rocks.forEach((rock, index) => {
+      const base = bases[index]!;
+      expect(
+        rock.position.y !== base.position.y
+        || rock.rotation.x !== base.rotation.x
+        || rock.rotation.z !== base.rotation.z,
+      ).toBe(true);
+      expect(rock.position.distanceTo(base.position)).toBeLessThanOrEqual(0.18);
+    });
 
     view.dispose();
   });
@@ -92,6 +125,24 @@ describe('DangerousWatersPresentation', () => {
     expect(Math.abs(itemPose.yaw)).toBeGreaterThan(0.1);
     view.dispose();
   });
+
+  it.each(['map', 'compass'] as const)(
+    'holds the completed %s item pose above and ahead of the boat',
+    async (choiceId) => {
+      const view = new DangerousWatersPresentation();
+      const itemPose = pose();
+      view.stage();
+
+      const motion = view.playChoice(choiceId);
+      view.update(1.1, 1.1);
+      await motion;
+
+      expect(view.copyItemPose(itemPose)).toBe(true);
+      expect(itemPose.y).toBeGreaterThan(0);
+      expect(itemPose.z).toBeLessThan(0);
+      view.dispose();
+    },
+  );
 
   it('dims the Sleep beat and restores borrowed light scale', async () => {
     const view = new DangerousWatersPresentation();
@@ -151,6 +202,35 @@ describe('DangerousWatersPresentation', () => {
     damage.copyBoatReaction(damagePose);
     severe.copyBoatReaction(severePose);
     expect(severePose.pitch).toBeGreaterThan(damagePose.pitch);
+    damage.dispose();
+    severe.dispose();
+  });
+
+  it('holds damage and severe scrape results after their sharp impact', async () => {
+    const damage = new DangerousWatersPresentation();
+    const severe = new DangerousWatersPresentation();
+    const reaction = boatReaction();
+    damage.stage();
+    severe.stage();
+    const damageMotion = damage.react({
+      accepted: true, code: 'event-resolved', message: 'Hit.',
+      deltas: { hull: -7 }, cue: 'impact',
+    });
+    damage.update(0.9, 0.9);
+    await damageMotion;
+    expect(damage.copyBoatReaction(reaction)).toBe(true);
+    expect(Math.abs(reaction.roll)).toBeGreaterThan(0.01);
+    expect(Math.abs(reaction.supplyRoll)).toBeGreaterThan(0.01);
+
+    const severeRock = severe.root.getObjectByName('dangerous-waters-rock:foreground')!;
+    const severeBase = severeRock.position.clone();
+    const severeMotion = severe.react({
+      accepted: true, code: 'event-resolved', message: 'Scrape.',
+      deltas: { hull: -25 }, cue: 'impact',
+    });
+    severe.update(0.9, 0.9);
+    await severeMotion;
+    expect(severeRock.position.z).not.toBe(severeBase.z);
     damage.dispose();
     severe.dispose();
   });
