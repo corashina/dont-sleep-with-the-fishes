@@ -992,7 +992,10 @@ export class SurvivalPhase implements GamePhase {
     else this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
-    await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
+    await Promise.all([
+      this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve(),
+      this.world.playEventChoice?.(eventId, choiceId) ?? Promise.resolve(),
+    ]);
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
