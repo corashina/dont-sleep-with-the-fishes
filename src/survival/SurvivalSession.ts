@@ -70,12 +70,6 @@ export interface SurvivalSessionOptions {
   initialEventFlags?: readonly string[];
 }
 
-declare module './survivalTypes' {
-  interface SurvivalSnapshot {
-    readonly pendingEventTargetId?: ItemInstanceId | null;
-  }
-}
-
 export type { DayActionOption } from './survivalTypes';
 export type { BeginFishingResult } from './survivalTypes';
 

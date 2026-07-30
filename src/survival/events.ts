@@ -178,7 +178,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('sleep', 'Sleep', undefined,
       outcome(60, 'The leak damages the boat.', effects([subtract('hull', { min: 15, max: 20 }), set('energy', 2)])),
       outcome(40, 'The leak damages the boat and takes an item.', effects([subtract('hull', { min: 5, max: 20 })], [loseRandom(1)]))),
-  ]),
+  ], undefined, { maximumAppearances: 1 }),
   event('school-of-fish', 'School of Fish', 'fish', 66, 8, 39, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(60, 'You gain three food.', effects([add('food', 3)])),
@@ -189,7 +189,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('spyglass', 'Use Binoculars', 'spyglass',
       outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', effects([add('food', 1)]))),
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
-  ]),
+  ], undefined, { minimumPressure: 1 }),
   {
     ...event('snatcher', 'Snatcher', 'impact', 28, 8, 45, [
       choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The binoculars break.', effects(undefined, [breakItem('spyglass')]))),
@@ -214,7 +214,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'The harpoon is used.', effects(undefined, [consume('harpoonGun')]))),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', effects([subtract('hull', { min: 55, max: 66 }), subtract('health', 70)], [breakItem('fishingNet')]))),
     choice('sleep', 'Sleep', undefined, outcome(5, 'Nothing happens.'), outcome(85, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 66 }), subtract('health', 60)]))),
-  ]),
+  ], undefined, { minimumPressure: 1 }),
   event('swarm-of-anglerfish', 'Swarm of Anglerfish', 'fish', 12, 10, 38, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The fishing net breaks.', effects(undefined, [breakItem('fishingNet')]))),
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('harpoonGun')]))),
@@ -222,7 +222,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', effects([subtract('bait', 2)]))),
     choice('sleep', 'Sleep', undefined,
       outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'Nothing happens.')),
-  ]),
+  ], undefined, { minimumPressure: 1 }),
   event('whirlpool', 'Whirlpool', 'impact', 5, 12, 30, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged and the anchor breaks.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
@@ -231,7 +231,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('sleep', 'Sleep', undefined,
       outcome(80, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 40 }), set('energy', 0)])),
       outcome(30, 'The boat is badly damaged and two items are lost.', effects([subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [loseRandom(2)]))),
-  ]),
+  ], undefined, { minimumPressure: 1 }),
   event('shark-men', 'Shark Men', 'impact', 15, 15, 30, [
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'The harpoon is used.', effects(undefined, [consume('harpoonGun')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',

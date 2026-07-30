@@ -178,6 +178,7 @@ export interface SurvivalSnapshot {
   inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
   pendingEventId: string | null;
+  readonly pendingEventTargetId: ItemInstanceId | null;
   readonly pendingDriftingLootVariant: DriftingLootVariant | null;
   lastOutcome: ActionOutcome | null;
   seed: number;
