@@ -13,6 +13,9 @@ export type DeathStareItemEffectKind =
 export interface DeathStareReactionState {
   readonly attacked: boolean;
   readonly lostItem: boolean;
+  readonly itemTravelX: number;
+  readonly itemTravelY: number;
+  readonly itemTravelZ: number;
 }
 
 export interface DeathStareSample {
@@ -259,21 +262,6 @@ export function sampleDeathStareReaction(
   holdGaze(output);
   const t = clamp01(progress);
 
-  if (reaction.lostItem) {
-    const mouthTravel = smoothstep((t - 0.08) / 0.64);
-    output.itemX = mouthTravel * 2.62;
-    output.itemY = mouthTravel * 0.24;
-    output.itemZ = mouthTravel * -1.38;
-    output.itemYaw = mouthTravel * 1.35;
-    output.itemPitch = mouthTravel * -0.28;
-    output.itemRoll = mouthTravel * -1.18;
-    const itemScale = 1 - mouthTravel * 0.82;
-    output.itemScaleX = itemScale;
-    output.itemScaleY = itemScale;
-    output.itemScaleZ = itemScale;
-    output.jawOpen += mouthTravel * 0.46;
-  }
-
   if (reaction.attacked) {
     const impact = pulse(t, 0.1, 0.46, 0.84);
     const lunge = pulse(t, 0.04, 0.54, 0.96);
@@ -286,16 +274,39 @@ export function sampleDeathStareReaction(
     output.cameraRoll = impact === 0 ? 0 : impact * 0.035;
     output.hullRoll = impact === 0 ? 0 : impact * -0.085;
     output.lureStrength = 0.72 + lunge * 0.28;
-    return true;
+  } else if (!reaction.lostItem) {
+    const sink = smoothstep((t - 0.32) / 0.68);
+    output.sink = sink;
+    output.fishY = sink * -2.1;
+    output.fishZ = sink * -0.42;
+    output.fishPitch = sink * 0.08;
+    output.fishVisibility = 1 - smoothstep((t - 0.82) / 0.18);
+    output.eyeTarget = 1 - sink * 0.62;
+    output.waterDrain = sink * 0.24;
   }
 
-  const sink = smoothstep((t - 0.32) / 0.68);
-  output.sink = sink;
-  output.fishY = sink * -2.1;
-  output.fishZ = sink * -0.42;
-  output.fishPitch = sink * 0.08;
-  output.fishVisibility = 1 - smoothstep((t - 0.82) / 0.18);
-  output.eyeTarget = 1 - sink * 0.62;
-  output.waterDrain = sink * 0.24;
+  if (reaction.lostItem) {
+    const travelX = Number.isFinite(reaction.itemTravelX)
+      ? reaction.itemTravelX!
+      : 0;
+    const travelY = Number.isFinite(reaction.itemTravelY)
+      ? reaction.itemTravelY!
+      : 0;
+    const travelZ = Number.isFinite(reaction.itemTravelZ)
+      ? reaction.itemTravelZ!
+      : 0;
+    const mouthTravel = smoothstep((t - 0.08) / 0.64);
+    output.itemX = mouthTravel * travelX + output.fishX;
+    output.itemY = mouthTravel * travelY + output.fishY;
+    output.itemZ = mouthTravel * travelZ + output.fishZ;
+    output.itemYaw = mouthTravel * 1.35;
+    output.itemPitch = mouthTravel * -0.28;
+    output.itemRoll = mouthTravel * -1.18;
+    const itemScale = 1 - mouthTravel * 0.82;
+    output.itemScaleX = itemScale;
+    output.itemScaleY = itemScale;
+    output.itemScaleZ = itemScale;
+    output.jawOpen += mouthTravel * 0.46;
+  }
   return true;
 }
