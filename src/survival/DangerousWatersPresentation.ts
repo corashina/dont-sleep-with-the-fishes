@@ -385,6 +385,8 @@ export class DangerousWatersPresentation {
   private heldKind: MotionKind = 'reveal';
   private heldProgress = 0;
   private heldChoiceId: DangerousWatersChoiceId | null = null;
+  private resultBaseChoiceId: DangerousWatersChoiceId | null = null;
+  private lastTime = 0;
   private disposed = false;
 
   constructor() {
@@ -437,6 +439,8 @@ export class DangerousWatersPresentation {
     this.heldKind = 'reveal';
     this.heldProgress = 0;
     this.heldChoiceId = null;
+    this.resultBaseChoiceId = null;
+    this.lastTime = 0;
     this.applyPose('reveal', 0, null, 0);
   }
 
@@ -451,11 +455,15 @@ export class DangerousWatersPresentation {
       this.disposed
       || (choiceId !== 'map' && choiceId !== 'compass' && choiceId !== 'sleep')
     ) return Promise.resolve();
+    this.resultBaseChoiceId = null;
     return this.startMotion('choice', choiceId, CHOICE_DURATION);
   }
 
   react(outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.resultBaseChoiceId = this.heldKind === 'choice'
+      ? this.heldChoiceId
+      : null;
     this.heldChoiceId = null;
     const hullDamage = Math.max(0, -(outcome.deltas.hull ?? 0));
     const kind: MotionKind = hullDamage >= 25
@@ -505,6 +513,8 @@ export class DangerousWatersPresentation {
     this.heldKind = 'reveal';
     this.heldProgress = 0;
     this.heldChoiceId = null;
+    this.resultBaseChoiceId = null;
+    this.lastTime = 0;
     this.applyPose('reveal', 0, null, 0);
     this.root.visible = false;
   }
@@ -512,25 +522,28 @@ export class DangerousWatersPresentation {
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     this.heldChoiceId = null;
+    this.resultBaseChoiceId = null;
     if (this.activeMotion === null) {
       this.heldKind = 'reveal';
       this.heldProgress = 1;
-      this.applyPose('reveal', 1, null, 0);
+      this.applyPose('reveal', 1, null, this.lastTime);
       return;
     }
     const motion = this.activeMotion;
     this.activeMotion = null;
     this.heldKind = motion.kind === 'choice' ? 'reveal' : motion.kind;
     this.heldProgress = 1;
-    this.applyPose(this.heldKind, 1, null, 0);
+    this.applyPose(this.heldKind, 1, null, this.lastTime);
     motion.resolve();
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.root.visible || delta < 0) return;
+    if (Number.isFinite(time)) this.lastTime = time;
     const motion = this.activeMotion;
     if (motion === null) {
-      this.applyPose(this.heldKind, this.heldProgress, null, time);
+      const choiceId = this.heldKind === 'choice' ? this.heldChoiceId : null;
+      this.applyPose(this.heldKind, this.heldProgress, choiceId, time);
       return;
     }
 
@@ -633,7 +646,7 @@ export class DangerousWatersPresentation {
         duration,
         resolve,
       };
-      this.applyPose(kind, 0, choiceId, 0);
+      this.applyPose(kind, 0, choiceId, this.lastTime);
     });
   }
 
@@ -650,15 +663,19 @@ export class DangerousWatersPresentation {
         this.applyRevealPose(value);
         break;
       case 'choice':
+        this.applyRevealPose(1);
         this.applyChoicePose(value, choiceId);
         break;
       case 'safe':
+        this.applySettledRoutePose(this.resultBaseChoiceId);
         this.applySafePose(value);
         break;
       case 'damage':
+        this.applySettledRoutePose(this.resultBaseChoiceId);
         this.applyDamagePose(value, 1);
         break;
       case 'severe':
+        this.applySettledRoutePose(this.resultBaseChoiceId);
         this.applySeverePose(value);
         break;
     }
@@ -725,9 +742,8 @@ export class DangerousWatersPresentation {
   ): void {
     const pulse = progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     const lift = smoothstep(Math.min(1, progress / 0.55));
-    this.lurker.scale.y = 1;
     if (choiceId === 'map') {
-      this.passage.position.x -= pulse * 0.9;
+      this.passage.position.x -= pulse * 0.9 + lift * 0.28;
       this.itemPose.y = lift * 0.56;
       this.itemPose.z = -lift * 0.2;
       this.itemPose.pitch = -lift * 0.32;
@@ -735,9 +751,9 @@ export class DangerousWatersPresentation {
       this.itemPose.scaleX = 1 + lift * 0.3;
       this.itemPose.scaleY = 1 - lift * 0.06;
       this.itemPose.scaleZ = 1 + lift * 0.2;
-      this.boatReaction.yaw = -pulse * 0.025;
+      this.boatReaction.yaw -= pulse * 0.025 + lift * 0.02;
     } else if (choiceId === 'compass') {
-      this.passage.position.x -= pulse * 0.45;
+      this.passage.position.x -= pulse * 0.45 + lift * 0.18;
       this.itemPose.y = lift * 0.48;
       this.itemPose.z = -lift * 0.18;
       this.itemPose.pitch = -lift * 0.18;
@@ -748,34 +764,33 @@ export class DangerousWatersPresentation {
       this.itemPose.scaleX = 1 + lift * 0.16;
       this.itemPose.scaleY = 1 + lift * 0.16;
       this.itemPose.scaleZ = 1 + lift * 0.16;
-      this.boatReaction.yaw = -pulse * 0.014;
+      this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
     } else if (choiceId === 'sleep') {
-      this.passage.position.z += pulse * 0.8;
-      this.boatReaction.lightScale = 1 - pulse * 0.36;
-      this.boatReaction.pitch = pulse * 0.025;
-      this.materials.foam.opacity = 0.34 + pulse * 0.32;
+      this.passage.position.z += pulse * 0.8 + lift * 0.32;
+      this.boatReaction.driftX -= lift * 0.12;
+      this.boatReaction.lightScale -= pulse * 0.36 + lift * 0.22;
+      this.boatReaction.pitch += pulse * 0.025 + lift * 0.012;
+      this.materials.foam.opacity += pulse * 0.32 + lift * 0.04;
     }
   }
 
   private applySafePose(progress: number): void {
     const eased = smoothstep(progress);
     this.passage.position.x -= eased * 2.2;
-    this.lurker.scale.y = 1 - eased;
-    this.materials.foam.opacity = 0.44 * (1 - eased);
-    this.boatReaction.yaw = -Math.sin(Math.PI * progress) * 0.028;
+    this.materials.foam.opacity *= 1 - eased;
+    this.boatReaction.yaw -= Math.sin(Math.PI * progress) * 0.028;
   }
 
   private applyDamagePose(progress: number, severity: number): void {
     const impact = Math.sin(Math.PI * progress);
     const hold = smoothstep((progress - 0.55) / 0.45);
-    this.lurker.scale.y = 1;
     this.foregroundRock.position.x += (impact * 0.08 + hold * 0.04) * severity;
-    this.materials.foam.opacity = 0.3 + impact * 0.48;
-    this.boatReaction.pitch = (impact * 0.07 + hold * 0.018) * severity;
-    this.boatReaction.roll = (impact * -0.045 + hold * -0.035) * severity;
-    this.boatReaction.cameraZ = (impact * -0.09 + hold * -0.055) * severity;
-    this.boatReaction.supplyRoll = (impact * 0.08 + hold * 0.052) * severity;
-    this.boatReaction.supplyLift = (impact * 0.1 + hold * 0.035) * severity;
+    this.materials.foam.opacity += impact * 0.48;
+    this.boatReaction.pitch += (impact * 0.07 + hold * 0.018) * severity;
+    this.boatReaction.roll += (impact * -0.045 + hold * -0.035) * severity;
+    this.boatReaction.cameraZ += (impact * -0.09 + hold * -0.055) * severity;
+    this.boatReaction.supplyRoll += (impact * 0.08 + hold * 0.052) * severity;
+    this.boatReaction.supplyLift += (impact * 0.1 + hold * 0.035) * severity;
   }
 
   private applySeverePose(progress: number): void {
@@ -784,7 +799,7 @@ export class DangerousWatersPresentation {
     this.applyDamagePose(progress, 1.65);
     this.foregroundRock.position.x += impact * 0.01 + hold * 0.01;
     this.foregroundRock.position.z += hold * 0.11;
-    this.materials.foam.opacity = 0.38 + impact * 0.57;
+    this.materials.foam.opacity += impact * 0.09;
     const fragmentTravel = smoothstep((progress - 0.24) / 0.5);
     for (const fragment of this.fragmentMembers) {
       fragment.mesh.visible = progress >= 0.24 && progress < 0.9;
@@ -830,6 +845,13 @@ export class DangerousWatersPresentation {
         + this.waveSample.displacementZ * 0.08
         + foam.travel.z * progress;
     }
+  }
+
+  private applySettledRoutePose(
+    choiceId: DangerousWatersChoiceId | null,
+  ): void {
+    this.applyRevealPose(1);
+    if (choiceId !== null) this.applyChoicePose(1, choiceId);
   }
 
   private cancelActiveMotion(): void {
