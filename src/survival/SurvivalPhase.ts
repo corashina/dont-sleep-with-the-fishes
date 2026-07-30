@@ -91,7 +91,7 @@ type EventPresentationState =
   | 'result'
   | 'receding';
 
-const EVENT_RESULT_CAPTIONS: Readonly<Record<EventPresentationKey, string>> = {
+const EVENT_RESULT_CAPTIONS: Readonly<Partial<Record<EventPresentationKey, string>>> = {
   'drifting-loot.food': 'Recovered',
   'drifting-loot.bait': 'Recovered',
   'drifting-loot.repair': 'Recovered',
@@ -106,8 +106,6 @@ const EVENT_RESULT_CAPTIONS: Readonly<Record<EventPresentationKey, string>> = {
   'mystery-chest.safe': 'A real chest',
   'mystery-chest.mimic': 'Teeth',
   'mystery-chest.leave': 'Left below',
-  'flowers.collect': 'One pale bloom',
-  'flowers.drift': 'Gone astern',
 };
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
@@ -166,17 +164,10 @@ export function formatFishingResult(
 export function formatDriftingLootResult(
   reward: RewardSummary,
 ): DriftingLootResultView {
-  const title = reward.kind === 'item'
-    ? ITEM_DEFINITIONS[reward.id].label
-    : `+${reward.quantity} ${
-      reward.id === 'repairMaterial'
-        ? 'REPAIR MATERIAL'
-        : reward.id.toLocaleUpperCase('en-US')
-    }`;
   return {
     caption: 'SALVAGE RECOVERED',
-    title,
-    detail: '−3 ENERGY',
+    reward,
+    energyCost: 3,
     target: null,
   };
 }
@@ -1111,9 +1102,12 @@ export class SurvivalPhase implements GamePhase {
     ) return;
     const terminal = this.session.snapshot();
     if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
-    if (eventId !== 'drifting-loot' && outcome.eventPresentationKey !== undefined) {
+    const resultCaption = outcome.eventPresentationKey === undefined
+      ? undefined
+      : EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey];
+    if (eventId !== 'drifting-loot' && resultCaption !== undefined) {
       const resultView: EventResultView = {
-        caption: EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey],
+        caption: resultCaption,
         detail: outcome.message,
         target: this.world.projectEventResultBounds?.(
           eventId,
