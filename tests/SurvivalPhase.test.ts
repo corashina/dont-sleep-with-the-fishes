@@ -3077,7 +3077,7 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('routes one eligible physical item through the presentation lock and resolved condition', async () => {
+  it('derives the selected item before random changed actors without an early inventory sync', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     const cue = deferred();
     let current = snapshot({
@@ -3085,6 +3085,7 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventId: event.id,
       inventory: inventory({
         'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'usable' },
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
       }),
     });
     const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
@@ -3094,18 +3095,24 @@ describe('SurvivalPhase orchestration', () => {
         pendingEventId: null,
         inventory: inventory({
           'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'broken' },
+          'map-1': { instanceId: 'map-1', type: 'map', condition: 'broken' },
         }),
       });
       return outcome;
     });
     const playEventItemUse = vi.fn(() => cue.promise);
-    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const syncInventory = vi.fn();
+    const reactToEventOutcome = vi.fn(() => {
+      expect(syncInventory).not.toHaveBeenCalledWith(current);
+      return Promise.resolve();
+    });
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
         play: vi.fn(() => Promise.resolve()),
         playEventItemUse,
         reactToEventOutcome,
+        syncInventory,
         dispose: vi.fn(),
       },
       ui: {
@@ -3139,7 +3146,148 @@ describe('SurvivalPhase orchestration', () => {
     expect(reactToEventOutcome).toHaveBeenCalledWith(
       'shower-night',
       outcome,
-      { choiceId: 'bucket', actors: [{ instanceId: 'bucket-1', condition: 'broken' }] },
+      {
+        choiceId: 'bucket',
+        actors: [
+          { instanceId: 'bucket-1', condition: 'broken' },
+          { instanceId: 'map-1', condition: 'broken' },
+        ],
+      },
+    );
+  });
+
+  it('derives two Windy Night Sleep actors in stable order', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'windy-night',
+      inventory: inventory({
+        'umbrella-1': {
+          instanceId: 'umbrella-1',
+          type: 'umbrella',
+          condition: 'usable',
+        },
+        'map-1': {
+          instanceId: 'map-1',
+          type: 'map',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            inventory: inventory({
+              'umbrella-1': {
+                instanceId: 'umbrella-1',
+                type: 'umbrella',
+                condition: 'broken',
+              },
+              'map-1': {
+                instanceId: 'map-1',
+                type: 'map',
+                condition: 'broken',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'windy-night',
+      outcome,
+      {
+        choiceId: 'sleep',
+        actors: [
+          { instanceId: 'map-1', condition: 'broken' },
+          { instanceId: 'umbrella-1', condition: 'broken' },
+        ],
+      },
+    );
+  });
+
+  it('derives a random Thunderstorm loss for Sleep', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'thunderstorm',
+      inventory: inventory({
+        'umbrella-1': {
+          instanceId: 'umbrella-1',
+          type: 'umbrella',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            inventory: inventory({
+              'umbrella-1': {
+                instanceId: 'umbrella-1',
+                type: 'umbrella',
+                condition: 'lost',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'thunderstorm',
+      outcome,
+      {
+        choiceId: 'sleep',
+        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
+      },
     );
   });
 
@@ -3508,7 +3656,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const syncInventory = vi.fn();
     const reactToEventOutcome = vi.fn(() => {
-      expect(syncInventory).toHaveBeenLastCalledWith(current);
+      expect(syncInventory).not.toHaveBeenCalledWith(current);
       return reaction.promise;
     });
     const showFeedback = vi.fn();

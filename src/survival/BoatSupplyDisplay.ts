@@ -227,6 +227,7 @@ export class BoatSupplyDisplay {
   private eventItemId: ItemInstanceId | null = null;
   private pinnedEventActorId: ItemInstanceId | null = null;
   private pinnedEventGroupId: BoatSupplyGroupId | null = null;
+  private readonly preparedEventActorIds = new Set<ItemInstanceId>();
   private releasePinnedActorOnSync = false;
   private readonly eventItemPose = {
     x: 0,
@@ -406,8 +407,8 @@ export class BoatSupplyDisplay {
   applyEventItemPose(instanceId: ItemInstanceId, pose: SupplyAdditivePose): boolean {
     if (this.disposed) return false;
     if (
-      this.pinnedEventActorId !== null
-      && this.pinnedEventActorId !== instanceId
+      this.pinnedEventActorId !== instanceId
+      && !this.preparedEventActorIds.has(instanceId)
     ) return false;
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined || this.recordsById.get(groupId)?.visibleCopies === 0) return false;
@@ -427,6 +428,7 @@ export class BoatSupplyDisplay {
   pinEventActor(instanceId: ItemInstanceId): boolean {
     if (this.disposed) return false;
     if (this.pinnedEventActorId === instanceId) {
+      this.preparedEventActorIds.add(instanceId);
       this.releasePinnedActorOnSync = false;
       return true;
     }
@@ -445,17 +447,20 @@ export class BoatSupplyDisplay {
     ) return false;
     this.pinnedEventActorId = instanceId;
     this.pinnedEventGroupId = groupId;
+    this.preparedEventActorIds.add(instanceId);
     this.releasePinnedActorOnSync = false;
     return true;
   }
 
   releaseEventActorOnNextSync(): void {
     if (this.disposed || this.pinnedEventActorId === null) return;
+    this.preparedEventActorIds.clear();
     this.releasePinnedActorOnSync = true;
   }
 
   releaseEventActor(): void {
     if (this.disposed) return;
+    this.preparedEventActorIds.clear();
     this.releasePinnedEventActor(true);
   }
 
@@ -478,6 +483,7 @@ export class BoatSupplyDisplay {
   clearEventMotion(): void {
     this.resetEventPose();
     this.cancelActiveAnimation();
+    this.preparedEventActorIds.clear();
     this.releasePinnedEventActor(false);
     this.restoreEventMotionBase();
     if (this.currentSnapshot !== null) {

@@ -408,13 +408,15 @@ export class WeatherEventAnimator {
   react(
     eventId: string,
     outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null,
+    response: EventPhysicalResponsePresentation,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const duration = response === null
-      ? null
-      : weatherReactionDuration(eventId, response.choiceId, response.actors.length);
-    if (response === null || duration === null) {
+    const duration = weatherReactionDuration(
+      eventId,
+      response.choiceId,
+      response.actors.length,
+    );
+    if (duration === null) {
       this.cancelActive();
       return Promise.resolve();
     }
@@ -422,6 +424,9 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
+    for (const actor of response.actors) {
+      this.supplyDisplay.pinEventActor(actor.instanceId);
+    }
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
@@ -597,11 +602,9 @@ export class WeatherEventAnimator {
     )) return;
 
     if (actor !== undefined && active.activeActorIndex !== actorIndex) {
-      if (this.supplyDisplay.pinEventActor(actor.instanceId)) {
-        active.activeActorIndex = actorIndex;
-      }
+      active.activeActorIndex = actorIndex;
     }
-    if (actor !== undefined && active.activeActorIndex === actorIndex) {
+    if (actor !== undefined) {
       const sample = this.reactionSample;
       this.itemSample.x = sample.actorX;
       this.itemSample.y = sample.actorY;

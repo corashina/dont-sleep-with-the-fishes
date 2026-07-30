@@ -779,7 +779,7 @@ export class BoatWorld {
   async reactToEventOutcome(
     eventId: string,
     outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null = null,
+    response: EventPhysicalResponsePresentation,
   ): Promise<void> {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
