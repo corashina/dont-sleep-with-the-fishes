@@ -175,6 +175,19 @@ describe('weather event choreography', () => {
     expect(Math.abs(heavy.cameraRoll)).toBeGreaterThan(Math.abs(light.cameraRoll));
   });
 
+  it('names the keyed Shower Night and Thunderstorm result effects', () => {
+    const shower = reaction();
+    const storm = reaction();
+
+    sampleWeatherReaction('shower-night', 'bucket', 0, 1, null, 0, 0.38, shower);
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 1, 'lost', 0, 0.1, storm);
+
+    expect(shower.effectKind).toBe('shower-safe-settle');
+    expect(shower.actorEffect).toBeGreaterThan(0);
+    expect(storm.effectKind).toBe('storm-loss-lightning');
+    expect(storm.actorEffect).toBeGreaterThan(0);
+  });
+
   it('authors bearing, optical push, and wave-anchor stabilization as named beats', () => {
     const compass = item();
     const spyglass = item();
