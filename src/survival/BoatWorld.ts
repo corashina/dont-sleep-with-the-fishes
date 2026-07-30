@@ -85,6 +85,7 @@ import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
+import { SharkMenPresentation } from './SharkMenPresentation';
 import { WeatherEventAnimator } from './WeatherEventAnimator';
 import {
   createSurvivalLantern,
@@ -427,6 +428,7 @@ export class BoatWorld {
   private readonly eventPresentation: EventPresentationLayer;
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
+  private readonly sharkMenPresentation: SharkMenPresentation;
   private readonly repairTools: Object3D;
   private readonly supplyAnchorBounds = new Map<
     BoatSupplyGroupId,
@@ -617,6 +619,11 @@ export class BoatWorld {
           barrel: shipFurniture.clone('barrel'),
           crate: shipFurniture.clone('cargoCrate'),
         }, this.driftingLootSternRest);
+    this.sharkMenPresentation = new SharkMenPresentation(
+      propModels.createEventModel('sharkMenShark'),
+      this.cameraRig,
+      this.supplyDisplay,
+    );
 
     this.ocean = new OceanRenderer(
       waterQuality,
@@ -641,6 +648,7 @@ export class BoatWorld {
       ...(this.driftingLootPresentation === null
         ? []
         : [this.driftingLootPresentation.root]),
+      this.sharkMenPresentation.root,
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
@@ -723,6 +731,11 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
+    if (
+      eventId === 'shark-men'
+      && await this.sharkMenPresentation.playItemChoice(choiceId, instanceId)
+    ) return;
+    if (this.disposed || operation !== this.weatherEventOperation) return;
     if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
       return;
     }
@@ -730,17 +743,34 @@ export class BoatWorld {
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
+  async playEventContextualChoice(
+    eventId: string,
+    choiceId: string,
+  ): Promise<void> {
+    if (this.disposed || eventId !== 'shark-men') return;
+    this.weatherEventOperation += 1;
+    await this.sharkMenPresentation.playContextualChoice(choiceId);
+  }
+
   stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
     if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
       if (variant === null) throw new Error('Drifting loot requires a variant.');
+      this.sharkMenPresentation.clear();
       this.eventPresentation.clear();
       this.weatherEventAnimator.clear();
       this.driftingLootPresentation.stage(variant);
       return;
     }
     this.driftingLootPresentation?.clear();
+    if (eventId === 'shark-men') {
+      this.eventPresentation.clear();
+      this.weatherEventAnimator.clear();
+      this.sharkMenPresentation.stage();
+      return;
+    }
+    this.sharkMenPresentation.clear();
     this.eventPresentation.stage(eventId);
     this.weatherEventAnimator.stage(eventId);
   }
@@ -750,6 +780,10 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
       await this.driftingLootPresentation.reveal();
+      return;
+    }
+    if (eventId === 'shark-men') {
+      await this.sharkMenPresentation.reveal();
       return;
     }
     await Promise.all([
@@ -783,6 +817,10 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
+    if (eventId === 'shark-men') {
+      await this.sharkMenPresentation.react(outcome, response);
+      return;
+    }
     await Promise.all([
       this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
@@ -794,6 +832,7 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     this.eventPresentation.clear();
     this.driftingLootPresentation?.clear();
+    this.sharkMenPresentation.clear();
     this.weatherEventAnimator.clear();
     this.supplyDisplay.clearEventMotion();
   }
@@ -802,6 +841,7 @@ export class BoatWorld {
     if (this.disposed || !hidden) return;
     this.weatherEventOperation += 1;
     this.skipSequence();
+    this.sharkMenPresentation.settleForVisibilityChange();
     this.eventPresentation.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
@@ -1282,8 +1322,9 @@ export class BoatWorld {
       }
 
       this.advanceFishingPresentation(delta);
-      this.eventPresentation.update(time, delta);
       this.driftingLootPresentation?.update(time, delta);
+      this.sharkMenPresentation.update(time, delta);
+      this.eventPresentation.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
@@ -1324,6 +1365,7 @@ export class BoatWorld {
         this.weatherEventOperation += 1;
       },
       () => this.cancelActiveSequence(),
+      () => this.sharkMenPresentation.dispose(),
       () => this.weatherEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),

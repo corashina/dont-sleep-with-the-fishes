@@ -43,6 +43,8 @@ import {
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
+import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
+import { SharkMenPresentation } from '../src/survival/SharkMenPresentation';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
@@ -558,6 +560,86 @@ describe('BoatWorld helpers', () => {
     disposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     furniture.dispose();
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it('routes the Shark Men tableau before generic and weather presenters', async () => {
+    const swimRing = savedItem('swimRing');
+    const propModels = createTestPropModels();
+    const genericStage = vi.spyOn(EventPresentationLayer.prototype, 'stage');
+    const genericReaction = vi.spyOn(EventPresentationLayer.prototype, 'react');
+    const weatherStage = vi.spyOn(WeatherEventAnimator.prototype, 'stage');
+    const weatherChoice = vi.spyOn(WeatherEventAnimator.prototype, 'playItemUse');
+    const weatherReaction = vi.spyOn(WeatherEventAnimator.prototype, 'react');
+    const sharkChoice = vi.spyOn(SharkMenPresentation.prototype, 'playItemChoice');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [swimRing],
+    );
+    world.syncInventory(snapshot([swimRing]));
+
+    world.stageEvent('shark-men');
+    expect(world.scene.getObjectByName('shark-men-presentation')?.visible).toBe(true);
+    expect(genericStage).not.toHaveBeenCalledWith('shark-men');
+    expect(weatherStage).not.toHaveBeenCalledWith('shark-men');
+
+    const reveal = world.revealEvent('shark-men');
+    world.update(2, 2);
+    await reveal;
+    expect(world.scene.getObjectByName('shark-men-hand')?.visible).toBe(true);
+
+    const use = world.playEventItemUse(
+      'shark-men',
+      'swimRing',
+      swimRing.instanceId,
+    );
+    world.update(3.1, 1.1);
+    await use;
+    expect(sharkChoice).toHaveBeenCalledWith('swimRing', swimRing.instanceId);
+    expect(weatherChoice).not.toHaveBeenCalledWith(
+      'shark-men',
+      'swimRing',
+      swimRing.instanceId,
+    );
+
+    const reaction = world.reactToEventOutcome(
+      'shark-men',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The swim ring is lost.',
+        deltas: {},
+        cue: 'none',
+      },
+      {
+        choiceId: 'swimRing',
+        actors: [{ instanceId: swimRing.instanceId, condition: 'lost' }],
+      },
+    );
+    world.update(4.7, 1.6);
+    await reaction;
+    expect(genericReaction).not.toHaveBeenCalledWith(
+      'shark-men',
+      expect.anything(),
+    );
+    expect(weatherReaction).not.toHaveBeenCalledWith(
+      'shark-men',
+      expect.anything(),
+      expect.anything(),
+    );
+
+    world.clearEvent();
+    expect(world.scene.getObjectByName('shark-men-presentation')?.visible).toBe(false);
+
+    genericStage.mockRestore();
+    genericReaction.mockRestore();
+    weatherStage.mockRestore();
+    weatherChoice.mockRestore();
+    weatherReaction.mockRestore();
+    sharkChoice.mockRestore();
+    world.dispose();
     propModels.dispose();
   });
 
