@@ -10,13 +10,15 @@ One source can serve several related actions.
 
 Deferred sounds are not in this list.
 
-The audio files are not downloaded yet.
+The audio files are committed in `src/assets/audio`.
+
+Run `node scripts/fetch-audio-assets.mjs` to verify and restore them.
 
 ## License
 
 Each linked source page stated CC0 on July 30, 2026.
 
-Freesound can require an account for downloads.
+The restore script uses public Freesound previews.
 
 CC0 labels do not prove that each uploader owned the source recording.
 
@@ -24,11 +26,21 @@ Reject any file with unclear origin or protected source material.
 
 Keep source records after download.
 
-## Music and ambience
+## Runtime
+
+`AudioSystem` owns the Web Audio backend and the master setting.
+
+Each game phase owns one audio scope. Scope disposal stops its loops and effects.
+
+Scavenging uses ship room tone. Survival crossfades ocean, wind, rain, and boat
+creak layers. The game has no continuous background music.
+
+System Tuning stores master volume and mute in local storage.
+
+## Ambience
 
 | Slot | Use | Selected source |
 | --- | --- | --- |
-| Music | Sparse, melancholic maritime loop | [Emotional Deluge](https://opengameart.org/content/emotional-deluge) |
 | Calm ocean | Normal open-water ambience | [Calm Ocean Waves](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | Rough ocean | Storm and high-wave ambience | [Storm Sea Close](https://freesound.org/people/frodeims/sounds/616222/) |
 | Light wind | Calm exposed-sea air | [Soft Breeze](https://freesound.org/people/Vrymaa/sounds/734663/) |
@@ -81,7 +93,7 @@ Keep source records after download.
 
 | Slot | Use | Selected source |
 | --- | --- | --- |
-| Dive entry | Full body enters water | [Person Diving](https://freesound.org/people/designerschoice/sounds/811439/) |
+| Dive entry | Full body enters water | [Jump into Water](https://freesound.org/people/Urkki69/sounds/628350/) |
 | Underwater movement | Submerged motion and bubbles | [Underwater Movement](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
 | Dive surface | Smaller surface splash | [Water Splash](https://freesound.org/people/audiosmedia/sounds/243519/) |
 | Fishing cast | Rod, line, and small splash | [Fishing Reel Cast with Splash](https://freesound.org/people/mwchristian95/sounds/725425/) |
@@ -96,7 +108,7 @@ Keep source records after download.
 | Slot | Use | Selected source |
 | --- | --- | --- |
 | Bucket rain | Rain collects in a hard container | [Rain Drips in Bucket](https://freesound.org/people/TheGloomWorker/sounds/683249/) |
-| Umbrella | Mechanism opens under load | [Umbrella Open](https://freesound.org/people/Geoff-Bremner-Audio/sounds/792187/) |
+| Umbrella | Mechanism opens under load | [Opening an Umbrella](https://freesound.org/people/randbsoundbites/sounds/792526/) |
 | Anchor chain | Heavy chain loads against metal | [Thick Chain on Metal](https://freesound.org/people/kyles/sounds/452577/) |
 | Flashlight | Old mechanical switch | [Small Flashlight Click](https://freesound.org/people/Rudmer_Rotteveel/sounds/457458/) |
 | Flare gun | Sharp launch with burning tail | [Firework Rocket Ignition](https://freesound.org/people/derplayer/sounds/587173/) |
@@ -120,10 +132,8 @@ Keep source records after download.
 
 The thunder source contains a clean, close strike without a full weather loop.
 
-Trim the bed-sheet recording to the 2.5-second sleep cover.
-
 The nightfall source uses processed breath, which keeps the transition tactile.
 
-Use a short opening fragment from the dawn source.
+The dawn file contains the first eight seconds of its source.
 
-The dawn cue must remain quiet beneath the ocean and music layers.
+The dawn cue must remain quiet beneath the ocean layer.

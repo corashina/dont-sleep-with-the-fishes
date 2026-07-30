@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
+import { AudioSystem } from '../src/audio/AudioSystem';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
 import {
@@ -127,8 +128,30 @@ describe('launchGame', () => {
       shipAssets,
       physicsRuntime,
       'enabled',
+      expect.any(AudioSystem),
     );
     expect(game.start).toHaveBeenCalledOnce();
+  });
+
+  it('loads audio with the other assets and disposes it after construction failure', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const audio = AudioSystem.silent();
+    const disposeAudio = vi.spyOn(audio, 'dispose');
+    const loadAudio = vi.fn(() => Promise.resolve(audio));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        loadAudio,
+        createGame: () => {
+          throw new Error('construction failed');
+        },
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(loadAudio).toHaveBeenCalledOnce();
+    expect(disposeAudio).toHaveBeenCalledOnce();
   });
 
   it('waits for models, furniture, sky, lifeboat, ship, and physics before creating the game', async () => {
@@ -189,6 +212,7 @@ describe('launchGame', () => {
       shipAssets,
       physicsRuntime,
       'enabled',
+      expect.any(AudioSystem),
     );
   });
 
@@ -216,6 +240,7 @@ describe('launchGame', () => {
       expect.anything(),
       null,
       'off',
+      expect.any(AudioSystem),
     );
     expect(game.start).toHaveBeenCalledOnce();
   });

@@ -44,6 +44,7 @@ import {
   type PhysicsMode,
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
+import { AudioSystem } from './audio/AudioSystem';
 
 export interface GameFactories {
   createScavenge(
@@ -99,6 +100,7 @@ export interface GameTestOptions {
   sceneRenderer?: SceneRenderer;
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
+  audioSystem?: AudioSystem;
 }
 
 function createRandomSeed(): number {
@@ -121,6 +123,7 @@ export class Game {
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
+  private audio!: AudioSystem;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -146,6 +149,7 @@ export class Game {
     shipAssets: ShipAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
+    audioSystem: AudioSystem = AudioSystem.silent(),
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -188,6 +192,7 @@ export class Game {
         shipAssets,
         physicsRuntime,
         physicsMode,
+        audioSystem,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -260,6 +265,7 @@ export class Game {
       ),
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
+      options.audioSystem ?? AudioSystem.silent(),
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -299,6 +305,7 @@ export class Game {
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
       () => this.shipAssets.dispose(),
+      () => this.audio.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -320,6 +327,7 @@ export class Game {
     shipAssets: ShipAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
+    audioSystem: AudioSystem,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -332,6 +340,7 @@ export class Game {
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
+    this.audio = audioSystem;
     this.factories = factories;
     this.createSeed = createSeed;
     let maxTextureAnisotropy = 1;
@@ -358,6 +367,7 @@ export class Game {
         shipAssets,
         physicsRuntime,
         physicsMode,
+        audio: audioSystem,
       };
       this.activePhase = null;
       this.performanceStats = null;
@@ -404,6 +414,12 @@ export class Game {
           {
             visible: this.performanceStats.isVisible(),
             setVisible: (visible) => this.performanceStats?.setVisible(visible),
+          },
+          {
+            volume: audioSystem.getPreference().volume,
+            muted: audioSystem.getPreference().muted,
+            setVolume: (volume) => audioSystem.setVolume(volume),
+            setMuted: (muted) => audioSystem.setMuted(muted),
           },
         );
       }

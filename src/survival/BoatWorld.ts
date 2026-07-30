@@ -676,6 +676,10 @@ export class BoatWorld {
     this.weatherEffects.setWeather(id);
   }
 
+  setLightningStrikeListener(listener: () => void): void {
+    this.weatherEffects.setLightningStrikeListener(listener);
+  }
+
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.ocean.setQuality(value);

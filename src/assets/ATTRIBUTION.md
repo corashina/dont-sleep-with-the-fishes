@@ -135,3 +135,61 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 | seaweed | `seaweed.glb` | Kelp / Poly by Google | https://poly.pizza/m/4cFllH6Iazk | `poly-pizza:8c51572a-1938-4c61-b971-63c3b69f3ea7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 784 | 784 | Source GLB SHA-256 `3D8E3071C69E6F701A7061AB820293F63E96023CED132C559CC0CDB12542C7C6`; used for the seaweed junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
+
+## Runtime audio ledger
+
+All audio in this ledger uses
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Freesound files use the public high-quality MP3 preview of the approved recording.
+
+The dawn file contains the first eight seconds of its source WAVE file.
+
+| Runtime ID | File | Source / creator |
+|---|---|---|
+| calmOcean | `calmOcean.mp3` | [Calm Ocean Waves / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
+| roughOcean | `roughOcean.mp3` | [Storm Sea Close / frodeims](https://freesound.org/people/frodeims/sounds/616222/) |
+| lightWind | `lightWind.mp3` | [Soft Breeze / Vrymaa](https://freesound.org/people/Vrymaa/sounds/734663/) |
+| strongWind | `strongWind.mp3` | [Heavy Gusts / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/565140/) |
+| rain | `rain.mp3` | [Rain Loop / Snoopy20111](https://freesound.org/people/Snoopy20111/sounds/399072/) |
+| thunderLightning | `thunderLightning.mp3` | [Thunder2 / Yoyodaman234](https://freesound.org/people/Yoyodaman234/sounds/267551/) |
+| roomTone | `roomTone.mp3` | [Ferry Room Tone / kyles](https://freesound.org/people/kyles/sounds/454012/) |
+| woodStep | `woodStep.mp3` | [Wood Footstep / SoundsAreGr8](https://freesound.org/people/SoundsAreGr8/sounds/340983/) |
+| jump | `jump.mp3` | [Quick Whoosh / florianreichelt](https://freesound.org/people/florianreichelt/sounds/683101/) |
+| itemHandling | `itemHandling.mp3` | [Short Whoosh / petenice](https://freesound.org/people/petenice/sounds/9509/) |
+| boatCreak | `boatCreak.mp3` | [Boat Creaking / craigsmith](https://freesound.org/people/craigsmith/sounds/675783/) |
+| lightWaveImpact | `lightWaveImpact.mp3` | [Waves Against Fishing Boat / kyles](https://freesound.org/people/kyles/sounds/637645/) |
+| hardWaveImpact | `hardWaveImpact.mp3` | [Strong Waves / Sheyvan](https://freesound.org/people/Sheyvan/sounds/520511/) |
+| confirm | `confirm.mp3` | [Wooden Confirmation / qubodup](https://freesound.org/people/qubodup/sounds/822568/) |
+| denied | `denied.mp3` | [UI Reject / Rob_Marion](https://freesound.org/people/Rob_Marion/sounds/542040/) |
+| pause | `pause.mp3` | [Wooden Click / BenjaminNelan](https://freesound.org/people/BenjaminNelan/sounds/321083/) |
+| resume | `resume.mp3` | [Menu Click / Leszek_Szary](https://freesound.org/people/Leszek_Szary/sounds/146720/) |
+| journal | `journal.mp3` | [Opening a Book / mateusboga](https://freesound.org/people/mateusboga/sounds/614081/) |
+| eating | `eating.mp3` | [Eating Sound / User391915396](https://freesound.org/people/User391915396/sounds/570336/) |
+| medkit | `medkit.mp3` | [Tape Bandage Rip / SecureSubset](https://freesound.org/people/SecureSubset/sounds/800275/) |
+| hullRepair | `hullRepair.mp3` | [Repair Metal / zbig77](https://freesound.org/people/zbig77/sounds/244985/) |
+| tapeRepair | `tapeRepair.mp3` | [Duct Tape Rip / baidonovan](https://freesound.org/people/baidonovan/sounds/187338/) |
+| diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/) |
+| underwaterMovement | `underwaterMovement.mp3` | [Underwater Movement / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
+| diveSurface | `diveSurface.mp3` | [Water Splash / audiosmedia](https://freesound.org/people/audiosmedia/sounds/243519/) |
+| fishingCast | `fishingCast.mp3` | [Fishing Reel Cast with Splash / mwchristian95](https://freesound.org/people/mwchristian95/sounds/725425/) |
+| fishingBite | `fishingBite.mp3` | [Fish Splash Release 1 / paulprit](https://freesound.org/people/paulprit/sounds/507094/) |
+| fishingReel | `fishingReel.mp3` | [Fishing Reel / mwchristian95](https://freesound.org/people/mwchristian95/sounds/725424/) |
+| fishCatch | `fishCatch.mp3` | [Fish Flopping / RatBird](https://freesound.org/people/RatBird/sounds/570208/) |
+| junkCatch | `junkCatch.mp3` | [Light Metal Trash / loganzsound](https://freesound.org/people/loganzsound/sounds/850720/) |
+| fishingMiss | `fishingMiss.mp3` | [Rope Quick Snatch / Vrymaa](https://freesound.org/people/Vrymaa/sounds/802697/) |
+| bucketRain | `bucketRain.mp3` | [Rain Drips in Bucket / TheGloomWorker](https://freesound.org/people/TheGloomWorker/sounds/683249/) |
+| umbrella | `umbrella.mp3` | [Opening an Umbrella / randbsoundbites](https://freesound.org/people/randbsoundbites/sounds/792526/) |
+| anchorChain | `anchorChain.mp3` | [Thick Chain on Metal / kyles](https://freesound.org/people/kyles/sounds/452577/) |
+| flashlight | `flashlight.mp3` | [Small Flashlight Click / Rudmer_Rotteveel](https://freesound.org/people/Rudmer_Rotteveel/sounds/457458/) |
+| flareGun | `flareGun.mp3` | [Firework Rocket Ignition / derplayer](https://freesound.org/people/derplayer/sounds/587173/) |
+| harpoonGun | `harpoonGun.mp3` | [Crossbow Shot / Lunevix](https://freesound.org/people/Lunevix/sounds/246015/) |
+| goingToSleep | `goingToSleep.mp3` | [Rustling Bed Sheets / Froey_](https://freesound.org/people/Froey_/sounds/644490/) |
+| nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
+| dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
+| eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
+| driftingCargo | `driftingCargo.mp3` | [Dragging a Crate / hz37](https://freesound.org/people/hz37/sounds/792375/) |
+| rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
+| deathEnding | `deathEnding.mp3` | [Ominous Drone / SilverIllusionist](https://freesound.org/people/SilverIllusionist/sounds/693405/) |
+| sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |
