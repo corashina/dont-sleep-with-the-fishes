@@ -268,6 +268,41 @@ describe('DeathStarePresentation', () => {
     expect(presentation.boatRoot.rotation.z).toBe(0);
   });
 
+  it('tracks the live pitched mouth during an attack and loss', async () => {
+    const lostId = 'flashlight-8' as ItemInstanceId;
+    const fixture = setup([lostId]);
+    const presentation = new DeathStarePresentation(fixture.environment);
+    const lostActor = fixture.actors.get(lostId)!;
+    const actorParent = new Group();
+    actorParent.position.set(1.1, -0.2, 0.7);
+    actorParent.rotation.set(0.08, -0.31, 0.04);
+    actorParent.add(lostActor.root);
+    lostActor.root.position.set(2.8, 0.48, -0.36);
+    stage(presentation);
+
+    const reaction = presentation.react(outcome({
+      hull: -44,
+      health: -60,
+      lost: [lostId],
+    }));
+    presentation.update(1, 1);
+
+    const angler = presentation.worldRoot.getObjectByName('death-stare-angler')!;
+    const mouthInActorParent = presentation.worldRoot
+      .getObjectByName('death-stare-mouth-target')!
+      .getWorldPosition(new Vector3());
+    actorParent.worldToLocal(mouthInActorParent);
+    const heldPose = lostActor.applyPose.mock.lastCall![0];
+
+    expect(angler.rotation.x).not.toBe(0);
+    expect(lostActor.root.position.x + heldPose.x).toBeCloseTo(mouthInActorParent.x);
+    expect(lostActor.root.position.y + heldPose.y).toBeCloseTo(mouthInActorParent.y);
+    expect(lostActor.root.position.z + heldPose.z).toBeCloseTo(mouthInActorParent.z);
+
+    presentation.update(1.25, 0.25);
+    await reaction;
+  });
+
   it('disposes its model and authored resources once', () => {
     const fixture = setup();
     const presentation = new DeathStarePresentation(fixture.environment);

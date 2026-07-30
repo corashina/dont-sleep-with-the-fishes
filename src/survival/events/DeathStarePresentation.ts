@@ -4,6 +4,7 @@ import {
   CylinderGeometry,
   DoubleSide,
   Group,
+  Matrix4,
   Material,
   Mesh,
   MeshStandardMaterial,
@@ -212,13 +213,11 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly reactionState = {
     attacked: false,
     lostItem: false,
-    itemTravelX: 0,
-    itemTravelY: 0,
-    itemTravelZ: 0,
   };
   private readonly borrowedBasePosition = new Vector3();
   private readonly mouthWorldPosition = new Vector3();
   private readonly mouthParentPosition = new Vector3();
+  private readonly actorParentWorldInverse = new Matrix4();
   private active: ActiveDeathStareAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
@@ -421,10 +420,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
       || (result.resourceDeltas.health ?? 0) < 0;
     this.reactionState.lostItem = lostId !== null && this.borrowedActor?.instanceId === lostId;
-    this.computeLostItemTravel();
     sampleDeathStareReaction(this.reactionState, 0, this.sample);
-    this.applyBorrowedPose();
     this.applySample(0);
+    this.applyReactionBorrowedPose();
 
     return new Promise((resolve) => {
       this.active = {
@@ -453,9 +451,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
         this.applyBorrowedPose();
       } else {
         sampleDeathStareReaction(this.reactionState, progress, this.sample);
-        this.applyBorrowedPose();
       }
       this.applySample(time);
+      if (active.kind === 'reaction') this.applyReactionBorrowedPose();
       if (progress === 1) this.finishActive();
       return;
     }
@@ -472,9 +470,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
       this.applyBorrowedPose();
     } else {
       sampleDeathStareReaction(this.reactionState, 1, this.sample);
-      this.applyBorrowedPose();
     }
     this.applySample(0);
+    if (this.active.kind === 'reaction') this.applyReactionBorrowedPose();
     this.finishActive();
   }
 
@@ -663,22 +661,39 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
   }
 
-  private computeLostItemTravel(): void {
+  private applyReactionBorrowedPose(): void {
     const actor = this.borrowedActor;
-    this.reactionState.itemTravelX = 0;
-    this.reactionState.itemTravelY = 0;
-    this.reactionState.itemTravelZ = 0;
-    if (!this.reactionState.lostItem || actor === null) return;
+    if (!this.reactionState.lostItem || actor === null) {
+      this.applyBorrowedPose();
+      return;
+    }
 
     this.mouthTarget.getWorldPosition(this.mouthWorldPosition);
     this.mouthParentPosition.copy(this.mouthWorldPosition);
-    actor.root.parent?.worldToLocal(this.mouthParentPosition);
-    this.reactionState.itemTravelX = this.mouthParentPosition.x
-      - this.borrowedBasePosition.x;
-    this.reactionState.itemTravelY = this.mouthParentPosition.y
-      - this.borrowedBasePosition.y;
-    this.reactionState.itemTravelZ = this.mouthParentPosition.z
-      - this.borrowedBasePosition.z;
+    const actorParent = actor.root.parent;
+    if (actorParent !== null) {
+      actorParent.updateWorldMatrix(true, false);
+      this.actorParentWorldInverse.copy(actorParent.matrixWorld).invert();
+      this.mouthParentPosition.applyMatrix4(this.actorParentWorldInverse);
+    }
+
+    const travel = this.sample.supplyTravel;
+    this.itemPose.x = (
+      this.mouthParentPosition.x - this.borrowedBasePosition.x
+    ) * travel;
+    this.itemPose.y = (
+      this.mouthParentPosition.y - this.borrowedBasePosition.y
+    ) * travel;
+    this.itemPose.z = (
+      this.mouthParentPosition.z - this.borrowedBasePosition.z
+    ) * travel;
+    this.itemPose.yaw = this.sample.itemYaw;
+    this.itemPose.pitch = this.sample.itemPitch;
+    this.itemPose.roll = this.sample.itemRoll;
+    this.itemPose.scaleX = this.sample.itemScaleX;
+    this.itemPose.scaleY = this.sample.itemScaleY;
+    this.itemPose.scaleZ = this.sample.itemScaleZ;
+    actor.applyPose(this.itemPose);
   }
 
   private hideScene(): void {
