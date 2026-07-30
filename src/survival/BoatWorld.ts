@@ -41,6 +41,7 @@ import {
 } from '../ocean/BoatBuoyancy';
 import {
   DEFAULT_WAVES,
+  createInactiveVortexWaveState,
   sampleWaveField,
   sampleWaveFieldInto,
   type WaveSample,
@@ -141,25 +142,6 @@ const INITIAL_BOAT_POSE: BoatPose = {
   driftX: 0,
   driftZ: 0,
 };
-
-function sampleDefaultWaveInto(
-  output: WaveSample,
-  time: number,
-  x: number,
-  z: number,
-  amplitudeScale: number,
-): void {
-  sampleWaveFieldInto(output, DEFAULT_WAVES, time, x, z, amplitudeScale);
-}
-
-function sampleDefaultWave(
-  time: number,
-  x: number,
-  z: number,
-  amplitudeScale: number,
-): WaveSample {
-  return sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale);
-}
 
 interface ActiveSequence {
   cue: PresentationCue;
@@ -446,10 +428,39 @@ export class BoatWorld {
   private readonly fishingBiteParticles = new FishingBiteParticles();
   private readonly fishing: FishingVisuals;
   private readonly baseRodPivotRotationX: number;
+  private readonly vortexWave = createInactiveVortexWaveState();
+  private readonly sampleWorldWave = (
+    time: number,
+    x: number,
+    z: number,
+    amplitudeScale: number,
+  ): WaveSample => sampleWaveField(
+    DEFAULT_WAVES,
+    time,
+    x,
+    z,
+    amplitudeScale,
+    this.vortexWave,
+  );
+  private readonly sampleWorldWaveInto = (
+    output: WaveSample,
+    time: number,
+    x: number,
+    z: number,
+    amplitudeScale: number,
+  ): void => sampleWaveFieldInto(
+    output,
+    DEFAULT_WAVES,
+    time,
+    x,
+    z,
+    amplitudeScale,
+    this.vortexWave,
+  );
   private readonly buoyancy = new BoatBuoyancy(
-    sampleDefaultWave,
+    this.sampleWorldWave,
     undefined,
-    sampleDefaultWaveInto,
+    this.sampleWorldWaveInto,
   );
   private readonly boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
@@ -1251,6 +1262,7 @@ export class BoatWorld {
 
     this.currentTime = time;
     const amplitudeScale = this.weatherProfile.waveScale;
+    this.ocean.setVortex(this.vortexWave);
     this.buoyancy.sampleTargetInto(
       this.boatTargetPose,
       time,
@@ -1581,7 +1593,7 @@ export class BoatWorld {
     amplitudeScale = this.weatherProfile.waveScale,
   ): void {
     if (!this.hasFishingCast) return;
-    sampleDefaultWaveInto(
+    this.sampleWorldWaveInto(
       this.fishingWaveSample,
       time,
       this.fishingCastPosition.x,

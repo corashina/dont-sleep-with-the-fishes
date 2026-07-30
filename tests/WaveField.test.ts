@@ -2,10 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_WAVES,
+  createInactiveVortexWaveState,
   createWaveUniformPayload,
   sampleWaveField,
   sampleWaveFieldInto,
   type WaveComponent,
+  type VortexWaveState,
 } from '../src/ocean/WaveField';
 
 describe('WaveField', () => {
@@ -36,6 +38,65 @@ describe('WaveField', () => {
 
     expect(output).toBe(firstReference);
     expect(output).toEqual(sampleWaveField(DEFAULT_WAVES, 1.5, -2, 6, 0.78));
+  });
+
+  it('adds a deterministic vortex disturbance without replacing the output', () => {
+    const base = {
+      height: 0,
+      displacementX: 0,
+      displacementZ: 0,
+      normal: { x: 0, y: 0, z: 0 },
+    };
+    const disturbed = {
+      height: 0,
+      displacementX: 0,
+      displacementZ: 0,
+      normal: { x: 0, y: 0, z: 0 },
+    };
+    const inactive = createInactiveVortexWaveState();
+    const active: VortexWaveState = {
+      centerX: 0,
+      centerZ: -7,
+      radius: 8,
+      depression: 1.1,
+      tangentStrength: 0.8,
+      phase: 0.4,
+      strength: 1,
+    };
+    const disturbedReference = disturbed;
+
+    sampleWaveFieldInto(base, DEFAULT_WAVES, 2, 1, -6, 1, inactive);
+    sampleWaveFieldInto(disturbed, DEFAULT_WAVES, 2, 1, -6, 1, active);
+
+    expect(disturbed).toBe(disturbedReference);
+    expect(disturbed).not.toEqual(base);
+    expect(Object.values(disturbed.normal).every(Number.isFinite)).toBe(true);
+  });
+
+  it('includes the vortex depression derivative in the normal', () => {
+    const sample = sampleWaveField(
+      [],
+      0,
+      1,
+      0,
+      1,
+      {
+        centerX: 0,
+        centerZ: 0,
+        radius: 8,
+        depression: 1.1,
+        tangentStrength: 0,
+        phase: 0,
+        strength: 1,
+      },
+    );
+    const envelopeT = 1 - 1 / 8;
+    const derivativeX = 1.1 * 6 * envelopeT * (1 - envelopeT) / 8;
+    const normalLength = Math.hypot(-derivativeX, 1, 0);
+
+    expect(sample.normal.x).toBeCloseTo(-derivativeX / normalLength, 10);
+    expect(sample.normal.y).toBeCloseTo(1 / normalLength, 10);
+    expect(sample.normal.z).toBeCloseTo(0, 10);
   });
 
   it('matches an analytic single-wave sample with a non-unit direction', () => {
