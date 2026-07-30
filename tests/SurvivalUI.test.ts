@@ -481,9 +481,12 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A shadow');
     expect(caption.querySelector('[data-event-danger]')).toBeNull();
-    expect(caption.querySelector('[data-event-reveal]')).toBeNull();
+    expect(caption.querySelector('[data-event-detail]')?.textContent)
+      .toBe('A shadow moves beneath the boat.');
     expect(caption.dataset.danger).toBe('dangerous');
-    expect(caption.getAttribute('aria-label')).toBe('Dangerous event: A shadow');
+    expect(caption.getAttribute('aria-label')).toBe(
+      'Dangerous event: A shadow. A shadow moves beneath the boat.',
+    );
 
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
     const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
@@ -643,9 +646,9 @@ describe('SurvivalUI', () => {
   });
 
   it.each([
-    ['safe', 'Safe event: A shadow'],
-    ['uncertain', 'Uncertain event: A shadow'],
-    ['dangerous', 'Dangerous event: A shadow'],
+    ['safe', 'Safe event: A shadow. A shadow moves beneath the boat.'],
+    ['uncertain', 'Uncertain event: A shadow. A shadow moves beneath the boat.'],
+    ['dangerous', 'Dangerous event: A shadow. A shadow moves beneath the boat.'],
   ] as const)('announces %s event risk without visible risk copy', async (danger, accessibleName) => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -655,7 +658,27 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.dataset.danger).toBe(danger);
     expect(caption.getAttribute('aria-label')).toBe(accessibleName);
-    expect(caption.textContent.trim()).toBe('A shadow');
+    expect(caption.textContent).toContain('A shadow moves beneath the boat.');
+  });
+
+  it('shows an exact Dangerous Waters result in the scene caption', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    await ui.showEventReveal(testEvent());
+
+    ui.showEventOutcome({
+      title: 'HULL \u22127',
+      detail: 'The rocks damage the boat.',
+      result: 'ROCK STRIKE',
+      state: 'damage',
+    });
+
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.dataset.result).toBe('damage');
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('HULL \u22127');
+    expect(caption.querySelector('[data-event-detail]')?.textContent)
+      .toBe('The rocks damage the boat.');
+    expect(caption.querySelector('[data-event-result]')?.textContent).toBe('ROCK STRIKE');
   });
 
   it('restores focus to the marker after manual Escape closes the journal', () => {
