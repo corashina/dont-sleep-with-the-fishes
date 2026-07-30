@@ -27,6 +27,12 @@ import {
   type PracticalLightModelId,
 } from './practicalLightModelManifest';
 import {
+  EVENT_MODEL_IDS,
+  EVENT_MODEL_SPECS,
+  type EventModelId,
+  type EventRuntimeModelSpec,
+} from './eventModelManifest';
+import {
   collectMeshResources,
   disposeResourceSets,
 } from './SceneResources';
@@ -38,6 +44,7 @@ import {
 } from './PropAnimation';
 
 type RuntimeModelId = ItemId | LifeboatEquipmentId | PracticalLightModelId;
+type ModelId = RuntimeModelId | EventModelId;
 const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
   ...ITEM_IDS,
   ...LIFEBOAT_EQUIPMENT_IDS,
@@ -108,15 +115,18 @@ function attemptCleanup(action: () => void): void {
   }
 }
 
-function validateSpec(id: RuntimeModelId, spec: RuntimeModelSpec | undefined): RuntimeModelSpec {
-  if (!spec) throw new ItemModelLoadError(id, 'manifest entry is missing');
+function validateSpec(
+  id: ModelId,
+  spec: EventRuntimeModelSpec | RuntimeModelSpec | undefined,
+): EventRuntimeModelSpec | RuntimeModelSpec {
+  if (!spec) throw new ItemModelLoadError(id as RuntimeModelId, 'manifest entry is missing');
   const metadata = spec.generatedMetadata;
   if (
     !Number.isInteger(metadata?.triangles)
     || metadata.triangles <= 0
     || metadata.triangles > spec.maxTriangles
   ) {
-    throw new ItemModelLoadError(id, 'generated triangle metadata is invalid');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'generated triangle metadata is invalid');
   }
   const bounds = [metadata.rawBounds?.min, metadata.rawBounds?.max];
   if (
@@ -124,26 +134,26 @@ function validateSpec(id: RuntimeModelId, spec: RuntimeModelSpec | undefined): R
     || !bounds.flat().every(Number.isFinite)
     || !metadata.rawBounds.max.some((maximum, axis) => maximum > metadata.rawBounds.min[axis]!)
   ) {
-    throw new ItemModelLoadError(id, 'generated bounds metadata is invalid');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'generated bounds metadata is invalid');
   }
   return spec;
 }
 
-function validateGeometry(id: RuntimeModelId, geometry: BufferGeometry): number {
+function validateGeometry(id: ModelId, geometry: BufferGeometry): number {
   const position = geometry.getAttribute('position');
   if (!position || position.count === 0) {
-    throw new ItemModelLoadError(id, 'mesh has missing or empty position data');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'mesh has missing or empty position data');
   }
 
   for (let index = 0; index < position.count; index += 1) {
     if (![position.getX(index), position.getY(index), position.getZ(index)].every(Number.isFinite)) {
-      throw new ItemModelLoadError(id, 'mesh contains non-finite position data');
+      throw new ItemModelLoadError(id as RuntimeModelId, 'mesh contains non-finite position data');
     }
   }
 
   const elementCount = geometry.index?.count ?? position.count;
   if (elementCount % 3 !== 0) {
-    throw new ItemModelLoadError(id, 'mesh element count does not describe complete triangles');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'mesh element count does not describe complete triangles');
   }
 
   if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
@@ -155,7 +165,11 @@ function finiteBox(box: Box3): boolean {
   return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
 }
 
-function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSpec): number {
+function normalizeTemplate(
+  id: ModelId,
+  root: Group,
+  spec: EventRuntimeModelSpec | RuntimeModelSpec,
+): number {
   root.rotation.set(...spec.rotation);
   root.updateMatrixWorld(true);
 
@@ -169,22 +183,22 @@ function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSp
     object.receiveShadow = true;
   });
 
-  if (meshCount === 0) throw new ItemModelLoadError(id, 'scene contains no meshes');
+  if (meshCount === 0) throw new ItemModelLoadError(id as RuntimeModelId, 'scene contains no meshes');
   if (triangles > spec.maxTriangles) {
     throw new ItemModelLoadError(
-      id,
+      id as RuntimeModelId,
       `triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`,
     );
   }
 
   const box = new Box3().setFromObject(root);
   if (box.isEmpty() || !finiteBox(box)) {
-    throw new ItemModelLoadError(id, 'scene has empty or non-finite bounds');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'scene has empty or non-finite bounds');
   }
   const size = box.getSize(new Vector3());
   const longestSide = Math.max(size.x, size.y, size.z);
   if (!Number.isFinite(longestSide) || longestSide <= 0) {
-    throw new ItemModelLoadError(id, 'scene has zero-length bounds');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'scene has zero-length bounds');
   }
 
   root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
@@ -192,7 +206,7 @@ function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSp
 
   const scaledBox = new Box3().setFromObject(root);
   if (scaledBox.isEmpty() || !finiteBox(scaledBox)) {
-    throw new ItemModelLoadError(id, 'normalized scene has empty or non-finite bounds');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'normalized scene has empty or non-finite bounds');
   }
   const center = scaledBox.getCenter(new Vector3());
   root.position.add(new Vector3(...spec.offset).sub(center));
@@ -207,7 +221,7 @@ function normalizeTemplate(id: RuntimeModelId, root: Group, spec: RuntimeModelSp
     || !Number.isFinite(finalLongestSide)
     || finalLongestSide <= 0
   ) {
-    throw new ItemModelLoadError(id, 'normalized scene has invalid bounds');
+    throw new ItemModelLoadError(id as RuntimeModelId, 'normalized scene has invalid bounds');
   }
 
   return triangles;
@@ -245,8 +259,13 @@ export interface PropPresentation {
   dispose(): void;
 }
 
+export interface EventModelPresentation {
+  readonly root: Group;
+  readonly animations: readonly AnimationClip[];
+}
+
 function validateAnimations(
-  id: RuntimeModelId,
+  id: ModelId,
   animations: readonly AnimationClip[],
 ): readonly AnimationClip[] {
   for (const clip of animations) {
@@ -257,14 +276,20 @@ function validateAnimations(
       || clip.tracks.length === 0
       || clip.tracks.some((track) => !track.validate())
     ) {
-      throw new ItemModelLoadError(id, `animation clip ${clip.name || '<unnamed>'} is invalid`);
+      throw new ItemModelLoadError(
+        id as RuntimeModelId,
+        `animation clip ${clip.name || '<unnamed>'} is invalid`,
+      );
     }
   }
   if (
     id === 'captainWhiskers'
     && !animations.some((clip) => clip.name === CAPTAIN_WHISKERS_IDLE_CLIP)
   ) {
-    throw new ItemModelLoadError(id, `required ${CAPTAIN_WHISKERS_IDLE_CLIP} clip is missing`);
+    throw new ItemModelLoadError(
+      id as RuntimeModelId,
+      `required ${CAPTAIN_WHISKERS_IDLE_CLIP} clip is missing`,
+    );
   }
   return animations;
 }
@@ -276,6 +301,7 @@ export class PropModelLibrary {
     private readonly itemTemplates: ReadonlyMap<ItemId, ModelTemplate>,
     private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, ModelTemplate>,
     private readonly practicalLightTemplates: ReadonlyMap<PracticalLightModelId, ModelTemplate>,
+    private readonly eventTemplates: ReadonlyMap<EventModelId, ModelTemplate>,
   ) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
@@ -283,8 +309,10 @@ export class PropModelLibrary {
       validateSpec(id, runtimeModelSpec(id));
     }
 
-    const results = await Promise.allSettled(RUNTIME_MODEL_IDS.map(async (id): Promise<LoadedTemplate> => {
-      const spec = runtimeModelSpec(id);
+    const loadTemplate = async (
+      id: ModelId,
+      spec: EventRuntimeModelSpec | RuntimeModelSpec,
+    ): Promise<LoadedTemplate> => {
       const loadedModel = await loader.load(spec.url);
       const root = loadedModel.scene;
       try {
@@ -297,9 +325,17 @@ export class PropModelLibrary {
         attemptCleanup(() => disposeRoots([root]));
         throw error;
       }
-    }));
+    };
 
-    const fulfilledRoots = results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []);
+    const [results, eventResults] = await Promise.all([
+      Promise.allSettled(RUNTIME_MODEL_IDS.map((id) => loadTemplate(id, runtimeModelSpec(id)))),
+      Promise.allSettled(EVENT_MODEL_IDS.map((id) => loadTemplate(id, EVENT_MODEL_SPECS[id]))),
+    ]);
+
+    const fulfilledRoots = [
+      ...results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []),
+      ...eventResults.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []),
+    ];
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
       const id = RUNTIME_MODEL_IDS[firstFailureIndex]!;
@@ -325,6 +361,15 @@ export class PropModelLibrary {
       }
     }
 
+    const eventTemplates = new Map<EventModelId, ModelTemplate>();
+    eventResults.forEach((result, index) => {
+      if (result.status !== 'fulfilled') return;
+      eventTemplates.set(EVENT_MODEL_IDS[index]!, {
+        root: result.value.root,
+        animations: result.value.animations,
+      });
+    });
+
     return new PropModelLibrary(
       new Map(ITEM_IDS.map((id, index) => [id, {
         root: loaded[index]!.root,
@@ -344,6 +389,7 @@ export class PropModelLibrary {
           animations: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.animations,
         },
       ])),
+      eventTemplates,
     );
   }
 
@@ -360,6 +406,7 @@ export class PropModelLibrary {
       ])),
       new Map([...equipmentTemplates].map(([id, root]) => [id, { root, animations: [] }])),
       new Map([...practicalLightTemplates].map(([id, root]) => [id, { root, animations: [] }])),
+      new Map(),
     );
   }
 
@@ -433,6 +480,15 @@ export class PropModelLibrary {
     return clone;
   }
 
+  createEventModel(id: EventModelId): EventModelPresentation | null {
+    const template = this.eventTemplates.get(id);
+    if (template === undefined) return null;
+    return {
+      root: cloneOwnedTemplate(template.root),
+      animations: template.animations,
+    };
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -440,6 +496,7 @@ export class PropModelLibrary {
       ...[...this.itemTemplates.values()].map(({ root }) => root),
       ...[...this.equipmentTemplates.values()].map(({ root }) => root),
       ...[...this.practicalLightTemplates.values()].map(({ root }) => root),
+      ...[...this.eventTemplates.values()].map(({ root }) => root),
     ]);
   }
 }
