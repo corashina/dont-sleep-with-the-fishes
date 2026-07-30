@@ -7,6 +7,12 @@ import {
   smoothBoatPose,
   smoothBoatPoseInto,
 } from '../src/ocean/BoatBuoyancy';
+import {
+  DEFAULT_WAVES,
+  createInactiveVortexWaveState,
+  sampleWaveField,
+  sampleWaveFieldInto,
+} from '../src/ocean/WaveField';
 
 describe('lifeboat buoyancy', () => {
   it('derives height, pitch, and roll from four samples', () => {
@@ -111,5 +117,37 @@ describe('lifeboat buoyancy', () => {
       driftX: 0.24,
       driftZ: -0.18,
     });
+  });
+
+  it('samples buoyancy through one caller-owned mutable vortex state', () => {
+    const vortex = createInactiveVortexWaveState();
+    const buoyancy = new BoatBuoyancy(
+      (time, x, z, amplitudeScale) =>
+        sampleWaveField(DEFAULT_WAVES, time, x, z, amplitudeScale, vortex),
+      undefined,
+      (output, time, x, z, amplitudeScale) =>
+        sampleWaveFieldInto(
+          output,
+          DEFAULT_WAVES,
+          time,
+          x,
+          z,
+          amplitudeScale,
+          vortex,
+        ),
+    );
+    const inactivePose = buoyancy.sampleTarget(2, 0, -7, 1);
+
+    vortex.centerX = 0;
+    vortex.centerZ = -7;
+    vortex.radius = 8;
+    vortex.depression = 1.1;
+    vortex.tangentStrength = 0.8;
+    vortex.phase = 0.4;
+    vortex.strength = 1;
+    const activePose = buoyancy.sampleTarget(2, 0, -7, 1);
+
+    expect(activePose).not.toEqual(inactivePose);
+    expect(Object.values(activePose).every(Number.isFinite)).toBe(true);
   });
 });

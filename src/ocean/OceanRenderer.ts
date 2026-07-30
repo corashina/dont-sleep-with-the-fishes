@@ -10,7 +10,11 @@ import {
   Vector4,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DEFAULT_WAVES, createWaveUniformPayload } from './WaveField';
+import {
+  DEFAULT_WAVES,
+  createWaveUniformPayload,
+  type VortexWaveState,
+} from './WaveField';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
   UNBOUNDED_MINIMUM_LOCAL_Y,
@@ -23,6 +27,7 @@ import {
 import type { WaterQuality } from '../rendering/waterQuality';
 
 const MAX_EXCLUSIONS = 2;
+const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
 
 export interface OceanSurfaceQuality {
   segments: number;
@@ -96,6 +101,12 @@ const vertexShader = `
   uniform vec2 uDirections[4];
   uniform vec4 uParameters[4];
   uniform float uPhases[4];
+  uniform vec2 uVortexCenter;
+  uniform float uVortexRadius;
+  uniform float uVortexDepression;
+  uniform float uVortexTangentStrength;
+  uniform float uVortexPhase;
+  uniform float uVortexStrength;
   varying float vHeight;
   varying float vWaveSlope;
   varying float vViewDepth;
@@ -121,6 +132,23 @@ const vertexShader = `
       derivativeX += amplitude * waveNumber * direction.x * waveCos;
       derivativeZ += amplitude * waveNumber * direction.y * waveCos;
     }
+    vec2 vortexDelta = worldXZ - uVortexCenter;
+    float vortexDistance = length(vortexDelta);
+    float vortexRadius = max(0.001, uVortexRadius);
+    float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
+    float envelope = envelopeT * envelopeT * (3.0 - 2.0 * envelopeT) * uVortexStrength;
+    float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
+    vec2 radial = vortexDelta * inverseDistance;
+    float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
+    float envelopeDerivative =
+      vortexDistance > 0.0001 && vortexDistance < vortexRadius
+        ? -6.0 * envelopeT * (1.0 - envelopeT) * uVortexStrength / vortexRadius
+        : 0.0;
+    height -= uVortexDepression * envelope;
+    displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
+    displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
+    derivativeX -= uVortexDepression * envelopeDerivative * radial.x;
+    derivativeZ -= uVortexDepression * envelopeDerivative * radial.y;
     displaced.y += height;
     vec3 localNormal = normalize(vec3(-derivativeX, 1.0, -derivativeZ));
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
@@ -775,6 +803,12 @@ export class OceanRenderer {
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
+        uVortexCenter: { value: new Vector2() },
+        uVortexRadius: { value: 0 },
+        uVortexDepression: { value: 0 },
+        uVortexTangentStrength: { value: 0 },
+        uVortexPhase: { value: 0 },
+        uVortexStrength: { value: 0 },
         uDeepColor: { value: new Color(colors.deep) },
         uShallowColor: { value: new Color(colors.shallow) },
         uFoamColor: { value: new Color(colors.foam) },
@@ -882,6 +916,31 @@ export class OceanRenderer {
     this.material.uniforms.uDirectLightStrength!.value = Number.isFinite(
       atmosphere.sunVisibility,
     ) ? Math.min(1, Math.max(0, atmosphere.sunVisibility)) : 0;
+  }
+
+  setVortex(state: Readonly<VortexWaveState>): void {
+    (this.material.uniforms.uVortexCenter!.value as Vector2).set(
+      finiteOrZero(state.centerX),
+      finiteOrZero(state.centerZ),
+    );
+    this.material.uniforms.uVortexRadius!.value = finiteOrZero(state.radius);
+    this.material.uniforms.uVortexDepression!.value = finiteOrZero(state.depression);
+    this.material.uniforms.uVortexTangentStrength!.value = finiteOrZero(state.tangentStrength);
+    this.material.uniforms.uVortexPhase!.value = finiteOrZero(state.phase);
+    this.material.uniforms.uVortexStrength!.value = finiteOrZero(state.strength);
+  }
+
+  vortexStateForTest(): VortexWaveState {
+    const center = this.material.uniforms.uVortexCenter!.value as Vector2;
+    return {
+      centerX: center.x,
+      centerZ: center.y,
+      radius: this.material.uniforms.uVortexRadius!.value as number,
+      depression: this.material.uniforms.uVortexDepression!.value as number,
+      tangentStrength: this.material.uniforms.uVortexTangentStrength!.value as number,
+      phase: this.material.uniforms.uVortexPhase!.value as number,
+      strength: this.material.uniforms.uVortexStrength!.value as number,
+    };
   }
 
   setExclusions(regions: readonly WaterExclusionRegion[]): void {
