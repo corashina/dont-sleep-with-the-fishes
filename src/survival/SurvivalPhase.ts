@@ -52,6 +52,7 @@ import type {
   SurvivalState,
 } from './survivalTypes';
 import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
+import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -188,6 +189,7 @@ function testContext(
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
     audio,
+    eventModels: EMPTY_SURVIVAL_EVENT_MODELS,
   };
 }
 
@@ -214,8 +216,6 @@ export class SurvivalPhase implements GamePhase {
   private presentedTerminalState: SurvivalState | null = null;
   private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
-  private pendingDayEventDay: number | null = null;
-  private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
@@ -390,8 +390,6 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     this.audio.action(action, selectedOption);
-    const day = this.session.snapshot().day;
-    if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     void this.runDayAction(outcome, action);
   }
 
@@ -497,7 +495,6 @@ export class SurvivalPhase implements GamePhase {
     this.onRestart = onRestart;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
-    this.requestedDayEventDays.clear();
     this.wireUI();
   }
 
@@ -789,8 +786,8 @@ export class SurvivalPhase implements GamePhase {
     this.fishingPresentation = 'ready';
     this.activeFishing = null;
     this.setBusy(false);
-    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.ui.setFishingViewExitVisible?.(true);
+    this.ui.setFishingState?.({ mode: 'ready', message: '', biteTarget: null });
   }
 
   private exitReadyFishingView(): void {
@@ -824,6 +821,7 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.transitionFishingView('exit', generation)) return;
     if (!this.isContinuationActive(generation)) return;
     this.fishingPresentation = 'idle';
+    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }
@@ -856,43 +854,15 @@ export class SurvivalPhase implements GamePhase {
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
     if (action === 'dive') this.audio.finishDive();
     if (this.disposed) return;
-    let snapshot = this.renderSnapshot(false, false);
+    const snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
     if (isTerminal(snapshot.state)) {
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
       return;
     }
-    snapshot = await this.openScheduledDayEvent(snapshot);
-    if (this.disposed) return;
-    if (snapshot.pendingEventId !== null) {
-      await this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
-      return;
-    }
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
-  }
-
-  private async openScheduledDayEvent(
-    snapshot: SurvivalSnapshot,
-    generation?: number,
-  ): Promise<SurvivalSnapshot> {
-    if (
-      this.pendingDayEventDay === null
-      || snapshot.day !== this.pendingDayEventDay
-      || snapshot.state !== 'day'
-    ) return snapshot;
-
-    const eventDay = this.pendingDayEventDay;
-    this.pendingDayEventDay = null;
-    this.requestedDayEventDays.add(eventDay);
-    const eventOutcome = this.session.requestDayEvent?.();
-    if (eventOutcome === undefined) return snapshot;
-    if (!eventOutcome.accepted) {
-      this.ui.showFeedback?.(eventOutcome);
-      return this.renderSnapshot(false, false);
-    }
-    return this.renderSnapshot(false, false);
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
@@ -1118,7 +1088,7 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    this.ui.showFeedback?.(outcome);
+    if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();

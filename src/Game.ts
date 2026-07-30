@@ -8,6 +8,11 @@ import {
 } from 'three';
 import type { GamePhase, PhaseContext } from './app/GamePhase';
 import {
+  EMPTY_SURVIVAL_EVENT_MODELS,
+  type SurvivalEventModelLibrary,
+  type SurvivalEventModels,
+} from './survival/SurvivalEventModelLibrary';
+import {
   EVENT_TEST_OPTIONS,
   createEventTestResult,
   isEventTestId,
@@ -101,6 +106,7 @@ export interface GameTestOptions {
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
+  eventModels?: SurvivalEventModels;
 }
 
 function createRandomSeed(): number {
@@ -124,6 +130,7 @@ export class Game {
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
   private audio!: AudioSystem;
+  private eventModels: SurvivalEventModelLibrary | null = null;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -150,6 +157,7 @@ export class Game {
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
+    eventModels?: SurvivalEventModelLibrary,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -193,6 +201,8 @@ export class Game {
         physicsRuntime,
         physicsMode,
         audioSystem,
+        eventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
+        eventModels ?? null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -266,6 +276,8 @@ export class Game {
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
+      options.eventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
+      null,
       factories,
       options.createSeed ?? createRandomSeed,
     );
@@ -306,6 +318,7 @@ export class Game {
       () => this.lifeboatAssets.dispose(),
       () => this.shipAssets.dispose(),
       () => this.audio.dispose(),
+      () => this.eventModels?.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -328,6 +341,8 @@ export class Game {
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
+    eventModels: SurvivalEventModels,
+    ownedEventModels: SurvivalEventModelLibrary | null,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -341,6 +356,7 @@ export class Game {
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
     this.audio = audioSystem;
+    this.eventModels = ownedEventModels;
     this.factories = factories;
     this.createSeed = createSeed;
     let maxTextureAnisotropy = 1;
@@ -368,6 +384,7 @@ export class Game {
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
+        eventModels,
       };
       this.activePhase = null;
       this.performanceStats = null;
