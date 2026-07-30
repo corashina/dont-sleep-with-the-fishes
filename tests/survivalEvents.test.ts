@@ -210,6 +210,7 @@ describe('survival events', () => {
 
   it('sets supernatural event pressure bounds and effects', () => {
     const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
+    const manInTheFog = byId['man-in-the-fog'];
 
     expect(byId['man-in-the-fog']?.minimumPressure).toBe(1);
     expect(byId.ghosts?.minimumPressure).toBe(1);
@@ -220,6 +221,18 @@ describe('survival events', () => {
       const serialized = JSON.stringify(byId[eventId]?.choices);
       expect(serialized).not.toContain('rescueProgress');
     }
+
+    const outcomeResources = (choiceId: string) => manInTheFog?.choices
+      .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
+    expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
+    expect(outcomeResources('flashlight')).toEqual([
+      [add('pressure', 2), subtract('health', 20), set('energy', 1)],
+      [add('pressure', 2)],
+    ]);
+    expect(outcomeResources('sleep')).toEqual([
+      [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
+      [add('pressure', 1), subtract('health', 20), set('energy', 2)],
+    ]);
   });
 
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
