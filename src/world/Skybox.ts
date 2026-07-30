@@ -28,6 +28,13 @@ export interface SkyboxCelestialDirections {
   readonly moon: CelestialDirection;
 }
 
+export interface MoonFacePresentation {
+  readonly reveal: number;
+  readonly grin: number;
+  readonly starScale: number;
+  readonly dim: number;
+}
+
 const clamp01 = (value: number): number => Number.isFinite(value)
   ? Math.min(1, Math.max(0, value))
   : 0;
@@ -65,6 +72,10 @@ const fragmentShader = `
   uniform float uHorizonBandWidth;
   uniform float uExposure;
   uniform float uTintAmount;
+  uniform float uMoonFaceReveal;
+  uniform float uMoonGrin;
+  uniform float uMoonStarScale;
+  uniform float uMoonEventDim;
   varying vec3 vSkyDirection;
 
   float hash31(vec3 value) {
@@ -146,7 +157,23 @@ const fragmentShader = `
     return tint * point * exists * brightness;
   }
 
-  vec4 sampleMoon(vec3 direction, vec3 moonDirection, out float radialDistance) {
+  float eyeShape(vec2 uv, vec2 center, vec2 scale) {
+    vec2 p = (uv - center) / scale;
+    return 1.0 - smoothstep(0.72, 1.0, dot(p, p));
+  }
+
+  float mouthShape(vec2 uv, float grin) {
+    float curve = abs(uv.y - (0.31 + grin * uv.x * uv.x));
+    float width = smoothstep(0.36, 0.08, abs(uv.x));
+    return (1.0 - smoothstep(0.018, 0.045, curve)) * width;
+  }
+
+  vec4 sampleMoon(
+    vec3 direction,
+    vec3 moonDirection,
+    out float radialDistance,
+    out vec2 moonUv
+  ) {
     vec3 moonRight = normalize(cross(vec3(0.0, 1.0, 0.0), moonDirection));
     vec3 moonUp = normalize(cross(moonDirection, moonRight));
     float facing = dot(direction, moonDirection);
@@ -155,7 +182,7 @@ const fragmentShader = `
       dot(direction, moonUp)
     ) / max(facing, 0.0001);
     const float moonRadius = 0.027;
-    vec2 moonUv = tangent / (moonRadius * 2.0) + 0.5;
+    moonUv = tangent / (moonRadius * 2.0) + 0.5;
     radialDistance = length(tangent) / moonRadius;
     float inside = step(0.0, facing)
       * step(abs(tangent.x), moonRadius)
@@ -206,10 +233,38 @@ const fragmentShader = `
 
     vec3 moonDirection = normalize(uMoonDirection);
     float moonRadialDistance;
-    vec4 moonSample = sampleMoon(direction, moonDirection, moonRadialDistance);
+    vec2 moonUv;
+    vec4 moonSample = sampleMoon(
+      direction,
+      moonDirection,
+      moonRadialDistance,
+      moonUv
+    );
     float moonClarity = 1.0 - uHaze * 0.72;
-    color += uMoonColor
-      * moonSample.rgb
+    float leftEyeReveal = smoothstep(0.02, 0.3, uMoonFaceReveal);
+    float rightEyeReveal = smoothstep(0.3, 0.58, uMoonFaceReveal);
+    float mouthReveal = smoothstep(0.58, 0.9, uMoonFaceReveal);
+    float leftEye = eyeShape(
+      moonUv,
+      vec2(0.36, 0.58),
+      vec2(0.065, 0.095)
+    ) * leftEyeReveal;
+    float rightEye = eyeShape(
+      moonUv,
+      vec2(0.64, 0.58),
+      vec2(0.065, 0.095)
+    ) * rightEyeReveal;
+    float mouth = mouthShape(
+      moonUv - vec2(0.5, 0.0),
+      mix(0.12, 0.42, uMoonGrin)
+    ) * mouthReveal;
+    float faceInk = clamp(max(max(leftEye, rightEye), mouth), 0.0, 1.0);
+    vec3 moonDisc = mix(
+      uMoonColor * moonSample.rgb,
+      vec3(0.035, 0.055, 0.065),
+      faceInk * 0.92
+    );
+    color += moonDisc
       * moonSample.a
       * uMoonVisibility
       * moonClarity;
@@ -225,13 +280,19 @@ const fragmentShader = `
     float starClarity = max(0.0, 1.0 - uHaze * 0.94);
     vec3 stars = starLayer(direction, 210.0, 0.9972)
       + starLayer(direction, 390.0, 0.9986) * 0.7;
-    color += uStarColor * stars * uStarVisibility * starHorizon * starClarity;
+    color += uStarColor
+      * stars
+      * uStarVisibility
+      * starHorizon
+      * starClarity
+      * uMoonStarScale;
 
     float atmosphericVariation = mix(0.992, 1.008,
       hash31(direction * 173.0));
     color *= atmosphericVariation;
     color *= uExposure;
     color = mix(color, uTintColor, clamp(uTintAmount, 0.0, 1.0));
+    color *= 1.0 - uMoonEventDim;
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
     float dither = (hash21(gl_FragCoord.xy) - 0.5) / 255.0;
@@ -295,6 +356,10 @@ export class Skybox {
         uHorizonBandWidth: { value: this.current.horizonBandWidth },
         uExposure: { value: this.current.exposure },
         uTintAmount: { value: 0 },
+        uMoonFaceReveal: { value: 0 },
+        uMoonGrin: { value: 0 },
+        uMoonStarScale: { value: 1 },
+        uMoonEventDim: { value: 0 },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
@@ -325,7 +390,22 @@ export class Skybox {
   }
 
   resetTransient(): void {
-    if (!this.disposed) this.material.uniforms.uTintAmount!.value = 0;
+    if (this.disposed) return;
+    const uniforms = this.material.uniforms;
+    uniforms.uTintAmount!.value = 0;
+    uniforms.uMoonFaceReveal!.value = 0;
+    uniforms.uMoonGrin!.value = 0;
+    uniforms.uMoonStarScale!.value = 1;
+    uniforms.uMoonEventDim!.value = 0;
+  }
+
+  setMoonFace(value: MoonFacePresentation): void {
+    if (this.disposed) return;
+    const uniforms = this.material.uniforms;
+    uniforms.uMoonFaceReveal!.value = clamp01(value.reveal);
+    uniforms.uMoonGrin!.value = clamp01(value.grin);
+    uniforms.uMoonStarScale!.value = clamp01(value.starScale);
+    uniforms.uMoonEventDim!.value = clamp01(value.dim);
   }
 
   setTint(color: Color, amount: number): void {
@@ -336,6 +416,7 @@ export class Skybox {
 
   dispose(): void {
     if (this.disposed) return;
+    this.resetTransient();
     this.disposed = true;
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
