@@ -81,6 +81,7 @@ import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import type { FocusedEventPresentationFactories } from './FocusedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -511,6 +512,7 @@ export class BoatWorld {
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
     waterQuality: WaterQuality = 'low',
+    focusedEventFactories: FocusedEventPresentationFactories = {},
   ) {
     this.scene = new Scene();
     this.sky = new Skybox(
@@ -612,7 +614,13 @@ export class BoatWorld {
 
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
-    this.eventPresentation = new EventPresentationLayer();
+    this.eventPresentation = new EventPresentationLayer({
+      propModels,
+      waves: DEFAULT_WAVES,
+      cameraRig: this.cameraRig,
+      supplyDisplay: this.supplyDisplay,
+      chestDisplay: this.chestDisplay,
+    }, focusedEventFactories);
     this.driftingLootPresentation = shipFurniture === undefined
       ? null
       : new DriftingLootPresentation({

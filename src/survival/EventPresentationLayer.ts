@@ -13,7 +13,6 @@ import {
   Vector3,
 } from 'three';
 import {
-  DEFAULT_WAVES,
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
@@ -22,6 +21,15 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import type { ActionOutcome } from './survivalTypes';
+import {
+  FOCUSED_EVENT_IDS,
+  type EventChoicePresentation,
+  type FocusedEventId,
+  type FocusedEventPresentation,
+  type FocusedEventPresentationDependencies,
+  type FocusedEventPresentationFactories,
+  type FocusedEventPresentationFactory,
+} from './FocusedEventPresentation';
 
 interface ActiveEventAnimation {
   readonly kind: 'reveal' | 'react';
@@ -325,6 +333,7 @@ function keyedRevealProgress(progress: number): number {
 export class EventPresentationLayer {
   readonly root = new Group();
   private readonly tableaus = new Map<string, EventTableau>();
+  private readonly focused = new Map<string, FocusedEventPresentation>();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly positionScratch = new Vector3();
@@ -336,13 +345,17 @@ export class EventPresentationLayer {
     normal: { x: 0, y: 1, z: 0 },
   };
   private activeAnimation: ActiveEventAnimation | null = null;
+  private activeFocused: FocusedEventPresentation | null = null;
   private stagedEventId: string | null = null;
   private held = false;
   private rescueProgress: number | null = null;
   private reactionDirection = 1;
   private disposed = false;
 
-  constructor() {
+  constructor(
+    private readonly dependencies: FocusedEventPresentationDependencies,
+    focusedFactories: FocusedEventPresentationFactories = {},
+  ) {
     this.root.name = 'event-presentation-layer';
     const materials = createMaterials();
     const tableaus = [
@@ -362,34 +375,85 @@ export class EventPresentationLayer {
       this.root.add(tableau.root);
     }
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+    for (const eventId of FOCUSED_EVENT_IDS) {
+      const factory = focusedFactories[eventId];
+      if (factory !== undefined) this.registerFocusedFactory(eventId, factory);
+    }
+  }
+
+  registerFocusedFactory(
+    eventId: FocusedEventId,
+    factory: FocusedEventPresentationFactory,
+  ): boolean {
+    if (this.disposed || this.focused.has(eventId)) return false;
+    const presenter = factory(this.dependencies);
+    if (presenter === null) return false;
+    presenter.root.visible = false;
+    this.focused.set(eventId, presenter);
+    this.root.add(presenter.root);
+    return true;
+  }
+
+  hasFocused(eventId: string): boolean {
+    return this.focused.has(eventId);
   }
 
   stage(eventId: string): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
-    this.stagedEventId = this.tableaus.has(eventId) ? eventId : null;
+    this.clearActiveFocused();
+    const focused = this.focused.get(eventId) ?? null;
+    this.activeFocused = focused;
+    this.stagedEventId = focused === null && this.tableaus.has(eventId)
+      ? eventId
+      : null;
     this.held = false;
-    for (const id of TABLEAU_EVENT_IDS) {
-      const tableau = this.tableaus.get(id)!;
-      tableau.heldReactionTilt = 0;
-      tableau.root.visible = id === this.stagedEventId || (
-        id === 'other-people' && this.rescueProgress !== null
-      );
-      this.resetTableauPose(tableau);
-      this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
-    }
+    this.resetGenericTableaus();
+    if (focused === null) return;
+    focused.root.visible = true;
+    focused.stage();
   }
 
   reveal(eventId: string): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.stagedEventId !== eventId) this.stage(eventId);
+    const focused = this.focused.get(eventId) ?? null;
+    if (
+      this.activeFocused !== focused
+      || (focused === null && this.stagedEventId !== eventId)
+    ) {
+      this.stage(eventId);
+    }
+    if (this.activeFocused !== null) return this.activeFocused.reveal();
     if (this.stagedEventId === null) return Promise.resolve();
     return this.startAnimation('reveal', eventId);
   }
 
+  playChoice(
+    eventId: string,
+    choice: EventChoicePresentation,
+  ): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const focused = this.focused.get(eventId) ?? null;
+    if (this.activeFocused !== focused) this.stage(eventId);
+    return this.activeFocused?.playChoice(choice) ?? Promise.resolve();
+  }
+
   react(eventId: string, outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.stagedEventId !== eventId) this.stage(eventId);
+    const focused = this.focused.get(eventId) ?? null;
+    if (
+      this.activeFocused !== focused
+      || (focused === null && this.stagedEventId !== eventId)
+    ) {
+      this.stage(eventId);
+    }
+    if (this.activeFocused !== null) {
+      const result = outcome.eventResult;
+      if (result === undefined || result.eventId !== eventId) {
+        throw new Error(`Focused event ${eventId} requires a matching event result.`);
+      }
+      return this.activeFocused.react(result, outcome);
+    }
     if (this.stagedEventId === null) return Promise.resolve();
     this.held = true;
     this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
@@ -401,18 +465,18 @@ export class EventPresentationLayer {
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.clearActiveFocused();
     this.stagedEventId = null;
     this.held = false;
-    for (const id of TABLEAU_EVENT_IDS) {
-      const tableau = this.tableaus.get(id)!;
-      tableau.heldReactionTilt = 0;
-      this.resetTableauPose(tableau);
-      tableau.root.visible = id === 'other-people' && this.rescueProgress !== null;
-    }
+    this.resetGenericTableaus();
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    if (this.activeFocused !== null) {
+      this.activeFocused.settleForVisibilityChange();
+      return;
+    }
     const animation = this.activeAnimation;
     if (animation === null) return;
     this.activeAnimation = null;
@@ -430,7 +494,9 @@ export class EventPresentationLayer {
     if (this.disposed) return;
     this.rescueProgress = progress === null ? null : Math.min(1, Math.max(0, progress));
     const cargo = this.tableaus.get('other-people')!;
-    cargo.root.visible = this.stagedEventId === 'other-people' || this.rescueProgress !== null;
+    cargo.root.visible = !this.focused.has('other-people') && (
+      this.stagedEventId === 'other-people' || this.rescueProgress !== null
+    );
     if (this.stagedEventId !== 'other-people' && this.rescueProgress !== null) {
       this.resetTableauPose(cargo);
       this.applyRevealPose(cargo, this.rescueProgress, 0);
@@ -439,6 +505,10 @@ export class EventPresentationLayer {
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
+    if (this.activeFocused !== null) {
+      this.activeFocused.update(time, delta);
+      return;
+    }
     const staged = this.stagedEventId === null
       ? null
       : this.tableaus.get(this.stagedEventId)!;
@@ -483,8 +553,33 @@ export class EventPresentationLayer {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.disposed = true;
+    this.activeFocused = null;
+    for (const presenter of this.focused.values()) presenter.dispose();
+    this.focused.clear();
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+  }
+
+  private clearActiveFocused(): void {
+    const focused = this.activeFocused;
+    this.activeFocused = null;
+    if (focused === null) return;
+    focused.clear();
+    focused.root.visible = false;
+  }
+
+  private resetGenericTableaus(): void {
+    for (const id of TABLEAU_EVENT_IDS) {
+      const tableau = this.tableaus.get(id)!;
+      tableau.heldReactionTilt = 0;
+      this.resetTableauPose(tableau);
+      tableau.root.visible = id === this.stagedEventId || (
+        id === 'other-people'
+        && this.rescueProgress !== null
+        && !this.focused.has('other-people')
+      );
+      this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
+    }
   }
 
   private startAnimation(
@@ -506,7 +601,7 @@ export class EventPresentationLayer {
   private applyWavePose(tableau: EventTableau, time: number): void {
     sampleWaveFieldInto(
       this.waveSample,
-      DEFAULT_WAVES,
+      this.dependencies.waves,
       time,
       tableau.basePosition.x,
       tableau.basePosition.z,
