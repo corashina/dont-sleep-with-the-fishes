@@ -3139,7 +3139,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(reactToEventOutcome).toHaveBeenCalledWith(
       'shower-night',
       outcome,
-      { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'broken' },
+      { choiceId: 'bucket', actors: [{ instanceId: 'bucket-1', condition: 'broken' }] },
     );
   });
 
