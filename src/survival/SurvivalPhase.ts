@@ -1,5 +1,6 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
+import { AudioSystem } from '../audio/AudioSystem';
 import {
   ITEM_DEFINITIONS,
   type ItemInstance,
@@ -183,6 +184,7 @@ function testContext(
     shipAssets: {} as ShipAssets,
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
+    audio: AudioSystem.silent(),
   };
 }
 

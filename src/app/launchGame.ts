@@ -31,6 +31,10 @@ import {
   configuredPhysicsMode,
   type PhysicsMode,
 } from '../physics/PhysicsOptions';
+import {
+  AudioLoadError,
+  AudioSystem,
+} from '../audio/AudioSystem';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -44,6 +48,7 @@ export interface LaunchDependencies {
   loadLifeboatAssets(): Promise<LifeboatAssets>;
   loadShipAssets(): Promise<ShipAssets>;
   loadPhysicsRuntime(): Promise<PhysicsRuntime>;
+  loadAudio?(): Promise<AudioSystem>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
@@ -53,6 +58,7 @@ export interface LaunchDependencies {
     shipAssets: ShipAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
+    audio: AudioSystem,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -63,6 +69,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
   loadPhysicsRuntime,
+  loadAudio: () => AudioSystem.load(),
   createGame: (
     mount,
     models,
@@ -72,6 +79,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     shipAssets,
     physicsRuntime,
     physicsMode,
+    audio,
   ) => (
     new Game(
       mount,
@@ -82,6 +90,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       shipAssets,
       physicsRuntime,
       physicsMode,
+      audio,
     )
   ),
 };
@@ -93,6 +102,7 @@ interface LoadedGameAssets {
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
   physicsRuntime: PhysicsRuntime | null;
+  audio: AudioSystem;
 }
 
 async function loadGameAssets(
@@ -109,6 +119,7 @@ async function loadGameAssets(
     lifeboatAssets,
     shipAssets,
     physicsRuntime,
+    audio,
   ] =
     await Promise.allSettled([
       dependencies.loadModels(),
@@ -117,6 +128,7 @@ async function loadGameAssets(
       dependencies.loadLifeboatAssets(),
       dependencies.loadShipAssets(),
       physicsRuntimePromise,
+      dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
     ]);
   const assetResults = [
     models,
@@ -124,6 +136,7 @@ async function loadGameAssets(
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    audio,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
   const firstFailure = results.find(
@@ -147,6 +160,7 @@ async function loadGameAssets(
     || lifeboatAssets.status !== 'fulfilled'
     || shipAssets.status !== 'fulfilled'
     || physicsRuntime.status !== 'fulfilled'
+    || audio.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
@@ -157,6 +171,7 @@ async function loadGameAssets(
     lifeboatAssets: lifeboatAssets.value,
     shipAssets: shipAssets.value,
     physicsRuntime: physicsRuntime.value,
+    audio: audio.value,
   };
 }
 
@@ -173,7 +188,11 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
         try {
           assets.lifeboatAssets.dispose();
         } finally {
-          assets.shipAssets.dispose();
+          try {
+            assets.shipAssets.dispose();
+          } finally {
+            assets.audio.dispose();
+          }
         }
       }
     }
@@ -232,6 +251,17 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       kicker: 'PHYSICS UNAVAILABLE',
       title: 'Unable to prepare the moving deck',
       lead: 'The ship simulation could not be initialized.',
+      detail: error.message,
+    });
+    return;
+  }
+
+  if (error instanceof AudioLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'AUDIO UNAVAILABLE',
+      title: 'Unable to prepare the soundscape',
+      lead: 'A required local audio file could not be loaded.',
       detail: error.message,
     });
     return;
@@ -364,6 +394,7 @@ export function launchGame(
         unownedAssets.shipAssets,
         unownedAssets.physicsRuntime,
         physicsMode,
+        unownedAssets.audio,
       );
       game = createdGame;
       unownedAssets = null;

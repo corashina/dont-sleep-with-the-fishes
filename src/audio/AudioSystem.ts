@@ -19,6 +19,13 @@ class SilentAudioBackend implements AudioBackend {
   dispose(): void {}
 }
 
+export class AudioLoadError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'AudioLoadError';
+  }
+}
+
 export class AudioSystem {
   private readonly preference: AudioPreference;
   private readonly scopes = new Set<OwnedAudioScope>();
@@ -28,6 +35,7 @@ export class AudioSystem {
   private constructor(
     private readonly backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
+    listenForUnlock: boolean,
   ) {
     const onPreferenceChange = (state: Readonly<AudioControlState>): void => {
       this.applyPreference(state);
@@ -36,19 +44,24 @@ export class AudioSystem {
       ? createAudioPreference(onPreferenceChange)
       : createAudioPreference(onPreferenceChange, storage);
     this.applyPreference(this.preference.get(), 0);
-    this.installUnlockListeners();
+    if (listenForUnlock) this.installUnlockListeners();
   }
 
   static async load(): Promise<AudioSystem> {
     const Context = globalThis.AudioContext;
     if (Context === undefined) return AudioSystem.silent();
-    const backend = new WebAudioBackend(new Context());
+    let backend: WebAudioBackend;
+    try {
+      backend = new WebAudioBackend(new Context());
+    } catch {
+      return AudioSystem.silent();
+    }
     try {
       await backend.load();
-      return new AudioSystem(backend, undefined);
-    } catch (error) {
+      return new AudioSystem(backend, undefined, true);
+    } catch (cause) {
       backend.dispose();
-      throw error;
+      throw new AudioLoadError('Required audio files could not be loaded.', { cause });
     }
   }
 
@@ -56,11 +69,11 @@ export class AudioSystem {
     backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null = null,
   ): AudioSystem {
-    return new AudioSystem(backend, storage);
+    return new AudioSystem(backend, storage, false);
   }
 
   static silent(): AudioSystem {
-    return new AudioSystem(new SilentAudioBackend(), null);
+    return new AudioSystem(new SilentAudioBackend(), null, false);
   }
 
   createScope(): AudioScope {
