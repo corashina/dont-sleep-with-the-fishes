@@ -161,16 +161,21 @@ describe('AnglerfishSwarmPresentation', () => {
       ({ name }) => name.startsWith('swarm-lure-light-'),
     );
 
-    expect(fixture.create).toHaveBeenCalledTimes(20);
+    expect(fixture.create).toHaveBeenCalledTimes(18);
     expect(fixture.create).toHaveBeenCalledWith('anglerFish');
     expect(anglerRoots).toHaveLength(18);
     expect(new Set(anglerRoots.map(({ scale }) => scale.x)).size).toBeGreaterThan(6);
     expect(anglerRoots.every(({ scale }) => scale.x < 1)).toBe(true);
     expect(lureLights).toHaveLength(18);
     expect(lureLights.every((light) => light instanceof PointLight)).toBe(true);
-    expect(presentation.boatRoot.children.filter(
+    const catches = presentation.boatRoot.children.filter(
       ({ name }) => name.startsWith('swarm-catch-actor-'),
-    )).toHaveLength(2);
+    );
+    expect(catches).toHaveLength(2);
+    expect(catches.every(({ children }) => children.length === 4)).toBe(true);
+    expect(catches.every(
+      ({ userData }) => userData.catchSource === 'authored-low-poly',
+    )).toBe(true);
     expect(presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('swarm-splash-'),
     )).toHaveLength(8);
@@ -259,14 +264,24 @@ describe('AnglerfishSwarmPresentation', () => {
       splash.material as MeshStandardMaterial,
       'dispose',
     );
+    const catchBody = presentation.boatRoot.getObjectByName(
+      'swarm-catch-actor-1-body',
+    ) as Mesh;
+    const catchGeometryDispose = vi.spyOn(catchBody.geometry, 'dispose');
+    const catchMaterialDispose = vi.spyOn(
+      catchBody.material as MeshStandardMaterial,
+      'dispose',
+    );
 
     presentation.dispose();
     presentation.dispose();
 
-    expect(fixture.modelDisposes).toHaveLength(20);
+    expect(fixture.modelDisposes).toHaveLength(18);
     expect(fixture.modelDisposes.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
     expect(splashGeometryDispose).toHaveBeenCalledOnce();
     expect(splashMaterialDispose).toHaveBeenCalledOnce();
+    expect(catchGeometryDispose).toHaveBeenCalledOnce();
+    expect(catchMaterialDispose).toHaveBeenCalledOnce();
     expect(presentation.worldRoot.children).toHaveLength(0);
     expect(presentation.boatRoot.children).toHaveLength(0);
   });

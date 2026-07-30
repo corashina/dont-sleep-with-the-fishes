@@ -1,12 +1,14 @@
 import {
   BufferGeometry,
   ConeGeometry,
+  CylinderGeometry,
   DoubleSide,
   Group,
   Material,
   Mesh,
   MeshStandardMaterial,
   PointLight,
+  SphereGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
@@ -133,7 +135,6 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     { length: SWARM_FISH_COUNT },
     () => DEFAULT_VARIANT,
   );
-  private readonly catchModels: EventModelInstance[] = [];
   private readonly catchActors: Group[] = [];
   private readonly splashes: Mesh[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -149,6 +150,30 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     depthWrite: false,
     flatShading: true,
     side: DoubleSide,
+  });
+  private readonly catchBodyMaterial = new MeshStandardMaterial({
+    color: 0x17282d,
+    emissive: 0x061116,
+    emissiveIntensity: 0.08,
+    roughness: 0.82,
+    metalness: 0.02,
+    flatShading: true,
+  });
+  private readonly catchDetailMaterial = new MeshStandardMaterial({
+    color: 0x56686b,
+    emissive: 0x111d20,
+    emissiveIntensity: 0.1,
+    roughness: 0.7,
+    metalness: 0,
+    flatShading: true,
+  });
+  private readonly catchLureMaterial = new MeshStandardMaterial({
+    color: 0x78c6d4,
+    emissive: 0x4aaec3,
+    emissiveIntensity: 0.58,
+    roughness: 0.3,
+    metalness: 0,
+    flatShading: true,
   });
   private readonly sample: SwarmSample = createSwarmSample();
   private readonly reactionState: {
@@ -171,6 +196,9 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.worldRoot.name = 'anglerfish-swarm-world';
     this.boatRoot.name = 'anglerfish-swarm-boat';
     this.ownedMaterials.add(this.splashMaterial);
+    this.ownedMaterials.add(this.catchBodyMaterial);
+    this.ownedMaterials.add(this.catchDetailMaterial);
+    this.ownedMaterials.add(this.catchLureMaterial);
 
     for (let index = 0; index < SWARM_FISH_COUNT; index += 1) {
       const model = environment.eventModels.create('anglerFish');
@@ -192,17 +220,46 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       this.worldRoot.add(root, lure);
     }
 
+    const catchBodyGeometry = new SphereGeometry(0.44, 7, 5);
+    const catchTailGeometry = new ConeGeometry(0.28, 0.56, 4, 1);
+    const catchStalkGeometry = new CylinderGeometry(0.018, 0.032, 0.5, 5);
+    const catchLureGeometry = new SphereGeometry(0.075, 6, 4);
+    this.ownedGeometries.add(catchBodyGeometry);
+    this.ownedGeometries.add(catchTailGeometry);
+    this.ownedGeometries.add(catchStalkGeometry);
+    this.ownedGeometries.add(catchLureGeometry);
     for (let index = 0; index < CATCH_COUNT; index += 1) {
-      const model = environment.eventModels.create('anglerFish');
-      const root = model.root;
+      const root = new Group();
       root.name = `swarm-catch-actor-${index + 1}`;
       root.position.set(1.25 + index * 0.72, 0.72 + index * 0.08, -0.38);
       root.rotation.set(0.08, -0.36 + index * 0.22, -0.14 + index * 0.08);
       root.scale.setScalar(0.62 - index * 0.04);
       root.userData.catchModelId = 'anglerFish';
+      root.userData.catchSource = 'authored-low-poly';
       root.userData.foodUnit = 1;
-      styleAngler(root);
-      this.catchModels.push(model);
+
+      const body = new Mesh(catchBodyGeometry, this.catchBodyMaterial);
+      body.name = `${root.name}-body`;
+      body.scale.set(1.18, 0.76, 0.82);
+      body.castShadow = true;
+      const tail = new Mesh(catchTailGeometry, this.catchDetailMaterial);
+      tail.name = `${root.name}-tail`;
+      tail.position.set(-0.58, 0, 0);
+      tail.rotation.z = Math.PI / 2;
+      tail.scale.set(1, 0.82, 0.46);
+      tail.castShadow = true;
+      const stalk = new Mesh(catchStalkGeometry, this.catchDetailMaterial);
+      stalk.name = `${root.name}-lure-stalk`;
+      stalk.position.set(0.2, 0.38, 0.02);
+      stalk.rotation.z = -0.52;
+      stalk.castShadow = true;
+      const lure = new Mesh(catchLureGeometry, this.catchLureMaterial);
+      lure.name = `${root.name}-lure`;
+      lure.position.set(0.33, 0.59, 0.02);
+      lure.scale.set(0.82, 1.14, 0.78);
+      lure.castShadow = true;
+      root.add(body, tail, stalk, lure);
+
       this.catchActors.push(root);
       this.boatRoot.add(root);
     }
@@ -365,7 +422,6 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       ...this.anglers.map(({ model }) => () => model.dispose()),
-      ...this.catchModels.map((model) => () => model.dispose()),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
