@@ -62,8 +62,8 @@ describe('AudioSystem', () => {
   it('owns one instance of each loop per scope', () => {
     const backend = new FakeAudioBackend();
     const scope = AudioSystem.forTest(backend).createScope();
-    expect(scope.startLoop('music')).toBe(scope.startLoop('music'));
-    expect(backend.voices.map(({ id }) => id)).toEqual(['music']);
+    expect(scope.startLoop('calmOcean')).toBe(scope.startLoop('calmOcean'));
+    expect(backend.voices.map(({ id }) => id)).toEqual(['calmOcean']);
     expect(() => scope.startLoop('confirm')).toThrow(
       'Sound is not configured as a loop: confirm',
     );

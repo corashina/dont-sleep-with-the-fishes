@@ -118,14 +118,6 @@ async function runPool(entries, worker, width) {
 await mkdir(assetRoot, { recursive: true });
 await runPool(freesoundSources, fetchFreesound, 4);
 
-const musicDestination = join(assetRoot, 'music.mp3');
-if (!await hasFile(musicDestination)) {
-  await writeFile(
-    musicDestination,
-    await fetchBuffer('https://opengameart.org/sites/default/files/This%20is%20Life.mp3'),
-  );
-}
-
 const dawnDestination = join(assetRoot, 'dawn.wav');
 if (!await hasFile(dawnDestination)) {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-audio-'));
@@ -148,9 +140,8 @@ if (!await hasFile(dawnDestination)) {
 
 const results = await Promise.all([
   ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.mp3`))),
-  stat(musicDestination),
   stat(dawnDestination),
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');
 const totalBytes = results.reduce((total, { size }) => total + size, 0);
-process.stdout.write(`Ready: 47 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);
+process.stdout.write(`Ready: 46 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);

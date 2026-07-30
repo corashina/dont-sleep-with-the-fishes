@@ -81,15 +81,12 @@ export class SurvivalAudio {
 
   start(): void {
     if (this.disposed) return;
-    this.scope.startLoop('music');
     for (const id of WEATHER_LOOPS) this.scope.startLoop(id);
     this.setWeather(this.weather, 0);
   }
 
-  update(deltaSeconds: number, pressure: number): void {
+  update(deltaSeconds: number): void {
     if (this.disposed) return;
-    const intensity = 0.72 + Math.min(4, Math.max(0, pressure)) * 0.07;
-    this.scope.setLoopGain('music', intensity, 0.25);
     this.waveClock += Math.max(0, deltaSeconds);
     const rough = ROUGH_WEATHER.has(this.weather);
     const interval = rough ? 4 : 8;

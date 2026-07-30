@@ -15,15 +15,15 @@ function createScope(): AudioScope {
 }
 
 describe('SurvivalAudio', () => {
-  it('starts music and the weather ambience layers', () => {
+  it('starts the weather ambience layers without background music', () => {
     const scope = createScope();
     const audio = new SurvivalAudio(scope);
 
     audio.start();
 
-    expect(scope.startLoop).toHaveBeenCalledWith('music');
     expect(scope.startLoop).toHaveBeenCalledWith('calmOcean');
     expect(scope.startLoop).toHaveBeenCalledWith('boatCreak');
+    expect(scope.startLoop).toHaveBeenCalledTimes(6);
     expect(scope.startLoop).not.toHaveBeenCalledWith('underwaterMovement');
   });
 

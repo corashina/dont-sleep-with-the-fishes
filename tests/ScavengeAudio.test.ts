@@ -14,15 +14,14 @@ function createScope(): AudioScope {
 }
 
 describe('ScavengeAudio', () => {
-  it('starts only music and ship room tone', () => {
+  it('starts only ship room tone', () => {
     const scope = createScope();
     const audio = new ScavengeAudio(scope);
 
     audio.start();
 
-    expect(scope.startLoop).toHaveBeenCalledTimes(2);
-    expect(scope.startLoop).toHaveBeenNthCalledWith(1, 'music');
-    expect(scope.startLoop).toHaveBeenNthCalledWith(2, 'roomTone');
+    expect(scope.startLoop).toHaveBeenCalledOnce();
+    expect(scope.startLoop).toHaveBeenCalledWith('roomTone');
   });
 
   it('uses one handling sound for pickup, drop, and storage', () => {
@@ -41,8 +40,8 @@ describe('ScavengeAudio', () => {
     const scope = createScope();
     const audio = new ScavengeAudio(scope);
 
-    audio.update({ movedDistance: 0.7, grounded: true, jumped: true }, 0, true);
-    audio.update({ movedDistance: 0.7, grounded: true, jumped: false }, 0, true);
+    audio.update({ movedDistance: 0.7, grounded: true, jumped: true }, true);
+    audio.update({ movedDistance: 0.7, grounded: true, jumped: false }, true);
 
     expect(scope.play).toHaveBeenCalledWith('jump');
     expect(scope.play).toHaveBeenCalledWith('woodStep');
