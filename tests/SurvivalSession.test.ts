@@ -129,6 +129,29 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession daytime actions', () => {
+  it('reuses an immutable snapshot until an action changes state', () => {
+    const session = new SurvivalSession(saved(), { seed: 1 });
+    const initial = session.snapshot();
+
+    expect(session.snapshot()).toBe(initial);
+    expect(Object.isFrozen(initial)).toBe(true);
+    expect(Object.isFrozen(initial.inventory)).toBe(true);
+
+    expect(session.perform('endDay').accepted).toBe(true);
+    expect(session.snapshot()).not.toBe(initial);
+  });
+
+  it('keeps snapshot identity after a rejected action', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      initial: { energy: 0 },
+    });
+    const initial = session.snapshot();
+
+    expect(session.perform('dive').accepted).toBe(false);
+    expect(session.snapshot()).toBe(initial);
+  });
+
 
   it('resolves the expanded contextual encounters deterministically', () => {
     const bottle = new SurvivalSession(saved('swimRing'), {
@@ -1450,7 +1473,9 @@ describe('SurvivalSession daytime actions', () => {
     const first = session.snapshot();
     expect(first.journalEntries).toHaveLength(1);
     expect(first.journalEntries[0]!.daytime).toBeNull();
-    (first.journalEntries as unknown as Array<{ day: number }>)[0]!.day = 99;
+    expect(() => {
+      (first.journalEntries as unknown as Array<{ day: number }>)[0]!.day = 99;
+    }).toThrow(TypeError);
     expect(session.snapshot().journalEntries[0]!.day).toBe(1);
     expect(session.resolveEvent({ kind: 'endure' }).accepted).toBe(false);
     expect(session.snapshot().journalEntries).toHaveLength(1);
@@ -1498,7 +1523,9 @@ describe('SurvivalSession daytime actions', () => {
     expect(first.daytime).toBeNull();
     expect(first.nighttime).toEqual({ kind: 'quiet' });
 
-    (first.nighttime as { kind: string }).kind = 'event';
+    expect(() => {
+      (first.nighttime as { kind: string }).kind = 'event';
+    }).toThrow(TypeError);
 
     expect(session.snapshot().journalEntries[0]!.nighttime).toEqual({ kind: 'quiet' });
   });

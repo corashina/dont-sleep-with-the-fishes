@@ -12,6 +12,7 @@ import { containsPointXZ, SCAVENGE_DURATION_SECONDS } from '../game/scavengeRule
 import {
   ScavengeSession,
   type ScavengeResult,
+  type ScavengeSnapshot,
 } from '../game/ScavengeSession';
 import {
   ITEM_LABELS,
@@ -150,6 +151,7 @@ export class ScavengePhase implements GamePhase {
   update(_time: number, deltaSeconds: number): void {
     if (this.disposed) return;
     const before = this.session.snapshot();
+    let current = before;
     const sessionActive = this.ending.stage === 'playing'
       && before.status === 'running'
       && !document.hidden;
@@ -170,15 +172,19 @@ export class ScavengePhase implements GamePhase {
         this.world.evacuationBounds,
         this.player.localPosition,
       ));
-      this.synchronizeElapsed();
-      if (this.session.snapshot().status === 'running') {
+      current = this.session.snapshot();
+      this.synchronizeElapsed(current);
+      if (current.status === 'running') {
         this.player.update(deltaSeconds, this.input);
-        this.synchronizeElapsed();
-        if (this.session.snapshot().status === 'running') {
+        current = this.session.snapshot();
+        this.synchronizeElapsed(current);
+        if (current.status === 'running') {
           this.updateInteraction();
-          if (this.session.snapshot().status === 'running') {
+          current = this.session.snapshot();
+          if (current.status === 'running') {
             sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
             this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
+            current = this.session.snapshot();
           }
         }
       }
@@ -187,11 +193,14 @@ export class ScavengePhase implements GamePhase {
         this.world.evacuationBounds,
         this.player.localPosition,
       ));
-      this.synchronizeElapsed();
-      if (this.session.snapshot().status === 'running') {
+      current = this.session.snapshot();
+      this.synchronizeElapsed(current);
+      if (current.status === 'running') {
         this.player.updatePassive(deltaSeconds);
+        current = this.session.snapshot();
         sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
+        current = this.session.snapshot();
       }
       this.input.consumeLook();
     } else if (this.ending.stage === 'playing') {
@@ -199,7 +208,7 @@ export class ScavengePhase implements GamePhase {
     }
 
     sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-    const next = this.session.snapshot();
+    const next = current;
     const failureStarted = !this.endingStarted && next.status === 'failure';
     this.ending = advanceScavengeEnding(
       this.ending,
@@ -312,8 +321,8 @@ export class ScavengePhase implements GamePhase {
     this.visualState.sinkingProgress = sinking.progress;
   }
 
-  private synchronizeElapsed(): void {
-    const nextElapsed = SCAVENGE_DURATION_SECONDS - this.session.snapshot().remainingSeconds;
+  private synchronizeElapsed(snapshot: ScavengeSnapshot): void {
+    const nextElapsed = SCAVENGE_DURATION_SECONDS - snapshot.remainingSeconds;
     if (nextElapsed !== this.elapsed) this.elapsed = nextElapsed;
   }
 

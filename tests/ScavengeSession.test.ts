@@ -19,6 +19,23 @@ const ITEM_MUTATIONS = [
 ] as const;
 
 describe('ScavengeSession', () => {
+  it('reuses a snapshot until state changes', () => {
+    const session = new ScavengeSession();
+    const initial = session.snapshot();
+
+    expect(session.snapshot()).toBe(initial);
+    session.start();
+    expect(session.snapshot()).not.toBe(initial);
+  });
+
+  it('keeps snapshot identity after a rejected mutation', () => {
+    const session = new ScavengeSession();
+    const initial = session.snapshot();
+
+    expect(session.pickUp('cannedFood')).toBe(false);
+    expect(session.snapshot()).toBe(initial);
+  });
+
   it('uses the scavenging roster by default', () => {
     const session = new ScavengeSession();
 

@@ -38,6 +38,9 @@ export class ScavengeSession {
   private readonly items: Record<ItemInstanceId, ScavengeItemState>;
   private readonly carriedIds: ItemInstanceId[] = [];
   private savedCount = 0;
+  private snapshotRevision = 0;
+  private cachedSnapshotRevision = -1;
+  private cachedSnapshot: Readonly<ScavengeSnapshot> | null = null;
 
   constructor(instances: readonly ItemInstance[] = createScavengeItemInstances()) {
     this.items = Object.fromEntries(instances.map((item) => [
@@ -54,12 +57,19 @@ export class ScavengeSession {
   }
 
   start(): void {
-    if (this.status === 'idle') this.status = 'running';
+    if (this.status === 'idle') {
+      this.status = 'running';
+      this.changed();
+    }
   }
 
   tick(deltaSeconds: number, evacuateAtDeadline = false): void {
     if (this.status !== 'running') return;
-    this.remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, deltaSeconds));
+    const remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, deltaSeconds));
+    if (remainingSeconds !== this.remainingSeconds) {
+      this.remainingSeconds = remainingSeconds;
+      this.changed();
+    }
     if (this.remainingSeconds === 0) {
       this.finish(evacuateAtDeadline ? 'success' : 'failure');
     }
@@ -67,16 +77,26 @@ export class ScavengeSession {
 
   penalize(seconds: number): void {
     if (this.status !== 'running') return;
-    this.remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, seconds));
+    const remainingSeconds = Math.max(0, this.remainingSeconds - Math.max(0, seconds));
+    if (remainingSeconds !== this.remainingSeconds) {
+      this.remainingSeconds = remainingSeconds;
+      this.changed();
+    }
     if (this.remainingSeconds === 0) this.finish('failure');
   }
 
   pause(): void {
-    if (this.status === 'running') this.status = 'paused';
+    if (this.status === 'running') {
+      this.status = 'paused';
+      this.changed();
+    }
   }
 
   resume(): void {
-    if (this.status === 'paused') this.status = 'running';
+    if (this.status === 'paused') {
+      this.status = 'running';
+      this.changed();
+    }
   }
 
   pickUp(instanceId: ItemInstanceId): boolean;
@@ -89,6 +109,7 @@ export class ScavengeSession {
     if (this.carriedWeight + ITEM_DEFINITIONS[item.type].weight > CARRY_CAPACITY) return false;
     item.status = 'carried';
     this.carriedIds.push(item.instanceId);
+    this.changed();
     return true;
   }
 
@@ -107,6 +128,7 @@ export class ScavengeSession {
       this.items[instanceId]!.status = 'saved';
     });
     this.savedCount += instanceIds.length;
+    this.changed();
     return Object.freeze(instanceIds.map((instanceId) => this.cloneInstance(instanceId)));
   }
 
@@ -126,6 +148,7 @@ export class ScavengeSession {
     const carriedIndex = this.carriedIds.lastIndexOf(instanceId);
     if (carriedIndex >= 0) this.carriedIds.splice(carriedIndex, 1);
     item.status = 'lost';
+    this.changed();
     return true;
   }
 
@@ -134,13 +157,18 @@ export class ScavengeSession {
   }
 
   snapshot(): ScavengeSnapshot {
+    if (
+      this.cachedSnapshot !== null
+      && this.cachedSnapshotRevision === this.snapshotRevision
+    ) return this.cachedSnapshot;
+
     const items = Object.fromEntries(Object.values(this.items).map((item) => [
       item.instanceId,
       Object.freeze({ ...item }),
     ])) as Record<ItemInstanceId, ScavengeItemState>;
     const carriedItems = this.carriedIds.map((id) => this.cloneInstance(id));
     const carriedItem = carriedItems.at(-1)?.type ?? null;
-    return {
+    this.cachedSnapshot = Object.freeze({
       status: this.status,
       remainingSeconds: this.remainingSeconds,
       savedCount: this.savedCount,
@@ -148,7 +176,9 @@ export class ScavengeSession {
       carriedItems: Object.freeze(carriedItems),
       items: Object.freeze(items),
       carriedItem,
-    };
+    });
+    this.cachedSnapshotRevision = this.snapshotRevision;
+    return this.cachedSnapshot;
   }
 
   result(): Readonly<ScavengeResult> | null {
@@ -168,6 +198,7 @@ export class ScavengeSession {
     if (instanceId === undefined) return null;
     this.items[instanceId]!.status = status;
     if (status === 'saved') this.savedCount += 1;
+    this.changed();
     return this.cloneInstance(instanceId);
   }
 
@@ -195,6 +226,11 @@ export class ScavengeSession {
   private finish(status: 'success' | 'failure'): boolean {
     if (this.status === 'success' || this.status === 'failure') return false;
     this.status = status;
+    this.changed();
     return true;
+  }
+
+  private changed(): void {
+    this.snapshotRevision += 1;
   }
 }

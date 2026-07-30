@@ -207,6 +207,7 @@ export class SurvivalPhase implements GamePhase {
   private started = false;
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
+  private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
   private pendingDayEventDay: number | null = null;
   private readonly requestedDayEventDays = new Set<number>();
@@ -1156,7 +1157,10 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private syncPresentation(snapshot: SurvivalSnapshot): void {
-    this.world.syncInventory?.(snapshot);
+    if (snapshot !== this.presentedInventorySnapshot) {
+      this.presentedInventorySnapshot = snapshot;
+      this.world.syncInventory?.(snapshot);
+    }
     this.ui.setAnchors?.(
       this.world.projectInteractionAnchors?.(this.viewportWidth, this.viewportHeight) ?? [],
     );

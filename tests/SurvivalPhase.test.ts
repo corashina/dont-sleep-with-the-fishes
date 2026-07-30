@@ -1083,7 +1083,7 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('synchronizes inventory and projected anchors after renders, updates, and resize', () => {
+  it('synchronizes stable inventory once while projecting anchors every update', () => {
     const current = snapshot();
     const syncInventory = vi.fn();
     const anchors = [{
@@ -1101,8 +1101,11 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     phase.resize(800, 600);
     phase.update(1, 0.016);
+    phase.update(2, 0.016);
 
+    expect(syncInventory).toHaveBeenCalledTimes(1);
     expect(syncInventory).toHaveBeenCalledWith(current);
+    expect(projectInteractionAnchors).toHaveBeenCalledTimes(4);
     expect(projectInteractionAnchors).toHaveBeenLastCalledWith(800, 600);
     expect(setAnchors).toHaveBeenLastCalledWith(anchors);
   });
