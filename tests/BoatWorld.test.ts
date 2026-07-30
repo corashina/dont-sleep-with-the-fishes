@@ -1077,6 +1077,80 @@ describe('BoatWorld helpers', () => {
     supplyMotion.mockRestore();
   });
 
+  it('holds active moon state during ambient pause updates without advancing it', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(1.9, 1.9);
+    const heldReveal = sky.material.uniforms.uMoonFaceReveal?.value as number;
+    const heldStars = sky.material.uniforms.uMoonStarScale?.value as number;
+
+    world.updateAmbient(21.9, 20);
+
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(heldReveal);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(heldStars);
+    expect(await remainsPending(reveal)).toBe(true);
+
+    world.update(23.8, 1.9);
+    await reveal;
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('restores the camera before replacement animators stage after Moon Energy loss', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(3.8, 3.8);
+    await reveal;
+    const reaction = world.reactToEventOutcome('face-on-the-moon', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'You cannot keep your eyes open.',
+      deltas: { energy: -80 },
+      cue: 'none',
+    });
+    world.update(4.9, 1.1);
+    await reaction;
+    expect(cameraRig.position.y).toBeLessThan(0);
+
+    const originalStage = SupernaturalEventAnimator.prototype.stage;
+    let cameraYWhenStaged = Number.NaN;
+    const stage = vi.spyOn(SupernaturalEventAnimator.prototype, 'stage')
+      .mockImplementation(function stageReplacement(
+        this: SupernaturalEventAnimator,
+        eventId: string,
+      ) {
+        cameraYWhenStaged = cameraRig.position.y;
+        return originalStage.call(this, eventId);
+      });
+
+    world.stageEvent('ghosts');
+
+    expect(cameraYWhenStaged).toBe(0);
+    expect(cameraRig.position.y).toBe(0);
+    stage.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('slides lost supplies starboard and crumples a broken Ring on one hull impact', async () => {
     const ring = savedItem('swimRing');
     const propModels = createTestPropModels();
