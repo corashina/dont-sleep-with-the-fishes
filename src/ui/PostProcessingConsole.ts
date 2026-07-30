@@ -218,7 +218,7 @@ export class PostProcessingConsole {
           </label>
           <small>Forced weather persists until reload.</small>
         </section>
-        <section class="post-processing-console__section">
+        <section class="post-processing-console__section post-processing-console__section--wide">
           <strong>AMBIENT OCCLUSION</strong>
           <label class="post-processing-console__select">
             <span>Display</span>

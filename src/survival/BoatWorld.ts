@@ -79,8 +79,9 @@ import {
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
-import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import { FeaturedEventPresentations } from './FeaturedEventPresentations';
+import { isFeaturedEventId, type FeaturedEventId } from './FeaturedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -101,6 +102,10 @@ import type {
   SurvivalSnapshot,
   WeatherId,
 } from './survivalTypes';
+import {
+  EMPTY_SURVIVAL_EVENT_MODELS,
+  type SurvivalEventModels,
+} from './SurvivalEventModelLibrary';
 
 export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
   0,
@@ -388,6 +393,7 @@ export class BoatWorld {
   private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
   private readonly cueCameraRig = new Group();
+  private readonly featuredEventCameraRig = new Group();
   private readonly cameraRig = new Group();
   private readonly boat: Group;
   private readonly lantern: SurvivalLantern;
@@ -422,13 +428,15 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
-  private readonly chestDisplay = new ChestDisplay();
+  private readonly chestDisplay: ChestDisplay;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
   private readonly driftingLootSternRest = new Object3D();
-  private readonly driftingLootPresentation: DriftingLootPresentation | null;
+  private readonly featuredEvents: FeaturedEventPresentations;
+  private activeFeaturedEventId: FeaturedEventId | null = null;
+  private activeDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly repairTools: Object3D;
   private readonly supplyAnchorBounds = new Map<
     BoatSupplyGroupId,
@@ -511,6 +519,7 @@ export class BoatWorld {
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
     waterQuality: WaterQuality = 'low',
+    eventModels?: SurvivalEventModels,
   ) {
     this.scene = new Scene();
     this.sky = new Skybox(
@@ -527,6 +536,17 @@ export class BoatWorld {
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
+    const resolvedEventModels = eventModels ?? (
+      shipFurniture === undefined
+        ? EMPTY_SURVIVAL_EVENT_MODELS
+        : {
+            clone: (id) => {
+              if (id === 'driftingLootBarrel') return shipFurniture.clone('barrel');
+              if (id === 'driftingLootCrate') return shipFurniture.clone('cargoCrate');
+              return EMPTY_SURVIVAL_EVENT_MODELS.clone(id);
+            },
+          } satisfies SurvivalEventModels
+    );
 
     const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
       new Texture(),
@@ -564,6 +584,9 @@ export class BoatWorld {
       build.storageRoot,
       savedItems,
     );
+    this.chestDisplay = new ChestDisplay(
+      eventModels === undefined ? undefined : resolvedEventModels.clone('mysteryChest'),
+    );
     this.boat.add(this.chestDisplay.root);
     this.weatherEventAnimator = new WeatherEventAnimator(
       this.cameraRig,
@@ -594,9 +617,11 @@ export class BoatWorld {
 
     this.motionRig.name = 'boat-motion-rig';
     this.cueCameraRig.name = 'boat-cue-camera-rig';
+    this.featuredEventCameraRig.name = 'boat-featured-event-camera-rig';
     this.cameraRig.name = 'boat-camera-rig';
     this.motionRig.add(this.boat, this.cueCameraRig);
-    this.cueCameraRig.add(this.cameraRig);
+    this.cueCameraRig.add(this.featuredEventCameraRig);
+    this.featuredEventCameraRig.add(this.cameraRig);
     this.cameraRig.add(camera);
     camera.position.set(0, 0.88, 1.72);
     camera.lookAt(this.baseCameraLookTarget);
@@ -613,12 +638,11 @@ export class BoatWorld {
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
     this.eventPresentation = new EventPresentationLayer();
-    this.driftingLootPresentation = shipFurniture === undefined
-      ? null
-      : new DriftingLootPresentation({
-          barrel: shipFurniture.clone('barrel'),
-          crate: shipFurniture.clone('cargoCrate'),
-        }, this.driftingLootSternRest);
+    this.featuredEvents = new FeaturedEventPresentations(
+      resolvedEventModels,
+      this.featuredEventCameraRig,
+      this.driftingLootSternRest,
+    );
 
     this.ocean = new OceanRenderer(
       waterQuality,
@@ -639,10 +663,8 @@ export class BoatWorld {
       this.key,
       this.key.target,
       this.eventPresentation.root,
+      this.featuredEvents.root,
       this.weatherEventAnimator.worldRoot,
-      ...(this.driftingLootPresentation === null
-        ? []
-        : [this.driftingLootPresentation.root]),
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
@@ -702,8 +724,10 @@ export class BoatWorld {
           ? this.lantern.root
           : instanceId === 'persistent-chest'
             ? this.chestDisplay.root
-          : instanceId === 'drifting-loot'
-            ? this.driftingLootPresentation?.interactionRoot() ?? null
+          : instanceId === 'drifting-loot' || instanceId?.startsWith('event:') === true
+            ? this.activeFeaturedEventId === null
+              ? null
+              : this.featuredEvents.interactionRoot(this.activeFeaturedEventId)
             : null,
     );
   }
@@ -735,14 +759,17 @@ export class BoatWorld {
   stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
-    if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
-      if (variant === null) throw new Error('Drifting loot requires a variant.');
+    if (isFeaturedEventId(eventId)) {
       this.eventPresentation.clear();
-      this.weatherEventAnimator.clear();
-      this.driftingLootPresentation.stage(variant);
+      this.featuredEvents.stage(eventId, variant);
+      this.activeFeaturedEventId = eventId;
+      this.activeDriftingLootVariant = eventId === 'drifting-loot' ? variant : null;
+      this.weatherEventAnimator.stage(eventId);
       return;
     }
-    this.driftingLootPresentation?.clear();
+    this.featuredEvents.clear();
+    this.activeFeaturedEventId = null;
+    this.activeDriftingLootVariant = null;
     this.eventPresentation.stage(eventId);
     this.weatherEventAnimator.stage(eventId);
   }
@@ -750,8 +777,11 @@ export class BoatWorld {
   async revealEvent(eventId: string): Promise<void> {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
-    if (eventId === 'drifting-loot' && this.driftingLootPresentation !== null) {
-      await this.driftingLootPresentation.reveal();
+    if (isFeaturedEventId(eventId)) {
+      await Promise.all([
+        this.featuredEvents.reveal(eventId),
+        this.weatherEventAnimator.reveal(eventId),
+      ]);
       return;
     }
     await Promise.all([
@@ -761,21 +791,43 @@ export class BoatWorld {
   }
 
   retrieveDriftingLoot(): Promise<void> {
-    if (this.disposed || this.driftingLootPresentation === null) return Promise.resolve();
+    if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.driftingLootPresentation.retrieve();
+    return this.featuredEvents.react('drifting-loot', 'drifting-loot.food');
   }
 
   recedeDriftingLoot(): Promise<void> {
-    if (this.disposed || this.driftingLootPresentation === null) return Promise.resolve();
+    if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.driftingLootPresentation.recede();
+    return this.featuredEvents.react('drifting-loot', 'drifting-loot.drift');
   }
 
   projectDriftingLoot(width: number, height: number): ProjectedBoatBounds | null {
-    if (this.disposed || this.driftingLootPresentation === null) return null;
+    if (this.disposed) return null;
     this.scene.updateMatrixWorld(true);
-    return this.driftingLootPresentation.projectHeld(this.camera, width, height);
+    return this.featuredEvents.projectHeldDriftingLoot(this.camera, width, height);
+  }
+
+  projectEventInteractionBounds(
+    eventId: string,
+    width: number,
+    height: number,
+  ): ProjectedBoatBounds | null {
+    if (this.disposed || width <= 0 || height <= 0) return null;
+    this.scene.updateMatrixWorld(true);
+    const root = this.featuredEvents.interactionRoot(eventId);
+    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
+  }
+
+  projectEventResultBounds(
+    eventId: string,
+    width: number,
+    height: number,
+  ): ProjectedBoatBounds | null {
+    if (this.disposed || width <= 0 || height <= 0) return null;
+    this.scene.updateMatrixWorld(true);
+    const root = this.featuredEvents.resultRoot(eventId);
+    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
   }
 
   async reactToEventOutcome(
@@ -785,8 +837,14 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
+    const featuredReaction = outcome.eventPresentationKey !== undefined
+      && isFeaturedEventId(eventId)
+      ? this.featuredEvents.react(eventId, outcome.eventPresentationKey)
+      : Promise.resolve();
     await Promise.all([
-      this.eventPresentation.react(eventId, outcome),
+      isFeaturedEventId(eventId)
+        ? featuredReaction
+        : this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
     ]);
   }
@@ -795,7 +853,9 @@ export class BoatWorld {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
     this.eventPresentation.clear();
-    this.driftingLootPresentation?.clear();
+    this.featuredEvents.clear();
+    this.activeFeaturedEventId = null;
+    this.activeDriftingLootVariant = null;
     this.weatherEventAnimator.clear();
     this.supplyDisplay.clearEventMotion();
   }
@@ -805,6 +865,7 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     this.skipSequence();
     this.eventPresentation.settleForVisibilityChange();
+    this.featuredEvents.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
   }
@@ -937,24 +998,29 @@ export class BoatWorld {
         depth: lanternDepth,
       },
     } satisfies BoatInteractionAnchor;
-    const driftingLootProjection = this.driftingLootPresentation?.projectInteraction(
-      this.camera,
-      width,
-      height,
-    ) ?? null;
-    const driftingLootAnchor = driftingLootProjection === null
+    const featuredRoot = this.activeFeaturedEventId === null
+      ? null
+      : this.featuredEvents.interactionRoot(this.activeFeaturedEventId);
+    const featuredProjection = featuredRoot === null
+      ? null
+      : projectBoatObjectBounds(featuredRoot, this.camera, width, height);
+    const featuredAnchor = featuredProjection === null || this.activeFeaturedEventId === null
       ? null
       : {
-          id: 'drifting-loot',
-          label: driftingLootProjection.variant === 'barrel' ? 'BARREL' : 'CRATE',
-          description: 'Floating salvage within reach.',
-          eventChoiceId: 'retrieve',
+          id: this.activeFeaturedEventId === 'drifting-loot'
+            ? 'drifting-loot'
+            : `event:${this.activeFeaturedEventId}`,
+          label: this.featuredAnchorLabel(this.activeFeaturedEventId),
+          description: this.featuredAnchorDescription(this.activeFeaturedEventId),
+          ...(this.featuredAnchorChoice(this.activeFeaturedEventId) === null
+            ? {}
+            : { eventChoiceId: this.featuredAnchorChoice(this.activeFeaturedEventId)! }),
           itemType: null,
           toolId: null,
           action: null,
-          x: driftingLootProjection.bounds.x,
-          y: driftingLootProjection.bounds.y,
-          visible: driftingLootProjection.bounds.visible,
+          x: featuredProjection.x,
+          y: featuredProjection.y,
+          visible: featuredProjection.visible,
           depleted: false,
           remainingUses: null,
           quantity: 1,
@@ -962,9 +1028,9 @@ export class BoatWorld {
           brokenQuantity: 0,
           backingInstanceId: null,
           hitArea: {
-            width: Math.max(64, driftingLootProjection.bounds.width),
-            height: Math.max(64, driftingLootProjection.bounds.height),
-            depth: driftingLootProjection.bounds.depth,
+            width: Math.max(64, featuredProjection.width),
+            height: Math.max(64, featuredProjection.height),
+            depth: featuredProjection.depth,
           },
         } satisfies BoatInteractionAnchor;
     const chestProjection = projectCachedBoatObjectBounds(
@@ -1009,7 +1075,7 @@ export class BoatWorld {
       repairAnchor,
       lanternAnchor,
       chestAnchor,
-      ...(driftingLootAnchor === null ? [] : [driftingLootAnchor]),
+      ...(featuredAnchor === null ? [] : [featuredAnchor]),
     ];
   }
 
@@ -1285,7 +1351,7 @@ export class BoatWorld {
 
       this.advanceFishingPresentation(delta);
       this.eventPresentation.update(time, delta);
-      this.driftingLootPresentation?.update(time, delta);
+      this.featuredEvents.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
@@ -1331,7 +1397,7 @@ export class BoatWorld {
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
       () => this.eventPresentation.dispose(),
-      () => this.driftingLootPresentation?.dispose(),
+      () => this.featuredEvents.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
@@ -1774,6 +1840,33 @@ export class BoatWorld {
         (this.scene.fog as FogExp2).density += eased * 0.02;
         break;
     }
+  }
+
+  private featuredAnchorLabel(eventId: FeaturedEventId): string {
+    if (eventId === 'drifting-loot') {
+      return this.activeDriftingLootVariant === 'barrel' ? 'BARREL' : 'CRATE';
+    }
+    if (eventId === 'drifting-bottle') return 'BOTTLE';
+    if (eventId === 'check-the-back') return 'ASTERN';
+    if (eventId === 'mystery-chest') return 'CHEST';
+    return 'FLOWERS';
+  }
+
+  private featuredAnchorDescription(eventId: FeaturedEventId): string {
+    if (eventId === 'drifting-loot') return 'Floating salvage within reach.';
+    if (eventId === 'drifting-bottle') return 'A sealed bottle taps the hull.';
+    if (eventId === 'check-the-back') return 'Something waits behind the boat.';
+    if (eventId === 'mystery-chest') return 'A waterlogged chest catches beside the hull.';
+    return 'Pale blooms pass in the dark water.';
+  }
+
+  private featuredAnchorChoice(eventId: FeaturedEventId): string | null {
+    if (eventId === 'drifting-loot') return 'retrieve';
+    if (eventId === 'drifting-bottle') return 'sleep';
+    if (eventId === 'check-the-back') return 'check';
+    if (eventId === 'mystery-chest') return 'take';
+    if (eventId === 'flowers') return 'sleep';
+    return null;
   }
 
   private cancelActiveSequence(): void {

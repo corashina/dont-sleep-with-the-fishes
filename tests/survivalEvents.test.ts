@@ -11,13 +11,24 @@ import {
 import { sequenceRandom } from './helpers/random';
 
 const INCLUDED = {
-  'dangerous-waters': 'day', leak: 'day', 'school-of-fish': 'day',
-  snatcher: 'day', 'death-stare': 'day', 'swarm-of-anglerfish': 'day',
-  whirlpool: 'day', 'shark-men': 'day',
+  'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
+  snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
+  whirlpool: 'night', 'shark-men': 'night',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
 } as const;
+
+const MOVED_NIGHT_EVENT_IDS = [
+  'dangerous-waters',
+  'leak',
+  'school-of-fish',
+  'snatcher',
+  'death-stare',
+  'swarm-of-anglerfish',
+  'whirlpool',
+  'shark-men',
+] as const;
 
 const resource = (resourceName: string, operation: string, value: unknown) => ({
   resource: resourceName, operation, value,
@@ -199,6 +210,19 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
+  it('keeps only Drifting Loot in the random day catalog', () => {
+    expect(
+      SURVIVAL_EVENTS
+        .filter(({ phase }) => phase === 'day')
+        .map(({ id }) => id),
+    ).toEqual(['drifting-loot']);
+    expect(
+      MOVED_NIGHT_EVENT_IDS.every((id) => (
+        SURVIVAL_EVENTS.find((event) => event.id === id)?.phase === 'night'
+      )),
+    ).toBe(true);
+  });
+
 
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
@@ -265,6 +289,42 @@ describe('survival events', () => {
     expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
   });
 
+  it('encodes the exact rules and presentation keys for the five featured events', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+
+    expect(event('drifting-loot')).toMatchObject({ phase: 'day', weight: 18, earliestDay: 3 });
+    expect(event('drifting-bottle')).toMatchObject({
+      weight: 30,
+      earliestDay: 2,
+      maximumAppearances: 1,
+      absentItemIds: ['bottledPaper'],
+    });
+    expect(event('check-the-back').choices[0]?.outcomes).toMatchObject([
+      { weight: 500, presentationKey: 'check-the-back.fish' },
+      { weight: 50, presentationKey: 'check-the-back.empty' },
+      {
+        weight: 1,
+        presentationKey: 'check-the-back.face',
+        minimumPriorAppearances: 1,
+      },
+    ]);
+    expect(event('mystery-chest').choices[0]?.outcomes).toMatchObject([
+      { weight: 80, presentationKey: 'mystery-chest.safe' },
+      {
+        weight: 30,
+        presentationKey: 'mystery-chest.mimic',
+        effects: { resources: [{ resource: 'health', operation: 'subtract', value: 25 }] },
+      },
+    ]);
+    expect(event('flowers')).toMatchObject({
+      weight: 2,
+      earliestDay: 2,
+      latestDay: 13,
+      maximumAppearances: 1,
+    });
+    expect(event('flowers').maximumPressure).toBeUndefined();
+  });
+
   it('blocks one-time, absent-item, and rescue-progress events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
@@ -287,17 +347,17 @@ describe('survival events', () => {
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
     const events = eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
+      phase: 'night', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
-    expect(events.every((event) => event.phase === 'day' && event.earliestDay <= 9)).toBe(true);
+    expect(events.every((event) => event.phase === 'night' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
     expect(events.map((event) => event.id)).not.toContain('death-stare');
     expect(events.map((event) => event.id)).toContain('leak');
     expect(eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
@@ -305,7 +365,7 @@ describe('survival events', () => {
 
   it('excludes Snatcher from the draw pool without a canonical target', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
@@ -316,7 +376,7 @@ describe('survival events', () => {
   });
 
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
-    const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'day').slice(0, 2);
+    const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'night').slice(0, 2);
     expect(drawWeightedEvent(pool, sequenceRandom([0])).id).toBe(pool[0]!.id);
     expect(drawWeightedEvent(pool, sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)])).id).toBe(pool[1]!.id);
     expect(drawWeightedEvent([], sequenceRandom([0]), 'day').id).toBe('day-calm-fallback');

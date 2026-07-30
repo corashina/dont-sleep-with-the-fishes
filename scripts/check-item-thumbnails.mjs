@@ -8,7 +8,7 @@ async function itemIds() {
   const source = await readFile(resolve('src', 'game', 'itemCatalog.ts'), 'utf8');
   const declaration = /export const ITEM_IDS = \[([\s\S]*?)\] as const;/.exec(source)?.[1];
   if (!declaration) throw new Error('Unable to read runtime ITEM_IDS');
-  return [...declaration.matchAll(/'([^']+)'/g)].map((match) => match[1]).filter((id) => id !== 'energyBar');
+  return [...declaration.matchAll(/'([^']+)'/g)].map((match) => match[1]);
 }
 
 function validatePng(filePath, bytes) {

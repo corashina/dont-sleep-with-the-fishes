@@ -247,6 +247,16 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(
       /\.boat-anchor\s*\{[^}]*cursor:\s*pointer;/s,
     );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\[data-event-state="locked"\]\s*\{[^}]*pointer-events:\s*none;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\[data-event-state="locked"\] \.boat-tooltip\s*\{[^}]*display:\s*none;/s,
+    );
+    expect(mainStyles).not.toMatch(
+      /\.boat-anchor\[data-event-state="available"\]\s*\{[^}]*(?:outline|box-shadow):/s,
+    );
+    expect(mainStyles).not.toContain('#c98242');
   });
 
   it('keeps low-energy Drifting Loot inspectable with an insufficient-energy tooltip', () => {
@@ -284,6 +294,7 @@ describe('SurvivalUI', () => {
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
       .toBe('BARREL — ⚡⚡⚡ — INSUFFICIENT ENERGY');
     expect(loot.disabled).toBe(false);
+    expect(loot.dataset.eventState).toBe('unavailable');
     expect(loot.getAttribute('aria-disabled')).toBe('true');
     loot.click();
     expect(selected).not.toHaveBeenCalled();
@@ -488,12 +499,13 @@ describe('SurvivalUI', () => {
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
     const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
     const umbrella = mount.querySelector<HTMLButtonElement>('[data-anchor-id="umbrella-2"]')!;
-    expect(bucket.dataset.eventState).toBe('eligible');
+    expect(bucket.dataset.eventState).toBe('available');
     expect(bucket.getAttribute('aria-disabled')).toBe('false');
     expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
-    expect(umbrella.dataset.eventState).toBe('muted');
+    expect(umbrella.dataset.eventState).toBe('unavailable');
     expect(umbrella.disabled).toBe(false);
-    expect(umbrella.getAttribute('aria-disabled')).toBe('true');
+    expect(umbrella.tabIndex).toBe(0);
+    expect(umbrella.querySelector('[role="tooltip"]')?.textContent).toBe('UMBRELLA');
 
     umbrella.click();
     expect(selected).not.toHaveBeenCalled();
@@ -565,16 +577,16 @@ describe('SurvivalUI', () => {
     ).toBe('BUCKET');
     expect(
       mount.querySelector('[data-anchor-id="cannedFood-test"] [role="tooltip"]')?.textContent,
-    ).toBe('FOOD ×2');
+    ).toBe('FOOD ×2 ⚡');
   });
 
   it.each([
     [99, 1],
     [67, 1],
-    [66, 2],
-    [34, 2],
-    [33, 3],
-  ] as const)('shows the repair tooltip tier at %i hull: %i energy', (hull, energyCost) => {
+    [66, 1],
+    [34, 1],
+    [33, 1],
+  ] as const)('shows one repair energy at %i hull', (hull, energyCost) => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.render(snapshot({ hull }), () => null);
@@ -705,7 +717,104 @@ describe('SurvivalUI', () => {
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     void ui.showEventReveal(testEvent());
-    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('locks ordinary anchors until event choices become available', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlights: Array<string | null> = [];
+    ui.onAnchorHighlight = (id) => highlights.push(id);
+    ui.setAnchors([
+      {
+        id: 'bucket-1',
+        itemType: 'bucket',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 140,
+        y: 180,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'end-day-lantern',
+        itemType: null,
+        toolId: 'lantern',
+        action: 'endDay',
+        remainingUses: null,
+        x: 640,
+        y: 280,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'scubaSet-1',
+        itemType: 'scubaSet',
+        toolId: null,
+        action: 'dive',
+        remainingUses: null,
+        x: 240,
+        y: 250,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'repair-tools',
+        itemType: null,
+        toolId: 'repairTools',
+        action: 'repair',
+        remainingUses: null,
+        x: 440,
+        y: 280,
+        visible: true,
+        depleted: false,
+      },
+    ]);
+    ui.render(snapshot(), () => null);
+
+    const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
+    const lantern = mount.querySelector<HTMLButtonElement>('[data-anchor-id="end-day-lantern"]')!;
+    const scuba = mount.querySelector<HTMLButtonElement>('[data-anchor-id="scubaSet-1"]')!;
+    const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
+
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('bucket-1');
+
+    ui.beginEventPresentation();
+
+    expect(highlights.at(-1)).toBeNull();
+    expect(bucket.dataset.eventState).toBe('locked');
+    expect(bucket.disabled).toBe(true);
+    expect(bucket.tabIndex).toBe(-1);
+    expect(lantern.dataset.eventState).toBe('locked');
+    expect(lantern.disabled).toBe(true);
+    expect(repair.dataset.eventState).toBe('locked');
+    expect(repair.disabled).toBe(true);
+
+    const count = highlights.length;
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    bucket.focus();
+    expect(highlights).toHaveLength(count);
+    expect(document.activeElement).not.toBe(bucket);
+
+    ui.setEventSelection(new Map([['bucket-1', 'bucket'] as const]));
+
+    expect(bucket.dataset.eventState).toBe('available');
+    expect(bucket.disabled).toBe(false);
+    expect(bucket.tabIndex).toBe(0);
+    expect(scuba.dataset.eventState).toBe('unavailable');
+    expect(scuba.disabled).toBe(false);
+    expect(scuba.tabIndex).toBe(0);
+    expect(scuba.getAttribute('aria-disabled')).toBe('true');
+    expect(scuba.querySelector('.boat-tooltip')?.textContent).toContain('SCUBA');
+    expect(lantern.dataset.eventState).toBe('locked');
+    expect(repair.dataset.eventState).toBe('locked');
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('bucket-1');
+    scuba.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('scubaSet-1');
   });
 
   it.each([
@@ -1180,26 +1289,28 @@ describe('SurvivalUI', () => {
     };
     ui.showDriftingLootResult({
       caption: 'SALVAGE RECOVERED',
-      title: '+2 FOOD',
-      detail: '−3 ENERGY',
+      reward: { kind: 'resource', id: 'food', quantity: 2 },
+      energyCost: 3,
       target,
     });
 
     const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
     expect(result.dataset.anchorState).toBe('projected');
-    expect(mainStyles).toMatch(
-      /\.routine-dialog--fishing \.fishing-result-card > p\.fishing-result-detail,\s*\.routine-dialog--salvage \.fishing-result-card > p\.fishing-result-detail\s*\{/s,
-    );
+    expect(mainStyles).toContain('.drifting-loot-result__icons');
     const projectedX = result.style.getPropertyValue('--routine-x');
     target.x = 20;
     ui.setAnchors([]);
     expect(result.style.getPropertyValue('--routine-x')).toBe(projectedX);
     expect(mount.querySelector('[data-drifting-loot-result-caption]')?.textContent)
       .toBe('SALVAGE RECOVERED');
-    expect(mount.querySelector('[data-drifting-loot-result-title]')?.textContent)
-      .toBe('+2 FOOD');
-    expect(mount.querySelector('[data-drifting-loot-result-detail]')?.textContent)
-      .toBe('−3 ENERGY');
+    expect(mount.querySelector('[data-drifting-loot-result-title]')).toBeNull();
+    expect(mount.querySelector('[data-drifting-loot-result-detail]')).toBeNull();
+    expect(mount.querySelector<HTMLImageElement>('.drifting-loot-result__thumbnail')?.src)
+      .toContain('cannedFood.png');
+    expect(mount.querySelector('.drifting-loot-result__quantity')?.textContent).toBe('×2');
+    expect(result.querySelectorAll('[data-ui-artwork="energy"]')).toHaveLength(3);
+    expect(result.getAttribute('aria-label'))
+      .toBe('SALVAGE RECOVERED. food, quantity 2, recovered. 3 energy spent.');
 
     const button = mount.querySelector<HTMLButtonElement>(
       '[data-drifting-loot-result-continue]',
@@ -1218,8 +1329,8 @@ describe('SurvivalUI', () => {
     ui.onDriftingLootContinue = continued;
     ui.showDriftingLootResult({
       caption: 'SALVAGE RECOVERED',
-      title: 'ENERGY BAR',
-      detail: '−3 ENERGY',
+      reward: { kind: 'item', id: 'energyBar', quantity: 1 },
+      energyCost: 3,
       target: null,
     });
 
@@ -1246,8 +1357,8 @@ describe('SurvivalUI', () => {
 
     ui.showDriftingLootResult({
       caption: 'SALVAGE RECOVERED',
-      title: '+1 FOOD',
-      detail: '−3 ENERGY',
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      energyCost: 3,
       target: { x: 90, y: 180, width: 40, height: 40, depth: 2, visible: false },
     });
     expect(result.dataset.anchorState).toBe('fallback');
@@ -1299,6 +1410,27 @@ describe('SurvivalUI', () => {
     button.click();
     expect(exit).toHaveBeenCalledOnce();
     expect(cast).not.toHaveBeenCalled();
+  });
+
+  it('keeps the fishing Back control active after result confirmation', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const exit = vi.fn();
+    ui.onFishingViewExit = exit;
+
+    ui.setFishingViewExitVisible(true);
+    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const button = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    expect(layer.classList).toContain('is-visible');
+    expect(layer.hasAttribute('inert')).toBe(false);
+    expect(button.hidden).toBe(false);
+    expect(document.activeElement).toBe(button);
+
+    button.click();
+    expect(exit).toHaveBeenCalledOnce();
   });
 
   it('uses the authored fishing-fade duration while preserving supersession', async () => {
@@ -1676,6 +1808,25 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-journal-open]')?.getAttribute('aria-label')).toContain('new entry');
     ui.setJournalUnread(false);
     expect(mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
+    ui.dispose();
+  });
+
+  it('shows and clears a compact event result beside its scene subject', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showEventResult({
+      caption: 'TEETH',
+      detail: 'The chest bites your arm.',
+      target: { x: 430, y: 310, width: 90, height: 70, depth: 2, visible: true },
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-event-result]')!;
+    expect(result.classList).toContain('is-visible');
+    expect(result.textContent).toContain('TEETH');
+    expect(result.style.getPropertyValue('--event-result-x')).toBe('430px');
+
+    ui.clearEventPresentation();
+    expect(result.classList).not.toContain('is-visible');
     ui.dispose();
   });
   it('removes document and button listeners exactly once on dispose', () => {

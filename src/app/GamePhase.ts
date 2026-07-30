@@ -14,6 +14,7 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { AudioSystem } from '../audio/AudioSystem';
+import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -31,6 +32,7 @@ export interface PhaseContext {
   physicsRuntime: PhysicsRuntime | null;
   physicsMode: PhysicsMode;
   audio: AudioSystem;
+  eventModels: SurvivalEventModels;
 }
 
 export interface GamePhase {
