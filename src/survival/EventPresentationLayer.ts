@@ -21,6 +21,7 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import type { ActionOutcome } from './survivalTypes';
+import { ChestAttackPresentation } from './ChestAttackPresentation';
 import {
   FOCUSED_EVENT_IDS,
   type EventChoicePresentation,
@@ -30,6 +31,7 @@ import {
   type FocusedEventPresentationFactories,
   type FocusedEventPresentationFactory,
 } from './FocusedEventPresentation';
+import { MidnightTourPresentation } from './MidnightTourPresentation';
 
 interface ActiveEventAnimation {
   readonly kind: 'reveal' | 'react';
@@ -80,6 +82,11 @@ const TABLEAU_EVENT_IDS = [
 
 const REVEAL_DURATION = 0.9;
 const REACTION_DURATION = 0.7;
+
+export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFactories = {
+  'chest-attack': (dependencies) => new ChestAttackPresentation(dependencies),
+  'midnight-tour': (dependencies) => new MidnightTourPresentation(dependencies),
+};
 
 function createMaterial(
   color: number,
@@ -377,7 +384,8 @@ export class EventPresentationLayer {
     }
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
     for (const eventId of FOCUSED_EVENT_IDS) {
-      const factory = focusedFactories[eventId];
+      const factory = focusedFactories[eventId]
+        ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
       if (factory !== undefined) this.registerFocusedFactory(eventId, factory);
     }
   }
@@ -387,7 +395,12 @@ export class EventPresentationLayer {
     factory: FocusedEventPresentationFactory,
   ): boolean {
     if (this.disposed || this.focused.has(eventId)) return false;
-    const presenter = factory(this.dependencies);
+    let presenter: FocusedEventPresentation | null;
+    try {
+      presenter = factory(this.dependencies);
+    } catch {
+      return false;
+    }
     if (presenter === null || this.ownedFocused.has(presenter)) return false;
     presenter.root.visible = false;
     this.focused.set(eventId, presenter);
