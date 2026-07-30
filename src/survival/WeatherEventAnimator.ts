@@ -17,10 +17,8 @@ import {
 import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-import type {
-  ActionOutcome,
-  ItemCondition,
-} from './survivalTypes';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
+import type { ActionOutcome } from './survivalTypes';
 import {
   sampleWeatherItemUse,
   sampleWeatherReveal,
@@ -29,12 +27,6 @@ import {
   type WeatherItemSample,
   type WeatherRevealSample,
 } from './weatherEventChoreography';
-
-export interface EventPhysicalResponsePresentation {
-  readonly choiceId: string;
-  readonly instanceId: ItemInstanceId;
-  readonly condition: ItemCondition;
-}
 
 type ActiveWeatherAnimation =
   | {
@@ -405,7 +397,8 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
-    if (!this.supplyDisplay.pinEventActor(response.instanceId)) {
+    const actor = response.actors[0];
+    if (actor !== undefined && !this.supplyDisplay.pinEventActor(actor.instanceId)) {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve();
     }
@@ -563,21 +556,22 @@ export class WeatherEventAnimator {
       && response?.choiceId === 'flashlight'
       && healthDamage < 0;
 
-    if (response?.condition === 'broken') {
+    const actor = response?.actors[0];
+    if (actor?.condition === 'broken') {
       const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
         * (1 - smoothstep((progress - 0.46) / 0.54));
       this.itemSample.y = -0.12 * settle;
       this.itemSample.roll = 0.26 * settle;
       this.itemSample.scaleY = 1 - 0.08 * settle;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
-    } else if (response?.condition === 'lost' || response?.condition === 'consumed') {
+      this.supplyDisplay.applyEventItemPose(actor.instanceId, this.itemSample);
+    } else if (actor?.condition === 'lost' || actor?.condition === 'consumed') {
       const departure = smoothstep((progress - 0.08) / 0.82);
       this.itemSample.x = -1.8 * departure;
       this.itemSample.y = 0.52 * departure;
       this.itemSample.z = -1.25 * departure;
       this.itemSample.yaw = 1.1 * departure;
       this.itemSample.roll = -0.55 * departure;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+      this.supplyDisplay.applyEventItemPose(actor.instanceId, this.itemSample);
     }
 
     if (damagingFlashlight) {
@@ -688,10 +682,8 @@ export class WeatherEventAnimator {
         active.resolve(true);
         break;
       case 'react':
-        if (
-          active.response?.condition === 'lost'
-          || active.response?.condition === 'consumed'
-        ) {
+        const actor = active.response?.actors[0];
+        if (actor?.condition === 'lost' || actor?.condition === 'consumed') {
           this.supplyDisplay.releaseEventActorOnNextSync();
         } else {
           this.supplyDisplay.clearEventPose();

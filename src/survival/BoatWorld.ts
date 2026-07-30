@@ -80,14 +80,12 @@ import {
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
-import {
-  WeatherEventAnimator,
-  type EventPhysicalResponsePresentation,
-} from './WeatherEventAnimator';
+import { WeatherEventAnimator } from './WeatherEventAnimator';
 import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,

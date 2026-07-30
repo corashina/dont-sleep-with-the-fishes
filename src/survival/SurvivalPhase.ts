@@ -34,6 +34,7 @@ import { BoatWorld } from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -51,7 +52,6 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
-import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -972,7 +972,7 @@ export class SurvivalPhase implements GamePhase {
       outcome,
       eventState,
       generation,
-      { choiceId, instanceId, condition },
+      { choiceId, actors: [{ instanceId, condition }] },
     );
   }
 

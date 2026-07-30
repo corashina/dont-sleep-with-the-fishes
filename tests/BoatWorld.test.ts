@@ -594,8 +594,7 @@ describe('BoatWorld helpers', () => {
       },
       {
         choiceId: 'anchor',
-        instanceId: anchor.instanceId,
-        condition: 'usable',
+        actors: [{ instanceId: anchor.instanceId, condition: 'usable' }],
       },
     );
 
@@ -642,8 +641,7 @@ describe('BoatWorld helpers', () => {
 
     const response = {
       choiceId: 'bucket',
-      instanceId: bucket.instanceId,
-      condition: 'usable' as const,
+      actors: [{ instanceId: bucket.instanceId, condition: 'usable' as const }],
     };
     const outcome: ActionOutcome = {
       accepted: true,
@@ -704,7 +702,7 @@ describe('BoatWorld helpers', () => {
         deltas: { hull: -10 },
         cue: 'impact',
       },
-      { choiceId: 'bucket', instanceId: bucket.instanceId, condition: 'usable' },
+      { choiceId: 'bucket', actors: [{ instanceId: bucket.instanceId, condition: 'usable' }] },
     );
     world.update(3, 0.2);
     world.setDocumentHidden(true);
@@ -798,7 +796,7 @@ describe('BoatWorld helpers', () => {
         deltas: {},
         cue: 'none',
       },
-      { choiceId: 'map', instanceId: maps[1].instanceId, condition: 'lost' },
+      { choiceId: 'map', actors: [{ instanceId: maps[1].instanceId, condition: 'lost' }] },
     );
     world.update(2, 0.84);
     await reaction;
