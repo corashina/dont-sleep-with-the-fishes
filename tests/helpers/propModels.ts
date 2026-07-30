@@ -2,6 +2,10 @@ import { BoxGeometry, Color, Group, Mesh, MeshStandardMaterial, type Object3D } 
 import { ITEM_IDS, type ItemId } from '../../src/game/ItemState';
 import type { LifeboatEquipmentId } from '../../src/world/lifeboatEquipmentManifest';
 import type { PracticalLightModelId } from '../../src/world/practicalLightModelManifest';
+import {
+  EVENT_MODEL_IDS,
+  type EventModelId,
+} from '../../src/world/eventModelManifest';
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {
@@ -33,11 +37,17 @@ export function createTestPropModels(): PropModelLibrary {
     ['lantern', template('lantern', staticItemCount + 1)],
     ['ceilingLight', template('ceilingLight', staticItemCount + 2)],
   ]);
+  const eventTemplates = new Map<EventModelId, Group>(EVENT_MODEL_IDS.map((id, index) => [
+    id,
+    template(id, staticItemCount + 3 + index),
+  ]));
 
   return PropModelLibrary.fromTemplatesForTest(
     itemTemplates,
     equipmentTemplates,
     practicalLightTemplates,
+    new Map(),
+    eventTemplates,
   );
 }
 
