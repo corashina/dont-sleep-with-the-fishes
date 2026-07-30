@@ -555,6 +555,43 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('rejects one focused presenter registered for two events and disposes it once', () => {
+    const propModels = createTestPropModels();
+    const shared = focusedPresenterTestDouble('shared');
+    const factories: FocusedEventPresentationFactories = {
+      'chest-attack': () => shared.presenter,
+      'midnight-tour': () => shared.presenter,
+    };
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    world.stageEvent('chest-attack');
+    expect(shared.stage).toHaveBeenCalledOnce();
+    expect(world.scene.getObjectByName('focused-event:shared')?.visible)
+      .toBe(true);
+
+    world.stageEvent('midnight-tour');
+    expect(shared.stage).toHaveBeenCalledOnce();
+    expect(shared.clear).toHaveBeenCalledOnce();
+    expect(world.scene.getObjectByName('focused-event:shared')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
+      .toBe(true);
+
+    world.dispose();
+    world.dispose();
+    expect(shared.dispose).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
   it('keeps focused routing when optional event models are missing', () => {
     const propModels = createTestPropModels();
     const createEventModel = vi.spyOn(propModels, 'createEventModel')

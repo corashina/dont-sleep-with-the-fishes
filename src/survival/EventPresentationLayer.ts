@@ -334,6 +334,7 @@ export class EventPresentationLayer {
   readonly root = new Group();
   private readonly tableaus = new Map<string, EventTableau>();
   private readonly focused = new Map<string, FocusedEventPresentation>();
+  private readonly ownedFocused = new Set<FocusedEventPresentation>();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly positionScratch = new Vector3();
@@ -387,9 +388,10 @@ export class EventPresentationLayer {
   ): boolean {
     if (this.disposed || this.focused.has(eventId)) return false;
     const presenter = factory(this.dependencies);
-    if (presenter === null) return false;
+    if (presenter === null || this.ownedFocused.has(presenter)) return false;
     presenter.root.visible = false;
     this.focused.set(eventId, presenter);
+    this.ownedFocused.add(presenter);
     this.root.add(presenter.root);
     return true;
   }
@@ -554,8 +556,9 @@ export class EventPresentationLayer {
     this.cancelActiveAnimation();
     this.disposed = true;
     this.activeFocused = null;
-    for (const presenter of this.focused.values()) presenter.dispose();
+    for (const presenter of this.ownedFocused) presenter.dispose();
     this.focused.clear();
+    this.ownedFocused.clear();
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
