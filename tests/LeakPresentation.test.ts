@@ -269,6 +269,46 @@ describe('LeakPresentation', () => {
     expect(drips.some(({ visible }) => visible)).toBe(true);
   });
 
+  it('holds only the exact consumed selected actor against the seam', async () => {
+    const selectedId = 'ductTape-3' as ItemInstanceId;
+    const nearbyId = 'ductTape-4' as ItemInstanceId;
+    const fixture = setup([selectedId, nearbyId]);
+    const presentation = new LeakPresentation(fixture.environment);
+    stage(presentation);
+
+    const firstUse = presentation.playItemUse('ductTape', selectedId);
+    presentation.update(0, 1.1);
+    await firstUse;
+    const nearbyReaction = presentation.react(outcome({
+      selected: selectedId,
+      consumed: [nearbyId],
+    }));
+    presentation.update(1, 1);
+    await nearbyReaction;
+
+    expect(fixture.actors.get(selectedId)!.applyPose.mock.lastCall![0]).toMatchObject({
+      x: 0,
+      scaleY: 1,
+    });
+    expect(fixture.borrowEventActor).not.toHaveBeenCalledWith(nearbyId);
+
+    presentation.clear();
+    stage(presentation);
+    const secondUse = presentation.playItemUse('ductTape', selectedId);
+    presentation.update(0, 1.1);
+    await secondUse;
+    const exactReaction = presentation.react(outcome({
+      selected: selectedId,
+      consumed: [selectedId],
+    }));
+    presentation.update(1, 1);
+    await exactReaction;
+
+    expect(fixture.actors.get(selectedId)!.applyPose.mock.lastCall![0].x).toBeGreaterThan(0.6);
+    expect(fixture.actors.get(selectedId)!.applyPose.mock.lastCall![0].scaleY).toBeLessThan(0.4);
+    expect(fixture.actors.get(selectedId)!.release).toHaveBeenCalledOnce();
+  });
+
   it('disposes its model, geometry, and material once', () => {
     const fixture = setup();
     const presentation = new LeakPresentation(fixture.environment);

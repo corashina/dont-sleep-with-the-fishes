@@ -120,11 +120,13 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private readonly reactionState: {
     safe: boolean;
     brokenItem: boolean;
+    consumedItem: boolean;
     hullDamage: boolean;
     lostItem: boolean;
   } = {
     safe: true,
     brokenItem: false,
+    consumedItem: false,
     hullDamage: false,
     lostItem: false,
   };
@@ -293,13 +295,17 @@ export class LeakPresentation implements DedicatedEventPresentation {
     const selected = result.selectedInstanceId;
     const selectedBroken = selected !== null
       && result.brokenInstanceIds.includes(selected);
+    const selectedConsumed = selected !== null
+      && result.consumedInstanceIds.includes(selected);
     const lost = result.lostInstanceIds[0] ?? null;
     const hullDamage = (result.resourceDeltas.hull ?? 0) < 0;
 
     if (lost !== null) this.borrowActor(lost);
     else if (selectedBroken && selected !== null) this.borrowActor(selected);
+    else if (selectedConsumed && selected !== null) this.borrowActor(selected);
 
     this.reactionState.brokenItem = selectedBroken;
+    this.reactionState.consumedItem = selectedConsumed;
     this.reactionState.hullDamage = hullDamage;
     this.reactionState.lostItem = lost !== null;
     this.reactionState.safe = !selectedBroken && !hullDamage && lost === null;
