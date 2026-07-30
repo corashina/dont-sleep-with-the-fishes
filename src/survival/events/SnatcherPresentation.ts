@@ -518,7 +518,9 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       return;
     }
     if (active.kind === 'reaction' && this.reactionState.targetLost) {
-      this.borrowedActor?.releaseOnNextSync();
+      const actor = this.borrowedActor;
+      this.borrowedActor = null;
+      actor?.releaseOnNextSync();
     }
     active.resolve();
   }
@@ -537,6 +539,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private applySample(): void {
     this.creature.visible = this.sample.headVisibility > 0.008
       || this.sample.fingerVisibility > 0.008;
+    this.modelInstance.root.visible = this.sample.headVisibility > 0.008;
     this.creature.position.set(
       CREATURE_X + this.sample.creatureX,
       CREATURE_Y + this.sample.creatureY,
@@ -574,6 +577,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.boatRoot.visible = false;
     this.worldRoot.visible = false;
     this.creature.visible = false;
+    this.modelInstance.root.visible = false;
     this.creature.position.set(CREATURE_X, CREATURE_Y, CREATURE_Z);
     this.creature.rotation.set(0, 0, 0);
     this.creature.scale.set(1, 1, 1);

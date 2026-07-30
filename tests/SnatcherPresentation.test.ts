@@ -157,7 +157,31 @@ describe('SnatcherPresentation', () => {
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
   });
 
-  it('releases the exact stolen target on the next inventory sync', async () => {
+  it('shows finger extensions before the model head during reveal', async () => {
+    const targetId = 'map-1' as ItemInstanceId;
+    const fixture = setup([targetId]);
+    const presentation = new SnatcherPresentation(fixture.environment);
+    presentation.stage({
+      eventId: 'snatcher',
+      targetInstanceId: targetId,
+      variantSeed: 7,
+    });
+    const model = presentation.boatRoot.getObjectByName('snatcher-model')!;
+    const finger = presentation.boatRoot.getObjectByName('snatcher-finger-left')!;
+
+    const reveal = presentation.reveal();
+    presentation.update(0, 0.5);
+
+    expect(finger.visible).toBe(true);
+    expect(model.visible).toBe(false);
+
+    presentation.update(0, 0.95);
+    expect(model.visible).toBe(true);
+    presentation.update(0, 1.05);
+    await reveal;
+  });
+
+  it('transfers the exact stolen target to next-sync release ownership', async () => {
     const targetId = 'map-1' as ItemInstanceId;
     const nearbyId = 'map-2' as ItemInstanceId;
     const fixture = setup([targetId, nearbyId]);
@@ -174,6 +198,9 @@ describe('SnatcherPresentation', () => {
 
     expect(fixture.actors.get(targetId)!.releaseOnNextSync).toHaveBeenCalledOnce();
     expect(fixture.actors.get(nearbyId)!.releaseOnNextSync).not.toHaveBeenCalled();
+
+    presentation.clear();
+    expect(fixture.actors.get(targetId)!.release).not.toHaveBeenCalled();
   });
 
   it('does not steal a nearby item when the exact target remains', async () => {
