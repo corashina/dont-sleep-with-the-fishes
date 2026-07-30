@@ -222,7 +222,7 @@ Confirm the flat distant band is not visible.
 
 Confirm the horizon fades into the current sky palette.
 
-- [ ] **Step 9: Commit the implementation**
+- [x] **Step 9: Commit the implementation**
 
 ```powershell
 git add -- src/ocean/OceanRenderer.ts tests/OceanRenderer.test.ts
