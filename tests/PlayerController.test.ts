@@ -325,18 +325,23 @@ describe('PlayerController', () => {
     );
 
     input.queueJump();
-    controller.update(0.1, input.asControllerInput());
+    const firstJump = controller.update(0.1, input.asControllerInput());
     expect(controller.localPosition.y).toBeGreaterThan(start.y);
+    expect(firstJump.jumped).toBe(true);
+    expect(firstJump.grounded).toBe(false);
 
     input.queueJump();
+    const rejectedJump = controller.update(0.1, input.asControllerInput());
+    expect(rejectedJump.jumped).toBe(false);
     for (let index = 0; index < 10; index += 1) {
       controller.update(0.1, input.asControllerInput());
     }
     expect(controller.localPosition.y).toBeCloseTo(start.y);
 
     input.queueJump();
-    controller.update(0.1, input.asControllerInput());
+    const secondJump = controller.update(0.1, input.asControllerInput());
     expect(controller.localPosition.y).toBeGreaterThan(start.y);
+    expect(secondJump.jumped).toBe(true);
   });
 
   it('lands on a 0.6-unit object, stands on it, then falls to deck after stepping off', () => {

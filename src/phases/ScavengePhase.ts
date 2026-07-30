@@ -40,6 +40,8 @@ import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { World } from '../world/World';
 import { commitBoatDeposit } from './scavengeDeposit';
+import { ScavengeAudio } from '../audio/ScavengeAudio';
+import type { PlayerMotionSample } from '../player/PlayerController';
 
 export const TITLE_CAMERA_POSITION = [33, 11.5, -4] as const;
 export const TITLE_CAMERA_TARGET = [0, 5.5, 2] as const;
@@ -78,6 +80,7 @@ export class ScavengePhase implements GamePhase {
   private overlayActive = false;
   private escapeResumeArmed = false;
   private presentationWeather: PresentationWeatherId = 'calm';
+  private readonly audio: ScavengeAudio;
 
   constructor(
     private readonly context: PhaseContext,
@@ -127,6 +130,7 @@ export class ScavengePhase implements GamePhase {
       },
     });
     this.carry = new CarryController(this.scene, context.camera);
+    this.audio = new ScavengeAudio(context.audio.createScope());
 
     this.ui.onStart = () => {
       void this.requestPointerLock();
@@ -146,6 +150,7 @@ export class ScavengePhase implements GamePhase {
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
+    this.audio.start();
   }
 
   update(_time: number, deltaSeconds: number): void {
@@ -166,6 +171,7 @@ export class ScavengePhase implements GamePhase {
       this.worldTime += deltaSeconds;
     }
     let sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
+    let motion: PlayerMotionSample | null = null;
 
     if (directControlActive) {
       this.session.tick(deltaSeconds, containsPointXZ(
@@ -175,7 +181,7 @@ export class ScavengePhase implements GamePhase {
       current = this.session.snapshot();
       this.synchronizeElapsed(current);
       if (current.status === 'running') {
-        this.player.update(deltaSeconds, this.input);
+        motion = this.player.update(deltaSeconds, this.input);
         current = this.session.snapshot();
         this.synchronizeElapsed(current);
         if (current.status === 'running') {
@@ -196,7 +202,7 @@ export class ScavengePhase implements GamePhase {
       current = this.session.snapshot();
       this.synchronizeElapsed(current);
       if (current.status === 'running') {
-        this.player.updatePassive(deltaSeconds);
+        motion = this.player.updatePassive(deltaSeconds);
         current = this.session.snapshot();
         sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
@@ -217,6 +223,7 @@ export class ScavengePhase implements GamePhase {
     );
     if (failureStarted) {
       this.endingStarted = true;
+      this.audio.sink();
       this.world.attachPhysicsBarrelsToShip();
       if (this.input.pointerLocked) document.exitPointerLock();
       this.contextAction = { type: 'none', prompt: '' };
@@ -245,6 +252,7 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.updateMatrixWorld(true);
     }
     this.syncVisualState(sinking);
+    this.audio.update(motion, sinking.progress, directControlActive);
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
@@ -287,6 +295,7 @@ export class ScavengePhase implements GamePhase {
   setOverlayActive(active: boolean): void {
     if (this.disposed || this.overlayActive === active) return;
     this.overlayActive = active;
+    this.audio.setPaused(active);
     if (
       !active
       && this.session.snapshot().status === 'running'
@@ -335,6 +344,7 @@ export class ScavengePhase implements GamePhase {
     document.removeEventListener('keyup', this.onKeyUp);
     if (this.input.pointerLocked) document.exitPointerLock();
     this.carry.reset();
+    this.audio.dispose();
     this.input.dispose();
     this.interaction.dispose();
     this.world.dispose();
@@ -407,16 +417,21 @@ export class ScavengePhase implements GamePhase {
       if (object && this.session.pickUp(action.item.instanceId)) {
         this.world.showItemPickupSmoke(action.item.instanceId);
         this.carry.pickUp(action.item, object);
+        this.audio.itemHandled();
       }
     } else if (action.type === 'depositBundle') {
-      commitBoatDeposit(this.session, this.carry, this.world);
+      if (commitBoatDeposit(this.session, this.carry, this.world)) {
+        this.audio.itemHandled();
+      }
     } else if (action.type === 'drop') {
       const released = this.carry.releaseActive();
       if (!released || !this.session.dropCarried()) return;
       this.world.dropItem(released.instanceId, action.point);
+      this.audio.itemHandled();
     } else if (action.type === 'evacuate') {
       this.session.evacuate();
     } else if (action.type === 'capacityFull') {
+      this.audio.deny();
       return;
     }
   }
@@ -458,15 +473,18 @@ export class ScavengePhase implements GamePhase {
       this.ui.clearPointerLockError();
       this.ui.hideStart();
       this.session.start();
+      this.audio.setPaused(false);
     } else if (transition === 'resume') {
       this.escapeResumeArmed = false;
       this.session.resume();
       this.ui.clearPointerLockError();
       this.ui.setPaused(false);
+      this.audio.setPaused(false);
     } else if (transition === 'pause') {
       this.escapeResumeArmed = false;
       this.session.pause();
       this.ui.setPaused(true);
+      this.audio.setPaused(true);
     }
   }
 
@@ -484,6 +502,7 @@ export class ScavengePhase implements GamePhase {
     if (document.hidden && this.session.snapshot().status === 'running') {
       this.session.pause();
       this.ui.setPaused(true);
+      this.audio.setPaused(true);
       if (document.pointerLockElement) document.exitPointerLock();
     }
   };
@@ -520,12 +539,14 @@ export class ScavengePhase implements GamePhase {
     const acquired = await this.input.requestPointerLock();
     if (acquired || this.disposed) return;
     this.ui.showPointerLockError();
+    this.audio.deny();
     if (
       !this.overlayActive
       && this.session.snapshot().status === 'running'
     ) {
       this.session.pause();
       this.ui.setPaused(true);
+      this.audio.setPaused(true);
     }
   }
 }
