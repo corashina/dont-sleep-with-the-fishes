@@ -537,12 +537,46 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps a target event on its generic tableau without a focused factory', () => {
+  it('registers the authored Chest Attack and Midnight Tour presenters', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
       createTestMoonTexture(),
+    );
+
+    world.stageEvent('chest-attack');
+    expect(world.scene.getObjectByName('event-prop:chest-attack')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('focused-event:chest-attack')?.visible)
+      .toBe(true);
+
+    world.stageEvent('midnight-tour');
+    expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('focused-event:midnight-tour')?.visible)
+      .toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the generic tableau when focused construction fails', () => {
+    const propModels = createTestPropModels();
+    const factories: FocusedEventPresentationFactories = {
+      'chest-attack': () => {
+        throw new Error('Chest presenter construction failed.');
+      },
+    };
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
     );
 
     world.stageEvent('chest-attack');
