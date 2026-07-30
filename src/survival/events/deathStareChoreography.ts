@@ -13,9 +13,6 @@ export type DeathStareItemEffectKind =
 export interface DeathStareReactionState {
   readonly attacked: boolean;
   readonly lostItem: boolean;
-  readonly itemTravelX: number;
-  readonly itemTravelY: number;
-  readonly itemTravelZ: number;
 }
 
 export interface DeathStareSample {
@@ -36,6 +33,7 @@ export interface DeathStareSample {
   cameraPitch: number;
   cameraRoll: number;
   hullRoll: number;
+  supplyTravel: number;
   itemX: number;
   itemY: number;
   itemZ: number;
@@ -84,6 +82,7 @@ function resetSample(output: DeathStareSample): void {
   output.cameraPitch = 0;
   output.cameraRoll = 0;
   output.hullRoll = 0;
+  output.supplyTravel = 0;
   output.itemX = 0;
   output.itemY = 0;
   output.itemZ = 0;
@@ -123,6 +122,7 @@ export function identityDeathStareSample(): DeathStareSample {
     cameraPitch: 0,
     cameraRoll: 0,
     hullRoll: 0,
+    supplyTravel: 0,
     itemX: 0,
     itemY: 0,
     itemZ: 0,
@@ -286,19 +286,8 @@ export function sampleDeathStareReaction(
   }
 
   if (reaction.lostItem) {
-    const travelX = Number.isFinite(reaction.itemTravelX)
-      ? reaction.itemTravelX!
-      : 0;
-    const travelY = Number.isFinite(reaction.itemTravelY)
-      ? reaction.itemTravelY!
-      : 0;
-    const travelZ = Number.isFinite(reaction.itemTravelZ)
-      ? reaction.itemTravelZ!
-      : 0;
     const mouthTravel = smoothstep((t - 0.08) / 0.64);
-    output.itemX = mouthTravel * travelX + output.fishX;
-    output.itemY = mouthTravel * travelY + output.fishY;
-    output.itemZ = mouthTravel * travelZ + output.fishZ;
+    output.supplyTravel = mouthTravel;
     output.itemYaw = mouthTravel * 1.35;
     output.itemPitch = mouthTravel * -0.28;
     output.itemRoll = mouthTravel * -1.18;

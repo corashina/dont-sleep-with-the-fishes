@@ -83,9 +83,6 @@ describe('death stare choreography', () => {
     sampleDeathStareReaction({
       attacked: false,
       lostItem: false,
-      itemTravelX: 0,
-      itemTravelY: 0,
-      itemTravelZ: 0,
     }, 0.8, safe);
     expect(safe.sink).toBeGreaterThan(0.5);
     expect(safe.fishY).toBeLessThan(0);
@@ -93,9 +90,6 @@ describe('death stare choreography', () => {
     sampleDeathStareReaction({
       attacked: true,
       lostItem: false,
-      itemTravelX: 0,
-      itemTravelY: 0,
-      itemTravelZ: 0,
     }, 0.58, attack);
     expect(attack.lunge).toBeGreaterThan(0.5);
     expect(attack.cameraPitch).not.toBe(0);
@@ -109,20 +103,17 @@ describe('death stare choreography', () => {
     sampleDeathStareReaction({
       attacked: false,
       lostItem: false,
-      itemTravelX: 0,
-      itemTravelY: 0,
-      itemTravelZ: 0,
     }, 0.5, held);
     sampleDeathStareReaction({
       attacked: false,
       lostItem: true,
-      itemTravelX: -3,
-      itemTravelY: 0.4,
-      itemTravelZ: -2,
     }, 0.5, lost);
 
     expect(held.itemX).toBe(0);
-    expect(lost.itemX).toBeLessThan(-1);
+    expect(lost.itemX).toBe(0);
+    expect(lost.itemY).toBe(0);
+    expect(lost.itemZ).toBe(0);
+    expect(lost.supplyTravel).toBeGreaterThan(0.5);
     expect(lost.itemScaleX).toBeLessThan(1);
   });
 });
