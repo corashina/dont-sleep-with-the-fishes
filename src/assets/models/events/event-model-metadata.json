@@ -1,0 +1,327 @@
+{
+  "chestClosed": {
+    "title": "Chest Closed",
+    "creator": "Quaternius",
+    "sourceUrl": "https://poly.pizza/m/AngpV0HxD8",
+    "sourceModelId": "poly-pizza:0ae3f497-8628-4864-b5d4-e81ab14704f8",
+    "license": "CC0 1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "1E018BAAB333027683C867357180B25F4228B878116CE5A69220161543A2A057",
+    "outputSha256": "0DB2596F63196835A2B988D6438476008DE44D8802C66D3456ED6178DD93421F",
+    "sourceTriangles": 1636,
+    "triangles": 1636,
+    "rawBounds": {
+      "min": [
+        -0.6973932962864637,
+        -0.020519483950920403,
+        -0.4437107127159834
+      ],
+      "max": [
+        0.6973932962864637,
+        0.8607305586338043,
+        0.44371061958372593
+      ]
+    },
+    "animations": [],
+    "nodes": [
+      "chestClosed:RootNode",
+      "Prop_Chest_Closed",
+      "chestClosed:lid",
+      "chestClosed:lid-model"
+    ],
+    "rigs": []
+  },
+  "midnightIsland": {
+    "title": "Island",
+    "creator": "J-Toastie",
+    "sourceUrl": "https://poly.pizza/m/C03O8OQq6O",
+    "sourceModelId": "poly-pizza:1fda6a0b-6228-4c16-9a3f-8ca36d9af6b6",
+    "license": "CC-BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "F2CA3A8EE6856FD312C8B6E5B1F2AA1D5234CB220FB441F836942CF4125274E6",
+    "outputSha256": "DD2CF11A77DCFFEB7F259D0D2302AEEDB595DD564FB9383F6A9A1391218A76CB",
+    "sourceTriangles": 84,
+    "triangles": 84,
+    "rawBounds": {
+      "min": [
+        -0.4464530050754547,
+        -0.009568000212311745,
+        -0.4417620003223419
+      ],
+      "max": [
+        0.4406239986419678,
+        0.7448949813842773,
+        0.46669599413871765
+      ]
+    },
+    "animations": [],
+    "nodes": [
+      "midnightIsland:Island01_Cylinder"
+    ],
+    "rigs": []
+  },
+  "deadTree": {
+    "title": "Dead Tree",
+    "creator": "Quaternius",
+    "sourceUrl": "https://poly.pizza/m/CD4edbPSGm",
+    "sourceModelId": "poly-pizza:4db29f97-8e10-413d-be54-39ecda1a7c8d",
+    "license": "CC0 1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "C6A2B34DE53EA610D4DCF20785340B12B023BD3B648A8F3DB3DCDB962008B9D3",
+    "outputSha256": "20BB0B01D7BC968AA966452B9B290B4AA5793E60AC6D77A86CA43B2DA304B628",
+    "sourceTriangles": 5648,
+    "triangles": 5648,
+    "rawBounds": {
+      "min": [
+        -3.9705326557159424,
+        -0.3355545699596405,
+        -4.7972307205200195
+      ],
+      "max": [
+        4.385861396789551,
+        16.10182762145996,
+        3.616036891937256
+      ]
+    },
+    "animations": [],
+    "nodes": [
+      "deadTree:RootNode",
+      "DeadTree_5"
+    ],
+    "rigs": []
+  },
+  "traderRowboat": {
+    "title": "Rowboat",
+    "creator": "Poly by Google",
+    "sourceUrl": "https://poly.pizza/m/dt1yhb5AYXD",
+    "sourceModelId": "poly-pizza:0c76d378-c3fb-4a1c-aa5f-a25f09bd3ea4",
+    "license": "CC-BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "D044E98D9C87D65CD650D6F054940A5F3C62C06457F32BB864D24615E71906FA",
+    "outputSha256": "A1756FD3E6857F99029CBD6DF9901600DA207C384E8CEF3EC1D4E0A3E977D67E",
+    "sourceTriangles": 1898,
+    "triangles": 1898,
+    "rawBounds": {
+      "min": [
+        -379.3330078125,
+        -94.74909973144531,
+        -431.5799865722656
+      ],
+      "max": [
+        394.0639953613281,
+        86.28849792480469,
+        431.5799865722656
+      ]
+    },
+    "animations": [],
+    "nodes": [
+      "traderRowboat:Node"
+    ],
+    "rigs": []
+  },
+  "riggedHand": {
+    "title": "Rigged Hand",
+    "creator": "J-Toastie",
+    "sourceUrl": "https://poly.pizza/m/BEy8jbxm6A",
+    "sourceModelId": "poly-pizza:a36ea2d8-8437-4215-98d3-2fa53be67d85",
+    "license": "CC-BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "32705E2EE2BADC9DF04886CC0705545D6640C34E927D4DB67AFFF2802AEC945E",
+    "outputSha256": "C63A08C01D86DD26C5260BD17BCC026BB60C0843A04D94DC52CD199DFCFD13B1",
+    "sourceTriangles": 1518,
+    "triangles": 1518,
+    "rawBounds": {
+      "min": [
+        -1.451046772301197,
+        -0.2179264827960273,
+        -0.9034632976562091
+      ],
+      "max": [
+        1.2005889108404517,
+        0.34729568482811835,
+        0.7280842997585244
+      ]
+    },
+    "animations": [
+      {
+        "name": "Scene",
+        "duration": 0.2916666567325592,
+        "channels": 19
+      }
+    ],
+    "nodes": [
+      "riggedHand:RootNode",
+      "Armature",
+      "HandMain",
+      "ThumbRoot",
+      "ThumbMiddle",
+      "ThumbTop",
+      "IndexRoot",
+      "IndexF_lower",
+      "IndexF_middle",
+      "IndexF_tip",
+      "MiddleRoot",
+      "MiddleF_lower",
+      "MiddleF_middle",
+      "MiddleF_tip",
+      "RingRoot",
+      "RingF_lower",
+      "RingF_middle",
+      "RingF_tip",
+      "PinkyRoot",
+      "PinkyF_lower",
+      "PinkyF_middle",
+      "PinkyF_tip",
+      "Hand"
+    ],
+    "rigs": [
+      {
+        "name": "",
+        "joints": [
+          "HandMain",
+          "ThumbRoot",
+          "ThumbMiddle",
+          "ThumbTop",
+          "IndexRoot",
+          "IndexF_lower",
+          "IndexF_middle",
+          "IndexF_tip",
+          "MiddleRoot",
+          "MiddleF_lower",
+          "MiddleF_middle",
+          "MiddleF_tip",
+          "RingRoot",
+          "RingF_lower",
+          "RingF_middle",
+          "RingF_tip",
+          "PinkyRoot",
+          "PinkyF_lower",
+          "PinkyF_middle",
+          "PinkyF_tip"
+        ]
+      }
+    ]
+  },
+  "containerShip": {
+    "title": "Container Ship",
+    "creator": "Alex Safayan",
+    "sourceUrl": "https://poly.pizza/m/3AmDGcCu6Ll",
+    "sourceModelId": "poly-pizza:df197d9f-5d8c-4744-bc03-75ee514e8df3",
+    "license": "CC-BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "downloadedOn": "2026-07-30",
+    "sourceSha256": "A6F5E74082C8DFE8D251B7D70AF5C2BD8570D108B3CA2A97C3D55F38871FCB4B",
+    "outputSha256": "B969EF01204841B4E09965740BEE30E7B5227576E4921253F3AFA0D306E2404D",
+    "sourceTriangles": 1620,
+    "triangles": 1620,
+    "rawBounds": {
+      "min": [
+        -0.1146669015288353,
+        -0.19675789773464203,
+        -0.39588209986686707
+      ],
+      "max": [
+        0.09535513818264008,
+        0.18458889424800873,
+        0.5791178941726685
+      ]
+    },
+    "animations": [],
+    "nodes": [
+      "containerShip:group582159379",
+      "containerShip:group2024440113",
+      "containerShip:group1659503815",
+      "containerShip:group1109515510",
+      "containerShip:group1319652846",
+      "containerShip:group293567500",
+      "containerShip:group1125255076",
+      "containerShip:group1609899504",
+      "containerShip:group1130434813",
+      "containerShip:group1686683300",
+      "containerShip:group542659570",
+      "containerShip:group682183177",
+      "containerShip:group1340366337",
+      "containerShip:group425647546",
+      "containerShip:group1751252301",
+      "containerShip:group1984813714",
+      "containerShip:group410845292",
+      "containerShip:group1639735897",
+      "containerShip:group874545954",
+      "containerShip:group615460451",
+      "containerShip:group1380036288",
+      "containerShip:group487546049",
+      "containerShip:group1429872227",
+      "containerShip:group402951083",
+      "containerShip:group743730337",
+      "containerShip:group1728621429",
+      "containerShip:group420469477",
+      "containerShip:group648967498",
+      "containerShip:group8081122",
+      "containerShip:group295412224",
+      "containerShip:group1249644479",
+      "containerShip:group645035792",
+      "containerShip:group1109883496",
+      "containerShip:group1991484969",
+      "containerShip:group445682376",
+      "containerShip:group730979645",
+      "containerShip:group1204232670",
+      "containerShip:group620926883",
+      "containerShip:group2123421558",
+      "containerShip:group68280000",
+      "containerShip:group1650019230",
+      "containerShip:group1476506327",
+      "containerShip:group1502905482",
+      "containerShip:group637847627",
+      "containerShip:group1490881220",
+      "containerShip:group708609790",
+      "containerShip:group1224037610",
+      "containerShip:group410031999",
+      "containerShip:group2015766892",
+      "containerShip:group2130245980",
+      "containerShip:group1248881623",
+      "containerShip:group1703920967",
+      "containerShip:group2115609096",
+      "containerShip:group1441484207",
+      "containerShip:group1697237491",
+      "containerShip:group254883405",
+      "containerShip:group1691778719",
+      "containerShip:group2103999571",
+      "containerShip:group948092280",
+      "containerShip:group1331663071",
+      "containerShip:group122146175",
+      "containerShip:group1333689153",
+      "containerShip:group989006632",
+      "containerShip:group645928749",
+      "containerShip:group716875044",
+      "containerShip:group1552610862",
+      "containerShip:group1936563596",
+      "containerShip:group1881423126",
+      "containerShip:group719063850",
+      "containerShip:group1854070983",
+      "containerShip:group95801961",
+      "containerShip:group1499757032",
+      "containerShip:group1465148937",
+      "containerShip:group774917317",
+      "containerShip:group1357515875",
+      "containerShip:group2032867843",
+      "containerShip:group1526770630",
+      "containerShip:group1998152179",
+      "containerShip:group1891745208",
+      "containerShip:group1611104514",
+      "containerShip:group828060803",
+      "containerShip:group316248503",
+      "containerShip:group2133724846",
+      "containerShip:group550546789",
+      "containerShip:group1701587960",
+      "containerShip:group652122083",
+      "containerShip:group868781494",
+      "containerShip:group1723449364"
+    ],
+    "rigs": []
+  }
+}
