@@ -1514,6 +1514,36 @@ describe('SurvivalSession daytime actions', () => {
     expect(stateAfterDawn(4, 100, 0.300001)).toBe('day');
   });
 
+  it.each([
+    ['map safe', ['map'], itemResponse('map'), [0], {}, 100],
+    ['map collision', ['map'], itemResponse('map'), [0.99, 0], { hull: -5, pressure: 1 }, 100],
+    ['compass safe', ['compass'], itemResponse('compass'), [0], {}, 100],
+    ['compass collision', ['compass'], itemResponse('compass'), [0.99, 0], { hull: -5, pressure: 1 }, 100],
+    ['sleep collision', [], choiceResponse('sleep'), [0, 0], { hull: -25, pressure: 1 }, 100],
+  ] as const)(
+    'aligns Dangerous Waters for %s',
+    (_name, itemIds, response, rolls, deltas, rescueProgress) => {
+      const session = new SurvivalSession(saved(...itemIds), {
+        seed: 31,
+        random: sequenceRandom(rolls),
+        initial: { day: 2, rescueProgress },
+        initialEventId: 'dangerous-waters',
+      });
+
+      expect(session.resolveEvent(response)).toMatchObject({
+        accepted: true,
+        deltas,
+      });
+      expect(session.snapshot()).toMatchObject({
+        rescueProgress,
+        eventFlags: expect.arrayContaining(['direction2']),
+      });
+      for (const itemState of Object.values(session.snapshot().inventory)) {
+        expect(itemState?.condition).toBe('usable');
+      }
+    },
+  );
+
   it('finalizes one journal entry with separate attempted and concrete facts', () => {
     const session = new SurvivalSession(saved('map'), {
       seed: 9,

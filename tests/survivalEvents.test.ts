@@ -41,6 +41,18 @@ const outcome = (
     ...(items.length ? { items } : {}),
   },
 });
+const dangerousWatersOutcome = (
+  weight: number,
+  message: string,
+  resources: readonly unknown[] = [],
+) => ({
+  weight,
+  message,
+  effects: {
+    ...(resources.length ? { resources } : {}),
+    flags: { set: ['direction2'] },
+  },
+});
 const choice = (id: string, label: string, itemId: string | undefined, ...outcomes: unknown[]) => ({
   id, label, ...(itemId ? { itemId } : {}), outcomes,
 });
@@ -88,13 +100,22 @@ const EXPECTED_REVEAL_TEXT = {
 const EXPECTED_CHOICES = {
   'dangerous-waters': [
     choice('map', 'Use Map', 'map',
-      outcome(80, 'Nothing happens.'),
-      outcome(20, 'The rocks damage the boat.', [subtract('hull', { min: 5, max: 10 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(80, 'Nothing happens.'),
+      dangerousWatersOutcome(20, 'The rocks damage the boat.', [
+        subtract('hull', { min: 5, max: 10 }),
+        add('pressure', 1),
+      ])),
     choice('compass', 'Use Compass', 'compass',
-      outcome(50, 'Nothing happens.'),
-      outcome(50, 'The rocks damage the boat.', [subtract('hull', { min: 5, max: 8 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(50, 'Nothing happens.'),
+      dangerousWatersOutcome(50, 'The rocks damage the boat.', [
+        subtract('hull', { min: 5, max: 8 }),
+        add('pressure', 1),
+      ])),
     choice('sleep', 'Sleep', undefined,
-      outcome(1, 'The rocks damage the boat.', [subtract('hull', { min: 25, max: 45 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(1, 'The rocks damage the boat.', [
+        subtract('hull', { min: 25, max: 45 }),
+        add('pressure', 1),
+      ])),
   ],
   leak: [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', [], [item('consume', 'ductTape')])),
@@ -301,6 +322,15 @@ describe('survival events', () => {
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
+  });
+
+  it('limits Dangerous Waters to one appearance per run', () => {
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      phase: 'day', day: 12, weather: 'calm', lastEventId: null,
+      lastSeenDay: new Map(), targetableItemIds: new Set(),
+      appearanceCounts: new Map([['dangerous-waters', 1]]),
+      inventoryItemIds: new Set(), rescueProgress: 0,
+    }).map(({ id }) => id)).not.toContain('dangerous-waters');
   });
 
   it('excludes Snatcher from the draw pool without a canonical target', () => {
