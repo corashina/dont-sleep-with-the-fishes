@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   SphereGeometry,
+  Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
@@ -191,6 +192,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly dominantEye: Mesh;
   private readonly recessedEye: Mesh;
   private readonly jawInterior: Mesh;
+  private readonly mouthTarget = new Group();
   private readonly lure: Mesh;
   private readonly lureStalk: Mesh;
   private readonly teeth: readonly Mesh[];
@@ -210,12 +212,15 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly reactionState = {
     attacked: false,
     lostItem: false,
+    itemTravelX: 0,
+    itemTravelY: 0,
+    itemTravelZ: 0,
   };
+  private readonly borrowedBasePosition = new Vector3();
+  private readonly mouthWorldPosition = new Vector3();
+  private readonly mouthParentPosition = new Vector3();
   private active: ActiveDeathStareAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
-  private cameraBasePitch = 0;
-  private cameraBaseRoll = 0;
-  private cameraEffectApplied = false;
   private staged = false;
   private disposed = false;
 
@@ -280,6 +285,10 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.jawInterior.position.set(0.02, -0.52, 0.5);
     this.jawInterior.scale.set(1.06, 0.44, 0.18);
     this.angler.add(this.jawInterior);
+
+    this.mouthTarget.name = 'death-stare-mouth-target';
+    this.mouthTarget.position.set(0.02, -0.52, 0.8);
+    this.angler.add(this.mouthTarget);
 
     const teeth: Mesh[] = [];
     for (let index = 0; index < 13; index += 1) {
@@ -355,8 +364,6 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== 'death-stare') return;
     this.clear();
-    this.cameraBasePitch = this.environment.cameraRig?.rotation.x ?? 0;
-    this.cameraBaseRoll = this.environment.cameraRig?.rotation.z ?? 0;
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
@@ -414,6 +421,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
       || (result.resourceDeltas.health ?? 0) < 0;
     this.reactionState.lostItem = lostId !== null && this.borrowedActor?.instanceId === lostId;
+    this.computeLostItemTravel();
     sampleDeathStareReaction(this.reactionState, 0, this.sample);
     this.applyBorrowedPose();
     this.applySample(0);
@@ -473,7 +481,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();
-    this.restoreCamera();
+    this.resetCameraEffect();
     this.releaseActor();
     this.staged = false;
     this.hideScene();
@@ -489,7 +497,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.resolveCancelled(active);
 
     runCleanupSteps([
-      () => this.restoreCamera(),
+      () => this.resetCameraEffect(),
       () => actor?.release(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
@@ -507,6 +515,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     const actor = this.environment.supplies.borrowEventActor(instanceId);
     if (actor === null) return false;
     this.borrowedActor = actor;
+    this.borrowedBasePosition.copy(actor.root.position);
     return true;
   }
 
@@ -643,22 +652,33 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   }
 
   private applyCameraEffect(): void {
-    const cameraRig = this.environment.cameraRig;
-    if (cameraRig === undefined) return;
-    const hasEffect = this.sample.cameraPitch !== 0 || this.sample.cameraRoll !== 0;
-    if (!hasEffect && !this.cameraEffectApplied) return;
-    cameraRig.rotation.x = this.cameraBasePitch + this.sample.cameraPitch;
-    cameraRig.rotation.z = this.cameraBaseRoll + this.sample.cameraRoll;
-    this.cameraEffectApplied = hasEffect;
+    const effectsRoot = this.environment.cameraEffectsRoot;
+    if (effectsRoot === undefined) return;
+    effectsRoot.rotation.x = this.sample.cameraPitch;
+    effectsRoot.rotation.y = 0;
+    effectsRoot.rotation.z = this.sample.cameraRoll;
   }
 
-  private restoreCamera(): void {
-    const cameraRig = this.environment.cameraRig;
-    if (cameraRig !== undefined && this.cameraEffectApplied) {
-      cameraRig.rotation.x = this.cameraBasePitch;
-      cameraRig.rotation.z = this.cameraBaseRoll;
-    }
-    this.cameraEffectApplied = false;
+  private resetCameraEffect(): void {
+    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
+  }
+
+  private computeLostItemTravel(): void {
+    const actor = this.borrowedActor;
+    this.reactionState.itemTravelX = 0;
+    this.reactionState.itemTravelY = 0;
+    this.reactionState.itemTravelZ = 0;
+    if (!this.reactionState.lostItem || actor === null) return;
+
+    this.mouthTarget.getWorldPosition(this.mouthWorldPosition);
+    this.mouthParentPosition.copy(this.mouthWorldPosition);
+    actor.root.parent?.worldToLocal(this.mouthParentPosition);
+    this.reactionState.itemTravelX = this.mouthParentPosition.x
+      - this.borrowedBasePosition.x;
+    this.reactionState.itemTravelY = this.mouthParentPosition.y
+      - this.borrowedBasePosition.y;
+    this.reactionState.itemTravelZ = this.mouthParentPosition.z
+      - this.borrowedBasePosition.z;
   }
 
   private hideScene(): void {

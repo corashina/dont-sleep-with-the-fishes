@@ -4,6 +4,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -97,7 +98,10 @@ function setup(actorIds: readonly ItemInstanceId[] = []) {
     sample.normal.y = 0.99;
     sample.normal.z = -0.04;
   });
-  const cameraRig = new Group();
+  const cameraBase = new Group();
+  const cameraEffectsRoot = new Group();
+  cameraBase.rotation.set(0.24, -0.18, 0.07);
+  cameraBase.add(cameraEffectsRoot);
   const vortexWave = {
     centerX: 2,
     centerZ: -3,
@@ -112,12 +116,13 @@ function setup(actorIds: readonly ItemInstanceId[] = []) {
     supplies: { borrowEventActor } as unknown as BoatSupplyDisplay,
     vortexWave,
     sampleWorldWaveInto,
-    cameraRig,
+    cameraEffectsRoot,
   } satisfies DedicatedEventEnvironment;
   return {
     actors,
     borrowEventActor,
-    cameraRig,
+    cameraBase,
+    cameraEffectsRoot,
     create,
     environment,
     modelDispose,
@@ -214,11 +219,18 @@ describe('DeathStarePresentation', () => {
     const lostId = 'flashlight-3' as ItemInstanceId;
     const fixture = setup([selectedId, lostId]);
     const presentation = new DeathStarePresentation(fixture.environment);
+    const lostActor = fixture.actors.get(lostId)!;
+    const actorParent = new Group();
+    actorParent.add(lostActor.root);
+    lostActor.root.position.set(3.4, 0.36, 0.72);
     stage(presentation);
 
     const use = presentation.playItemUse('flashlight', selectedId);
     presentation.update(0, 1.25);
     await use;
+    const mouthWorld = presentation.worldRoot
+      .getObjectByName('death-stare-mouth-target')!
+      .getWorldPosition(new Vector3());
     const reaction = presentation.react(outcome({
       selected: selectedId,
       lost: [lostId],
@@ -226,26 +238,33 @@ describe('DeathStarePresentation', () => {
     presentation.update(0.8, 0.8);
 
     expect(fixture.borrowEventActor).toHaveBeenCalledWith(lostId);
-    expect(fixture.actors.get(lostId)!.applyPose.mock.lastCall![0].x).toBeGreaterThan(1);
+    expect(lostActor.applyPose.mock.lastCall![0].x).toBeLessThan(0);
     expect(fixture.actors.get(selectedId)!.release).toHaveBeenCalledOnce();
     presentation.update(1.25, 0.45);
     await reaction;
-    expect(fixture.actors.get(lostId)!.releaseOnNextSync).toHaveBeenCalledOnce();
+    const finalPose = lostActor.applyPose.mock.lastCall![0];
+    expect(lostActor.root.position.x + finalPose.x).toBeCloseTo(mouthWorld.x);
+    expect(lostActor.root.position.y + finalPose.y).toBeCloseTo(mouthWorld.y);
+    expect(lostActor.root.position.z + finalPose.z).toBeCloseTo(mouthWorld.z);
+    expect(lostActor.releaseOnNextSync).toHaveBeenCalledOnce();
   });
 
-  it('applies and restores attack camera and hull effects', async () => {
+  it('uses an additive camera root without changing the camera base', async () => {
     const fixture = setup();
     const presentation = new DeathStarePresentation(fixture.environment);
+    const baseRotation = fixture.cameraBase.rotation.toArray();
     stage(presentation);
     const reaction = presentation.react(outcome({ hull: -44, health: -60 }));
     presentation.update(0.7, 0.7);
 
-    expect(fixture.cameraRig.rotation.x).not.toBe(0);
+    expect(fixture.cameraEffectsRoot.rotation.x).not.toBe(0);
+    expect(fixture.cameraBase.rotation.toArray()).toEqual(baseRotation);
     expect(presentation.boatRoot.rotation.z).not.toBe(0);
 
     presentation.update(1.25, 0.55);
     await reaction;
-    expect(fixture.cameraRig.rotation.x).toBe(0);
+    expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(fixture.cameraBase.rotation.toArray()).toEqual(baseRotation);
     expect(presentation.boatRoot.rotation.z).toBe(0);
   });
 
