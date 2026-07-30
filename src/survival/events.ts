@@ -14,7 +14,7 @@ import type {
 } from './survivalTypes';
 
 export const INCLUDED_EVENT_PHASES = Object.freeze({
-  'dangerous-waters': 'day', leak: 'day', 'school-of-fish': 'day',
+  'dangerous-waters': 'night', leak: 'day', 'school-of-fish': 'day',
   snatcher: 'day', 'death-stare': 'day', 'swarm-of-anglerfish': 'day',
   whirlpool: 'day', 'shark-men': 'day',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',

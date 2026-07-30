@@ -11,7 +11,7 @@ import {
 import { sequenceRandom } from './helpers/random';
 
 const INCLUDED = {
-  'dangerous-waters': 'day', leak: 'day', 'school-of-fish': 'day',
+  'dangerous-waters': 'night', leak: 'day', 'school-of-fish': 'day',
   snatcher: 'day', 'death-stare': 'day', 'swarm-of-anglerfish': 'day',
   whirlpool: 'day', 'shark-men': 'day',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
@@ -318,15 +318,27 @@ describe('survival events', () => {
     expect(events.map((event) => event.id)).not.toContain('death-stare');
     expect(events.map((event) => event.id)).toContain('leak');
     expect(eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
+  it('assigns Dangerous Waters to the night with its authored one-time rule', () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters');
+
+    expect(event).toMatchObject({
+      phase: 'night',
+      weight: 15,
+      earliestDay: 2,
+      latestDay: 30,
+      maximumAppearances: 1,
+    });
+  });
+
   it('limits Dangerous Waters to one appearance per run', () => {
     expect(eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 12, weather: 'calm', lastEventId: null,
+      phase: 'night', day: 12, weather: 'calm', lastEventId: null,
       lastSeenDay: new Map(), targetableItemIds: new Set(),
       appearanceCounts: new Map([['dangerous-waters', 1]]),
       inventoryItemIds: new Set(), rescueProgress: 0,
