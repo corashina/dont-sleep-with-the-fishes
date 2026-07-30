@@ -136,6 +136,20 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 | boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 
+## Runtime night-event model ledger
+
+These five models support authored night-event presentations.
+Static models use safe vertex welding.
+The snatcher keeps its source rig and eight animation clips.
+
+| Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source SHA-256 | Source triangles | Committed triangles | Modifications | Downloaded |
+|---|---|---|---|---|---|---|---:|---:|---|---|
+| leakPlanks | `leakPlanks.glb` | Wood Planks / Quaternius | https://poly.pizza/m/hwQ1Fx5P8U | `poly-pizza:27afd21d-e642-4ec8-8688-d99f693388d1` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `6E3DAA7AEDFBD2FD0B999555B165895552D80D0A6B413C181FFFE4CF4A8E9987` | 150 | 150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
+| schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
+| snatcher | `snatcher.glb` | Enemy Small / Quaternius | https://poly.pizza/m/4LjT020LQh | `poly-pizza:4d23d8b4-4e88-4e88-9fd8-176e1abb66c0` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B4D6CB3E0920058EAB20D079DC57FA6BDBAECAD6806803F0F3D504EE730891DD` | 1572 | 1572 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-30 |
+| anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
+| whirlpoolCore | `whirlpoolCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
+
 ## Runtime audio ledger
 
 All audio in this ledger uses
