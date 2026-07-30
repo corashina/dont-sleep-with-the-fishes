@@ -4,7 +4,7 @@
 
 **Goal:** Hide the coarse ocean grid join with a low-cost horizon haze ramp.
 
-**Architecture:** `OceanRenderer` owns one reusable haze uniform. The fragment shader blends distant water toward atmospheric color before the existing weather fog.
+**Architecture:** `OceanRenderer` owns reusable haze and detail uniforms. The shader keeps subtle distant ripples and moves far fog toward the sky horizon color.
 
 **Tech Stack:** TypeScript, Three.js GLSL, Vitest, Vite
 
@@ -14,13 +14,15 @@ Add no geometry, texture, render pass, draw call, or frame allocation.
 
 Keep the current shared wave field unchanged.
 
-Use low settings `35`, `120`, and `0.88`.
+Use low haze settings `85`, `260`, and `1`.
 
-Use high settings `45`, `145`, and `0.82`.
+Use high haze settings `100`, `320`, and `1`.
 
-Mix haze color from fog color and 22 percent horizon color.
+Use detail floors `0.11` for low and `0.08` for high.
 
-Keep existing fog and ordered dither after the haze blend.
+Blend the fog target toward the horizon color.
+
+Keep existing fog strength and ordered dither.
 
 Do not add reduced-motion behavior.
 
@@ -44,7 +46,9 @@ Do not add reduced-motion behavior.
 - Produces: `OceanSurfaceQuality.horizonHazeStart: number`.
 - Produces: `OceanSurfaceQuality.horizonHazeEnd: number`.
 - Produces: `OceanSurfaceQuality.horizonHazeStrength: number`.
+- Produces: `OceanSurfaceQuality.distantDetailStrength: number`.
 - Produces: shader uniform `uHorizonHaze: Vector3`.
+- Produces: shader uniform `uDistantDetailStrength: number`.
 
 - [x] **Step 1: Write failing quality and ownership tests**
 
@@ -61,19 +65,29 @@ import {
 
 describe('OceanRenderer horizon haze', () => {
   it.each([
-    ['low', [35, 120, 0.88]],
-    ['high', [45, 145, 0.82]],
-  ] as const)('uses the %s quality haze settings', (quality, expected) => {
+    ['low', [85, 260, 1], 0.11],
+    ['high', [100, 320, 1], 0.08],
+  ] as const)('uses the %s quality distance settings', (
+    quality,
+    expectedHaze,
+    expectedDetail,
+  ) => {
     const ocean = new OceanRenderer(quality);
 
     expect([
       OCEAN_SURFACE_QUALITY[quality].horizonHazeStart,
       OCEAN_SURFACE_QUALITY[quality].horizonHazeEnd,
       OCEAN_SURFACE_QUALITY[quality].horizonHazeStrength,
-    ]).toEqual(expected);
+    ]).toEqual(expectedHaze);
+    expect(
+      OCEAN_SURFACE_QUALITY[quality].distantDetailStrength,
+    ).toBe(expectedDetail);
     expect(
       (ocean.material.uniforms.uHorizonHaze!.value as Vector3).toArray(),
-    ).toEqual(expected);
+    ).toEqual(expectedHaze);
+    expect(
+      ocean.material.uniforms.uDistantDetailStrength!.value,
+    ).toBe(expectedDetail);
 
     ocean.dispose();
   });
@@ -85,7 +99,8 @@ describe('OceanRenderer horizon haze', () => {
     ocean.setQuality('high');
 
     expect(ocean.material.uniforms.uHorizonHaze!.value).toBe(haze);
-    expect(haze.toArray()).toEqual([45, 145, 0.82]);
+    expect(haze.toArray()).toEqual([100, 320, 1]);
+    expect(ocean.material.uniforms.uDistantDetailStrength!.value).toBe(0.08);
     ocean.dispose();
   });
 
@@ -117,22 +132,25 @@ Add these fields to `OceanSurfaceQuality`:
 horizonHazeStart: number;
 horizonHazeEnd: number;
 horizonHazeStrength: number;
+distantDetailStrength: number;
 ```
 
 Add these low settings:
 
 ```ts
-horizonHazeStart: 35,
-horizonHazeEnd: 120,
-horizonHazeStrength: 0.88,
+horizonHazeStart: 85,
+horizonHazeEnd: 260,
+horizonHazeStrength: 1,
+distantDetailStrength: 0.11,
 ```
 
 Add these high settings:
 
 ```ts
-horizonHazeStart: 45,
-horizonHazeEnd: 145,
-horizonHazeStrength: 0.82,
+horizonHazeStart: 100,
+horizonHazeEnd: 320,
+horizonHazeStrength: 1,
+distantDetailStrength: 0.08,
 ```
 
 - [x] **Step 4: Add the shader uniform and blend**
@@ -141,6 +159,7 @@ Add this fragment shader uniform:
 
 ```glsl
 uniform vec3 uHorizonHaze;
+uniform float uDistantDetailStrength;
 ```
 
 Add this code immediately before the current exponential fog:
@@ -151,11 +170,29 @@ float horizonHaze = smoothstep(
   uHorizonHaze.y,
   vViewDepth
 ) * uHorizonHaze.z;
-vec3 hazeColor = mix(uFogColor, uHorizonColor, 0.22);
-color = mix(color, hazeColor, horizonHaze);
+float fogFactor = 1.0 - exp(
+  -uFogDensity * uFogDensity * vViewDepth * vViewDepth
+);
+vec3 distanceFogColor = mix(uFogColor, uHorizonColor, horizonHaze);
+color = mix(color, distanceFogColor, clamp(fogFactor, 0.0, 1.0));
 ```
 
-Keep the existing fog and ordered dither code after this blend.
+Keep ordered dither after this blend.
+
+Retain medium ripple detail with:
+
+```glsl
+float distanceBlend = 1.0 - smoothstep(
+  uDetailFade.x,
+  uDetailFade.y,
+  vViewDepth
+);
+float distanceFade = mix(
+  uDistantDetailStrength,
+  1.0,
+  distanceBlend
+);
+```
 
 - [x] **Step 5: Create and update the uniform without frame allocations**
 
@@ -169,6 +206,9 @@ uHorizonHaze: {
     surfaceQuality.horizonHazeStrength,
   ),
 },
+uDistantDetailStrength: {
+  value: surfaceQuality.distantDetailStrength,
+},
 ```
 
 Add this in-place update to `setQuality`:
@@ -179,6 +219,8 @@ Add this in-place update to `setQuality`:
   surfaceQuality.horizonHazeEnd,
   surfaceQuality.horizonHazeStrength,
 );
+this.material.uniforms.uDistantDetailStrength!.value =
+  surfaceQuality.distantDetailStrength;
 ```
 
 Do not add work to `update`, `follow`, or `dispose`.

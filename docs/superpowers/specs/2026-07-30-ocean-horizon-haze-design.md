@@ -24,32 +24,40 @@ The horizon ring uses much wider cells after this join.
 
 These cells cannot show the short shared waves with the same shape.
 
-The change in surface detail makes the far water look flat.
+Medium ripple shading also fades to zero near the grid join.
+
+Final ocean fog targets the darker fog color.
+
+The sky uses the lighter horizon color at the water line.
+
+These changes make a flat, dark band below the horizon.
 
 ## Chosen approach
 
-Add an ocean-only horizon haze ramp to the current fragment shader.
+Add an ocean-only horizon haze ramp to the current fog target.
 
-The ramp starts before the near grid ends.
+The ramp starts near the grid join.
 
-It reduces contrast across the grid join.
+It moves the far ocean fog color toward the sky horizon color.
 
 The existing exponential fog still controls the final distance fade.
 
-The haze color mixes the current fog color with 22 percent horizon color.
+Keep a small floor under the existing medium ripple shading.
 
-The existing fog then fades the result to the exact scene fog color.
+The floor uses ripple work that the shader already calculates.
 
 ## Quality settings
 
-Use one reusable `Vector3` uniform for start distance, end distance, and strength.
+Use one reusable `Vector3` uniform for haze start, end, and strength.
+
+Use one number uniform for the distant detail floor.
 
 Use these values:
 
-| Quality | Start | End | Strength |
-| --- | ---: | ---: | ---: |
-| Low | 35 | 120 | 0.88 |
-| High | 45 | 145 | 0.82 |
+| Quality | Start | End | Strength | Detail floor |
+| --- | ---: | ---: | ---: | ---: |
+| Low | 85 | 260 | 1 | 0.11 |
+| High | 100 | 320 | 1 | 0.08 |
 
 Use `smoothstep` between the start and end distances.
 
@@ -63,19 +71,21 @@ Calculate water color, reflections, light, and foam as now.
 
 Calculate the horizon haze from `vViewDepth`.
 
-Blend the water toward the haze color with the horizon haze.
+Blend the fog target from fog color toward horizon color.
 
-Apply the existing exponential fog after the haze.
+Apply the existing exponential fog with this target.
+
+Keep the medium ripple slope above the quality detail floor.
 
 Keep the current ordered dither after fog.
 
 ## Ownership
 
-`OceanRenderer` owns the haze uniform with its other water uniforms.
+`OceanRenderer` owns both distance uniforms with its water uniforms.
 
-The constructor creates the uniform once.
+The constructor creates each uniform once.
 
-`setQuality` updates the existing uniform in place.
+`setQuality` updates both existing uniforms.
 
 `dispose` needs no new work because the material owns the uniform.
 
@@ -85,11 +95,13 @@ Do not change `WaveField`, wave displacement, buoyancy, or vessel motion.
 
 The shared wave field stays the source for all water movement.
 
-The change affects only distant water color.
+The change affects only distant water color and rendered normal detail.
 
 ## Performance
 
-The shader adds one `smoothstep`, one fixed color mix, and one color blend.
+The shader adds one detail mix and one fog-target color mix.
+
+The shader already calculates all retained ripple waves.
 
 The change adds no CPU work in the frame loop.
 
@@ -99,9 +111,9 @@ The change keeps one water material and the current draw calls.
 
 ## Tests
 
-Add tests for both quality haze settings.
+Add tests for both quality distance settings.
 
-Check that quality changes update the existing uniform object.
+Check that quality changes update both uniforms.
 
 Check that disposal remains safe after a quality change.
 
