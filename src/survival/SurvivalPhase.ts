@@ -993,6 +993,7 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveDriftingLootChoice(choiceId, generation);
       return;
     }
+    this.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.audio.sleep();
     else this.audio.confirm();
     this.eventPresentation = 'using';
@@ -1004,6 +1005,7 @@ export class SurvivalPhase implements GamePhase {
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
       this.audio.deny();
+      this.ui.setEventSleepMask?.(eventId, false);
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.restoreEventSelection();

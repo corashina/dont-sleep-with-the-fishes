@@ -3201,6 +3201,78 @@ describe('SurvivalPhase orchestration', () => {
     expect(playEventItemUse).not.toHaveBeenCalled();
   });
 
+  it('keeps the Ghosts sleep mask through cover closure and clears it before dawn', async () => {
+    const calls: string[] = [];
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'ghosts',
+      pressure: 1,
+    });
+    let coverGate: Deferred | null = null;
+    const setEventSleepMask = vi.fn((eventId: string, visible: boolean) => {
+      calls.push(`mask:${eventId}:${visible}`);
+    });
+    const setSleepCovered = vi.fn((covered: boolean) => {
+      calls.push(covered ? 'cover' : 'uncover');
+      return coverGate?.promise ?? Promise.resolve();
+    });
+    const clearEventPresentation = vi.fn(() => {
+      calls.push('clear');
+    });
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      setEventSleepMask,
+      setSleepCovered,
+      clearEventPresentation,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            pressure: 1,
+          });
+          return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
+        }),
+        beginDawn: vi.fn(() => {
+          calls.push('dawn');
+          current = snapshot({ state: 'day', day: 2, pressure: 1 });
+          return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    calls.length = 0;
+    coverGate = deferred();
+
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(calls).toEqual(['mask:ghosts:true', 'cover']);
+    expect(clearEventPresentation).not.toHaveBeenCalled();
+
+    coverGate.resolve();
+    await flushPromises();
+
+    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('clear'));
+    expect(calls.indexOf('clear')).toBeLessThan(calls.indexOf('dawn'));
+  });
+
   it.each(['dispose', 'restart'] as const)(
     'does not resolve an event when %s supersedes its pending physical item use',
     async (teardown) => {
