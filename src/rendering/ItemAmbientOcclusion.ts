@@ -16,12 +16,12 @@ export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.5;
 
 export type ItemAmbientOcclusionMode = 'composite' | 'debug' | 'off';
 
-const AO_QUALITY = {
+export const ITEM_AMBIENT_OCCLUSION_QUALITY = {
   low: {
-    resolutionScale: 0.5,
-    gtaoSamples: 8,
+    resolutionScale: 0.4,
+    gtaoSamples: 6,
     denoiseRings: 1,
-    denoiseSamples: 8,
+    denoiseSamples: 4,
   },
   high: {
     resolutionScale: 1,
@@ -135,7 +135,7 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
   }
 
   private applyVisualQuality(): void {
-    const quality = AO_QUALITY[this.visualQuality];
+    const quality = ITEM_AMBIENT_OCCLUSION_QUALITY[this.visualQuality];
     this.updateGtaoMaterial({ samples: quality.gtaoSamples });
     this.updatePdMaterial({
       radius: 4,
@@ -149,7 +149,7 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
   }
 
   private resizeInternalTargets(): void {
-    const scale = AO_QUALITY[this.visualQuality].resolutionScale;
+    const scale = ITEM_AMBIENT_OCCLUSION_QUALITY[this.visualQuality].resolutionScale;
     super.setSize(
       Math.max(1, Math.floor(this.fullWidth * scale)),
       Math.max(1, Math.floor(this.fullHeight * scale)),
