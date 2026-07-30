@@ -64,15 +64,20 @@ function outcome(
 function setup(actorIds: readonly ItemInstanceId[] = []) {
   const modelDisposes: Array<ReturnType<typeof vi.fn>> = [];
   const modelMeshes: Mesh[] = [];
+  const modelRoots: Group[] = [];
   const create = vi.fn(() => {
     const root = new Group();
     const mesh = new Mesh(
       new PlaneGeometry(1, 1),
       new MeshStandardMaterial({ color: 0x82979d }),
     );
-    const dispose = vi.fn();
+    const dispose = vi.fn(() => {
+      mesh.geometry.dispose();
+      (mesh.material as MeshStandardMaterial).dispose();
+    });
     root.add(mesh);
     modelMeshes.push(mesh);
+    modelRoots.push(root);
     modelDisposes.push(dispose);
     return { root, dispose } satisfies EventModelInstance;
   });
@@ -113,6 +118,7 @@ function setup(actorIds: readonly ItemInstanceId[] = []) {
     environment,
     modelDisposes,
     modelMeshes,
+    modelRoots,
     sampleWorldWaveInto,
     vortexBefore: { ...vortexWave },
   };
@@ -134,7 +140,7 @@ describe('SchoolOfFishPresentation', () => {
       ({ name }) => name.startsWith('school-fish-'),
     );
 
-    expect(fixture.create).toHaveBeenCalledTimes(24);
+    expect(fixture.create).toHaveBeenCalledTimes(25);
     expect(fixture.create).toHaveBeenCalledWith('schoolFish');
     expect(fishRoots).toHaveLength(24);
     expect(presentation.worldRoot.children.filter(
@@ -143,7 +149,10 @@ describe('SchoolOfFishPresentation', () => {
     expect(presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('school-splash-'),
     )).toHaveLength(6);
-    expect(presentation.boatRoot.getObjectByName('school-catch-actor')).toBeDefined();
+    expect(presentation.boatRoot.getObjectByName('school-catch-actor')).toBe(
+      fixture.modelRoots[24],
+    );
+    expect(fixture.create.mock.calls[24]).toEqual(['schoolFish']);
     expect(fixture.modelMeshes.every(
       ({ material }) => (material as MeshStandardMaterial).flatShading,
     )).toBe(true);
@@ -191,16 +200,19 @@ describe('SchoolOfFishPresentation', () => {
     const bucketId = 'bucket-6' as ItemInstanceId;
     const fixture = setup([bucketId]);
     const presentation = new SchoolOfFishPresentation(fixture.environment);
-    stage(presentation);
+    stage(presentation, 6);
     const reaction = presentation.react(outcome(2, bucketId, [bucketId]));
     presentation.update(5, 1.1);
     await reaction;
 
     const catchActor = presentation.boatRoot.getObjectByName('school-catch-actor')!;
-    const shownMarks = catchActor.children.filter(({ visible }) => visible);
     expect(presentation.worldRoot.userData.foodDelta).toBe(2);
     expect(catchActor.userData.foodDelta).toBe(2);
-    expect(shownMarks).toHaveLength(2);
+    expect(catchActor.userData.catchModelId).toBe('schoolFish');
+    expect(catchActor.visible).toBe(true);
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('school-fish-') && visible,
+    )).toHaveLength(23);
     expect(fixture.actors.get(bucketId)!.applyPose.mock.lastCall![0].scaleY).toBeLessThan(0.7);
 
     presentation.clear();
@@ -212,16 +224,36 @@ describe('SchoolOfFishPresentation', () => {
     const fixture = setup();
     const presentation = new SchoolOfFishPresentation(fixture.environment);
     const flash = presentation.worldRoot.getObjectByName('school-surface-flash-1') as Mesh;
-    const geometryDispose = vi.spyOn(flash.geometry, 'dispose');
-    const materialDispose = vi.spyOn(flash.material as MeshStandardMaterial, 'dispose');
+    const splash = presentation.worldRoot.getObjectByName('school-splash-1') as Mesh;
+    const catchMesh = fixture.modelMeshes[24]!;
+    const flashGeometryDispose = vi.spyOn(flash.geometry, 'dispose');
+    const flashMaterialDispose = vi.spyOn(
+      flash.material as MeshStandardMaterial,
+      'dispose',
+    );
+    const splashGeometryDispose = vi.spyOn(splash.geometry, 'dispose');
+    const splashMaterialDispose = vi.spyOn(
+      splash.material as MeshStandardMaterial,
+      'dispose',
+    );
+    const catchGeometryDispose = vi.spyOn(catchMesh.geometry, 'dispose');
+    const catchMaterialDispose = vi.spyOn(
+      catchMesh.material as MeshStandardMaterial,
+      'dispose',
+    );
 
     presentation.dispose();
     presentation.dispose();
 
-    expect(fixture.modelDisposes).toHaveLength(24);
+    expect(fixture.modelDisposes).toHaveLength(25);
     expect(fixture.modelDisposes.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(flashGeometryDispose).toHaveBeenCalledOnce();
+    expect(flashMaterialDispose).toHaveBeenCalledOnce();
+    expect(splashGeometryDispose).toHaveBeenCalledOnce();
+    expect(splashMaterialDispose).toHaveBeenCalledOnce();
+    expect(fixture.modelDisposes[24]).toHaveBeenCalledOnce();
+    expect(catchGeometryDispose).toHaveBeenCalledOnce();
+    expect(catchMaterialDispose).toHaveBeenCalledOnce();
     expect(presentation.worldRoot.children).toHaveLength(0);
     expect(presentation.boatRoot.children).toHaveLength(0);
   });
