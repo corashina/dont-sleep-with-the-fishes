@@ -98,22 +98,42 @@ describe('DangerousWatersPresentation', () => {
   });
 
   it.each(['map', 'compass', 'sleep'] as const)(
-    'plays and restores %s passage motion',
+    'keeps the sunk reveal and holds a readable %s route',
     async (choiceId) => {
       const view = new DangerousWatersPresentation();
+      const reaction = boatReaction();
       view.stage();
       const reveal = view.reveal();
       view.update(2.4, 2.4);
       await reveal;
       const passage = view.root.getObjectByName('dangerous-waters-passage')!;
+      const lurker = view.root.getObjectByName('dangerous-waters-lurker')!;
       const base = passage.position.clone();
+      view.copyBoatReaction(reaction);
+      const cameraYaw = reaction.cameraYaw;
 
       const motion = view.playChoice(choiceId);
+      expect(lurker.scale.y).toBe(0);
+      view.copyBoatReaction(reaction);
+      expect(reaction.cameraYaw).toBe(cameraYaw);
       view.update(0.55, 0.55);
+      expect(lurker.scale.y).toBe(0);
+      view.copyBoatReaction(reaction);
+      expect(reaction.cameraYaw).toBe(cameraYaw);
       expect(passage.position.toArray()).not.toEqual(base.toArray());
       view.update(1.1, 0.55);
       await motion;
-      expect(passage.position.toArray()).toEqual(base.toArray());
+      expect(lurker.scale.y).toBe(0);
+      expect(passage.position.toArray()).not.toEqual(base.toArray());
+      view.copyBoatReaction(reaction);
+      expect(reaction.cameraYaw).toBe(cameraYaw);
+      expect(Math.abs(reaction.yaw) + Math.abs(reaction.driftX)).toBeGreaterThan(0.01);
+      const heldPassage = passage.position.clone();
+      const heldReaction = { ...reaction };
+      view.update(2, 0);
+      expect(passage.position.toArray()).toEqual(heldPassage.toArray());
+      view.copyBoatReaction(reaction);
+      expect(reaction).toEqual(heldReaction);
       view.dispose();
     },
   );
@@ -155,7 +175,7 @@ describe('DangerousWatersPresentation', () => {
     },
   );
 
-  it('dims the Sleep beat and restores borrowed light scale', async () => {
+  it('dims the Sleep beat and holds its settled drift and dimming', async () => {
     const view = new DangerousWatersPresentation();
     const reaction = boatReaction();
     view.stage();
@@ -167,9 +187,63 @@ describe('DangerousWatersPresentation', () => {
     view.update(1.1, 0.55);
     await motion;
     view.copyBoatReaction(reaction);
-    expect(reaction.lightScale).toBe(1);
+    expect(reaction.lightScale).toBeLessThan(1);
+    expect(Math.abs(reaction.driftX)).toBeGreaterThan(0.01);
     view.dispose();
   });
+
+  it.each([
+    ['reveal and safe', null, {}],
+    ['Map and damage', 'map', { hull: -7 }],
+    ['Compass and severe damage', 'compass', { hull: -25 }],
+    ['Sleep and damage', 'sleep', { hull: -7 }],
+  ] as const)(
+    'starts a result from settled %s state without a visual pop',
+    async (_label, choiceId, deltas) => {
+      const view = new DangerousWatersPresentation();
+      const before = boatReaction();
+      const after = boatReaction();
+      const lurker = view.root.getObjectByName('dangerous-waters-lurker')!;
+      const passage = view.root.getObjectByName('dangerous-waters-passage')!;
+      const rocks = ['foreground', 'port', 'starboard'].map((name) => (
+        view.root.getObjectByName(`dangerous-waters-rock:${name}`)!
+      ));
+      view.stage();
+      const reveal = view.reveal();
+      view.update(2.4, 2.4);
+      await reveal;
+      if (choiceId !== null) {
+        const choice = view.playChoice(choiceId);
+        view.update(1.1, 1.1);
+        await choice;
+      }
+      const passageBefore = passage.position.clone();
+      const rocksBefore = rocks.map((rock) => ({
+        position: rock.position.toArray(),
+        rotation: rock.rotation.toArray(),
+      }));
+      view.copyBoatReaction(before);
+
+      void view.react({
+        accepted: true, code: 'event-resolved', message: 'Result.',
+        deltas, cue: 'impact',
+      });
+
+      view.copyBoatReaction(after);
+      expect(lurker.scale.y).toBe(0);
+      expect(passage.position.toArray()).toEqual(passageBefore.toArray());
+      expect(after).toEqual(before);
+      rocks.forEach((rock, index) => {
+        expect(rock.position.toArray()).toEqual(rocksBefore[index]!.position);
+        expect(rock.rotation.toArray()).toEqual(rocksBefore[index]!.rotation);
+      });
+      view.update(0.01, 0.01);
+      expect(lurker.scale.y).toBe(0);
+      view.copyBoatReaction(after);
+      expect(after.cameraYaw).toBe(before.cameraYaw);
+      view.dispose();
+    },
+  );
 
   it.each([
     ['safe', {}, 0],
