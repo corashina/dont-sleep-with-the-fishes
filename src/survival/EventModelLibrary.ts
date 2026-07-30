@@ -1,0 +1,296 @@
+import {
+  Box3,
+  BufferGeometry,
+  Group,
+  Material,
+  Mesh,
+  Skeleton,
+  SkinnedMesh,
+  Texture,
+  Vector3,
+} from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import {
+  EVENT_MODEL_IDS,
+  EVENT_MODEL_MAX_TOTAL_TRIANGLES,
+  EVENT_MODEL_SPECS,
+  type EventModelId,
+  type EventModelSpec,
+} from './eventModelManifest';
+import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+
+export interface EventModelLoader {
+  load(url: string): Promise<Group>;
+}
+
+export interface EventModelInstance {
+  readonly root: Group;
+  dispose(): void;
+}
+
+export class EventModelLoadError extends Error {
+  constructor(
+    readonly eventModelId: EventModelId,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(`Event model ${eventModelId}: ${message}`, options);
+    this.name = 'EventModelLoadError';
+  }
+}
+
+class GltfEventModelLoader implements EventModelLoader {
+  private readonly loader = new GLTFLoader();
+
+  async load(url: string): Promise<Group> {
+    return (await this.loader.loadAsync(url)).scene;
+  }
+}
+
+function materialTextures(material: Material): readonly Texture[] {
+  return Object.values(material).filter((value): value is Texture => value instanceof Texture);
+}
+
+function collectSkeletons(root: Group): Set<Skeleton> {
+  const skeletons = new Set<Skeleton>();
+  root.traverse((object) => {
+    if (object instanceof SkinnedMesh) skeletons.add(object.skeleton);
+  });
+  return skeletons;
+}
+
+function disposeTemplateRoots(roots: Iterable<Group>): void {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  const textures = new Set<Texture>();
+  const skeletons = new Set<Skeleton>();
+  for (const root of roots) {
+    collectMeshResources(root, geometries, materials);
+    collectSkeletons(root).forEach((skeleton) => skeletons.add(skeleton));
+  }
+  materials.forEach((material) => {
+    materialTextures(material).forEach((texture) => textures.add(texture));
+  });
+  disposeResourceSets(geometries, textures, materials, skeletons);
+}
+
+function disposeOwnedEventRoot(root: Group): void {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  collectMeshResources(root, geometries, materials);
+  disposeResourceSets(geometries, materials, collectSkeletons(root));
+}
+
+function attemptCleanup(action: () => void): void {
+  try {
+    action();
+  } catch {
+    // Rollback preserves the primary load or validation error.
+  }
+}
+
+function finiteBox(box: Box3): boolean {
+  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
+}
+
+function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): EventModelSpec {
+  if (!spec) throw new EventModelLoadError(id, 'manifest entry is missing');
+  const metadata = spec.generatedMetadata;
+  if (
+    !Number.isInteger(metadata?.triangles)
+    || metadata.triangles <= 0
+    || metadata.triangles > spec.maxTriangles
+  ) {
+    throw new EventModelLoadError(id, 'generated triangle metadata is invalid');
+  }
+  const bounds = [metadata.rawBounds?.min, metadata.rawBounds?.max];
+  if (
+    bounds.some((values) => !Array.isArray(values) || values.length !== 3)
+    || !bounds.flat().every(Number.isFinite)
+    || !metadata.rawBounds.max.some((maximum, axis) => maximum > metadata.rawBounds.min[axis]!)
+  ) {
+    throw new EventModelLoadError(id, 'generated bounds metadata is invalid');
+  }
+  if (
+    !Number.isFinite(spec.targetLongestDimension)
+    || spec.targetLongestDimension <= 0
+    || ![...spec.rotation, ...spec.offset].every(Number.isFinite)
+  ) {
+    throw new EventModelLoadError(id, 'presentation metadata is invalid');
+  }
+  return spec;
+}
+
+function geometryTriangles(id: EventModelId, geometry: BufferGeometry): number {
+  const position = geometry.getAttribute('position');
+  if (!position || position.count === 0) {
+    throw new EventModelLoadError(id, 'mesh has missing or empty position data');
+  }
+  for (let index = 0; index < position.count; index += 1) {
+    if (![position.getX(index), position.getY(index), position.getZ(index)].every(Number.isFinite)) {
+      throw new EventModelLoadError(id, 'mesh contains non-finite position data');
+    }
+  }
+  const elementCount = geometry.index?.count ?? position.count;
+  if (elementCount % 3 !== 0) {
+    throw new EventModelLoadError(id, 'mesh element count does not describe complete triangles');
+  }
+  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
+  return elementCount / 3;
+}
+
+function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec): number {
+  root.rotation.set(...spec.rotation);
+  root.updateMatrixWorld(true);
+  let meshCount = 0;
+  let triangles = 0;
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    meshCount += 1;
+    triangles += geometryTriangles(id, object.geometry);
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
+  if (meshCount === 0) throw new EventModelLoadError(id, 'scene contains no meshes');
+  if (triangles > spec.maxTriangles) {
+    throw new EventModelLoadError(
+      id,
+      `triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`,
+    );
+  }
+
+  const sourceBounds = new Box3().setFromObject(root);
+  if (sourceBounds.isEmpty() || !finiteBox(sourceBounds)) {
+    throw new EventModelLoadError(id, 'scene has empty or non-finite bounds');
+  }
+  const sourceSize = sourceBounds.getSize(new Vector3());
+  const longestSide = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
+  if (!Number.isFinite(longestSide) || longestSide <= 0) {
+    throw new EventModelLoadError(id, 'scene has zero-length bounds');
+  }
+
+  root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
+  root.updateMatrixWorld(true);
+  const scaledBounds = new Box3().setFromObject(root);
+  if (scaledBounds.isEmpty() || !finiteBox(scaledBounds)) {
+    throw new EventModelLoadError(id, 'normalized scene has empty or non-finite bounds');
+  }
+  const center = scaledBounds.getCenter(new Vector3());
+  root.position.add(new Vector3(...spec.offset).sub(center));
+  root.updateMatrixWorld(true);
+
+  const finalBounds = new Box3().setFromObject(root);
+  const finalSize = finalBounds.getSize(new Vector3());
+  const finalLongestSide = Math.max(finalSize.x, finalSize.y, finalSize.z);
+  if (
+    finalBounds.isEmpty()
+    || !finiteBox(finalBounds)
+    || !Number.isFinite(finalLongestSide)
+    || Math.abs(finalLongestSide - spec.targetLongestDimension) > 1e-6
+  ) {
+    throw new EventModelLoadError(id, 'normalized scene has invalid bounds');
+  }
+  return triangles;
+}
+
+function cloneOwnedEventTemplate(template: Group): Group {
+  const clone = cloneSkeleton(template) as Group;
+  clone.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry = object.geometry.clone();
+    object.material = Array.isArray(object.material)
+      ? object.material.map((material) => material.clone())
+      : object.material.clone();
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
+  return clone;
+}
+
+interface LoadedTemplate {
+  readonly root: Group;
+  readonly triangles: number;
+}
+
+export class EventModelLibrary {
+  private disposed = false;
+
+  private constructor(
+    private readonly templates: ReadonlyMap<EventModelId, Group>,
+  ) {}
+
+  static async load(
+    loader: EventModelLoader = new GltfEventModelLoader(),
+  ): Promise<EventModelLibrary> {
+    for (const id of EVENT_MODEL_IDS) validateSpec(id, EVENT_MODEL_SPECS[id]);
+
+    const loadedRoots: Array<Group | undefined> = new Array(EVENT_MODEL_IDS.length);
+    const results = await Promise.allSettled(EVENT_MODEL_IDS.map(
+      async (id, index): Promise<LoadedTemplate> => {
+        const root = await loader.load(EVENT_MODEL_SPECS[id].url);
+        loadedRoots[index] = root;
+        const triangles = normalizeTemplate(id, root, EVENT_MODEL_SPECS[id]);
+        const template = new Group();
+        template.name = `event-model:${id}`;
+        template.userData.eventModelId = id;
+        template.add(root);
+        return { root: template, triangles };
+      },
+    ));
+
+    const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
+    if (firstFailureIndex >= 0) {
+      const id = EVENT_MODEL_IDS[firstFailureIndex]!;
+      const cause = (results[firstFailureIndex] as PromiseRejectedResult).reason;
+      attemptCleanup(() => {
+        disposeTemplateRoots(loadedRoots.filter((root): root is Group => root !== undefined));
+      });
+      if (cause instanceof EventModelLoadError && cause.eventModelId === id) throw cause;
+      const message = cause instanceof Error ? cause.message : String(cause);
+      throw new EventModelLoadError(id, message, { cause });
+    }
+
+    const loaded = results.map(
+      (result) => (result as PromiseFulfilledResult<LoadedTemplate>).value,
+    );
+    let aggregateTriangles = 0;
+    for (let index = 0; index < loaded.length; index += 1) {
+      aggregateTriangles += loaded[index]!.triangles;
+      if (aggregateTriangles > EVENT_MODEL_MAX_TOTAL_TRIANGLES) {
+        const error = new EventModelLoadError(
+          EVENT_MODEL_IDS[index]!,
+          `aggregate triangle count ${aggregateTriangles} exceeds the ${EVENT_MODEL_MAX_TOTAL_TRIANGLES} limit`,
+        );
+        attemptCleanup(() => disposeTemplateRoots(loaded.map(({ root }) => root)));
+        throw error;
+      }
+    }
+
+    return new EventModelLibrary(new Map(
+      EVENT_MODEL_IDS.map((id, index) => [id, loaded[index]!.root]),
+    ));
+  }
+
+  create(id: EventModelId): EventModelInstance {
+    if (this.disposed) throw new Error('Event model library is disposed');
+    const template = this.templates.get(id);
+    if (!template) throw new Error(`Missing event model template: ${id}`);
+    const root = cloneOwnedEventTemplate(template);
+    let disposed = false;
+    return {
+      root,
+      dispose(): void {
+        if (disposed) return;
+        disposed = true;
+        disposeOwnedEventRoot(root);
+      },
+    };
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    disposeTemplateRoots(this.templates.values());
+  }
+}

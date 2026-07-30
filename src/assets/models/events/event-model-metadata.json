@@ -1,0 +1,107 @@
+{
+  "leakPlanks": {
+    "triangles": 150,
+    "rawBounds": {
+      "min": [
+        -0.3297226342634245,
+        0.09606270241683966,
+        -0.8968293823034315
+      ],
+      "max": [
+        0.38670947609286827,
+        0.22046006201315008,
+        0.8314915474879928
+      ]
+    },
+    "sourceSha256": "6E3DAA7AEDFBD2FD0B999555B165895552D80D0A6B413C181FFFE4CF4A8E9987",
+    "sourceTriangles": 150,
+    "outputSha256": "8EFEDCE21FEF2A542E047BD82F2C9E04D59CF81810ECFB6D62D5DA9239677DD6",
+    "hasSkins": false,
+    "animationCount": 0,
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "schoolFish": {
+    "triangles": 233,
+    "rawBounds": {
+      "min": [
+        -0.09891591221094131,
+        0,
+        -0.31039130687713623
+      ],
+      "max": [
+        0.09891591221094131,
+        0.32220110297203064,
+        0.31039130687713623
+      ]
+    },
+    "sourceSha256": "26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3",
+    "sourceTriangles": 233,
+    "outputSha256": "94C8D591FA64FC5E9EE77669D1DEC18376F7EDD3EA5A659504D87E80FAA9308F",
+    "hasSkins": false,
+    "animationCount": 0,
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "snatcher": {
+    "triangles": 1572,
+    "rawBounds": {
+      "min": [
+        -0.45942808501422405,
+        1.5033785640096318,
+        -0.3947358200688904
+      ],
+      "max": [
+        0.45942808501422405,
+        3.1806769877701146,
+        0.5217115401921293
+      ]
+    },
+    "sourceSha256": "B4D6CB3E0920058EAB20D079DC57FA6BDBAECAD6806803F0F3D504EE730891DD",
+    "sourceTriangles": 1572,
+    "outputSha256": "D1B822654A5371468EE40CB8E438FCE9FAB8939C6A1171B3235D8B8DD4541AAA",
+    "hasSkins": true,
+    "animationCount": 8,
+    "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
+  },
+  "anglerFish": {
+    "triangles": 2150,
+    "rawBounds": {
+      "min": [
+        -1.0812100172042847,
+        -0.34994369745254517,
+        -0.43619608879089355
+      ],
+      "max": [
+        0.5875555276870728,
+        0.8278276920318604,
+        0.6722251772880554
+      ]
+    },
+    "sourceSha256": "E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8",
+    "sourceTriangles": 2150,
+    "outputSha256": "6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF",
+    "hasSkins": false,
+    "animationCount": 0,
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "whirlpoolCore": {
+    "triangles": 324,
+    "rawBounds": {
+      "min": [
+        -0.6645879745483398,
+        -1.000635027885437,
+        -0.6388189792633057
+      ],
+      "max": [
+        0.5920479893684387,
+        1.2087810039520264,
+        0.562608003616333
+      ]
+    },
+    "sourceSha256": "A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F",
+    "sourceTriangles": 324,
+    "outputSha256": "1E15643EBAE9F3B0FE109A97D47793F195FFB6F19819C59359BD21EBE2872FD7",
+    "hasSkins": false,
+    "animationCount": 0,
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  }
+}
