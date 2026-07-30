@@ -1112,11 +1112,13 @@ export class SurvivalPhase implements GamePhase {
     physicalResponse: EventPhysicalResponsePresentation | null = null,
   ): Promise<void> {
     this.setBusy(true);
+    this.audio.beginEventReaction(eventId, outcome);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
       this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
         ?? Promise.resolve(),
     ]);
+    this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1234,6 +1236,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
+    this.audio.beginEvent(event.id);
     this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
@@ -1362,6 +1365,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private clearEventPresentation(): void {
+    this.audio.clearEvent();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.activeDriftingLootVariant = null;
