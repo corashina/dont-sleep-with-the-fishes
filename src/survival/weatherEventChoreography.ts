@@ -563,6 +563,7 @@ export function sampleWeatherReaction(
   const staggered = clamp01((t - Math.min(index, count) * 0.16) / 0.72);
   const actorBeat = pulse(staggered, 0.04, 0.42, 0.88);
   const hullBeat = pulse(t, 0.14, 0.38, 0.62);
+  const hullImpact = clamp01(-hullDelta / 40) * hullBeat;
 
   switch (eventId) {
     case 'shower-night':
@@ -624,10 +625,12 @@ export function sampleWeatherReaction(
         output.cameraRoll = -0.12 * actorBeat;
       } else {
         output.effectKind = 'storm-hull-impact';
-        output.cameraX = 0.16 * hullBeat;
-        output.cameraY = -0.11 * hullBeat;
-        output.cameraPitch = 0.09 * hullBeat;
-        output.cameraRoll = -0.18 * hullBeat;
+        if (hullImpact > 0) {
+          output.cameraX = 0.16 * hullImpact;
+          output.cameraY = -0.11 * hullImpact;
+          output.cameraPitch = 0.09 * hullImpact;
+          output.cameraRoll = -0.18 * hullImpact;
+        }
       }
       output.actorEffect = actorBeat;
       break;
