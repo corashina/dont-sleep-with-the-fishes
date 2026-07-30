@@ -175,8 +175,8 @@ const EXPECTED_CHOICES = {
   ],
   'man-in-the-fog': [
     choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5)])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [subtract('rescueProgress', 10)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [subtract('rescueProgress', 10), add('pressure', 1)])),
     choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [subtract('rescueProgress', 5), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [subtract('rescueProgress', 5), subtract('health', 20), set('energy', 2)])),
   ],
   ghosts: [
@@ -193,7 +193,7 @@ const EXPECTED_CHOICES = {
   ],
   'face-on-the-moon': [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', [set('energy', 2)])),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'The binoculars break.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'The binoculars break.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
     choice('sleep', 'Sleep', undefined, outcome(100, 'You wake exhausted.', [set('energy', 0)]), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
   ],
 } as const;
@@ -204,6 +204,7 @@ describe('survival events', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
       'drifting-loot', 'drifting-bottle', 'check-the-back', 'mystery-chest',
       'midnight-tour', 'night-trader', 'handyman', 'other-people',
+      'flowers', 'chest-attack',
     ]));
   });
 
@@ -387,6 +388,8 @@ describe('survival events', () => {
     rejectsEffects({ resources: undefined }, /resources.*array/i);
     rejectsEffects({ items: undefined }, /items.*array/i);
     rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
+    rejectsEffects({ chest: undefined }, /chest.*invalid effect/i);
+    rejectsEffects({ flags: undefined }, /flags.*plain object/i);
     const hiddenRoute = {};
     Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
     rejectsEffects(hiddenRoute, /unsupported effect key route/i);

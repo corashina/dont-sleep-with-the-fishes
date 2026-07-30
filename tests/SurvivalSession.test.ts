@@ -152,6 +152,90 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toBe(initial);
   });
 
+  it('raises scheduled pressure at dawn and doubles late night damage', () => {
+    const pressure = new SurvivalSession(saved(), {
+      seed: 7,
+      random: sequenceRandom([0, 0.99, 0.99]),
+      initial: { day: 7 },
+    });
+    pressure.perform('endDay');
+    expect(pressure.beginDawn().deltas.pressure).toBe(1);
+    expect(pressure.snapshot().pressure).toBe(1);
+
+    const increased = new SurvivalSession(saved('spyglass'), {
+      seed: 12,
+      random: sequenceRandom([0]),
+      initial: { day: 6 },
+      initialEventId: 'man-in-the-fog',
+    });
+    expect(increased.resolveEvent(itemResponse('spyglass')).deltas.pressure).toBe(1);
+
+    const lateAttack = new SurvivalSession(saved(), {
+      seed: 8,
+      random: sequenceRandom([0]),
+      initial: { day: 50 },
+      initialChest: { state: 'mimic', acquiredDay: 48 },
+      initialEventId: 'chest-attack',
+    });
+    expect(lateAttack.resolveEvent(choiceResponse('fight')).deltas.health).toBe(-50);
+  });
+
+  it('opens a recovered chest and prefers a missing durable item', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 9,
+      random: sequenceRandom([0]),
+      initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+
+    expect(session.perform('openChest')).toMatchObject({
+      accepted: true,
+      code: 'chest-opened',
+      deltas: { energy: -3 },
+      rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
+    });
+    expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
+    expect(session.snapshot().inventory['compass-1']).toMatchObject({ condition: 'usable' });
+  });
+
+  it('turns an old chest into a mimic and lets a net bind it', () => {
+    const session = new SurvivalSession(saved('fishingNet'), {
+      seed: 10,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 3 },
+      initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+
+    expect(session.perform('endDay')).toMatchObject({ accepted: true, code: 'event-opened' });
+    expect(session.snapshot()).toMatchObject({
+      pendingEventId: 'chest-attack',
+      chest: { state: 'mimic', acquiredDay: 1 },
+    });
+    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
+  });
+
+  it('records the Flowers event without granting a survival reward', () => {
+    const session = new SurvivalSession(saved('bucket'), {
+      seed: 11,
+      random: sequenceRandom([0]),
+      initial: { day: 4 },
+      initialEventId: 'flowers',
+    });
+
+    expect(session.resolveEvent(itemResponse('bucket'))).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(session.snapshot().eventFlags).toContain('flowers:collected');
+    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
+      kind: 'event',
+      event: { eventId: 'flowers', attemptedItemId: 'bucket' },
+    });
+  });
+
 
   it('resolves the expanded contextual encounters deterministically', () => {
     const bottle = new SurvivalSession(saved('swimRing'), {
@@ -164,10 +248,10 @@ describe('SurvivalSession daytime actions', () => {
     const chest = new SurvivalSession(saved(), {
       seed: 102, random: sequenceRandom([0.99]), initial: { day: 6 }, initialEventId: 'mystery-chest',
     });
-    expect(chest.resolveEvent(choiceResponse('open'))).toMatchObject({
-      accepted: true, message: 'The chest bites back.', deltas: { health: -25 },
+    expect(chest.resolveEvent(choiceResponse('take'))).toMatchObject({
+      accepted: true, message: 'You haul the closed chest aboard.', deltas: {},
     });
-    expect(chest.snapshot().health).toBe(75);
+    expect(chest.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 6 });
 
     const island = new SurvivalSession(saved(), {
       seed: 103, random: sequenceRandom([0.5]), initial: { day: 7 }, initialEventId: 'midnight-tour',

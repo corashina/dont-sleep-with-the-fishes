@@ -61,6 +61,8 @@ const TABLEAU_EVENT_IDS = [
   'drifting-bottle',
   'check-the-back',
   'mystery-chest',
+  'chest-attack',
+  'flowers',
   'midnight-tour',
   'night-trader',
   'handyman',
@@ -181,6 +183,65 @@ function chestTableau(materials: MaritimeMaterials): Group {
   return root;
 }
 
+function mimicChestTableau(materials: MaritimeMaterials): Group {
+  const root = chestTableau(materials);
+  root.name = 'mimic-chest';
+  addMesh(root, 'mimic-mouth', new BoxGeometry(0.64, 0.12, 0.08), materials.fishDark, [0, 0.12, 0.39]);
+  for (const x of [-0.24, -0.08, 0.08, 0.24]) {
+    addMesh(
+      root,
+      `mimic-tooth:${x}`,
+      new ConeGeometry(0.05, 0.16, 5),
+      materials.paper,
+      [x, 0.2, 0.45],
+      [Math.PI, 0, 0],
+    );
+  }
+  addMesh(root, 'mimic-eye-left', new SphereGeometry(0.07, 6, 4), materials.eye, [-0.22, 0.45, 0.26]);
+  addMesh(root, 'mimic-eye-right', new SphereGeometry(0.07, 6, 4), materials.eye, [0.22, 0.45, 0.26]);
+  return root;
+}
+
+function flowersTableau(materials: MaritimeMaterials): Group {
+  const root = new Group();
+  const positions: readonly VectorTuple[] = [
+    [-0.45, 0, -0.12],
+    [-0.18, 0.03, 0.18],
+    [0.12, -0.01, -0.16],
+    [0.38, 0.02, 0.11],
+    [0.02, 0.04, 0.3],
+  ];
+  positions.forEach(([x, y, z], index) => {
+    addMesh(
+      root,
+      `flower-pad:${index}`,
+      new CylinderGeometry(0.2, 0.23, 0.035, 8),
+      materials.foliage,
+      [x, y, z],
+    );
+    for (let petal = 0; petal < 5; petal += 1) {
+      const angle = petal * Math.PI * 0.4;
+      addMesh(
+        root,
+        `flower-petal:${index}:${petal}`,
+        new SphereGeometry(0.075, 6, 4),
+        materials.paper,
+        [x + Math.cos(angle) * 0.08, y + 0.065, z + Math.sin(angle) * 0.08],
+        [0, angle, 0],
+        [1.3, 0.45, 0.8],
+      );
+    }
+    addMesh(
+      root,
+      `flower-center:${index}`,
+      new SphereGeometry(0.045, 6, 4),
+      materials.eye,
+      [x, y + 0.075, z],
+    );
+  });
+  return root;
+}
+
 function islandTableau(materials: MaritimeMaterials): Group {
   const root = new Group();
   addMesh(root, 'island-rock', new ConeGeometry(2.8, 1.1, 7), materials.earth, [0, -0.25, 0], [0, 0.2, 0], [1, 1, 0.72]);
@@ -288,6 +349,8 @@ export class EventPresentationLayer {
       createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
       createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
       createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
+      createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
+      createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
       createTableau('night-trader', traderTableau(materials), [4.4, 0.02, -7.2], [1.6, -0.38, -0.5]),
       createTableau('handyman', handTableau(materials), [-3.8, 0.05, -5.4], [-0.9, -0.52, 0.25]),
