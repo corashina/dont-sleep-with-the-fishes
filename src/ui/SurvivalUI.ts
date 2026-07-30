@@ -247,6 +247,13 @@ export interface DriftingLootResultView {
   readonly target: ProjectedBoatBounds | null;
 }
 
+export interface EventOutcomeView {
+  readonly title: string;
+  readonly detail: string;
+  readonly result: string;
+  readonly state: 'safe' | 'damage' | 'severe';
+}
+
 export interface EventContextChoice {
   readonly id: EventResponseId;
   readonly label: string;
@@ -326,9 +333,11 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
-  private readonly eventResult: HTMLElement;
+  private readonly eventResultPanel: HTMLElement;
   private readonly eventResultCaption: HTMLElement;
   private readonly eventResultDetail: HTMLElement;
+  private readonly eventDetail: HTMLElement;
+  private readonly eventOutcomeResult: HTMLElement;
   private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
@@ -481,9 +490,11 @@ export class SurvivalUI {
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
+        <p class="event-caption__detail ui-role-narrative" data-event-detail></p>
+        <p class="event-caption__result ui-role-context" data-event-result hidden></p>
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
-      <section class="event-result" data-event-result aria-hidden="true" aria-live="polite">
+      <section class="event-result" data-event-result-panel aria-hidden="true" aria-live="polite">
         <strong class="ui-role-display" data-event-result-caption></strong>
         <span class="ui-role-narrative" data-event-result-detail></span>
       </section>
@@ -547,9 +558,11 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.eventResult = requireElement(this.root, '[data-event-result]');
+    this.eventResultPanel = requireElement(this.root, '[data-event-result-panel]');
     this.eventResultCaption = requireElement(this.root, '[data-event-result-caption]');
     this.eventResultDetail = requireElement(this.root, '[data-event-result-detail]');
+    this.eventDetail = requireElement(this.root, '[data-event-detail]');
+    this.eventOutcomeResult = requireElement(this.root, '[data-event-result]');
     this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
@@ -712,15 +725,20 @@ export class SurvivalUI {
   }
 
   showEventReveal(
-    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'danger'>,
+    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.updateText('event:title', this.eventTitle, event.title);
+    this.updateText('event:detail', this.eventDetail, event.revealText);
+    this.eventOutcomeResult.textContent = '';
+    this.eventOutcomeResult.hidden = true;
+    delete this.eventCaption.dataset.result;
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
     this.eventCaption.setAttribute(
       'aria-label',
-      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event: ${event.title}`,
+      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event: `
+        + `${event.title}. ${event.revealText}`,
     );
     this.eventPresentationActive = true;
     this.eventCaption.classList.add('is-visible');
@@ -736,16 +754,28 @@ export class SurvivalUI {
     const target = view.target?.visible === true ? view.target : null;
     const x = target?.x ?? Math.max(24, this.mount.clientWidth * 0.5);
     const y = target?.y ?? Math.max(120, this.mount.clientHeight * 0.68);
-    this.eventResult.style.setProperty('--event-result-x', `${x}px`);
-    this.eventResult.style.setProperty('--event-result-y', `${y}px`);
-    this.eventResult.classList.add('is-visible');
-    this.eventResult.setAttribute('aria-hidden', 'false');
+    this.eventResultPanel.style.setProperty('--event-result-x', `${x}px`);
+    this.eventResultPanel.style.setProperty('--event-result-y', `${y}px`);
+    this.eventResultPanel.classList.add('is-visible');
+    this.eventResultPanel.setAttribute('aria-hidden', 'false');
   }
 
   hideEventResult(): void {
     if (this.disposed) return;
-    this.eventResult.classList.remove('is-visible');
-    this.eventResult.setAttribute('aria-hidden', 'true');
+    this.eventResultPanel.classList.remove('is-visible');
+    this.eventResultPanel.setAttribute('aria-hidden', 'true');
+  }
+
+  showEventOutcome(view: EventOutcomeView): void {
+    if (this.disposed) return;
+    this.updateText('event:title', this.eventTitle, view.title);
+    this.updateText('event:detail', this.eventDetail, view.detail);
+    this.updateText('event:result', this.eventOutcomeResult, view.result);
+    this.eventOutcomeResult.hidden = false;
+    this.eventCaption.dataset.result = view.state;
+    const announcement = `${view.title}. ${view.detail} ${view.result}.`;
+    this.eventCaption.setAttribute('aria-label', announcement);
+    this.publishAnnouncement(announcement);
   }
 
   setEventSelection(
@@ -824,6 +854,10 @@ export class SurvivalUI {
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    delete this.eventCaption.dataset.result;
+    this.eventDetail.textContent = '';
+    this.eventOutcomeResult.textContent = '';
+    this.eventOutcomeResult.hidden = true;
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;

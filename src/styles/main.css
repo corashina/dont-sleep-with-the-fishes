@@ -1142,6 +1142,29 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font-size: .78rem;
   line-height: 1.3;
 }
+.event-caption__detail {
+  max-width: 52ch;
+  margin: 0;
+  color: #c7c7bd;
+  font-size: clamp(.72rem, 1.35vw, .9rem);
+  line-height: 1.35;
+}
+.event-caption__result {
+  margin: 2px 0 0;
+  color: var(--ink-yellow);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+.event-caption[data-result="safe"] h2,
+.event-caption[data-result="safe"] .event-caption__result {
+  color: var(--ink-green);
+}
+.event-caption[data-result="damage"] h2,
+.event-caption[data-result="severe"] h2,
+.event-caption[data-result="severe"] .event-caption__result {
+  color: var(--ink-red-bright);
+}
 .event-choices {
   display: flex;
   flex-wrap: wrap;

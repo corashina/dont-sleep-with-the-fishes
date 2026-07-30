@@ -21,6 +21,11 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import {
+  DangerousWatersPresentation,
+  type DangerousWatersBoatReaction,
+  type DangerousWatersItemPose,
+} from './DangerousWatersPresentation';
 import type { ActionOutcome } from './survivalTypes';
 
 interface ActiveEventAnimation {
@@ -320,6 +325,7 @@ function keyedRevealProgress(progress: number): number {
 
 export class EventPresentationLayer {
   readonly root = new Group();
+  private readonly dangerousWaters = new DangerousWatersPresentation();
   private readonly tableaus = new Map<string, EventTableau>();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
@@ -354,12 +360,17 @@ export class EventPresentationLayer {
       this.root.add(tableau.root);
     }
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+    this.root.add(this.dangerousWaters.root);
   }
 
   stage(eventId: string): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
-    this.stagedEventId = this.tableaus.has(eventId) ? eventId : null;
+    this.dangerousWaters.clear();
+    this.stagedEventId = eventId === 'dangerous-waters' || this.tableaus.has(eventId)
+      ? eventId
+      : null;
+    if (eventId === 'dangerous-waters') this.dangerousWaters.stage();
     this.held = false;
     for (const id of TABLEAU_EVENT_IDS) {
       const tableau = this.tableaus.get(id)!;
@@ -376,6 +387,7 @@ export class EventPresentationLayer {
     if (this.disposed) return Promise.resolve();
     if (this.stagedEventId !== eventId) this.stage(eventId);
     if (this.stagedEventId === null) return Promise.resolve();
+    if (eventId === 'dangerous-waters') return this.dangerousWaters.reveal();
     return this.startAnimation('reveal', eventId);
   }
 
@@ -383,6 +395,7 @@ export class EventPresentationLayer {
     if (this.disposed) return Promise.resolve();
     if (this.stagedEventId !== eventId) this.stage(eventId);
     if (this.stagedEventId === null) return Promise.resolve();
+    if (eventId === 'dangerous-waters') return this.dangerousWaters.react(outcome);
     this.held = true;
     this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
       (value) => typeof value === 'number' && value < 0,
@@ -390,9 +403,26 @@ export class EventPresentationLayer {
     return this.startAnimation('react', eventId);
   }
 
+  playChoice(eventId: string, choiceId: string): Promise<void> {
+    if (this.disposed || eventId !== 'dangerous-waters') return Promise.resolve();
+    if (this.stagedEventId !== eventId) this.stage(eventId);
+    return this.dangerousWaters.playChoice(choiceId);
+  }
+
+  copyDangerousWatersBoatReaction(
+    target: DangerousWatersBoatReaction,
+  ): boolean {
+    return this.dangerousWaters.copyBoatReaction(target);
+  }
+
+  copyDangerousWatersItemPose(target: DangerousWatersItemPose): boolean {
+    return this.dangerousWaters.copyItemPose(target);
+  }
+
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.dangerousWaters.clear();
     this.stagedEventId = null;
     this.held = false;
     for (const id of TABLEAU_EVENT_IDS) {
@@ -405,6 +435,7 @@ export class EventPresentationLayer {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    this.dangerousWaters.settleForVisibilityChange();
     const animation = this.activeAnimation;
     if (animation === null) return;
     this.activeAnimation = null;
@@ -431,9 +462,10 @@ export class EventPresentationLayer {
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
+    this.dangerousWaters.update(time, delta);
     const staged = this.stagedEventId === null
       ? null
-      : this.tableaus.get(this.stagedEventId)!;
+      : this.tableaus.get(this.stagedEventId) ?? null;
     const cargo = this.tableaus.get('other-people')!;
 
     if (staged !== null) this.applyWavePose(staged, time);
@@ -474,6 +506,7 @@ export class EventPresentationLayer {
   dispose(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.dangerousWaters.dispose();
     this.disposed = true;
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
