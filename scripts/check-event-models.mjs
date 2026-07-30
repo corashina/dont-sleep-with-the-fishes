@@ -49,6 +49,8 @@ const EVENT_SOURCES = Object.freeze({
   }),
 });
 const EVENT_MODEL_IDS = Object.freeze(['fogMan', 'ghost', 'siren', 'sirenRock']);
+const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
+const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
 const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -70,6 +72,108 @@ function sameAnimations(first, second) {
         && animation?.duration === expected?.duration
         && animation?.channels === expected?.channels;
     });
+}
+
+function exactKeys(value, expectedKeys, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} is not an object`);
+  }
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpected = [...expectedKeys].sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(sortedExpected)) {
+    throw new Error(
+      `${label} keys must be exactly ${sortedExpected.join(', ')}; received ${actualKeys.join(', ')}`,
+    );
+  }
+}
+
+export function validateEventModelMetadata(metadata) {
+  exactKeys(metadata, EVENT_MODEL_IDS, 'event model metadata');
+  for (const modelId of EVENT_MODEL_IDS) {
+    const model = metadata[modelId];
+    exactKeys(model, ['triangles', 'rawBounds', 'animations'], `${modelId} metadata`);
+    exactKeys(model.rawBounds, ['min', 'max'], `${modelId} rawBounds`);
+    if (!Array.isArray(model.animations)) {
+      throw new Error(`${modelId} animations is not an array`);
+    }
+    model.animations.forEach((animation, index) => {
+      exactKeys(
+        animation,
+        ['name', 'duration', 'channels'],
+        `${modelId} animation ${index}`,
+      );
+    });
+  }
+}
+
+function expectedAttributionBlock(modelId) {
+  const source = EVENT_SOURCES[modelId];
+  return [
+    `- "${source.title}" by ${source.creator}.`,
+    `  Source: https://poly.pizza/m/${source.publicId}`,
+    `  License: ${source.license}.`,
+    `  Source asset ID: \`poly-pizza:${source.resourceId}\`.`,
+    `  Source GLB SHA-256: \`${source.sha256}\`.`,
+  ].join('\n');
+}
+
+function attributionBlocks(section) {
+  const blocks = [];
+  let current = null;
+  for (const line of section.split('\n')) {
+    if (line.startsWith('- ')) {
+      if (current) blocks.push(current.join('\n'));
+      current = [line];
+    } else if (current && line.startsWith('  ')) {
+      current.push(line);
+    } else if (current) {
+      blocks.push(current.join('\n'));
+      current = null;
+    }
+  }
+  if (current) blocks.push(current.join('\n'));
+  return blocks;
+}
+
+export function validateEventModelAttribution(ledgerText) {
+  const ledger = ledgerText.replaceAll('\r\n', '\n');
+  const headingMatches = ledger.split(ATTRIBUTION_HEADING).length - 1;
+  if (headingMatches !== 1) {
+    throw new Error(
+      `ATTRIBUTION.md: expected one event model heading, received ${headingMatches}`,
+    );
+  }
+  const sectionStart = ledger.indexOf(ATTRIBUTION_HEADING) + ATTRIBUTION_HEADING.length;
+  const nextHeading = ledger.indexOf('\n## ', sectionStart);
+  const section = ledger.slice(sectionStart, nextHeading < 0 ? ledger.length : nextHeading);
+  const blocks = attributionBlocks(section);
+  if (blocks.length !== ATTRIBUTION_MODEL_IDS.length) {
+    throw new Error(
+      `ATTRIBUTION.md: expected ${ATTRIBUTION_MODEL_IDS.length} attribution blocks, received ${blocks.length}`,
+    );
+  }
+  ATTRIBUTION_MODEL_IDS.forEach((modelId, index) => {
+    if (blocks[index] !== expectedAttributionBlock(modelId)) {
+      throw new Error(`ATTRIBUTION.md: ${modelId} attribution block does not match`);
+    }
+  });
+  const eventMarkers = ATTRIBUTION_MODEL_IDS.flatMap((modelId) => {
+    const source = EVENT_SOURCES[modelId];
+    return [
+      `"${source.title}" by`,
+      `https://poly.pizza/m/${source.publicId}`,
+      `poly-pizza:${source.resourceId}`,
+      source.sha256,
+    ];
+  });
+  const ledgerEventBlocks = attributionBlocks(ledger).filter((block) => (
+    eventMarkers.some((marker) => block.includes(marker))
+  ));
+  if (ledgerEventBlocks.length !== ATTRIBUTION_MODEL_IDS.length) {
+    throw new Error(
+      `ATTRIBUTION.md: expected ${ATTRIBUTION_MODEL_IDS.length} event attribution blocks in the ledger, received ${ledgerEventBlocks.length}`,
+    );
+  }
 }
 
 function parseGlb(filePath, bytes) {
@@ -166,9 +270,7 @@ async function main() {
     metadata = JSON.parse(
       await readFile(resolve(modelsDir, 'event-model-metadata.json'), 'utf8'),
     );
-    if (JSON.stringify(Object.keys(metadata)) !== JSON.stringify(EVENT_MODEL_IDS)) {
-      errors.push('event-model-metadata.json keys do not match pinned model IDs');
-    }
+    validateEventModelMetadata(metadata);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
@@ -217,20 +319,7 @@ async function main() {
 
   if (!assetsOnly) {
     try {
-      const ledger = (await readFile(ledgerPath, 'utf8')).replaceAll('\r\n', '\n');
-      for (const modelId of EVENT_MODEL_IDS) {
-        const source = EVENT_SOURCES[modelId];
-        const expectedBlock = [
-          `- "${source.title}" by ${source.creator}.`,
-          `  Source: https://poly.pizza/m/${source.publicId}`,
-          `  License: ${source.license}.`,
-          `  Source asset ID: \`poly-pizza:${source.resourceId}\`.`,
-          `  Source GLB SHA-256: \`${source.sha256}\`.`,
-        ].join('\n');
-        if (!ledger.includes(expectedBlock)) {
-          errors.push(`ATTRIBUTION.md: ${modelId} entry does not match the pinned source`);
-        }
-      }
+      validateEventModelAttribution(await readFile(ledgerPath, 'utf8'));
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
