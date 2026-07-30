@@ -11,12 +11,14 @@ export type LeakItemEffectKind =
 export type LeakReactionKind =
   | 'safe'
   | 'broken-item'
+  | 'consumed-item'
   | 'hull-damage'
   | 'lost-item';
 
 export interface LeakReactionState {
   readonly safe: boolean;
   readonly brokenItem: boolean;
+  readonly consumedItem?: boolean;
   readonly hullDamage: boolean;
   readonly lostItem: boolean;
 }
@@ -191,11 +193,13 @@ function reactionFlags(
     return (reaction.safe ? 1 : 0)
       | (reaction.brokenItem ? 2 : 0)
       | (reaction.hullDamage ? 4 : 0)
-      | (reaction.lostItem ? 8 : 0);
+      | (reaction.lostItem ? 8 : 0)
+      | (reaction.consumedItem ? 16 : 0);
   }
   switch (reaction) {
     case 'safe': return 1;
     case 'broken-item': return 2;
+    case 'consumed-item': return 16;
     case 'hull-damage': return 4;
     case 'lost-item': return 8;
   }
@@ -244,6 +248,17 @@ export function sampleLeakReaction(
     output.scaleX = 1 + 0.08 * buckle;
     output.scaleY = 1 - 0.32 * buckle;
     output.scaleZ = 1 + 0.06 * buckle;
+  } else if ((flags & 16) !== 0) {
+    const press = smoothstep((t - 0.04) / 0.7);
+    output.x = 0.74 * press;
+    output.y = 0.36 * press;
+    output.z = -0.3 * press;
+    output.yaw = -0.2 * press;
+    output.pitch = -0.68 * press;
+    output.roll = 0.08 * press;
+    output.scaleX = 1 + 0.24 * press;
+    output.scaleY = 1 - 0.74 * press;
+    output.scaleZ = 1 + 0.12 * press;
   }
   return true;
 }
