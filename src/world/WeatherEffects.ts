@@ -252,6 +252,7 @@ export class WeatherEffects {
   private lightningIntervalIndex = 0;
   private lightningFlashRemaining = 0;
   private activeLightningBoltCount = 0;
+  private lightningStrikeListener: () => void = () => undefined;
   private disposed = false;
 
   constructor(
@@ -331,9 +332,14 @@ export class WeatherEffects {
     return this.stateValue;
   }
 
+  setLightningStrikeListener(listener: () => void): void {
+    this.lightningStrikeListener = listener;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.lightningStrikeListener = () => undefined;
     this.root.removeFromParent();
     this.rain.points.geometry.dispose();
     this.rain.points.material.dispose();
@@ -504,6 +510,7 @@ export class WeatherEffects {
     if (crossedInterval) {
       this.prepareLightningStrike();
       this.lightningFlashRemaining = LIGHTNING_FLASH_DURATION;
+      this.lightningStrikeListener();
     }
 
     if (this.lightningFlashRemaining <= 0) {
