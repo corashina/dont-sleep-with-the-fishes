@@ -57,6 +57,7 @@ const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 const POST_ACTION_EXCLUDED_EVENT_IDS: ReadonlySet<string> = new Set(['drifting-loot']);
 
 function fallbackResultId(eventId: string): string | undefined {
+  if (eventId === 'midnight-tour') return 'tour-food-fallback';
   if (eventId === 'night-trader') return 'trader-food-fallback';
   if (eventId === 'handyman') return 'handyman-food-fallback';
   return undefined;

@@ -237,6 +237,16 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(tour.resolveEvent(choiceResponse('visit')).eventResult?.resultId).toBe('tour-chest');
     expect(tour.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 1 });
+
+    const duplicateChest = new SurvivalSession(saved(), {
+      seed: 12,
+      random: sequenceRandom([0]),
+      initialChest: { state: 'closed', acquiredDay: 1 },
+      initialEventId: 'midnight-tour',
+    });
+    expect(duplicateChest.resolveEvent(choiceResponse('visit')).eventResult?.resultId)
+      .toBe('tour-food-fallback');
+    expect(duplicateChest.snapshot().food).toBe(1);
   });
 
   it('records the Flowers event without granting a survival reward', () => {
