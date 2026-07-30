@@ -13,6 +13,7 @@ import type { ShipAssets } from '../world/ShipAssets';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
+import type { AudioSystem } from '../audio/AudioSystem';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -29,6 +30,7 @@ export interface PhaseContext {
   shipAssets: ShipAssets;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode: PhysicsMode;
+  audio: AudioSystem;
 }
 
 export interface GamePhase {

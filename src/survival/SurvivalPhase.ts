@@ -1,5 +1,7 @@
 import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
+import { AudioSystem } from '../audio/AudioSystem';
+import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
   ITEM_DEFINITIONS,
   type ItemInstance,
@@ -55,6 +57,7 @@ export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
   world: Partial<BoatWorld>;
   ui: Partial<SurvivalUI>;
+  audio?: AudioSystem;
   onRestart?: () => void;
   sceneRenderer?: SceneRenderer;
 }
@@ -162,6 +165,7 @@ function testContext(
     resize: () => undefined,
     dispose: () => undefined,
   },
+  audio: AudioSystem = AudioSystem.silent(),
 ): PhaseContext {
   const mount = {
     clientWidth: 1,
@@ -183,6 +187,7 @@ function testContext(
     shipAssets: {} as ShipAssets,
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
+    audio,
   };
 }
 
@@ -226,6 +231,7 @@ export class SurvivalPhase implements GamePhase {
   private lifecycleGeneration = 0;
   private readonly visibilityResumeWaiters = new Set<() => void>();
   private cameraLook: SurvivalCameraLook | null = null;
+  private audio!: SurvivalAudio;
 
   constructor(
     context: PhaseContext,
@@ -288,7 +294,7 @@ export class SurvivalPhase implements GamePhase {
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
-      testContext(dependencies.sceneRenderer),
+      testContext(dependencies.sceneRenderer, dependencies.audio),
       [],
       0,
       0,
@@ -301,6 +307,8 @@ export class SurvivalPhase implements GamePhase {
   start(): void {
     if (this.disposed || this.started) return;
     this.started = true;
+    this.audio.start();
+    this.audio.setWeather(this.effectivePresentationWeather, 0);
     const snapshot = this.renderSnapshot(false);
     if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       void this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
@@ -327,6 +335,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.update?.(time, deltaSeconds);
     this.cameraLook?.update(deltaSeconds);
     const snapshot = this.session.snapshot();
+    this.audio.update(deltaSeconds);
     this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
     if (this.started) this.advanceFishing(deltaSeconds);
@@ -359,7 +368,10 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleAction(action: DayActionId, option?: DayActionOption): void {
-    if (!this.canAcceptCommand()) return;
+    if (!this.canAcceptCommand()) {
+      this.audio.deny();
+      return;
+    }
     if (action === 'fish') {
       void this.beginFishing();
       return;
@@ -368,16 +380,19 @@ export class SurvivalPhase implements GamePhase {
     const outcome = this.session.perform?.(action, selectedOption);
     if (outcome === undefined) return;
     if (!outcome.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(outcome);
       return;
     }
     if (action === 'endDay') {
+      this.audio.sleep();
       void this.runEndDay(outcome);
       return;
     }
+    this.audio.action(action, selectedOption);
     const day = this.session.snapshot().day;
     if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
-    void this.runDayAction(outcome);
+    void this.runDayAction(outcome, action);
   }
 
   handleEventItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
@@ -397,18 +412,21 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed || this.busy || this.paused || this.documentIsHidden()) return;
     const snapshot = this.session.snapshot();
     this.lastReadJournalDay = this.latestJournalDay(snapshot);
+    this.audio.journal();
     this.ui.setJournalUnread?.(false);
     this.ui.showJournal?.(snapshot.journalEntries);
   }
 
   handleJournalClose(): void {
     if (this.disposed) return;
+    this.audio.journal();
     this.ui.hideJournal?.();
   }
 
   setPaused(paused: boolean): void {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
+    this.audio.setPaused(paused);
     if (paused) this.cameraLook?.cancel();
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
@@ -458,6 +476,7 @@ export class SurvivalPhase implements GamePhase {
     }
     this.cameraLook?.dispose();
     this.cameraLook = null;
+    this.audio.dispose();
     this.world.dispose?.();
     this.ui.dispose?.();
   }
@@ -476,6 +495,8 @@ export class SurvivalPhase implements GamePhase {
     this.ui = ui;
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
+    this.audio = new SurvivalAudio(context.audio.createScope());
+    this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.requestedDayEventDays.clear();
     this.wireUI();
   }
@@ -493,6 +514,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
+    this.ui.onJournalPage = () => this.audio.journal();
     this.ui.onFishingCast = (point) => this.handleFishingCast(point);
     this.ui.onFishingReel = () => this.handleFishingReel();
     this.ui.onFishingResultContinue = () => this.continueFishingResult();
@@ -541,6 +563,7 @@ export class SurvivalPhase implements GamePhase {
     const begun = this.session.beginFishing?.();
     if (begun === undefined) return;
     if (!begun.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(begun.outcome);
       return;
     }
@@ -594,6 +617,7 @@ export class SurvivalPhase implements GamePhase {
 
     const storedPoint = attempt.snapshot().castPoint;
     if (storedPoint === null) return false;
+    this.audio.fishingCast();
     const generation = this.lifecycleGeneration;
     this.ui.setFishingViewExitVisible?.(false);
     this.fishingPresentation = 'casting';
@@ -651,6 +675,7 @@ export class SurvivalPhase implements GamePhase {
 
   private enterFishingBite(point: FishingCastPoint): void {
     this.fishingPresentation = 'bite';
+    this.audio.fishingBite();
     this.world.showFishingBite?.(point);
     this.ui.setFishingState?.({
       mode: 'bite',
@@ -690,6 +715,7 @@ export class SurvivalPhase implements GamePhase {
     if (!attempt.completeReel().accepted) return false;
     const result = attempt.snapshot().result;
     if (result === null || result !== reel.result) return false;
+    this.audio.fishingReel();
     return this.settleFishing(attempt, result, generation);
   }
 
@@ -703,6 +729,7 @@ export class SurvivalPhase implements GamePhase {
     this.fishingPresentation = 'settling';
     const outcome = this.session.finishFishing?.(attempt.snapshot().id, result);
     if (outcome === undefined || !outcome.accepted) {
+      this.audio.deny();
       if (outcome !== undefined) this.ui.showFeedback?.(outcome);
       this.fishingSettlementInProgress = false;
       this.fishingPresentation = 'bite';
@@ -726,6 +753,7 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     generation: number,
   ): Promise<void> {
+    this.audio.fishingResult(result);
     if (result.kind === 'catch') {
       await (this.world.playFishingReel?.(result.catch.id) ?? Promise.resolve());
     } else {
@@ -820,9 +848,13 @@ export class SurvivalPhase implements GamePhase {
       && (generation === undefined || generation === this.lifecycleGeneration);
   }
 
-  private async runDayAction(outcome: ActionOutcome): Promise<void> {
+  private async runDayAction(
+    outcome: ActionOutcome,
+    action: DayActionId,
+  ): Promise<void> {
     this.setBusy(true);
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
+    if (action === 'dive') this.audio.finishDive();
     if (this.disposed) return;
     let snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
@@ -874,6 +906,7 @@ export class SurvivalPhase implements GamePhase {
       this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
+    this.audio.nightfall();
     let snapshot = this.renderSnapshot(false, false);
 
     if (outcome.code === 'quiet-night') {
@@ -903,6 +936,8 @@ export class SurvivalPhase implements GamePhase {
     const pending = this.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
+    const itemType = pending.inventory[instanceId]?.type;
+    if (itemType !== undefined) this.audio.tool(itemType);
     const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
@@ -921,6 +956,7 @@ export class SurvivalPhase implements GamePhase {
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.world.setEventSelectedItem?.(null);
@@ -952,6 +988,8 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveDriftingLootChoice(choiceId, generation);
       return;
     }
+    if (choiceId === 'sleep') this.audio.sleep();
+    else this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
     await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
@@ -960,6 +998,7 @@ export class SurvivalPhase implements GamePhase {
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.restoreEventSelection();
@@ -982,6 +1021,7 @@ export class SurvivalPhase implements GamePhase {
     }
 
     this.activeDriftingLootVariant = pending.pendingDriftingLootVariant;
+    this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
     await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
@@ -991,6 +1031,7 @@ export class SurvivalPhase implements GamePhase {
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.restoreEventSelection();
@@ -1045,9 +1086,11 @@ export class SurvivalPhase implements GamePhase {
     const eventState = pending.state;
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
+    this.audio.confirm();
     const outcome = this.session.resolveEvent?.({ kind: 'endure' });
     if (outcome === undefined) return;
     if (!outcome.accepted) {
+      this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.setBusy(false);
@@ -1109,7 +1152,10 @@ export class SurvivalPhase implements GamePhase {
 
   private async runDawn(generation: number): Promise<SurvivalSnapshot> {
     const dawn = this.session.beginDawn?.();
-    if (dawn?.accepted) await (this.world.play?.(dawn.cue) ?? Promise.resolve());
+    if (dawn?.accepted) {
+      this.audio.dawn();
+      await (this.world.play?.(dawn.cue) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return this.session.snapshot();
     return this.renderSnapshot(false, false);
   }
@@ -1183,6 +1229,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
+    this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
     this.setBusy(true);
@@ -1380,6 +1427,7 @@ export class SurvivalPhase implements GamePhase {
     if (resolved.id === this.effectivePresentationWeather) return;
     this.effectivePresentationWeather = resolved.id;
     this.world.setPresentationWeather?.(resolved.id);
+    this.audio.setWeather(resolved.id);
   }
 
   private presentTerminalOnce(snapshot: SurvivalSnapshot): void {
@@ -1389,6 +1437,7 @@ export class SurvivalPhase implements GamePhase {
       || this.presentedTerminalState !== null
     ) return;
     this.presentedTerminalState = snapshot.state;
+    this.audio.ending(snapshot.state);
     this.ui.showEnding?.(
       snapshot.state,
       snapshot.day,

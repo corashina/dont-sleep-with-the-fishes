@@ -11,6 +11,8 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
+import type { ScavengeAudio } from '../src/audio/ScavengeAudio';
+import { AudioSystem } from '../src/audio/AudioSystem';
 import { Game } from '../src/Game';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
 import {
@@ -82,6 +84,18 @@ function gamePhase(): GamePhase {
   };
 }
 
+function scavengeAudioStub(): ScavengeAudio {
+  return {
+    start: vi.fn(),
+    update: vi.fn(),
+    itemHandled: vi.fn(),
+    deny: vi.fn(),
+    setPaused: vi.fn(),
+    sink: vi.fn(),
+    dispose: vi.fn(),
+  } as unknown as ScavengeAudio;
+}
+
 function postProcessingSceneRenderer(): SceneRenderer {
   const postProcessingControls: PostProcessingControls = {
     getState: vi.fn(() => ({
@@ -118,6 +132,7 @@ function createUpdateHarness(
     elapsed: 0,
     worldTime: 1,
     presentation: 'playing',
+    audio: scavengeAudioStub(),
     session,
     input,
     world: {
@@ -171,6 +186,7 @@ describe('ScavengePhase lifecycle integration', () => {
       skyAssets,
       physicsRuntime,
       maxTextureAnisotropy: 1,
+      audio: AudioSystem.silent(),
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
     const internals = phase as unknown as {
@@ -202,6 +218,7 @@ describe('ScavengePhase lifecycle integration', () => {
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
+    context.audio.dispose();
     propModels.dispose();
     shipFurniture.dispose();
     skyAssets.dispose();
@@ -212,6 +229,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       presentation: 'title',
+      audio: scavengeAudioStub(),
       player: { placeCamera: () => order.push('camera') },
       session: {
         snapshot: () => ({ status: 'idle' }),
@@ -269,6 +287,7 @@ describe('ScavengePhase lifecycle integration', () => {
       elapsed: 0,
       worldTime: 1,
       presentation: 'playing',
+      audio: scavengeAudioStub(),
       session: {
         snapshot: () => ({ status: 'running', remainingSeconds: SCAVENGE_DURATION_SECONDS }),
         tick,
@@ -1434,6 +1453,7 @@ describe('ScavengePhase lifecycle integration', () => {
       skyAssets,
       physicsRuntime,
       maxTextureAnisotropy: 1,
+      audio: AudioSystem.silent(),
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
     const internals = phase as unknown as {
@@ -1475,6 +1495,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
     phase.dispose();
+    context.audio.dispose();
     propModels.dispose();
     skyAssets.dispose();
   });
@@ -1494,6 +1515,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
+      audio: scavengeAudioStub(),
       input: { pointerLocked: true, dispose: disposeInput },
       carry: { reset: resetCarry },
       interaction: { dispose: disposeInteraction },
@@ -1661,6 +1683,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session: { dropCarried },
+      audio: scavengeAudioStub(),
       carry: { releaseActive },
       world: { dropItem },
     });
@@ -1695,7 +1718,12 @@ describe('ScavengePhase lifecycle integration', () => {
       loseItem: vi.fn(),
     };
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, { session, carry, world });
+    Object.assign(phase, {
+      session,
+      carry,
+      world,
+      audio: scavengeAudioStub(),
+    });
 
     (phase as unknown as {
       performAction: (action: {
@@ -1731,7 +1759,12 @@ describe('ScavengePhase lifecycle integration', () => {
       showItemPickupSmoke: vi.fn(),
     };
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, { session, carry, world });
+    Object.assign(phase, {
+      session,
+      carry,
+      world,
+      audio: scavengeAudioStub(),
+    });
 
     (phase as unknown as {
       performAction: (action: {
@@ -1754,6 +1787,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
+      audio: scavengeAudioStub(),
       input: { requestPointerLock: vi.fn().mockResolvedValue(false) },
       session: { snapshot: () => ({ status: 'idle' }) },
       ui: { showPointerLockError },

@@ -271,6 +271,7 @@ export class SurvivalUI {
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
+  onJournalPage: () => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
@@ -1115,6 +1116,7 @@ export class SurvivalUI {
     this.onPauseChange = () => undefined;
     this.onJournalOpen = () => undefined;
     this.onJournalClose = () => undefined;
+    this.onJournalPage = () => undefined;
     this.onFishingCast = null;
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
@@ -1146,7 +1148,9 @@ export class SurvivalUI {
 
   private moveJournalPage(delta: -1 | 1): void {
     const maximum = Math.max(0, this.journalEntries.length - 1);
+    const previousIndex = this.journalIndex;
     this.journalIndex = Math.min(maximum, Math.max(0, this.journalIndex + delta));
+    if (this.journalIndex !== previousIndex) this.onJournalPage();
     this.renderJournalPage();
     const requested = delta < 0 ? this.journalPrevious : this.journalNext;
     const available = delta < 0 ? this.journalNext : this.journalPrevious;
