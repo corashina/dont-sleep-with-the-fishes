@@ -14,9 +14,9 @@ Add no geometry, texture, render pass, draw call, or frame allocation.
 
 Keep the current shared wave field unchanged.
 
-Use low settings `55`, `180`, and `0.76`.
+Use low settings `35`, `120`, and `0.88`.
 
-Use high settings `65`, `220`, and `0.65`.
+Use high settings `45`, `145`, and `0.82`.
 
 Mix haze color from fog color and 22 percent horizon color.
 
@@ -46,7 +46,7 @@ Do not add reduced-motion behavior.
 - Produces: `OceanSurfaceQuality.horizonHazeStrength: number`.
 - Produces: shader uniform `uHorizonHaze: Vector3`.
 
-- [ ] **Step 1: Write failing quality and ownership tests**
+- [x] **Step 1: Write failing quality and ownership tests**
 
 Create `tests/OceanRenderer.test.ts`:
 
@@ -61,8 +61,8 @@ import {
 
 describe('OceanRenderer horizon haze', () => {
   it.each([
-    ['low', [55, 180, 0.76]],
-    ['high', [65, 220, 0.65]],
+    ['low', [35, 120, 0.88]],
+    ['high', [45, 145, 0.82]],
   ] as const)('uses the %s quality haze settings', (quality, expected) => {
     const ocean = new OceanRenderer(quality);
 
@@ -85,7 +85,7 @@ describe('OceanRenderer horizon haze', () => {
     ocean.setQuality('high');
 
     expect(ocean.material.uniforms.uHorizonHaze!.value).toBe(haze);
-    expect(haze.toArray()).toEqual([65, 220, 0.65]);
+    expect(haze.toArray()).toEqual([45, 145, 0.82]);
     ocean.dispose();
   });
 
@@ -99,7 +99,7 @@ describe('OceanRenderer horizon haze', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and confirm failure**
+- [x] **Step 2: Run the focused test and confirm failure**
 
 Run:
 
@@ -109,7 +109,7 @@ bunx vitest run tests/OceanRenderer.test.ts
 
 Expected: fail because haze quality fields and `uHorizonHaze` do not exist.
 
-- [ ] **Step 3: Add exact quality settings**
+- [x] **Step 3: Add exact quality settings**
 
 Add these fields to `OceanSurfaceQuality`:
 
@@ -122,20 +122,20 @@ horizonHazeStrength: number;
 Add these low settings:
 
 ```ts
-horizonHazeStart: 55,
-horizonHazeEnd: 180,
-horizonHazeStrength: 0.76,
+horizonHazeStart: 35,
+horizonHazeEnd: 120,
+horizonHazeStrength: 0.88,
 ```
 
 Add these high settings:
 
 ```ts
-horizonHazeStart: 65,
-horizonHazeEnd: 220,
-horizonHazeStrength: 0.65,
+horizonHazeStart: 45,
+horizonHazeEnd: 145,
+horizonHazeStrength: 0.82,
 ```
 
-- [ ] **Step 4: Add the shader uniform and blend**
+- [x] **Step 4: Add the shader uniform and blend**
 
 Add this fragment shader uniform:
 
@@ -157,7 +157,7 @@ color = mix(color, hazeColor, horizonHaze);
 
 Keep the existing fog and ordered dither code after this blend.
 
-- [ ] **Step 5: Create and update the uniform without frame allocations**
+- [x] **Step 5: Create and update the uniform without frame allocations**
 
 Add this constructor uniform:
 
@@ -183,7 +183,7 @@ Add this in-place update to `setQuality`:
 
 Do not add work to `update`, `follow`, or `dispose`.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -193,7 +193,7 @@ bunx vitest run tests/OceanRenderer.test.ts tests/WaveField.test.ts tests/BoatWo
 
 Expected: all focused tests pass.
 
-- [ ] **Step 7: Run all automated checks**
+- [x] **Step 7: Run all automated checks**
 
 Run:
 
@@ -204,7 +204,7 @@ bun run build
 
 Expected: all tests pass. TypeScript and Vite builds pass.
 
-- [ ] **Step 8: Check the clear-day horizon**
+- [x] **Step 8: Check the clear-day horizon**
 
 Run:
 
