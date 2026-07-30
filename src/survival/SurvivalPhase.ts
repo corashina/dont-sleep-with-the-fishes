@@ -17,6 +17,7 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
   type DriftingLootResultView,
+  type EventOutcomeView,
   type EventContextChoice,
   type FishingResultView,
 } from '../ui/SurvivalUI';
@@ -138,6 +139,27 @@ export function formatFishingResult(
     title: result.catch.label.toLocaleUpperCase('en-US'),
     detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
     catchTarget: null,
+  };
+}
+
+export function formatDangerousWatersOutcome(
+  outcome: ActionOutcome,
+): EventOutcomeView {
+  const hullDamage = Math.max(0, -(outcome.deltas.hull ?? 0));
+  if (hullDamage === 0) {
+    return {
+      title: 'CLEAR WATER',
+      detail: 'The route opens ahead.',
+      result: 'HULL HOLDS',
+      state: 'safe',
+    };
+  }
+  const severe = hullDamage >= 25;
+  return {
+    title: `HULL \u2212${hullDamage}`,
+    detail: outcome.message,
+    result: severe ? 'SEVERE ROCK STRIKE' : 'ROCK STRIKE',
+    state: severe ? 'severe' : 'damage',
   };
 }
 
@@ -1121,6 +1143,9 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
+    if (eventId === 'dangerous-waters') {
+      this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
+    }
     this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
@@ -1257,8 +1282,11 @@ export class SurvivalPhase implements GamePhase {
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
-    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
+    const delayCaption = event.id === 'dangerous-waters';
+    if (!delayCaption) {
+      await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
 
     if (event.id === 'drifting-loot') {
       await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
@@ -1269,6 +1297,10 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     if (event.id !== 'drifting-loot') {
       await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
+    if (delayCaption) {
+      await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
     if (

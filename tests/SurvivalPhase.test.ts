@@ -9,6 +9,7 @@ import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import {
+  formatDangerousWatersOutcome,
   formatDriftingLootResult,
   formatFishingResult,
   SurvivalPhase,
@@ -86,6 +87,32 @@ describe('formatFishingResult utility salvage', () => {
       code: 'utility-caught',
       deltas: catchId === 'bait' ? { bait: 1 } : {},
     }))).toMatchObject({ caption: 'UTILITY SALVAGE', title, detail });
+  });
+});
+
+describe('formatDangerousWatersOutcome', () => {
+  it('shows a clear route when the Hull does not change', () => {
+    expect(formatDangerousWatersOutcome(accepted({ deltas: {} }))).toEqual({
+      title: 'CLEAR WATER',
+      detail: 'The route opens ahead.',
+      result: 'HULL HOLDS',
+      state: 'safe',
+    });
+  });
+
+  it.each([
+    [-7, 'damage', 'ROCK STRIKE'],
+    [-25, 'severe', 'SEVERE ROCK STRIKE'],
+  ] as const)('shows exact Hull loss for %s damage', (hull, state, result) => {
+    expect(formatDangerousWatersOutcome(accepted({
+      message: 'The rocks damage the boat.',
+      deltas: { hull },
+    }))).toEqual({
+      title: `HULL \u2212${Math.abs(hull)}`,
+      detail: 'The rocks damage the boat.',
+      result,
+      state,
+    });
   });
 });
 
@@ -1778,7 +1805,7 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event', 'scene-render', 'settle',
+      'fish', 'begin-event', 'cover', 'stage', 'scene-render', 'settle',
     ]);
     expect(setEventSelection).not.toHaveBeenCalled();
     expect(calls).not.toContain('reveal-tableau');
@@ -1796,8 +1823,8 @@ describe('SurvivalPhase orchestration', () => {
     tableauReveal.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event',
-      'scene-render', 'settle', 'uncover', 'reveal-tableau', 'selection',
+      'fish', 'begin-event', 'cover', 'stage', 'scene-render',
+      'settle', 'uncover', 'reveal-tableau', 'event', 'selection',
     ]);
   });
 
@@ -1970,6 +1997,49 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls).toEqual([
       'begin-event', 'nightfall', 'cover', 'stage', 'caption',
       'uncover', 'reveal-tableau', 'selection',
+    ]);
+  });
+
+  it('shows the Dangerous Waters caption after its scene reveal', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
+    const calls: string[] = [];
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dayEvent',
+          pendingEventId: event.id,
+        })),
+      },
+      world: {
+        stageEvent: vi.fn(() => { calls.push('stage'); }),
+        revealEvent: vi.fn(async () => { calls.push('reveal-tableau'); }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(() => { calls.push('begin-event'); }),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+        }),
+        showEventReveal: vi.fn(async () => { calls.push('caption'); }),
+        setEventSelection: vi.fn(() => { calls.push('selection'); }),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(calls).toEqual([
+      'begin-event',
+      'cover',
+      'stage',
+      'uncover',
+      'reveal-tableau',
+      'caption',
+      'selection',
     ]);
   });
 
@@ -2205,10 +2275,16 @@ describe('SurvivalPhase orchestration', () => {
     const calls: string[] = [];
     const beat = deferred();
     const worldBeat = deferred();
+    const showEventOutcome = vi.fn();
     const resolveEvent = vi.fn(() => {
       calls.push('resolve');
       current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
-      return accepted({ code: 'event-resolved', cue: 'none', deltas: { energy: -3 } });
+      return accepted({
+        code: 'event-resolved',
+        message: 'The rocks damage the boat.',
+        cue: 'none',
+        deltas: { hull: -25 },
+      });
     });
     const ui: Partial<SurvivalUI> = {
       beginEventPresentation: vi.fn(),
@@ -2221,6 +2297,7 @@ describe('SurvivalPhase orchestration', () => {
       }),
       setBusy: vi.fn(),
       showFeedback: vi.fn(),
+      showEventOutcome,
       render: vi.fn(),
       setJournalUnread: vi.fn(),
       clearEventPresentation: vi.fn(),
@@ -2264,6 +2341,12 @@ describe('SurvivalPhase orchestration', () => {
       'resolve',
       'react',
     ]);
+    expect(showEventOutcome).toHaveBeenCalledWith({
+      title: 'HULL \u221225',
+      detail: 'The rocks damage the boat.',
+      result: 'SEVERE ROCK STRIKE',
+      state: 'severe',
+    });
   });
 
   it('does not resolve after disposal cancels a pending contextual press beat', async () => {
