@@ -1,122 +1,140 @@
-# Ocean Horizon Haze Design
+# Ocean Distance Continuity Design
 
 ## Goal
 
-Hide the abrupt flat water band near the horizon.
+Remove the flat water band near the horizon.
 
-Keep the near water clear and active.
+Keep near and middle-distance waves readable.
 
-Add no geometry, texture, render pass, draw call, or frame allocation.
+Keep the current vertex count, draw calls, textures, and shared wave field.
 
-## Visual direction
-
-Use distance and weather to strengthen maritime isolation.
-
-The haze supports the broad sea and quiet horizon.
-
-It does not replace the authored waves, lighting, or material.
-
-## Current cause
+## Root cause
 
 The near ocean grid ends 90 units from its center.
 
-The horizon ring uses much wider cells after this join.
+Its low-quality cells are about 0.94 units wide.
 
-These cells cannot show the short shared waves with the same shape.
+Its high-quality cells are about 0.63 units wide.
 
-The change in surface detail makes the far water look flat.
+The old horizon ring used uniform radial spacing.
+
+Its first low-quality cell was about 21 units wide.
+
+Its first high-quality cell was about 14 units wide.
+
+This sudden density change flattened the rendered wave shape.
+
+Clear-weather fog also reached about 93 percent by 150 units.
+
+That fog removed the remaining middle-distance wave contrast.
 
 ## Chosen approach
 
-Add an ocean-only horizon haze ramp to the current fragment shader.
+Redistribute the existing horizon vertices with a power curve.
 
-The ramp starts before the near grid ends.
+Concentrate cells beside the near grid.
 
-It reduces contrast across the grid join.
+Grow cell size gradually where fog can hide it.
 
-The existing exponential fog still controls the final distance fade.
+Keep a small water-color contribution under strong middle-distance fog.
 
-The haze color mixes the current fog color with 22 percent horizon color.
+Complete the fog near the true horizon.
 
-The existing fog then fades the result to the exact scene fog color.
+Move the final fog color toward the sky horizon color.
 
 ## Quality settings
 
-Use one reusable `Vector3` uniform for start distance, end distance, and strength.
+Use a radial exponent of `1.75` for both quality levels.
 
-Use these values:
+| Quality | Radial segments | First cell | Fog start | Fog end | Fog limit |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Low | 48 | about 1.15 | 150 | 650 | 0.86 |
+| High | 72 | about 0.57 | 180 | 750 | 0.82 |
 
-| Quality | Start | End | Strength |
-| --- | ---: | ---: | ---: |
-| Low | 55 | 180 | 0.76 |
-| High | 65 | 220 | 0.65 |
+The fog limit preserves 14 percent water color on low quality.
 
-Use `smoothstep` between the start and end distances.
+The fog limit preserves 18 percent water color on high quality.
 
-Keep haze at zero before the start distance.
+## Geometry
 
-Cap haze at the quality strength after the end distance.
+Keep the dense center surface unchanged.
+
+Keep the eight horizon panels and one horizon mesh.
+
+Remap each radial axis after panel construction.
+
+Use normalized radial progress raised to exponent `1.75`.
+
+Apply the same remap to both axes of each corner panel.
+
+Do not add vertices, indices, panels, materials, or draw calls.
 
 ## Shader flow
 
-Calculate water color, reflections, light, and foam as now.
+Calculate water color, reflections, light, and foam as before.
 
-Calculate the horizon haze from `vViewDepth`.
+Calculate the existing exponential fog factor.
 
-Blend the water toward the haze color with the horizon haze.
+Limit that factor in the middle distance.
 
-Apply the existing exponential fog after the haze.
+Blend the limit toward full fog between the quality fog distances.
 
-Keep the current ordered dither after fog.
+Blend the fog target from fog color toward horizon color over the same range.
+
+Keep ordered dither after fog.
 
 ## Ownership
 
-`OceanRenderer` owns the haze uniform with its other water uniforms.
+`OceanRenderer` owns the graded geometry and horizon fog uniform.
 
-The constructor creates the uniform once.
+The constructor creates each resource once.
 
-`setQuality` updates the existing uniform in place.
+`setQuality` replaces geometry and updates the existing fog uniform.
 
-`dispose` needs no new work because the material owns the uniform.
+`dispose` disposes each geometry and the shared material once.
 
 ## Shared wave contract
 
-Do not change `WaveField`, wave displacement, buoyancy, or vessel motion.
+Do not change `WaveField`, buoyancy, or vessel motion.
 
-The shared wave field stays the source for all water movement.
+The vertex shader still uses the shared four-wave payload.
 
-The change affects only distant water color.
+The fix changes only mesh sampling and distance fog presentation.
 
 ## Performance
 
-The shader adds one `smoothstep`, one fixed color mix, and one color blend.
+The vertex count stays unchanged.
 
-The change adds no CPU work in the frame loop.
+The vertex shader still evaluates the same four waves per vertex.
 
-The change keeps both ocean meshes and their vertex counts unchanged.
+The fragment shader adds one `smoothstep` and two simple mixes.
 
-The change keeps one water material and the current draw calls.
+The frame loop adds no CPU work or allocations.
 
 ## Tests
 
-Add tests for both quality haze settings.
+Check the first radial cell against the near-grid cell size.
 
-Check that quality changes update the existing uniform object.
+Check that radial cells grow toward the horizon.
 
-Check that disposal remains safe after a quality change.
+Check that each quality keeps its previous vertex count.
 
-Run the focused ocean and world tests.
+Check quality-specific horizon fog settings.
+
+Check quality changes and repeated disposal.
+
+Run focused ocean and world tests.
 
 Run the full test suite and production build.
 
-Compare clear-day screenshots before and after the change.
+Inspect the clear-day start screen.
 
-Confirm that the grid join no longer reads as a flat band.
+Confirm waves stay readable into the middle distance.
 
-Confirm that near waves, foam, weather fog, and horizon color stay readable.
+Confirm the final horizon fade has no flat cyan slab.
 
 ## Scope
 
-Change only the ocean shader, water quality settings, and related tests.
+Change only ocean geometry construction, ocean fog presentation, and tests.
 
-Do not change mesh density, camera range, sky geometry, or post-processing.
+Do not change mesh count, camera range, sky geometry, or post-processing.
