@@ -813,10 +813,10 @@ export class BoatWorld {
       return;
     }
     this.driftingLootPresentation?.clear();
+    this.stageMoonEvent(eventId);
     this.eventPresentation.stage(eventId);
     this.weatherEventAnimator.stage(eventId);
     this.supernaturalEventAnimator.stage(eventId);
-    this.stageMoonEvent(eventId);
   }
 
   async revealEvent(eventId: string): Promise<void> {
@@ -1371,6 +1371,8 @@ export class BoatWorld {
       this.updateMoonEvent(delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
+    } else if (this.moonEventStaged) {
+      this.applyMoonPresentation();
     }
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
@@ -1865,6 +1867,7 @@ export class BoatWorld {
     this.moonEventStaged = eventId === 'face-on-the-moon';
     this.resetMoonValues();
     this.sky.resetTransient();
+    this.cameraRig.position.y = 0;
   }
 
   private revealMoonEvent(eventId: string): Promise<void> {
