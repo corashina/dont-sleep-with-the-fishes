@@ -28,6 +28,7 @@ export interface OceanSurfaceQuality {
   segments: number;
   detailFadeNear: number;
   detailFadeFar: number;
+  distantDetailStrength: number;
   horizonHazeStart: number;
   horizonHazeEnd: number;
   horizonHazeStrength: number;
@@ -41,9 +42,10 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 192,
     detailFadeNear: 28,
     detailFadeFar: 92,
-    horizonHazeStart: 35,
-    horizonHazeEnd: 120,
-    horizonHazeStrength: 0.88,
+    distantDetailStrength: 0.11,
+    horizonHazeStart: 85,
+    horizonHazeEnd: 260,
+    horizonHazeStrength: 1,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 48,
@@ -52,9 +54,10 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 288,
     detailFadeNear: 40,
     detailFadeFar: 128,
-    horizonHazeStart: 45,
-    horizonHazeEnd: 145,
-    horizonHazeStrength: 0.82,
+    distantDetailStrength: 0.08,
+    horizonHazeStart: 100,
+    horizonHazeEnd: 320,
+    horizonHazeStrength: 1,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 72,
@@ -134,6 +137,7 @@ const fragmentShader = `
   uniform float uTime;
   uniform float uAmplitudeScale;
   uniform vec2 uDetailFade;
+  uniform float uDistantDetailStrength;
   uniform vec3 uDeepColor;
   uniform vec3 uShallowColor;
   uniform vec3 uFoamColor;
@@ -195,7 +199,16 @@ const fragmentShader = `
       + crossWind * mediumB * 0.042
       + quartering * fineA * 0.021
       + opposing * fineB * 0.011;
-    float distanceFade = 1.0 - smoothstep(uDetailFade.x, uDetailFade.y, vViewDepth);
+    float distanceBlend = 1.0 - smoothstep(
+      uDetailFade.x,
+      uDetailFade.y,
+      vViewDepth
+    );
+    float distanceFade = mix(
+      uDistantDetailStrength,
+      1.0,
+      distanceBlend
+    );
     float weatherStrength = clamp(0.92 + (uAmplitudeScale - 1.0) * 0.32, 0.78, 1.18);
     return slope * distanceFade * weatherStrength;
   }
@@ -596,11 +609,9 @@ const fragmentShader = `
       uHorizonHaze.y,
       vViewDepth
     ) * uHorizonHaze.z;
-    vec3 hazeColor = mix(uFogColor, uHorizonColor, 0.22);
-    color = mix(color, hazeColor, horizonHaze);
-
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
-    color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
+    vec3 distanceFogColor = mix(uFogColor, uHorizonColor, horizonHaze);
+    color = mix(color, distanceFogColor, clamp(fogFactor, 0.0, 1.0));
     gl_FragColor = vec4(color, 0.98);
     #include <colorspace_fragment>
     gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);
@@ -698,6 +709,9 @@ export class OceanRenderer {
             surfaceQuality.horizonHazeStrength,
           ),
         },
+        uDistantDetailStrength: {
+          value: surfaceQuality.distantDetailStrength,
+        },
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
@@ -767,6 +781,8 @@ export class OceanRenderer {
       surfaceQuality.horizonHazeEnd,
       surfaceQuality.horizonHazeStrength,
     );
+    this.material.uniforms.uDistantDetailStrength!.value =
+      surfaceQuality.distantDetailStrength;
     (this.material.uniforms.uDeepColor!.value as Color).setHex(colors.deep);
     (this.material.uniforms.uShallowColor!.value as Color).setHex(colors.shallow);
     (this.material.uniforms.uFoamColor!.value as Color).setHex(colors.foam);

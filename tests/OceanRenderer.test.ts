@@ -8,19 +8,29 @@ import {
 
 describe('OceanRenderer horizon haze', () => {
   it.each([
-    ['low', [35, 120, 0.88]],
-    ['high', [45, 145, 0.82]],
-  ] as const)('uses the %s quality haze settings', (quality, expected) => {
+    ['low', [85, 260, 1], 0.11],
+    ['high', [100, 320, 1], 0.08],
+  ] as const)('uses the %s quality distance settings', (
+    quality,
+    expectedHaze,
+    expectedDetail,
+  ) => {
     const ocean = new OceanRenderer(quality);
 
     expect([
       OCEAN_SURFACE_QUALITY[quality].horizonHazeStart,
       OCEAN_SURFACE_QUALITY[quality].horizonHazeEnd,
       OCEAN_SURFACE_QUALITY[quality].horizonHazeStrength,
-    ]).toEqual(expected);
+    ]).toEqual(expectedHaze);
+    expect(
+      OCEAN_SURFACE_QUALITY[quality].distantDetailStrength,
+    ).toBe(expectedDetail);
     expect(
       (ocean.material.uniforms.uHorizonHaze!.value as Vector3).toArray(),
-    ).toEqual(expected);
+    ).toEqual(expectedHaze);
+    expect(
+      ocean.material.uniforms.uDistantDetailStrength!.value,
+    ).toBe(expectedDetail);
 
     ocean.dispose();
   });
@@ -32,7 +42,8 @@ describe('OceanRenderer horizon haze', () => {
     ocean.setQuality('high');
 
     expect(ocean.material.uniforms.uHorizonHaze!.value).toBe(haze);
-    expect(haze.toArray()).toEqual([45, 145, 0.82]);
+    expect(haze.toArray()).toEqual([100, 320, 1]);
+    expect(ocean.material.uniforms.uDistantDetailStrength!.value).toBe(0.08);
     ocean.dispose();
   });
 
