@@ -49,6 +49,13 @@ export interface PerformanceStatsControls {
   setVisible(visible: boolean): void;
 }
 
+export interface AudioControls {
+  readonly volume: number;
+  readonly muted: boolean;
+  setVolume(volume: number): void;
+  setMuted(muted: boolean): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -82,6 +89,7 @@ export class PostProcessingConsole {
       null,
     ),
     private readonly performanceStatsControls?: PerformanceStatsControls,
+    private readonly audioControls?: AudioControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -143,6 +151,36 @@ export class PostProcessingConsole {
           </label>
         </section>
       `;
+    const audioControl = audioControls === undefined
+      ? ''
+      : `
+        <section class="post-processing-console__section">
+          <strong>AUDIO</strong>
+          <label class="post-processing-console__slider">
+            <span>Master volume</span>
+            <output data-audio-volume-output>${Math.round(audioControls.volume * 100)}%</output>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value="${Math.round(audioControls.volume * 100)}"
+              data-audio-volume
+              aria-label="Master audio volume"
+            >
+          </label>
+          <label class="post-processing-console__toggle">
+            <span>Mute all audio</span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-audio-muted
+              ${audioControls.muted ? 'checked' : ''}
+            >
+            <output data-audio-muted-state>${audioControls.muted ? 'ON' : 'OFF'}</output>
+          </label>
+        </section>
+      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
@@ -159,6 +197,7 @@ export class PostProcessingConsole {
         </header>
         ${physicsControl}
         ${performanceStatsControl}
+        ${audioControl}
         <section class="post-processing-console__section" data-ao-quality-control></section>
         <section class="post-processing-console__section" data-water-quality-control></section>
         ${eventTestControls === undefined
@@ -338,6 +377,17 @@ export class PostProcessingConsole {
     const target = event.target;
     if (
       target instanceof HTMLInputElement
+      && target.matches('[data-audio-muted]')
+    ) {
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-audio-muted-state]',
+      );
+      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      this.audioControls?.setMuted(target.checked);
+      return;
+    }
+    if (
+      target instanceof HTMLInputElement
       && target.matches('[data-performance-stats-enabled]')
     ) {
       const output = this.element.querySelector<HTMLOutputElement>(
@@ -390,6 +440,15 @@ export class PostProcessingConsole {
   private readonly handleInput = (event: Event): void => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.type !== 'range') return;
+    if (target.matches('[data-audio-volume]')) {
+      const volume = Math.min(100, Math.max(0, Number(target.value)));
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-audio-volume-output]',
+      );
+      if (output !== null) output.value = `${Math.round(volume)}%`;
+      this.audioControls?.setVolume(volume / 100);
+      return;
+    }
     const setting = target.dataset.postProcessingSetting as
       | PostProcessingNumericSetting
       | undefined;
