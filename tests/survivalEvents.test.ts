@@ -208,6 +208,71 @@ describe('survival events', () => {
     ]));
   });
 
+  it('uses the authored gates for the five-night events', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+
+    expect(event('midnight-tour')).toMatchObject({
+      weight: 18,
+      earliestDay: 7,
+      latestDay: 40,
+      minimumPressure: 1,
+      cooldownDays: 30,
+      allowedChestStates: ['none'],
+    });
+    expect(event('handyman')).toMatchObject({
+      weight: 12,
+      earliestDay: 20,
+      minimumPressure: 2,
+      cooldownDays: 50,
+    });
+    expect(event('other-people')).toMatchObject({
+      weight: 10,
+      earliestDay: 15,
+      cooldownDays: 20,
+      minimumRescueProgress: 15,
+      maximumAppearances: 2,
+    });
+  });
+
+  it('defines the authored five-night choice outcomes', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+    const resultIds = (eventId: string, choiceId: string) => (
+      event(eventId).choices.find(({ id }) => id === choiceId)!.outcomes.map(({ resultId }) => resultId)
+    );
+
+    expect(resultIds('chest-attack', 'fishingNet')).toEqual(['chest-bound']);
+    expect(resultIds('chest-attack', 'fight')).toEqual(['chest-fight']);
+    expect(resultIds('chest-attack', 'sleep')).toEqual(['chest-hide']);
+    expect(event('midnight-tour').choices.find(({ id }) => id === 'visit')?.outcomes).toMatchObject([
+      {
+        resultId: 'tour-chest', weight: 50,
+        effects: {
+          resources: [set('energy', 2), add('pressure', 1)],
+          items: [{ kind: 'gainChest', quantity: 1, fallbackFood: 1 }],
+          flags: { set: ['direction3'] },
+        },
+      },
+      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)], flags: { set: ['direction3'] } } },
+      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)], flags: { set: ['direction3'] } } },
+    ]);
+    expect(resultIds('midnight-tour', 'sleep')).toEqual(['tour-pass']);
+    expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
+      resultIds('night-trader', choiceId).every((resultId) => resultId === 'trader-reward')
+    ))).toBe(true);
+    expect(resultIds('night-trader', 'sleep')).toEqual(['trader-refuse']);
+    expect(['spyglass', 'flashlight', 'flareGun', 'harpoonGun', 'scubaSet', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'anchor', 'chest']
+      .every((choiceId) => resultIds('handyman', choiceId).every((resultId) => resultId === 'handyman-reward'))).toBe(true);
+    expect(event('handyman').choices.find(({ id }) => id === 'chest')).toMatchObject({
+      requiredChestState: 'closed',
+      outcomes: [{ effects: { chest: 'destroy', items: [{ kind: 'gain', itemId: 'anchor', quantity: 1, fallbackFood: 1 }] } }],
+    });
+    expect(resultIds('handyman', 'touch')).toEqual(['handyman-touch']);
+    expect(resultIds('handyman', 'sleep')).toEqual(['handyman-sleep']);
+    expect(resultIds('other-people', 'flareGun')).toEqual(['people-rescue']);
+    expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
+    expect(resultIds('other-people', 'pass')).toEqual(['people-pass']);
+  });
+
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
     const bottle = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle');
 
@@ -283,6 +348,16 @@ describe('survival events', () => {
       ...base,
       appearanceCounts: new Map([['drifting-bottle', 1]]),
     }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...base,
+      rescueProgress: 15,
+      appearanceCounts: new Map([['other-people', 2]]),
+    }).some(({ id }) => id === 'other-people')).toBe(false);
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...base,
+      rescueProgress: 15,
+      appearanceCounts: new Map([['other-people', 1]]),
+    }).some(({ id }) => id === 'other-people')).toBe(true);
   });
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
