@@ -954,6 +954,129 @@ describe('BoatWorld helpers', () => {
     supernaturalSupport.mockRestore();
   });
 
+  it('reveals the moon face after a normal-moon hold and clears every sky transient', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(0.76, 0.76);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(await remainsPending(reveal)).toBe(true);
+
+    world.update(1.71, 0.95);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
+
+    world.update(3.8, 2.09);
+    await reveal;
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0);
+
+    world.clearEvent();
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('widens the moon grin for Pressure and dims a lowered view for Energy loss', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(3.8, 3.8);
+    await reveal;
+    const baseGrin = sky.material.uniforms.uMoonGrin?.value as number;
+
+    const pressureReaction = world.reactToEventOutcome('face-on-the-moon', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The grin grows.',
+      deltas: { pressure: 1 },
+      cue: 'none',
+    });
+    world.update(4.9, 1.1);
+    await pressureReaction;
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
+
+    const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'You cannot keep your eyes open.',
+      deltas: { energy: -80 },
+      cue: 'none',
+    });
+    world.update(5.45, 0.55);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0);
+    expect(cameraRig.position.y).toBeLessThan(0);
+    world.update(6, 0.55);
+    await energyReaction;
+
+    world.setDocumentHidden(true);
+    world.clearEvent();
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(cameraRig.position.y).toBe(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses existing supply motion for the Moon Umbrella and Telescope choices', async () => {
+    const umbrella = savedItem('umbrella');
+    const telescope = savedItem('spyglass');
+    const propModels = createTestPropModels();
+    const supplyMotion = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [umbrella, telescope],
+    );
+    world.syncInventory(snapshot([umbrella, telescope]));
+
+    const umbrellaMotion = world.playEventItemUse(
+      'face-on-the-moon',
+      'umbrella',
+      umbrella.instanceId,
+    );
+    world.update(1.5, 1.5);
+    await umbrellaMotion;
+
+    const telescopeMotion = world.playEventItemUse(
+      'face-on-the-moon',
+      'spyglass',
+      telescope.instanceId,
+    );
+    world.update(3, 1.5);
+    await telescopeMotion;
+
+    expect(supplyMotion).toHaveBeenNthCalledWith(1, umbrella.instanceId);
+    expect(supplyMotion).toHaveBeenNthCalledWith(2, telescope.instanceId);
+    world.dispose();
+    propModels.dispose();
+    supplyMotion.mockRestore();
+  });
+
   it('slides lost supplies starboard and crumples a broken Ring on one hull impact', async () => {
     const ring = savedItem('swimRing');
     const propModels = createTestPropModels();
