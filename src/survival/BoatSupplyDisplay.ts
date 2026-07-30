@@ -483,11 +483,15 @@ export class BoatSupplyDisplay {
     }
   }
 
-  update(deltaSeconds: number): void {
+  updatePropAnimations(deltaSeconds: number): void {
     if (this.disposed) return;
     for (const copies of this.copiesById.values()) {
       for (const copy of copies) copy.presentation?.update(deltaSeconds);
     }
+  }
+
+  update(deltaSeconds: number): void {
+    if (this.disposed) return;
     const animation = this.activeAnimation;
     this.applyEventMotion();
     if (animation === null) return;

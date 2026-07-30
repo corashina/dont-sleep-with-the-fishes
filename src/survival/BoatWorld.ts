@@ -1264,6 +1264,7 @@ export class BoatWorld {
     );
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
+    this.supplyDisplay.updatePropAnimations(delta);
 
     if (advancePresentation) {
       const sequence = this.activeSequence;
