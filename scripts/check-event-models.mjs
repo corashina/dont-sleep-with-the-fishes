@@ -201,42 +201,142 @@ function sameNumbers(first, second) {
     && first.every((value, index) => Number.isFinite(value) && value === second[index]);
 }
 
-function hasDescendantMesh(node) {
-  if (node.getMesh()) return true;
+function activeSceneNodes(document) {
+  const root = document.getRoot();
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  if (!scene) throw new Error('active scene is missing');
+  const nodes = new Set();
+  for (const child of scene.listChildren()) {
+    child.traverse((node) => nodes.add(node));
+  }
+  return nodes;
+}
+
+function hasActiveDescendantMesh(node, activeNodes) {
   let found = false;
   node.traverse((candidate) => {
-    if (candidate.getMesh()) found = true;
+    if (activeNodes.has(candidate) && candidate.getMesh()) found = true;
   });
   return found;
 }
 
 function validateAuthoredControls(id, document) {
   const root = document.getRoot();
+  const activeNodes = activeSceneNodes(document);
   if (id === 'chestClosed') {
-    const lid = root.listNodes().find((node) => node.getName() === 'chestClosed:lid');
-    const base = root.listMeshes().find((mesh) => mesh.getName() === 'chestClosed:base');
-    if (!lid || !base || !hasDescendantMesh(lid)) {
+    const lids = [...activeNodes].filter((node) => node.getName() === 'chestClosed:lid');
+    const activeBaseNodes = [...activeNodes].filter(
+      (node) => node.getMesh()?.getName() === 'chestClosed:base',
+    );
+    if (
+      lids.length !== 1
+      || activeBaseNodes.length !== 1
+      || !hasActiveDescendantMesh(lids[0], activeNodes)
+    ) {
       throw new Error(`${id}: usable lid node is missing`);
     }
   }
   if (id === 'riggedHand') {
-    const skins = root.listSkins();
-    const rigJoints = skins.flatMap((skin) => skin.listJoints());
-    const namedFingerJoints = root.listNodes().filter((node) => (
+    const activeSkinnedNodes = [...activeNodes].filter(
+      (node) => node.getMesh() && node.getSkin(),
+    );
+    const activeSkins = new Set(activeSkinnedNodes.map((node) => node.getSkin()));
+    const rigJoints = [...activeSkins].flatMap((skin) => skin.listJoints());
+    const namedFingerJoints = rigJoints.filter((node) => (
       /(thumb|index|middle|ring|pinky)/i.test(node.getName())
     ));
     if (
-      !skins.some((skin) => skin.listJoints().length >= 5)
-      && namedFingerJoints.length < 5
+      activeSkins.size !== 1
+      || rigJoints.length < 5
+      || namedFingerJoints.length < 5
+      || rigJoints.some((joint) => !activeNodes.has(joint))
     ) {
       throw new Error(`${id}: usable rig or named movable joints are missing`);
     }
-    if (rigJoints.length > 0 && !root.listAnimations().some(
-      (animation) => animation.listChannels().length > 0,
-    )) {
-      throw new Error(`${id}: rig has no usable animation channels`);
+    const rigJointSet = new Set(rigJoints);
+    const animationChannels = root.listAnimations().flatMap(
+      (animation) => animation.listChannels(),
+    );
+    if (
+      animationChannels.length === 0
+      || animationChannels.some((channel) => (
+        !channel.getTargetNode()
+        || !rigJointSet.has(channel.getTargetNode())
+        || !activeNodes.has(channel.getTargetNode())
+      ))
+    ) {
+      throw new Error(`${id}: animation channels are not linked to the active rig`);
     }
   }
+}
+
+function expectAuthoredControlRejection(id, document, label) {
+  let rejected = false;
+  try {
+    validateAuthoredControls(id, document);
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) throw new Error(`${id}: accepted negative fixture ${label}`);
+}
+
+function runAuthoredControlNegativeFixtures(id, document) {
+  const root = document.getRoot();
+  const activeNodes = activeSceneNodes(document);
+  if (id === 'chestClosed') {
+    const activeLid = [...activeNodes].find(
+      (node) => node.getName() === 'chestClosed:lid',
+    );
+    let lidMesh = null;
+    activeLid?.traverse((node) => {
+      if (!lidMesh && node.getMesh()) lidMesh = node.getMesh();
+    });
+    if (!activeLid || !lidMesh) throw new Error(`${id}: negative fixture setup failed`);
+    const originalName = activeLid.getName();
+    const unusedLid = document.createNode('chestClosed:lid').setMesh(lidMesh);
+    activeLid.setName('chestClosed:active-lid-hidden-from-global-check');
+    try {
+      expectAuthoredControlRejection(id, document, 'unused lid tree');
+    } finally {
+      activeLid.setName(originalName);
+      unusedLid.dispose();
+    }
+    return 1;
+  }
+  if (id === 'riggedHand') {
+    const activeHand = [...activeNodes].find(
+      (node) => node.getMesh() && node.getSkin(),
+    );
+    const activeSkin = activeHand?.getSkin();
+    if (!activeHand || !activeSkin) throw new Error(`${id}: negative fixture setup failed`);
+    const unusedHand = document.createNode('riggedHand:unused-skinned-mesh')
+      .setMesh(activeHand.getMesh())
+      .setSkin(activeSkin);
+    activeHand.setSkin(null);
+    try {
+      expectAuthoredControlRejection(id, document, 'unused hand rig');
+    } finally {
+      activeHand.setSkin(activeSkin);
+      unusedHand.dispose();
+    }
+
+    const channels = root.listAnimations().flatMap(
+      (animation) => animation.listChannels(),
+    );
+    const originalTargets = channels.map((channel) => channel.getTargetNode());
+    const unusedJoints = channels.map((_, index) => (
+      document.createNode(`riggedHand:unused-animation-joint-${index}`)
+    ));
+    channels.forEach((channel, index) => channel.setTargetNode(unusedJoints[index]));
+    try {
+      expectAuthoredControlRejection(id, document, 'unlinked animation channels');
+    } finally {
+      channels.forEach((channel, index) => channel.setTargetNode(originalTargets[index]));
+      unusedJoints.forEach((joint) => joint.dispose());
+    }
+    return 2;
+  }
+  return 0;
 }
 
 function parseLedgerRow(row) {
@@ -376,10 +476,14 @@ async function main() {
         throw new Error(`${id}: model bounds do not match metadata`);
       }
       validateAuthoredControls(id, document);
+      const negativeFixtureCount = runAuthoredControlNegativeFixtures(id, document);
       if (ledger) verifyLedgerRow(ledger, id, expected);
       console.log(
         `${id}.glb: ${measurement.triangles} / ${descriptor.maxTriangles} triangles; `
-        + `SHA-256 ${expected.outputSha256}`,
+        + `SHA-256 ${expected.outputSha256}`
+        + (negativeFixtureCount > 0
+          ? `; ${negativeFixtureCount} negative control fixture(s) rejected`
+          : ''),
       );
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
