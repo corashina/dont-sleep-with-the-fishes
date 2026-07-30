@@ -2,10 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   sampleWeatherItemUse,
+  sampleWeatherReaction,
   sampleWeatherReveal,
   weatherItemUseDuration,
+  weatherReactionDuration,
   weatherRevealDuration,
   type WeatherItemSample,
+  type WeatherReactionSample,
   type WeatherRevealSample,
 } from '../src/survival/weatherEventChoreography';
 
@@ -23,6 +26,16 @@ const item = (): WeatherItemSample => ({
   cameraYaw: 0, cameraPush: 0, supplyRoll: 0, effectKind: 'none',
 });
 
+const reaction = (): WeatherReactionSample => ({
+  actorX: 0, actorY: 0, actorZ: 0,
+  actorYaw: 0, actorPitch: 0, actorRoll: 0,
+  actorScaleX: 1, actorScaleY: 1, actorScaleZ: 1,
+  actorEffect: 0,
+  cameraX: 0, cameraY: 0, cameraZ: 0,
+  cameraYaw: 0, cameraPitch: 0, cameraRoll: 0,
+  effectKind: 'none',
+});
+
 const hasItemMotion = (sample: WeatherItemSample): boolean => (
   Math.abs(sample.x) > 0.01 || Math.abs(sample.y) > 0.01 || Math.abs(sample.z) > 0.01
   || Math.abs(sample.yaw) > 0.01 || Math.abs(sample.pitch) > 0.01 || Math.abs(sample.roll) > 0.01
@@ -38,12 +51,14 @@ const supportedPairs = [
   ['thunderstorm', 'anchor'], ['thunderstorm', 'bucket'], ['thunderstorm', 'umbrella'],
   ['restless-waves', 'anchor'], ['restless-waves', 'swimRing'],
   ['man-in-the-fog', 'compass'], ['man-in-the-fog', 'spyglass'], ['man-in-the-fog', 'flashlight'],
+  ['bad-sleep', 'bucket'], ['bad-sleep', 'flashlight'],
+  ['bad-sleep', 'swimRing'], ['bad-sleep', 'umbrella'],
 ] as const;
 
 describe('weather event choreography', () => {
   it.each([
     'shower-night', 'windy-night', 'thunderstorm',
-    'restless-waves', 'man-in-the-fog',
+    'restless-waves', 'man-in-the-fog', 'bad-sleep',
   ])('restores %s reveal to identity', (eventId) => {
     const output = reveal();
     expect(weatherRevealDuration(eventId)).toBeGreaterThanOrEqual(3.4);
@@ -59,9 +74,13 @@ describe('weather event choreography', () => {
     expect(output.figureVisibility).toBe(0);
   });
 
+  it('holds the Bad Sleep reveal for 3.4 seconds', () => {
+    expect(weatherRevealDuration('bad-sleep')).toBe(3.4);
+  });
+
   it.each([
     'shower-night', 'windy-night', 'thunderstorm',
-    'restless-waves', 'man-in-the-fog',
+    'restless-waves', 'man-in-the-fog', 'bad-sleep',
   ])('%s reveal has visible middle motion and eases home before completion', (eventId) => {
     const middle = reveal();
     const nearEnd = reveal();
@@ -73,7 +92,7 @@ describe('weather event choreography', () => {
 
   it.each([
     'shower-night', 'windy-night', 'thunderstorm',
-    'restless-waves', 'man-in-the-fog',
+    'restless-waves', 'man-in-the-fog', 'bad-sleep',
   ])('%s reveal enters continuously from exact identity', (eventId) => {
     const start = reveal();
     const nearStart = reveal();
@@ -111,6 +130,32 @@ describe('weather event choreography', () => {
       return output.effectKind;
     });
     expect(new Set(commands).size).toBe(supportedPairs.length);
+  });
+
+  it('assigns each Bad Sleep comfort object a distinct reaction', () => {
+    const effects = ['bucket', 'flashlight', 'swimRing', 'umbrella'].map((choiceId) => {
+      const output = item();
+      sampleWeatherItemUse('bad-sleep', choiceId, 0.5, output);
+      return output.effectKind;
+    });
+    expect(new Set(effects).size).toBe(effects.length);
+  });
+
+  it('sequences two Windy Night broken actors', () => {
+    const first = reaction();
+    const second = reaction();
+    expect(weatherReactionDuration('windy-night', 'sleep', 2)).toBeGreaterThan(1.4);
+    sampleWeatherReaction('windy-night', 'sleep', 0, 2, 'broken', -20, 0.35, first);
+    sampleWeatherReaction('windy-night', 'sleep', 1, 2, 'broken', -20, 0.35, second);
+    expect(first.actorEffect).toBeGreaterThan(second.actorEffect);
+  });
+
+  it('gives Thunderstorm one main kick and smaller settle', () => {
+    const impact = reaction();
+    const settle = reaction();
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 0, null, -40, 0.38, impact);
+    sampleWeatherReaction('thunderstorm', 'sleep', 0, 0, null, -40, 0.72, settle);
+    expect(Math.abs(impact.cameraRoll)).toBeGreaterThan(Math.abs(settle.cameraRoll));
   });
 
   it('authors bearing, optical push, and wave-anchor stabilization as named beats', () => {

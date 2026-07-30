@@ -3,7 +3,8 @@ export type WeatherAnimationEventId =
   | 'windy-night'
   | 'thunderstorm'
   | 'restless-waves'
-  | 'man-in-the-fog';
+  | 'man-in-the-fog'
+  | 'bad-sleep';
 
 export type WeatherItemEffectKind =
   | 'none'
@@ -20,7 +21,24 @@ export type WeatherItemEffectKind =
   | 'wave-ring-buffer'
   | 'compass-bearing'
   | 'spyglass-optical-push'
-  | 'fog-flashlight-sweep';
+  | 'fog-flashlight-sweep'
+  | 'bad-sleep-bucket-rock'
+  | 'bad-sleep-flashlight-glow'
+  | 'bad-sleep-ring-drift'
+  | 'bad-sleep-umbrella-fold';
+
+export type WeatherReactionEffectKind =
+  | 'none'
+  | 'shower-safe-settle'
+  | 'shower-break-collapse'
+  | 'wind-break-fold'
+  | 'wind-loss-depart'
+  | 'bad-sleep-exhale'
+  | 'bad-sleep-umbrella-collapse'
+  | 'storm-anchor-steady'
+  | 'storm-break-collapse'
+  | 'storm-loss-lightning'
+  | 'storm-hull-impact';
 
 export interface WeatherRevealSample {
   cameraX: number;
@@ -53,6 +71,26 @@ export interface WeatherItemSample {
   effectKind: WeatherItemEffectKind;
 }
 
+export interface WeatherReactionSample {
+  actorX: number;
+  actorY: number;
+  actorZ: number;
+  actorYaw: number;
+  actorPitch: number;
+  actorRoll: number;
+  actorScaleX: number;
+  actorScaleY: number;
+  actorScaleZ: number;
+  actorEffect: number;
+  cameraX: number;
+  cameraY: number;
+  cameraZ: number;
+  cameraYaw: number;
+  cameraPitch: number;
+  cameraRoll: number;
+  effectKind: WeatherReactionEffectKind;
+}
+
 interface WeatherItemChoreography {
   readonly duration: number;
   readonly effectKind: Exclude<WeatherItemEffectKind, 'none'>;
@@ -64,6 +102,7 @@ const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Obje
   thunderstorm: 4,
   'restless-waves': 3.8,
   'man-in-the-fog': 4.2,
+  'bad-sleep': 3.4,
 });
 
 const ITEM_CHOREOGRAPHY: Readonly<
@@ -92,6 +131,12 @@ const ITEM_CHOREOGRAPHY: Readonly<
     compass: Object.freeze({ duration: 1.2, effectKind: 'compass-bearing' }),
     spyglass: Object.freeze({ duration: 1.45, effectKind: 'spyglass-optical-push' }),
     flashlight: Object.freeze({ duration: 1.35, effectKind: 'fog-flashlight-sweep' }),
+  }),
+  'bad-sleep': Object.freeze({
+    bucket: Object.freeze({ duration: 1.3, effectKind: 'bad-sleep-bucket-rock' }),
+    flashlight: Object.freeze({ duration: 1.25, effectKind: 'bad-sleep-flashlight-glow' }),
+    swimRing: Object.freeze({ duration: 1.35, effectKind: 'bad-sleep-ring-drift' }),
+    umbrella: Object.freeze({ duration: 1.4, effectKind: 'bad-sleep-umbrella-fold' }),
   }),
 });
 
@@ -140,6 +185,26 @@ function resetItem(output: WeatherItemSample): void {
   output.cameraYaw = 0;
   output.cameraPush = 0;
   output.supplyRoll = 0;
+  output.effectKind = 'none';
+}
+
+function resetReaction(output: WeatherReactionSample): void {
+  output.actorX = 0;
+  output.actorY = 0;
+  output.actorZ = 0;
+  output.actorYaw = 0;
+  output.actorPitch = 0;
+  output.actorRoll = 0;
+  output.actorScaleX = 1;
+  output.actorScaleY = 1;
+  output.actorScaleZ = 1;
+  output.actorEffect = 0;
+  output.cameraX = 0;
+  output.cameraY = 0;
+  output.cameraZ = 0;
+  output.cameraYaw = 0;
+  output.cameraPitch = 0;
+  output.cameraRoll = 0;
   output.effectKind = 'none';
 }
 
@@ -223,6 +288,12 @@ export function sampleWeatherReveal(
       output.figureVisibility = pulse(t, 0.38, 0.55, 0.78);
       output.figureDistance = output.figureVisibility
         * (1 - 0.35 * smoothstep((t - 0.38) / 0.4));
+      break;
+    case 'bad-sleep':
+      output.cameraY = -0.08 * pulse(t, 0.12, 0.5, 0.88);
+      output.cameraYaw = 0.12 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraPitch = 0.06 * pulse(t, 0.2, 0.54, 0.82);
+      output.supplyRoll = 0.05 * Math.sin(3 * Math.PI * t) * sweep;
       break;
   }
 
@@ -403,6 +474,36 @@ export function sampleWeatherItemUse(
           break;
       }
       break;
+    case 'bad-sleep':
+      switch (choiceId) {
+        case 'bucket':
+          output.y = 0.2 * hold;
+          output.roll = 0.16 * Math.sin(2 * Math.PI * t) * hold;
+          output.effect = pulse(t, 0.12, 0.5, 0.86);
+          break;
+        case 'flashlight':
+          output.y = 0.3 * hold;
+          output.pitch = -0.12 * hold;
+          output.effect = pulse(t, 0.08, 0.46, 0.9);
+          output.cameraYaw = 0.08 * Math.sin(Math.PI * t) * hold;
+          break;
+        case 'swimRing':
+          output.x = 0.18 * Math.sin(2 * Math.PI * t) * hold;
+          output.y = 0.16 * hold;
+          output.roll = 0.1 * hold;
+          output.scaleX = 1 + 0.08 * hold;
+          output.scaleZ = 1 + 0.08 * hold;
+          output.effect = hold;
+          break;
+        case 'umbrella':
+          output.y = 0.28 * hold;
+          output.pitch = -0.14 * hold;
+          output.roll = -0.18 * pulse(t, 0.2, 0.58, 0.86);
+          output.scaleY = 1 - 0.1 * pulse(t, 0.28, 0.6, 0.84);
+          output.effect = pulse(t, 0.2, 0.58, 0.86);
+          break;
+      }
+      break;
   }
 
   const ingressEnvelope = smoothstep(t / 0.08);
@@ -421,5 +522,135 @@ export function sampleWeatherItemUse(
   output.cameraYaw *= envelope;
   output.cameraPush *= envelope;
   output.supplyRoll *= envelope;
+  return true;
+}
+
+export function weatherReactionDuration(
+  eventId: string,
+  choiceId: string,
+  actorCount: number,
+): number | null {
+  if (!isWeatherEventId(eventId)) return null;
+  const actors = Math.max(0, Math.floor(actorCount));
+  switch (eventId) {
+    case 'shower-night': return 1.25 + Math.min(actors, 2) * 0.18;
+    case 'windy-night': return 1.45 + Math.min(actors, 2) * 0.28;
+    case 'bad-sleep': return choiceId === 'umbrella' ? 1.4 : 1.2;
+    case 'thunderstorm': return choiceId === 'anchor' ? 1.5 : 1.35;
+    default: return actors > 0 ? 1.25 : 1.1;
+  }
+}
+
+export function sampleWeatherReaction(
+  eventId: string,
+  choiceId: string,
+  actorIndex: number,
+  actorCount: number,
+  condition: 'broken' | 'lost' | null,
+  hullDelta: number,
+  progress: number,
+  output: WeatherReactionSample,
+): boolean {
+  resetReaction(output);
+  if (!isWeatherEventId(eventId) || weatherReactionDuration(eventId, choiceId, actorCount) === null) {
+    return false;
+  }
+
+  const t = clamp01(progress);
+  if (t === 0 || t === 1) return true;
+  const index = Math.max(0, Math.floor(actorIndex));
+  const count = Math.max(0, Math.floor(actorCount));
+  const staggered = clamp01((t - Math.min(index, count) * 0.16) / 0.72);
+  const actorBeat = pulse(staggered, 0.04, 0.42, 0.88);
+  const hullBeat = pulse(t, 0.14, 0.38, 0.62);
+
+  switch (eventId) {
+    case 'shower-night':
+      if (condition === 'broken') {
+        output.effectKind = 'shower-break-collapse';
+        output.actorY = -0.34 * actorBeat;
+        output.actorPitch = 0.38 * actorBeat;
+        output.actorScaleY = 1 - 0.3 * actorBeat;
+        output.actorEffect = actorBeat;
+      } else {
+        output.effectKind = 'shower-safe-settle';
+        output.actorY = -0.08 * actorBeat;
+        output.actorRoll = 0.07 * actorBeat;
+        output.actorEffect = actorBeat;
+      }
+      break;
+    case 'windy-night':
+      if (condition === 'lost') {
+        output.effectKind = 'wind-loss-depart';
+        output.actorX = -0.8 * actorBeat;
+        output.actorY = 0.22 * actorBeat;
+        output.actorYaw = 0.6 * actorBeat;
+      } else {
+        output.effectKind = 'wind-break-fold';
+        output.actorY = -0.26 * actorBeat;
+        output.actorRoll = 0.44 * actorBeat;
+        output.actorScaleY = 1 - 0.26 * actorBeat;
+      }
+      output.actorEffect = actorBeat;
+      output.cameraRoll = 0.08 * hullBeat;
+      break;
+    case 'bad-sleep':
+      if (choiceId === 'umbrella' && condition === 'broken') {
+        output.effectKind = 'bad-sleep-umbrella-collapse';
+        output.actorY = -0.22 * actorBeat;
+        output.actorScaleY = 1 - 0.34 * actorBeat;
+        output.actorRoll = -0.26 * actorBeat;
+      } else {
+        output.effectKind = 'bad-sleep-exhale';
+        output.actorY = -0.06 * actorBeat;
+        output.cameraY = -0.04 * hullBeat;
+      }
+      output.actorEffect = actorBeat;
+      break;
+    case 'thunderstorm':
+      if (choiceId === 'anchor' && condition !== 'broken' && condition !== 'lost') {
+        output.effectKind = 'storm-anchor-steady';
+        output.actorY = -0.12 * actorBeat;
+        output.actorPitch = 0.16 * actorBeat;
+      } else if (condition === 'broken') {
+        output.effectKind = 'storm-break-collapse';
+        output.actorY = -0.36 * actorBeat;
+        output.actorRoll = 0.38 * actorBeat;
+        output.actorScaleY = 1 - 0.32 * actorBeat;
+      } else if (condition === 'lost') {
+        output.effectKind = 'storm-loss-lightning';
+        output.actorX = 0.44 * actorBeat;
+        output.actorY = 0.22 * actorBeat;
+        output.cameraRoll = -0.12 * actorBeat;
+      } else {
+        output.effectKind = 'storm-hull-impact';
+        output.cameraX = 0.16 * hullBeat;
+        output.cameraY = -0.11 * hullBeat;
+        output.cameraPitch = 0.09 * hullBeat;
+        output.cameraRoll = -0.18 * hullBeat;
+      }
+      output.actorEffect = actorBeat;
+      break;
+    default:
+      return true;
+  }
+
+  const envelope = smoothstep(t / 0.08) * (1 - smoothstep((t - 0.76) / 0.24));
+  output.actorX *= envelope;
+  output.actorY *= envelope;
+  output.actorZ *= envelope;
+  output.actorYaw *= envelope;
+  output.actorPitch *= envelope;
+  output.actorRoll *= envelope;
+  output.actorScaleX = 1 + (output.actorScaleX - 1) * envelope;
+  output.actorScaleY = 1 + (output.actorScaleY - 1) * envelope;
+  output.actorScaleZ = 1 + (output.actorScaleZ - 1) * envelope;
+  output.actorEffect *= envelope;
+  output.cameraX *= envelope;
+  output.cameraY *= envelope;
+  output.cameraZ *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPitch *= envelope;
+  output.cameraRoll *= envelope;
   return true;
 }
