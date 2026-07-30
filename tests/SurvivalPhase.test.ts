@@ -484,20 +484,20 @@ describe('SurvivalPhase orchestration', () => {
       'dawn',
       'begin-event',
       'stage:drifting-loot:barrel',
-      'reveal:drifting-loot',
       'render',
       'settle',
       'uncover',
+      'reveal:drifting-loot',
     ].includes(call))).toEqual([
       'nightfall',
       'cover',
       'dawn',
       'begin-event',
       'stage:drifting-loot:barrel',
-      'reveal:drifting-loot',
       'render',
       'settle',
       'uncover',
+      'reveal:drifting-loot',
     ]);
 
     calls.length = 0;
@@ -1914,7 +1914,7 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'begin-event', 'nightfall', 'cover', 'stage', 'caption', 'scene-render', 'settle',
+      'begin-event', 'nightfall', 'cover', 'stage', 'scene-render', 'settle',
     ]);
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
     expect(setEventSelection).not.toHaveBeenCalled();
@@ -1933,7 +1933,7 @@ describe('SurvivalPhase orchestration', () => {
 
     tableauReveal.resolve();
     await flushPromises();
-    expect(calls.at(-1)).toBe('selection');
+    expect(calls.slice(-2)).toEqual(['caption', 'selection']);
     expect(setEventSelection).toHaveBeenCalledOnce();
   });
 
@@ -1968,8 +1968,8 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(calls).toEqual([
-      'begin-event', 'nightfall', 'cover', 'stage', 'caption',
-      'uncover', 'reveal-tableau', 'selection',
+      'begin-event', 'nightfall', 'cover', 'stage',
+      'uncover', 'reveal-tableau', 'caption', 'selection',
     ]);
   });
 
@@ -2757,6 +2757,7 @@ describe('SurvivalPhase orchestration', () => {
     ) => {
       calls.push('selection');
     });
+    const showEventResult = vi.fn(() => { calls.push('result:paper-inside'); });
     const phase = SurvivalPhase.forTest({
       session,
       world: {
@@ -2766,6 +2767,9 @@ describe('SurvivalPhase orchestration', () => {
         revealEvent: vi.fn(async () => { calls.push('reveal:drifting-bottle'); }),
         playEventItemUse: vi.fn(async () => { calls.push('use:swimRing-1'); }),
         reactToEventOutcome: vi.fn(async () => { calls.push('react:drifting-bottle'); }),
+        projectEventResultBounds: vi.fn(() => (
+          { x: 440, y: 300, width: 80, height: 65, depth: 2, visible: true }
+        )),
         clearEvent: vi.fn(() => { calls.push('clear:drifting-bottle'); }),
         dispose: vi.fn(),
       },
@@ -2780,6 +2784,7 @@ describe('SurvivalPhase orchestration', () => {
         showEventReveal: vi.fn(async () => { calls.push('caption:drifting-bottle'); }),
         setEventSelection,
         setEventUsing: vi.fn(),
+        showEventResult,
         showFeedback: vi.fn(() => { calls.push('feedback'); }),
         holdEventOutcome: vi.fn(() => {
           calls.push('hold');
@@ -2814,8 +2819,13 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:drifting-bottle'));
     expect(calls.indexOf('reveal:drifting-bottle')).toBeLessThan(calls.indexOf('selection'));
     expect(calls.indexOf('use:swimRing-1')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
-    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('feedback'));
-    expect(calls.indexOf('feedback')).toBeLessThan(calls.indexOf('hold'));
+    expect(showEventResult).toHaveBeenCalledWith(expect.objectContaining({
+      caption: 'Paper inside',
+      detail: 'You recover bottled paper.',
+      target: expect.objectContaining({ x: 440, y: 300 }),
+    }));
+    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('clear:drifting-bottle'));
     expect(calls.indexOf('clear:drifting-bottle')).toBeLessThan(calls.indexOf('cue:dawn'));
