@@ -1363,19 +1363,19 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('opens one day event only after an action and resolves an authored choice once', () => {
-    const session = new SurvivalSession(saved('map', 'cannedFood'), {
+    const session = new SurvivalSession(saved('map', 'bucket', 'cannedFood'), {
       seed: 2,
       random: sequenceRandom([0, 0, 0]),
-      initial: { day: 2, hunger: 80 },
+      initial: { day: 4, hunger: 80 },
     });
     expect(session.requestDayEvent().code).toBe('act-first');
     expect(session.perform('eat').accepted).toBe(true);
     expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
     expect(session.snapshot().state).toBe('dayEvent');
-    const first = session.resolveEvent(itemResponse('map'));
+    const first = session.resolveEvent(itemResponse('bucket'));
     expect(first.accepted).toBe(true);
     const inventory = session.snapshot().inventory;
-    expect(session.resolveEvent(itemResponse('map')).accepted).toBe(false);
+    expect(session.resolveEvent(itemResponse('bucket')).accepted).toBe(false);
     expect(session.snapshot().inventory).toEqual(inventory);
     expect(session.endDay().code).toBe('quiet-night');
     const journal = session.snapshot().journalEntries[0]!;
@@ -1530,6 +1530,8 @@ describe('SurvivalSession daytime actions', () => {
         initialEventId: 'dangerous-waters',
       });
 
+      expect(session.snapshot()).toMatchObject({ state: 'nightEvent' });
+
       expect(session.resolveEvent(response)).toMatchObject({
         accepted: true,
         deltas,
@@ -1545,23 +1547,23 @@ describe('SurvivalSession daytime actions', () => {
   );
 
   it('finalizes one journal entry with separate attempted and concrete facts', () => {
-    const session = new SurvivalSession(saved('map'), {
+    const session = new SurvivalSession(saved('bucket'), {
       seed: 9,
       random: sequenceRandom([0, 0.5, 0, 0]),
       initial: { day: 2 },
-      initialEventId: 'dangerous-waters',
+      initialEventId: 'leak',
     });
-    session.resolveEvent(itemResponse('map'));
+    session.resolveEvent(itemResponse('bucket'));
     session.perform('endDay');
-    session.resolveEvent(itemResponse('map'));
+    session.resolveEvent(choiceResponse('sleep'));
 
     expect(session.snapshot().journalEntries).toEqual([expect.objectContaining({
       day: 2,
       weather: 'calm',
       daytime: expect.objectContaining({
-        eventId: 'dangerous-waters',
-        attemptedChoiceId: 'map',
-        attemptedItemId: 'map',
+        eventId: 'leak',
+        attemptedChoiceId: 'bucket',
+        attemptedItemId: 'bucket',
         resolution: 'suitableItem',
         outcomeMessage: 'Nothing happens.',
         inventoryMutations: [],
@@ -1570,9 +1572,9 @@ describe('SurvivalSession daytime actions', () => {
         kind: 'event',
         event: expect.objectContaining({
           phase: 'night',
-          attemptedChoiceId: 'map',
-          attemptedItemId: 'map',
-          resolution: 'suitableItem',
+          attemptedChoiceId: 'sleep',
+          attemptedItemId: null,
+          resolution: 'endure',
         }),
       },
     })]);
@@ -1596,15 +1598,15 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('protects nested daytime and nighttime event records from snapshot mutation', () => {
-    const session = new SurvivalSession(saved('map', 'bucket'), {
+    const session = new SurvivalSession(saved('bucket'), {
       seed: 9,
       random: sequenceRandom([0, 0.5, 0, 0]),
       initial: { day: 2 },
-      initialEventId: 'dangerous-waters',
+      initialEventId: 'leak',
     });
-    session.resolveEvent(itemResponse('map'));
-    session.perform('endDay');
     session.resolveEvent(itemResponse('bucket'));
+    session.perform('endDay');
+    session.resolveEvent(choiceResponse('sleep'));
     const first = session.snapshot().journalEntries[0]!;
     const daytime = first.daytime;
     const nighttime = first.nighttime;

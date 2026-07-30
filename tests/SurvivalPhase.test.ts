@@ -1805,7 +1805,7 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'scene-render', 'settle',
+      'fish', 'begin-event', 'cover', 'stage', 'event', 'scene-render', 'settle',
     ]);
     expect(setEventSelection).not.toHaveBeenCalled();
     expect(calls).not.toContain('reveal-tableau');
@@ -1823,8 +1823,8 @@ describe('SurvivalPhase orchestration', () => {
     tableauReveal.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'scene-render',
-      'settle', 'uncover', 'reveal-tableau', 'event', 'selection',
+      'fish', 'begin-event', 'cover', 'stage', 'event', 'scene-render',
+      'settle', 'uncover', 'reveal-tableau', 'selection',
     ]);
   });
 
@@ -1834,7 +1834,7 @@ describe('SurvivalPhase orchestration', () => {
       {
         seed: 202,
         random: sequenceRandom([0.999999, 0, 0]),
-        initial: { day: 3, hunger: 35, energy: 3 },
+        initial: { day: 4, hunger: 35, energy: 3 },
       },
     );
     const setEventSelection = vi.fn();
@@ -1872,7 +1872,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       state: 'dayEvent',
-      pendingEventId: 'dangerous-waters',
+      pendingEventId: 'leak',
       energy: 3,
     });
     expect(setEventSelection).toHaveBeenCalled();
@@ -1881,13 +1881,13 @@ describe('SurvivalPhase orchestration', () => {
     expect(session.snapshot()).toMatchObject({
       state: 'day',
       pendingEventId: null,
-      energy: 3,
+      energy: 2,
       food: 0,
     });
   });
 
   it('stages a committed night event under cover before revealing choices', async () => {
-    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     let current = snapshot();
     const calls: string[] = [];
     const setEventEligibleItems = vi.fn();
@@ -1965,7 +1965,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('keeps event reveal ordering through authored transitions', async () => {
-    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'night')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     let current = snapshot();
     const calls: string[] = [];
     const phase = SurvivalPhase.forTest({
@@ -2006,7 +2006,7 @@ describe('SurvivalPhase orchestration', () => {
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: vi.fn(() => snapshot({
-          state: 'dayEvent',
+          state: 'nightEvent',
           pendingEventId: event.id,
         })),
       },
@@ -2427,7 +2427,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('holds a resolved night event, then advances and renders only while covered', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
     const calls: string[] = [];
     const outcomeCue = deferred();
@@ -2457,7 +2457,7 @@ describe('SurvivalPhase orchestration', () => {
       setBusy,
       showFeedback: vi.fn(() => { calls.push('feedback'); }),
       holdEventOutcome: vi.fn(() => {
-        calls.push('hold');
+        calls.push('hold-result');
         return outcomeHold.promise;
       }),
       render: vi.fn((rendered) => {
@@ -2490,7 +2490,7 @@ describe('SurvivalPhase orchestration', () => {
           expect(eventId).toBe(event.id);
           return tableauReaction.promise;
         }),
-        clearEvent: vi.fn(() => { calls.push('clear'); }),
+        clearEvent: vi.fn(() => { calls.push('clear-event'); }),
         syncInventory: vi.fn((synced) => {
           if (trackExit) calls.push(`inventory:${synced.state}`);
         }),
@@ -2524,19 +2524,19 @@ describe('SurvivalPhase orchestration', () => {
 
     tableauReaction.resolve();
     await flushPromises();
-    expect(calls).toEqual(['resolve', 'cue', 'react', 'feedback', 'hold']);
+    expect(calls).toEqual(['resolve', 'cue', 'react', 'feedback', 'hold-result']);
 
     outcomeHold.resolve();
     await flushPromises();
     expect(calls.at(-1)).toBe('cover');
-    expect(calls).not.toContain('clear');
+    expect(calls).not.toContain('clear-event');
     expect(calls).not.toContain('dawn');
 
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'resolve', 'cue', 'react', 'feedback', 'hold', 'cover',
-      'clear', 'dawn', 'dawn-cue',
+      'resolve', 'cue', 'react', 'feedback', 'hold-result', 'cover',
+      'clear-event', 'dawn', 'dawn-cue',
     ]);
     expect(calls).not.toContain('uncover');
 
@@ -2544,7 +2544,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls.slice(-2)).toEqual(['scene-render', 'settle']);
     expect(calls).not.toContain('uncover');
-    for (const mutation of ['clear', 'dawn', 'render:day', 'inventory:day']) {
+    for (const mutation of ['clear-event', 'dawn', 'render:day', 'inventory:day']) {
       expect(calls.indexOf(mutation)).toBeGreaterThan(calls.indexOf('cover'));
       expect(calls.indexOf(mutation)).toBeLessThan(calls.indexOf('settle'));
     }
@@ -2557,6 +2557,16 @@ describe('SurvivalPhase orchestration', () => {
 
     uncover.resolve();
     await flushPromises();
+    expect(calls.filter((call) => [
+      'hold-result', 'cover', 'clear-event', 'dawn', 'scene-render', 'uncover',
+    ].includes(call))).toEqual([
+      'hold-result',
+      'cover',
+      'clear-event',
+      'dawn',
+      'scene-render',
+      'uncover',
+    ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
   });
