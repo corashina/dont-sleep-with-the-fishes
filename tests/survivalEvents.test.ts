@@ -337,6 +337,7 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[1].id = catalog[0].choices[0].id; }, /choice ID.*duplicated/i);
     rejects((catalog) => { catalog[0].choices = []; }, /choices.*empty/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes = []; }, /outcomes.*empty/i);
+    rejects((catalog) => { catalog[0].choices[0].outcomes[0].resultId = ' '; }, /result ID.*blank/i);
     rejects((catalog) => { catalog[0].weight = 0; }, /event.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].weight = 0; }, /outcome.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].itemId = 'telescope'; }, /unknown item/i);
@@ -347,6 +348,8 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'telescope')]; }, /unknown item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'ductTape', 1.5)]; }, /quantity/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'flashlight')]; }, /not breakable/i);
+    rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
+    rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);
   });
 

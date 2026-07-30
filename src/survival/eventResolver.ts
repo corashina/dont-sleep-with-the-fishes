@@ -32,6 +32,7 @@ export function resolveWeightedOutcome(
   }
 
   return {
+    ...(selected.resultId === undefined ? {} : { resultId: selected.resultId }),
     weight: selected.weight,
     message: selected.message,
     effects: {
