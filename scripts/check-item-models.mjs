@@ -316,7 +316,9 @@ function verifyLedgerRow(ledger, itemId, measurement) {
     if (
       actual.length !== 10
       || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
-      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.sha256)
+      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.archiveSha256)
+      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.modelSha256)
+      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.textureSha256)
       || !actual[8].includes(CAPTAIN_WHISKERS_IDLE_CLIP)
       || actual[9] !== CAPTAIN_WHISKERS_SOURCE.downloadedOn
     ) {

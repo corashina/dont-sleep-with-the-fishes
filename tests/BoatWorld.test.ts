@@ -898,7 +898,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('plays Captain Whiskers idle on the visible lifeboat perch', async () => {
+  it('keeps Captain Whiskers idle running during ambient updates', async () => {
     const whiskers = savedItem('captainWhiskers');
     const propModels = await loadProductionPropModels();
     const world = new BoatWorld(
@@ -913,7 +913,7 @@ describe('BoatWorld helpers', () => {
       const animatedRoot = copy.getObjectByName('CaptainWhiskers')!;
       const before = animatedRoot.quaternion.clone();
 
-      world.update(0.5, 0.5);
+      world.updateAmbient(0.5, 0.5);
 
       expect(copy.visible).toBe(true);
       expect(animatedRoot.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
