@@ -2,21 +2,21 @@ import {
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
-  CylinderGeometry,
   DoubleSide,
-  DodecahedronGeometry,
   Euler,
   Group,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Texture,
   TorusGeometry,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import type { EventModelLibrary } from './EventModelLibrary';
 import type {
   ActionOutcome,
   ItemCondition,
@@ -101,41 +101,24 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.effectKind = 'none';
 }
 
-function createFogMan(material: Material): Group {
-  const root = new Group();
+function prepareFogMan(root: Group, material: Material): Group {
+  const replacedMaterials = new Set<Material>();
+  const replacedTextures = new Set<Texture>();
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const replaced of materials) {
+      replacedMaterials.add(replaced);
+      for (const value of Object.values(replaced)) {
+        if (value instanceof Texture) replacedTextures.add(value);
+      }
+    }
+    object.material = material;
+  });
+  disposeResourceSets(replacedTextures, replacedMaterials);
+
   root.name = 'fog-man-silhouette';
   root.position.set(3.4, 1.2, DISTANT_FIGURE_Z);
-
-  const body = new Mesh(new CylinderGeometry(0.34, 0.47, 1.25, 5), material);
-  body.name = 'fog-man-body';
-  body.position.y = 0.46;
-  body.rotation.z = -0.025;
-  root.add(body);
-
-  const coat = new Mesh(new CylinderGeometry(0.43, 0.68, 1.45, 5), material);
-  coat.name = 'fog-man-coat';
-  coat.position.set(0.04, -0.26, -0.025);
-  coat.rotation.y = 0.13;
-  root.add(coat);
-
-  const head = new Mesh(new DodecahedronGeometry(0.29, 0), material);
-  head.name = 'fog-man-head';
-  head.position.set(-0.035, 1.28, 0.015);
-  head.scale.set(0.82, 1.08, 0.74);
-  root.add(head);
-
-  const shoulders = new Mesh(new BoxGeometry(1.08, 0.18, 0.34, 1, 1, 1), material);
-  shoulders.name = 'fog-man-uneven-shoulders';
-  shoulders.position.set(0.08, 0.83, -0.03);
-  shoulders.rotation.set(0.03, -0.08, -0.09);
-  root.add(shoulders);
-
-  const nearShoulder = new Mesh(new BoxGeometry(0.33, 0.28, 0.31), material);
-  nearShoulder.name = 'fog-man-raised-shoulder';
-  nearShoulder.position.set(-0.43, 0.86, -0.02);
-  nearShoulder.rotation.z = 0.18;
-  root.add(nearShoulder);
-
   root.visible = false;
   return root;
 }
@@ -276,6 +259,7 @@ export class WeatherEventAnimator {
   constructor(
     private readonly cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
+    eventModels: EventModelLibrary,
   ) {
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
@@ -320,7 +304,8 @@ export class WeatherEventAnimator {
       depthWrite: false,
     });
 
-    this.silhouette = createFogMan(this.figureMaterial);
+    this.ownedMaterials.add(this.figureMaterial);
+    this.silhouette = prepareFogMan(eventModels.create('fogMan'), this.figureMaterial);
     this.flashlightBeam = createFlashlightBeam(this.beamMaterial);
     this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
     this.anchorChain = createAnchorChain(chainMaterial);
@@ -467,7 +452,7 @@ export class WeatherEventAnimator {
     this.disposed = true;
     this.worldRoot.removeFromParent();
     this.boatRoot.removeFromParent();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, new Set());
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
 
   private updateReveal(eventId: string, progress: number): void {
@@ -562,13 +547,36 @@ export class WeatherEventAnimator {
     const damagingFlashlight = eventId === 'man-in-the-fog'
       && response?.choiceId === 'flashlight'
       && healthDamage < 0;
+    const lostSupply = eventId === 'restless-waves'
+      && response?.condition === 'lost';
+    const brokenRing = eventId === 'restless-waves'
+      && response?.choiceId === 'swimRing'
+      && response.condition === 'broken';
 
-    if (response?.condition === 'broken') {
+    if (brokenRing) {
+      const compression = smoothstep((progress - 0.04) / 0.36);
+      const buckle = pulse(progress, 0.02, 0.24, 0.54);
+      this.itemSample.y = -0.09 * compression;
+      this.itemSample.yaw = -0.3 * compression;
+      this.itemSample.roll = 0.34 * compression + 0.08 * buckle;
+      this.itemSample.scaleX = 1 - 0.3 * compression;
+      this.itemSample.scaleY = 1 - 0.36 * compression;
+      this.itemSample.scaleZ = 1 + 0.08 * compression;
+      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+    } else if (response?.condition === 'broken') {
       const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
         * (1 - smoothstep((progress - 0.46) / 0.54));
       this.itemSample.y = -0.12 * settle;
       this.itemSample.roll = 0.26 * settle;
       this.itemSample.scaleY = 1 - 0.08 * settle;
+      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+    } else if (lostSupply) {
+      const departure = smoothstep((progress - 0.08) / 0.82);
+      this.itemSample.x = 1.8 * departure;
+      this.itemSample.y = 0.16 * departure;
+      this.itemSample.z = 0.15 * departure;
+      this.itemSample.yaw = 0.5 * departure;
+      this.itemSample.roll = -0.2 * departure;
       this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
     } else if (response?.condition === 'lost' || response?.condition === 'consumed') {
       const departure = smoothstep((progress - 0.08) / 0.82);
@@ -590,6 +598,18 @@ export class WeatherEventAnimator {
         -0.2 * grab,
         0.04 * grab,
         -0.06 * grab,
+      );
+      return;
+    }
+    if (eventId === 'restless-waves' && hullDamage < 0) {
+      const impact = pulse(progress, 0.04, 0.24, 0.62);
+      this.applyCameraPose(
+        0.14 * impact,
+        -0.025 * impact,
+        0,
+        -0.06 * impact,
+        0,
+        0.09 * impact,
       );
       return;
     }

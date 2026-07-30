@@ -580,6 +580,7 @@ export class BoatWorld {
     this.weatherEventAnimator = new WeatherEventAnimator(
       this.cameraRig,
       this.supplyDisplay,
+      this.eventModels,
     );
     this.boat.add(this.weatherEventAnimator.boatRoot);
 

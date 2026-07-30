@@ -208,14 +208,20 @@ export function sampleWeatherReveal(
       output.supplyRoll = 0.16 * Math.sin(3 * Math.PI * t) * sweep;
       output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
       break;
-    case 'restless-waves':
+    case 'restless-waves': {
+      const riseCarrier = (
+        Math.sin(Math.PI * t)
+        + 0.72 * Math.sin(3 * Math.PI * t)
+        + 0.38 * Math.sin(5 * Math.PI * t)
+      );
       output.cameraX = 0.14 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraY = 0.2 * Math.sin(3 * Math.PI * t) * sweep;
+      output.cameraY = 0.18 * riseCarrier * Math.sin(3 * Math.PI * t);
       output.cameraYaw = 0.28 * Math.sin(Math.PI * (t - 0.14));
-      output.cameraRoll = 0.16 * Math.sin(2 * Math.PI * t) * sweep;
-      output.supplyRoll = 0.24 * Math.sin(3 * Math.PI * t) * sweep;
-      output.supplyLift = 0.13 * pulse(t, 0.16, 0.52, 0.84);
+      output.cameraRoll = 0.15 * Math.sin(2 * Math.PI * t);
+      output.supplyRoll = 0.24 * Math.sin(3 * Math.PI * t);
+      output.supplyLift = 0.12 * Math.max(0, riseCarrier);
       break;
+    }
     case 'man-in-the-fog':
       output.cameraX = 0.1 * Math.sin(Math.PI * (t - 0.1));
       output.cameraYaw = 0.35 * Math.sin(Math.PI * (t - 0.18));

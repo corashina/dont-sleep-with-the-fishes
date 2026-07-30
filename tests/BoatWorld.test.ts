@@ -43,6 +43,7 @@ import {
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
+import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import {
   boatStorageTransform,
@@ -836,6 +837,103 @@ describe('BoatWorld helpers', () => {
       world.dispose();
       propModels.dispose();
     }
+  });
+
+  it('stages the loaded fog man and hides it when the event clears', () => {
+    const propModels = createTestPropModels();
+    const fogMan = new Group();
+    const geometry = new BufferGeometry();
+    const importedMaterial = new MeshStandardMaterial();
+    const figure = new Mesh(geometry, importedMaterial);
+    const disposeGeometry = vi.spyOn(geometry, 'dispose');
+    const disposeImportedMaterial = vi.spyOn(importedMaterial, 'dispose');
+    fogMan.add(figure);
+    const create = vi.fn(() => fogMan);
+    const eventModels = {
+      create,
+      animations: vi.fn(() => []),
+      dispose: vi.fn(),
+    } as unknown as EventModelLibrary;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+
+    expect(figure.material).not.toBe(importedMaterial);
+    expect(disposeImportedMaterial).toHaveBeenCalledOnce();
+    const silhouetteMaterial = figure.material as Material;
+    const disposeSilhouetteMaterial = vi.spyOn(silhouetteMaterial, 'dispose');
+
+    world.stageEvent('man-in-the-fog');
+    expect(create).toHaveBeenCalledWith('fogMan');
+    expect(world.scene.getObjectByName('fog-man-silhouette')).toBeDefined();
+
+    world.clearEvent();
+    expect(world.scene.getObjectByName('fog-man-silhouette')?.visible).toBe(false);
+
+    world.dispose();
+    expect(disposeGeometry).toHaveBeenCalledOnce();
+    expect(disposeSilhouetteMaterial).toHaveBeenCalledOnce();
+    expect(disposeImportedMaterial).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
+  it('slides lost supplies starboard and crumples a broken Ring on one hull impact', async () => {
+    const ring = savedItem('swimRing');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [ring],
+    );
+    world.syncInventory(snapshot([ring]));
+    const ringRoot = world.scene.getObjectByName('boat-supply:swimRing')!;
+    const baseX = ringRoot.position.x;
+
+    const lost = world.reactToEventOutcome(
+      'restless-waves',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The Ring slips away.',
+        deltas: {},
+        cue: 'none',
+      },
+      { choiceId: 'swimRing', instanceId: ring.instanceId, condition: 'lost' },
+    );
+    world.update(0.42, 0.42);
+    expect(ringRoot.position.x).toBeGreaterThan(baseX + 0.3);
+    world.clearEvent();
+    await lost;
+
+    const broken = world.reactToEventOutcome(
+      'restless-waves',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The Ring buckles against the hull.',
+        deltas: { hull: -20 },
+        cue: 'impact',
+      },
+      { choiceId: 'swimRing', instanceId: ring.instanceId, condition: 'broken' },
+    );
+    world.update(0.62, 0.2);
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    expect(cameraRig.position.x).toBeGreaterThan(0.1);
+    expect(ringRoot.scale.x).toBeLessThan(0.9);
+    expect(Math.abs(ringRoot.rotation.y)).toBeGreaterThan(0.1);
+
+    world.clearEvent();
+    await broken;
+    world.dispose();
+    propModels.dispose();
   });
 
   it('shows a newly gained supply without allocating a model during inventory sync', () => {
