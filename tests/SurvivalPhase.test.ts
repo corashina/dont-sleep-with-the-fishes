@@ -1,6 +1,7 @@
 // Importance: 5/5. Protects survival orchestration and lifecycle.
 import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { PhaseContext } from '../src/app/GamePhase';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
@@ -86,6 +87,20 @@ describe('formatFishingResult utility salvage', () => {
       code: 'utility-caught',
       deltas: catchId === 'bait' ? { bait: 1 } : {},
     }))).toMatchObject({ caption: 'UTILITY SALVAGE', title, detail });
+  });
+});
+
+describe('SurvivalPhase test context', () => {
+  it('includes an empty event model library', () => {
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { dispose: vi.fn() },
+      ui: { dispose: vi.fn() },
+    });
+    const context = (phase as unknown as { context: PhaseContext }).context;
+
+    expect(context.eventModels.animations('ghost')).toEqual([]);
+    phase.dispose();
   });
 });
 
