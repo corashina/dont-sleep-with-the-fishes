@@ -51,12 +51,27 @@ describe('weather event choreography', () => {
     expect(output).toEqual(reveal());
   });
 
-  it('shows and then hides the fog figure before reveal completion', () => {
-    const output = reveal();
-    sampleWeatherReveal('man-in-the-fog', 0.58, output);
-    expect(output.figureVisibility).toBeGreaterThan(0.7);
-    sampleWeatherReveal('man-in-the-fog', 0.86, output);
-    expect(output.figureVisibility).toBe(0);
+  it('authors three Restless Waves rises and holds a readable final list', () => {
+    const rises = [0.2, 0.48, 0.76].map((progress) => {
+      const output = reveal();
+      sampleWeatherReveal('restless-waves', progress, output);
+      return output.cameraY;
+    });
+    expect(rises.every((value) => Math.abs(value) > 0.04)).toBe(true);
+    expect(new Set(rises.map((value) => Math.sign(value))).size).toBeGreaterThan(1);
+
+    const held = reveal();
+    sampleWeatherReveal('restless-waves', 0.82, held);
+    expect(Math.abs(held.cameraRoll)).toBeGreaterThan(0.06);
+  });
+
+  it('shows and then hides the fog figure before choices appear', () => {
+    const middle = reveal();
+    const choices = reveal();
+    sampleWeatherReveal('man-in-the-fog', 0.55, middle);
+    sampleWeatherReveal('man-in-the-fog', 0.86, choices);
+    expect(middle.figureVisibility).toBeGreaterThan(0.7);
+    expect(choices.figureVisibility).toBe(0);
   });
 
   it.each([
