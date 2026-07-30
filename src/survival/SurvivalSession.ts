@@ -115,6 +115,7 @@ export class SurvivalSession {
   private readonly random: RandomSource;
   private fishingCounter = 0;
   private activeFishing: ActiveFishingTransaction | null = null;
+  private cachedSnapshot: Readonly<SurvivalSnapshot> | null = null;
 
   constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions) {
     this.seed = options.seed;
@@ -149,9 +150,16 @@ export class SurvivalSession {
   }
 
   snapshot(): SurvivalSnapshot {
-    const lastOutcome = this.lastOutcome === null ? null : this.cloneOutcome(this.lastOutcome);
+    if (this.cachedSnapshot !== null) return this.cachedSnapshot;
+    const clonedOutcome = this.lastOutcome === null ? null : this.cloneOutcome(this.lastOutcome);
+    const lastOutcome = clonedOutcome === null
+      ? null
+      : Object.freeze({
+          ...clonedOutcome,
+          deltas: Object.freeze({ ...clonedOutcome.deltas }),
+        });
 
-    return {
+    this.cachedSnapshot = Object.freeze({
       state: this.state,
       day: this.day,
       health: this.health,
@@ -174,7 +182,8 @@ export class SurvivalSession {
       pendingEventTargetId: this.pendingEventTargetId,
       lastOutcome,
       seed: this.seed,
-    };
+    });
+    return this.cachedSnapshot;
   }
 
   availableReason(action: DayActionId, option?: DayActionOption): string | null {
@@ -480,6 +489,7 @@ export class SurvivalSession {
       outcome,
       inventoryMutations,
     );
+    this.changed();
 
     if (!this.isTerminal()) {
       if (phase === 'day') this.state = 'day';
@@ -858,12 +868,12 @@ export class SurvivalSession {
   }
 
   private journalSnapshot(): readonly JournalEntry[] {
-    return this.journalEntries.map((entry) => ({
+    return Object.freeze(this.journalEntries.map((entry) => Object.freeze({
       ...entry,
       actions: this.cloneJournalActions(entry.actions),
       daytime: entry.daytime === null ? null : this.cloneJournalRecord(entry.daytime),
-      nighttime: this.cloneJournalNight(entry.nighttime),
-    }));
+      nighttime: Object.freeze(this.cloneJournalNight(entry.nighttime)),
+    })));
   }
 
   private cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
@@ -976,7 +986,12 @@ export class SurvivalSession {
     const terminalCue = this.state === 'dead' ? 'death' : this.state === 'sunk' ? 'sinking' : this.state === 'rescued' ? 'rescue' : cue;
     const outcome: ActionOutcome = { accepted: true, code, message, deltas: applied, cue: terminalCue };
     this.lastOutcome = outcome;
+    this.changed();
     return { ...outcome, deltas: { ...outcome.deltas } };
+  }
+
+  private changed(): void {
+    this.cachedSnapshot = null;
   }
 
   private resourceValues(): Required<ResourceDelta> {
