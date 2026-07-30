@@ -603,6 +603,45 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
+  it('does not rewrite anchor layout for equal rounded values', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const anchor = {
+      id: 'repair-tools',
+      itemType: null,
+      toolId: 'repairTools' as const,
+      action: 'repair' as const,
+      remainingUses: null,
+      x: 440.1,
+      y: 280.1,
+      visible: true,
+      depleted: false,
+      hitArea: { width: 96.1, height: 52.1, depth: 2.4 },
+    };
+    ui.setAnchors([anchor]);
+    const button = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="repair-tools"]',
+    )!;
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => mutations.push(...records));
+    observer.observe(button, {
+      attributes: true,
+      attributeFilter: ['style', 'hidden', 'data-target-kind', 'class'],
+    });
+
+    ui.setAnchors([{
+      ...anchor,
+      x: 440.2,
+      y: 280.2,
+      hitArea: { width: 96.2, height: 52.2, depth: 2.4 },
+    }]);
+    await Promise.resolve();
+
+    expect(mutations).toEqual([]);
+    observer.disconnect();
+  });
+
   it.each([
     ['safe', 'Safe event: A shadow'],
     ['uncertain', 'Uncertain event: A shadow'],

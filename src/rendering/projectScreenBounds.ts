@@ -1,5 +1,6 @@
 import {
   Box3,
+  Matrix4,
   Mesh,
   type Object3D,
   type PerspectiveCamera,
@@ -15,6 +16,16 @@ export interface ProjectedScreenBounds {
   visible: boolean;
 }
 
+export interface ObjectScreenBoundsCacheEntry {
+  readonly object: Mesh;
+  readonly bounds: Box3;
+  readonly rootFromMesh: Matrix4;
+}
+
+export interface ObjectScreenBoundsCache {
+  readonly entries: readonly ObjectScreenBoundsCacheEntry[];
+}
+
 const TARGET_PADDING = 8;
 const MINIMUM_TARGET = 44;
 const center = new Vector3();
@@ -22,6 +33,8 @@ const cameraCenter = new Vector3();
 const corner = new Vector3();
 const objectCameraCorner = new Vector3();
 const objectProjectedCorner = new Vector3();
+const objectCacheRootInverse = new Matrix4();
+const objectCachedWorldMatrix = new Matrix4();
 let objectProjectionCamera: PerspectiveCamera | null = null;
 let objectProjectionWidth = 0;
 let objectProjectionHeight = 0;
@@ -123,13 +136,17 @@ function projectVisibleMeshBounds(object: Object3D): void {
   if (object.geometry.boundingBox === null) object.geometry.computeBoundingBox();
   const bounds = object.geometry.boundingBox;
   if (bounds === null || bounds.isEmpty()) return;
+  projectMeshBounds(bounds, object.matrixWorld);
+}
 
+function projectMeshBounds(bounds: Box3, matrixWorld: Matrix4): void {
+  if (objectProjectionCamera === null) return;
   for (let index = 0; index < 8; index += 1) {
     objectCameraCorner.set(
       index & 1 ? bounds.max.x : bounds.min.x,
       index & 2 ? bounds.max.y : bounds.min.y,
       index & 4 ? bounds.max.z : bounds.min.z,
-    ).applyMatrix4(object.matrixWorld).applyMatrix4(objectProjectionCamera.matrixWorldInverse);
+    ).applyMatrix4(matrixWorld).applyMatrix4(objectProjectionCamera.matrixWorldInverse);
     if (objectCameraCorner.z >= 0) {
       objectProjectionCrossesCamera = true;
       continue;
@@ -151,16 +168,11 @@ function projectVisibleMeshBounds(object: Object3D): void {
   }
 }
 
-export function projectObjectScreenBounds(
-  root: Object3D,
+function beginObjectProjection(
   camera: PerspectiveCamera,
   viewportWidth: number,
   viewportHeight: number,
-): ProjectedScreenBounds {
-  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
-  camera.updateWorldMatrix(true, false);
-  root.updateWorldMatrix(true, true);
-
+): void {
   objectProjectionCamera = camera;
   objectProjectionWidth = viewportWidth;
   objectProjectionHeight = viewportHeight;
@@ -172,9 +184,13 @@ export function projectObjectScreenBounds(
   objectMaximumCameraZ = Number.NEGATIVE_INFINITY;
   objectProjectionCrossesCamera = false;
   objectProjectionHasPoint = false;
-  root.traverseVisible(projectVisibleMeshBounds);
-  objectProjectionCamera = null;
+}
 
+function finishObjectProjection(
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
+  objectProjectionCamera = null;
   if (!objectProjectionHasPoint || objectProjectionCrossesCamera) return hiddenBounds();
   return boundsFromExtents(
     objectRawLeft,
@@ -185,4 +201,76 @@ export function projectObjectScreenBounds(
     viewportWidth,
     viewportHeight,
   );
+}
+
+export function projectObjectScreenBounds(
+  root: Object3D,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
+  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
+  camera.updateWorldMatrix(true, false);
+  root.updateWorldMatrix(true, true);
+
+  beginObjectProjection(camera, viewportWidth, viewportHeight);
+  root.traverseVisible(projectVisibleMeshBounds);
+  return finishObjectProjection(viewportWidth, viewportHeight);
+}
+
+export function createObjectScreenBoundsCache(
+  root: Object3D,
+): ObjectScreenBoundsCache | null {
+  root.updateWorldMatrix(true, true);
+  objectCacheRootInverse.copy(root.matrixWorld).invert();
+  const entries: ObjectScreenBoundsCacheEntry[] = [];
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    if (object.geometry.boundingBox === null) object.geometry.computeBoundingBox();
+    const bounds = object.geometry.boundingBox;
+    if (bounds === null || bounds.isEmpty()) return;
+    entries.push(Object.freeze({
+      object,
+      bounds: bounds.clone(),
+      rootFromMesh: new Matrix4().multiplyMatrices(
+        objectCacheRootInverse,
+        object.matrixWorld,
+      ),
+    }));
+  });
+  if (entries.length === 0) return null;
+  return Object.freeze({ entries: Object.freeze(entries) });
+}
+
+function isVisibleWithinRoot(object: Object3D, root: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current !== null) {
+    if (!current.visible) return false;
+    if (current === root) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+export function projectCachedObjectScreenBounds(
+  root: Object3D,
+  cache: ObjectScreenBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
+  if (cache === null) {
+    return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
+  }
+  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
+  camera.updateWorldMatrix(true, false);
+  root.updateWorldMatrix(true, false);
+
+  beginObjectProjection(camera, viewportWidth, viewportHeight);
+  for (const entry of cache.entries) {
+    if (!isVisibleWithinRoot(entry.object, root)) continue;
+    objectCachedWorldMatrix.multiplyMatrices(root.matrixWorld, entry.rootFromMesh);
+    projectMeshBounds(entry.bounds, objectCachedWorldMatrix);
+  }
+  return finishObjectProjection(viewportWidth, viewportHeight);
 }

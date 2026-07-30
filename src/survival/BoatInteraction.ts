@@ -1,8 +1,11 @@
 import { Box3, type Object3D, type PerspectiveCamera, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
 import {
+  createObjectScreenBoundsCache,
+  projectCachedObjectScreenBounds,
   projectObjectScreenBounds,
   projectScreenBounds,
+  type ObjectScreenBoundsCache,
   type ProjectedScreenBounds,
 } from '../rendering/projectScreenBounds';
 import type { DayActionId, EventResponseId } from './survivalTypes';
@@ -22,6 +25,7 @@ export interface BoatInteractionHitArea {
 }
 
 export type ProjectedBoatBounds = ProjectedScreenBounds;
+export type BoatObjectBoundsCache = ObjectScreenBoundsCache;
 
 export type BoatToolId = 'repairTools' | 'fishingRod' | 'lantern';
 
@@ -62,6 +66,28 @@ export function projectBoatObjectBounds(
   viewportHeight: number,
 ): ProjectedBoatBounds {
   return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
+}
+
+export function createBoatObjectBoundsCache(
+  root: Object3D,
+): BoatObjectBoundsCache | null {
+  return createObjectScreenBoundsCache(root);
+}
+
+export function projectCachedBoatObjectBounds(
+  root: Object3D,
+  cache: BoatObjectBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedBoatBounds {
+  return projectCachedObjectScreenBounds(
+    root,
+    cache,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
 }
 
 export function projectBoatAnchor(
