@@ -711,7 +711,7 @@ export class DangerousWatersPresentation {
     const peek = smoothstep((progress - 0.42) / 0.2);
     const sink = smoothstep((progress - 0.82) / 0.16);
     this.passage.position.x += (1 - travel) * 3.2;
-    this.lurker.scale.y = Math.min(1, peek * 2) * (1 - sink);
+    this.lurker.scale.y = peek * (1 - sink);
     this.materials.foam.opacity = 0.12 + smoothstep(progress) * 0.32;
     this.boatReaction.driftX = Math.sin(Math.PI * progress) * -0.34;
     this.boatReaction.cameraYaw = smoothstep(progress) * -0.09;
@@ -769,7 +769,7 @@ export class DangerousWatersPresentation {
     const impact = Math.sin(Math.PI * progress);
     const hold = smoothstep((progress - 0.55) / 0.45);
     this.lurker.scale.y = 1;
-    this.foregroundRock.position.x += (impact * 0.7 + hold * 0.18) * severity;
+    this.foregroundRock.position.x += (impact * 0.08 + hold * 0.04) * severity;
     this.materials.foam.opacity = 0.3 + impact * 0.48;
     this.boatReaction.pitch = (impact * 0.07 + hold * 0.018) * severity;
     this.boatReaction.roll = (impact * -0.045 + hold * -0.035) * severity;
@@ -782,8 +782,8 @@ export class DangerousWatersPresentation {
     const impact = Math.sin(Math.PI * progress);
     const hold = smoothstep((progress - 0.55) / 0.45);
     this.applyDamagePose(progress, 1.65);
-    this.foregroundRock.position.x += impact * 0.445 + hold * 0.52;
-    this.foregroundRock.position.z += hold * 2.8;
+    this.foregroundRock.position.x += impact * 0.01 + hold * 0.01;
+    this.foregroundRock.position.z += hold * 0.11;
     this.materials.foam.opacity = 0.38 + impact * 0.57;
     const fragmentTravel = smoothstep((progress - 0.24) / 0.5);
     for (const fragment of this.fragmentMembers) {
