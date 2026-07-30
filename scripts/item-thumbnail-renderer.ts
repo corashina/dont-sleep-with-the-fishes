@@ -10,8 +10,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { SCAVENGE_ITEM_IDS } from '../src/game/scavengeCatalog';
-import type { ItemId } from '../src/game/ItemState';
+import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
 
 const SIZE = 256;
@@ -105,7 +104,7 @@ async function main(): Promise<void> {
   let library: PropModelLibrary | undefined;
   try {
     library = await PropModelLibrary.load();
-    for (const id of SCAVENGE_ITEM_IDS) {
+    for (const id of ITEM_IDS) {
       const root = library.create({ instanceId: `${id}-1`, type: id });
       try {
         root.rotation.set(...(THUMBNAIL_ROTATIONS[id] ?? [0, 0, 0]));
