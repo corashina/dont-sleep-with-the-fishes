@@ -1,0 +1,243 @@
+{
+  "fogMan": {
+    "triangles": 2058,
+    "rawBounds": {
+      "min": [
+        -2.5985823944211006,
+        0.0033593024910342946,
+        -0.509220124748199
+      ],
+      "max": [
+        2.5985823944211006,
+        4.844610952960424,
+        0.5433815806588739
+      ]
+    },
+    "animations": [
+      {
+        "name": "HumanArmature|Man_Clapping",
+        "duration": 1.6666666269302368,
+        "channels": 29
+      },
+      {
+        "name": "HumanArmature|Man_Death",
+        "duration": 2.0833332538604736,
+        "channels": 31
+      },
+      {
+        "name": "HumanArmature|Man_Idle",
+        "duration": 4.166666507720947,
+        "channels": 15
+      },
+      {
+        "name": "HumanArmature|Man_Jump",
+        "duration": 1.0416666269302368,
+        "channels": 26
+      },
+      {
+        "name": "HumanArmature|Man_Punch",
+        "duration": 0.9166666865348816,
+        "channels": 30
+      },
+      {
+        "name": "HumanArmature|Man_Run",
+        "duration": 0.875,
+        "channels": 22
+      },
+      {
+        "name": "HumanArmature|Man_RunningJump",
+        "duration": 1.25,
+        "channels": 24
+      },
+      {
+        "name": "HumanArmature|Man_Sitting",
+        "duration": 8.333333015441895,
+        "channels": 27
+      },
+      {
+        "name": "HumanArmature|Man_Standing",
+        "duration": 0.8333333134651184,
+        "channels": 26
+      },
+      {
+        "name": "HumanArmature|Man_SwordSlash",
+        "duration": 1.0416666269302368,
+        "channels": 29
+      },
+      {
+        "name": "HumanArmature|Man_Walk",
+        "duration": 1.0416666269302368,
+        "channels": 26
+      }
+    ]
+  },
+  "ghost": {
+    "triangles": 1039,
+    "rawBounds": {
+      "min": [
+        -0.482015997171402,
+        -0.7836403846740723,
+        -1.1231199502944946
+      ],
+      "max": [
+        1.0678139925003052,
+        0.634246289730072,
+        0.30356499552726746
+      ]
+    },
+    "animations": []
+  },
+  "siren": {
+    "triangles": 6108,
+    "rawBounds": {
+      "min": [
+        -0.8246226236224174,
+        0.0010581070585241657,
+        -0.11697277324160225
+      ],
+      "max": [
+        0.8246226236224174,
+        1.8435580143266943,
+        0.2554729938181829
+      ]
+    },
+    "animations": [
+      {
+        "name": "CharacterArmature|Death",
+        "duration": 1.3333333730697632,
+        "channels": 24
+      },
+      {
+        "name": "CharacterArmature|Gun_Shoot",
+        "duration": 0.75,
+        "channels": 29
+      },
+      {
+        "name": "CharacterArmature|HitRecieve",
+        "duration": 0.7083333134651184,
+        "channels": 12
+      },
+      {
+        "name": "CharacterArmature|HitRecieve_2",
+        "duration": 0.7083333134651184,
+        "channels": 12
+      },
+      {
+        "name": "CharacterArmature|Idle",
+        "duration": 2.0833332538604736,
+        "channels": 21
+      },
+      {
+        "name": "CharacterArmature|Idle_Gun",
+        "duration": 2.0833332538604736,
+        "channels": 34
+      },
+      {
+        "name": "CharacterArmature|Idle_Gun_Pointing",
+        "duration": 2.0833332538604736,
+        "channels": 34
+      },
+      {
+        "name": "CharacterArmature|Idle_Gun_Shoot",
+        "duration": 0.8333333134651184,
+        "channels": 37
+      },
+      {
+        "name": "CharacterArmature|Idle_Neutral",
+        "duration": 2.0833332538604736,
+        "channels": 22
+      },
+      {
+        "name": "CharacterArmature|Idle_Sword",
+        "duration": 2.0833332538604736,
+        "channels": 34
+      },
+      {
+        "name": "CharacterArmature|Interact",
+        "duration": 1.5833333730697632,
+        "channels": 15
+      },
+      {
+        "name": "CharacterArmature|Kick_Left",
+        "duration": 1.1666666269302368,
+        "channels": 54
+      },
+      {
+        "name": "CharacterArmature|Kick_Right",
+        "duration": 1.1666666269302368,
+        "channels": 54
+      },
+      {
+        "name": "CharacterArmature|Punch_Left",
+        "duration": 1.0416666269302368,
+        "channels": 55
+      },
+      {
+        "name": "CharacterArmature|Punch_Right",
+        "duration": 1.0416666269302368,
+        "channels": 55
+      },
+      {
+        "name": "CharacterArmature|Roll",
+        "duration": 1.6666666269302368,
+        "channels": 57
+      },
+      {
+        "name": "CharacterArmature|Run",
+        "duration": 1,
+        "channels": 53
+      },
+      {
+        "name": "CharacterArmature|Run_Back",
+        "duration": 1.0416666269302368,
+        "channels": 53
+      },
+      {
+        "name": "CharacterArmature|Run_Left",
+        "duration": 1,
+        "channels": 55
+      },
+      {
+        "name": "CharacterArmature|Run_Right",
+        "duration": 1,
+        "channels": 55
+      },
+      {
+        "name": "CharacterArmature|Run_Shoot",
+        "duration": 1.0416666269302368,
+        "channels": 53
+      },
+      {
+        "name": "CharacterArmature|Sword_Slash",
+        "duration": 1.2916666269302368,
+        "channels": 34
+      },
+      {
+        "name": "CharacterArmature|Walk",
+        "duration": 1.6666666269302368,
+        "channels": 29
+      },
+      {
+        "name": "CharacterArmature|Wave",
+        "duration": 2.0833332538604736,
+        "channels": 22
+      }
+    ]
+  },
+  "sirenRock": {
+    "triangles": 214,
+    "rawBounds": {
+      "min": [
+        -0.8963941931724548,
+        0,
+        -0.7399998903274536
+      ],
+      "max": [
+        0.8899999856948853,
+        0.16500000655651093,
+        0.7078391909599304
+      ]
+    },
+    "animations": []
+  }
+}

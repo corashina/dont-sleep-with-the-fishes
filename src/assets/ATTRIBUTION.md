@@ -114,6 +114,31 @@ cardboard box `81982A2F0CF2D04CB60B5194897D9CB76E688E01DB5A7F8FA757E5B55679D7C2`
 storage shelf `5AB0C13CC921F63C16F07C63AD4D29B5FDE0E8E7F150114D406728B12DA9C667`;
 pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
 
+## Runtime survival-event model ledger
+
+- "Ghoooooost" by Nikki Morin.
+  Source: https://poly.pizza/m/112vpcommxv
+  License: CC BY 3.0.
+  Source asset ID: `poly-pizza:02d70fdb-284b-4799-a9ee-18c7277f158c`.
+  Source GLB SHA-256: `3AFB58D595ECA2D5F7953847CF51230270BB9EEE40B59F56FE04CDF4A28CD1C3`.
+- "Man in Suit" by Quaternius.
+  Source: https://poly.pizza/m/mQnGoME1ez
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:66b57880-bcb0-479a-8d72-5c3e88afaa39`.
+  Source GLB SHA-256: `31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763`.
+- "Animated Woman" by Quaternius.
+  Source: https://poly.pizza/m/nIItLV9nxS
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:46d6db5a-3c9f-4238-8cdf-8eb7194498dc`.
+  Source GLB SHA-256: `A6522FE53D15DE21130A957D1BF2B8A9A58D4E4E9A12AF646645B667A9BB2D17`.
+- "Rock Flat" by Kenney.
+  Source: https://poly.pizza/m/CrSoV13mCU
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:3e9d82ac-0749-42b6-8dfd-082393547ed5`.
+  Source GLB SHA-256: `8A0595C2F0C6914CC1794CE8CB35517F4451EB4CFB6703D3A58CA654D5900BAB`.
+
+These files keep their source geometry. Runtime code normalizes scale, rotation, and offset.
+
 ## Runtime fishing-catch model ledger
 
 These models are loaded only for a successful catch reveal and disposed when
