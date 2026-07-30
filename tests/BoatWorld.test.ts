@@ -957,6 +957,80 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('borrows one stable supply actor without transferring resource ownership', () => {
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const parent = new Group();
+    const display = new BoatSupplyDisplay(propModels, parent, [map]);
+    display.sync(snapshot([map]));
+    const actor = display.borrowEventActor(map.instanceId);
+    const sameActor = display.borrowEventActor(map.instanceId);
+
+    expect(actor).not.toBeNull();
+    expect(sameActor).toBe(actor);
+    expect(actor?.instanceId).toBe(map.instanceId);
+    expect(actor?.root).toBe(parent.getObjectByName('boat-supply:map'));
+
+    const mesh = firstMesh(actor!.root);
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const materialDisposals = materials.map((material) => vi.spyOn(material, 'dispose'));
+    actor!.applyPose({
+      x: 0.4,
+      y: 0.2,
+      z: -0.3,
+      yaw: 0.1,
+      pitch: 0.2,
+      roll: -0.15,
+      scaleX: 1.1,
+      scaleY: 0.9,
+      scaleZ: 1.2,
+    });
+    display.update(0);
+    expect(actor!.root.position.toArray()).toEqual([0.4, 0.2, -0.3]);
+
+    actor!.releaseOnNextSync();
+    display.sync(snapshot([map]));
+    expect(actor!.root.position.toArray()).toEqual([0, 0, 0]);
+    expect(geometryDispose).not.toHaveBeenCalled();
+    materialDisposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
+
+    display.dispose();
+    propModels.dispose();
+  });
+
+  it('ignores stale borrowed actor commands after another supply becomes active', () => {
+    const map = savedItem('map');
+    const ring = savedItem('swimRing');
+    const propModels = createTestPropModels();
+    const display = new BoatSupplyDisplay(propModels, new Group(), [map, ring]);
+    display.sync(snapshot([map, ring]));
+    const mapActor = display.borrowEventActor(map.instanceId)!;
+    const ringActor = display.borrowEventActor(ring.instanceId)!;
+
+    mapActor.release();
+    expect(display.borrowEventActor('missing-1' as ItemInstanceId)).toBeNull();
+    ringActor.applyPose({
+      x: 0.3,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      scaleX: 1,
+      scaleY: 1,
+      scaleZ: 1,
+    });
+    display.update(0);
+
+    expect(mapActor.root.position.toArray()).toEqual([0, 0, 0]);
+    expect(ringActor.root.position.toArray()).toEqual([0.3, 0, 0]);
+
+    ringActor.release();
+    display.dispose();
+    propModels.dispose();
+  });
+
   it('uses the imported lantern model with a shadow-casting light', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
