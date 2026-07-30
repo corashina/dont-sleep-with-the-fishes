@@ -239,6 +239,23 @@ interface AnchorTooltipNodes {
   readonly energy: HTMLElement;
 }
 
+interface AnchorLayoutState {
+  readonly visible: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly targetKind: 'item' | 'tool' | 'event';
+  readonly width: number;
+  readonly height: number;
+  readonly zIndex: number;
+  readonly depleted: boolean;
+}
+
+const DEFAULT_ANCHOR_HIT_AREA = Object.freeze({
+  width: 54,
+  height: 54,
+  depth: 0,
+});
+
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
@@ -309,6 +326,7 @@ export class SurvivalUI {
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
+  private readonly anchorLayouts = new Map<string, AnchorLayoutState>();
   private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly actionReasons = new Map<DayActionId, string | null>();
   private readonly lastValues = new Map<string, string | number | boolean | null>();
@@ -570,22 +588,49 @@ export class SurvivalUI {
       }
       this.anchors.set(anchor.id, anchor);
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
-      button.hidden = !anchor.visible;
-      button.style.transform = `translate(${Math.round(anchor.x)}px, ${Math.round(anchor.y)}px)`;
       const itemTarget = anchor.itemType !== null;
-      button.dataset.targetKind = itemTarget
+      const targetKind = itemTarget
         ? 'item'
         : anchor.eventChoiceId === undefined ? 'tool' : 'event';
-      const hitArea = anchor.hitArea ?? { width: 54, height: 54, depth: 0 };
+      const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+      const x = Math.round(anchor.x);
+      const y = Math.round(anchor.y);
       const targetWidth = Math.round(hitArea.width);
       const targetHeight = Math.round(hitArea.height);
-      button.style.width = `${targetWidth}px`;
-      button.style.height = `${targetHeight}px`;
-      button.style.marginLeft = `${-targetWidth / 2}px`;
-      button.style.marginTop = `${-targetHeight / 2}px`;
-      button.style.zIndex = String(Math.max(1, 100000 - Math.round(hitArea.depth * 100)));
-      this.placeAnchorTooltip(button, anchor);
-      button.classList.toggle('is-depleted', anchor.depleted);
+      const zIndex = Math.max(1, 100000 - Math.round(hitArea.depth * 100));
+      const previous = this.anchorLayouts.get(anchor.id);
+      if (
+        previous === undefined
+        || previous.visible !== anchor.visible
+        || previous.x !== x
+        || previous.y !== y
+        || previous.targetKind !== targetKind
+        || previous.width !== targetWidth
+        || previous.height !== targetHeight
+        || previous.zIndex !== zIndex
+        || previous.depleted !== anchor.depleted
+      ) {
+        this.anchorLayouts.set(anchor.id, {
+          visible: anchor.visible,
+          x,
+          y,
+          targetKind,
+          width: targetWidth,
+          height: targetHeight,
+          zIndex,
+          depleted: anchor.depleted,
+        });
+        button.hidden = !anchor.visible;
+        button.style.transform = `translate(${x}px, ${y}px)`;
+        button.dataset.targetKind = targetKind;
+        button.style.width = `${targetWidth}px`;
+        button.style.height = `${targetHeight}px`;
+        button.style.marginLeft = `${-targetWidth / 2}px`;
+        button.style.marginTop = `${-targetHeight / 2}px`;
+        button.style.zIndex = String(zIndex);
+        this.placeAnchorTooltip(button, x, y);
+        button.classList.toggle('is-depleted', anchor.depleted);
+      }
       this.refreshAnchorTooltip(button, anchor);
     }
     this.anchorButtons.forEach((button, id) => {
@@ -594,6 +639,7 @@ export class SurvivalUI {
       button.remove();
       this.anchorButtons.delete(id);
       this.anchors.delete(id);
+      this.anchorLayouts.delete(id);
     });
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.positionOpenRoutineDialogs();
@@ -1035,6 +1081,7 @@ export class SurvivalUI {
     this.pendingEventOutcomeHold?.finish();
     this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
+    this.anchorLayouts.clear();
     this.hideLayer(this.driftingLootResultLayer);
     this.driftingLootResultTarget = null;
     if (this.fishingMode !== 'hidden') {
@@ -1237,14 +1284,14 @@ export class SurvivalUI {
     return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
   }
 
-  private placeAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+  private placeAnchorTooltip(button: HTMLButtonElement, x: number, y: number): void {
     const bounds = this.root.getBoundingClientRect();
     const viewportWidth = bounds.width || this.root.clientWidth || window.innerWidth;
     const edgeGutter = 160;
-    button.dataset.tooltipX = anchor.x < edgeGutter
+    button.dataset.tooltipX = x < edgeGutter
       ? 'left'
-      : anchor.x > viewportWidth - edgeGutter ? 'right' : 'center';
-    button.dataset.tooltipY = anchor.y < 96 ? 'below' : 'above';
+      : x > viewportWidth - edgeGutter ? 'right' : 'center';
+    button.dataset.tooltipY = y < 96 ? 'below' : 'above';
   }
 
   private updateMeter(id: MeterId, value: number): void {

@@ -54,7 +54,10 @@ import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
-import { BOAT_SUPPLY_GROUP_IDS } from '../world/BoatStorage';
+import {
+  BOAT_SUPPLY_GROUP_IDS,
+  type BoatSupplyGroupId,
+} from '../world/BoatStorage';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   collectMeshResources,
@@ -67,7 +70,10 @@ import { WeatherEffects } from '../world/WeatherEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
   ACTION_FOR_ITEM,
+  createBoatObjectBoundsCache,
   projectBoatObjectBounds,
+  projectCachedBoatObjectBounds,
+  type BoatObjectBoundsCache,
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
@@ -421,6 +427,13 @@ export class BoatWorld {
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
   private readonly repairTools: Object3D;
+  private readonly supplyAnchorBounds = new Map<
+    BoatSupplyGroupId,
+    BoatObjectBoundsCache | null
+  >();
+  private readonly fishingAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
@@ -628,6 +641,15 @@ export class BoatWorld {
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
+    for (const record of this.supplyDisplay.records()) {
+      this.supplyAnchorBounds.set(
+        record.groupId,
+        createBoatObjectBoundsCache(record.root),
+      );
+    }
+    this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
+    this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
+    this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
     this.applyBasePresentation();
   }
 
@@ -780,8 +802,9 @@ export class BoatWorld {
     const itemAnchors = this.supplyDisplay.records()
       .filter((record) => record.visibleCopies > 0)
       .map((record) => {
-      const projection = projectBoatObjectBounds(
+      const projection = projectCachedBoatObjectBounds(
         record.root,
+        this.supplyAnchorBounds.get(record.groupId) ?? null,
         this.camera,
         width,
         height,
@@ -813,8 +836,9 @@ export class BoatWorld {
         },
       } satisfies BoatInteractionAnchor;
       });
-    const fishingProjection = projectBoatObjectBounds(
+    const fishingProjection = projectCachedBoatObjectBounds(
       this.rodPivot,
+      this.fishingAnchorBounds,
       this.camera,
       width,
       height,
@@ -844,8 +868,9 @@ export class BoatWorld {
         depth: fishingDepth,
       },
     } satisfies BoatInteractionAnchor;
-    const repairProjection = projectBoatObjectBounds(
+    const repairProjection = projectCachedBoatObjectBounds(
       this.repairTools,
+      this.repairAnchorBounds,
       this.camera,
       width,
       height,
@@ -866,8 +891,9 @@ export class BoatWorld {
       backingInstanceId: null,
       hitArea: { width: hitWidth, height: hitHeight, depth },
     } satisfies BoatInteractionAnchor;
-    const lanternProjection = projectBoatObjectBounds(
+    const lanternProjection = projectCachedBoatObjectBounds(
       this.lantern.root,
+      this.lanternAnchorBounds,
       this.camera,
       width,
       height,

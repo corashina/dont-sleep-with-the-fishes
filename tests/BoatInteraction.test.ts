@@ -11,8 +11,10 @@ import {
 } from 'three';
 import {
   ACTION_FOR_ITEM,
+  createBoatObjectBoundsCache,
   projectBoatAnchor,
   projectBoatBounds,
+  projectCachedBoatObjectBounds,
   projectBoatObjectBounds,
 } from '../src/survival/BoatInteraction';
 
@@ -89,6 +91,50 @@ describe('BoatInteraction', () => {
     item.material.dispose();
   });
 
+  it('matches live traversal after a cached root moves', () => {
+    const camera = new PerspectiveCamera(65, 2, 0.1, 100);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const root = new Group();
+    const nested = new Group();
+    nested.position.set(0.3, -0.2, 0.1);
+    nested.rotation.z = 0.25;
+    const item = new Mesh(
+      new BoxGeometry(0.4, 0.3, 0.2),
+      new MeshBasicMaterial(),
+    );
+    nested.add(item);
+    root.add(nested);
+    root.position.set(2, 1, -8);
+    root.rotation.y = 0.4;
+    const cache = createBoatObjectBoundsCache(root);
+
+    expect(cache).not.toBeNull();
+    const cached = projectCachedBoatObjectBounds(root, cache, camera, 1280, 720);
+    const live = projectBoatObjectBounds(root, camera, 1280, 720);
+    expect(cached.visible).toBe(live.visible);
+    expect(cached.x).toBeCloseTo(live.x);
+    expect(cached.y).toBeCloseTo(live.y);
+    expect(cached.width).toBeCloseTo(live.width);
+    expect(cached.height).toBeCloseTo(live.height);
+    expect(cached.depth).toBeCloseTo(live.depth);
+
+    item.geometry.dispose();
+    item.material.dispose();
+  });
+
+  it('falls back when a root has no mesh bounds', () => {
+    const camera = new PerspectiveCamera(65, 2, 0.1, 100);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const root = new Group();
+    root.position.z = -4;
+    const cache = createBoatObjectBoundsCache(root);
+
+    expect(cache).toBeNull();
+    expect(projectCachedBoatObjectBounds(root, cache, camera, 1280, 720))
+      .toEqual(projectBoatObjectBounds(root, camera, 1280, 720));
+  });
 
   it('clips partial bounds and hides empty, off-screen, and behind-camera bounds', () => {
     const camera = new PerspectiveCamera(65, 2, 0.1, 100);
