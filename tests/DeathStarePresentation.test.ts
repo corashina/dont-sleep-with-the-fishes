@@ -278,6 +278,16 @@ describe('DeathStarePresentation', () => {
     actorParent.rotation.set(0.08, -0.31, 0.04);
     actorParent.add(lostActor.root);
     lostActor.root.position.set(2.8, 0.48, -0.36);
+    const actorOrigin = lostActor.root.position.clone();
+    const actorWorld = new Vector3();
+    const mouthWorld = new Vector3();
+    lostActor.applyPose.mockImplementation((pose) => {
+      lostActor.root.position.set(
+        actorOrigin.x + pose.x,
+        actorOrigin.y + pose.y,
+        actorOrigin.z + pose.z,
+      );
+    });
     stage(presentation);
 
     const reaction = presentation.react(outcome({
@@ -288,19 +298,20 @@ describe('DeathStarePresentation', () => {
     presentation.update(1, 1);
 
     const angler = presentation.worldRoot.getObjectByName('death-stare-angler')!;
-    const mouthInActorParent = presentation.worldRoot
-      .getObjectByName('death-stare-mouth-target')!
-      .getWorldPosition(new Vector3());
-    actorParent.worldToLocal(mouthInActorParent);
-    const heldPose = lostActor.applyPose.mock.lastCall![0];
+    const mouthTarget = presentation.worldRoot.getObjectByName(
+      'death-stare-mouth-target',
+    )!;
+    lostActor.root.getWorldPosition(actorWorld);
+    mouthTarget.getWorldPosition(mouthWorld);
 
     expect(angler.rotation.x).not.toBe(0);
-    expect(lostActor.root.position.x + heldPose.x).toBeCloseTo(mouthInActorParent.x);
-    expect(lostActor.root.position.y + heldPose.y).toBeCloseTo(mouthInActorParent.y);
-    expect(lostActor.root.position.z + heldPose.z).toBeCloseTo(mouthInActorParent.z);
+    expect(actorWorld.distanceTo(mouthWorld)).toBeLessThan(1e-6);
 
     presentation.update(1.25, 0.25);
     await reaction;
+    lostActor.root.getWorldPosition(actorWorld);
+    mouthTarget.getWorldPosition(mouthWorld);
+    expect(actorWorld.distanceTo(mouthWorld)).toBeLessThan(1e-6);
   });
 
   it('disposes its model and authored resources once', () => {
