@@ -6,7 +6,10 @@ import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
-import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
+import {
+  EventModelLoadError,
+  type EventModelLibrary,
+} from '../src/survival/EventModelLibrary';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
 import {
   ShipFurnitureLoadError,
@@ -358,6 +361,26 @@ describe('launchGame', () => {
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(createGame).not.toHaveBeenCalled();
     expect(mount.textContent).toContain('ATMOSPHERE UNAVAILABLE');
+  });
+
+  it('identifies an event model preload failure without diagnosing WebGL', async () => {
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        loadEventModels: () => Promise.reject(
+          new EventModelLoadError('ghost', 'local GLB missing'),
+        ),
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(models.dispose).toHaveBeenCalledOnce();
+    expect(mount.textContent).toContain('EVENT MODEL UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare ghost');
+    expect(mount.textContent).toContain('local GLB missing');
+    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
   it('disposes fulfilled sky assets when model preload fails', async () => {

@@ -35,7 +35,10 @@ import {
   AudioLoadError,
   AudioSystem,
 } from '../audio/AudioSystem';
-import { EventModelLibrary } from '../survival/EventModelLibrary';
+import {
+  EventModelLibrary,
+  EventModelLoadError,
+} from '../survival/EventModelLibrary';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -278,6 +281,17 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       kicker: 'AUDIO UNAVAILABLE',
       title: 'Unable to prepare the soundscape',
       lead: 'A required local audio file could not be loaded.',
+      detail: error.message,
+    });
+    return;
+  }
+
+  if (error instanceof EventModelLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'EVENT MODEL UNAVAILABLE',
+      title: `Unable to prepare ${error.eventModelId}`,
+      lead: 'A required local event model could not be loaded.',
       detail: error.message,
     });
     return;
