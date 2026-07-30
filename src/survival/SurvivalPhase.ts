@@ -1292,7 +1292,8 @@ export class SurvivalPhase implements GamePhase {
   ): Map<ItemInstanceId, EventResponseId> {
     const choiceByItem = new Map(
       event.choices
-        .filter((choice) => choice.itemId !== undefined)
+        .filter((choice) => choice.itemId !== undefined
+          && (choice.requiredChestState === undefined || choice.requiredChestState === snapshot.chest.state))
         .map((choice) => [choice.itemId!, choice.id] as const),
     );
     const eligibility = new Map<ItemInstanceId, EventResponseId>();
@@ -1314,17 +1315,21 @@ export class SurvivalPhase implements GamePhase {
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
         ) ?? [];
+        const chestUnavailable = choice.requiredChestState !== undefined
+          && choice.requiredChestState !== snapshot.chest.state;
+        const unavailableReasons = [
+          ...unmet.map(({ resource, minimum }) => (
+            `Requires ${minimum} ${resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US')}; `
+            + `you have ${snapshot[resource]}.`
+          )),
+          ...(chestUnavailable
+            ? [`Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`]
+            : []),
+        ];
         return {
           id: choice.id,
           label: choice.label,
-          unavailableReason: unmet.length === 0
-            ? null
-            : unmet
-                .map(({ resource, minimum }) => (
-                  `Requires ${minimum} ${resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US')}; `
-                  + `you have ${snapshot[resource]}.`
-                ))
-                .join(' '),
+          unavailableReason: unavailableReasons.length === 0 ? null : unavailableReasons.join(' '),
           ...(event.id === 'drifting-loot' && choice.id === 'retrieve'
             ? {
                 anchorId: 'drifting-loot',

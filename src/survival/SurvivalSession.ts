@@ -56,6 +56,12 @@ import type {
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 const POST_ACTION_EXCLUDED_EVENT_IDS: ReadonlySet<string> = new Set(['drifting-loot']);
 
+function fallbackResultId(eventId: string): string | undefined {
+  if (eventId === 'night-trader') return 'trader-food-fallback';
+  if (eventId === 'handyman') return 'handyman-food-fallback';
+  return undefined;
+}
+
 export interface SurvivalSessionOptions {
   seed: number;
   random?: RandomSource;
@@ -468,6 +474,9 @@ export class SurvivalSession {
     if (!this.meetsChoiceRequirements(choice.requirements)) {
       return this.reject('requirements-unmet', 'You do not have the resources for that response.');
     }
+    if (choice.requiredChestState !== undefined && choice.requiredChestState !== this.chestState) {
+      return this.reject('chest-state-unavailable', `That response requires a ${choice.requiredChestState} chest.`);
+    }
 
     const mutationExclusions = new Set<ItemInstanceId>();
     const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
@@ -487,14 +496,14 @@ export class SurvivalSession {
       ));
     }
     for (const mutation of resolved.effects.items ?? []) {
-      const concrete = this.applyEventMutation(
+      const mutationResult = this.applyEventMutation(
         mutation,
         mutationExclusions,
         selectedInstanceId,
         attemptedItemId,
       );
-      if (mutation.kind === 'gain' && concrete === null) fallbackFoodGranted = true;
-      if (concrete !== null) inventoryMutations.push(concrete);
+      fallbackFoodGranted ||= mutationResult.fallbackFoodGranted;
+      if (mutationResult.mutation !== null) inventoryMutations.push(mutationResult.mutation);
     }
     this.applyChestEffect(resolved.effects.chest);
     this.applyFlagEffects(resolved.effects.flags);
@@ -515,6 +524,16 @@ export class SurvivalSession {
     const rewardSummary = pendingDriftingLootVariant === null
       ? undefined
       : this.driftingLootRewardSummary(event.id, choiceId, resolved, fallbackFoodGranted);
+    const resolvedResultId = fallbackFoodGranted
+      ? fallbackResultId(event.id)
+      : resolved.resultId;
+    const eventResult = resolvedResultId === undefined
+      ? undefined
+      : Object.freeze({
+          eventId: event.id,
+          choiceId,
+          resultId: resolvedResultId,
+        });
     const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
@@ -524,6 +543,7 @@ export class SurvivalSession {
       deltas,
       cue,
       ...(rewardSummary === undefined ? {} : { rewardSummary }),
+      ...(eventResult === undefined ? {} : { eventResult }),
     };
     this.lastOutcome = outcome;
     this.recordJournalEvent(
@@ -1018,6 +1038,9 @@ export class SurvivalSession {
       ...(outcome.rewardSummary === undefined
         ? {}
         : { rewardSummary: Object.freeze({ ...outcome.rewardSummary }) as RewardSummary }),
+      ...(outcome.eventResult === undefined
+        ? {}
+        : { eventResult: Object.freeze({ ...outcome.eventResult }) }),
     };
   }
 
@@ -1048,7 +1071,9 @@ export class SurvivalSession {
 
   private hasUsableEventChoice(event: SurvivalEventDefinition): boolean {
     return event.choices.some((choice) => (
-      choice.itemId !== undefined && this.canUseEventItem(choice.itemId)
+      choice.itemId !== undefined
+      && (choice.requiredChestState === undefined || choice.requiredChestState === this.chestState)
+      && this.canUseEventItem(choice.itemId)
     ));
   }
 
@@ -1155,9 +1180,10 @@ export class SurvivalSession {
     excludedInstanceIds: ReadonlySet<ItemInstanceId>,
     selectedInstanceId: ItemInstanceId | null,
     attemptedItemId: ItemId | null,
-  ): JournalInventoryMutation | null {
+  ): { readonly mutation: JournalInventoryMutation | null; readonly fallbackFoodGranted: boolean } {
     let kind: JournalInventoryMutation['kind'];
     let instanceIds: ItemInstanceId[];
+    let fallbackFoodGranted = false;
     const preferredInstanceId = 'itemId' in mutation
       && mutation.itemId === attemptedItemId
       ? selectedInstanceId
@@ -1167,7 +1193,16 @@ export class SurvivalSession {
         kind = 'gain';
         const gained = this.inventory.gain(mutation.itemId);
         instanceIds = gained === null ? [] : [gained];
-        if (gained === null) this.applyDeltas({ food: mutation.fallbackFood });
+        if (gained === null) {
+          this.applyDeltas({ food: mutation.fallbackFood });
+          fallbackFoodGranted = true;
+        }
+        break;
+      }
+      case 'gainChest': {
+        kind = 'gain';
+        instanceIds = [];
+        fallbackFoodGranted = this.applyChestGain(mutation.fallbackFood);
         break;
       }
       case 'consume':
@@ -1216,9 +1251,19 @@ export class SurvivalSession {
           : [];
         break;
     }
-    if (instanceIds.length === 0) return null;
+    if (instanceIds.length === 0) return { mutation: null, fallbackFoodGranted };
     this.synchronizeRemovedResources(kind, instanceIds);
-    return { kind, instanceIds };
+    return { mutation: { kind, instanceIds }, fallbackFoodGranted };
+  }
+
+  private applyChestGain(fallbackFood: 1): boolean {
+    if (this.chestState === 'none') {
+      this.chestState = 'closed';
+      this.chestAcquiredDay = this.day;
+      return false;
+    }
+    this.applyDeltas({ food: fallbackFood });
+    return true;
   }
 
   private applyChestEffect(effect: WeightedEventOutcome['effects']['chest']): void {

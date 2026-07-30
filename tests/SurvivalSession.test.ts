@@ -217,6 +217,28 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
   });
 
+  it('publishes stable results for Chest Attack and Midnight Tour', () => {
+    const chest = new SurvivalSession(saved(), {
+      seed: 10,
+      random: sequenceRandom([0]),
+      initialChest: { state: 'mimic', acquiredDay: 1 },
+      initialEventId: 'chest-attack',
+    });
+    expect(chest.resolveEvent(choiceResponse('fight')).eventResult).toEqual({
+      eventId: 'chest-attack',
+      choiceId: 'fight',
+      resultId: 'chest-fight',
+    });
+
+    const tour = new SurvivalSession(saved(), {
+      seed: 11,
+      random: sequenceRandom([0]),
+      initialEventId: 'midnight-tour',
+    });
+    expect(tour.resolveEvent(choiceResponse('visit')).eventResult?.resultId).toBe('tour-chest');
+    expect(tour.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 1 });
+  });
+
   it('records the Flowers event without granting a survival reward', () => {
     const session = new SurvivalSession(saved('bucket'), {
       seed: 11,
@@ -307,6 +329,19 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
+  it('publishes the Handyman Food fallback result for a duplicate reward', () => {
+    const session = new SurvivalSession(saved('spyglass', 'flashlight'), {
+      seed: 106,
+      random: sequenceRandom([0]),
+      initial: { day: 20 },
+      initialEventId: 'handyman',
+    });
+
+    expect(session.resolveEvent(itemResponse('spyglass')).eventResult?.resultId)
+      .toBe('handyman-food-fallback');
+    expect(session.snapshot().food).toBe(1);
+  });
+
   it.each([
     [0, -30],
     [0.999999, -60],
@@ -370,6 +405,24 @@ describe('SurvivalSession daytime actions', () => {
 
     expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({ accepted: true, code: 'event-resolved' });
     expect(session.snapshot().repairMaterial).toBe(1);
+  });
+
+  it('rejects a response that requires another Chest state', () => {
+    const session = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
+    (session as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent = {
+      ...itemlessEvent({}),
+      choices: [{
+        id: 'sleep',
+        label: 'Sleep',
+        requiredChestState: 'closed',
+        outcomes: [{ weight: 1, message: 'Handled.', effects: {} }],
+      }],
+    };
+
+    expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({
+      accepted: false,
+      code: 'chest-state-unavailable',
+    });
   });
 
   it('gains an event item and falls back to food when its stable slot is occupied', () => {
