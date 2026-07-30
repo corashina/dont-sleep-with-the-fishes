@@ -7,7 +7,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   RingGeometry,
-  SphereGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
@@ -122,8 +121,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   private readonly fishActors: FishActor[] = [];
   private readonly surfaceFlashes: Mesh[] = [];
   private readonly splashes: Mesh[] = [];
-  private readonly catchMarks: Mesh[] = [];
-  private readonly catchActor = new Group();
+  private readonly catchModel: EventModelInstance;
+  private readonly catchActor: Group;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly silverMaterial = new MeshStandardMaterial({
@@ -150,14 +149,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     flatShading: true,
     side: DoubleSide,
   });
-  private readonly catchMaterial = new MeshStandardMaterial({
-    color: 0x8faeb5,
-    emissive: 0x405f66,
-    emissiveIntensity: 0.16,
-    roughness: 0.46,
-    metalness: 0.2,
-    flatShading: true,
-  });
   private readonly sample: SchoolSample = identitySchoolSample();
   private readonly reactionState: {
     foodDelta: number;
@@ -177,7 +168,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.boatRoot.name = 'school-of-fish-boat';
     this.ownedMaterials.add(this.silverMaterial);
     this.ownedMaterials.add(this.splashMaterial);
-    this.ownedMaterials.add(this.catchMaterial);
 
     for (let index = 0; index < MAX_FISH; index += 1) {
       const model = environment.eventModels.create('schoolFish');
@@ -216,19 +206,13 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.worldRoot.add(splash);
     }
 
-    const catchGeometry = new SphereGeometry(0.16, 6, 4);
-    this.ownedGeometries.add(catchGeometry);
+    this.catchModel = environment.eventModels.create('schoolFish');
+    this.catchActor = this.catchModel.root;
     this.catchActor.name = 'school-catch-actor';
     this.catchActor.position.set(1.52, 0.86, -0.42);
     this.catchActor.rotation.set(0.08, -0.34, -0.12);
-    for (let index = 0; index < 3; index += 1) {
-      const catchMark = new Mesh(catchGeometry, this.catchMaterial);
-      catchMark.name = `school-catch-mark-${index + 1}`;
-      catchMark.position.set((index - 1) * 0.22, (index % 2) * 0.1, index * 0.045);
-      catchMark.scale.set(1.45, 0.56, 0.42);
-      this.catchMarks.push(catchMark);
-      this.catchActor.add(catchMark);
-    }
+    this.catchActor.userData.catchModelId = 'schoolFish';
+    setFlatShading(this.catchActor);
     this.boatRoot.add(this.catchActor);
     this.hideScene();
   }
@@ -385,6 +369,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       ...this.fishActors.map(({ model }) => () => model.dispose()),
+      () => this.catchModel.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
@@ -429,6 +414,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   }
 
   private applySample(time: number): void {
+    const showCatch = this.sample.catchStrength > 0.008
+      && this.sample.foodDelta > 0;
     for (let index = 0; index < this.fishActors.length; index += 1) {
       const fish = this.fishActors[index]!;
       const variant = fish.variant;
@@ -446,7 +433,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         pose.roll - fish.wave.normal.x * 0.1,
       );
       fish.root.scale.set(pose.scale, pose.scale, pose.scale);
-      fish.root.visible = index < this.activeFish;
+      fish.root.visible = index < this.activeFish && (!showCatch || index !== 0);
     }
 
     const flashStrength = Math.max(
@@ -484,17 +471,10 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       splash.scale.set(splashScale, splashScale, splashScale);
     }
 
-    const shownCatchCount = Math.max(0, Math.min(
-      this.catchMarks.length,
-      Math.trunc(this.sample.foodDelta),
-    ));
-    this.catchActor.visible = this.sample.catchStrength > 0.008 && shownCatchCount > 0;
+    this.catchActor.visible = showCatch;
     const catchScale = 0.68 + this.sample.catchStrength * 0.32;
     this.catchActor.scale.set(catchScale, catchScale, catchScale);
     this.catchActor.position.y = 0.66 + this.sample.catchStrength * 0.2;
-    for (let index = 0; index < this.catchMarks.length; index += 1) {
-      this.catchMarks[index]!.visible = index < shownCatchCount;
-    }
   }
 
   private hideScene(): void {
@@ -515,6 +495,5 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     }
     for (const flash of this.surfaceFlashes) flash.visible = false;
     for (const splash of this.splashes) splash.visible = false;
-    for (const catchMark of this.catchMarks) catchMark.visible = false;
   }
 }
