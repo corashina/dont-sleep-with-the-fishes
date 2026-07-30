@@ -444,11 +444,15 @@ export class BoatWorld {
     scaleZ: 1,
   };
   private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
+    driftX: 0,
     pitch: 0,
     yaw: 0,
     roll: 0,
+    cameraYaw: 0,
     cameraZ: 0,
     lightScale: 1,
+    supplyRoll: 0,
+    supplyLift: 0,
   };
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
@@ -758,7 +762,7 @@ export class BoatWorld {
       } finally {
         if (!this.disposed && operation === this.weatherEventOperation) {
           this.dangerousWatersItemId = null;
-          this.supplyDisplay.clearEventMotion();
+          this.supplyDisplay.releaseEventActor();
         }
       }
       return;
@@ -852,7 +856,7 @@ export class BoatWorld {
     this.eventPresentation.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
     this.dangerousWatersItemId = null;
-    this.supplyDisplay.settleEventItemUse();
+    this.supplyDisplay.clearEventMotion();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1430,12 +1434,18 @@ export class BoatWorld {
   private applyDangerousWatersPresentation(): void {
     const reaction = this.dangerousWatersBoatReaction;
     if (this.eventPresentation.copyDangerousWatersBoatReaction(reaction)) {
+      this.motionRig.position.x += reaction.driftX;
       this.motionRig.rotation.x += reaction.pitch;
       this.motionRig.rotation.y += reaction.yaw;
       this.motionRig.rotation.z += reaction.roll;
+      this.cueCameraRig.rotation.y += reaction.cameraYaw;
       this.cueCameraRig.position.z += reaction.cameraZ;
       this.ambient.intensity *= reaction.lightScale;
       this.key.intensity *= reaction.lightScale;
+      this.supplyDisplay.applyEventAmbientPose(
+        reaction.supplyRoll,
+        reaction.supplyLift,
+      );
     }
     if (
       this.dangerousWatersItemId !== null
