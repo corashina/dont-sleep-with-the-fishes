@@ -17,6 +17,7 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
   type DriftingLootResultView,
+  type EventOutcomeView,
   type EventContextChoice,
   type EventResultView,
   type FishingResultView,
@@ -158,6 +159,27 @@ export function formatFishingResult(
     title: result.catch.label.toLocaleUpperCase('en-US'),
     detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
     catchTarget: null,
+  };
+}
+
+export function formatDangerousWatersOutcome(
+  outcome: ActionOutcome,
+): EventOutcomeView {
+  const hullDamage = Math.max(0, -(outcome.deltas.hull ?? 0));
+  if (hullDamage === 0) {
+    return {
+      title: 'CLEAR WATER',
+      detail: 'The route opens ahead.',
+      result: 'HULL HOLDS',
+      state: 'safe',
+    };
+  }
+  const severe = hullDamage >= 25;
+  return {
+    title: `HULL \u2212${hullDamage}`,
+    detail: outcome.message,
+    result: severe ? 'SEVERE ROCK STRIKE' : 'ROCK STRIKE',
+    state: severe ? 'severe' : 'damage',
   };
 }
 
@@ -975,7 +997,10 @@ export class SurvivalPhase implements GamePhase {
     else this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
-    await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
+    await Promise.all([
+      this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve(),
+      this.world.playEventChoice?.(eventId, choiceId) ?? Promise.resolve(),
+    ]);
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
@@ -1116,6 +1141,9 @@ export class SurvivalPhase implements GamePhase {
         ) ?? null,
       };
       this.ui.showEventResult?.(resultView);
+    }
+    if (eventId === 'dangerous-waters') {
+      this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
     }
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);

@@ -93,6 +93,15 @@ function effects(
   };
 }
 
+function dangerousWatersEffects(
+  resources: readonly ResourceEffect[] = [],
+): WeightedEventOutcome['effects'] {
+  return {
+    ...(resources.length ? { resources } : {}),
+    flags: { set: ['direction2'] },
+  };
+}
+
 const outcome = (
   weight: number,
   message: string,
@@ -178,14 +187,23 @@ function deepFreeze<T>(value: T): T {
 export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('dangerous-waters', 'Dangerous Waters', 'impact', 15, 2, 0, [
     choice('map', 'Use Map', 'map',
-      outcome(80, 'Nothing happens.'),
-      outcome(20, 'The rocks damage the boat.', effects([subtract('hull', { min: 5, max: 10 }), subtract('rescueProgress', 5)]))),
+      outcome(80, 'Nothing happens.', dangerousWatersEffects()),
+      outcome(20, 'The rocks damage the boat.', dangerousWatersEffects([
+        subtract('hull', { min: 5, max: 10 }),
+        add('pressure', 1),
+      ]))),
     choice('compass', 'Use Compass', 'compass',
-      outcome(50, 'Nothing happens.'),
-      outcome(50, 'The rocks damage the boat.', effects([subtract('hull', { min: 5, max: 8 }), subtract('rescueProgress', 5)]))),
+      outcome(50, 'Nothing happens.', dangerousWatersEffects()),
+      outcome(50, 'The rocks damage the boat.', dangerousWatersEffects([
+        subtract('hull', { min: 5, max: 8 }),
+        add('pressure', 1),
+      ]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(1, 'The rocks damage the boat.', effects([subtract('hull', { min: 25, max: 45 }), subtract('rescueProgress', 5)]))),
-  ], 30),
+      outcome(1, 'The rocks damage the boat.', dangerousWatersEffects([
+        subtract('hull', { min: 25, max: 45 }),
+        add('pressure', 1),
+      ]))),
+  ], 30, { maximumAppearances: 1 }),
   event('leak', 'Leak', 'impact', 10, 4, 0, [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', effects(undefined, [consume('ductTape')]))),
     choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'Nothing happens.'), outcome(20, 'The boat is damaged and the bucket breaks.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('bucket')]))),

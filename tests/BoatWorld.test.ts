@@ -571,6 +571,90 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('presents Dangerous Waters through its authored scene and Map motion', async () => {
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [map],
+    );
+    world.syncInventory(snapshot([map]));
+    const presentation = world.scene.getObjectByName('dangerous-waters-presentation')!;
+    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const cueCameraRig = world.scene.getObjectByName('boat-cue-camera-rig')!;
+
+    world.stageEvent('dangerous-waters');
+    expect(presentation.visible).toBe(true);
+    const baseMotionX = motionRig.position.x;
+    const reveal = world.revealEvent('dangerous-waters');
+    world.update(1.2, 1.2);
+    expect(Math.abs(motionRig.position.x - baseMotionX)).toBeGreaterThan(0.2);
+    expect(Math.abs(cueCameraRig.rotation.y)).toBeGreaterThan(0.04);
+    world.update(2.4, 1.2);
+    await reveal;
+
+    const baseScale = mapRoot.scale.clone();
+    const itemUse = world.playEventItemUse(
+      'dangerous-waters',
+      'map',
+      map.instanceId,
+    );
+    world.update(2.95, 0.55);
+    expect(mapRoot.scale.x).toBeGreaterThan(baseScale.x);
+    world.update(3.5, 0.55);
+    await itemUse;
+
+    world.clearEvent();
+    expect(presentation.visible).toBe(false);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('borrows the boat rig for a severe Dangerous Waters impact', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    world.stageEvent('dangerous-waters');
+    const supplyRoot = world.scene.getObjectByName('boat-supply:bucket')!;
+    const baseSupplyRotation = supplyRoot.rotation.clone();
+    const reaction = world.reactToEventOutcome('dangerous-waters', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The boat strikes the rocks.',
+      deltas: { hull: -25 },
+      cue: 'impact',
+    });
+
+    world.update(0.45, 0.45);
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const fragments = world.scene.getObjectByName('dangerous-waters-fragments')!;
+    expect(motionRig.rotation.x).toBeGreaterThan(0.1);
+    expect(supplyRoot.rotation.toArray().slice(0, 3)).not.toEqual(
+      baseSupplyRotation.toArray().slice(0, 3),
+    );
+    expect(fragments.children.filter(({ visible }) => visible)).toHaveLength(8);
+
+    world.update(0.9, 0.45);
+    await reaction;
+    expect(Math.abs(motionRig.rotation.z)).toBeGreaterThan(0.005);
+
+    world.clearEvent();
+    expect(supplyRoot.rotation.toArray().slice(0, 3)).toEqual(
+      baseSupplyRotation.toArray().slice(0, 3),
+    );
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the generic impact cue visible during an event-specific reaction', async () => {
     const anchor = savedItem('anchor');
     const propModels = createTestPropModels();
@@ -711,6 +795,28 @@ describe('BoatWorld helpers', () => {
     await reaction;
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+
+    world.stageEvent('dangerous-waters');
+    const baseBucketRotation = bucketRoot.rotation.clone();
+    const dangerousReaction = world.reactToEventOutcome(
+      'dangerous-waters',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The boat strikes the rocks.',
+        deltas: { hull: -10 },
+        cue: 'impact',
+      },
+    );
+    world.update(3.5, 0.45);
+    expect(bucketRoot.rotation.toArray().slice(0, 3)).not.toEqual(
+      baseBucketRotation.toArray().slice(0, 3),
+    );
+    world.setDocumentHidden(true);
+    await dangerousReaction;
+    expect(bucketRoot.rotation.toArray().slice(0, 3)).toEqual(
+      baseBucketRotation.toArray().slice(0, 3),
+    );
 
     world.dispose();
     propModels.dispose();
