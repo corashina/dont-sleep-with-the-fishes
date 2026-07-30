@@ -1,5 +1,4 @@
 export const SOUND_IDS = [
-  'music',
   'calmOcean',
   'roughOcean',
   'lightWind',
@@ -90,7 +89,6 @@ function asset(
 
 export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
   Object.freeze({
-    music: asset('music', 'music', 0.32, true),
     calmOcean: asset('calmOcean', 'ambience', 0.42, true),
     roughOcean: asset('roughOcean', 'ambience', 0.5, true),
     lightWind: asset('lightWind', 'ambience', 0.24, true),

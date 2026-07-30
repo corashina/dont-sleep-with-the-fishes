@@ -32,16 +32,15 @@ Keep source records after download.
 
 Each game phase owns one audio scope. Scope disposal stops its loops and effects.
 
-Scavenging uses music and ship room tone. Survival crossfades ocean, wind, rain,
-and boat creak layers.
+Scavenging uses ship room tone. Survival crossfades ocean, wind, rain, and boat
+creak layers. The game has no continuous background music.
 
 System Tuning stores master volume and mute in local storage.
 
-## Music and ambience
+## Ambience
 
 | Slot | Use | Selected source |
 | --- | --- | --- |
-| Music | Sparse, melancholic maritime loop | [Emotional Deluge](https://opengameart.org/content/emotional-deluge) |
 | Calm ocean | Normal open-water ambience | [Calm Ocean Waves](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | Rough ocean | Storm and high-wave ambience | [Storm Sea Close](https://freesound.org/people/frodeims/sounds/616222/) |
 | Light wind | Calm exposed-sea air | [Soft Breeze](https://freesound.org/people/Vrymaa/sounds/734663/) |
@@ -137,4 +136,4 @@ The nightfall source uses processed breath, which keeps the transition tactile.
 
 The dawn file contains the first eight seconds of its source.
 
-The dawn cue must remain quiet beneath the ocean and music layers.
+The dawn cue must remain quiet beneath the ocean layer.

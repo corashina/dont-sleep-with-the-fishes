@@ -335,7 +335,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.update?.(time, deltaSeconds);
     this.cameraLook?.update(deltaSeconds);
     const snapshot = this.session.snapshot();
-    this.audio.update(deltaSeconds, snapshot.pressure);
+    this.audio.update(deltaSeconds);
     this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
     if (this.started) this.advanceFishing(deltaSeconds);

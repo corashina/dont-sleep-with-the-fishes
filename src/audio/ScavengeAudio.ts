@@ -12,18 +12,14 @@ export class ScavengeAudio {
 
   start(): void {
     if (this.disposed) return;
-    this.scope.startLoop('music');
     this.scope.startLoop('roomTone');
   }
 
   update(
     motion: Readonly<PlayerMotionSample> | null,
-    sinkingProgress: number,
     movementActive: boolean,
   ): void {
     if (this.disposed) return;
-    const intensity = 0.72 + Math.min(1, Math.max(0, sinkingProgress)) * 0.28;
-    this.scope.setLoopGain('music', intensity, 0.25);
     if (motion === null) return;
     if (motion.jumped) this.scope.play('jump');
     if (!movementActive || !motion.grounded) {

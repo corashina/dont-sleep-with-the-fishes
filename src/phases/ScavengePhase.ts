@@ -252,7 +252,7 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.updateMatrixWorld(true);
     }
     this.syncVisualState(sinking);
-    this.audio.update(motion, sinking.progress, directControlActive);
+    this.audio.update(motion, directControlActive);
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
