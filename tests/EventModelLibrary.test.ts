@@ -8,6 +8,7 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  Texture,
   Vector3,
 } from 'three';
 import {
@@ -152,5 +153,43 @@ describe('EventModelLibrary', () => {
     expect([...sourceSpies, ...ownedSpies].every(
       (spy) => spy.mock.calls.length === 1,
     )).toBe(true);
+  });
+
+  it('deep-clones and disposes instance textures once', async () => {
+    const sourceTexture = new Texture();
+    const roots = completeRoots();
+    roots.anglerFish = modelRoot(
+      new BoxGeometry(2, 1, 1),
+      new MeshStandardMaterial({ map: sourceTexture }),
+    );
+    const sourceDispose = vi.spyOn(sourceTexture, 'dispose');
+    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const first = library.create('anglerFish');
+    const second = library.create('anglerFish');
+    const firstTexture = (
+      (first.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
+    ).map!;
+    const secondTexture = (
+      (second.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
+    ).map!;
+    const firstDispose = vi.spyOn(firstTexture, 'dispose');
+    const secondDispose = vi.spyOn(secondTexture, 'dispose');
+
+    expect(firstTexture).not.toBe(sourceTexture);
+    expect(secondTexture).not.toBe(sourceTexture);
+    expect(firstTexture).not.toBe(secondTexture);
+
+    first.dispose();
+    first.dispose();
+    library.dispose();
+    expect(firstDispose).toHaveBeenCalledOnce();
+    expect(secondDispose).not.toHaveBeenCalled();
+    expect(sourceDispose).toHaveBeenCalledOnce();
+
+    second.dispose();
+    second.dispose();
+    library.dispose();
+    expect(secondDispose).toHaveBeenCalledOnce();
+    expect(sourceDispose).toHaveBeenCalledOnce();
   });
 });
