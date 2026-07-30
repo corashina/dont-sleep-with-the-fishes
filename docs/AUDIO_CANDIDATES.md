@@ -81,7 +81,7 @@ Keep source records after download.
 
 | Slot | Use | Selected source |
 | --- | --- | --- |
-| Dive entry | Full body enters water | [Person Diving](https://freesound.org/people/designerschoice/sounds/811439/) |
+| Dive entry | Full body enters water | [Jump into Water](https://freesound.org/people/Urkki69/sounds/628350/) |
 | Underwater movement | Submerged motion and bubbles | [Underwater Movement](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
 | Dive surface | Smaller surface splash | [Water Splash](https://freesound.org/people/audiosmedia/sounds/243519/) |
 | Fishing cast | Rod, line, and small splash | [Fishing Reel Cast with Splash](https://freesound.org/people/mwchristian95/sounds/725425/) |
@@ -96,7 +96,7 @@ Keep source records after download.
 | Slot | Use | Selected source |
 | --- | --- | --- |
 | Bucket rain | Rain collects in a hard container | [Rain Drips in Bucket](https://freesound.org/people/TheGloomWorker/sounds/683249/) |
-| Umbrella | Mechanism opens under load | [Umbrella Open](https://freesound.org/people/Geoff-Bremner-Audio/sounds/792187/) |
+| Umbrella | Mechanism opens under load | [Opening an Umbrella](https://freesound.org/people/randbsoundbites/sounds/792526/) |
 | Anchor chain | Heavy chain loads against metal | [Thick Chain on Metal](https://freesound.org/people/kyles/sounds/452577/) |
 | Flashlight | Old mechanical switch | [Small Flashlight Click](https://freesound.org/people/Rudmer_Rotteveel/sounds/457458/) |
 | Flare gun | Sharp launch with burning tail | [Firework Rocket Ignition](https://freesound.org/people/derplayer/sounds/587173/) |
