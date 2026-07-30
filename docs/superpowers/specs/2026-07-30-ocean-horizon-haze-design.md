@@ -48,8 +48,8 @@ Use these values:
 
 | Quality | Start | End | Strength |
 | --- | ---: | ---: | ---: |
-| Low | 55 | 180 | 0.76 |
-| High | 65 | 220 | 0.65 |
+| Low | 35 | 120 | 0.88 |
+| High | 45 | 145 | 0.82 |
 
 Use `smoothstep` between the start and end distances.
 

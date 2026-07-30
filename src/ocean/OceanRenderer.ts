@@ -28,6 +28,9 @@ export interface OceanSurfaceQuality {
   segments: number;
   detailFadeNear: number;
   detailFadeFar: number;
+  horizonHazeStart: number;
+  horizonHazeEnd: number;
+  horizonHazeStrength: number;
   surfaceExtent: number;
   horizonHalfExtent: number;
   horizonRadialSegments: number;
@@ -38,6 +41,9 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 192,
     detailFadeNear: 28,
     detailFadeFar: 92,
+    horizonHazeStart: 35,
+    horizonHazeEnd: 120,
+    horizonHazeStrength: 0.88,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 48,
@@ -46,6 +52,9 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 288,
     detailFadeNear: 40,
     detailFadeFar: 128,
+    horizonHazeStart: 45,
+    horizonHazeEnd: 145,
+    horizonHazeStrength: 0.82,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
     horizonRadialSegments: 72,
@@ -131,6 +140,7 @@ const fragmentShader = `
   uniform vec3 uFogColor;
   uniform vec3 uSkyColor;
   uniform vec3 uHorizonColor;
+  uniform vec3 uHorizonHaze;
   uniform vec3 uSunColor;
   uniform float uDirectLightStrength;
   uniform float uFogDensity;
@@ -581,6 +591,14 @@ const fragmentShader = `
     color = mix(color, highFoamColor, highFoamLayer * 0.78);
     #endif
 
+    float horizonHaze = smoothstep(
+      uHorizonHaze.x,
+      uHorizonHaze.y,
+      vViewDepth
+    ) * uHorizonHaze.z;
+    vec3 hazeColor = mix(uFogColor, uHorizonColor, 0.22);
+    color = mix(color, hazeColor, horizonHaze);
+
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     color = mix(color, uFogColor, clamp(fogFactor, 0.0, 1.0));
     gl_FragColor = vec4(color, 0.98);
@@ -673,6 +691,13 @@ export class OceanRenderer {
             surfaceQuality.detailFadeFar,
           ),
         },
+        uHorizonHaze: {
+          value: new Vector3(
+            surfaceQuality.horizonHazeStart,
+            surfaceQuality.horizonHazeEnd,
+            surfaceQuality.horizonHazeStrength,
+          ),
+        },
         uDirections: { value: payload.directions.map(([x, y]) => new Vector2(x, y)) },
         uParameters: { value: payload.parameters.map(([x, y, z, w]) => new Vector4(x, y, z, w)) },
         uPhases: { value: payload.phases },
@@ -736,6 +761,11 @@ export class OceanRenderer {
     (this.material.uniforms.uDetailFade!.value as Vector2).set(
       surfaceQuality.detailFadeNear,
       surfaceQuality.detailFadeFar,
+    );
+    (this.material.uniforms.uHorizonHaze!.value as Vector3).set(
+      surfaceQuality.horizonHazeStart,
+      surfaceQuality.horizonHazeEnd,
+      surfaceQuality.horizonHazeStrength,
     );
     (this.material.uniforms.uDeepColor!.value as Color).setHex(colors.deep);
     (this.material.uniforms.uShallowColor!.value as Color).setHex(colors.shallow);
