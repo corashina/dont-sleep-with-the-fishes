@@ -23,6 +23,12 @@ export interface PlayerNavigationBounds {
   fall: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
+export interface PlayerMotionSample {
+  readonly movedDistance: number;
+  readonly grounded: boolean;
+  readonly jumped: boolean;
+}
+
 function containsLocalPosition(
   bounds: PlayerNavigationBounds['safe'],
   position: Vector3,
@@ -73,7 +79,9 @@ export class PlayerController {
     this.floorEyeHeight = start.y;
   }
 
-  update(delta: number, input: InputController): void {
+  update(delta: number, input: InputController): PlayerMotionSample {
+    const previousX = this.localPosition.x;
+    const previousZ = this.localPosition.z;
     const look = input.consumeLook();
     this.yaw -= look.x * LOOK_SENSITIVITY;
     this.pitch = Math.max(
@@ -115,18 +123,27 @@ export class PlayerController {
         ladderTraversal.position.z,
       );
       this.placeCamera();
-      return;
+      return {
+        movedDistance: Math.hypot(
+          this.localPosition.x - previousX,
+          this.localPosition.z - previousZ,
+        ),
+        grounded: false,
+        jumped: false,
+      };
     }
 
-    this.integrate(delta, input.consumeJump());
+    return this.integrate(delta, input.consumeJump());
   }
 
-  updatePassive(delta: number): void {
+  updatePassive(delta: number): PlayerMotionSample {
     this.movement.set(0, 0, 0);
-    this.integrate(delta, false);
+    return this.integrate(delta, false);
   }
 
-  private integrate(delta: number, jumpRequested: boolean): void {
+  private integrate(delta: number, jumpRequested: boolean): PlayerMotionSample {
+    const previousX = this.localPosition.x;
+    const previousZ = this.localPosition.z;
     const currentSupport = findSupportEyeHeight(
       this.localPosition,
       0.35,
@@ -135,7 +152,8 @@ export class PlayerController {
     );
     const grounded = this.localPosition.y <= currentSupport + GROUND_EPSILON
       && this.verticalVelocity <= 0;
-    if (jumpRequested && grounded) this.verticalVelocity = JUMP_SPEED;
+    const jumped = jumpRequested && grounded;
+    if (jumped) this.verticalVelocity = JUMP_SPEED;
 
     const nextY = this.localPosition.y
       + this.verticalVelocity * delta
@@ -195,6 +213,15 @@ export class PlayerController {
     }
 
     this.placeCamera();
+    return {
+      movedDistance: Math.hypot(
+        this.localPosition.x - previousX,
+        this.localPosition.z - previousZ,
+      ),
+      grounded: this.localPosition.y <= support + GROUND_EPSILON
+        && this.verticalVelocity <= 0,
+      jumped,
+    };
   }
 
   placeCamera(): void {
