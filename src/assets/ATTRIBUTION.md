@@ -55,6 +55,11 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 | lantern | `lantern.glb` | Lantern / Kay Lousberg | https://poly.pizza/m/CtHBJ1ufeW | `poly-pizza:ecbc7b04-09ca-4068-bb3c-4e5ce1163c9a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 264 | 264 | Source GLB SHA-256 `24EE9E4B9E280023CBBAF9FF6284E7BA51A07753F8D5EC8690ECC61DD156981D`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 | ceilingLight | `ceilingLight.glb` | Light Ceiling Single / Quaternius | https://poly.pizza/m/JT44JUXU2d | `poly-pizza:2cc064fb-2b1b-4269-9007-473dfe78bffc` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 232 | 232 | Source GLB SHA-256 `4E307B591D68D8AFF049F07B59E5AA75B81E8DA211FD48B752BF847918EDED1B`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 
+## Event model attribution
+
+- "Shark" by Quaternius. Poly Pizza. Public Domain, CC0 1.0.
+  <https://poly.pizza/m/YYsK3gRCBZ>
+
 ## Runtime ship-furniture and deck-detail model ledger
 
 Five models come from [Kenney Furniture Kit 1.0](https://kenney.nl/assets/furniture-kit),
