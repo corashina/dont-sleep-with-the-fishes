@@ -89,6 +89,9 @@ import {
   WeatherEventAnimator,
   type EventPhysicalResponsePresentation,
 } from './WeatherEventAnimator';
+import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
+import { supernaturalItemUseDuration } from './supernaturalEventChoreography';
+import { weatherItemUseDuration } from './weatherEventChoreography';
 import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,
@@ -435,6 +438,7 @@ export class BoatWorld {
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
+  private readonly supernaturalEventAnimator: SupernaturalEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
@@ -582,6 +586,11 @@ export class BoatWorld {
       this.supplyDisplay,
       this.eventModels,
     );
+    this.supernaturalEventAnimator = new SupernaturalEventAnimator(
+      this.cameraRig,
+      this.supplyDisplay,
+      this.eventModels,
+    );
     this.boat.add(this.weatherEventAnimator.boatRoot);
 
     const repairTools = createRepairToolbox();
@@ -653,6 +662,7 @@ export class BoatWorld {
       this.key.target,
       this.eventPresentation.root,
       this.weatherEventAnimator.worldRoot,
+      this.supernaturalEventAnimator.worldRoot,
       ...(this.driftingLootPresentation === null
         ? []
         : [this.driftingLootPresentation.root]),
@@ -738,10 +748,18 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
-    if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
-      return;
+    if (weatherItemUseDuration(eventId, choiceId) !== null) {
+      if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+        return;
+      }
+      if (this.disposed || operation !== this.weatherEventOperation) return;
     }
-    if (this.disposed || operation !== this.weatherEventOperation) return;
+    if (supernaturalItemUseDuration(eventId, choiceId) !== null) {
+      if (await this.supernaturalEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+        return;
+      }
+      if (this.disposed || operation !== this.weatherEventOperation) return;
+    }
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
@@ -752,12 +770,14 @@ export class BoatWorld {
       if (variant === null) throw new Error('Drifting loot requires a variant.');
       this.eventPresentation.clear();
       this.weatherEventAnimator.clear();
+      this.supernaturalEventAnimator.clear();
       this.driftingLootPresentation.stage(variant);
       return;
     }
     this.driftingLootPresentation?.clear();
     this.eventPresentation.stage(eventId);
     this.weatherEventAnimator.stage(eventId);
+    this.supernaturalEventAnimator.stage(eventId);
   }
 
   async revealEvent(eventId: string): Promise<void> {
@@ -770,6 +790,7 @@ export class BoatWorld {
     await Promise.all([
       this.eventPresentation.reveal(eventId),
       this.weatherEventAnimator.reveal(eventId),
+      this.supernaturalEventAnimator.reveal(eventId),
     ]);
   }
 
@@ -801,6 +822,7 @@ export class BoatWorld {
     await Promise.all([
       this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
+      this.supernaturalEventAnimator.react(eventId, outcome, response),
     ]);
   }
 
@@ -810,6 +832,7 @@ export class BoatWorld {
     this.eventPresentation.clear();
     this.driftingLootPresentation?.clear();
     this.weatherEventAnimator.clear();
+    this.supernaturalEventAnimator.clear();
     this.supplyDisplay.clearEventMotion();
   }
 
@@ -819,6 +842,7 @@ export class BoatWorld {
     this.skipSequence();
     this.eventPresentation.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
+    this.supernaturalEventAnimator.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
   }
 
@@ -1300,6 +1324,7 @@ export class BoatWorld {
       this.eventPresentation.update(time, delta);
       this.driftingLootPresentation?.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
+      this.supernaturalEventAnimator.update(time, delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
     }
@@ -1340,6 +1365,7 @@ export class BoatWorld {
       },
       () => this.cancelActiveSequence(),
       () => this.weatherEventAnimator.dispose(),
+      () => this.supernaturalEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
