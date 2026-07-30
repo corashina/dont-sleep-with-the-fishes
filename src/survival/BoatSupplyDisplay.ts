@@ -405,6 +405,10 @@ export class BoatSupplyDisplay {
 
   applyEventItemPose(instanceId: ItemInstanceId, pose: SupplyAdditivePose): boolean {
     if (this.disposed) return false;
+    if (
+      this.pinnedEventActorId !== null
+      && this.pinnedEventActorId !== instanceId
+    ) return false;
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined || this.recordsById.get(groupId)?.visibleCopies === 0) return false;
     this.eventItemId = instanceId;
