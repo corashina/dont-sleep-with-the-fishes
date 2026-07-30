@@ -18,6 +18,24 @@ const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
 const CC_BY_3 = 'https://creativecommons.org/licenses/by/3.0/';
 const DOWNLOADED_ON = '2026-07-30';
 
+function signature(
+  sceneRootCount,
+  sceneRootNamesSha256,
+  nodeCount,
+  nodeNamesSha256,
+  meshCount,
+  meshNamesSha256,
+) {
+  return Object.freeze({
+    sceneRoots: Object.freeze({
+      count: sceneRootCount,
+      namesSha256: sceneRootNamesSha256,
+    }),
+    nodes: Object.freeze({ count: nodeCount, namesSha256: nodeNamesSha256 }),
+    meshes: Object.freeze({ count: meshCount, namesSha256: meshNamesSha256 }),
+  });
+}
+
 function source({
   id,
   publicId,
@@ -26,6 +44,7 @@ function source({
   creator,
   license,
   sourceSha256,
+  sourceSignature,
   sourceTriangles,
   targetLongestDimension,
   maxTriangles,
@@ -44,6 +63,7 @@ function source({
     license,
     licenseUrl: license === 'CC0 1.0' ? CC0 : CC_BY_3,
     sourceSha256,
+    sourceSignature,
     sourceTriangles,
     targetLongestDimension,
     maxTriangles,
@@ -62,6 +82,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'Quaternius',
     license: 'CC0 1.0',
     sourceSha256: '1E018BAAB333027683C867357180B25F4228B878116CE5A69220161543A2A057',
+    sourceSignature: signature(
+      1,
+      '57A304DA5C5FBB0DF28DAAE1BE357439E857281A3A5BE3822B1FD78FE488B6F9',
+      2,
+      '520CA2294470AD351F1734AFBE9C9531363961A39D4D4661D2844312DCC0A586',
+      1,
+      'F98004224DE3C1F1C1CA6EA59FA142BD40DA210CDAD23E098EBA833D87DDC2A4',
+    ),
     sourceTriangles: 1_636,
     targetLongestDimension: 1.1,
     maxTriangles: 2_000,
@@ -76,6 +104,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'J-Toastie',
     license: 'CC-BY 3.0',
     sourceSha256: 'F2CA3A8EE6856FD312C8B6E5B1F2AA1D5234CB220FB441F836942CF4125274E6',
+    sourceSignature: signature(
+      1,
+      '401D8C5F943FECE8C7E22F770EF9D4932056A0B27E5D5E92501BB07AAF1A0837',
+      1,
+      '401D8C5F943FECE8C7E22F770EF9D4932056A0B27E5D5E92501BB07AAF1A0837',
+      1,
+      'A0B3D803E2B7FA4DD50798B8C9B4550E33F5B02E604671A76B8F39604D9F240B',
+    ),
     sourceTriangles: 84,
     targetLongestDimension: 18,
     maxTriangles: 200,
@@ -90,6 +126,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'Quaternius',
     license: 'CC0 1.0',
     sourceSha256: 'C6A2B34DE53EA610D4DCF20785340B12B023BD3B648A8F3DB3DCDB962008B9D3',
+    sourceSignature: signature(
+      1,
+      '57A304DA5C5FBB0DF28DAAE1BE357439E857281A3A5BE3822B1FD78FE488B6F9',
+      2,
+      '4BF46E5806787957A5A5D586C8BD9DE1DD5886A89E2DD36E7E90B2A07B23AABF',
+      1,
+      '404458B24CC4F514C1CC4177B8D407F83FBCD30B93B792755C8325E854FB530C',
+    ),
     sourceTriangles: 5_648,
     targetLongestDimension: 5.5,
     maxTriangles: 6_000,
@@ -104,6 +148,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'Poly by Google',
     license: 'CC-BY 3.0',
     sourceSha256: 'D044E98D9C87D65CD650D6F054940A5F3C62C06457F32BB864D24615E71906FA',
+    sourceSignature: signature(
+      1,
+      'E93372533F323B2F12783AA3A586135CF421486439C2CDCDE47411B78F9839EC',
+      1,
+      'E93372533F323B2F12783AA3A586135CF421486439C2CDCDE47411B78F9839EC',
+      1,
+      '7E6CC40BD4B7D2937DCC7B1FD68BAA1A86027DD1321306F10BAD6CB47B78C475',
+    ),
     sourceTriangles: 1_898,
     targetLongestDimension: 4.2,
     maxTriangles: 2_500,
@@ -118,6 +170,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'J-Toastie',
     license: 'CC-BY 3.0',
     sourceSha256: '32705E2EE2BADC9DF04886CC0705545D6640C34E927D4DB67AFFF2802AEC945E',
+    sourceSignature: signature(
+      1,
+      '57A304DA5C5FBB0DF28DAAE1BE357439E857281A3A5BE3822B1FD78FE488B6F9',
+      28,
+      '4FFFC9F6264D79A3C52E70A93EF8F813363CE899D34AAF827AEAF62740150FCC',
+      1,
+      'FA18C06733FBBF4138EA8591D50949C1ECD653D0FBF13278A3439EE5AFA14C49',
+    ),
     sourceTriangles: 1_518,
     targetLongestDimension: 1.2,
     maxTriangles: 2_000,
@@ -132,6 +192,14 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze({
     creator: 'Alex Safayan',
     license: 'CC-BY 3.0',
     sourceSha256: 'A6F5E74082C8DFE8D251B7D70AF5C2BD8570D108B3CA2A97C3D55F38871FCB4B',
+    sourceSignature: signature(
+      88,
+      'AB237DC15D22F6C8F5A2DD8936AF43466FCCBE20B4C8DDABBD9FEBCD3D1280D8',
+      88,
+      'AB237DC15D22F6C8F5A2DD8936AF43466FCCBE20B4C8DDABBD9FEBCD3D1280D8',
+      88,
+      '6E12DFD132322B686EABFBBE6D6915BD065E344B99073935B08FA287194E2A99',
+    ),
     sourceTriangles: 1_620,
     targetLongestDimension: 36,
     maxTriangles: 2_500,
@@ -148,6 +216,61 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex').toUpperCase();
+}
+
+function namesSha256(names) {
+  return sha256(Buffer.from([...names].sort().join('\n'), 'utf8'));
+}
+
+function documentSourceSignature(document) {
+  const root = document.getRoot();
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  if (!scene) throw new Error('source signature: active scene is missing');
+  const sceneRoots = scene.listChildren().map((node) => node.getName());
+  const nodes = root.listNodes().map((node) => node.getName());
+  const meshes = root.listMeshes().map((mesh) => mesh.getName());
+  return {
+    sceneRoots: { count: sceneRoots.length, namesSha256: namesSha256(sceneRoots) },
+    nodes: { count: nodes.length, namesSha256: namesSha256(nodes) },
+    meshes: { count: meshes.length, namesSha256: namesSha256(meshes) },
+  };
+}
+
+function validateSourceSignature(document, descriptor) {
+  const actual = documentSourceSignature(document);
+  for (const category of ['sceneRoots', 'nodes', 'meshes']) {
+    const expectedPart = descriptor.sourceSignature[category];
+    const actualPart = actual[category];
+    if (
+      actualPart.count !== expectedPart.count
+      || actualPart.namesSha256 !== expectedPart.namesSha256
+    ) {
+      throw new Error(
+        `${descriptor.id}: approved source ${category} signature does not match`,
+      );
+    }
+  }
+}
+
+function assertInjectedPackRejected(document, descriptor) {
+  const root = document.getRoot();
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  const sourceMesh = root.listMeshes()[0];
+  if (!scene || !sourceMesh) throw new Error(`${descriptor.id}: negative fixture setup failed`);
+  const injected = document.createNode('InjectedPackModel').setMesh(sourceMesh);
+  scene.addChild(injected);
+  let rejected = false;
+  try {
+    validateSourceSignature(document, descriptor);
+  } catch {
+    rejected = true;
+  } finally {
+    scene.removeChild(injected);
+    injected.dispose();
+  }
+  if (!rejected) {
+    throw new Error(`${descriptor.id}: injected multi-model pack was accepted`);
+  }
 }
 
 function countDocumentTriangles(document) {
@@ -378,6 +501,7 @@ async function inspectSource(descriptor, targetPath, verifyHash) {
   }
   const document = await io.read(targetPath);
   validateSingleModel(document, descriptor);
+  validateSourceSignature(document, descriptor);
   const sourceTriangles = countDocumentTriangles(document);
   if (sourceTriangles !== descriptor.sourceTriangles) {
     throw new Error(
@@ -456,6 +580,7 @@ async function inspectSources() {
     for (const descriptor of Object.values(POLY_PIZZA_EVENT_MODEL_SOURCES)) {
       const sourcePath = join(temporaryRoot, `${descriptor.id}.glb`);
       const inspection = await inspectSource(descriptor, sourcePath, false);
+      assertInjectedPackRejected(inspection.document, descriptor);
       console.log(JSON.stringify({
         id: descriptor.id,
         sourceSha256: inspection.sourceSha256,
@@ -464,6 +589,8 @@ async function inspectSources() {
         animations: inspection.animations,
         rigs: inspection.rigs,
         meshes: meshMetadata(inspection.document),
+        sourceSignature: documentSourceSignature(inspection.document),
+        injectedPackFixture: 'rejected',
       }));
     }
   } finally {
