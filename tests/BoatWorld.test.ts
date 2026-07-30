@@ -848,7 +848,7 @@ describe('BoatWorld helpers', () => {
     const disposeGeometry = vi.spyOn(geometry, 'dispose');
     const disposeImportedMaterial = vi.spyOn(importedMaterial, 'dispose');
     fogMan.add(figure);
-    const create = vi.fn(() => fogMan);
+    const create = vi.fn((id: string) => id === 'fogMan' ? fogMan : new Group());
     const eventModels = {
       create,
       animations: vi.fn(() => []),
@@ -881,6 +881,62 @@ describe('BoatWorld helpers', () => {
     expect(disposeGeometry).toHaveBeenCalledOnce();
     expect(disposeSilhouetteMaterial).toHaveBeenCalledOnce();
     expect(disposeImportedMaterial).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
+  it('coordinates supernatural staging, item motion, and cleanup', async () => {
+    const flare = savedItem('flareGun');
+    const propModels = createTestPropModels();
+    const create = vi.fn((id: string) => {
+      const root = new Group();
+      root.add(new Mesh(new BufferGeometry(), new MeshStandardMaterial()));
+      if (id === 'siren') {
+        const head = new Group();
+        head.name = 'Formad_Head';
+        root.add(head);
+      }
+      return root;
+    });
+    const eventModels = {
+      create,
+      animations: vi.fn(() => []),
+      dispose: vi.fn(),
+    } as unknown as EventModelLibrary;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [flare],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    world.syncInventory(snapshot([flare]));
+
+    world.stageEvent('ghosts');
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
+
+    const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
+    world.update(1, 1.2);
+    await itemUse;
+    const reaction = world.reactToEventOutcome(
+      'ghosts',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The flare cuts through the mist.',
+        deltas: {},
+        cue: 'none',
+      },
+      { choiceId: 'flareGun', instanceId: flare.instanceId, condition: 'consumed' },
+    );
+    world.update(2, 0.84);
+    await reaction;
+
+    world.clearEvent();
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
+    world.dispose();
     propModels.dispose();
   });
 
