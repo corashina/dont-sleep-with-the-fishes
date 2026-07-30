@@ -79,6 +79,10 @@ import {
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
+import type {
+  DangerousWatersBoatReaction,
+  DangerousWatersItemPose,
+} from './DangerousWatersPresentation';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
@@ -427,6 +431,25 @@ export class BoatWorld {
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
+  private dangerousWatersItemId: ItemInstanceId | null = null;
+  private readonly dangerousWatersItemPose: DangerousWatersItemPose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
+  private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
+    pitch: 0,
+    yaw: 0,
+    roll: 0,
+    cameraZ: 0,
+    lightScale: 1,
+  };
   private readonly driftingLootSternRest = new Object3D();
   private readonly driftingLootPresentation: DriftingLootPresentation | null;
   private readonly repairTools: Object3D;
@@ -725,11 +748,32 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
+    if (
+      eventId === 'dangerous-waters'
+      && this.supplyDisplay.pinEventActor(instanceId)
+    ) {
+      this.dangerousWatersItemId = instanceId;
+      try {
+        await this.eventPresentation.playChoice(eventId, choiceId);
+      } finally {
+        if (!this.disposed && operation === this.weatherEventOperation) {
+          this.dangerousWatersItemId = null;
+          this.supplyDisplay.clearEventMotion();
+        }
+      }
+      return;
+    }
     if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
       return;
     }
     if (this.disposed || operation !== this.weatherEventOperation) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
+  }
+
+  playEventChoice(eventId: string, choiceId: string): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.weatherEventOperation += 1;
+    return this.eventPresentation.playChoice(eventId, choiceId);
   }
 
   stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
@@ -797,6 +841,7 @@ export class BoatWorld {
     this.eventPresentation.clear();
     this.driftingLootPresentation?.clear();
     this.weatherEventAnimator.clear();
+    this.dangerousWatersItemId = null;
     this.supplyDisplay.clearEventMotion();
   }
 
@@ -806,6 +851,7 @@ export class BoatWorld {
     this.skipSequence();
     this.eventPresentation.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
+    this.dangerousWatersItemId = null;
     this.supplyDisplay.settleEventItemUse();
   }
 
@@ -1284,9 +1330,11 @@ export class BoatWorld {
       }
 
       this.advanceFishingPresentation(delta);
+      this.supplyDisplay.resetEventPoseForFrame();
       this.eventPresentation.update(time, delta);
       this.driftingLootPresentation?.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
+      this.applyDangerousWatersPresentation();
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
     }
@@ -1377,6 +1425,29 @@ export class BoatWorld {
     this.camera.quaternion.copy(this.baseCameraQuaternion);
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     this.eventPresentation.setRescueCue(null);
+  }
+
+  private applyDangerousWatersPresentation(): void {
+    const reaction = this.dangerousWatersBoatReaction;
+    if (this.eventPresentation.copyDangerousWatersBoatReaction(reaction)) {
+      this.motionRig.rotation.x += reaction.pitch;
+      this.motionRig.rotation.y += reaction.yaw;
+      this.motionRig.rotation.z += reaction.roll;
+      this.cueCameraRig.position.z += reaction.cameraZ;
+      this.ambient.intensity *= reaction.lightScale;
+      this.key.intensity *= reaction.lightScale;
+    }
+    if (
+      this.dangerousWatersItemId !== null
+      && this.eventPresentation.copyDangerousWatersItemPose(
+        this.dangerousWatersItemPose,
+      )
+    ) {
+      this.supplyDisplay.applyEventItemPose(
+        this.dangerousWatersItemId,
+        this.dangerousWatersItemPose,
+      );
+    }
   }
 
   private startFishingAnimation(

@@ -2196,7 +2196,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('finishes the contextual press beat before resolving and reacting', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     let current = snapshot({
       state: 'dayEvent',
       pendingEventId: event.id,
@@ -2204,6 +2204,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const calls: string[] = [];
     const beat = deferred();
+    const worldBeat = deferred();
     const resolveEvent = vi.fn(() => {
       calls.push('resolve');
       current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
@@ -2230,6 +2231,10 @@ describe('SurvivalPhase orchestration', () => {
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
         revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(() => {
+          calls.push('world-choice');
+          return worldBeat.promise;
+        }),
         reactToEventOutcome: vi.fn(() => {
           calls.push('react');
           return Promise.resolve();
@@ -2245,12 +2250,20 @@ describe('SurvivalPhase orchestration', () => {
 
     ui.onEventChoice?.('sleep');
     await flushPromises();
-    expect(calls).toEqual(['press']);
+    expect(calls).toEqual(['press', 'world-choice']);
     expect(resolveEvent).not.toHaveBeenCalled();
 
     beat.resolve();
     await flushPromises();
-    expect(calls.slice(0, 3)).toEqual(['press', 'resolve', 'react']);
+    expect(resolveEvent).not.toHaveBeenCalled();
+    worldBeat.resolve();
+    await flushPromises();
+    expect(calls.slice(0, 4)).toEqual([
+      'press',
+      'world-choice',
+      'resolve',
+      'react',
+    ]);
   });
 
   it('does not resolve after disposal cancels a pending contextual press beat', async () => {

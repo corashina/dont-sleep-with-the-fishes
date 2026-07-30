@@ -571,6 +571,70 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('presents Dangerous Waters through its authored scene and Map motion', async () => {
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [map],
+    );
+    world.syncInventory(snapshot([map]));
+    const presentation = world.scene.getObjectByName('dangerous-waters-presentation')!;
+    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+
+    world.stageEvent('dangerous-waters');
+    expect(presentation.visible).toBe(true);
+    const reveal = world.revealEvent('dangerous-waters');
+    world.update(2.4, 2.4);
+    await reveal;
+
+    const baseScale = mapRoot.scale.clone();
+    const itemUse = world.playEventItemUse(
+      'dangerous-waters',
+      'map',
+      map.instanceId,
+    );
+    world.update(2.95, 0.55);
+    expect(mapRoot.scale.x).toBeGreaterThan(baseScale.x);
+    world.update(3.5, 0.55);
+    await itemUse;
+
+    world.clearEvent();
+    expect(presentation.visible).toBe(false);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('borrows the boat rig for a severe Dangerous Waters impact', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.stageEvent('dangerous-waters');
+    const reaction = world.reactToEventOutcome('dangerous-waters', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The boat strikes the rocks.',
+      deltas: { hull: -25 },
+      cue: 'impact',
+    });
+
+    world.update(0.45, 0.45);
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const fragments = world.scene.getObjectByName('dangerous-waters-fragments')!;
+    expect(motionRig.rotation.x).toBeGreaterThan(0.1);
+    expect(fragments.children.filter(({ visible }) => visible)).toHaveLength(8);
+
+    world.update(0.9, 0.45);
+    await reaction;
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the generic impact cue visible during an event-specific reaction', async () => {
     const anchor = savedItem('anchor');
     const propModels = createTestPropModels();
