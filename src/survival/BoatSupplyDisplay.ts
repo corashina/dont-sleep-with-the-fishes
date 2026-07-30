@@ -463,6 +463,7 @@ export class BoatSupplyDisplay {
     }
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined) return false;
+    const previousSelectedItemId = this.eventSelectedItemId;
     if (this.currentSnapshot !== null) {
       this.eventSelectedItemId = instanceId;
       this.syncGroup(groupId, this.currentSnapshot);
@@ -472,7 +473,13 @@ export class BoatSupplyDisplay {
       record === undefined
       || record.visibleCopies === 0
       || record.backingInstanceId !== instanceId
-    ) return false;
+    ) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      if (this.currentSnapshot !== null) {
+        this.syncGroup(groupId, this.currentSnapshot);
+      }
+      return false;
+    }
     if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
     this.pinnedEventActorId = instanceId;
     this.pinnedEventGroupId = groupId;

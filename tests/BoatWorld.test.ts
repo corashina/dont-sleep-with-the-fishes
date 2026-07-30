@@ -1031,6 +1031,41 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps the active actor bound when a known saved sibling is absent', () => {
+    const firstMap = savedItem('map', 1);
+    const absentMap = savedItem('map', 2);
+    const propModels = createTestPropModels();
+    const display = new BoatSupplyDisplay(
+      propModels,
+      new Group(),
+      [firstMap, absentMap],
+    );
+    display.sync(snapshot([firstMap]));
+    const activeActor = display.borrowEventActor(firstMap.instanceId)!;
+
+    expect(display.recordFor('map')?.backingInstanceId).toBe(firstMap.instanceId);
+    expect(display.borrowEventActor(absentMap.instanceId)).toBeNull();
+    expect(display.recordFor('map')?.backingInstanceId).toBe(firstMap.instanceId);
+
+    activeActor.applyPose({
+      x: -0.25,
+      y: 0.1,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      scaleX: 1,
+      scaleY: 1,
+      scaleZ: 1,
+    });
+    display.update(0);
+    expect(activeActor.root.position.toArray()).toEqual([-0.25, 0.1, 0]);
+
+    activeActor.release();
+    display.dispose();
+    propModels.dispose();
+  });
+
   it('uses the imported lantern model with a shadow-casting light', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
