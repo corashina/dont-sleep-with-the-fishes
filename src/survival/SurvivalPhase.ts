@@ -18,6 +18,7 @@ import {
   SurvivalUI,
   type DriftingLootResultView,
   type EventContextChoice,
+  type EventResultView,
   type FishingResultView,
 } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -45,6 +46,7 @@ import type {
   DayActionId,
   DayActionOption,
   DriftingLootVariant,
+  EventPresentationKey,
   EventResponse,
   EventResponseId,
   RewardSummary,
@@ -88,6 +90,25 @@ type EventPresentationState =
   | 'retrieving'
   | 'result'
   | 'receding';
+
+const EVENT_RESULT_CAPTIONS: Readonly<Record<EventPresentationKey, string>> = {
+  'drifting-loot.food': 'Recovered',
+  'drifting-loot.bait': 'Recovered',
+  'drifting-loot.repair': 'Recovered',
+  'drifting-loot.energy-bar': 'Recovered',
+  'drifting-loot.drift': 'Slipped away',
+  'drifting-bottle.retrieve': 'Paper inside',
+  'drifting-bottle.lost': 'Lost in the wake',
+  'check-the-back.fish': 'A fish',
+  'check-the-back.empty': 'Only water',
+  'check-the-back.face': 'It was me',
+  'check-the-back.ignore': 'Left unseen',
+  'mystery-chest.safe': 'A real chest',
+  'mystery-chest.mimic': 'Teeth',
+  'mystery-chest.leave': 'Left below',
+  'flowers.collect': 'One pale bloom',
+  'flowers.drift': 'Gone astern',
+};
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
@@ -265,6 +286,7 @@ export class SurvivalPhase implements GamePhase {
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
+          context.eventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -1089,6 +1111,18 @@ export class SurvivalPhase implements GamePhase {
     ) return;
     const terminal = this.session.snapshot();
     if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
+    if (eventId !== 'drifting-loot' && outcome.eventPresentationKey !== undefined) {
+      const resultView: EventResultView = {
+        caption: EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey],
+        detail: outcome.message,
+        target: this.world.projectEventResultBounds?.(
+          eventId,
+          this.viewportWidth,
+          this.viewportHeight,
+        ) ?? null,
+      };
+      this.ui.showEventResult?.(resultView);
+    }
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
@@ -1224,20 +1258,13 @@ export class SurvivalPhase implements GamePhase {
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
-    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-
-    if (event.id === 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    if (event.id !== 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
+    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
@@ -1295,9 +1322,11 @@ export class SurvivalPhase implements GamePhase {
                   + `you have ${snapshot[resource]}.`
                 ))
                 .join(' '),
+          ...(this.eventChoiceAnchor(event.id, choice.id) === null
+            ? {}
+            : { anchorId: this.eventChoiceAnchor(event.id, choice.id)! }),
           ...(event.id === 'drifting-loot' && choice.id === 'retrieve'
             ? {
-                anchorId: 'drifting-loot',
                 energyCost: choice.requirements?.find(
                   ({ resource }) => resource === 'energy',
                 )?.minimum ?? 0,
@@ -1305,6 +1334,15 @@ export class SurvivalPhase implements GamePhase {
             : {}),
         };
       });
+  }
+
+  private eventChoiceAnchor(eventId: string, choiceId: string): string | null {
+    if (eventId === 'drifting-loot' && choiceId === 'retrieve') return 'drifting-loot';
+    if (eventId === 'drifting-bottle' && choiceId === 'sleep') return 'event:drifting-bottle';
+    if (eventId === 'check-the-back' && choiceId === 'check') return 'event:check-the-back';
+    if (eventId === 'mystery-chest' && choiceId === 'take') return 'event:mystery-chest';
+    if (eventId === 'flowers' && choiceId === 'sleep') return 'event:flowers';
+    return null;
   }
 
   private restoreEventSelection(): void {
