@@ -90,8 +90,6 @@ import {
   type EventPhysicalResponsePresentation,
 } from './WeatherEventAnimator';
 import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
-import { supernaturalItemUseDuration } from './supernaturalEventChoreography';
-import { weatherItemUseDuration } from './weatherEventChoreography';
 import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,
@@ -748,13 +746,13 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
-    if (weatherItemUseDuration(eventId, choiceId) !== null) {
+    if (this.weatherEventAnimator.supportsItemUse(eventId, choiceId)) {
       if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
         return;
       }
       if (this.disposed || operation !== this.weatherEventOperation) return;
     }
-    if (supernaturalItemUseDuration(eventId, choiceId) !== null) {
+    if (this.supernaturalEventAnimator.supportsItemUse(eventId, choiceId)) {
       if (await this.supernaturalEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
         return;
       }

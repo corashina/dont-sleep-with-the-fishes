@@ -2,13 +2,13 @@ import {
   BufferGeometry,
   DoubleSide,
   Euler,
+  Float32BufferAttribute,
   Group,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  PlaneGeometry,
   Quaternion,
   Texture,
   Vector3,
@@ -67,6 +67,11 @@ const SIREN_ROCK_X = 4.6;
 const SIREN_ROCK_Y = 0.3;
 const SIREN_ROCK_Z = -11;
 const UP = new Vector3(0, 1, 0);
+const FOG_OPACITY_WEIGHTS = [0.72, 1, 0.58] as const;
+const FLARE_RADII = [
+  1, 0.68, 0.94, 0.62, 1.08, 0.7,
+  0.88, 0.6, 1.02, 0.66, 0.9, 0.64,
+] as const;
 const GHOST_TARGETS = [
   [-2.2, 1.05, -3.4],
   [3.8, 1.2, -8.2],
@@ -94,13 +99,74 @@ function replaceMaterials(root: Group, material: Material): void {
   disposeResourceSets(replacedTextures, replacedMaterials);
 }
 
-function createFogCurtain(material: Material): Group {
+function createFogStripGeometry(width: number, height: number, variant: number): BufferGeometry {
+  const geometry = new BufferGeometry();
+  const xOffsets = [-0.5, -0.28, -0.04, 0.25, 0.5] as const;
+  const upperOffsets = [
+    [0.28, 0.47, 0.39, 0.52, 0.31],
+    [0.35, 0.5, 0.32, 0.46, 0.27],
+    [0.3, 0.42, 0.51, 0.34, 0.25],
+  ] as const;
+  const lowerOffsets = [
+    [-0.34, -0.49, -0.38, -0.53, -0.3],
+    [-0.28, -0.46, -0.35, -0.5, -0.25],
+    [-0.32, -0.43, -0.52, -0.36, -0.27],
+  ] as const;
+  const positions: number[] = [];
+  for (let index = 0; index < xOffsets.length; index += 1) {
+    positions.push(
+      xOffsets[index]! * width,
+      upperOffsets[variant]![index]! * height,
+      0,
+    );
+  }
+  for (let index = 0; index < xOffsets.length; index += 1) {
+    positions.push(
+      xOffsets[index]! * width,
+      lowerOffsets[variant]![index]! * height,
+      0,
+    );
+  }
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex([
+    0, 5, 1, 1, 5, 6,
+    1, 6, 2, 2, 6, 7,
+    2, 7, 3, 3, 7, 8,
+    3, 8, 4, 4, 8, 9,
+  ]);
+  return geometry;
+}
+
+function createFlareBurstGeometry(): BufferGeometry {
+  const geometry = new BufferGeometry();
+  const positions: number[] = [0, 0.1, 0];
+  const colors: number[] = [1, 0.36, 0.22];
+  const indices: number[] = [];
+  for (let index = 0; index < FLARE_RADII.length; index += 1) {
+    const angle = Math.PI * 2 * index / FLARE_RADII.length;
+    const radius = FLARE_RADII[index]!;
+    positions.push(
+      Math.cos(angle) * radius * 2.35,
+      Math.sin(angle) * radius * 3.05,
+      0,
+    );
+    const edge = index % 2 === 0 ? 0.28 : 0.14;
+    colors.push(edge, 0.018, 0.025);
+    indices.push(0, index + 1, (index + 1) % FLARE_RADII.length + 1);
+  }
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  return geometry;
+}
+
+function createFogCurtain(materials: readonly Material[]): Group {
   const root = new Group();
   root.name = 'supernatural-fog-curtain';
   for (let index = 0; index < 3; index += 1) {
     const strip = new Mesh(
-      new PlaneGeometry(7.2 - index * 0.7, 2.4 + index * 0.25),
-      material,
+      createFogStripGeometry(7.2 - index * 0.7, 2.4 + index * 0.25, index),
+      materials[index]!,
     );
     strip.name = `supernatural-fog-strip-${index + 1}`;
     strip.position.set(
@@ -116,7 +182,7 @@ function createFogCurtain(material: Material): Group {
 }
 
 function createFlareFlash(material: Material): Mesh {
-  const flash = new Mesh(new PlaneGeometry(5.2, 5.2), material);
+  const flash = new Mesh(createFlareBurstGeometry(), material);
   flash.name = 'supernatural-flare-flash';
   flash.position.set(0, 2.2, -4.5);
   flash.visible = false;
@@ -204,15 +270,32 @@ export class SupernaturalEventAnimator {
     roughness: 1,
     flatShading: true,
   });
-  private readonly fogMaterial = new MeshBasicMaterial({
-    color: 0x789196,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    side: DoubleSide,
-  });
+  private readonly fogMaterials = [
+    new MeshBasicMaterial({
+      color: 0x6b858a,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: DoubleSide,
+    }),
+    new MeshBasicMaterial({
+      color: 0x82979a,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: DoubleSide,
+    }),
+    new MeshBasicMaterial({
+      color: 0x566f76,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: DoubleSide,
+    }),
+  ] as const;
   private readonly flareMaterial = new MeshBasicMaterial({
-    color: 0xa82f31,
+    color: 0xffffff,
+    vertexColors: true,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -268,7 +351,7 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.position.set(SIREN_ROCK_X, SIREN_ROCK_Y, SIREN_ROCK_Z);
     this.sirenTableau.add(this.sirenRock, this.siren);
     this.sirenTableau.visible = false;
-    this.fogCurtain = createFogCurtain(this.fogMaterial);
+    this.fogCurtain = createFogCurtain(this.fogMaterials);
     this.flareFlash = createFlareFlash(this.flareMaterial);
     this.worldRoot.add(
       ...this.ghosts,
@@ -286,6 +369,10 @@ export class SupernaturalEventAnimator {
     this.stagedEventId = supernaturalRevealDuration(eventId) === null ? null : eventId;
     this.rememberCameraBase();
     this.restoreStage();
+  }
+
+  supportsItemUse(eventId: string, choiceId: string): boolean {
+    return supernaturalItemUseDuration(eventId, choiceId) !== null;
   }
 
   reveal(eventId: string): Promise<void> {
@@ -454,10 +541,10 @@ export class SupernaturalEventAnimator {
     }
     this.sirenTableau.visible = sample.melodyClarity > 0.015;
     this.fogCurtain.visible = sample.fogCurtain > 0.015;
-    this.fogMaterial.opacity = Math.min(
+    this.setFogOpacity(Math.min(
       0.62,
       sample.fogCurtain * (0.62 - sample.melodyClarity * 0.34),
-    );
+    ));
     this.turnSirenHead(sample.sirenHeadTurn);
     this.siren.position.z = this.sirenBasePosition.z + sample.sirenLunge;
   }
@@ -481,6 +568,9 @@ export class SupernaturalEventAnimator {
     if (eventId === 'ghosts') {
       if (choiceId === 'flareGun') this.showFlare(this.itemSample.effect);
       if (choiceId === 'flashlight' && this.itemSample.effect > 0.015) {
+        for (let index = 1; index < this.ghosts.length; index += 1) {
+          this.ghosts[index]!.visible = false;
+        }
         this.ghosts[0]!.visible = true;
         this.ghostMaterial.emissiveIntensity = 0.34 + this.itemSample.effect * 0.72;
         this.ghostMaterial.opacity = 0.42 + this.itemSample.effect * 0.28;
@@ -489,7 +579,7 @@ export class SupernaturalEventAnimator {
     }
     if (this.itemSample.effect > 0.015) {
       this.fogCurtain.visible = true;
-      this.fogMaterial.opacity = 0.12 + this.itemSample.effect * 0.22;
+      this.setFogOpacity(0.12 + this.itemSample.effect * 0.22);
     }
   }
 
@@ -532,7 +622,7 @@ export class SupernaturalEventAnimator {
     this.siren.rotation.z = this.sirenBaseRotation.z - sample.sirenStrike * 0.34;
     if (sample.fogCurtain > 0.015) {
       this.fogCurtain.visible = true;
-      this.fogMaterial.opacity = sample.fogCurtain * 0.64;
+      this.setFogOpacity(sample.fogCurtain * 0.64);
     }
   }
 
@@ -575,6 +665,12 @@ export class SupernaturalEventAnimator {
     this.flareFlash.scale.setScalar(0.72 + amount * 0.42);
   }
 
+  private setFogOpacity(amount: number): void {
+    for (let index = 0; index < this.fogMaterials.length; index += 1) {
+      this.fogMaterials[index]!.opacity = amount * FOG_OPACITY_WEIGHTS[index]!;
+    }
+  }
+
   private restoreStage(): void {
     this.hideAll();
     this.siren.position.copy(this.sirenBasePosition);
@@ -591,7 +687,7 @@ export class SupernaturalEventAnimator {
     } else if (this.stagedEventId === 'eerie-melody') {
       this.sirenTableau.visible = true;
       this.fogCurtain.visible = true;
-      this.fogMaterial.opacity = 0.24;
+      this.setFogOpacity(0.24);
     }
   }
 
@@ -603,7 +699,7 @@ export class SupernaturalEventAnimator {
     this.fogCurtain.visible = false;
     this.flareFlash.visible = false;
     this.ghostMaterial.emissiveIntensity = 0.34;
-    this.fogMaterial.opacity = 0;
+    this.setFogOpacity(0);
     this.flareMaterial.opacity = 0;
     this.flareFlash.scale.set(1, 1, 1);
   }
