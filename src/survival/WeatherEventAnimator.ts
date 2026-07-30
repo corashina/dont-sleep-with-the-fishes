@@ -325,6 +325,10 @@ export class WeatherEventAnimator {
     this.hideTransientEffects();
   }
 
+  supportsItemUse(eventId: string, choiceId: string): boolean {
+    return weatherItemUseDuration(eventId, choiceId) !== null;
+  }
+
   reveal(eventId: string): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.cancelActive();

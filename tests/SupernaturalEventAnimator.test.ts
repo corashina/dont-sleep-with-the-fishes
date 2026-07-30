@@ -2,10 +2,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BoxGeometry,
+  BufferGeometry,
   Group,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  Vector3,
 } from 'three';
 import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
@@ -77,6 +80,29 @@ describe('SupernaturalEventAnimator', () => {
     animator.dispose();
   });
 
+  it('uses irregular fog strips and a non-square vertex-colored flare burst', () => {
+    const { animator } = createAnimator();
+    const fog = animator.worldRoot.getObjectByName('supernatural-fog-strip-1') as Mesh;
+    const flare = animator.worldRoot.getObjectByName('supernatural-flare-flash') as Mesh<
+      BufferGeometry,
+      MeshBasicMaterial
+    >;
+    const fogPosition = fog.geometry.getAttribute('position');
+    const fogHeights = new Set<number>();
+    for (let index = 0; index < fogPosition.count; index += 1) {
+      fogHeights.add(fogPosition.getY(index));
+    }
+    flare.geometry.computeBoundingBox();
+    const flareSize = flare.geometry.boundingBox!.getSize(new Vector3());
+
+    expect(fogPosition.count).toBeGreaterThan(4);
+    expect(fogHeights.size).toBeGreaterThan(2);
+    expect(flare.geometry.getAttribute('position').count).toBeGreaterThan(8);
+    expect(flareSize.x).not.toBeCloseTo(flareSize.y);
+    expect(flare.material.vertexColors).toBe(true);
+    animator.dispose();
+  });
+
   it('settles a pending reveal and hides all models when cleared', async () => {
     const { animator } = createAnimator();
     animator.stage('ghosts');
@@ -119,6 +145,36 @@ describe('SupernaturalEventAnimator', () => {
     expect(order.slice(0, 2)).toEqual(['pin', 'pose']);
     animator.clear();
     await expect(supported).resolves.toBe(false);
+    animator.dispose();
+  });
+
+  it('keeps item support checks side-effect free', () => {
+    const { animator, supplyDisplay } = createAnimator();
+    animator.stage('ghosts');
+    vi.mocked(supplyDisplay.clearEventMotion).mockClear();
+    vi.mocked(supplyDisplay.pinEventActor).mockClear();
+
+    expect(animator.supportsItemUse('ghosts', 'flashlight')).toBe(true);
+    expect(animator.supportsItemUse('ghosts', 'bucket')).toBe(false);
+    expect(animator.worldRoot.getObjectByName('ghost-1')?.visible).toBe(true);
+    expect(supplyDisplay.clearEventMotion).not.toHaveBeenCalled();
+    expect(supplyDisplay.pinEventActor).not.toHaveBeenCalled();
+    animator.dispose();
+  });
+
+  it('focuses the Flashlight on Ghost 1 and hides the other Ghosts', async () => {
+    const { animator } = createAnimator();
+    animator.stage('ghosts');
+    const itemUse = animator.playItemUse('ghosts', 'flashlight', 'flashlight-1');
+
+    animator.update(1, 0.68);
+
+    expect(animator.worldRoot.getObjectByName('ghost-1')?.visible).toBe(true);
+    for (let index = 2; index <= 5; index += 1) {
+      expect(animator.worldRoot.getObjectByName(`ghost-${index}`)?.visible).toBe(false);
+    }
+    animator.clear();
+    await expect(itemUse).resolves.toBe(false);
     animator.dispose();
   });
 

@@ -41,6 +41,8 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
+import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
@@ -885,6 +887,11 @@ describe('BoatWorld helpers', () => {
   });
 
   it('coordinates supernatural staging, item motion, and cleanup', async () => {
+    const weatherSupport = vi.spyOn(WeatherEventAnimator.prototype, 'supportsItemUse');
+    const supernaturalSupport = vi.spyOn(
+      SupernaturalEventAnimator.prototype,
+      'supportsItemUse',
+    );
     const flare = savedItem('flareGun');
     const propModels = createTestPropModels();
     const create = vi.fn((id: string) => {
@@ -918,6 +925,11 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
+    expect(weatherSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
+    expect(supernaturalSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
+    expect(weatherSupport.mock.invocationCallOrder[0]).toBeLessThan(
+      supernaturalSupport.mock.invocationCallOrder[0]!,
+    );
     world.update(1, 1.2);
     await itemUse;
     const reaction = world.reactToEventOutcome(
@@ -938,6 +950,8 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
     world.dispose();
     propModels.dispose();
+    weatherSupport.mockRestore();
+    supernaturalSupport.mockRestore();
   });
 
   it('slides lost supplies starboard and crumples a broken Ring on one hull impact', async () => {
