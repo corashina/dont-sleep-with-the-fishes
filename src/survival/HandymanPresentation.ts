@@ -1,4 +1,5 @@
 import {
+  Bone,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -9,6 +10,8 @@ import {
   MeshStandardMaterial,
   Object3D,
   Quaternion,
+  Skeleton,
+  SkinnedMesh,
   SphereGeometry,
   TorusGeometry,
   Vector3,
@@ -80,6 +83,10 @@ const PALM_TARGET = new Vector3(0.05, 0.32, 0.05);
 const PAYMENT_START = new Vector3(3.05, 0.38, 3.9);
 const REWARD_END = new Vector3(2.85, 0.55, 3.6);
 const CHEST_PALM_TARGET = new Vector3(-3.45, 0.62, -5.05);
+const TOUCH_HELD_CAMERA_YAW = -0.22;
+const TOUCH_HELD_CAMERA_PITCH = -0.2;
+const TOUCH_HELD_CAMERA_X = -0.16;
+const TOUCH_HELD_CAMERA_Z = -2.05;
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
@@ -138,37 +145,91 @@ function createMaterial(
   });
 }
 
-function hasRenderableBounds(root: Group): boolean {
-  let hasMesh = false;
+function hasRenderableBounds(root: Object3D): boolean {
+  try {
+    let hasMesh = false;
+    root.traverse((object) => {
+      if (object instanceof Mesh) hasMesh = true;
+    });
+    if (!hasMesh) return false;
+    const box = new Box3().setFromObject(root);
+    const size = box.getSize(new Vector3());
+    return !box.isEmpty()
+      && [size.x, size.y, size.z].every(Number.isFinite)
+      && Math.max(size.x, size.y, size.z) > 0;
+  } catch {
+    return false;
+  }
+}
+
+function collectOwnedSkeletons(
+  root: Object3D,
+  skeletons: Set<Skeleton>,
+): void {
   root.traverse((object) => {
-    if (object instanceof Mesh) hasMesh = true;
+    if (object instanceof SkinnedMesh) skeletons.add(object.skeleton);
   });
-  if (!hasMesh) return false;
-  const box = new Box3().setFromObject(root);
-  const size = box.getSize(new Vector3());
-  return !box.isEmpty()
-    && [size.x, size.y, size.z].every(Number.isFinite)
-    && Math.max(size.x, size.y, size.z) > 0;
+}
+
+function disposeSkeletons(skeletons: Set<Skeleton>): void {
+  for (const skeleton of skeletons) skeleton.dispose();
+  skeletons.clear();
 }
 
 function disposeRejectedModel(root: Group): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
+  const skeletons = new Set<Skeleton>();
   collectMeshResources(root, geometries, materials);
+  collectOwnedSkeletons(root, skeletons);
+  disposeSkeletons(skeletons);
   disposeResourceSets(geometries, materials);
   root.clear();
 }
 
-function importedFingerNodes(root: Group): Object3D[] | null {
-  const nodes: Object3D[] = [];
+function isDescendantOf(node: Object3D, ancestor: Object3D): boolean {
+  let parent = node.parent;
+  while (parent !== null) {
+    if (parent === ancestor) return true;
+    parent = parent.parent;
+  }
+  return false;
+}
+
+interface ImportedHandRig {
+  readonly nodes: readonly Bone[];
+  readonly skeletons: ReadonlySet<Skeleton>;
+}
+
+function importedHandRig(root: Group): ImportedHandRig | null {
+  const nodes: Bone[] = [];
   for (const chain of IMPORTED_FINGER_NAMES) {
+    let previous: Bone | null = null;
     for (const name of chain) {
       const node = root.getObjectByName(name);
-      if (node === undefined) return null;
+      if (!(node instanceof Bone)) return null;
+      if (previous !== null && !isDescendantOf(node, previous)) return null;
       nodes.push(node);
+      previous = node;
     }
   }
-  return nodes;
+  if (new Set(nodes).size !== nodes.length) return null;
+
+  const skeletons = new Set<Skeleton>();
+  let hasDrivenRenderableMesh = false;
+  root.traverse((object) => {
+    if (!(object instanceof SkinnedMesh)) return;
+    const skeleton = object.skeleton;
+    skeletons.add(skeleton);
+    if (
+      !hasDrivenRenderableMesh
+      && nodes.every((node) => skeleton.bones.includes(node))
+      && hasRenderableBounds(object)
+    ) {
+      hasDrivenRenderableMesh = true;
+    }
+  });
+  return hasDrivenRenderableMesh ? { nodes, skeletons } : null;
 }
 
 export class HandymanPresentation implements FocusedEventPresentation {
@@ -182,6 +243,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private readonly rewardActors = new Group();
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
+  private readonly staticSkeletons = new Set<Skeleton>();
   private readonly exchangeGeometries = new Set<BufferGeometry>();
   private readonly exchangeMaterials = new Set<Material>();
   private readonly fingerJoints: FingerJoint[] = [];
@@ -219,6 +281,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private usingSupplyPayment = false;
   private usingChestPayment = false;
   private cameraCaptured = false;
+  private touchCameraHeld = false;
   private chestCaptured = false;
   private paymentVisible = false;
   private rewardVisible = false;
@@ -387,6 +450,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
         animation.resolve();
       }
     }
+    if (this.touchCameraHeld) this.applyHeldTouchCameraPose();
     this.applySharedWave(time);
   }
 
@@ -406,6 +470,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.disposed = true;
     this.staged = false;
     this.root.removeFromParent();
+    disposeSkeletons(this.staticSkeletons);
     disposeResourceSets(this.staticGeometries, this.staticMaterials);
     this.root.clear();
   }
@@ -473,6 +538,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
         break;
       case 'result-touch':
         this.root.userData.state = 'held-touch';
+        this.touchCameraHeld = true;
+        this.applyHeldTouchCameraPose();
         break;
       case 'result-sleep':
         this.root.userData.state = 'held-sleep';
@@ -956,6 +1023,15 @@ export class HandymanPresentation implements FocusedEventPresentation {
       .multiply(this.cameraPitchQuaternion);
   }
 
+  private applyHeldTouchCameraPose(): void {
+    this.applyCameraPose(
+      TOUCH_HELD_CAMERA_YAW,
+      TOUCH_HELD_CAMERA_PITCH,
+      TOUCH_HELD_CAMERA_X,
+      TOUCH_HELD_CAMERA_Z,
+    );
+  }
+
   private captureChestPose(): void {
     this.chestStartPosition.copy(this.dependencies.chestDisplay.root.position);
     this.chestStartQuaternion.copy(
@@ -989,6 +1065,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.setFingerBend(0);
     this.root.userData.cameraEnclosed = false;
     this.root.userData.cameraGrabbed = false;
+    this.touchCameraHeld = false;
     this.root.userData.hullKicks = 0;
     this.root.userData.shrugs = 0;
     this.root.userData.sank = false;
@@ -1003,12 +1080,12 @@ export class HandymanPresentation implements FocusedEventPresentation {
     } catch {
       selected = null;
     }
-    const importedNodes = selected === null
+    const importedRig = selected === null
       ? null
-      : importedFingerNodes(selected);
+      : importedHandRig(selected);
     if (
       selected !== null
-      && importedNodes !== null
+      && importedRig !== null
       && hasRenderableBounds(selected)
     ) {
       selected.name = 'event-model:riggedHand';
@@ -1029,8 +1106,11 @@ export class HandymanPresentation implements FocusedEventPresentation {
         }
       });
       this.handVisual.add(selected);
-      for (let index = 0; index < importedNodes.length; index += 1) {
-        const joint = importedNodes[index]!;
+      for (const skeleton of importedRig.skeletons) {
+        this.staticSkeletons.add(skeleton);
+      }
+      for (let index = 0; index < importedRig.nodes.length; index += 1) {
+        const joint = importedRig.nodes[index]!;
         this.fingerJoints.push({
           object: joint,
           baseQuaternion: joint.quaternion.clone(),

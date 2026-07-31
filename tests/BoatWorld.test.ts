@@ -663,6 +663,54 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('reapplies the held Handyman Touch camera after each base reset', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    world.stageEvent('handyman');
+    const choice = world.playEventChoice('handyman', {
+      choiceId: 'touch',
+      instanceId: null,
+      condition: null,
+    });
+    world.update(1, 1);
+    await choice;
+
+    const reaction = world.reactToEventOutcome('handyman', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The hand closes around the camera.',
+      deltas: {},
+      cue: 'none',
+      eventResult: {
+        eventId: 'handyman',
+        choiceId: 'touch',
+        resultId: 'handyman-touch',
+      },
+    });
+    world.update(2, 2);
+    await reaction;
+    const heldPosition = cameraRig.position.toArray();
+    const heldQuaternion = cameraRig.quaternion.toArray();
+    expect(heldPosition).not.toEqual([0, 0, 0]);
+    expect(
+      world.scene.getObjectByName('focused-event:handyman')?.userData.state,
+    ).toBe('held-touch');
+
+    world.update(3, 1 / 60);
+    expect(cameraRig.position.toArray()).toEqual(heldPosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(heldQuaternion);
+
+    world.clearEvent();
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the generic tableau when focused construction fails', () => {
     const propModels = createTestPropModels();
     const factories: FocusedEventPresentationFactories = {
