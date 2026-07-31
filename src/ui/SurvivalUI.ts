@@ -226,6 +226,7 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
+export type SleepCoverProfile = 'solid' | 'bad-sleep';
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -435,7 +436,10 @@ export class SurvivalUI {
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover aria-hidden="true"></div>
+      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
+        <span data-dream-eyelid="top"></span>
+        <span data-dream-eyelid="bottom"></span>
+      </div>
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
           <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
@@ -766,8 +770,21 @@ export class SurvivalUI {
     this.eventResultPanel.setAttribute('aria-hidden', 'true');
   }
 
-  showEventOutcome(view: EventOutcomeView): void {
+  showEventOutcome(
+    view: EventOutcomeView | Pick<ActionOutcome, 'accepted' | 'message'>,
+  ): void {
     if (this.disposed) return;
+    if (!('title' in view)) {
+      this.updateText('event:title', this.eventTitle, view.message);
+      this.eventCaption.dataset.result = 'true';
+      this.eventCaption.setAttribute('aria-label', `Event result: ${view.message}`);
+      this.eventCaption.classList.add('is-visible');
+      this.eventCaption.setAttribute('aria-hidden', 'false');
+      this.eventPresentationActive = true;
+      this.syncCommandState();
+      this.publishAnnouncement(view.message);
+      return;
+    }
     this.updateText('event:title', this.eventTitle, view.title);
     this.updateText('event:detail', this.eventDetail, view.detail);
     this.updateText('event:result', this.eventOutcomeResult, view.result);
@@ -858,6 +875,7 @@ export class SurvivalUI {
     this.eventDetail.textContent = '';
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
+    void this.setSleepCoverProfile('solid');
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
@@ -880,6 +898,12 @@ export class SurvivalUI {
     this.feedbackTimer = window.setTimeout(() => {
       if (!this.disposed) this.feedback.classList.remove('is-visible');
     }, 2600);
+  }
+
+  setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.sleepCover.dataset.profile = profile;
+    return Promise.resolve();
   }
 
   setSleepCovered(covered: boolean): Promise<void> {

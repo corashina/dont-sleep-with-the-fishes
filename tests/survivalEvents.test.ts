@@ -13,7 +13,7 @@ import { sequenceRandom } from './helpers/random';
 const INCLUDED = {
   'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
   snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
-  whirlpool: 'night', 'shark-men': 'night',
+  whirlpool: 'night',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
@@ -27,7 +27,6 @@ const MOVED_NIGHT_EVENT_IDS = [
   'death-stare',
   'swarm-of-anglerfish',
   'whirlpool',
-  'shark-men',
 ] as const;
 
 const resource = (resourceName: string, operation: string, value: unknown) => ({
@@ -76,7 +75,6 @@ const EXPECTED_METADATA = {
   'death-stare': ['Death Stare', 'impact', 160, 9, undefined, 32],
   'swarm-of-anglerfish': ['Swarm of Anglerfish', 'fish', 12, 10, undefined, 38],
   whirlpool: ['Whirlpool', 'impact', 5, 12, undefined, 30],
-  'shark-men': ['Shark Men', 'impact', 15, 15, undefined, 30],
   'shower-night': ['Shower Night', 'storm', 35, 2, undefined, 35],
   'windy-night': ['Windy Night', 'storm', 40, 2, undefined, 40],
   'bad-sleep': ['Bad Sleep', 'darkness', 40, 2, 10, 40],
@@ -96,7 +94,6 @@ const EXPECTED_REVEAL_TEXT = {
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
   whirlpool: 'The sea begins circling faster around the boat.',
-  'shark-men': 'Figures cut through the water and surround the hull.',
   'shower-night': 'Rain starts falling over the exposed boat.',
   'windy-night': 'Wind catches every loose object on the boat.',
   'bad-sleep': 'Uneasy darkness settles over the boat.',
@@ -168,12 +165,6 @@ const EXPECTED_CHOICES = {
     choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged and the anchor breaks.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'anchor')])),
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })]), outcome(50, 'The boat is damaged and the swim ring breaks.', [subtract('hull', { min: 20, max: 40 })], [item('break', 'swimRing')])),
     choice('sleep', 'Sleep', undefined, outcome(80, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 }), set('energy', 0)]), outcome(30, 'The boat is badly damaged and two items are lost.', [subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [randomItem('loseRandom', 2)])),
-  ],
-  'shark-men': [
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'The harpoon is used.', [], [item('consume', 'harpoonGun')])),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(85, 'The swim ring is lost.', [], [item('lose', 'swimRing')]), outcome(35, 'The shark men attack.', [subtract('hull', { min: 50, max: 70 }), subtract('health', 50)], [item('break', 'swimRing')])),
-    choice('scubaSet', 'Use Scuba Gear', 'scubaSet', outcome(70, 'You gain four food.', [set('energy', 2), add('food', 4)], [item('break', 'scubaSet')]), outcome(36, 'The shark men attack.', [set('energy', 1), subtract('hull', { min: 20, max: 30 }), subtract('health', 80)], [item('break', 'scubaSet')])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'The shark men attack.', [subtract('hull', { min: 50, max: 70 }), subtract('health', 50)]), outcome(20, 'Nothing happens.')),
   ],
   'shower-night': [
     choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket breaks.', [], [item('break', 'bucket')])),

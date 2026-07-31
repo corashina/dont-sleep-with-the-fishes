@@ -36,6 +36,10 @@ import { BoatWorld } from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
+import {
+  deriveEventPhysicalResponse,
+  type EventPhysicalResponsePresentation,
+} from './EventPhysicalResponse';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -54,7 +58,6 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
-import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
@@ -970,14 +973,18 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     const resolved = this.session.snapshot();
-    const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
-    this.syncPresentation(resolved);
+    const response = deriveEventPhysicalResponse(
+      choiceId,
+      pending.inventory,
+      resolved.inventory,
+      instanceId,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
       eventState,
       generation,
-      { choiceId, instanceId, condition },
+      response,
     );
   }
 
@@ -1013,7 +1020,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, pending.state, generation, null);
+    const resolved = this.session.snapshot();
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      pending.state,
+      generation,
+      deriveEventPhysicalResponse(
+        choiceId,
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
+    );
   }
 
   private async resolveDriftingLootChoice(
@@ -1104,7 +1123,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation, null);
+    const resolved = this.session.snapshot();
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      deriveEventPhysicalResponse(
+        'endure',
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
+    );
   }
 
   private async runEventResolution(
@@ -1112,7 +1143,7 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
-    physicalResponse: EventPhysicalResponsePresentation | null = null,
+    physicalResponse: EventPhysicalResponsePresentation,
   ): Promise<void> {
     this.setBusy(true);
     await Promise.all([
@@ -1144,6 +1175,8 @@ export class SurvivalPhase implements GamePhase {
     }
     if (eventId === 'dangerous-waters') {
       this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
+    } else if (eventState === 'nightEvent' && resultCaption === undefined) {
+      this.ui.showEventOutcome?.(outcome);
     }
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
@@ -1157,7 +1190,11 @@ export class SurvivalPhase implements GamePhase {
 
     await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (eventId === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
@@ -1281,7 +1318,11 @@ export class SurvivalPhase implements GamePhase {
     this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
     if (!await this.renderAndSettleCoveredScene(generation)) return;
-    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (event.id === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('bad-sleep') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return;
     await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
