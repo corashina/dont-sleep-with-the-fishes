@@ -3,6 +3,8 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  Points,
+  PointsMaterial,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -301,6 +303,12 @@ describe('LeakPresentation', () => {
     const hole = presentation.boatRoot.getObjectByName('leak-hole-1') as Mesh;
     const geometryDispose = vi.spyOn(hole.geometry, 'dispose');
     const materialDispose = vi.spyOn(hole.material as MeshStandardMaterial, 'dispose');
+    const spray = presentation.boatRoot.getObjectByName('leak-spray-particles') as Points;
+    const sprayGeometryDispose = vi.spyOn(spray.geometry, 'dispose');
+    const sprayMaterialDispose = vi.spyOn(
+      spray.material as PointsMaterial,
+      'dispose',
+    );
 
     presentation.dispose();
     presentation.dispose();
@@ -308,6 +316,8 @@ describe('LeakPresentation', () => {
     expect(fixture.create).not.toHaveBeenCalled();
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+    expect(sprayGeometryDispose).toHaveBeenCalledOnce();
+    expect(sprayMaterialDispose).toHaveBeenCalledOnce();
     expect(presentation.boatRoot.parent).toBeNull();
     expect(presentation.boatRoot.children).toHaveLength(0);
   });
