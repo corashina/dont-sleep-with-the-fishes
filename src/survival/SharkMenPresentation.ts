@@ -277,6 +277,7 @@ function createFoodResults(material: Material): Group[] {
 
 export class SharkMenPresentation {
   readonly root = new Group();
+  readonly boatRoot = new Group();
   private readonly pathRoots: Group[] = [];
   private readonly modelRoots: Group[] = [];
   private readonly fins: Group[] = [];
@@ -308,6 +309,7 @@ export class SharkMenPresentation {
   private readonly strike: Group;
   private readonly foodResults: Group[];
   private active: ActiveSharkMenAnimation | null = null;
+  private waveScale = 1;
   private disposed = false;
 
   constructor(
@@ -316,6 +318,8 @@ export class SharkMenPresentation {
     private readonly supplyDisplay: BoatSupplyDisplay,
   ) {
     this.root.name = 'shark-men-presentation';
+    this.boatRoot.name = 'shark-men-boat-presentation';
+    this.root.add(this.boatRoot);
     this.root.userData.strikeCount = 0;
     const finGeometry = new ConeGeometry(0.34, 0.88, 3);
     const finMaterial = new MeshStandardMaterial({
@@ -420,10 +424,16 @@ export class SharkMenPresentation {
     this.hand.visible = false;
     this.strike = createStrike(strikeMaterial);
     this.foodResults = createFoodResults(foodMaterial);
-    this.root.add(this.hand, this.strike, ...this.foodResults);
+    this.boatRoot.add(this.hand, this.strike, ...this.foodResults);
     this.root.visible = false;
+    this.boatRoot.visible = false;
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
     this.rememberCameraBase();
+  }
+
+  setWaveScale(value: number): void {
+    if (this.disposed || !Number.isFinite(value) || value < 0) return;
+    this.waveScale = value;
   }
 
   stage(): void {
@@ -432,6 +442,7 @@ export class SharkMenPresentation {
     this.rememberCameraBase();
     this.resetPresentation();
     this.root.visible = true;
+    this.boatRoot.visible = true;
   }
 
   reveal(): Promise<void> {
@@ -543,12 +554,13 @@ export class SharkMenPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    if (!this.root.visible && this.active === null) return;
+    if (!this.root.visible && !this.boatRoot.visible && this.active === null) return;
     this.cancelActive();
     this.supplyDisplay.clearEventMotion();
     this.restoreCamera();
     this.resetPresentation();
     this.root.visible = false;
+    this.boatRoot.visible = false;
   }
 
   update(time: number, delta: number): void {
@@ -590,6 +602,7 @@ export class SharkMenPresentation {
       mixer.uncacheRoot(this.modelRoots[index]!);
     }
     this.root.removeFromParent();
+    this.boatRoot.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
 
@@ -600,12 +613,12 @@ export class SharkMenPresentation {
       const x = path.centerX + Math.cos(angle) * path.radiusX;
       const z = path.centerZ + Math.sin(angle) * path.radiusZ;
       const sample = this.waveSamples[index]!;
-      sampleWaveFieldInto(sample, DEFAULT_WAVES, time, x, z, 1);
+      sampleWaveFieldInto(sample, DEFAULT_WAVES, time, x, z, this.waveScale);
       const root = this.pathRoots[index]!;
       root.position.set(
-        x + sample.displacementX * 0.1,
-        sample.height * 0.38,
-        z + sample.displacementZ * 0.1,
+        x + sample.displacementX,
+        sample.height,
+        z + sample.displacementZ,
       );
       root.rotation.set(
         sample.normal.z * 0.08,

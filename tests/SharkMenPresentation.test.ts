@@ -20,6 +20,7 @@ import type {
   ActionOutcome,
   ItemCondition,
 } from '../src/survival/survivalTypes';
+import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 
 class FakeBoatSupplyDisplay {
   readonly poses = new Map<ItemInstanceId, SupplyAdditivePose>();
@@ -147,6 +148,26 @@ describe('SharkMenPresentation', () => {
       presentation.root.getObjectByName(`shark-men-fin-${index + 1}`)?.visible);
     expect(visibleFins).toEqual([true, true, false, false, false]);
 
+    presentation.dispose();
+  });
+
+  it('uses the configured presentation wave scale without dampening the sample', () => {
+    const { presentation } = createPresentation();
+    const time = 2.37;
+    const waveScale = 1.55;
+    const angle = 0.18 + time * 0.29;
+    const x = -2.9 + Math.cos(angle) * 0.72;
+    const z = -3.7 + Math.sin(angle) * 0.48;
+    const expected = sampleWaveField(DEFAULT_WAVES, time, x, z, waveScale);
+
+    presentation.stage();
+    presentation.setWaveScale(waveScale);
+    presentation.update(time, 0.1);
+
+    const path = presentation.root.getObjectByName('shark-men-path-1')!;
+    expect(path.position.y).toBeCloseTo(expected.height);
+    expect(path.position.x).toBeCloseTo(x + expected.displacementX);
+    expect(path.position.z).toBeCloseTo(z + expected.displacementZ);
     presentation.dispose();
   });
 
