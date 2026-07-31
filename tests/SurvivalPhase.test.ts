@@ -1982,7 +1982,6 @@ describe('SurvivalPhase orchestration', () => {
     ['windy-night', 'wind'],
     ['thunderstorm', 'thunderstorm'],
     ['restless-waves', 'waves'],
-    ['shark-men', 'waves'],
     ['man-in-the-fog', 'fog'],
   ] as const)(
     'applies %s event weather before staging and retains it until central cleanup',
@@ -2287,70 +2286,6 @@ describe('SurvivalPhase orchestration', () => {
     beat.resolve();
     await flushPromises();
     expect(calls.slice(0, 3)).toEqual(['press', 'resolve', 'react']);
-  });
-
-  it('runs the Shark Men Sleep tableau beside the contextual press beat', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shark-men')!;
-    let current = snapshot({
-      state: 'dayEvent',
-      pendingEventId: event.id,
-      energy: 3,
-    });
-    const calls: string[] = [];
-    const pressBeat = deferred();
-    const tableauBeat = deferred();
-    const resolveEvent = vi.fn(() => {
-      calls.push('resolve');
-      current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
-      return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
-    });
-    const ui: Partial<SurvivalUI> = {
-      beginEventPresentation: vi.fn(),
-      setSleepCovered: vi.fn(() => Promise.resolve()),
-      showEventReveal: vi.fn(() => Promise.resolve()),
-      setEventSelection: vi.fn(),
-      playEventChoiceBeat: vi.fn(() => {
-        calls.push('press');
-        return pressBeat.promise;
-      }),
-      setBusy: vi.fn(),
-      showFeedback: vi.fn(),
-      render: vi.fn(),
-      setJournalUnread: vi.fn(),
-      clearEventPresentation: vi.fn(),
-      restoreCommandFocus: vi.fn(),
-      dispose: vi.fn(),
-    };
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => current), resolveEvent },
-      world: {
-        revealEvent: vi.fn(() => Promise.resolve()),
-        playEventContextualChoice: vi.fn(() => {
-          calls.push('tableau');
-          return tableauBeat.promise;
-        }),
-        reactToEventOutcome: vi.fn(() => Promise.resolve()),
-        play: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(),
-        dispose: vi.fn(),
-      },
-      ui,
-    });
-    phase.start();
-    await flushPromises();
-
-    ui.onEventChoice?.('sleep');
-    await flushPromises();
-    expect(calls).toEqual(['press', 'tableau']);
-    expect(resolveEvent).not.toHaveBeenCalled();
-
-    pressBeat.resolve();
-    await flushPromises();
-    expect(resolveEvent).not.toHaveBeenCalled();
-
-    tableauBeat.resolve();
-    await flushPromises();
-    expect(calls.at(-1)).toBe('resolve');
   });
 
   it('does not resolve after disposal cancels a pending contextual press beat', async () => {

@@ -8,15 +8,6 @@ export type WeatherAnimationEventId =
 
 export type WeatherItemEffectKind =
   | 'none'
-  | 'shower-rain-catch'
-  | 'shower-umbrella-shed'
-  | 'shower-map-canopy'
-  | 'wind-net-lash'
-  | 'wind-map-flight'
-  | 'wind-umbrella-invert'
-  | 'storm-anchor-check'
-  | 'storm-bucket-bail'
-  | 'storm-umbrella-brace'
   | 'wave-anchor-stabilize'
   | 'wave-ring-buffer'
   | 'compass-bearing'
@@ -29,17 +20,9 @@ export type WeatherItemEffectKind =
 
 export type WeatherReactionEffectKind =
   | 'none'
-  | 'shower-safe-settle'
-  | 'shower-break-collapse'
-  | 'wind-safe-settle'
-  | 'wind-break-fold'
-  | 'wind-loss-depart'
   | 'bad-sleep-exhale'
   | 'bad-sleep-umbrella-collapse'
-  | 'storm-anchor-steady'
-  | 'storm-break-collapse'
-  | 'storm-loss-lightning'
-  | 'storm-hull-impact';
+  | 'storm-loss-lightning';
 
 export interface WeatherRevealSample {
   cameraX: number;
@@ -94,7 +77,17 @@ export interface WeatherReactionSample {
 
 interface WeatherItemChoreography {
   readonly duration: number;
-  readonly effectKind: Exclude<WeatherItemEffectKind, 'none'>;
+  readonly effectKind: WeatherItemEffectKind;
+}
+
+const CAMERA_ONLY_WEATHER_EVENTS: ReadonlySet<string> = new Set([
+  'shower-night',
+  'windy-night',
+  'thunderstorm',
+]);
+
+export function isCameraOnlyWeatherEvent(eventId: string): boolean {
+  return CAMERA_ONLY_WEATHER_EVENTS.has(eventId);
 }
 
 const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Object.freeze({
@@ -110,19 +103,19 @@ const ITEM_CHOREOGRAPHY: Readonly<
   Record<WeatherAnimationEventId, Readonly<Record<string, WeatherItemChoreography>>>
 > = Object.freeze({
   'shower-night': Object.freeze({
-    bucket: Object.freeze({ duration: 1.35, effectKind: 'shower-rain-catch' }),
-    umbrella: Object.freeze({ duration: 1.5, effectKind: 'shower-umbrella-shed' }),
-    map: Object.freeze({ duration: 1.4, effectKind: 'shower-map-canopy' }),
+    bucket: Object.freeze({ duration: 1.35, effectKind: 'none' }),
+    umbrella: Object.freeze({ duration: 1.5, effectKind: 'none' }),
+    map: Object.freeze({ duration: 1.4, effectKind: 'none' }),
   }),
   'windy-night': Object.freeze({
-    fishingNet: Object.freeze({ duration: 1.6, effectKind: 'wind-net-lash' }),
-    map: Object.freeze({ duration: 1.45, effectKind: 'wind-map-flight' }),
-    umbrella: Object.freeze({ duration: 1.55, effectKind: 'wind-umbrella-invert' }),
+    fishingNet: Object.freeze({ duration: 1.6, effectKind: 'none' }),
+    map: Object.freeze({ duration: 1.45, effectKind: 'none' }),
+    umbrella: Object.freeze({ duration: 1.55, effectKind: 'none' }),
   }),
   thunderstorm: Object.freeze({
-    anchor: Object.freeze({ duration: 1.8, effectKind: 'storm-anchor-check' }),
-    bucket: Object.freeze({ duration: 1.4, effectKind: 'storm-bucket-bail' }),
-    umbrella: Object.freeze({ duration: 1.55, effectKind: 'storm-umbrella-brace' }),
+    anchor: Object.freeze({ duration: 1.8, effectKind: 'none' }),
+    bucket: Object.freeze({ duration: 1.4, effectKind: 'none' }),
+    umbrella: Object.freeze({ duration: 1.55, effectKind: 'none' }),
   }),
   'restless-waves': Object.freeze({
     anchor: Object.freeze({ duration: 1.75, effectKind: 'wave-anchor-stabilize' }),
@@ -236,6 +229,31 @@ function multiplyReveal(output: WeatherRevealSample, envelope: number): void {
   output.lightningEmphasis *= envelope;
 }
 
+function multiplyItem(output: WeatherItemSample, envelope: number): void {
+  output.x *= envelope;
+  output.y *= envelope;
+  output.z *= envelope;
+  output.yaw *= envelope;
+  output.pitch *= envelope;
+  output.roll *= envelope;
+  output.scaleX = 1 + (output.scaleX - 1) * envelope;
+  output.scaleY = 1 + (output.scaleY - 1) * envelope;
+  output.scaleZ = 1 + (output.scaleZ - 1) * envelope;
+  output.effect *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPush *= envelope;
+  output.supplyRoll *= envelope;
+}
+
+function multiplyReactionCamera(output: WeatherReactionSample, envelope: number): void {
+  output.cameraX *= envelope;
+  output.cameraY *= envelope;
+  output.cameraZ *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPitch *= envelope;
+  output.cameraRoll *= envelope;
+}
+
 export function weatherRevealDuration(eventId: string): number | null {
   return isWeatherEventId(eventId) ? REVEAL_DURATIONS[eventId] : null;
 }
@@ -257,21 +275,17 @@ export function sampleWeatherReveal(
       output.cameraY = 0.12 * sweep;
       output.cameraYaw = 0.32 * Math.sin(Math.PI * (t - 0.08));
       output.cameraPitch = -0.08 * pulse(t, 0.08, 0.34, 0.7);
-      output.supplyLift = 0.06 * pulse(t, 0.18, 0.48, 0.82);
       break;
     case 'windy-night':
       output.cameraX = 0.18 * Math.sin(Math.PI * (t - 0.05));
       output.cameraYaw = 0.44 * Math.sin(Math.PI * (t - 0.12));
       output.cameraRoll = 0.07 * Math.sin(3 * Math.PI * t) * sweep;
-      output.supplyRoll = 0.19 * Math.sin(4 * Math.PI * t) * sweep;
-      output.supplyLift = 0.1 * pulse(t, 0.28, 0.52, 0.78);
       break;
     case 'thunderstorm':
       output.cameraY = 0.15 * Math.sin(2 * Math.PI * t) * sweep;
       output.cameraYaw = 0.38 * Math.sin(Math.PI * (t - 0.16));
       output.cameraPitch = -0.13 * pulse(t, 0.16, 0.52, 0.84);
       output.cameraRoll = 0.1 * Math.sin(3 * Math.PI * t) * sweep;
-      output.supplyRoll = 0.16 * Math.sin(3 * Math.PI * t) * sweep;
       output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
       break;
     case 'restless-waves':
@@ -291,9 +305,11 @@ export function sampleWeatherReveal(
         * (1 - 0.35 * smoothstep((t - 0.38) / 0.4));
       break;
     case 'bad-sleep':
-      output.cameraY = -0.08 * pulse(t, 0.12, 0.5, 0.88);
-      output.cameraYaw = 0.12 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraPitch = 0.06 * pulse(t, 0.2, 0.54, 0.82);
+      output.cameraX = 0.1 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraY = -0.1 * pulse(t, 0.12, 0.5, 0.88);
+      output.cameraYaw = 0.19 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraPitch = 0.08 * pulse(t, 0.2, 0.54, 0.82);
+      output.cameraRoll = 0.12 * Math.sin(3 * Math.PI * t) * sweep;
       output.supplyRoll = 0.05 * Math.sin(3 * Math.PI * t) * sweep;
       break;
   }
@@ -326,96 +342,29 @@ export function sampleWeatherItemUse(
   const hold = Math.min(up, down);
   const impact = pulse(t, 0.28, 0.56, 0.84);
 
+  if (isCameraOnlyWeatherEvent(eventId)) {
+    const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
+    switch (eventId) {
+      case 'shower-night':
+        output.cameraYaw = direction * 0.07 * hold;
+        output.cameraPush = 0.035 * impact;
+        break;
+      case 'windy-night':
+        output.cameraYaw = direction * 0.14 * Math.sin(Math.PI * t) * hold;
+        output.cameraPush = 0.075 * impact;
+        break;
+      case 'thunderstorm':
+        output.cameraYaw = direction * 0.11 * impact;
+        output.cameraPush = 0.12 * impact;
+        break;
+    }
+    const envelope = smoothstep(t / 0.08)
+      * (1 - smoothstep((t - 0.76) / 0.24));
+    multiplyItem(output, envelope);
+    return true;
+  }
+
   switch (eventId) {
-    case 'shower-night':
-      switch (choiceId) {
-        case 'bucket':
-          output.y = 0.42 * hold;
-          output.x = -0.12 * impact;
-          output.pitch = -0.48 * pulse(t, 0.3, 0.62, 0.9);
-          output.roll = 0.14 * hold;
-          output.effect = pulse(t, 0.08, 0.4, 0.72);
-          break;
-        case 'umbrella':
-          output.y = 0.66 * hold;
-          output.pitch = -0.1 * hold;
-          output.roll = -0.2 * hold + 0.08 * impact;
-          output.scaleX = 1 + 0.13 * hold;
-          output.scaleZ = 1 + 0.13 * hold;
-          output.effect = pulse(t, 0.22, 0.58, 0.88);
-          break;
-        case 'map':
-          output.y = 0.54 * hold;
-          output.pitch = -0.24 * hold;
-          output.roll = 0.1 * impact;
-          output.scaleX = 1 + 0.18 * hold;
-          output.scaleY = 1 - 0.1 * impact;
-          output.scaleZ = 1 + 0.12 * hold;
-          output.effect = impact;
-          break;
-      }
-      break;
-    case 'windy-night':
-      switch (choiceId) {
-        case 'fishingNet':
-          output.x = 0.36 * hold;
-          output.y = 0.3 * hold;
-          output.yaw = 0.5 * hold;
-          output.roll = 0.3 * Math.sin(Math.PI * t) * hold;
-          output.scaleX = 1 + 0.22 * hold;
-          output.scaleZ = 1 + 0.16 * hold;
-          output.effect = impact;
-          break;
-        case 'map': {
-          const travel = smoothstep(t / 0.72);
-          output.x = -0.94 * travel;
-          output.y = 0.22 * pulse(t, 0.04, 0.38, 0.9);
-          output.yaw = 0.78 * travel;
-          output.roll = -0.42 * travel + Math.sin(8 * Math.PI * t) * 0.08 * hold;
-          output.effect = pulse(t, 0.04, 0.42, 0.92);
-          break;
-        }
-        case 'umbrella':
-          output.x = -0.46 * hold;
-          output.y = 0.58 * hold;
-          output.pitch = -0.16 * hold;
-          output.roll = 0.68 * impact;
-          output.scaleX = 1 - 0.16 * impact;
-          output.scaleZ = 1 + 0.18 * impact;
-          output.effect = impact;
-          break;
-      }
-      break;
-    case 'thunderstorm':
-      switch (choiceId) {
-        case 'anchor': {
-          const drop = smoothstep((t - 0.12) / 0.64);
-          output.x = 0.24 * hold;
-          output.y = -0.94 * drop;
-          output.z = -0.58 * drop;
-          output.pitch = 0.48 * drop;
-          output.roll = -0.08 * impact;
-          output.effect = smoothstep((t - 0.12) / 0.6);
-          break;
-        }
-        case 'bucket':
-          output.x = 0.22 * impact;
-          output.y = 0.4 * hold;
-          output.pitch = -0.58 * pulse(t, 0.3, 0.6, 0.9);
-          output.roll = -0.22 * hold + 0.18 * impact;
-          output.effect = impact;
-          break;
-        case 'umbrella':
-          output.x = 0.16 * impact;
-          output.y = 0.7 * hold;
-          output.pitch = -0.18 * hold;
-          output.roll = -0.24 * hold + 0.3 * impact;
-          output.scaleX = 1 + 0.1 * hold;
-          output.scaleZ = 1 + 0.1 * hold;
-          output.effect = impact;
-          break;
-      }
-      break;
     case 'restless-waves':
       switch (choiceId) {
         case 'anchor': {
@@ -509,20 +458,7 @@ export function sampleWeatherItemUse(
 
   const ingressEnvelope = smoothstep(t / 0.08);
   const returnEnvelope = 1 - smoothstep((t - 0.76) / 0.24);
-  const envelope = ingressEnvelope * returnEnvelope;
-  output.x *= envelope;
-  output.y *= envelope;
-  output.z *= envelope;
-  output.yaw *= envelope;
-  output.pitch *= envelope;
-  output.roll *= envelope;
-  output.scaleX = 1 + (output.scaleX - 1) * envelope;
-  output.scaleY = 1 + (output.scaleY - 1) * envelope;
-  output.scaleZ = 1 + (output.scaleZ - 1) * envelope;
-  output.effect *= envelope;
-  output.cameraYaw *= envelope;
-  output.cameraPush *= envelope;
-  output.supplyRoll *= envelope;
+  multiplyItem(output, ingressEnvelope * returnEnvelope);
   return true;
 }
 
@@ -567,41 +503,37 @@ export function sampleWeatherReaction(
   const hullBeat = pulse(t, 0.14, 0.38, 0.62);
   const hullImpact = clamp01(-hullDelta / 40) * hullBeat;
 
+  if (isCameraOnlyWeatherEvent(eventId)) {
+    const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
+    switch (eventId) {
+      case 'shower-night':
+        output.cameraY = -0.035 * hullBeat;
+        output.cameraYaw = direction * 0.055 * actorBeat;
+        output.cameraPitch = -0.035 * actorBeat;
+        break;
+      case 'windy-night':
+        output.cameraX = direction * 0.08 * hullBeat;
+        output.cameraYaw = direction * 0.1 * actorBeat;
+        output.cameraRoll = direction * 0.11 * actorBeat;
+        break;
+      case 'thunderstorm':
+        output.cameraX = direction * (0.08 * actorBeat + 0.12 * hullImpact);
+        output.cameraY = -0.09 * hullImpact;
+        output.cameraPitch = 0.07 * hullImpact;
+        output.cameraRoll = direction * (0.1 * actorBeat + 0.12 * hullImpact);
+        if (condition === 'lost') {
+          output.effectKind = 'storm-loss-lightning';
+          output.actorEffect = actorBeat;
+        }
+        break;
+    }
+    const envelope = smoothstep(t / 0.08)
+      * (1 - smoothstep((t - 0.76) / 0.24));
+    multiplyReactionCamera(output, envelope);
+    return true;
+  }
+
   switch (eventId) {
-    case 'shower-night':
-      if (condition === 'broken') {
-        output.effectKind = 'shower-break-collapse';
-        output.actorY = -0.34 * actorBeat;
-        output.actorPitch = 0.38 * actorBeat;
-        output.actorScaleY = 1 - 0.3 * actorBeat;
-        output.actorEffect = actorBeat;
-      } else {
-        output.effectKind = 'shower-safe-settle';
-        output.actorY = -0.08 * actorBeat;
-        output.actorRoll = 0.07 * actorBeat;
-        output.actorEffect = actorBeat;
-      }
-      break;
-    case 'windy-night':
-      if (condition === 'lost') {
-        output.effectKind = 'wind-loss-depart';
-        output.actorX = -1.45 * actorBeat;
-        output.actorY = 0.22 * actorBeat;
-        output.actorYaw = 0.6 * actorBeat;
-      } else if (condition === 'broken') {
-        output.effectKind = 'wind-break-fold';
-        output.actorY = -0.26 * actorBeat;
-        output.actorRoll = 0.44 * actorBeat;
-        output.actorScaleY = 1 - 0.26 * actorBeat;
-      } else {
-        output.effectKind = 'wind-safe-settle';
-        output.actorY = -0.06 * actorBeat;
-        output.actorRoll = -0.11 * actorBeat;
-        output.actorScaleY = 1 - 0.02 * actorBeat;
-      }
-      output.actorEffect = actorBeat;
-      output.cameraRoll = 0.08 * hullBeat;
-      break;
     case 'bad-sleep':
       if (choiceId === 'umbrella' && condition === 'broken') {
         output.effectKind = 'bad-sleep-umbrella-collapse';
@@ -615,42 +547,11 @@ export function sampleWeatherReaction(
       }
       output.actorEffect = actorBeat;
       break;
-    case 'thunderstorm':
-      if (choiceId === 'anchor' && condition !== 'broken' && condition !== 'lost') {
-        output.effectKind = 'storm-anchor-steady';
-        output.actorY = -0.12 * actorBeat;
-        output.actorPitch = 0.16 * actorBeat;
-      } else if (condition === 'broken') {
-        output.effectKind = 'storm-break-collapse';
-        output.actorY = -0.36 * actorBeat;
-        output.actorRoll = 0.38 * actorBeat;
-        output.actorScaleY = 1 - 0.32 * actorBeat;
-      } else if (condition === 'lost') {
-        output.effectKind = 'storm-loss-lightning';
-        output.actorX = 0.44 * actorBeat;
-        output.actorY = 0.22 * actorBeat;
-        output.cameraRoll = -0.12 * actorBeat;
-      } else {
-        output.effectKind = 'storm-hull-impact';
-        if (hullImpact > 0) {
-          output.cameraX = 0.16 * hullImpact;
-          output.cameraY = -0.11 * hullImpact;
-          output.cameraPitch = 0.09 * hullImpact;
-          output.cameraRoll = -0.18 * hullImpact;
-        }
-      }
-      output.actorEffect = actorBeat;
-      break;
     default:
       return true;
   }
 
   const envelope = smoothstep(t / 0.08) * (1 - smoothstep((t - 0.76) / 0.24));
-  output.cameraX *= envelope;
-  output.cameraY *= envelope;
-  output.cameraZ *= envelope;
-  output.cameraYaw *= envelope;
-  output.cameraPitch *= envelope;
-  output.cameraRoll *= envelope;
+  multiplyReactionCamera(output, envelope);
   return true;
 }

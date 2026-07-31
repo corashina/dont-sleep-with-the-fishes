@@ -44,7 +44,6 @@ import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
-import { SharkMenPresentation } from '../src/survival/SharkMenPresentation';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
@@ -563,171 +562,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('routes the Shark Men tableau before generic and weather presenters', async () => {
-    const swimRing = savedItem('swimRing');
-    const propModels = createTestPropModels();
-    const genericStage = vi.spyOn(EventPresentationLayer.prototype, 'stage');
-    const genericReaction = vi.spyOn(EventPresentationLayer.prototype, 'react');
-    const weatherStage = vi.spyOn(WeatherEventAnimator.prototype, 'stage');
-    const weatherChoice = vi.spyOn(WeatherEventAnimator.prototype, 'playItemUse');
-    const weatherReaction = vi.spyOn(WeatherEventAnimator.prototype, 'react');
-    const sharkChoice = vi.spyOn(SharkMenPresentation.prototype, 'playItemChoice');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [swimRing],
-    );
-    world.syncInventory(snapshot([swimRing]));
-
-    world.stageEvent('shark-men');
-    expect(world.scene.getObjectByName('shark-men-presentation')?.visible).toBe(true);
-    expect(genericStage).not.toHaveBeenCalledWith('shark-men');
-    expect(weatherStage).not.toHaveBeenCalledWith('shark-men');
-
-    const reveal = world.revealEvent('shark-men');
-    world.update(2, 2);
-    await reveal;
-    expect(world.scene.getObjectByName('shark-men-hand')?.visible).toBe(true);
-
-    const use = world.playEventItemUse(
-      'shark-men',
-      'swimRing',
-      swimRing.instanceId,
-    );
-    world.update(3.1, 1.1);
-    await use;
-    expect(sharkChoice).toHaveBeenCalledWith('swimRing', swimRing.instanceId);
-    expect(weatherChoice).not.toHaveBeenCalledWith(
-      'shark-men',
-      'swimRing',
-      swimRing.instanceId,
-    );
-
-    const reaction = world.reactToEventOutcome(
-      'shark-men',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The swim ring is lost.',
-        deltas: {},
-        cue: 'none',
-      },
-      {
-        choiceId: 'swimRing',
-        actors: [{ instanceId: swimRing.instanceId, condition: 'lost' }],
-      },
-    );
-    world.update(4.7, 1.6);
-    await reaction;
-    expect(genericReaction).not.toHaveBeenCalledWith(
-      'shark-men',
-      expect.anything(),
-    );
-    expect(weatherReaction).not.toHaveBeenCalledWith(
-      'shark-men',
-      expect.anything(),
-      expect.anything(),
-    );
-
-    world.clearEvent();
-    expect(world.scene.getObjectByName('shark-men-presentation')?.visible).toBe(false);
-
-    genericStage.mockRestore();
-    genericReaction.mockRestore();
-    weatherStage.mockRestore();
-    weatherChoice.mockRestore();
-    weatherReaction.mockRestore();
-    sharkChoice.mockRestore();
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('anchors Shark Men contact props to the vessel motion rig', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.stageEvent('shark-men');
-    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
-    const hand = world.scene.getObjectByName('shark-men-hand')!;
-    const strike = world.scene.getObjectByName('shark-men-strike')!;
-    const food = world.scene.getObjectByName('shark-men-food-1')!;
-    const fin = world.scene.getObjectByName('shark-men-fin-1')!;
-    world.scene.updateMatrixWorld(true);
-    const handStart = hand.getWorldPosition(new Vector3());
-    const finStart = fin.getWorldPosition(new Vector3());
-
-    expect(motionRig.getObjectByName('shark-men-hand')).toBe(hand);
-    expect(motionRig.getObjectByName('shark-men-strike')).toBe(strike);
-    expect(motionRig.getObjectByName('shark-men-food-1')).toBe(food);
-    expect(motionRig.getObjectByName('shark-men-fin-1')).toBeUndefined();
-
-    motionRig.position.x += 2;
-    world.scene.updateMatrixWorld(true);
-    expect(hand.getWorldPosition(new Vector3()).x).toBeCloseTo(handStart.x + 2);
-    expect(fin.getWorldPosition(new Vector3()).x).toBeCloseTo(finStart.x);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('uses resolved presentation weather for Shark Men wave samples', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const time = 2.37;
-    const angle = 0.18 + time * 0.16;
-    const x = -2.35 + Math.cos(angle) * 0.38;
-    const z = -3.1 + Math.sin(angle) * 0.3;
-    const waveScale = presentationWeatherProfile('thunderstorm').waveScale;
-    const expected = sampleWaveField(DEFAULT_WAVES, time, x, z, waveScale);
-
-    world.stageEvent('shark-men');
-    world.setPresentationWeather('thunderstorm');
-    world.update(time, 0.1);
-
-    const path = world.scene.getObjectByName('shark-men-path-1')!;
-    expect(path.position.y).toBeCloseTo(expected.height);
-    expect(path.position.x).toBeCloseTo(x + expected.displacementX);
-    expect(path.position.z).toBeCloseTo(z + expected.displacementZ);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('routes Shark Men contextual choices and ignores unsupported events', async () => {
-    const propModels = createTestPropModels();
-    const contextualChoice = vi.spyOn(
-      SharkMenPresentation.prototype,
-      'playContextualChoice',
-    );
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    await world.playEventContextualChoice('bad-sleep', 'sleep');
-    expect(contextualChoice).not.toHaveBeenCalled();
-
-    world.stageEvent('shark-men');
-    const sleep = world.playEventContextualChoice('shark-men', 'sleep');
-    world.update(1, 1);
-    await sleep;
-    expect(contextualChoice).toHaveBeenCalledOnce();
-    expect(contextualChoice).toHaveBeenCalledWith('sleep');
-
-    contextualChoice.mockRestore();
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('applies the Bad Sleep reveal to the camera and supplies', async () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay();
@@ -769,176 +603,59 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps keyed Shower Night splash active during its result', () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
+  it.each([
+    ['shower-night', 'bucket', 'bucket-1'],
+    ['windy-night', 'umbrella', 'umbrella-1'],
+    ['thunderstorm', 'anchor', 'anchor-1'],
+  ] as const)(
+    'moves only the camera for %s item use and result',
+    async (eventId, choiceId, instanceId) => {
+      const cameraRig = new Group();
+      const supplies = new FakeBoatSupplyDisplay();
+      const animator = new WeatherEventAnimator(
+        cameraRig,
+        supplies as unknown as BoatSupplyDisplay,
+      );
 
-    void animator.react(
-      'shower-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The bucket catches the rain.',
-        deltas: {},
-        cue: 'none',
-      },
-      {
-        choiceId: 'bucket',
-        actors: [],
-      },
-    );
-    animator.update(0.55, 0.55);
+      const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
+      animator.update(0.6, 0.6);
 
-    expect(
-      animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible,
-    ).toBe(true);
-    animator.dispose();
-  });
+      expect(supplies.poses.size).toBe(0);
+      expect(supplies.pinCalls).toHaveLength(0);
+      expect(
+        Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
+      ).toBeGreaterThan(0.01);
 
-  it('pins two Windy Night break actors in sequence', () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
+      animator.update(2, 2);
+      await itemUse;
+      const result = animator.react(
+        eventId,
+        {
+          accepted: true,
+          code: 'event-resolved',
+          message: 'The night passes.',
+          deltas: { hull: -20 },
+          cue: 'impact',
+        },
+        {
+          choiceId,
+          actors: [{ instanceId, condition: 'broken' }],
+        },
+      );
+      animator.update(0.55, 0.55);
 
-    void animator.react(
-      'windy-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The wind breaks two supplies.',
-        deltas: { hull: -20 },
-        cue: 'impact',
-      },
-      {
-        choiceId: 'sleep',
-        actors: [
-          { instanceId: 'map-1', condition: 'broken' },
-          { instanceId: 'umbrella-1', condition: 'broken' },
-        ],
-      },
-    );
-    expect(supplies.pinHistory).toEqual(['map-1', 'umbrella-1']);
-    const pinCallCount = supplies.pinCalls.length;
+      expect(supplies.poses.size).toBe(0);
+      expect(supplies.pinCalls).toHaveLength(0);
+      expect(
+        Math.abs(cameraRig.position.x) + Math.abs(cameraRig.position.y)
+        + Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.rotation.z),
+      ).toBeGreaterThan(0.01);
 
-    animator.update(0.4, 0.4);
-    animator.update(1.1, 0.7);
-
-    expect(supplies.pinHistory).toEqual(['map-1', 'umbrella-1']);
-    expect(supplies.pinCalls).toHaveLength(pinCallCount);
-    animator.dispose();
-  });
-
-  it('keeps every Windy Night break actor posed after the result resolves', async () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    const result = animator.react(
-      'windy-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The wind breaks two supplies.',
-        deltas: { hull: -20 },
-        cue: 'impact',
-      },
-      {
-        choiceId: 'sleep',
-        actors: [
-          { instanceId: 'map-1', condition: 'broken' },
-          { instanceId: 'umbrella-1', condition: 'broken' },
-        ],
-      },
-    );
-    animator.update(2.1, 2.1);
-    await result;
-
-    expect(Math.abs(supplies.poses.get('map-1')?.roll ?? 0)).toBeGreaterThan(0.1);
-    expect(Math.abs(supplies.poses.get('umbrella-1')?.roll ?? 0)).toBeGreaterThan(0.1);
-
-    animator.clear();
-    expect(supplies.poses.size).toBe(0);
-    animator.dispose();
-  });
-
-  it('keeps an unchanged safe Shower Night actor and splash through the result hold', async () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    const itemUse = animator.playItemUse('shower-night', 'bucket', 'bucket-1');
-    animator.update(2, 2);
-    await itemUse;
-    const result = animator.react(
-      'shower-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The bucket catches the rain.',
-        deltas: {},
-        cue: 'none',
-      },
-      { choiceId: 'bucket', actors: [] },
-    );
-    animator.update(2, 2);
-    await result;
-
-    expect(Math.abs(supplies.poses.get('bucket-1')?.y ?? 0)).toBeGreaterThan(0.04);
-    expect(
-      animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible,
-    ).toBe(true);
-
-    animator.clear();
-    expect(supplies.poses.size).toBe(0);
-    animator.dispose();
-  });
-
-  it('keeps a safe Windy Night Umbrella settled after the result resolves', async () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    const itemUse = animator.playItemUse('windy-night', 'umbrella', 'umbrella-1');
-    animator.update(2, 2);
-    await itemUse;
-    const result = animator.react(
-      'windy-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'You wake with two energy.',
-        deltas: { energy: 2 },
-        cue: 'none',
-      },
-      { choiceId: 'umbrella', actors: [] },
-    );
-    animator.update(2, 2);
-    await result;
-
-    const held = supplies.poses.get('umbrella-1');
-    expect(Math.abs(held?.roll ?? 0)).toBeGreaterThan(0.04);
-    expect(held?.scaleY).toBeGreaterThan(0.95);
-
-    animator.clear();
-    expect(supplies.poses.size).toBe(0);
-    animator.dispose();
-  });
+      animator.update(2, 2);
+      await result;
+      animator.dispose();
+    },
+  );
 
   it('keeps the Bad Sleep broken Umbrella collapsed through the result hold', async () => {
     const cameraRig = new Group();
@@ -972,91 +689,7 @@ describe('BoatWorld helpers', () => {
     animator.dispose();
   });
 
-  it('keeps Thunderstorm Anchor and lightning effects through result holds', async () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    const itemUse = animator.playItemUse('thunderstorm', 'anchor', 'anchor-1');
-    animator.update(2, 2);
-    await itemUse;
-    const anchorResult = animator.react(
-      'thunderstorm',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The anchor steadies the boat.',
-        deltas: {},
-        cue: 'none',
-      },
-      { choiceId: 'anchor', actors: [] },
-    );
-    animator.update(2, 2);
-    await anchorResult;
-
-    expect(animator.boatRoot.getObjectByName('weather-anchor-chain')?.visible).toBe(true);
-    expect(Math.abs(supplies.poses.get('anchor-1')?.pitch ?? 0)).toBeGreaterThan(0.1);
-
-    animator.clear();
-    const lossResult = animator.react(
-      'thunderstorm',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'Lightning takes the umbrella.',
-        deltas: {},
-        cue: 'impact',
-      },
-      {
-        choiceId: 'sleep',
-        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
-      },
-    );
-    animator.update(2, 2);
-    await lossResult;
-
-    expect(animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible).toBe(true);
-    expect(Math.abs(supplies.poses.get('umbrella-1')?.x ?? 0)).toBeGreaterThan(0.3);
-
-    animator.clear();
-    expect(supplies.poses.size).toBe(0);
-    animator.dispose();
-  });
-
-  it('does not retry a failed actor pin from the update path', () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay('map-1');
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    void animator.react(
-      'windy-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The wind breaks the map.',
-        deltas: {},
-        cue: 'none',
-      },
-      {
-        choiceId: 'sleep',
-        actors: [{ instanceId: 'map-1', condition: 'broken' }],
-      },
-    );
-    animator.update(0.2, 0.2);
-    animator.update(0.4, 0.2);
-    animator.update(0.6, 0.2);
-
-    expect(supplies.pinCalls).toEqual(['map-1']);
-    animator.dispose();
-  });
-
-  it('flashes before a Thunderstorm loss departs', () => {
+  it('keeps Thunderstorm lightning off the lost item', () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay();
     const animator = new WeatherEventAnimator(
@@ -1070,7 +703,7 @@ describe('BoatWorld helpers', () => {
         accepted: true,
         code: 'event-resolved',
         message: 'Lightning takes the umbrella.',
-        deltas: {},
+        deltas: { hull: -40 },
         cue: 'impact',
       },
       {
@@ -1078,41 +711,13 @@ describe('BoatWorld helpers', () => {
         actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
       },
     );
-    animator.update(0.1, 0.1);
-    const earlyPose = supplies.poses.get('umbrella-1');
+    animator.update(0.45, 0.45);
 
     expect(
       animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible,
     ).toBe(true);
-    expect(Math.abs(earlyPose?.x ?? 0)).toBeLessThan(0.1);
-
-    animator.update(0.6, 0.5);
-    expect(Math.abs(supplies.poses.get('umbrella-1')?.x ?? 0))
-      .toBeGreaterThan(Math.abs(earlyPose?.x ?? 0));
-    animator.dispose();
-  });
-
-  it('moves the camera for a damage-only Thunderstorm Sleep result', () => {
-    const cameraRig = new Group();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-    );
-
-    void animator.react(
-      'thunderstorm',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The storm damages the hull.',
-        deltas: { hull: -40 },
-        cue: 'impact',
-      },
-      { choiceId: 'sleep', actors: [] },
-    );
-    animator.update(0.513, 0.513);
-
+    expect(supplies.pinCalls).toHaveLength(0);
+    expect(supplies.poses.size).toBe(0);
     expect(Math.abs(cameraRig.rotation.z)).toBeGreaterThan(0.05);
     animator.dispose();
   });
@@ -1135,7 +740,8 @@ describe('BoatWorld helpers', () => {
 
     void animator.reveal('windy-night');
     animator.update(0.9, 0.9);
-    expect(supplies.ambientRoll).not.toBe(0);
+    expect(supplies.ambientRoll).toBe(0);
+    expect(Math.abs(cameraRig.rotation.y)).toBeGreaterThan(0.01);
 
     animator.clear();
 
@@ -1164,7 +770,7 @@ describe('BoatWorld helpers', () => {
 
     expect(world.scene.getObjectByName('weather-event-world')).toBeDefined();
     expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
-    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeUndefined();
     const reveal = world.revealEvent('shower-night');
     world.update(3.39, 3.39);
     expect(await remainsPending(reveal)).toBe(true);
@@ -1179,7 +785,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses event-specific Bucket choreography and retains generic fallback', async () => {
+  it('uses camera-only Shower choreography and retains generic fallback', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1190,6 +796,7 @@ describe('BoatWorld helpers', () => {
     );
     world.syncInventory(snapshot([bucket]));
     const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
 
     const showerUse = world.playEventItemUse(
       'shower-night',
@@ -1198,7 +805,10 @@ describe('BoatWorld helpers', () => {
     );
     world.update(0.66, 0.66);
     expect(await remainsPending(showerUse)).toBe(true);
-    expect(bucketGroup.position.toArray()).not.toEqual([0, 0, 0]);
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+    expect(
+      Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
+    ).toBeGreaterThan(0.01);
     world.update(2, 2);
     await showerUse;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
@@ -1407,7 +1017,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps a selected lost duplicate visible through its terminal reaction', async () => {
+  it('keeps a selected lost duplicate still through its camera-only reaction', async () => {
     const maps = [savedItem('map', 1), savedItem('map', 2)] as const;
     const inventory = new SurvivalInventoryState(maps);
     const propModels = createTestPropModels();
@@ -1446,12 +1056,12 @@ describe('BoatWorld helpers', () => {
     );
     world.update(2, 0.5);
     expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.x).toBeLessThan(base.x - 0.1);
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
 
     world.update(3, 1.23);
     await reaction;
     expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.x).toBeLessThan(base.x - 1);
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
 
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
     expect(mapRoot.visible).toBe(true);

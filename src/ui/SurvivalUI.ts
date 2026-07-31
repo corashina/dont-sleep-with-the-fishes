@@ -391,9 +391,8 @@ export class SurvivalUI {
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
       <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
-        <span data-dream-shutter="top"></span>
-        <span data-dream-shutter="middle"></span>
-        <span data-dream-shutter="bottom"></span>
+        <span data-dream-eyelid="top"></span>
+        <span data-dream-eyelid="bottom"></span>
       </div>
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
