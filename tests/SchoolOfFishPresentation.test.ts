@@ -147,6 +147,9 @@ describe('SchoolOfFishPresentation', () => {
       ({ name }) => name.startsWith('school-surface-flash-'),
     )).toHaveLength(8);
     expect(presentation.worldRoot.children.filter(
+      ({ name }) => name.startsWith('school-surface-fin-'),
+    )).toHaveLength(8);
+    expect(presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('school-splash-'),
     )).toHaveLength(6);
     expect(presentation.boatRoot.getObjectByName('school-catch-actor')).toBe(
@@ -187,13 +190,19 @@ describe('SchoolOfFishPresentation', () => {
     expect(visibleFish.length).toBeGreaterThanOrEqual(18);
     expect(visibleFish.length).toBeLessThanOrEqual(24);
     expect(visibleFish.every(({ scale }) => scale.x >= 0.72)).toBe(true);
-    expect(visibleFish.every(({ position }) => position.y > 0.9)).toBe(true);
-    expect(visibleFish.every(({ position }) => position.z < -3)).toBe(true);
+    expect(visibleFish.every(({ position }) => position.y < 0.12)).toBe(true);
+    expect(Math.max(...visibleFish.map(({ position }) => position.x))).toBeGreaterThan(2.5);
+    expect(Math.min(...visibleFish.map(({ position }) => position.x))).toBeLessThan(-2.5);
+    expect(Math.max(...visibleFish.map(({ position }) => position.z))).toBeGreaterThan(1.5);
+    expect(Math.min(...visibleFish.map(({ position }) => position.z))).toBeLessThan(-4);
+    const visibleFins = presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('school-surface-fin-') && visible,
+    );
+    expect(visibleFins).toHaveLength(8);
+    expect(visibleFins.every(({ position }) => position.y > 0.3)).toBe(true);
     expect(presentation.worldRoot.children.filter(
-      ({ name, visible, position }) => (
-        name.startsWith('school-splash-') && visible && position.y > 0.9
-      ),
-    )).toHaveLength(6);
+      ({ name, visible }) => name.startsWith('school-splash-') && visible,
+    )).toHaveLength(0);
     expect(
       visibleFish.reduce((sum, { position }) => sum + position.x, 0)
         / visibleFish.length,
@@ -223,11 +232,6 @@ describe('SchoolOfFishPresentation', () => {
     expect(catchActor.visible).toBe(true);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('school-fish-') && visible,
-    )).toHaveLength(23);
-    expect(presentation.worldRoot.children.filter(
-      ({ name, visible, position }) => (
-        name.startsWith('school-fish-') && visible && position.z < -3
-      ),
     )).toHaveLength(23);
     expect(fixture.actors.get(bucketId)!.applyPose.mock.lastCall![0].scaleY).toBeLessThan(0.7);
 

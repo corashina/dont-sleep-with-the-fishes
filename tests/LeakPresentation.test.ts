@@ -3,7 +3,6 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  PlaneGeometry,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -66,18 +65,7 @@ function outcome(
 }
 
 function setup(actorIds: readonly ItemInstanceId[] = []) {
-  const modelRoot = new Group();
-  const modelMesh = new Mesh(
-    new PlaneGeometry(1, 1),
-    new MeshStandardMaterial({ color: 0x765239 }),
-  );
-  modelRoot.add(modelMesh);
-  const modelDispose = vi.fn();
-  const modelInstance = {
-    root: modelRoot,
-    dispose: modelDispose,
-  } satisfies EventModelInstance;
-  const create = vi.fn(() => modelInstance);
+  const create = vi.fn<() => EventModelInstance>();
   const actors = new Map(actorIds.map((id) => [id, actor(id)]));
   const borrowEventActor = vi.fn((id: ItemInstanceId) => actors.get(id) ?? null);
   const sampleWorldWaveInto = vi.fn((sample: {
@@ -114,8 +102,6 @@ function setup(actorIds: readonly ItemInstanceId[] = []) {
     borrowEventActor,
     create,
     environment,
-    modelDispose,
-    modelMesh,
     sampleWorldWaveInto,
     vortexBefore: { ...vortexWave },
   };
@@ -135,21 +121,19 @@ describe('LeakPresentation', () => {
     const presentation = new LeakPresentation(fixture.environment);
     const root = presentation.boatRoot;
 
-    expect(fixture.create).toHaveBeenCalledExactlyOnceWith('leakPlanks');
-    expect(root.getObjectByName('leak-water-jet')).toBeDefined();
+    expect(fixture.create).not.toHaveBeenCalled();
+    expect(root.getObjectByName('leak-planks')).toBeUndefined();
+    expect(root.children.filter(({ name }) => name.startsWith('leak-hole-'))).toHaveLength(3);
+    expect(root.children.filter(({ name }) => name.startsWith('leak-stream-'))).toHaveLength(3);
+    expect(root.getObjectByName('leak-spray-particles')).toBeDefined();
     expect(root.getObjectByName('leak-interior-water')).toBeDefined();
-    expect(root.getObjectByName('leak-seam')).toBeDefined();
-    expect(root.getObjectByName('leak-wet-band')).toBeDefined();
-    expect(root.children.filter(({ name }) => name.startsWith('leak-drip-'))).toHaveLength(8);
-    expect(root.children.filter(({ name }) => name.startsWith('leak-splash-'))).toHaveLength(6);
-    expect(fixture.modelMesh.material.flatShading).toBe(true);
   });
 
   it('holds the visible leak after reveal and clears all water', async () => {
     const fixture = setup();
     const presentation = new LeakPresentation(fixture.environment);
     stage(presentation);
-    const jet = presentation.boatRoot.getObjectByName('leak-water-jet') as Mesh;
+    const jet = presentation.boatRoot.getObjectByName('leak-stream-1') as Mesh;
     const jetMaterial = jet.material as MeshStandardMaterial;
     const interiorWater = presentation.boatRoot.getObjectByName(
       'leak-interior-water',
@@ -161,6 +145,7 @@ describe('LeakPresentation', () => {
 
     expect(jetMaterial.opacity).toBeGreaterThan(0.5);
     expect(interiorWater.visible).toBe(true);
+    expect(interiorWater.position.y).toBeLessThan(0.1);
     expect(fixture.sampleWorldWaveInto).toHaveBeenCalled();
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
 
@@ -239,7 +224,7 @@ describe('LeakPresentation', () => {
     expect(fixture.actors.get(mapId)!.release).toHaveBeenCalledOnce();
   });
 
-  it('holds a broken selected actor and turns a safe jet into drips', async () => {
+  it('holds a broken actor and turns safe streams into fine spray', async () => {
     const mapId = 'map-2' as ItemInstanceId;
     const fixture = setup([mapId]);
     const presentation = new LeakPresentation(fixture.environment);
@@ -261,12 +246,12 @@ describe('LeakPresentation', () => {
     const safeReaction = presentation.react(outcome());
     presentation.update(2, 1);
     await safeReaction;
-    const jet = presentation.boatRoot.getObjectByName('leak-water-jet') as Mesh;
-    const drips = presentation.boatRoot.children.filter(
-      ({ name }) => name.startsWith('leak-drip-'),
+    const jet = presentation.boatRoot.getObjectByName('leak-stream-1') as Mesh;
+    const sprays = presentation.boatRoot.children.filter(
+      ({ name }) => name === 'leak-spray-particles',
     );
-    expect((jet.material as MeshStandardMaterial).opacity).toBeLessThan(0.2);
-    expect(drips.some(({ visible }) => visible)).toBe(true);
+    expect((jet.material as MeshStandardMaterial).opacity).toBeLessThan(0.3);
+    expect(sprays.some(({ visible }) => visible)).toBe(true);
   });
 
   it('holds only the exact consumed selected actor against the seam', async () => {
@@ -309,17 +294,17 @@ describe('LeakPresentation', () => {
     expect(fixture.actors.get(selectedId)!.release).toHaveBeenCalledOnce();
   });
 
-  it('disposes its model, geometry, and material once', () => {
+  it('disposes its authored geometry and material once', () => {
     const fixture = setup();
     const presentation = new LeakPresentation(fixture.environment);
-    const seam = presentation.boatRoot.getObjectByName('leak-seam') as Mesh;
-    const geometryDispose = vi.spyOn(seam.geometry, 'dispose');
-    const materialDispose = vi.spyOn(seam.material as MeshStandardMaterial, 'dispose');
+    const hole = presentation.boatRoot.getObjectByName('leak-hole-1') as Mesh;
+    const geometryDispose = vi.spyOn(hole.geometry, 'dispose');
+    const materialDispose = vi.spyOn(hole.material as MeshStandardMaterial, 'dispose');
 
     presentation.dispose();
     presentation.dispose();
 
-    expect(fixture.modelDispose).toHaveBeenCalledOnce();
+    expect(fixture.create).not.toHaveBeenCalled();
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(presentation.boatRoot.parent).toBeNull();
