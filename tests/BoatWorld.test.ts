@@ -440,7 +440,7 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('forwards event staging and keeps the cargo vessel held for natural rescue', async () => {
+  it('keeps the focused cargo vessel held for natural rescue', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -458,7 +458,10 @@ describe('BoatWorld helpers', () => {
     const rescue = world.play('rescue');
     world.skipSequence();
     await rescue;
-    expect(world.scene.getObjectByName('event-prop:other-people')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('event-prop:other-people')).toBeUndefined();
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
 
     world.dispose();
     propModels.dispose();
@@ -496,7 +499,11 @@ describe('BoatWorld helpers', () => {
       expect(world.scene.getObjectByName(`focused-event:${eventId}`)?.visible)
         .toBe(true);
       const generic = world.scene.getObjectByName(`event-prop:${eventId}`);
-      if (eventId === 'night-trader' || eventId === 'handyman') {
+      if (
+        eventId === 'night-trader'
+        || eventId === 'handyman'
+        || eventId === 'other-people'
+      ) {
         expect(generic).toBeUndefined();
       } else {
         expect(generic?.visible).toBe(false);
@@ -548,7 +555,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('registers the four authored focused event presenters', () => {
+  it('registers the five authored focused event presenters', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -578,6 +585,22 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('event-prop:handyman')).toBeUndefined();
     expect(world.scene.getObjectByName('focused-event:handyman')?.visible)
       .toBe(true);
+
+    world.stageEvent('other-people');
+    expect(world.scene.getObjectByName('event-prop:other-people'))
+      .toBeUndefined();
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
+    const ship = world.scene.getObjectByName(
+      'other-people-container-ship',
+    )!;
+    const heldPosition = ship.position.clone();
+    world.update(2, 1 / 60);
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
+    expect(ship.position.toArray()).toEqual(heldPosition.toArray());
 
     world.dispose();
     propModels.dispose();

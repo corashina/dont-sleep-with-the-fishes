@@ -34,6 +34,7 @@ import {
 import { HandymanPresentation } from './HandymanPresentation';
 import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';
+import { OtherPeoplePresentation } from './OtherPeoplePresentation';
 
 interface ActiveEventAnimation {
   readonly kind: 'reveal' | 'react';
@@ -64,7 +65,10 @@ interface MaritimeMaterials {
   readonly eye: MeshStandardMaterial;
   readonly earth: MeshStandardMaterial;
   readonly foliage: MeshStandardMaterial;
-  readonly vessel: MeshStandardMaterial;
+}
+
+interface RescueCuePresentation extends FocusedEventPresentation {
+  setRescueCue(progress: number | null): void;
 }
 
 type VectorTuple = readonly [number, number, number];
@@ -76,7 +80,6 @@ const TABLEAU_EVENT_IDS = [
   'chest-attack',
   'flowers',
   'midnight-tour',
-  'other-people',
   'death-stare',
 ] as const;
 
@@ -88,6 +91,7 @@ export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFact
   'midnight-tour': (dependencies) => new MidnightTourPresentation(dependencies),
   'night-trader': (dependencies) => new NightTraderPresentation(dependencies),
   handyman: (dependencies) => new HandymanPresentation(dependencies),
+  'other-people': (dependencies) => new OtherPeoplePresentation(dependencies),
 };
 
 function createMaterial(
@@ -124,7 +128,6 @@ function createMaterials(): MaritimeMaterials {
     eye: createMaterial(0xc9aa68, 0.48, { emissive: 0x302008 }),
     earth: createMaterial(0x403a31, 1),
     foliage: createMaterial(0x344f42, 0.96),
-    vessel: createMaterial(0x222d31, 0.9, { metalness: 0.12 }),
   };
 }
 
@@ -270,20 +273,6 @@ function islandTableau(materials: MaritimeMaterials): Group {
   return root;
 }
 
-function cargoVesselTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'cargo-vessel-hull', new BoxGeometry(8.5, 1.05, 1.3), materials.vessel, [0, 0, 0], [0, 0.04, 0]);
-  addMesh(root, 'cargo-vessel-bow', new ConeGeometry(0.68, 1.7, 4), materials.vessel, [-5.05, 0, 0], [0, 0, Math.PI / 2], [1, 1, 1.2]);
-  addMesh(root, 'cargo-vessel-deck', new BoxGeometry(5.4, 0.24, 1.02), materials.metal, [0.55, 0.66, 0]);
-  addMesh(root, 'cargo-vessel-cabin', new BoxGeometry(1.65, 1.25, 0.92), materials.paper, [2.15, 1.25, 0]);
-  addMesh(root, 'cargo-vessel-wheelhouse', new BoxGeometry(1.05, 0.48, 1.02), materials.vessel, [2.14, 2.06, 0]);
-  addMesh(root, 'cargo-vessel-mast', new CylinderGeometry(0.07, 0.09, 3.4, 6), materials.metal, [-0.78, 2.05, 0], [0, 0, 0.04]);
-  for (const x of [-2.1, -1.2, -0.3, 0.6]) {
-    addMesh(root, `cargo-vessel-crate:${x}`, new BoxGeometry(0.72, 0.62, 0.78), materials.wood, [x, 1.02, 0], [0, x * 0.025, 0]);
-  }
-  return root;
-}
-
 function createTableau(
   eventId: string,
   content: Group,
@@ -334,7 +323,6 @@ export class EventPresentationLayer {
   private activeFocused: FocusedEventPresentation | null = null;
   private stagedEventId: string | null = null;
   private held = false;
-  private rescueProgress: number | null = null;
   private reactionDirection = 1;
   private disposed = false;
 
@@ -351,7 +339,6 @@ export class EventPresentationLayer {
       createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
       createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
-      createTableau('other-people', cargoVesselTableau(materials), [-9, 1.25, -48], [-5.2, -0.75, -1.5]),
       createTableau('death-stare', fishTableau(materials, true), [0, -0.8, -7.4], [0, -2.3, -1.4]),
     ];
     for (const tableau of tableaus) {
@@ -483,15 +470,13 @@ export class EventPresentationLayer {
 
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
-    this.rescueProgress = progress === null ? null : Math.min(1, Math.max(0, progress));
-    const cargo = this.tableaus.get('other-people')!;
-    cargo.root.visible = !this.focused.has('other-people') && (
-      this.stagedEventId === 'other-people' || this.rescueProgress !== null
-    );
-    if (this.stagedEventId !== 'other-people' && this.rescueProgress !== null) {
-      this.resetTableauPose(cargo);
-      this.applyRevealPose(cargo, this.rescueProgress, 0);
-    }
+    const presenter = this.focused.get('other-people');
+    if (
+      presenter === undefined
+      || presenter === this.activeFocused
+      || !this.supportsRescueCue(presenter)
+    ) return;
+    presenter.setRescueCue(progress);
   }
 
   update(time: number, delta: number): void {
@@ -503,18 +488,13 @@ export class EventPresentationLayer {
     const staged = this.stagedEventId === null
       ? null
       : this.tableaus.get(this.stagedEventId)!;
-    const cargo = this.tableaus.get('other-people')!;
 
     if (staged !== null) this.applyWavePose(staged, time);
-    if (this.rescueProgress !== null && staged !== cargo) this.applyWavePose(cargo, time);
 
     const animation = this.activeAnimation;
     if (animation === null) {
       if (staged !== null) {
         this.applyRevealPose(staged, this.held ? 1 : 0, staged.heldReactionTilt);
-      }
-      if (this.rescueProgress !== null && staged !== cargo) {
-        this.applyRevealPose(cargo, this.rescueProgress, 0);
       }
       return;
     }
@@ -557,7 +537,9 @@ export class EventPresentationLayer {
     this.activeFocused = null;
     if (focused === null) return;
     focused.clear();
-    focused.root.visible = false;
+    if (focused.root.userData.holdOnClear !== true) {
+      focused.root.visible = false;
+    }
   }
 
   private resetGenericTableaus(): void {
@@ -565,13 +547,17 @@ export class EventPresentationLayer {
       const tableau = this.tableaus.get(id)!;
       tableau.heldReactionTilt = 0;
       this.resetTableauPose(tableau);
-      tableau.root.visible = id === this.stagedEventId || (
-        id === 'other-people'
-        && this.rescueProgress !== null
-        && !this.focused.has('other-people')
-      );
+      tableau.root.visible = id === this.stagedEventId;
       this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
     }
+  }
+
+  private supportsRescueCue(
+    presenter: FocusedEventPresentation,
+  ): presenter is RescueCuePresentation {
+    return typeof (
+      presenter as Partial<RescueCuePresentation>
+    ).setRescueCue === 'function';
   }
 
   private startAnimation(
