@@ -204,11 +204,13 @@ interface ActiveMoonAnimation {
   readonly fromGrin: number;
   readonly fromStarScale: number;
   readonly fromDim: number;
+  readonly fromMoonScale: number;
   readonly fromCameraLower: number;
   readonly targetReveal: number;
   readonly targetGrin: number;
   readonly targetStarScale: number;
   readonly targetDim: number;
+  readonly targetMoonScale: number;
   readonly targetCameraLower: number;
   readonly resolve: () => void;
 }
@@ -250,6 +252,7 @@ const MOON_FACE_REACTION_DURATION = 1.1;
 const MOON_FACE_HOLD_FRACTION = 0.2;
 const MOON_FACE_BASE_GRIN = 0.36;
 const MOON_FACE_STAR_SCALE = 0.28;
+const MOON_FACE_MOON_SCALE = 3.6;
 const MOON_FACE_PRESSURE_GRIN = 0.88;
 const MOON_FACE_ENERGY_DIM = 0.48;
 const MOON_FACE_CAMERA_LOWER = 0.2;
@@ -523,11 +526,13 @@ export class BoatWorld {
     grin: number;
     starScale: number;
     dim: number;
+    scale: number;
   } = {
     reveal: 0,
     grin: 0,
     starScale: 1,
     dim: 0,
+    scale: 1,
   };
   private moonCameraLower = 0;
   private moonEventStaged = false;
@@ -1884,11 +1889,13 @@ export class BoatWorld {
         fromGrin: 0,
         fromStarScale: 1,
         fromDim: 0,
+        fromMoonScale: 1,
         fromCameraLower: 0,
         targetReveal: 1,
         targetGrin: MOON_FACE_BASE_GRIN,
         targetStarScale: MOON_FACE_STAR_SCALE,
         targetDim: 0,
+        targetMoonScale: MOON_FACE_MOON_SCALE,
         targetCameraLower: 0,
         resolve,
       };
@@ -1911,6 +1918,7 @@ export class BoatWorld {
         fromGrin: this.moonFace.grin,
         fromStarScale: this.moonFace.starScale,
         fromDim: this.moonFace.dim,
+        fromMoonScale: this.moonFace.scale,
         fromCameraLower: this.moonCameraLower,
         targetReveal: 1,
         targetGrin: pressureGain
@@ -1920,6 +1928,7 @@ export class BoatWorld {
         targetDim: energyLoss
           ? Math.max(this.moonFace.dim, MOON_FACE_ENERGY_DIM)
           : this.moonFace.dim,
+        targetMoonScale: this.moonFace.scale,
         targetCameraLower: energyLoss
           ? Math.max(this.moonCameraLower, MOON_FACE_CAMERA_LOWER)
           : this.moonCameraLower,
@@ -1952,6 +1961,8 @@ export class BoatWorld {
         this.moonFace.grin = MOON_FACE_BASE_GRIN * grinProgress;
         this.moonFace.starScale = 1
           - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
+        this.moonFace.scale = 1
+          + (MOON_FACE_MOON_SCALE - 1) * easeOut(revealProgress);
       } else {
         const eased = easeInOut(progress);
         this.moonFace.reveal = animation.fromReveal
@@ -1962,6 +1973,8 @@ export class BoatWorld {
           + (animation.targetStarScale - animation.fromStarScale) * eased;
         this.moonFace.dim = animation.fromDim
           + (animation.targetDim - animation.fromDim) * eased;
+        this.moonFace.scale = animation.fromMoonScale
+          + (animation.targetMoonScale - animation.fromMoonScale) * eased;
         this.moonCameraLower = animation.fromCameraLower
           + (animation.targetCameraLower - animation.fromCameraLower) * eased;
       }
@@ -1984,6 +1997,7 @@ export class BoatWorld {
     this.moonFace.grin = animation.targetGrin;
     this.moonFace.starScale = animation.targetStarScale;
     this.moonFace.dim = animation.targetDim;
+    this.moonFace.scale = animation.targetMoonScale;
     this.moonCameraLower = animation.targetCameraLower;
     animation.resolve();
   }
@@ -2001,6 +2015,7 @@ export class BoatWorld {
     this.moonFace.grin = 0;
     this.moonFace.starScale = 1;
     this.moonFace.dim = 0;
+    this.moonFace.scale = 1;
     this.moonCameraLower = 0;
   }
 

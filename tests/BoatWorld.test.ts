@@ -976,17 +976,20 @@ describe('BoatWorld helpers', () => {
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
 
     world.update(3.8, 2.09);
     await reveal;
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(3.5);
 
     world.clearEvent();
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
     expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
 
     world.dispose();
     propModels.dispose();

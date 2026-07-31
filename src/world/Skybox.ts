@@ -33,11 +33,16 @@ export interface MoonFacePresentation {
   readonly grin: number;
   readonly starScale: number;
   readonly dim: number;
+  readonly scale: number;
 }
 
 const clamp01 = (value: number): number => Number.isFinite(value)
   ? Math.min(1, Math.max(0, value))
   : 0;
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Number.isFinite(value)
+    ? Math.min(maximum, Math.max(minimum, value))
+    : minimum;
 const smoothstep = (value: number): number => {
   const t = clamp01(value);
   return t * t * (3 - 2 * t);
@@ -76,6 +81,7 @@ const fragmentShader = `
   uniform float uMoonGrin;
   uniform float uMoonStarScale;
   uniform float uMoonEventDim;
+  uniform float uMoonScale;
   varying vec3 vSkyDirection;
 
   float hash31(vec3 value) {
@@ -181,7 +187,7 @@ const fragmentShader = `
       dot(direction, moonRight),
       dot(direction, moonUp)
     ) / max(facing, 0.0001);
-    const float moonRadius = 0.027;
+    float moonRadius = 0.027 * uMoonScale;
     moonUv = tangent / (moonRadius * 2.0) + 0.5;
     radialDistance = length(tangent) / moonRadius;
     float inside = step(0.0, facing)
@@ -360,6 +366,7 @@ export class Skybox {
         uMoonGrin: { value: 0 },
         uMoonStarScale: { value: 1 },
         uMoonEventDim: { value: 0 },
+        uMoonScale: { value: 1 },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
@@ -397,6 +404,7 @@ export class Skybox {
     uniforms.uMoonGrin!.value = 0;
     uniforms.uMoonStarScale!.value = 1;
     uniforms.uMoonEventDim!.value = 0;
+    uniforms.uMoonScale!.value = 1;
   }
 
   setMoonFace(value: MoonFacePresentation): void {
@@ -406,6 +414,7 @@ export class Skybox {
     uniforms.uMoonGrin!.value = clamp01(value.grin);
     uniforms.uMoonStarScale!.value = clamp01(value.starScale);
     uniforms.uMoonEventDim!.value = clamp01(value.dim);
+    uniforms.uMoonScale!.value = clamp(value.scale, 1, 4);
   }
 
   setTint(color: Color, amount: number): void {

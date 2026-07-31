@@ -19,12 +19,14 @@ describe('Skybox moon face', () => {
       grin: 0.6,
       starScale: 0.2,
       dim: 0.35,
+      scale: 3.6,
     });
 
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
     expect(sky.material.uniforms.uMoonGrin?.value).toBe(0.6);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBe(0.2);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0.35);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(3.6);
 
     sky.resetTransient();
 
@@ -32,6 +34,7 @@ describe('Skybox moon face', () => {
     expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
     sky.dispose();
   });
 
@@ -52,7 +55,13 @@ describe('Skybox moon face', () => {
 
   it('clears moon transients before disposal', () => {
     const sky = createTestSkybox();
-    sky.setMoonFace({ reveal: 1, grin: 1, starScale: 0, dim: 1 });
+    sky.setMoonFace({
+      reveal: 1,
+      grin: 1,
+      starScale: 0,
+      dim: 1,
+      scale: 3.6,
+    });
 
     sky.dispose();
 
@@ -60,5 +69,6 @@ describe('Skybox moon face', () => {
     expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
   });
 });
