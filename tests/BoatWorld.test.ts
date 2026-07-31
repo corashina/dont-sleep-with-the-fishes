@@ -49,6 +49,7 @@ import {
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
+import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import {
   boatStorageTransform,
   boatSupplyTransform,
@@ -606,9 +607,37 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('rejects a focused result that does not match the played choice', async () => {
+  it.each([
+    {
+      label: 'a missing event result',
+      eventResult: undefined,
+      received: 'missing',
+    },
+    {
+      label: 'a wrong event id',
+      eventResult: {
+        eventId: 'handyman',
+        choiceId: 'map',
+        resultId: 'trader-reward',
+      },
+      received: 'handyman/map',
+    },
+    {
+      label: 'a wrong choice id',
+      eventResult: {
+        eventId: 'night-trader',
+        choiceId: 'umbrella',
+        resultId: 'trader-reward',
+      },
+      received: 'night-trader/umbrella',
+    },
+  ])('rejects $label before any focused or weather reaction', async ({
+    eventResult,
+    received,
+  }) => {
     const propModels = createTestPropModels();
     const active = focusedPresenterTestDouble('night-trader');
+    const weatherReact = vi.spyOn(WeatherEventAnimator.prototype, 'react');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -624,23 +653,26 @@ describe('BoatWorld helpers', () => {
       instanceId: 'map-1' as ItemInstanceId,
       condition: 'lost' as const,
     };
-    world.stageEvent('night-trader');
-
-    await expect(world.reactToEventOutcome('night-trader', {
+    const outcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
       message: 'The trader gives you a compass.',
       deltas: {},
       cue: 'none',
-      eventResult: {
-        eventId: 'night-trader',
-        choiceId: 'umbrella',
-        resultId: 'trader-reward',
-      },
-    }, choice)).rejects.toThrow('does not match choice map');
+      ...(eventResult === undefined ? {} : { eventResult }),
+    };
+    world.stageEvent('night-trader');
+
+    await expect(
+      world.reactToEventOutcome('night-trader', outcome, choice),
+    ).rejects.toThrow(
+      `Focused event night-trader requires result night-trader/map; received ${received}.`,
+    );
     expect(active.react).not.toHaveBeenCalled();
+    expect(weatherReact).not.toHaveBeenCalled();
 
     world.dispose();
+    weatherReact.mockRestore();
     propModels.dispose();
   });
 

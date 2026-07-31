@@ -2208,7 +2208,16 @@ describe('SurvivalPhase orchestration', () => {
     const resolveEvent = vi.fn(() => {
       calls.push('resolve');
       current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
-      return accepted({ code: 'event-resolved', cue: 'none', deltas: { energy: -3 } });
+      return accepted({
+        code: 'event-resolved',
+        cue: 'none',
+        deltas: { energy: -3 },
+        eventResult: {
+          eventId: 'midnight-tour',
+          choiceId: 'visit',
+          resultId: 'tour-bait',
+        },
+      });
     });
     const ui: Partial<SurvivalUI> = {
       beginEventPresentation: vi.fn(),
@@ -2546,6 +2555,187 @@ describe('SurvivalPhase orchestration', () => {
     hold.resolve();
     await flushPromises();
     expect(calls.at(-1)).toBe('clear');
+    phase.dispose();
+  });
+
+  it.each([
+    {
+      label: 'a missing event result',
+      eventId: 'night-trader',
+      choiceId: 'map',
+      route: 'item',
+      eventResult: undefined,
+      received: 'missing',
+    },
+    {
+      label: 'a wrong event id',
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      route: 'context',
+      eventResult: {
+        eventId: 'handyman',
+        choiceId: 'visit',
+        resultId: 'tour-bait',
+      },
+      received: 'handyman/visit',
+    },
+    {
+      label: 'a wrong choice id',
+      eventId: 'other-people',
+      choiceId: 'sleep',
+      route: 'endure',
+      eventResult: {
+        eventId: 'other-people',
+        choiceId: 'flare',
+        resultId: 'rescue-missed',
+      },
+      received: 'other-people/flare',
+    },
+  ])('rejects $label before focused sync or reaction and cleans up', async ({
+    eventId,
+    choiceId,
+    route,
+    eventResult,
+    received,
+  }) => {
+    const map = {
+      instanceId: 'map-1' as const,
+      type: 'map' as const,
+      condition: 'usable' as const,
+    };
+    const before = snapshot({
+      state: 'nightEvent',
+      pendingEventId: eventId,
+      energy: 3,
+      bait: 0,
+      ...(route === 'item'
+        ? { inventory: inventory({ 'map-1': map }) }
+        : {}),
+    });
+    let current = before;
+    let resolvedSnapshot: SurvivalSnapshot | null = null;
+    const calls: string[] = [];
+    const reactToEventOutcome = vi.fn();
+    const play = vi.fn();
+    const syncInventory = vi.fn((synced: SurvivalSnapshot) => {
+      if (synced !== before) calls.push('sync');
+    });
+    const setBusy = vi.fn();
+    const clearEvent = vi.fn(() => { calls.push('clear-world'); });
+    const clearEventPresentation = vi.fn(() => { calls.push('clear-ui'); });
+    const restoreCommandFocus = vi.fn(() => { calls.push('focus'); });
+    const onInvariantError = vi.fn((error: Error) => {
+      calls.push('error');
+      expect(error.message).toBe(
+        `Focused event ${eventId} requires result ${eventId}/${choiceId}; `
+        + `received ${received}.`,
+      );
+      expect(clearEvent).toHaveBeenCalledOnce();
+      expect(clearEventPresentation).toHaveBeenCalledOnce();
+      expect(reactToEventOutcome).not.toHaveBeenCalled();
+      expect(play).not.toHaveBeenCalled();
+      expect(syncInventory).not.toHaveBeenCalledWith(resolvedSnapshot);
+    });
+    const outcome = accepted({
+      code: 'event-resolved',
+      cue: 'none',
+      message: 'The tour result is invalid.',
+      deltas: { bait: 1 },
+      ...(eventResult === undefined ? {} : { eventResult }),
+    });
+    const ui = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy,
+      showEventOutcome: vi.fn(),
+      showFeedback: vi.fn(),
+      clearEventPresentation,
+      restoreCommandFocus,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          resolvedSnapshot = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            energy: 0,
+            bait: 1,
+            ...(route === 'item'
+              ? {
+                  inventory: inventory({
+                    'map-1': { ...map, condition: 'lost' },
+                    'compass-1': {
+                      instanceId: 'compass-1',
+                      type: 'compass',
+                      condition: 'usable',
+                    },
+                  }),
+                }
+              : {}),
+          });
+          current = resolvedSnapshot;
+          return outcome;
+        }),
+        beginDawn: vi.fn(() => {
+          current = snapshot({
+            state: 'day',
+            day: 2,
+            energy: 0,
+            bait: 1,
+          });
+          return accepted({ code: 'dawn', cue: 'none', deltas: {} });
+        }),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        syncInventory,
+        play,
+        clearEvent,
+        dispose: vi.fn(),
+      },
+      ui,
+      onInvariantError,
+    });
+
+    phase.start();
+    await flushPromises();
+    syncInventory.mockClear();
+    if (route === 'item') phase.handleEventItem(choiceId, 'map-1');
+    else if (route === 'context') {
+      (ui as Partial<SurvivalUI>).onEventChoice?.(choiceId);
+    } else {
+      phase.handleEndure();
+    }
+    await flushPromises();
+    await flushPromises();
+
+    expect(onInvariantError).toHaveBeenCalledOnce();
+    expect(calls).toEqual([
+      'clear-world',
+      'clear-ui',
+      'error',
+      'sync',
+      'focus',
+    ]);
+    expect(reactToEventOutcome).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledOnce();
+    expect(play).toHaveBeenCalledWith('none');
+    expect(calls.indexOf('error')).toBeLessThan(calls.indexOf('sync'));
+    expect(syncInventory).toHaveBeenCalledWith(current);
+    expect(ui.showEventOutcome).not.toHaveBeenCalled();
+    expect(ui.showFeedback).not.toHaveBeenCalled();
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(current.state).toBe('day');
     phase.dispose();
   });
 
