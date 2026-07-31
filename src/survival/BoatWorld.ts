@@ -427,7 +427,7 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
-  private readonly chestDisplay = new ChestDisplay();
+  private readonly chestDisplay: ChestDisplay;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
@@ -530,6 +530,9 @@ export class BoatWorld {
     );
     this.weatherEffects = new WeatherEffects(this.scene);
     this.camera = camera;
+    this.chestDisplay = new ChestDisplay(
+      propModels.createEventModel('chestClosed')?.root ?? null,
+    );
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
@@ -622,6 +625,7 @@ export class BoatWorld {
       propModels,
       waves: DEFAULT_WAVES,
       cameraRig: this.cameraRig,
+      boatMotionRoot: this.motionRig,
       supplyDisplay: this.supplyDisplay,
       chestDisplay: this.chestDisplay,
     }, focusedEventFactories);
@@ -707,6 +711,9 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
+    const eventRoot = instanceId === null
+      ? null
+      : this.eventPresentation.interactionRoot(instanceId);
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
@@ -716,7 +723,7 @@ export class BoatWorld {
             ? this.chestDisplay.root
           : instanceId === 'drifting-loot'
             ? this.driftingLootPresentation?.interactionRoot() ?? null
-            : null,
+            : eventRoot,
     );
   }
 
@@ -1049,13 +1056,20 @@ export class BoatWorld {
         depth: chestDepth,
       },
     } satisfies BoatInteractionAnchor;
+    const focusedEventAnchors = this.eventPresentation.projectInteractionAnchors(
+      this.camera,
+      width,
+      height,
+    );
+    const focusedIds = new Set(focusedEventAnchors.map(({ id }) => id));
     return [
       ...itemAnchors,
       fishingAnchor,
       repairAnchor,
       lanternAnchor,
-      chestAnchor,
+      ...(focusedIds.has(chestAnchor.id) ? [] : [chestAnchor]),
       ...(driftingLootAnchor === null ? [] : [driftingLootAnchor]),
+      ...focusedEventAnchors,
     ];
   }
 

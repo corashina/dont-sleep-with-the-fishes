@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Group,
   Mesh,
+  PointLight,
   Quaternion,
   Vector3,
 } from 'three';
@@ -79,6 +80,15 @@ describe('MidnightTourPresentation', () => {
       .toBeDefined();
     expect(island.getObjectByName('midnight-tour-rock-shelf-1')).toBeDefined();
     expect(island.getObjectByName('midnight-tour-shore-light')).toBeDefined();
+    expect(
+      (island.getObjectByName('midnight-tour-shore-light') as PointLight).intensity,
+    ).toBeGreaterThan(2);
+    expect(island.getObjectByName('midnight-tour-moon-fill')).toBeDefined();
+    expect(harness.presentation.interactionTargets()).toMatchObject([{
+      id: 'midnight-tour:island',
+      choiceId: 'visit',
+      root: island,
+    }]);
 
     harness.dispose();
   });

@@ -2,6 +2,7 @@ import {
   Group,
   Material,
   Mesh,
+  PointLight,
   PerspectiveCamera,
   SpotLight,
 } from 'three';
@@ -175,7 +176,7 @@ describe('OtherPeoplePresentation', () => {
     const harness = createHarness();
     harness.presentation.stage();
     const reveal = harness.presentation.reveal();
-    harness.presentation.update(0.12, 0.12);
+    harness.presentation.update(0.2, 0.2);
 
     expect(
       harness.presentation.root.getObjectByName(
@@ -216,14 +217,16 @@ describe('OtherPeoplePresentation', () => {
     const position = ship.position.clone();
     const quaternion = ship.quaternion.clone();
 
-    harness.presentation.update(100, 0);
-    harness.presentation.update(200, 0);
+    harness.presentation.update(100, 0.5);
 
-    expect(ship.position.toArray()).toEqual(position.toArray());
+    expect(ship.position.x).toBeGreaterThan(position.x);
+    expect(ship.position.x - position.x).toBeLessThan(0.5);
     expect(ship.quaternion.toArray()).toEqual(quaternion.toArray());
     expect(ship.userData.motionSource).toBe('steady-authored-path');
     expect(harness.presentation.root.userData.openWaterDistance)
       .toBeGreaterThan(15);
+    expect((ship.getObjectByName('other-people-ship-fill') as PointLight).intensity)
+      .toBeGreaterThan(2);
     harness.dispose();
   });
 

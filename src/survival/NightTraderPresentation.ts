@@ -178,6 +178,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     scaleZ: 1,
   };
   private readonly lanternLight: PointLight;
+  private readonly traderFillLight = new PointLight(0x9dbec7, 0, 22, 1.2);
   private readonly reflectionMaterial: MeshStandardMaterial;
   private readonly mistMaterial: MeshStandardMaterial;
   private activeAnimation: ActiveAnimation | null = null;
@@ -213,7 +214,11 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
+    this.traderFillLight.name = 'night-trader-cool-fill';
+    this.traderFillLight.position.set(0.45, 3.1, 2.4);
+    this.traderFillLight.castShadow = false;
     this.vesselContent.add(this.lantern);
+    this.vesselContent.add(this.traderFillLight);
     this.lanternReflection.name = 'night-trader-lantern-reflection';
     this.reflectionMaterial = createMaterial(0xd48746, 0.64, {
       emissive: 0x6b381a,
@@ -447,7 +452,8 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     if (progress > 0) {
       this.lantern.visible = true;
       this.lanternReflection.visible = true;
-      this.lanternLight.intensity = 2.7 * smoothstep(progress / 0.22);
+      this.lanternLight.intensity = 5.2 * smoothstep(progress / 0.22);
+      this.traderFillLight.intensity = 2.4 * smoothstep(progress / 0.32);
       this.reflectionMaterial.opacity = 0.34 * smoothstep(progress / 0.25);
       if ((this.root.userData.revealOrder as string[]).length === 0) {
         (this.root.userData.revealOrder as string[]).push('lantern');
@@ -545,8 +551,11 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.mistMaterial.opacity = Math.sin(
       smoothstep((progress - 0.32) / 0.68) * Math.PI,
     ) * 0.34;
-    this.lanternLight.intensity = 2.7 * (1 - smoothstep(
+    this.lanternLight.intensity = 5.2 * (1 - smoothstep(
       (progress - 0.52) / 0.48,
+    ));
+    this.traderFillLight.intensity = 2.4 * (1 - smoothstep(
+      (progress - 0.38) / 0.62,
     ));
     if (progress >= 1) {
       this.root.userData.refuseRows = 2;
@@ -785,6 +794,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.lantern.visible = false;
     this.lanternReflection.visible = false;
     this.lanternLight.intensity = 0;
+    this.traderFillLight.intensity = 0;
     this.reflectionMaterial.opacity = 0;
     this.caseLid.rotation.x = 0;
     this.traderHead.rotation.set(0, 0, -0.08);
@@ -841,10 +851,13 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   }
 
   private buildTrader(): void {
-    const cloth = createMaterial(0x1f282b, 0.98);
-    const clothEdge = createMaterial(0x354044, 0.96);
-    const leather = createMaterial(0x58402f, 0.96);
-    const iron = createMaterial(0x525b5a, 0.72, { metalness: 0.3 });
+    const cloth = createMaterial(0x35474d, 0.98, { emissive: 0x10191c });
+    const clothEdge = createMaterial(0x52646a, 0.96, { emissive: 0x172328 });
+    const leather = createMaterial(0x6d513b, 0.96, { emissive: 0x1c1008 });
+    const iron = createMaterial(0x626f6d, 0.72, {
+      metalness: 0.3,
+      emissive: 0x101718,
+    });
 
     const torso = new Mesh(
       new ConeGeometry(0.48, 1.3, 7),
@@ -961,13 +974,13 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.lantern.userData.modelKind = 'procedural';
     }
     this.lantern.position.set(-1.3, 0.72, 0.5);
-    const light = new PointLight(0xffae58, 0, 9, 1.8);
+    const light = new PointLight(0xffae58, 0, 14, 1.6);
     light.name = 'night-trader-lantern-light';
     light.position.y = 0.08;
     light.castShadow = true;
     light.shadow.mapSize.set(256, 256);
     light.shadow.camera.near = 0.08;
-    light.shadow.camera.far = 9;
+    light.shadow.camera.far = 14;
     light.shadow.camera.updateProjectionMatrix();
     this.lantern.add(light);
     return light;

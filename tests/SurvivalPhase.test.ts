@@ -2205,6 +2205,7 @@ describe('SurvivalPhase orchestration', () => {
     const calls: string[] = [];
     const beat = deferred();
     const focusedChoice = deferred();
+    const setEventSelection = vi.fn();
     const resolveEvent = vi.fn(() => {
       calls.push('resolve');
       current = snapshot({ state: 'day', pendingEventId: null, energy: 0 });
@@ -2223,7 +2224,7 @@ describe('SurvivalPhase orchestration', () => {
       beginEventPresentation: vi.fn(),
       setSleepCovered: vi.fn(() => Promise.resolve()),
       showEventReveal: vi.fn(() => Promise.resolve()),
-      setEventSelection: vi.fn(),
+      setEventSelection,
       playEventChoiceBeat: vi.fn(() => {
         calls.push('press');
         return beat.promise;
@@ -2262,6 +2263,15 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
+    expect(setEventSelection.mock.calls[0]![1]).toEqual([
+      {
+        id: 'visit',
+        label: 'Visit the Island',
+        unavailableReason: null,
+        anchorId: 'midnight-tour:island',
+      },
+      { id: 'sleep', label: 'Sail On', unavailableReason: null },
+    ]);
     ui.onEventChoice?.('visit');
     await flushPromises();
     expect(calls).toEqual(['press']);
@@ -2280,6 +2290,53 @@ describe('SurvivalPhase orchestration', () => {
       'resolve',
       'react',
     ]);
+  });
+
+  it('anchors Handyman Chest and Touch choices to their world subjects', async () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'handyman',
+      chest: { state: 'closed', acquiredDay: 4 },
+    });
+    const setEventSelection = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        setBusy: vi.fn(),
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(setEventSelection.mock.calls[0]![1]).toEqual([
+      {
+        id: 'chest',
+        label: 'Chest for Anchor',
+        unavailableReason: null,
+        anchorId: 'persistent-chest',
+      },
+      {
+        id: 'touch',
+        label: 'Touch the Hand',
+        unavailableReason: null,
+        anchorId: 'handyman:hand',
+      },
+      { id: 'sleep', label: 'Sleep', unavailableReason: null },
+    ]);
+    phase.dispose();
   });
 
   it('orders a focused contextual result before permanent sync and the held caption', async () => {
@@ -2389,6 +2446,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
+
     (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
     await flushPromises();
     expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);
@@ -2533,6 +2591,12 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
+    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([
+      ['map-1', 'map'],
+    ]);
+    expect(ui.setEventSelection.mock.calls[0]![1]).toEqual([
+      { id: 'sleep', label: 'Refuse', unavailableReason: null },
+    ]);
     phase.handleEventItem('map', 'map-1');
     await flushPromises();
     expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);

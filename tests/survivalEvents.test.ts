@@ -241,7 +241,7 @@ describe('survival events', () => {
     );
 
     expect(resultIds('chest-attack', 'fishingNet')).toEqual(['chest-bound']);
-    expect(resultIds('chest-attack', 'fight')).toEqual(['chest-fight']);
+    expect(event('chest-attack').choices.some(({ id }) => id === 'fight')).toBe(false);
     expect(resultIds('chest-attack', 'sleep')).toEqual(['chest-hide']);
     expect(event('midnight-tour').choices.find(({ id }) => id === 'visit')?.outcomes).toMatchObject([
       {
@@ -259,6 +259,16 @@ describe('survival events', () => {
     expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
       resultIds('night-trader', choiceId).every((resultId) => resultId === 'trader-reward')
     ))).toBe(true);
+    expect(event('night-trader').choices.slice(0, 4).map(({ id, itemId, label }) => ({
+      id,
+      itemId,
+      label,
+    }))).toEqual([
+      { id: 'food', itemId: 'cannedFood', label: 'Offer Food' },
+      { id: 'bait', itemId: 'baitTin', label: 'Offer Bait' },
+      { id: 'map', itemId: 'map', label: 'Offer Map' },
+      { id: 'umbrella', itemId: 'umbrella', label: 'Offer Umbrella' },
+    ]);
     expect(resultIds('night-trader', 'sleep')).toEqual(['trader-refuse']);
     expect(['spyglass', 'flashlight', 'flareGun', 'harpoonGun', 'scubaSet', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'anchor', 'chest']
       .every((choiceId) => resultIds('handyman', choiceId).every((resultId) => resultId === 'handyman-reward'))).toBe(true);
