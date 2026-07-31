@@ -31,7 +31,9 @@ import {
   type FocusedEventPresentationFactories,
   type FocusedEventPresentationFactory,
 } from './FocusedEventPresentation';
+import { HandymanPresentation } from './HandymanPresentation';
 import { MidnightTourPresentation } from './MidnightTourPresentation';
+import { NightTraderPresentation } from './NightTraderPresentation';
 
 interface ActiveEventAnimation {
   readonly kind: 'reveal' | 'react';
@@ -74,8 +76,6 @@ const TABLEAU_EVENT_IDS = [
   'chest-attack',
   'flowers',
   'midnight-tour',
-  'night-trader',
-  'handyman',
   'other-people',
   'death-stare',
 ] as const;
@@ -86,6 +86,8 @@ const REACTION_DURATION = 0.7;
 export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFactories = {
   'chest-attack': (dependencies) => new ChestAttackPresentation(dependencies),
   'midnight-tour': (dependencies) => new MidnightTourPresentation(dependencies),
+  'night-trader': (dependencies) => new NightTraderPresentation(dependencies),
+  handyman: (dependencies) => new HandymanPresentation(dependencies),
 };
 
 function createMaterial(
@@ -268,30 +270,6 @@ function islandTableau(materials: MaritimeMaterials): Group {
   return root;
 }
 
-function traderTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'trader-skiff-hull', new BoxGeometry(1.65, 0.35, 0.72), materials.darkWood, [0, -0.08, 0], [0, -0.12, 0], [1, 1, 0.82]);
-  addMesh(root, 'trader-skiff-prow', new ConeGeometry(0.38, 0.75, 4), materials.wood, [-1.12, -0.02, 0], [0, 0, Math.PI / 2]);
-  for (const x of [-0.48, 0.15]) {
-    addMesh(root, `trader-skiff-rib:${x}`, new BoxGeometry(0.08, 0.26, 0.82), materials.rope, [x, 0.12, 0]);
-  }
-  addMesh(root, 'trader-case', new BoxGeometry(0.62, 0.4, 0.2), materials.wood, [0.38, 0.37, -0.15], [-0.42, 0.08, 0]);
-  addMesh(root, 'trader-oar', new BoxGeometry(1.8, 0.055, 0.10), materials.wood, [0.1, 0.22, 0.52], [0, 0.25, -0.05]);
-  addMesh(root, 'trader-cloaked-silhouette', new ConeGeometry(0.34, 1.05, 6), materials.vessel, [-0.26, 0.75, -0.03], [0, 0.08, -0.04]);
-  addMesh(root, 'trader-cloaked-head', new SphereGeometry(0.19, 7, 5), materials.fishDark, [-0.26, 1.28, -0.03]);
-  return root;
-}
-
-function handTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'hand-palm', new BoxGeometry(0.55, 0.22, 0.72), materials.paper, [0, 0.16, 0], [0.06, -0.16, 0.02]);
-  for (let index = 0; index < 4; index += 1) {
-    addMesh(root, `hand-finger:${index}`, new CylinderGeometry(0.055, 0.07, 0.58 + index * 0.035, 6), materials.paper, [-0.24 + index * 0.16, 0.57, -0.08 + Math.abs(index - 1.5) * 0.03], [0.05, 0, -0.08 + index * 0.035]);
-  }
-  addMesh(root, 'hand-cuff', new CylinderGeometry(0.28, 0.34, 0.48, 7), materials.vessel, [0, -0.22, 0], [0, 0, 0.04], [1, 1, 0.82]);
-  return root;
-}
-
 function cargoVesselTableau(materials: MaritimeMaterials): Group {
   const root = new Group();
   addMesh(root, 'cargo-vessel-hull', new BoxGeometry(8.5, 1.05, 1.3), materials.vessel, [0, 0, 0], [0, 0.04, 0]);
@@ -373,8 +351,6 @@ export class EventPresentationLayer {
       createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
       createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
-      createTableau('night-trader', traderTableau(materials), [4.4, 0.02, -7.2], [1.6, -0.38, -0.5]),
-      createTableau('handyman', handTableau(materials), [-3.8, 0.05, -5.4], [-0.9, -0.52, 0.25]),
       createTableau('other-people', cargoVesselTableau(materials), [-9, 1.25, -48], [-5.2, -0.75, -1.5]),
       createTableau('death-stare', fishTableau(materials, true), [0, -0.8, -7.4], [0, -2.3, -1.4]),
     ];

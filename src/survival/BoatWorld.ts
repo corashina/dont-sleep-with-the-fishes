@@ -805,8 +805,8 @@ export class BoatWorld {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
     await Promise.all([
-      this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
+      this.eventPresentation.react(eventId, outcome),
     ]);
   }
 
@@ -1346,10 +1346,10 @@ export class BoatWorld {
       },
       () => this.cancelActiveSequence(),
       () => this.weatherEventAnimator.dispose(),
+      () => this.eventPresentation.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
-      () => this.eventPresentation.dispose(),
       () => this.driftingLootPresentation?.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
