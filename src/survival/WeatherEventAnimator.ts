@@ -64,10 +64,13 @@ type ActiveWeatherAnimation =
     };
 
 const REACTION_DURATION = 0.84;
-const CLOSE_FIGURE_Z = -3.2;
-const DISTANT_FIGURE_Z = -6.2;
-const REVEAL_FIGURE_X = -1.5;
+const DISTANT_FIGURE_Z = -9.2;
+const REVEAL_FIGURE_X = -2.1;
 const REVEAL_FIGURE_Y = 0;
+
+function isCameraOnlyEvent(eventId: string): boolean {
+  return eventId === 'restless-waves' || eventId === 'man-in-the-fog';
+}
 
 function clamp01(value: number): number {
   if (value <= 0 || !Number.isFinite(value)) return 0;
@@ -363,6 +366,19 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     resetItemSample(this.itemSample);
+    if (isCameraOnlyEvent(eventId)) {
+      return new Promise((resolve) => {
+        this.active = {
+          kind: 'item',
+          eventId,
+          choiceId,
+          instanceId,
+          elapsed: 0,
+          duration,
+          resolve,
+        };
+      });
+    }
     if (!this.supplyDisplay.pinEventActor(instanceId)) {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve(false);
@@ -399,6 +415,8 @@ export class WeatherEventAnimator {
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
     if (
+      !isCameraOnlyEvent(eventId)
+      &&
       response !== null
       && !this.supplyDisplay.pinEventActor(response.instanceId)
     ) {
@@ -477,9 +495,11 @@ export class WeatherEventAnimator {
       sample.cameraPitch,
       sample.cameraRoll,
     );
-    this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
+    if (!isCameraOnlyEvent(eventId)) {
+      this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
+    }
     if (eventId === 'man-in-the-fog') {
-      this.showSilhouette(sample.figureVisibility, sample.figureDistance, false);
+      this.showSilhouette(sample.figureVisibility);
     }
     if (eventId === 'thunderstorm' && sample.lightningEmphasis > 0.015) {
       this.lightningFlash.visible = true;
@@ -495,6 +515,17 @@ export class WeatherEventAnimator {
     progress: number,
   ): void {
     if (!sampleWeatherItemUse(eventId, choiceId, progress, this.itemSample)) return;
+    if (isCameraOnlyEvent(eventId)) {
+      this.applyCameraPose(
+        0,
+        0,
+        -this.itemSample.cameraPush,
+        this.itemSample.cameraYaw,
+        0,
+        0,
+      );
+      return;
+    }
     this.supplyDisplay.applyEventItemPose(instanceId, this.itemSample);
     this.supplyDisplay.applyEventAmbientPose(this.itemSample.supplyRoll, 0);
     if (this.itemSample.cameraYaw !== 0 || this.itemSample.cameraPush !== 0) {
@@ -556,50 +587,28 @@ export class WeatherEventAnimator {
     const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
     const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
     const fogAttack = eventId === 'man-in-the-fog' && healthDamage < 0;
-    const lostSupply = eventId === 'restless-waves'
-      && response?.condition === 'lost';
-    const brokenRing = eventId === 'restless-waves'
-      && response?.choiceId === 'swimRing'
-      && response.condition === 'broken';
 
-    if (brokenRing) {
-      const compression = smoothstep((progress - 0.04) / 0.36);
-      const buckle = pulse(progress, 0.02, 0.24, 0.54);
-      this.itemSample.y = -0.09 * compression;
-      this.itemSample.yaw = -0.3 * compression;
-      this.itemSample.roll = 0.34 * compression + 0.08 * buckle;
-      this.itemSample.scaleX = 1 - 0.3 * compression;
-      this.itemSample.scaleY = 1 - 0.36 * compression;
-      this.itemSample.scaleZ = 1 + 0.08 * compression;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
-    } else if (response?.condition === 'broken') {
-      const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
-        * (1 - smoothstep((progress - 0.46) / 0.54));
-      this.itemSample.y = -0.12 * settle;
-      this.itemSample.roll = 0.26 * settle;
-      this.itemSample.scaleY = 1 - 0.08 * settle;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
-    } else if (lostSupply) {
-      const departure = smoothstep((progress - 0.08) / 0.82);
-      this.itemSample.x = 1.8 * departure;
-      this.itemSample.y = 0.16 * departure;
-      this.itemSample.z = 0.15 * departure;
-      this.itemSample.yaw = 0.5 * departure;
-      this.itemSample.roll = -0.2 * departure;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
-    } else if (response?.condition === 'lost' || response?.condition === 'consumed') {
-      const departure = smoothstep((progress - 0.08) / 0.82);
-      this.itemSample.x = -1.8 * departure;
-      this.itemSample.y = 0.52 * departure;
-      this.itemSample.z = -1.25 * departure;
-      this.itemSample.yaw = 1.1 * departure;
-      this.itemSample.roll = -0.55 * departure;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+    if (!isCameraOnlyEvent(eventId)) {
+      if (response?.condition === 'broken') {
+        const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
+          * (1 - smoothstep((progress - 0.46) / 0.54));
+        this.itemSample.y = -0.12 * settle;
+        this.itemSample.roll = 0.26 * settle;
+        this.itemSample.scaleY = 1 - 0.08 * settle;
+        this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+      } else if (response?.condition === 'lost' || response?.condition === 'consumed') {
+        const departure = smoothstep((progress - 0.08) / 0.82);
+        this.itemSample.x = -1.8 * departure;
+        this.itemSample.y = 0.52 * departure;
+        this.itemSample.z = -1.25 * departure;
+        this.itemSample.yaw = 1.1 * departure;
+        this.itemSample.roll = -0.55 * departure;
+        this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+      }
     }
 
     if (fogAttack) {
       const grab = pulse(progress, 0.08, 0.44, 0.9);
-      this.showSilhouette(grab, grab, true);
       this.applyCameraPose(
         -0.14 * grab,
         0.05 * grab,
@@ -651,25 +660,16 @@ export class WeatherEventAnimator {
     this.cameraRig.rotateZ(roll);
   }
 
-  private showSilhouette(visibility: number, distance: number, close: boolean): void {
+  private showSilhouette(visibility: number): void {
     if (visibility <= 0.015) return;
     this.silhouette.visible = true;
-    this.figureMaterial.opacity = Math.min(0.96, visibility * 0.94);
-    if (close) {
-      this.silhouette.position.set(
-        1.15 - distance * 0.28,
-        -0.14,
-        DISTANT_FIGURE_Z + (CLOSE_FIGURE_Z - DISTANT_FIGURE_Z) * distance,
-      );
-      this.silhouette.scale.setScalar(1 + distance * 0.34);
-      return;
-    }
+    this.figureMaterial.opacity = Math.min(0.38, visibility * 0.36);
     this.silhouette.position.set(
-      REVEAL_FIGURE_X - distance * 0.25,
+      REVEAL_FIGURE_X,
       REVEAL_FIGURE_Y,
-      DISTANT_FIGURE_Z + distance * 1.6,
+      DISTANT_FIGURE_Z,
     );
-    this.silhouette.scale.setScalar(1);
+    this.silhouette.scale.setScalar(0.86);
   }
 
   private rememberCameraBase(): void {

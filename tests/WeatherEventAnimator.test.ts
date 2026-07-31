@@ -1,7 +1,6 @@
 // Importance: 4/5. Protects readable fog staging and camera-safe flashlight motion.
 import { describe, expect, it, vi } from 'vitest';
 import {
-  Box3,
   BoxGeometry,
   Group,
   Mesh,
@@ -49,6 +48,7 @@ function createEventModels(): EventModelLibrary {
 
 function createAnimator(canPinEventActor = true) {
   const cameraRig = new Group();
+  const supplyDisplay = createSupplyDisplay(canPinEventActor);
   const camera = new PerspectiveCamera(65, 1280 / 720, 0.08, 1000);
   camera.position.set(0, 0.88, 1.72);
   camera.lookAt(new Vector3(0, 0.88, -1.55));
@@ -56,14 +56,14 @@ function createAnimator(canPinEventActor = true) {
   cameraRig.add(camera);
   const animator = new WeatherEventAnimator(
     cameraRig,
-    createSupplyDisplay(canPinEventActor),
+    supplyDisplay,
     createEventModels(),
   );
-  return { animator, camera, cameraRig };
+  return { animator, camera, cameraRig, supplyDisplay };
 }
 
 describe('WeatherEventAnimator fog staging', () => {
-  it('keeps the normalized fog man large, central, and high-contrast at reveal', async () => {
+  it('keeps the normalized fog man distant and faint during its longer reveal', async () => {
     const { animator, camera } = createAnimator();
     animator.stage('man-in-the-fog');
     const reveal = animator.reveal('man-in-the-fog');
@@ -78,22 +78,13 @@ describe('WeatherEventAnimator fog staging', () => {
     const screen = projectObjectScreenBounds(silhouette, camera, 1280, 720);
     expect(silhouette.visible).toBe(true);
     expect(screen.visible).toBe(true);
-    expect(screen.width).toBeGreaterThanOrEqual(150);
-    expect(screen.width).toBeLessThanOrEqual(320);
-    expect(screen.height).toBeGreaterThanOrEqual(160);
-    expect(screen.height).toBeLessThanOrEqual(340);
-    expect(screen.x).toBeGreaterThanOrEqual(440);
-    expect(screen.x).toBeLessThanOrEqual(840);
-    expect(screen.y).toBeGreaterThanOrEqual(240);
-    expect(screen.y).toBeLessThanOrEqual(520);
-    expect(figure.material.opacity).toBeGreaterThanOrEqual(0.9);
-    expect(
-      Math.max(
-        figure.material.emissive.r,
-        figure.material.emissive.g,
-        figure.material.emissive.b,
-      ) * figure.material.emissiveIntensity,
-    ).toBeGreaterThanOrEqual(0.12);
+    expect(screen.width).toBeGreaterThanOrEqual(80);
+    expect(screen.width).toBeLessThanOrEqual(180);
+    expect(screen.height).toBeGreaterThanOrEqual(80);
+    expect(screen.height).toBeLessThanOrEqual(200);
+    expect(silhouette.position.z).toBeLessThanOrEqual(-9);
+    expect(figure.material.opacity).toBeGreaterThan(0.2);
+    expect(figure.material.opacity).toBeLessThanOrEqual(0.38);
 
     animator.clear();
     await reveal;
@@ -101,8 +92,8 @@ describe('WeatherEventAnimator fog staging', () => {
     animator.dispose();
   });
 
-  it('keeps the flashlight beam wholly forward and the figure hidden during use', async () => {
-    const { animator } = createAnimator();
+  it('uses only the camera during a fog Flashlight choice', async () => {
+    const { animator, cameraRig, supplyDisplay } = createAnimator();
     animator.stage('man-in-the-fog');
     const itemUse = animator.playItemUse(
       'man-in-the-fog',
@@ -113,11 +104,12 @@ describe('WeatherEventAnimator fog staging', () => {
     animator.update(0.675, 0.675);
 
     const beam = animator.boatRoot.getObjectByName('weather-flashlight-beam-cone')!;
-    const bounds = new Box3().setFromObject(beam);
-    expect(beam.parent?.visible).toBe(true);
-    expect(bounds.max.z).toBeLessThanOrEqual(-0.35);
+    expect(beam.parent?.visible).toBe(false);
     expect(animator.worldRoot.getObjectByName('fog-man-silhouette')?.visible)
       .toBe(false);
+    expect(Math.abs(cameraRig.rotation.y)).toBeGreaterThan(0.05);
+    expect(supplyDisplay.pinEventActor).not.toHaveBeenCalled();
+    expect(supplyDisplay.applyEventItemPose).not.toHaveBeenCalled();
 
     animator.clear();
     await expect(itemUse).resolves.toBe(false);
@@ -126,6 +118,25 @@ describe('WeatherEventAnimator fog staging', () => {
 });
 
 describe('WeatherEventAnimator itemless outcome reactions', () => {
+  it('keeps Restless Waves supplies fixed during reveal and item use', async () => {
+    const { animator, cameraRig, supplyDisplay } = createAnimator();
+    animator.stage('restless-waves');
+    const reveal = animator.reveal('restless-waves');
+    animator.update(1.9, 1.9);
+    expect(supplyDisplay.applyEventAmbientPose).not.toHaveBeenCalled();
+    animator.clear();
+    await reveal;
+
+    const itemUse = animator.playItemUse('restless-waves', 'anchor', 'anchor-1');
+    animator.update(0.875, 0.875);
+    expect(cameraRig.position.z).toBeLessThan(0);
+    expect(supplyDisplay.pinEventActor).not.toHaveBeenCalled();
+    expect(supplyDisplay.applyEventItemPose).not.toHaveBeenCalled();
+    animator.clear();
+    await expect(itemUse).resolves.toBe(false);
+    animator.dispose();
+  });
+
   it('shows a Restless Waves hull impact without an item actor', async () => {
     const { animator, cameraRig } = createAnimator(false);
     animator.stage('restless-waves');
@@ -176,7 +187,7 @@ describe('WeatherEventAnimator itemless outcome reactions', () => {
     animator.dispose();
   });
 
-  it('shows and clears a Man in the Fog attack without an item actor', async () => {
+  it('uses only camera motion for a Man in the Fog attack', async () => {
     const { animator, cameraRig } = createAnimator(false);
     animator.stage('man-in-the-fog');
 
@@ -194,7 +205,7 @@ describe('WeatherEventAnimator itemless outcome reactions', () => {
     animator.update(0.37, 0.37);
 
     const silhouette = animator.worldRoot.getObjectByName('fog-man-silhouette')!;
-    expect(silhouette.visible).toBe(true);
+    expect(silhouette.visible).toBe(false);
     expect(cameraRig.position.x).toBeLessThan(-0.1);
 
     animator.update(0.84, 0.47);

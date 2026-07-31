@@ -33,7 +33,7 @@ const itemSample = (): SupernaturalItemSample => ({
 const reactionSample = (): SupernaturalReactionSample => ({
   cameraX: 0, cameraY: 0, cameraZ: 0,
   cameraYaw: 0, cameraPitch: 0, cameraRoll: 0,
-  ghostVisibility: 0, ghostFocus: -1,
+  ghostVisibility: 0, ghostAdvance: 0,
   flareFlash: 0, fogCurtain: 0,
   sirenLunge: 0, sirenStrike: 0,
 });
@@ -53,11 +53,41 @@ describe('supernatural event choreography', () => {
     expect(supernaturalRevealDuration('eerie-melody')).toBe(4.4);
   });
 
-  it('brings five Ghosts in at distinct distances', () => {
+  it('flies five Ghosts across the ocean at distinct distances', () => {
+    const early = revealSample();
     const output = revealSample();
+    sampleSupernaturalReveal('ghosts', 0.2, early);
     expect(sampleSupernaturalReveal('ghosts', 0.9, output)).toBe(true);
     expect(new Set(output.ghostDistances.map((value) => value.toFixed(3))).size).toBe(5);
-    expect(output.ghostDistances[0]).toBeGreaterThan(0.9);
+    expect(output.ghostDistances.every((value) => value > 5)).toBe(true);
+    expect(output.ghostSideOffsets[0]).toBeGreaterThan(early.ghostSideOffsets[0]);
+    expect(output.ghostSideOffsets[1]).toBeLessThan(early.ghostSideOffsets[1]);
+  });
+
+  it('charges Ghosts only after a wrong choice', () => {
+    const flare = reactionSample();
+    const flashlight = reactionSample();
+    const sleep = reactionSample();
+    sampleSupernaturalReaction(
+      'ghosts',
+      { deltas: {} },
+      { choiceId: 'flareGun', condition: 'consumed' },
+      0.5,
+      flare,
+    );
+    sampleSupernaturalReaction(
+      'ghosts',
+      { deltas: {} },
+      { choiceId: 'flashlight', condition: 'usable' },
+      0.5,
+      flashlight,
+    );
+    sampleSupernaturalReaction('ghosts', { deltas: { energy: 1 } }, undefined, 0.5, sleep);
+    expect(flare.ghostVisibility).toBe(0);
+    expect(flare.ghostAdvance).toBe(0);
+    expect(flashlight.ghostVisibility).toBeGreaterThan(0);
+    expect(flashlight.ghostAdvance).toBeGreaterThan(0);
+    expect(sleep.ghostAdvance).toBeGreaterThan(0);
   });
 
   it('draws the fog curtain before the siren turns', () => {

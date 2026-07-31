@@ -49,7 +49,7 @@ export interface SupernaturalReactionSample {
   cameraPitch: number;
   cameraRoll: number;
   ghostVisibility: number;
-  ghostFocus: number;
+  ghostAdvance: number;
   flareFlash: number;
   fogCurtain: number;
   sirenLunge: number;
@@ -71,12 +71,12 @@ const ITEM_DURATIONS = Object.freeze({
   }),
 });
 
-const GHOST_TARGETS = Object.freeze([
-  [-2.2, 1.05, -3.4],
-  [3.8, 1.2, -8.2],
-  [-5.4, 1.35, -10.5],
-  [1.2, 1.55, -13.2],
-  [6.1, 1.3, -15.4],
+export const GHOST_FLIGHT_PATHS = Object.freeze([
+  Object.freeze({ start: [-7.2, 0.92, -6.2] as const, end: [6.4, 1.18, -7.1] as const }),
+  Object.freeze({ start: [7.4, 1.2, -8.4] as const, end: [-5.8, 0.98, -9.1] as const }),
+  Object.freeze({ start: [-6.3, 1.28, -11.2] as const, end: [4.8, 1.5, -10.4] as const }),
+  Object.freeze({ start: [6.1, 1.52, -13.4] as const, end: [-4.7, 1.26, -12.2] as const }),
+  Object.freeze({ start: [-4.2, 1.04, -15.2] as const, end: [6.7, 1.42, -14.1] as const }),
 ] as const);
 
 function clamp01(value: number): number {
@@ -165,7 +165,7 @@ function resetReaction(output: SupernaturalReactionSample): void {
   output.cameraPitch = 0;
   output.cameraRoll = 0;
   output.ghostVisibility = 0;
-  output.ghostFocus = -1;
+  output.ghostAdvance = 0;
   output.flareFlash = 0;
   output.fogCurtain = 0;
   output.sirenLunge = 0;
@@ -180,16 +180,6 @@ function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number)
   output.cameraPitch *= envelope;
   output.cameraRoll *= envelope;
   output.ghostVisibility *= envelope;
-  output.ghostDistances[0] *= envelope;
-  output.ghostDistances[1] *= envelope;
-  output.ghostDistances[2] *= envelope;
-  output.ghostDistances[3] *= envelope;
-  output.ghostDistances[4] *= envelope;
-  output.ghostSideOffsets[0] *= envelope;
-  output.ghostSideOffsets[1] *= envelope;
-  output.ghostSideOffsets[2] *= envelope;
-  output.ghostSideOffsets[3] *= envelope;
-  output.ghostSideOffsets[4] *= envelope;
   output.flareFlash *= envelope;
   output.fogCurtain *= envelope;
   output.sirenHeadTurn *= envelope;
@@ -213,20 +203,20 @@ export function sampleSupernaturalReveal(
   if (t === 0 || t === 1) return true;
 
   if (eventId === 'ghosts') {
-    const ghosts = smoothstep((t - 0.14) / 0.58);
+    const ghosts = smoothstep((t - 0.06) / 0.18)
+      * (1 - smoothstep((t - 0.84) / 0.12));
+    const flight = smoothstep((t - 0.08) / 0.76);
     output.cameraYaw = 0.18 * smoothstep(t / 0.38);
     output.cameraPitch = -0.06 * smoothstep((t - 0.22) / 0.42);
     output.ghostVisibility = ghosts;
-    output.ghostDistances[0] = -GHOST_TARGETS[0][2] * ghosts;
-    output.ghostDistances[1] = -GHOST_TARGETS[1][2] * ghosts;
-    output.ghostDistances[2] = -GHOST_TARGETS[2][2] * ghosts;
-    output.ghostDistances[3] = -GHOST_TARGETS[3][2] * ghosts;
-    output.ghostDistances[4] = -GHOST_TARGETS[4][2] * ghosts;
-    output.ghostSideOffsets[0] = GHOST_TARGETS[0][0] * ghosts;
-    output.ghostSideOffsets[1] = GHOST_TARGETS[1][0] * ghosts;
-    output.ghostSideOffsets[2] = GHOST_TARGETS[2][0] * ghosts;
-    output.ghostSideOffsets[3] = GHOST_TARGETS[3][0] * ghosts;
-    output.ghostSideOffsets[4] = GHOST_TARGETS[4][0] * ghosts;
+    for (let index = 0; index < GHOST_FLIGHT_PATHS.length; index += 1) {
+      const path = GHOST_FLIGHT_PATHS[index]!;
+      output.ghostDistances[index] = -(
+        path.start[2] + (path.end[2] - path.start[2]) * flight
+      );
+      output.ghostSideOffsets[index] = path.start[0]
+        + (path.end[0] - path.start[0]) * flight;
+    }
     output.flareFlash = pulse(t, 0.34, 0.47, 0.62);
   } else {
     const curtain = smoothstep((t - 0.12) / 0.42);
@@ -339,14 +329,15 @@ export function sampleSupernaturalReaction(
   const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
   const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
   const attack = hullDamage < 0 || healthDamage < 0;
-  const tiring = outcome.deltas.energy !== undefined;
   const envelope = smoothstep(t / 0.12) * (1 - smoothstep((t - 0.76) / 0.24));
 
   if (eventId === 'ghosts') {
-    output.ghostVisibility = attack || tiring ? 1 : 1 - smoothstep(t / 0.56);
-    output.ghostFocus = response?.choiceId === 'flashlight' || tiring ? 0 : -1;
+    const wrongChoice = response?.choiceId !== 'flareGun';
+    output.ghostVisibility = wrongChoice ? 1 : 0;
+    output.ghostAdvance = wrongChoice ? smoothstep((t - 0.08) / 0.68) : 0;
     output.flareFlash = response?.choiceId === 'flareGun' ? pulse(t, 0.1, 0.32, 0.6) : 0;
-    output.cameraRoll = attack ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
+    output.cameraZ = wrongChoice ? 0.12 * output.ghostAdvance : 0;
+    output.cameraRoll = wrongChoice ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
   } else if (attack) {
     output.sirenLunge = pulse(t, 0.14, 0.48, 0.88);
     output.sirenStrike = pulse(t, 0.36, 0.52, 0.72);
@@ -364,6 +355,7 @@ export function sampleSupernaturalReaction(
   output.cameraPitch *= envelope;
   output.cameraRoll *= envelope;
   output.ghostVisibility *= envelope;
+  output.ghostAdvance *= envelope;
   output.flareFlash *= envelope;
   output.fogCurtain *= envelope;
   output.sirenLunge *= envelope;

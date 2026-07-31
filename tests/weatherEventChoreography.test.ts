@@ -65,14 +65,28 @@ describe('weather event choreography', () => {
     expect(Math.abs(held.cameraRoll)).toBeGreaterThan(0.06);
   });
 
-  it('shows and then hides the fog figure before choices appear', () => {
+  it('holds the distant fog figure longer, then hides it before choices appear', () => {
     const middle = reveal();
+    const held = reveal();
     const choices = reveal();
     sampleWeatherReveal('man-in-the-fog', 0.55, middle);
-    sampleWeatherReveal('man-in-the-fog', 0.86, choices);
+    sampleWeatherReveal('man-in-the-fog', 0.86, held);
+    sampleWeatherReveal('man-in-the-fog', 0.99, choices);
     expect(middle.figureVisibility).toBeGreaterThan(0.7);
-    expect(choices.figureVisibility).toBe(0);
+    expect(held.figureVisibility).toBeGreaterThan(0.7);
+    expect(choices.figureVisibility).toBeLessThan(0.02);
+    expect(middle.figureDistance).toBe(0);
   });
+
+  it.each(['restless-waves', 'man-in-the-fog'])(
+    'keeps supplies fixed during the %s reveal',
+    (eventId) => {
+      const output = reveal();
+      sampleWeatherReveal(eventId, 0.5, output);
+      expect(output.supplyRoll).toBe(0);
+      expect(output.supplyLift).toBe(0);
+    },
+  );
 
   it.each([
     'shower-night', 'windy-night', 'thunderstorm',
@@ -143,9 +157,11 @@ describe('weather event choreography', () => {
     expect(spyglass.effectKind).toBe('spyglass-optical-push');
     expect(spyglass.cameraPush).toBeGreaterThan(0.1);
     expect(earlyAnchor.effectKind).toBe('wave-anchor-stabilize');
-    expect(Math.abs(heldAnchor.supplyRoll)).toBeLessThan(
-      Math.abs(earlyAnchor.supplyRoll),
-    );
+    expect(heldAnchor.x).toBe(0);
+    expect(heldAnchor.y).toBe(0);
+    expect(heldAnchor.z).toBe(0);
+    expect(heldAnchor.supplyRoll).toBe(0);
+    expect(Math.abs(earlyAnchor.cameraYaw) + earlyAnchor.cameraPush).toBeGreaterThan(0.01);
   });
 
   it('distinguishes repeated physical items by event semantics', () => {

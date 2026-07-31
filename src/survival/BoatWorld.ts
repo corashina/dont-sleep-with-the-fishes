@@ -255,7 +255,7 @@ const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
 const MOON_FACE_REVEAL_DURATION = 3.8;
 const MOON_FACE_REACTION_DURATION = 1.1;
 const MOON_FACE_HOLD_FRACTION = 0.2;
-const MOON_FACE_BASE_GRIN = 0.36;
+const MOON_FACE_BASE_GRIN = 0.58;
 const MOON_FACE_STAR_SCALE = 0.28;
 const MOON_FACE_MOON_SCALE = 3.6;
 const MOON_FACE_PRESSURE_GRIN = 0.88;
@@ -539,6 +539,14 @@ export class BoatWorld {
     dim: 0,
     scale: 1,
   };
+  private readonly moonFaceDisplay = {
+    reveal: 0,
+    grin: 0,
+    starScale: 1,
+    dim: 0,
+    scale: 1,
+  };
+  private moonPulseElapsed = 0;
   private moonCameraLower = 0;
   private moonEventStaged = false;
   private readonly moonPhysicalResponsePose: EventPhysicalResponsePose = {
@@ -1977,6 +1985,7 @@ export class BoatWorld {
 
   private updateMoonEvent(delta: number): void {
     if (!this.moonEventStaged) return;
+    this.moonPulseElapsed += Math.max(0, Number.isFinite(delta) ? delta : 0);
     const animation = this.activeMoonAnimation;
     if (animation !== null) {
       animation.elapsed = Math.min(
@@ -2070,10 +2079,20 @@ export class BoatWorld {
     this.moonFace.dim = 0;
     this.moonFace.scale = 1;
     this.moonCameraLower = 0;
+    this.moonPulseElapsed = 0;
   }
 
   private applyMoonPresentation(): void {
-    this.sky.setMoonFace(this.moonFace);
+    const pulse = this.moonFace.reveal * (
+      Math.sin(this.moonPulseElapsed * 1.45) * 0.065
+      + Math.sin(this.moonPulseElapsed * 3.17 + 1.1) * 0.025
+    );
+    this.moonFaceDisplay.reveal = this.moonFace.reveal;
+    this.moonFaceDisplay.grin = clamp(this.moonFace.grin + pulse, 0, 1);
+    this.moonFaceDisplay.starScale = this.moonFace.starScale;
+    this.moonFaceDisplay.dim = this.moonFace.dim;
+    this.moonFaceDisplay.scale = this.moonFace.scale;
+    this.sky.setMoonFace(this.moonFaceDisplay);
     this.cameraRig.position.y -= this.moonCameraLower;
   }
 
