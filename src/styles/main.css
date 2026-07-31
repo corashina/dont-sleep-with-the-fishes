@@ -1350,19 +1350,46 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   pointer-events: none;
 }
 .sleep-cover.is-covered { opacity: 1; }
-.sleep-cover [data-dream-shutter] {
+.sleep-cover [data-dream-eyelid] {
   position: absolute;
-  left: 0;
-  width: 100%;
+  left: -6%;
+  width: 112%;
+  height: 62%;
   background: #010202;
-  box-shadow: inset 0 -2px #172126;
+  will-change: transform;
 }
-.sleep-cover [data-dream-shutter="top"] { top: -12%; height: 48%; }
-.sleep-cover [data-dream-shutter="middle"] { top: 31%; height: 38%; }
-.sleep-cover [data-dream-shutter="bottom"] { top: 64%; height: 48%; }
-.sleep-cover[data-profile="bad-sleep"] [data-dream-shutter="top"] { top: -12%; height: 40%; }
-.sleep-cover[data-profile="bad-sleep"] [data-dream-shutter="middle"] { top: 36%; height: 28%; }
-.sleep-cover[data-profile="bad-sleep"] [data-dream-shutter="bottom"] { top: 72%; height: 40%; }
+.sleep-cover [data-dream-eyelid="top"] {
+  top: -12%;
+  border-radius: 0 0 48% 55%;
+  box-shadow: inset 0 -3px #172126;
+}
+.sleep-cover [data-dream-eyelid="bottom"] {
+  bottom: -12%;
+  border-radius: 52% 46% 0 0;
+  box-shadow: inset 0 3px #172126;
+}
+.sleep-cover[data-profile="bad-sleep"].is-covered [data-dream-eyelid="top"] {
+  animation: bad-sleep-top-eyelid 3.4s cubic-bezier(.38, .04, .22, 1) forwards;
+}
+.sleep-cover[data-profile="bad-sleep"].is-covered [data-dream-eyelid="bottom"] {
+  animation: bad-sleep-bottom-eyelid 3.4s cubic-bezier(.38, .04, .22, 1) forwards;
+}
+@keyframes bad-sleep-top-eyelid {
+  0% { transform: translateY(0); }
+  18% { transform: translateY(-34%); }
+  43% { transform: translateY(-18%); }
+  58% { transform: translateY(-32%); }
+  76% { transform: translateY(-23%); }
+  100% { transform: translateY(-20%); }
+}
+@keyframes bad-sleep-bottom-eyelid {
+  0% { transform: translateY(0); }
+  21% { transform: translateY(31%); }
+  46% { transform: translateY(16%); }
+  61% { transform: translateY(29%); }
+  78% { transform: translateY(21%); }
+  100% { transform: translateY(18%); }
+}
 .ending-overlay { z-index: 21; }
 .pause-overlay { z-index: 22; }
 .survival-meters {

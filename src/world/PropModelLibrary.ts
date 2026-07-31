@@ -27,12 +27,6 @@ import {
   type PracticalLightModelId,
 } from './practicalLightModelManifest';
 import {
-  EVENT_MODEL_IDS,
-  EVENT_MODEL_SPECS,
-  type EventModelId,
-  type EventRuntimeModelSpec,
-} from './eventModelManifest';
-import {
   collectMeshResources,
   disposeResourceSets,
 } from './SceneResources';
@@ -44,7 +38,7 @@ import {
 } from './PropAnimation';
 
 type RuntimeModelId = ItemId | LifeboatEquipmentId | PracticalLightModelId;
-type ModelId = RuntimeModelId | EventModelId;
+type ModelId = RuntimeModelId;
 const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
   ...ITEM_IDS,
   ...LIFEBOAT_EQUIPMENT_IDS,
@@ -117,8 +111,8 @@ function attemptCleanup(action: () => void): void {
 
 function validateSpec(
   id: ModelId,
-  spec: EventRuntimeModelSpec | RuntimeModelSpec | undefined,
-): EventRuntimeModelSpec | RuntimeModelSpec {
+  spec: RuntimeModelSpec | undefined,
+): RuntimeModelSpec {
   if (!spec) throw new ItemModelLoadError(id as RuntimeModelId, 'manifest entry is missing');
   const metadata = spec.generatedMetadata;
   if (
@@ -168,7 +162,7 @@ function finiteBox(box: Box3): boolean {
 function normalizeTemplate(
   id: ModelId,
   root: Group,
-  spec: EventRuntimeModelSpec | RuntimeModelSpec,
+  spec: RuntimeModelSpec,
 ): number {
   root.rotation.set(...spec.rotation);
   root.updateMatrixWorld(true);
@@ -259,11 +253,6 @@ export interface PropPresentation {
   dispose(): void;
 }
 
-export interface EventModelPresentation {
-  readonly root: Group;
-  readonly animations: readonly AnimationClip[];
-}
-
 function validateAnimations(
   id: ModelId,
   animations: readonly AnimationClip[],
@@ -301,7 +290,6 @@ export class PropModelLibrary {
     private readonly itemTemplates: ReadonlyMap<ItemId, ModelTemplate>,
     private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, ModelTemplate>,
     private readonly practicalLightTemplates: ReadonlyMap<PracticalLightModelId, ModelTemplate>,
-    private readonly eventTemplates: ReadonlyMap<EventModelId, ModelTemplate>,
   ) {}
 
   static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
@@ -311,7 +299,7 @@ export class PropModelLibrary {
 
     const loadTemplate = async (
       id: ModelId,
-      spec: EventRuntimeModelSpec | RuntimeModelSpec,
+      spec: RuntimeModelSpec,
     ): Promise<LoadedTemplate> => {
       const loadedModel = await loader.load(spec.url);
       const root = loadedModel.scene;
@@ -327,15 +315,13 @@ export class PropModelLibrary {
       }
     };
 
-    const [results, eventResults] = await Promise.all([
-      Promise.allSettled(RUNTIME_MODEL_IDS.map((id) => loadTemplate(id, runtimeModelSpec(id)))),
-      Promise.allSettled(EVENT_MODEL_IDS.map((id) => loadTemplate(id, EVENT_MODEL_SPECS[id]))),
-    ]);
+    const results = await Promise.allSettled(
+      RUNTIME_MODEL_IDS.map((id) => loadTemplate(id, runtimeModelSpec(id))),
+    );
 
-    const fulfilledRoots = [
-      ...results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []),
-      ...eventResults.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []),
-    ];
+    const fulfilledRoots = results.flatMap(
+      (result) => result.status === 'fulfilled' ? [result.value.root] : [],
+    );
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
       const id = RUNTIME_MODEL_IDS[firstFailureIndex]!;
@@ -361,15 +347,6 @@ export class PropModelLibrary {
       }
     }
 
-    const eventTemplates = new Map<EventModelId, ModelTemplate>();
-    eventResults.forEach((result, index) => {
-      if (result.status !== 'fulfilled') return;
-      eventTemplates.set(EVENT_MODEL_IDS[index]!, {
-        root: result.value.root,
-        animations: result.value.animations,
-      });
-    });
-
     return new PropModelLibrary(
       new Map(ITEM_IDS.map((id, index) => [id, {
         root: loaded[index]!.root,
@@ -389,7 +366,6 @@ export class PropModelLibrary {
           animations: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.animations,
         },
       ])),
-      eventTemplates,
     );
   }
 
@@ -406,7 +382,6 @@ export class PropModelLibrary {
       ])),
       new Map([...equipmentTemplates].map(([id, root]) => [id, { root, animations: [] }])),
       new Map([...practicalLightTemplates].map(([id, root]) => [id, { root, animations: [] }])),
-      new Map(),
     );
   }
 
@@ -480,15 +455,6 @@ export class PropModelLibrary {
     return clone;
   }
 
-  createEventModel(id: EventModelId): EventModelPresentation | null {
-    const template = this.eventTemplates.get(id);
-    if (template === undefined) return null;
-    return {
-      root: cloneOwnedTemplate(template.root),
-      animations: template.animations,
-    };
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -496,7 +462,6 @@ export class PropModelLibrary {
       ...[...this.itemTemplates.values()].map(({ root }) => root),
       ...[...this.equipmentTemplates.values()].map(({ root }) => root),
       ...[...this.practicalLightTemplates.values()].map(({ root }) => root),
-      ...[...this.eventTemplates.values()].map(({ root }) => root),
     ]);
   }
 }

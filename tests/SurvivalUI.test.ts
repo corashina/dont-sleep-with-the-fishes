@@ -545,7 +545,7 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
-  it('opens narrow Bad Sleep gaps while keeping event controls visible', async () => {
+  it('uses uneven Bad Sleep eyelids while keeping event controls visible', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -557,12 +557,15 @@ describe('SurvivalUI', () => {
     const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
     const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
     expect(cover.dataset.profile).toBe('bad-sleep');
-    expect(mount.querySelectorAll('[data-dream-shutter]')).toHaveLength(3);
+    expect(mount.querySelectorAll('[data-dream-eyelid]')).toHaveLength(2);
     expect(endure.hidden).toBe(false);
     endure.focus();
     expect(document.activeElement).toBe(endure);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
+    expect(mainStyles).toMatch(/@keyframes bad-sleep-top-eyelid/);
+    expect(mainStyles).toMatch(/@keyframes bad-sleep-bottom-eyelid/);
+    expect(mainStyles).not.toMatch(/\.sleep-cover\[data-profile="bad-sleep"\][^{]*\{[^}]*blur/s);
   });
 
   it('reuses the event caption for the exact held result', async () => {
