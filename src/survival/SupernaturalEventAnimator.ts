@@ -63,9 +63,9 @@ type ActiveSupernaturalAnimation =
     };
 
 const REACTION_DURATION = 0.84;
-const SIREN_ROCK_X = 4.6;
+const SIREN_ROCK_X = 1.85;
 const SIREN_ROCK_Y = 0.3;
-const SIREN_ROCK_Z = -11;
+const SIREN_ROCK_Z = -7.4;
 const UP = new Vector3(0, 1, 0);
 const FOG_OPACITY_WEIGHTS = [0.72, 1, 0.58] as const;
 const FLARE_RADII = [
@@ -259,14 +259,14 @@ export class SupernaturalEventAnimator {
     depthWrite: false,
   });
   private readonly sirenMaterial = new MeshStandardMaterial({
-    color: 0x85828e,
-    emissive: 0x252c38,
-    emissiveIntensity: 0.16,
+    color: 0xb9b1bd,
+    emissive: 0x586879,
+    emissiveIntensity: 0.52,
     roughness: 0.9,
     flatShading: true,
   });
   private readonly rockMaterial = new MeshStandardMaterial({
-    color: 0x343b42,
+    color: 0x4d5b61,
     roughness: 1,
     flatShading: true,
   });

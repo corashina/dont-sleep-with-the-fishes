@@ -127,6 +127,60 @@ describe('SupernaturalEventAnimator', () => {
     animator.dispose();
   });
 
+  it('keeps the revealed siren near the central foreground', () => {
+    const { animator } = createAnimator();
+    animator.stage('eerie-melody');
+    void animator.reveal('eerie-melody');
+
+    animator.update(2.35, 2.2);
+
+    const tableau = animator.worldRoot.getObjectByName('siren-tableau')!;
+    expect(tableau.visible).toBe(true);
+    expect(Math.abs(tableau.position.x)).toBeLessThanOrEqual(2.2);
+    expect(tableau.position.z).toBeGreaterThanOrEqual(-8);
+    animator.dispose();
+  });
+
+  it('uses a readable night value hierarchy for the melody tableau', () => {
+    const { animator } = createAnimator();
+    animator.stage('eerie-melody');
+    void animator.reveal('eerie-melody');
+
+    animator.update(2.35, 2.2);
+
+    const siren = animator.worldRoot.getObjectByName('event-siren')!;
+    const sirenMesh = siren.getObjectByProperty('type', 'Mesh') as Mesh<
+      BufferGeometry,
+      MeshStandardMaterial
+    >;
+    const rock = animator.worldRoot.getObjectByName('event-siren-rock')!;
+    const rockMesh = rock.getObjectByProperty('type', 'Mesh') as Mesh<
+      BufferGeometry,
+      MeshStandardMaterial
+    >;
+    const colorPeak = Math.max(
+      sirenMesh.material.color.r,
+      sirenMesh.material.color.g,
+      sirenMesh.material.color.b,
+    );
+    const emissivePeak = Math.max(
+      sirenMesh.material.emissive.r,
+      sirenMesh.material.emissive.g,
+      sirenMesh.material.emissive.b,
+    ) * sirenMesh.material.emissiveIntensity;
+    const rockPeak = Math.max(
+      rockMesh.material.color.r,
+      rockMesh.material.color.g,
+      rockMesh.material.color.b,
+    );
+
+    expect(siren.visible).toBe(true);
+    expect(rockPeak).toBeGreaterThanOrEqual(0.08);
+    expect(colorPeak + emissivePeak).toBeGreaterThanOrEqual(0.52);
+    expect(colorPeak + emissivePeak - rockPeak).toBeGreaterThanOrEqual(0.38);
+    animator.dispose();
+  });
+
   it('pins supported item actors before motion and rejects unsupported pairs', async () => {
     const { animator, supplyDisplay } = createAnimator();
     const order: string[] = [];
