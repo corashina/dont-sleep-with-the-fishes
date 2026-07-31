@@ -35,6 +35,10 @@ import {
   AudioLoadError,
   AudioSystem,
 } from '../audio/AudioSystem';
+import {
+  EventModelLibrary,
+  EventModelLoadError,
+} from '../survival/EventModelLibrary';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -47,6 +51,7 @@ export interface LaunchDependencies {
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
   loadShipAssets(): Promise<ShipAssets>;
+  loadEventModels(): Promise<EventModelLibrary>;
   loadPhysicsRuntime(): Promise<PhysicsRuntime>;
   loadAudio?(): Promise<AudioSystem>;
   createGame(
@@ -56,6 +61,7 @@ export interface LaunchDependencies {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audio: AudioSystem,
@@ -68,6 +74,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
+  loadEventModels: () => EventModelLibrary.load(),
   loadPhysicsRuntime,
   loadAudio: () => AudioSystem.load(),
   createGame: (
@@ -77,6 +84,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    eventModels,
     physicsRuntime,
     physicsMode,
     audio,
@@ -88,6 +96,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       skyAssets,
       lifeboatAssets,
       shipAssets,
+      eventModels,
       physicsRuntime,
       physicsMode,
       audio,
@@ -101,6 +110,7 @@ interface LoadedGameAssets {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
+  eventModels: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   audio: AudioSystem;
 }
@@ -118,6 +128,7 @@ async function loadGameAssets(
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    eventModels,
     physicsRuntime,
     audio,
   ] =
@@ -127,6 +138,7 @@ async function loadGameAssets(
       dependencies.loadSkyAssets(),
       dependencies.loadLifeboatAssets(),
       dependencies.loadShipAssets(),
+      dependencies.loadEventModels(),
       physicsRuntimePromise,
       dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
     ]);
@@ -136,6 +148,7 @@ async function loadGameAssets(
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    eventModels,
     audio,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
@@ -159,6 +172,7 @@ async function loadGameAssets(
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
     || shipAssets.status !== 'fulfilled'
+    || eventModels.status !== 'fulfilled'
     || physicsRuntime.status !== 'fulfilled'
     || audio.status !== 'fulfilled'
   ) {
@@ -170,6 +184,7 @@ async function loadGameAssets(
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
     shipAssets: shipAssets.value,
+    eventModels: eventModels.value,
     physicsRuntime: physicsRuntime.value,
     audio: audio.value,
   };
@@ -191,7 +206,11 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
           try {
             assets.shipAssets.dispose();
           } finally {
-            assets.audio.dispose();
+            try {
+              assets.eventModels.dispose();
+            } finally {
+              assets.audio.dispose();
+            }
           }
         }
       }
@@ -262,6 +281,17 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       kicker: 'AUDIO UNAVAILABLE',
       title: 'Unable to prepare the soundscape',
       lead: 'A required local audio file could not be loaded.',
+      detail: error.message,
+    });
+    return;
+  }
+
+  if (error instanceof EventModelLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'EVENT MODELS UNAVAILABLE',
+      title: `Unable to prepare ${error.eventModelId}`,
+      lead: 'A night event model could not be prepared.',
       detail: error.message,
     });
     return;
@@ -392,6 +422,7 @@ export function launchGame(
         unownedAssets.skyAssets,
         unownedAssets.lifeboatAssets,
         unownedAssets.shipAssets,
+        unownedAssets.eventModels,
         unownedAssets.physicsRuntime,
         physicsMode,
         unownedAssets.audio,

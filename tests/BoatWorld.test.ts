@@ -41,6 +41,12 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import type {
+  EventModelInstance,
+  EventModelLibrary,
+} from '../src/survival/EventModelLibrary';
+import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
+import type { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
@@ -57,6 +63,7 @@ import type {
   SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
+import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import type { SkyPalette } from '../src/world/skyPalette';
 import {
   createTestPropModels,
@@ -71,6 +78,16 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
   type,
 });
+
+function createTestEventModels(): EventModelLibrary {
+  return {
+    create: vi.fn(() => ({
+      root: new Group(),
+      dispose: vi.fn(),
+    } satisfies EventModelInstance)),
+    dispose: vi.fn(),
+  } as unknown as EventModelLibrary;
+}
 
 function firstMesh(root: Object3D): Mesh {
   let found: Mesh | undefined;
@@ -953,6 +970,243 @@ describe('BoatWorld helpers', () => {
     });
     expect(copy.position.toArray()).toEqual(expected.position.toArray());
     expect(copy.rotation.toArray()).toEqual(expected.rotation.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('registers all dedicated events on additive pose roots', () => {
+    const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+
+    const coordinatorWorld = world.scene.getObjectByName('dedicated-event-world')!;
+    const coordinatorBoat = world.scene.getObjectByName('dedicated-event-boat')!;
+    const cameraEffects = world.scene.getObjectByName('dedicated-event-camera-effects')!;
+    const boatEffects = world.scene.getObjectByName('dedicated-event-boat-effects')!;
+
+    expect(coordinatorWorld.children.map(({ name }) => name)).toEqual([
+      'leak-world',
+      'school-of-fish-world',
+      'snatcher-world',
+      'death-stare-world',
+      'anglerfish-swarm-world',
+      'whirlpool-world',
+    ]);
+    expect(coordinatorBoat.children.map(({ name }) => name)).toEqual([
+      'leak-boat',
+      'school-of-fish-boat',
+      'snatcher-boat',
+      'death-stare-boat',
+      'anglerfish-swarm-boat',
+      'whirlpool-boat',
+    ]);
+    expect(cameraEffects.parent?.name).toBe('boat-cue-camera-rig');
+    expect(cameraEffects.getObjectByName('boat-camera-rig')).toBeDefined();
+    expect(boatEffects.parent?.name).toBe('boat-motion-rig');
+    expect(coordinatorBoat.parent).toBe(
+      boatEffects.getObjectByName('lifeboat'),
+    );
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('cleans completed event and world siblings when coordinator construction fails', () => {
+    const propModels = createTestPropModels();
+    const leakModelDispose = vi.fn();
+    const constructionFailure = new Error('school model failed');
+    let createCount = 0;
+    const eventModels = {
+      create: vi.fn(() => {
+        createCount += 1;
+        if (createCount === 2) throw constructionFailure;
+        return {
+          root: new Group(),
+          dispose: leakModelDispose,
+        } satisfies EventModelInstance;
+      }),
+      dispose: vi.fn(),
+    } as unknown as EventModelLibrary;
+    const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
+
+    expect(() => new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    )).toThrow(constructionFailure);
+    expect(leakModelDispose).toHaveBeenCalledOnce();
+    expect(disposeSupplies).toHaveBeenCalledOnce();
+    expect(eventModels.dispose).not.toHaveBeenCalled();
+
+    disposeSupplies.mockRestore();
+    propModels.dispose();
+  });
+
+  it('routes dedicated events before generic and weather paths', async () => {
+    const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
+    const genericStage = vi.spyOn(EventPresentationLayer.prototype, 'stage');
+    const genericClear = vi.spyOn(EventPresentationLayer.prototype, 'clear');
+    const genericReact = vi.spyOn(EventPresentationLayer.prototype, 'react');
+    const weatherStage = vi.spyOn(WeatherEventAnimator.prototype, 'stage');
+    const weatherClear = vi.spyOn(WeatherEventAnimator.prototype, 'clear');
+    const weatherItem = vi.spyOn(WeatherEventAnimator.prototype, 'playItemUse');
+    const weatherReact = vi.spyOn(WeatherEventAnimator.prototype, 'react');
+    const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('bucket')],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    const coordinator = (
+      world as unknown as { dedicatedEvents: EventPresentationCoordinator }
+    ).dedicatedEvents;
+    const dedicatedStage = vi.spyOn(coordinator, 'stage');
+    const dedicatedClear = vi.spyOn(coordinator, 'clear');
+    const dedicatedItem = vi.spyOn(coordinator, 'playItemUse')
+      .mockResolvedValue(false);
+    const dedicatedReact = vi.spyOn(coordinator, 'react')
+      .mockResolvedValue();
+    const context = {
+      eventId: 'leak' as const,
+      targetInstanceId: null,
+      variantSeed: 77,
+    };
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bucket breaks.',
+      deltas: { hull: -7 },
+      cue: 'impact',
+    };
+    const presentation = {
+      outcome,
+      resourceDeltas: { hull: -7 },
+      brokenInstanceIds: ['bucket-1'] as ItemInstanceId[],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: 'bucket-1' as ItemInstanceId,
+      selectedCondition: 'broken' as const,
+      targetInstanceId: null,
+    };
+
+    world.stageEvent(context);
+    await world.playEventItemUse('leak', 'bucket', 'bucket-1');
+    await world.reactToEventOutcome(
+      'leak',
+      outcome,
+      { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'broken' },
+      presentation,
+    );
+
+    expect(dedicatedStage).toHaveBeenCalledWith(context);
+    expect(dedicatedItem).toHaveBeenCalledWith('bucket', 'bucket-1');
+    expect(dedicatedReact).toHaveBeenCalledWith(presentation);
+    expect(genericStage).not.toHaveBeenCalled();
+    expect(genericClear).toHaveBeenCalled();
+    expect(genericReact).not.toHaveBeenCalled();
+    expect(weatherStage).not.toHaveBeenCalled();
+    expect(weatherClear).toHaveBeenCalled();
+    expect(weatherItem).not.toHaveBeenCalled();
+    expect(weatherReact).not.toHaveBeenCalled();
+    expect(supplyItem).not.toHaveBeenCalled();
+
+    world.stageEvent('windy-night');
+    expect(genericStage).toHaveBeenCalledWith('windy-night');
+    expect(weatherStage).toHaveBeenCalledWith('windy-night');
+    expect(dedicatedClear).toHaveBeenCalled();
+
+    world.dispose();
+    genericStage.mockRestore();
+    genericClear.mockRestore();
+    genericReact.mockRestore();
+    weatherStage.mockRestore();
+    weatherClear.mockRestore();
+    weatherItem.mockRestore();
+    weatherReact.mockRestore();
+    supplyItem.mockRestore();
+    propModels.dispose();
+  });
+
+  it('clears the coordinator, supplies, pose roots, and shared vortex', () => {
+    const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    const internals = world as unknown as {
+      dedicatedEvents: EventPresentationCoordinator;
+      supplyDisplay: BoatSupplyDisplay;
+      cameraEffectsRoot: Group;
+      boatEffectsRoot: Group;
+      vortexWave: {
+        centerX: number;
+        centerZ: number;
+        radius: number;
+        depression: number;
+        tangentStrength: number;
+        phase: number;
+        strength: number;
+      };
+    };
+    const clearCoordinator = vi.spyOn(internals.dedicatedEvents, 'clear');
+    const clearSupplies = vi.spyOn(internals.supplyDisplay, 'clearEventMotion');
+    internals.cameraEffectsRoot.rotation.z = 0.4;
+    internals.boatEffectsRoot.rotation.y = 0.7;
+    Object.assign(internals.vortexWave, {
+      centerX: 2,
+      centerZ: -3,
+      radius: 8,
+      depression: 2,
+      tangentStrength: 1,
+      phase: 5,
+      strength: 1,
+    });
+
+    world.clearEvent();
+
+    expect(clearCoordinator).toHaveBeenCalledOnce();
+    expect(clearSupplies).toHaveBeenCalled();
+    expect(internals.cameraEffectsRoot.rotation.toArray().slice(0, 3))
+      .toEqual([0, 0, 0]);
+    expect(internals.boatEffectsRoot.rotation.toArray().slice(0, 3))
+      .toEqual([0, 0, 0]);
+    expect(internals.vortexWave).toEqual({
+      centerX: 0,
+      centerZ: 0,
+      radius: 0,
+      depression: 0,
+      tangentStrength: 0,
+      phase: 0,
+      strength: 0,
+    });
+
     world.dispose();
     propModels.dispose();
   });

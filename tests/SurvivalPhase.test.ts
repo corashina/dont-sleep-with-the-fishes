@@ -10,9 +10,12 @@ import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import {
   formatDriftingLootResult,
+  formatEventResult,
   formatFishingResult,
   SurvivalPhase,
 } from '../src/survival/SurvivalPhase';
+import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
+import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   RewardSummary,
@@ -87,6 +90,45 @@ describe('formatFishingResult utility salvage', () => {
       code: 'utility-caught',
       deltas: catchId === 'bait' ? { bait: 1 } : {},
     }))).toMatchObject({ caption: 'UTILITY SALVAGE', title, detail });
+  });
+});
+
+describe('formatEventResult', () => {
+  const result = (
+    overrides: Partial<EventOutcomePresentation> = {},
+  ): EventOutcomePresentation => ({
+    outcome: accepted({ message: 'The event settles.', deltas: {} }),
+    resourceDeltas: {},
+    brokenInstanceIds: [],
+    lostInstanceIds: [],
+    consumedInstanceIds: [],
+    selectedInstanceId: null,
+    selectedCondition: null,
+    targetInstanceId: null,
+    ...overrides,
+  });
+
+  it('lists exact resource and broken-item changes', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { food: 3 },
+      brokenInstanceIds: ['bucket-1'],
+    })).lines).toEqual([
+      'FOOD +3',
+      'BUCKET BROKEN',
+    ]);
+  });
+
+  it('lists hull damage and exact lost and consumed items', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { hull: -18 },
+      lostInstanceIds: ['map-1', 'swimRing-1'],
+      consumedInstanceIds: ['ductTape-1'],
+    })).lines).toEqual([
+      'HULL -18',
+      'MAP LOST',
+      'SWIM RING LOST',
+      'DUCT TAPE CONSUMED',
+    ]);
   });
 });
 
@@ -1974,6 +2016,66 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
+  it('stages a dedicated event with exact context and preserves reveal order', async () => {
+    const calls: string[] = [];
+    const stageEvent = vi.fn(() => { calls.push('stage:snatcher'); });
+    const current = snapshot({
+      state: 'dayEvent',
+      day: 6,
+      seed: 42,
+      pendingEventId: 'snatcher',
+      pendingEventTargetId: 'map-1',
+      inventory: inventory({
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+        'spyglass-1': {
+          instanceId: 'spyglass-1',
+          type: 'spyglass',
+          condition: 'usable',
+        },
+      }),
+    });
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        scene: new Scene(),
+        stageEvent,
+        revealEvent: vi.fn(async () => { calls.push('world:reveal'); }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover:on' : 'cover:off');
+        }),
+        showEventReveal: vi.fn(async () => { calls.push('ui:reveal'); }),
+        settleCoveredScene: vi.fn(async () => { calls.push('render:settle'); }),
+        setEventSelection: vi.fn(() => { calls.push('choices:on'); }),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(stageEvent).toHaveBeenCalledWith({
+      eventId: 'snatcher',
+      targetInstanceId: 'map-1',
+      variantSeed: deriveEventVariantSeed(42, 6, 'snatcher'),
+    });
+    expect(calls).toEqual([
+      'cover:on',
+      'stage:snatcher',
+      'ui:reveal',
+      'render:settle',
+      'cover:off',
+      'world:reveal',
+      'choices:on',
+    ]);
+  });
+
   it.each([
     ['shower-night', 'rain'],
     ['windy-night', 'wind'],
@@ -3141,7 +3243,118 @@ describe('SurvivalPhase orchestration', () => {
       'shower-night',
       outcome,
       { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'broken' },
+      expect.objectContaining({
+        resourceDeltas: { energy: -2, food: 1 },
+        brokenInstanceIds: ['bucket-1'],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: 'bucket-1',
+        selectedCondition: 'broken',
+      }),
     );
+  });
+
+  it('passes an exact dedicated before-and-after diff to world and UI', async () => {
+    let current = snapshot({
+      state: 'dayEvent',
+      day: 6,
+      seed: 42,
+      hull: 88,
+      pendingEventId: 'snatcher',
+      pendingEventTargetId: 'map-1',
+      inventory: inventory({
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+        'spyglass-1': {
+          instanceId: 'spyglass-1',
+          type: 'spyglass',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({
+      code: 'event-resolved',
+      message: 'The spyglass breaks.',
+      deltas: { hull: -12 },
+      cue: 'impact',
+    });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const showEventResult = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'day',
+            day: 6,
+            seed: 42,
+            hull: 76,
+            inventory: inventory({
+              'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+              'spyglass-1': {
+                instanceId: 'spyglass-1',
+                type: 'spyglass',
+                condition: 'broken',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        scene: new Scene(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        showEventResult,
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('spyglass', 'spyglass-1');
+    await flushPromises();
+
+    const presentation = {
+      outcome,
+      resourceDeltas: { hull: -12 },
+      brokenInstanceIds: ['spyglass-1'],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: 'spyglass-1',
+      selectedCondition: 'broken',
+      targetInstanceId: 'map-1',
+    };
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'snatcher',
+      outcome,
+      {
+        choiceId: 'spyglass',
+        instanceId: 'spyglass-1',
+        condition: 'broken',
+      },
+      presentation,
+    );
+    expect(showEventResult).toHaveBeenCalledWith({
+      message: 'The spyglass breaks.',
+      lines: ['HULL -12', 'BINOCULARS BROKEN'],
+    });
   });
 
   it('keeps the Sleep response free of physical item animation', async () => {

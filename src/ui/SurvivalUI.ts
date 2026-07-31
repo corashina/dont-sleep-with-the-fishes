@@ -233,6 +233,11 @@ export interface EventContextChoice {
   readonly energyCost?: number;
 }
 
+export interface EventResultView {
+  readonly message: string;
+  readonly lines: readonly string[];
+}
+
 interface PendingFade {
   readonly finish: () => void;
 }
@@ -291,6 +296,9 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
+  private readonly eventResult: HTMLElement;
+  private readonly eventResultMessage: HTMLElement;
+  private readonly eventResultLines: HTMLElement;
   private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
@@ -445,6 +453,10 @@ export class SurvivalUI {
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
+        <section class="event-result" data-event-result role="status" hidden>
+          <p class="event-result__message ui-role-narrative" data-event-result-message></p>
+          <ul class="event-result__lines ui-role-numeral" data-event-result-lines></ul>
+        </section>
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
       <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
@@ -507,6 +519,9 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
+    this.eventResult = requireElement(this.root, '[data-event-result]');
+    this.eventResultMessage = requireElement(this.root, '[data-event-result-message]');
+    this.eventResultLines = requireElement(this.root, '[data-event-result-lines]');
     this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
@@ -682,8 +697,28 @@ export class SurvivalUI {
     this.eventPresentationActive = true;
     this.eventCaption.classList.add('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.clearEventResult();
     this.syncCommandState();
     return Promise.resolve();
+  }
+
+  showEventResult(result: EventResultView): void {
+    if (this.disposed) return;
+    this.eventResultMessage.textContent = result.message;
+    this.eventResultLines.replaceChildren(...result.lines.map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      item.dataset.state = line.endsWith(' BROKEN')
+        ? 'broken'
+        : line.endsWith(' LOST')
+          ? 'lost'
+          : line.endsWith(' CONSUMED')
+            ? 'consumed'
+            : 'resource';
+      return item;
+    }));
+    this.eventResultLines.hidden = result.lines.length === 0;
+    this.eventResult.hidden = false;
   }
 
   setEventSelection(
@@ -761,6 +796,7 @@ export class SurvivalUI {
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    this.clearEventResult();
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
@@ -783,6 +819,13 @@ export class SurvivalUI {
     this.feedbackTimer = window.setTimeout(() => {
       if (!this.disposed) this.feedback.classList.remove('is-visible');
     }, 2600);
+  }
+
+  private clearEventResult(): void {
+    this.eventResult.hidden = true;
+    this.eventResultMessage.textContent = '';
+    this.eventResultLines.replaceChildren();
+    this.eventResultLines.hidden = true;
   }
 
   setSleepCovered(covered: boolean): Promise<void> {

@@ -545,6 +545,39 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('renders exact event result lines with text states below the caption', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    await ui.showEventReveal(testEvent());
+    ui.showEventResult({
+      message: 'The haul tears the bucket loose.',
+      lines: ['FOOD +3', 'BUCKET BROKEN', 'MAP LOST', 'DUCT TAPE CONSUMED'],
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-event-result]')!;
+    const lines = [...result.querySelectorAll<HTMLElement>('li')];
+    expect(result.hidden).toBe(false);
+    expect(result.querySelector('[data-event-result-message]')?.textContent)
+      .toBe('The haul tears the bucket loose.');
+    expect(lines.map(({ textContent }) => textContent)).toEqual([
+      'FOOD +3',
+      'BUCKET BROKEN',
+      'MAP LOST',
+      'DUCT TAPE CONSUMED',
+    ]);
+    expect(lines.map(({ dataset }) => dataset.state)).toEqual([
+      'resource',
+      'broken',
+      'lost',
+      'consumed',
+    ]);
+
+    ui.clearEventPresentation();
+    expect(result.hidden).toBe(true);
+    expect(result.querySelectorAll('li')).toHaveLength(0);
+  });
+
   it('shows quantity only when an item represents more than one copy', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
