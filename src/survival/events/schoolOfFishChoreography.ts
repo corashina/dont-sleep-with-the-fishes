@@ -1,8 +1,8 @@
 export const SCHOOL_REVEAL_DURATION = 2.6;
 export const SCHOOL_ITEM_DURATION = 1.25;
 export const SCHOOL_REACTION_DURATION = 1.1;
-export const SCHOOL_CENTER_X = 4.15;
-export const SCHOOL_CENTER_Z = -0.35;
+export const SCHOOL_CENTER_X = 1.25;
+export const SCHOOL_CENTER_Z = -4.45;
 
 export type SchoolItemEffectKind =
   | 'none'
@@ -107,7 +107,7 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
       depth: 0.16 + variantUnit(safeSeed, index, 4) * 0.42,
       scatterX: (variantUnit(safeSeed, index, 5) < 0.5 ? -1 : 1)
         * (3.2 + variantUnit(safeSeed, index, 6) * 2.3),
-      scatterZ: (variantUnit(safeSeed, index, 7) - 0.5) * 7.4,
+      scatterZ: -(0.8 + variantUnit(safeSeed, index, 7) * 2.2),
       speed: 0.72 + variantUnit(safeSeed, index, 8) * 0.48,
       bank: (variantUnit(safeSeed, index, 9) - 0.5) * 0.26,
       flashOffset: variantUnit(safeSeed, index, 10),

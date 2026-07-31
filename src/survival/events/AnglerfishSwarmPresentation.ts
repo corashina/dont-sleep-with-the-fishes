@@ -1,5 +1,6 @@
 import {
   BufferGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -67,20 +68,24 @@ interface AnglerActor {
   readonly model: EventModelInstance;
   readonly root: Group;
   readonly lure: PointLight;
+  readonly lureMarker: Mesh;
   readonly wave: WaveSample;
   readonly pose: SwarmFishPose;
   variant: SwarmVariant;
 }
 
 const WATERLINE = 0.04;
+const SURFACE_BODY_LIFT = 0.82;
+const BODY_PRESENTATION_SCALE = 1.25;
+const SWARM_BODY_TINT = new Color(0x31535b);
 const CATCH_COUNT = 2;
 const SPLASH_COUNT = 8;
 const DEFAULT_VARIANT: SwarmVariant = {
   scale: 0.54,
   hullAngle: 0,
-  radiusX: 3.2,
-  radiusZ: 2.1,
-  approachDistance: 4,
+  radiusX: 2.2,
+  radiusZ: 4.1,
+  approachDistance: 1.8,
   depth: 0.3,
   speed: 0.8,
   roll: 0,
@@ -107,9 +112,9 @@ function styleAngler(root: Group): void {
     for (let index = 0; index < materials.length; index += 1) {
       const material = materials[index]!;
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.multiplyScalar(0.48);
+      material.color.lerp(SWARM_BODY_TINT, 0.55);
       material.emissive.setHex(0x07161c);
-      material.emissiveIntensity = 0.08;
+      material.emissiveIntensity = 0.14;
       material.roughness = Math.max(0.68, material.roughness);
       material.metalness = Math.min(0.08, material.metalness);
       material.flatShading = true;
@@ -200,24 +205,30 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.ownedMaterials.add(this.catchDetailMaterial);
     this.ownedMaterials.add(this.catchLureMaterial);
 
+    const swarmLureGeometry = new SphereGeometry(0.075, 6, 4);
+    this.ownedGeometries.add(swarmLureGeometry);
     for (let index = 0; index < SWARM_FISH_COUNT; index += 1) {
       const model = environment.eventModels.create('anglerFish');
       const root = model.root;
       root.name = `swarm-angler-${index + 1}`;
-      root.userData.presentationScaleMaximum = 0.86;
+      root.userData.presentationScaleMaximum = 1.08;
       styleAngler(root);
       const lure = new PointLight(0x67cde4, 0, 4.2, 1.8);
       lure.name = `swarm-lure-light-${index + 1}`;
       lure.userData.palette = 'cold-cyan';
+      const lureMarker = new Mesh(swarmLureGeometry, this.catchLureMaterial);
+      lureMarker.name = `swarm-lure-marker-${index + 1}`;
+      lureMarker.renderOrder = 3;
       this.anglers.push({
         model,
         root,
         lure,
+        lureMarker,
         wave: waveSample(),
         pose: createSwarmFishPose(),
         variant: DEFAULT_VARIANT,
       });
-      this.worldRoot.add(root, lure);
+      this.worldRoot.add(root, lureMarker, lure);
     }
 
     const catchBodyGeometry = new SphereGeometry(0.44, 7, 5);
@@ -485,7 +496,8 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       );
       fish.root.position.set(
         fish.pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height - fish.variant.depth,
+        WATERLINE + fish.wave.height + SURFACE_BODY_LIFT
+          + fish.variant.scale * 0.08,
         fish.pose.z + fish.wave.displacementZ,
       );
       fish.root.rotation.set(
@@ -493,19 +505,24 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         fish.pose.yaw,
         fish.pose.roll - fish.wave.normal.x * 0.08,
       );
-      fish.root.scale.setScalar(fish.pose.scale);
+      fish.root.scale.setScalar(fish.pose.scale * BODY_PRESENTATION_SCALE);
       const caught = index < this.sample.foodDelta
         && this.sample.catchStrength > 0.008;
       fish.root.visible = index < this.sample.bodyVisibleCount && !caught;
 
       fish.lure.visible = index < this.sample.visibleCount;
+      fish.lureMarker.visible = fish.lure.visible;
       fish.lure.position.set(
         fish.root.position.x,
-        fish.root.position.y + fish.variant.scale * 0.46,
+        fish.root.position.y + fish.variant.scale * 0.56,
         fish.root.position.z + fish.variant.scale * 0.12,
       );
+      fish.lureMarker.position.copy(fish.lure.position);
       const lurePulse = 0.9
         + Math.sin(time * fish.variant.speed * 1.7 + fish.variant.lurePhase) * 0.1;
+      fish.lureMarker.scale.setScalar(
+        lurePulse * (0.82 + this.sample.lureStrength * 0.28),
+      );
       fish.lure.intensity = fish.lure.visible
         ? this.sample.lureStrength * (1 - this.sample.lureDim) * lurePulse
         : 0;
@@ -568,8 +585,11 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       fish.root.rotation.set(0, 0, 0);
       fish.root.scale.setScalar(1);
       fish.lure.visible = false;
+      fish.lureMarker.visible = false;
       fish.lure.intensity = 0;
       fish.lure.position.set(0, 0, 0);
+      fish.lureMarker.position.set(0, 0, 0);
+      fish.lureMarker.scale.set(1, 1, 1);
     }
     for (let index = 0; index < this.catchActors.length; index += 1) {
       const actor = this.catchActors[index]!;

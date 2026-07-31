@@ -1,5 +1,6 @@
 // Importance: 5/5. Protects the exact threatened actor and Snatcher scene ownership.
 import {
+  BoxGeometry,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -137,6 +138,47 @@ describe('SnatcherPresentation', () => {
     expect(presentation.targetOutline.visibleForTest()).toBe(true);
   });
 
+  it('fits the warning cage to the exact threatened actor', () => {
+    const targetId = 'map-1' as ItemInstanceId;
+    const fixture = setup([targetId]);
+    const target = fixture.actors.get(targetId)!.root;
+    const targetMesh = new Mesh(
+      new BoxGeometry(0.28, 0.18, 0.08),
+      new MeshStandardMaterial(),
+    );
+    targetMesh.position.set(0.14, 0.09, 0.04);
+    target.add(targetMesh);
+    const hiddenSibling = new Mesh(
+      new BoxGeometry(4, 4, 4),
+      new MeshStandardMaterial(),
+    );
+    hiddenSibling.position.set(8, 8, 8);
+    hiddenSibling.visible = false;
+    target.add(hiddenSibling);
+    target.updateMatrixWorld(true);
+    const presentation = new SnatcherPresentation(fixture.environment);
+
+    presentation.stage({
+      eventId: 'snatcher',
+      targetInstanceId: targetId,
+      variantSeed: 7,
+    });
+
+    const warning = presentation.targetOutline.objectForTest();
+    expect(warning.position.x).toBeCloseTo(0.14);
+    expect(warning.position.y).toBeCloseTo(0.09);
+    expect(warning.position.z).toBeCloseTo(0.04);
+    expect(warning.scale.x).toBeLessThan(0.4);
+    expect(warning.scale.y).toBeLessThan(0.3);
+    expect(warning.scale.z).toBeLessThan(0.2);
+
+    presentation.dispose();
+    targetMesh.geometry.dispose();
+    targetMesh.material.dispose();
+    hiddenSibling.geometry.dispose();
+    hiddenSibling.material.dispose();
+  });
+
   it('keeps the crouched creature and target warning visible after reveal', async () => {
     const targetId = 'map-1' as ItemInstanceId;
     const fixture = setup([targetId]);
@@ -152,7 +194,12 @@ describe('SnatcherPresentation', () => {
     await reveal;
 
     expect(presentation.boatRoot.visible).toBe(true);
-    expect(presentation.boatRoot.getObjectByName('snatcher-creature')!.visible).toBe(true);
+    const creature = presentation.boatRoot.getObjectByName('snatcher-creature')!;
+    expect(creature.visible).toBe(true);
+    expect(creature.position.x).toBeLessThan(1.6);
+    expect(creature.position.y).toBeLessThan(0.8);
+    expect(creature.scale.x).toBeGreaterThan(1);
+    expect(creature.scale.x).toBeLessThan(1.15);
     expect(presentation.targetOutline.visibleForTest()).toBe(true);
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
   });

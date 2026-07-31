@@ -187,6 +187,17 @@ describe('SchoolOfFishPresentation', () => {
     expect(visibleFish.length).toBeGreaterThanOrEqual(18);
     expect(visibleFish.length).toBeLessThanOrEqual(24);
     expect(visibleFish.every(({ scale }) => scale.x >= 0.72)).toBe(true);
+    expect(visibleFish.every(({ position }) => position.y > 0.9)).toBe(true);
+    expect(visibleFish.every(({ position }) => position.z < -3)).toBe(true);
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible, position }) => (
+        name.startsWith('school-splash-') && visible && position.y > 0.9
+      ),
+    )).toHaveLength(6);
+    expect(
+      visibleFish.reduce((sum, { position }) => sum + position.x, 0)
+        / visibleFish.length,
+    ).toBeLessThan(2);
 
     const use = presentation.playItemUse('fishingNet', netId);
     presentation.update(3.5, 0.72);
@@ -212,6 +223,11 @@ describe('SchoolOfFishPresentation', () => {
     expect(catchActor.visible).toBe(true);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('school-fish-') && visible,
+    )).toHaveLength(23);
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible, position }) => (
+        name.startsWith('school-fish-') && visible && position.z < -3
+      ),
     )).toHaveLength(23);
     expect(fixture.actors.get(bucketId)!.applyPose.mock.lastCall![0].scaleY).toBeLessThan(0.7);
 

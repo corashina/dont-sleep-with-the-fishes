@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
@@ -9,6 +10,7 @@ import {
   MeshStandardMaterial,
   OctahedronGeometry,
   SphereGeometry,
+  Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import {
@@ -56,9 +58,11 @@ type ActiveSnatcherAnimation =
       readonly resolve: () => void;
     };
 
-const CREATURE_X = 1.88;
-const CREATURE_Y = 1.02;
-const CREATURE_Z = -0.72;
+const CREATURE_X = 1.48;
+const CREATURE_Y = 0.65;
+const CREATURE_Z = -0.7;
+const CREATURE_SCALE = 1.08;
+const WARNING_PADDING = 0.02;
 
 interface MutableSupplyPose {
   x: number;
@@ -80,7 +84,7 @@ function setCreatureMaterial(root: Group): void {
       : [object.material];
     for (const material of materials) {
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.multiplyScalar(0.46);
+      material.color.multiplyScalar(0.7);
       material.roughness = 0.88;
       material.metalness = 0.04;
       material.flatShading = true;
@@ -116,6 +120,11 @@ export class SnatcherTargetOutline {
     flatShading: true,
   });
   private readonly warnings: readonly Mesh[];
+  private readonly fittedScale = new Vector3(1, 1, 1);
+  private readonly bounds = new Box3();
+  private readonly worldCenter = new Vector3();
+  private readonly worldSize = new Vector3();
+  private readonly worldScale = new Vector3();
   private targetId: ItemInstanceId | null = null;
   private disposed = false;
 
@@ -149,6 +158,27 @@ export class SnatcherTargetOutline {
   setTarget(targetId: ItemInstanceId, target: Group): void {
     if (this.disposed) return;
     this.root.removeFromParent();
+    target.updateWorldMatrix(true, true);
+    const visibleCopy = target.children.find(({ visible }) => visible) ?? target;
+    this.bounds.setFromObject(visibleCopy, true);
+    if (this.bounds.isEmpty()) {
+      this.root.position.set(0, 0, 0);
+      this.fittedScale.set(1, 1, 1);
+    } else {
+      this.bounds.getCenter(this.worldCenter);
+      this.bounds.getSize(this.worldSize);
+      target.getWorldScale(this.worldScale);
+      target.worldToLocal(this.worldCenter);
+      this.root.position.copy(this.worldCenter);
+      this.fittedScale.set(
+        (this.worldSize.x / Math.max(0.001, Math.abs(this.worldScale.x))
+          + WARNING_PADDING) / 1.08,
+        (this.worldSize.y / Math.max(0.001, Math.abs(this.worldScale.y))
+          + WARNING_PADDING) / 0.72,
+        (this.worldSize.z / Math.max(0.001, Math.abs(this.worldScale.z))
+          + WARNING_PADDING) / 0.92,
+      );
+    }
     this.targetId = targetId;
     this.root.userData.targetInstanceId = targetId;
     this.root.visible = true;
@@ -162,7 +192,11 @@ export class SnatcherTargetOutline {
     this.material.opacity = 0.34 + safeStrength * 0.48;
     this.warningMaterial.opacity = 0.42 + safeStrength * 0.44;
     const cageScale = 0.96 + safeStrength * 0.08;
-    this.root.scale.set(cageScale, cageScale, cageScale);
+    this.root.scale.set(
+      this.fittedScale.x * cageScale,
+      this.fittedScale.y * cageScale,
+      this.fittedScale.z * cageScale,
+    );
     for (let index = 0; index < this.warnings.length; index += 1) {
       const scale = 0.72 + safeStrength * (0.35 + index * 0.035);
       this.warnings[index]!.scale.set(scale, scale, scale);
@@ -174,6 +208,9 @@ export class SnatcherTargetOutline {
     this.root.removeFromParent();
     this.root.visible = false;
     this.targetId = null;
+    this.root.position.set(0, 0, 0);
+    this.root.scale.set(1, 1, 1);
+    this.fittedScale.set(1, 1, 1);
     delete this.root.userData.targetInstanceId;
   }
 
@@ -551,7 +588,11 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       this.sample.creatureRoll,
     );
     const crouchScale = 1 - this.sample.crouchStrength * 0.05;
-    this.creature.scale.set(1.02, crouchScale, 0.98);
+    this.creature.scale.set(
+      CREATURE_SCALE * 1.02,
+      CREATURE_SCALE * crouchScale,
+      CREATURE_SCALE * 0.98,
+    );
 
     for (let index = 0; index < this.fingers.length; index += 1) {
       const finger = this.fingers[index]!;
@@ -580,7 +621,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.modelInstance.root.visible = false;
     this.creature.position.set(CREATURE_X, CREATURE_Y, CREATURE_Z);
     this.creature.rotation.set(0, 0, 0);
-    this.creature.scale.set(1, 1, 1);
+    this.creature.scale.setScalar(CREATURE_SCALE);
     for (const finger of this.fingers) finger.visible = false;
     for (const eye of this.eyes) eye.visible = false;
     for (const pupil of this.pupils) pupil.visible = false;

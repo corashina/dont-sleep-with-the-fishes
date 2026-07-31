@@ -70,6 +70,8 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
+const SURFACE_BODY_LIFT = 0.82;
+const SURFACE_EFFECT_LIFT = 0.68;
 
 const DEFAULT_VARIANT: SchoolVariant = {
   scale: 1,
@@ -424,7 +426,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.environment.sampleWorldWaveInto(fish.wave, time, pose.x, pose.z, 1);
       fish.root.position.set(
         pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height - variant.depth,
+        WATERLINE + fish.wave.height + SURFACE_BODY_LIFT - variant.depth * 0.12,
         pose.z + fish.wave.displacementZ,
       );
       fish.root.rotation.set(
@@ -436,8 +438,12 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       fish.root.visible = index < this.activeFish && (!showCatch || index !== 0);
     }
 
+    const heldBreaching = this.sample.schoolAlpha > 0.98
+      && this.sample.gather > 0.98
+      && this.sample.scatter < 0.01;
     const flashStrength = Math.max(
       this.sample.surfaceFlash,
+      heldBreaching ? 0.24 : 0,
       this.sample.effectKind === 'telescope-track' ? this.sample.effect * 0.34 : 0,
     );
     this.silverMaterial.opacity = Math.min(0.68, flashStrength * 0.7);
@@ -449,25 +455,31 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       flash.visible = flashStrength > threshold && fish.root.visible;
       flash.position.set(
         fish.root.position.x,
-        WATERLINE + fish.wave.height + 0.025,
+        WATERLINE + fish.wave.height + SURFACE_EFFECT_LIFT,
         fish.root.position.z,
       );
       const flashScale = 0.5 + flashStrength * (0.75 + index * 0.035);
       flash.scale.set(flashScale, flashScale, flashScale);
     }
 
-    this.splashMaterial.opacity = Math.min(0.72, this.sample.splash * 0.74);
+    const splashStrength = Math.max(
+      this.sample.splash,
+      heldBreaching ? 0.26 : 0,
+    );
+    this.splashMaterial.opacity = Math.min(0.72, splashStrength * 0.74);
     for (let index = 0; index < this.splashes.length; index += 1) {
       const splash = this.splashes[index]!;
       const fishIndex = (index * 4 + 1) % this.activeFish;
       const fish = this.fishActors[fishIndex]!;
-      splash.visible = this.sample.splash > index * 0.09 && fish.root.visible;
+      splash.visible = (
+        heldBreaching || this.sample.splash > index * 0.09
+      ) && fish.root.visible;
       splash.position.set(
         fish.root.position.x,
-        WATERLINE + fish.wave.height + 0.12,
+        WATERLINE + fish.wave.height + SURFACE_EFFECT_LIFT,
         fish.root.position.z,
       );
-      const splashScale = 0.28 + this.sample.splash * (0.82 + index * 0.04);
+      const splashScale = 0.28 + splashStrength * (0.82 + index * 0.04);
       splash.scale.set(splashScale, splashScale, splashScale);
     }
 

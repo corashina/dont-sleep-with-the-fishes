@@ -266,7 +266,7 @@ export function sampleDeathStareReaction(
     const impact = pulse(t, 0.1, 0.46, 0.84);
     const lunge = pulse(t, 0.04, 0.54, 0.96);
     output.lunge = lunge;
-    output.fishZ = lunge * 1.38;
+    output.fishZ = lunge * 0.12;
     output.fishY = lunge * 0.16;
     output.fishPitch = lunge * -0.07;
     output.jawOpen += lunge * 0.54;
