@@ -76,6 +76,7 @@ const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.fr
   'windy-night': 'wind',
   thunderstorm: 'thunderstorm',
   'restless-waves': 'waves',
+  'shark-men': 'waves',
   'man-in-the-fog': 'fog',
 });
 
