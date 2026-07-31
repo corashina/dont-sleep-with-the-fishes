@@ -198,9 +198,9 @@ const EXPECTED_CHOICES = {
   ],
   'man-in-the-fog': [
     choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [subtract('rescueProgress', 10), add('pressure', 1)])),
-    choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [subtract('rescueProgress', 5), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [subtract('rescueProgress', 5), subtract('health', 20), set('energy', 2)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [add('pressure', 1)])),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [add('pressure', 2), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [add('pressure', 2)])),
+    choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [add('pressure', 1), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [add('pressure', 1), subtract('health', 20), set('energy', 2)])),
   ],
   ghosts: [
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The flare is used.', [], [item('consume', 'flareGun')])),
@@ -242,6 +242,33 @@ describe('survival events', () => {
       'midnight-tour', 'night-trader', 'handyman', 'other-people',
       'flowers', 'chest-attack',
     ]));
+  });
+
+  it('sets supernatural event pressure bounds and effects', () => {
+    const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
+    const manInTheFog = byId['man-in-the-fog'];
+
+    expect(byId['man-in-the-fog']?.minimumPressure).toBe(1);
+    expect(byId.ghosts?.minimumPressure).toBe(1);
+    expect(byId['eerie-melody']?.minimumPressure).toBe(2);
+    expect(byId['face-on-the-moon']?.minimumPressure).toBe(3);
+
+    for (const eventId of ['man-in-the-fog', 'face-on-the-moon'] as const) {
+      const serialized = JSON.stringify(byId[eventId]?.choices);
+      expect(serialized).not.toContain('rescueProgress');
+    }
+
+    const outcomeResources = (choiceId: string) => manInTheFog?.choices
+      .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
+    expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
+    expect(outcomeResources('flashlight')).toEqual([
+      [add('pressure', 2), subtract('health', 20), set('energy', 1)],
+      [add('pressure', 2)],
+    ]);
+    expect(outcomeResources('sleep')).toEqual([
+      [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
+      [add('pressure', 1), subtract('health', 20), set('energy', 2)],
+    ]);
   });
 
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {

@@ -606,6 +606,24 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-sleep-cover]')?.dataset.profile).toBe('solid');
   });
 
+  it('shows the pale sleep mask only for Ghosts and clears it with the event', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const mask = mount.querySelector<HTMLElement>('[data-event-sleep-mask]');
+
+    ui.setEventSleepMask('ghosts', true);
+    expect(mask?.classList.contains('is-visible')).toBe(true);
+    expect(mask?.getAttribute('aria-hidden')).toBe('true');
+
+    ui.clearEventPresentation();
+    expect(mask?.classList.contains('is-visible')).toBe(false);
+
+    for (const eventId of ['eerie-melody', 'face-on-the-moon', 'man-in-the-fog']) {
+      ui.setEventSleepMask(eventId, true);
+      expect(mask?.classList.contains('is-visible')).toBe(false);
+    }
+  });
+
   it('shows quantity only when an item represents more than one copy', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);

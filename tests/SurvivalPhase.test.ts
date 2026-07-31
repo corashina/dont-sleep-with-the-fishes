@@ -2,6 +2,10 @@
 import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
+import type { PhaseContext } from '../src/app/GamePhase';
+import type { AudioBackend, AudioVoice } from '../src/audio/AudioBackend';
+import { AudioSystem } from '../src/audio/AudioSystem';
+import type { SoundId } from '../src/audio/audioManifest';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
@@ -117,6 +121,20 @@ describe('formatDangerousWatersOutcome', () => {
       result,
       state,
     });
+  });
+});
+
+describe('SurvivalPhase test context', () => {
+  it('includes an empty event model library', () => {
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { dispose: vi.fn() },
+      ui: { dispose: vi.fn() },
+    });
+    const context = (phase as unknown as { context: PhaseContext }).context;
+
+    expect(context.supernaturalEventModels.animations('ghost')).toEqual([]);
+    phase.dispose();
   });
 });
 
@@ -3492,6 +3510,78 @@ describe('SurvivalPhase orchestration', () => {
     expect(playEventItemUse).not.toHaveBeenCalled();
   });
 
+  it('keeps the Ghosts sleep mask through cover closure and clears it before dawn', async () => {
+    const calls: string[] = [];
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'ghosts',
+      pressure: 1,
+    });
+    let coverGate: Deferred | null = null;
+    const setEventSleepMask = vi.fn((eventId: string, visible: boolean) => {
+      calls.push(`mask:${eventId}:${visible}`);
+    });
+    const setSleepCovered = vi.fn((covered: boolean) => {
+      calls.push(covered ? 'cover' : 'uncover');
+      return coverGate?.promise ?? Promise.resolve();
+    });
+    const clearEventPresentation = vi.fn(() => {
+      calls.push('clear');
+    });
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      setEventSleepMask,
+      setSleepCovered,
+      clearEventPresentation,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            pressure: 1,
+          });
+          return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
+        }),
+        beginDawn: vi.fn(() => {
+          calls.push('dawn');
+          current = snapshot({ state: 'day', day: 2, pressure: 1 });
+          return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    calls.length = 0;
+    coverGate = deferred();
+
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(calls).toEqual(['mask:ghosts:true', 'cover']);
+    expect(clearEventPresentation).not.toHaveBeenCalled();
+
+    coverGate.resolve();
+    await flushPromises();
+
+    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('clear'));
+    expect(calls.indexOf('clear')).toBeLessThan(calls.indexOf('dawn'));
+  });
+
   it.each(['dispose', 'restart'] as const)(
     'does not resolve an event when %s supersedes its pending physical item use',
     async (teardown) => {
@@ -3871,6 +3961,99 @@ describe('SurvivalPhase orchestration', () => {
     hold.resolve();
     phase.dispose();
   });
+
+  it.each([
+    ['safe', {}, ['audio-stop:0.02', 'react'], ['audio-stop:0.02', 'react']],
+    ['attack', { health: -20 }, ['react'], ['react', 'audio-stop:0.08']],
+  ] as const)(
+    'coordinates the Eerie Melody loop around a %s result motion',
+    async (_kind, deltas, beforeSettle, afterSettle) => {
+      const calls: string[] = [];
+      const reaction = deferred();
+      const hold = deferred();
+      const melodyVoice: AudioVoice = {
+        id: 'eerieMelody',
+        setGain: vi.fn(),
+        stop: vi.fn((fadeSeconds) => calls.push(`audio-stop:${fadeSeconds}`)),
+        onEnded: vi.fn(),
+      };
+      const backend: AudioBackend = {
+        load: vi.fn(() => Promise.resolve()),
+        unlock: vi.fn(() => Promise.resolve()),
+        play: vi.fn((id: SoundId) => {
+          if (id === 'eerieMelody') calls.push('audio-begin');
+          return id === 'eerieMelody'
+            ? melodyVoice
+            : {
+                id,
+                setGain: vi.fn(),
+                stop: vi.fn(),
+                onEnded: vi.fn(),
+              };
+        }),
+        setBusGain: vi.fn(),
+        setMasterGain: vi.fn(),
+        dispose: vi.fn(),
+      };
+      let current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: 'eerie-melody',
+      });
+      const phase = SurvivalPhase.forTest({
+        audio: AudioSystem.forTest(backend),
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent: vi.fn(() => {
+            current = snapshot({ state: 'nightEvent', pendingEventId: null });
+            return accepted({
+              code: 'event-resolved',
+              cue: 'impact',
+              deltas,
+            });
+          }),
+        },
+        world: {
+          revealEvent: vi.fn(() => {
+            calls.push('reveal');
+            return Promise.resolve();
+          }),
+          play: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => {
+            calls.push('react');
+            return reaction.promise;
+          }),
+          dispose: vi.fn(),
+        },
+        ui: {
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          settleCoveredScene: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+          showFeedback: vi.fn(),
+          holdEventOutcome: vi.fn(() => hold.promise),
+          dispose: vi.fn(),
+        },
+      });
+
+      phase.start();
+      await flushPromises();
+      expect(calls.slice(0, 2)).toEqual(['audio-begin', 'reveal']);
+      calls.length = 0;
+
+      phase.handleEndure();
+      await flushPromises();
+      expect(calls).toEqual(beforeSettle);
+
+      reaction.resolve();
+      await flushPromises();
+      expect(calls).toEqual(afterSettle);
+
+      phase.dispose();
+      expect(melodyVoice.stop).toHaveBeenCalledOnce();
+      hold.resolve();
+    },
+  );
 
   it('wires command, pause, journal, and restart callbacks without legacy camera input', () => {
     const perform = vi.fn(() => ({ ...accepted(), accepted: false }));

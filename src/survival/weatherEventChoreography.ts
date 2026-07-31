@@ -84,6 +84,8 @@ const CAMERA_ONLY_WEATHER_EVENTS: ReadonlySet<string> = new Set([
   'shower-night',
   'windy-night',
   'thunderstorm',
+  'restless-waves',
+  'man-in-the-fog',
 ]);
 
 export function isCameraOnlyWeatherEvent(eventId: string): boolean {
@@ -95,7 +97,7 @@ const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Obje
   'windy-night': 3.6,
   thunderstorm: 4,
   'restless-waves': 3.8,
-  'man-in-the-fog': 4.2,
+  'man-in-the-fog': 5.2,
   'bad-sleep': 3.4,
 });
 
@@ -288,21 +290,25 @@ export function sampleWeatherReveal(
       output.cameraRoll = 0.1 * Math.sin(3 * Math.PI * t) * sweep;
       output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
       break;
-    case 'restless-waves':
+    case 'restless-waves': {
+      const riseCarrier = (
+        Math.sin(Math.PI * t)
+        + 0.72 * Math.sin(3 * Math.PI * t)
+        + 0.38 * Math.sin(5 * Math.PI * t)
+      );
       output.cameraX = 0.14 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraY = 0.2 * Math.sin(3 * Math.PI * t) * sweep;
+      output.cameraY = 0.18 * riseCarrier * Math.sin(3 * Math.PI * t);
       output.cameraYaw = 0.28 * Math.sin(Math.PI * (t - 0.14));
-      output.cameraRoll = 0.16 * Math.sin(2 * Math.PI * t) * sweep;
-      output.supplyRoll = 0.24 * Math.sin(3 * Math.PI * t) * sweep;
-      output.supplyLift = 0.13 * pulse(t, 0.16, 0.52, 0.84);
+      output.cameraRoll = 0.15 * Math.sin(2 * Math.PI * t);
       break;
+    }
     case 'man-in-the-fog':
       output.cameraX = 0.1 * Math.sin(Math.PI * (t - 0.1));
       output.cameraYaw = 0.35 * Math.sin(Math.PI * (t - 0.18));
       output.cameraPitch = -0.06 * pulse(t, 0.16, 0.54, 0.82);
-      output.figureVisibility = pulse(t, 0.38, 0.55, 0.78);
-      output.figureDistance = output.figureVisibility
-        * (1 - 0.35 * smoothstep((t - 0.38) / 0.4));
+      output.figureVisibility = smoothstep((t - 0.2) / 0.18)
+        * (1 - smoothstep((t - 0.84) / 0.12));
+      output.figureDistance = 0;
       break;
     case 'bad-sleep':
       output.cameraX = 0.1 * Math.sin(2 * Math.PI * t) * sweep;
@@ -315,7 +321,10 @@ export function sampleWeatherReveal(
   }
 
   const ingressEnvelope = smoothstep(t / 0.12);
-  const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
+  const returnEnvelope = 1 - smoothstep(
+    (t - (eventId === 'man-in-the-fog' ? 0.9 : 0.72))
+      / (eventId === 'man-in-the-fog' ? 0.1 : 0.28),
+  );
   multiplyReveal(output, ingressEnvelope * returnEnvelope);
   return true;
 }
@@ -357,6 +366,27 @@ export function sampleWeatherItemUse(
         output.cameraYaw = direction * 0.11 * impact;
         output.cameraPush = 0.12 * impact;
         break;
+      case 'restless-waves':
+        output.cameraYaw = choiceId === 'anchor'
+          ? -0.1 * Math.sin(2 * Math.PI * t) * hold
+          : 0.13 * Math.sin(2 * Math.PI * t) * hold;
+        output.cameraPush = choiceId === 'anchor'
+          ? 0.07 * pulse(t, 0.12, 0.44, 0.8)
+          : 0.12 * impact;
+        output.effect = impact;
+        break;
+      case 'man-in-the-fog':
+        if (choiceId === 'compass') {
+          output.effect = hold;
+          output.cameraYaw = 0.18 * Math.sin(Math.PI * (t - 0.1)) * hold;
+        } else if (choiceId === 'spyglass') {
+          output.effect = hold;
+          output.cameraPush = 0.28 * pulse(t, 0.2, 0.54, 0.88);
+        } else {
+          output.effect = pulse(t, 0.08, 0.5, 0.94);
+          output.cameraYaw = 0.3 * Math.sin(Math.PI * (t - 0.1)) * hold;
+        }
+        break;
     }
     const envelope = smoothstep(t / 0.08)
       * (1 - smoothstep((t - 0.76) / 0.24));
@@ -367,24 +397,14 @@ export function sampleWeatherItemUse(
   switch (eventId) {
     case 'restless-waves':
       switch (choiceId) {
-        case 'anchor': {
-          const drop = smoothstep((t - 0.1) / 0.62);
-          output.y = -1.02 * drop;
-          output.z = -0.62 * drop;
-          output.pitch = 0.52 * drop;
-          output.roll = 0.12 * pulse(t, 0.08, 0.3, 0.54);
-          output.effect = smoothstep((t - 0.08) / 0.58);
-          output.supplyRoll = 0.2 * (1 - smoothstep((t - 0.12) / 0.58));
+        case 'anchor':
+          output.cameraYaw = -0.1 * Math.sin(2 * Math.PI * t) * hold;
+          output.cameraPush = 0.07 * pulse(t, 0.12, 0.44, 0.8);
+          output.effect = impact;
           break;
-        }
         case 'swimRing':
-          output.x = 0.3 * hold;
-          output.y = -0.24 * impact;
-          output.z = -0.2 * impact;
-          output.pitch = 0.3 * impact;
-          output.scaleX = 1 + 0.1 * impact;
-          output.scaleY = 1 - 0.2 * impact;
-          output.scaleZ = 1 + 0.08 * impact;
+          output.cameraYaw = 0.13 * Math.sin(2 * Math.PI * t) * hold;
+          output.cameraPush = 0.12 * impact;
           output.effect = impact;
           break;
       }
@@ -392,35 +412,16 @@ export function sampleWeatherItemUse(
     case 'man-in-the-fog':
       switch (choiceId) {
         case 'compass':
-          output.y = 0.46 * hold;
-          output.z = -0.3 * hold;
-          output.yaw = (
-            Math.sin(8 * Math.PI * t) * 0.26 * (1 - smoothstep(t))
-            + 0.18 * hold
-          );
-          output.pitch = -0.18 * hold;
-          output.scaleX = 1 + 0.2 * hold;
-          output.scaleY = 1 + 0.2 * hold;
-          output.scaleZ = 1 + 0.2 * hold;
           output.effect = hold;
-          output.cameraYaw = 0.14 * pulse(t, 0.24, 0.56, 0.88);
+          output.cameraYaw = 0.18 * Math.sin(Math.PI * (t - 0.1)) * hold;
           break;
         case 'spyglass':
-          output.y = 0.4 * hold;
-          output.z = -0.52 * hold;
-          output.pitch = -0.1 * hold;
-          output.roll = 0.05 * impact;
-          output.scaleX = 1 + 0.24 * hold;
-          output.scaleY = 1 + 0.24 * hold;
-          output.scaleZ = 1 + 0.24 * hold;
           output.effect = hold;
-          output.cameraPush = 0.34 * pulse(t, 0.2, 0.54, 0.88);
+          output.cameraPush = 0.28 * pulse(t, 0.2, 0.54, 0.88);
           break;
         case 'flashlight':
-          output.y = 0.32 * hold;
-          output.yaw = 0.72 * Math.sin(2 * Math.PI * t) * hold;
-          output.pitch = -0.2 * hold;
           output.effect = pulse(t, 0.08, 0.5, 0.94);
+          output.cameraYaw = 0.3 * Math.sin(Math.PI * (t - 0.1)) * hold;
           break;
       }
       break;
@@ -474,6 +475,9 @@ export function weatherReactionDuration(
     case 'windy-night': return 1.45 + Math.min(actors, 2) * 0.28;
     case 'bad-sleep': return choiceId === 'umbrella' ? 1.4 : 1.2;
     case 'thunderstorm': return choiceId === 'anchor' ? 1.5 : 1.35;
+    case 'restless-waves':
+    case 'man-in-the-fog':
+      return 0.84;
     default: return actors > 0 ? 1.25 : 1.1;
   }
 }

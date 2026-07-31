@@ -85,12 +85,18 @@ import type {
 } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import type { EventModelLibrary } from './EventModelLibrary';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import { isFeaturedEventId, type FeaturedEventId } from './FeaturedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
 import { WeatherEventAnimator } from './WeatherEventAnimator';
+import {
+  sampleEventPhysicalResponsePose,
+  type EventPhysicalResponsePose,
+} from './eventPhysicalResponseChoreography';
+import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,
@@ -205,6 +211,26 @@ interface ActiveFishingAnimation {
   readonly resolve: () => void;
 }
 
+interface ActiveMoonAnimation {
+  readonly kind: 'reveal' | 'reaction';
+  elapsed: number;
+  readonly duration: number;
+  readonly fromReveal: number;
+  readonly fromGrin: number;
+  readonly fromStarScale: number;
+  readonly fromDim: number;
+  readonly fromMoonScale: number;
+  readonly fromCameraLower: number;
+  readonly targetReveal: number;
+  readonly targetGrin: number;
+  readonly targetStarScale: number;
+  readonly targetDim: number;
+  readonly targetMoonScale: number;
+  readonly targetCameraLower: number;
+  readonly response: EventPhysicalResponsePresentation | null;
+  readonly resolve: () => void;
+}
+
 interface FishingVisuals {
   readonly root: Group;
   readonly line: Line<BufferGeometry, LineBasicMaterial>;
@@ -237,6 +263,15 @@ const FISHING_ROD_LEAN = MathUtils.degToRad(-22);
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
+const MOON_FACE_REVEAL_DURATION = 3.8;
+const MOON_FACE_REACTION_DURATION = 1.1;
+const MOON_FACE_HOLD_FRACTION = 0.2;
+const MOON_FACE_BASE_GRIN = 0.58;
+const MOON_FACE_STAR_SCALE = 0.28;
+const MOON_FACE_MOON_SCALE = 3.6;
+const MOON_FACE_PRESSURE_GRIN = 0.88;
+const MOON_FACE_ENERGY_DIM = 0.48;
+const MOON_FACE_CAMERA_LOWER = 0.2;
 const FISHING_CATCH_BOW_REST = Object.freeze({
   x: 0,
   y: 0.43,
@@ -391,6 +426,20 @@ function createFishingVisuals(
   };
 }
 
+export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
+  return {
+    create: () => new Group(),
+    animations: () => [],
+    dispose: () => undefined,
+  } as unknown as EventModelLibrary;
+}
+
+function isSupernaturalEventModelLibrary(
+  models: SurvivalEventModels | EventModelLibrary | undefined,
+): models is EventModelLibrary {
+  return models !== undefined && 'create' in models;
+}
+
 export class BoatWorld {
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
@@ -438,6 +487,7 @@ export class BoatWorld {
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
+  private readonly supernaturalEventAnimator: SupernaturalEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
   private dangerousWatersItemId: ItemInstanceId | null = null;
   private readonly dangerousWatersItemPose: DangerousWatersItemPose = {
@@ -518,6 +568,41 @@ export class BoatWorld {
     visible: false,
   };
   private activeFishingAnimation: ActiveFishingAnimation | null = null;
+  private activeMoonAnimation: ActiveMoonAnimation | null = null;
+  private readonly moonFace: {
+    reveal: number;
+    grin: number;
+    starScale: number;
+    dim: number;
+    scale: number;
+  } = {
+    reveal: 0,
+    grin: 0,
+    starScale: 1,
+    dim: 0,
+    scale: 1,
+  };
+  private readonly moonFaceDisplay = {
+    reveal: 0,
+    grin: 0,
+    starScale: 1,
+    dim: 0,
+    scale: 1,
+  };
+  private moonPulseElapsed = 0;
+  private moonCameraLower = 0;
+  private moonEventStaged = false;
+  private readonly moonPhysicalResponsePose: EventPhysicalResponsePose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
@@ -544,6 +629,7 @@ export class BoatWorld {
     this.lightningStrikePending = true;
   };
   private disposed = false;
+  private readonly eventModels: EventModelLibrary;
 
   constructor(
     camera: PerspectiveCamera,
@@ -553,8 +639,16 @@ export class BoatWorld {
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
     waterQuality: WaterQuality = 'low',
-    eventModels?: SurvivalEventModels,
+    eventModels?: SurvivalEventModels | EventModelLibrary,
+    supernaturalEventModels?: EventModelLibrary,
   ) {
+    const survivalEventModels = isSupernaturalEventModelLibrary(eventModels)
+      ? undefined
+      : eventModels;
+    this.eventModels = supernaturalEventModels
+      ?? (isSupernaturalEventModelLibrary(eventModels)
+        ? eventModels
+        : createEmptyEventModelLibraryForTest());
     this.scene = new Scene();
     this.sky = new Skybox(
       this.scene,
@@ -571,7 +665,7 @@ export class BoatWorld {
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
-    const resolvedEventModels = eventModels ?? (
+    const resolvedEventModels = survivalEventModels ?? (
       shipFurniture === undefined
         ? EMPTY_SURVIVAL_EVENT_MODELS
         : {
@@ -620,12 +714,18 @@ export class BoatWorld {
       savedItems,
     );
     this.chestDisplay = new ChestDisplay(
-      eventModels === undefined ? undefined : resolvedEventModels.clone('mysteryChest'),
+      survivalEventModels === undefined ? undefined : resolvedEventModels.clone('mysteryChest'),
     );
     this.boat.add(this.chestDisplay.root);
     this.weatherEventAnimator = new WeatherEventAnimator(
       this.cameraRig,
       this.supplyDisplay,
+      this.eventModels,
+    );
+    this.supernaturalEventAnimator = new SupernaturalEventAnimator(
+      this.cameraRig,
+      this.supplyDisplay,
+      this.eventModels,
     );
     this.boat.add(this.weatherEventAnimator.boatRoot);
 
@@ -699,6 +799,7 @@ export class BoatWorld {
       this.eventPresentation.root,
       this.featuredEvents.root,
       this.weatherEventAnimator.worldRoot,
+      this.supernaturalEventAnimator.worldRoot,
       this.fishing.root,
       this.fishingBiteParticles.points,
     );
@@ -798,10 +899,18 @@ export class BoatWorld {
       }
       return;
     }
-    if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
-      return;
+    if (this.weatherEventAnimator.supportsItemUse(eventId, choiceId)) {
+      if (await this.weatherEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+        return;
+      }
+      if (this.disposed || operation !== this.weatherEventOperation) return;
     }
-    if (this.disposed || operation !== this.weatherEventOperation) return;
+    if (this.supernaturalEventAnimator.supportsItemUse(eventId, choiceId)) {
+      if (await this.supernaturalEventAnimator.playItemUse(eventId, choiceId, instanceId)) {
+        return;
+      }
+      if (this.disposed || operation !== this.weatherEventOperation) return;
+    }
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
@@ -820,13 +929,17 @@ export class BoatWorld {
       this.activeFeaturedEventId = eventId;
       this.activeDriftingLootVariant = eventId === 'drifting-loot' ? variant : null;
       this.weatherEventAnimator.stage(eventId);
+      this.supernaturalEventAnimator.clear();
+      this.clearMoonEvent();
       return;
     }
     this.featuredEvents.clear();
     this.activeFeaturedEventId = null;
     this.activeDriftingLootVariant = null;
+    this.stageMoonEvent(eventId);
     this.eventPresentation.stage(eventId);
     this.weatherEventAnimator.stage(eventId);
+    this.supernaturalEventAnimator.stage(eventId);
   }
 
   async revealEvent(eventId: string): Promise<void> {
@@ -842,6 +955,8 @@ export class BoatWorld {
     await Promise.all([
       this.eventPresentation.reveal(eventId),
       this.weatherEventAnimator.reveal(eventId),
+      this.supernaturalEventAnimator.reveal(eventId),
+      this.revealMoonEvent(eventId),
     ]);
   }
 
@@ -901,6 +1016,8 @@ export class BoatWorld {
         ? featuredReaction
         : this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
+      this.supernaturalEventAnimator.react(eventId, outcome, response),
+      this.reactMoonEvent(eventId, outcome, response),
     ]);
   }
 
@@ -913,6 +1030,8 @@ export class BoatWorld {
     this.activeDriftingLootVariant = null;
     this.weatherEventAnimator.clear();
     this.dangerousWatersItemId = null;
+    this.supernaturalEventAnimator.clear();
+    this.clearMoonEvent();
     this.supplyDisplay.clearEventMotion();
   }
 
@@ -924,7 +1043,9 @@ export class BoatWorld {
     this.featuredEvents.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
     this.dangerousWatersItemId = null;
-    this.supplyDisplay.clearEventMotion();
+    this.supernaturalEventAnimator.settleForVisibilityChange();
+    this.settleMoonForVisibilityChange();
+    this.supplyDisplay.settleEventItemUse();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -1412,8 +1533,12 @@ export class BoatWorld {
       this.featuredEvents.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
       this.applyDangerousWatersPresentation();
+      this.supernaturalEventAnimator.update(time, delta, amplitudeScale);
+      this.updateMoonEvent(delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
+    } else if (this.moonEventStaged) {
+      this.applyMoonPresentation();
     }
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
@@ -1457,7 +1582,9 @@ export class BoatWorld {
         this.lightningStrikeListener = null;
       },
       () => this.cancelActiveSequence(),
+      () => this.clearMoonEvent(),
       () => this.weatherEventAnimator.dispose(),
+      () => this.supernaturalEventAnimator.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
@@ -1961,6 +2088,230 @@ export class BoatWorld {
     if (eventId === 'mystery-chest') return 'take';
     if (eventId === 'flowers') return 'sleep';
     return null;
+  }
+
+  private stageMoonEvent(eventId: string): void {
+    this.cancelMoonAnimation();
+    this.moonEventStaged = eventId === 'face-on-the-moon';
+    this.resetMoonValues();
+    this.sky.resetTransient();
+    this.cameraRig.position.y = 0;
+  }
+
+  private revealMoonEvent(eventId: string): Promise<void> {
+    if (eventId !== 'face-on-the-moon') return Promise.resolve();
+    if (!this.moonEventStaged) this.stageMoonEvent(eventId);
+    this.cancelMoonAnimation();
+    this.resetMoonValues();
+    return new Promise((resolve) => {
+      this.activeMoonAnimation = {
+        kind: 'reveal',
+        elapsed: 0,
+        duration: MOON_FACE_REVEAL_DURATION,
+        fromReveal: 0,
+        fromGrin: 0,
+        fromStarScale: 1,
+        fromDim: 0,
+        fromMoonScale: 1,
+        fromCameraLower: 0,
+        targetReveal: 1,
+        targetGrin: MOON_FACE_BASE_GRIN,
+        targetStarScale: MOON_FACE_STAR_SCALE,
+        targetDim: 0,
+        targetMoonScale: MOON_FACE_MOON_SCALE,
+        targetCameraLower: 0,
+        response: null,
+        resolve,
+      };
+    });
+  }
+
+  private reactMoonEvent(
+    eventId: string,
+    outcome: ActionOutcome,
+    response: EventPhysicalResponsePresentation | null,
+  ): Promise<void> {
+    if (eventId !== 'face-on-the-moon') return Promise.resolve();
+    if (!this.moonEventStaged) this.stageMoonEvent(eventId);
+    this.cancelMoonAnimation();
+    const pressureGain = (outcome.deltas.pressure ?? 0) > 0;
+    const energyLoss = (outcome.deltas.energy ?? 0) < 0;
+    const responseActor = response?.actors[0];
+    const hasPhysicalResponse = responseActor !== undefined
+      && sampleEventPhysicalResponsePose(
+        eventId,
+        { choiceId: response?.choiceId ?? '', condition: responseActor.condition },
+        0,
+        this.moonPhysicalResponsePose,
+      );
+    let activeResponse: EventPhysicalResponsePresentation | null = null;
+    if (hasPhysicalResponse && response !== null && responseActor !== undefined) {
+      this.supplyDisplay.clearEventPose();
+      if (this.supplyDisplay.pinEventActor(responseActor.instanceId)) {
+        activeResponse = response;
+      }
+    }
+    if (!pressureGain && !energyLoss && activeResponse === null) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.activeMoonAnimation = {
+        kind: 'reaction',
+        elapsed: 0,
+        duration: MOON_FACE_REACTION_DURATION,
+        fromReveal: this.moonFace.reveal,
+        fromGrin: this.moonFace.grin,
+        fromStarScale: this.moonFace.starScale,
+        fromDim: this.moonFace.dim,
+        fromMoonScale: this.moonFace.scale,
+        fromCameraLower: this.moonCameraLower,
+        targetReveal: 1,
+        targetGrin: pressureGain
+          ? Math.max(this.moonFace.grin, MOON_FACE_PRESSURE_GRIN)
+          : this.moonFace.grin,
+        targetStarScale: this.moonFace.starScale,
+        targetDim: energyLoss
+          ? Math.max(this.moonFace.dim, MOON_FACE_ENERGY_DIM)
+          : this.moonFace.dim,
+        targetMoonScale: this.moonFace.scale,
+        targetCameraLower: energyLoss
+          ? Math.max(this.moonCameraLower, MOON_FACE_CAMERA_LOWER)
+          : this.moonCameraLower,
+        response: activeResponse,
+        resolve,
+      };
+    });
+  }
+
+  private updateMoonEvent(delta: number): void {
+    if (!this.moonEventStaged) return;
+    this.moonPulseElapsed += Math.max(0, Number.isFinite(delta) ? delta : 0);
+    const animation = this.activeMoonAnimation;
+    if (animation !== null) {
+      animation.elapsed = Math.min(
+        animation.duration,
+        animation.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
+      );
+      const progress = animation.elapsed / animation.duration;
+      if (animation.kind === 'reveal') {
+        const revealProgress = smootherStep(clamp(
+          (progress - MOON_FACE_HOLD_FRACTION) / (1 - MOON_FACE_HOLD_FRACTION),
+          0,
+          1,
+        ));
+        const grinProgress = smootherStep(clamp(
+          (revealProgress - 0.68) / 0.32,
+          0,
+          1,
+        ));
+        this.moonFace.reveal = revealProgress;
+        this.moonFace.grin = MOON_FACE_BASE_GRIN * grinProgress;
+        this.moonFace.starScale = 1
+          - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
+        this.moonFace.scale = 1
+          + (MOON_FACE_MOON_SCALE - 1) * easeOut(revealProgress);
+      } else {
+        const eased = easeInOut(progress);
+        this.moonFace.reveal = animation.fromReveal
+          + (animation.targetReveal - animation.fromReveal) * eased;
+        this.moonFace.grin = animation.fromGrin
+          + (animation.targetGrin - animation.fromGrin) * eased;
+        this.moonFace.starScale = animation.fromStarScale
+          + (animation.targetStarScale - animation.fromStarScale) * eased;
+        this.moonFace.dim = animation.fromDim
+          + (animation.targetDim - animation.fromDim) * eased;
+        this.moonFace.scale = animation.fromMoonScale
+          + (animation.targetMoonScale - animation.fromMoonScale) * eased;
+        this.moonCameraLower = animation.fromCameraLower
+          + (animation.targetCameraLower - animation.fromCameraLower) * eased;
+        const responseActor = animation.response?.actors[0];
+        if (
+          responseActor !== undefined
+          && sampleEventPhysicalResponsePose(
+            'face-on-the-moon',
+            {
+              choiceId: animation.response!.choiceId,
+              condition: responseActor.condition,
+            },
+            progress,
+            this.moonPhysicalResponsePose,
+          )
+        ) {
+          this.supplyDisplay.applyEventItemPose(
+            responseActor.instanceId,
+            this.moonPhysicalResponsePose,
+          );
+        }
+      }
+      if (progress >= 1) this.finishMoonAnimation();
+    }
+    this.applyMoonPresentation();
+  }
+
+  private settleMoonForVisibilityChange(): void {
+    if (this.activeMoonAnimation === null) return;
+    this.finishMoonAnimation();
+    this.applyMoonPresentation();
+  }
+
+  private finishMoonAnimation(): void {
+    const animation = this.activeMoonAnimation;
+    if (animation === null) return;
+    this.activeMoonAnimation = null;
+    this.moonFace.reveal = animation.targetReveal;
+    this.moonFace.grin = animation.targetGrin;
+    this.moonFace.starScale = animation.targetStarScale;
+    this.moonFace.dim = animation.targetDim;
+    this.moonFace.scale = animation.targetMoonScale;
+    this.moonCameraLower = animation.targetCameraLower;
+    this.releaseMoonPhysicalResponse(animation);
+    animation.resolve();
+  }
+
+  private clearMoonEvent(): void {
+    this.cancelMoonAnimation();
+    this.moonEventStaged = false;
+    this.resetMoonValues();
+    this.sky.resetTransient();
+    this.cameraRig.position.y = 0;
+  }
+
+  private resetMoonValues(): void {
+    this.moonFace.reveal = 0;
+    this.moonFace.grin = 0;
+    this.moonFace.starScale = 1;
+    this.moonFace.dim = 0;
+    this.moonFace.scale = 1;
+    this.moonCameraLower = 0;
+    this.moonPulseElapsed = 0;
+  }
+
+  private applyMoonPresentation(): void {
+    const pulse = this.moonFace.reveal * (
+      Math.sin(this.moonPulseElapsed * 1.45) * 0.065
+      + Math.sin(this.moonPulseElapsed * 3.17 + 1.1) * 0.025
+    );
+    this.moonFaceDisplay.reveal = this.moonFace.reveal;
+    this.moonFaceDisplay.grin = clamp(this.moonFace.grin + pulse, 0, 1);
+    this.moonFaceDisplay.starScale = this.moonFace.starScale;
+    this.moonFaceDisplay.dim = this.moonFace.dim;
+    this.moonFaceDisplay.scale = this.moonFace.scale;
+    this.sky.setMoonFace(this.moonFaceDisplay);
+    this.cameraRig.position.y -= this.moonCameraLower;
+  }
+
+  private cancelMoonAnimation(): void {
+    const animation = this.activeMoonAnimation;
+    this.activeMoonAnimation = null;
+    if (animation === null) return;
+    this.releaseMoonPhysicalResponse(animation);
+    animation.resolve();
+  }
+
+  private releaseMoonPhysicalResponse(animation: ActiveMoonAnimation): void {
+    if (animation.response === null) return;
+    this.supplyDisplay.clearEventPose();
+    this.supplyDisplay.releaseEventActor();
   }
 
   private cancelActiveSequence(): void {

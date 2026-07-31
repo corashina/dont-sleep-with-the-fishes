@@ -331,6 +331,7 @@ export class SurvivalUI {
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
+  private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
@@ -439,6 +440,9 @@ export class SurvivalUI {
       <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
         <span data-dream-eyelid="top"></span>
         <span data-dream-eyelid="bottom"></span>
+      </div>
+      <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
+        <i></i><i></i><i></i>
       </div>
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
@@ -559,6 +563,7 @@ export class SurvivalUI {
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
+    this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
@@ -858,6 +863,7 @@ export class SurvivalUI {
   clearEventPresentation(): void {
     if (this.disposed) return;
     this.pendingEventChoiceBeat?.finish();
+    this.eventSleepMask.classList.remove('is-visible');
     const focusedContextualChoice = document.activeElement !== null
       && this.eventChoices.contains(document.activeElement);
     this.eventEligibility = null;
@@ -884,6 +890,14 @@ export class SurvivalUI {
     });
     this.syncCommandState();
     if (focusedContextualChoice) this.firstUsableAction()?.focus();
+  }
+
+  setEventSleepMask(eventId: string, visible: boolean): void {
+    if (this.disposed) return;
+    this.eventSleepMask.classList.toggle(
+      'is-visible',
+      eventId === 'ghosts' && visible,
+    );
   }
 
   showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {

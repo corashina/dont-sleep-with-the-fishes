@@ -74,17 +74,46 @@ describe('weather event choreography', () => {
     expect(output).toEqual(reveal());
   });
 
-  it('shows and then hides the fog figure before reveal completion', () => {
-    const output = reveal();
-    sampleWeatherReveal('man-in-the-fog', 0.58, output);
-    expect(output.figureVisibility).toBeGreaterThan(0.7);
-    sampleWeatherReveal('man-in-the-fog', 0.86, output);
-    expect(output.figureVisibility).toBe(0);
+  it('authors three Restless Waves rises and holds a readable final list', () => {
+    const rises = [0.2, 0.48, 0.76].map((progress) => {
+      const output = reveal();
+      sampleWeatherReveal('restless-waves', progress, output);
+      return output.cameraY;
+    });
+    expect(rises.every((value) => Math.abs(value) > 0.04)).toBe(true);
+    expect(new Set(rises.map((value) => Math.sign(value))).size).toBeGreaterThan(1);
+
+    const held = reveal();
+    sampleWeatherReveal('restless-waves', 0.82, held);
+    expect(Math.abs(held.cameraRoll)).toBeGreaterThan(0.06);
   });
 
   it('holds the Bad Sleep reveal for 3.4 seconds', () => {
     expect(weatherRevealDuration('bad-sleep')).toBe(3.4);
   });
+
+  it('holds the distant fog figure longer, then hides it before choices appear', () => {
+    const middle = reveal();
+    const held = reveal();
+    const choices = reveal();
+    sampleWeatherReveal('man-in-the-fog', 0.55, middle);
+    sampleWeatherReveal('man-in-the-fog', 0.86, held);
+    sampleWeatherReveal('man-in-the-fog', 0.99, choices);
+    expect(middle.figureVisibility).toBeGreaterThan(0.7);
+    expect(held.figureVisibility).toBeGreaterThan(0.7);
+    expect(choices.figureVisibility).toBeLessThan(0.02);
+    expect(middle.figureDistance).toBe(0);
+  });
+
+  it.each(['restless-waves', 'man-in-the-fog'])(
+    'keeps supplies fixed during the %s reveal',
+    (eventId) => {
+      const output = reveal();
+      sampleWeatherReveal(eventId, 0.5, output);
+      expect(output.supplyRoll).toBe(0);
+      expect(output.supplyLift).toBe(0);
+    },
+  );
 
   it.each([
     'shower-night', 'windy-night', 'thunderstorm',
@@ -280,9 +309,11 @@ describe('weather event choreography', () => {
     expect(spyglass.effectKind).toBe('spyglass-optical-push');
     expect(spyglass.cameraPush).toBeGreaterThan(0.1);
     expect(earlyAnchor.effectKind).toBe('wave-anchor-stabilize');
-    expect(Math.abs(heldAnchor.supplyRoll)).toBeLessThan(
-      Math.abs(earlyAnchor.supplyRoll),
-    );
+    expect(heldAnchor.x).toBe(0);
+    expect(heldAnchor.y).toBe(0);
+    expect(heldAnchor.z).toBe(0);
+    expect(heldAnchor.supplyRoll).toBe(0);
+    expect(Math.abs(earlyAnchor.cameraYaw) + earlyAnchor.cameraPush).toBeGreaterThan(0.01);
   });
 
   it('distinguishes repeated physical items by event semantics', () => {
