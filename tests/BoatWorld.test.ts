@@ -643,6 +643,91 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('anchors Shark Men contact props to the vessel motion rig', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.stageEvent('shark-men');
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const hand = world.scene.getObjectByName('shark-men-hand')!;
+    const strike = world.scene.getObjectByName('shark-men-strike')!;
+    const food = world.scene.getObjectByName('shark-men-food-1')!;
+    const fin = world.scene.getObjectByName('shark-men-fin-1')!;
+    world.scene.updateMatrixWorld(true);
+    const handStart = hand.getWorldPosition(new Vector3());
+    const finStart = fin.getWorldPosition(new Vector3());
+
+    expect(motionRig.getObjectByName('shark-men-hand')).toBe(hand);
+    expect(motionRig.getObjectByName('shark-men-strike')).toBe(strike);
+    expect(motionRig.getObjectByName('shark-men-food-1')).toBe(food);
+    expect(motionRig.getObjectByName('shark-men-fin-1')).toBeUndefined();
+
+    motionRig.position.x += 2;
+    world.scene.updateMatrixWorld(true);
+    expect(hand.getWorldPosition(new Vector3()).x).toBeCloseTo(handStart.x + 2);
+    expect(fin.getWorldPosition(new Vector3()).x).toBeCloseTo(finStart.x);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('uses resolved presentation weather for Shark Men wave samples', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const time = 2.37;
+    const angle = 0.18 + time * 0.29;
+    const x = -2.9 + Math.cos(angle) * 0.72;
+    const z = -3.7 + Math.sin(angle) * 0.48;
+    const waveScale = presentationWeatherProfile('thunderstorm').waveScale;
+    const expected = sampleWaveField(DEFAULT_WAVES, time, x, z, waveScale);
+
+    world.stageEvent('shark-men');
+    world.setPresentationWeather('thunderstorm');
+    world.update(time, 0.1);
+
+    const path = world.scene.getObjectByName('shark-men-path-1')!;
+    expect(path.position.y).toBeCloseTo(expected.height);
+    expect(path.position.x).toBeCloseTo(x + expected.displacementX);
+    expect(path.position.z).toBeCloseTo(z + expected.displacementZ);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes Shark Men contextual choices and ignores unsupported events', async () => {
+    const propModels = createTestPropModels();
+    const contextualChoice = vi.spyOn(
+      SharkMenPresentation.prototype,
+      'playContextualChoice',
+    );
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    await world.playEventContextualChoice('bad-sleep', 'sleep');
+    expect(contextualChoice).not.toHaveBeenCalled();
+
+    world.stageEvent('shark-men');
+    const sleep = world.playEventContextualChoice('shark-men', 'sleep');
+    world.update(1, 1);
+    await sleep;
+    expect(contextualChoice).toHaveBeenCalledOnce();
+    expect(contextualChoice).toHaveBeenCalledWith('sleep');
+
+    contextualChoice.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('applies the Bad Sleep reveal to the camera and supplies', async () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay();

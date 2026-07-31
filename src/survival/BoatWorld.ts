@@ -624,6 +624,8 @@ export class BoatWorld {
       this.cameraRig,
       this.supplyDisplay,
     );
+    this.sharkMenPresentation.setWaveScale(this.weatherProfile.waveScale);
+    this.motionRig.add(this.sharkMenPresentation.boatRoot);
 
     this.ocean = new OceanRenderer(
       waterQuality,
@@ -678,6 +680,7 @@ export class BoatWorld {
   setPresentationWeather(id: PresentationWeatherId): void {
     if (this.disposed) return;
     this.weatherProfile = presentationWeatherProfile(id);
+    this.sharkMenPresentation.setWaveScale(this.weatherProfile.waveScale);
     this.skyState.weather = this.weatherProfile.skyWeather;
     this.weatherEffects.setWeather(id);
   }
