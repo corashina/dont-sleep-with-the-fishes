@@ -390,7 +390,7 @@ export class WeatherEventAnimator {
     response: EventPhysicalResponsePresentation | null,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (response === null || weatherRevealDuration(eventId) === null) {
+    if (weatherRevealDuration(eventId) === null) {
       this.cancelActive();
       return Promise.resolve();
     }
@@ -398,7 +398,10 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
-    if (!this.supplyDisplay.pinEventActor(response.instanceId)) {
+    if (
+      response !== null
+      && !this.supplyDisplay.pinEventActor(response.instanceId)
+    ) {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve();
     }
@@ -552,9 +555,7 @@ export class WeatherEventAnimator {
     resetItemSample(this.itemSample);
     const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
     const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
-    const damagingFlashlight = eventId === 'man-in-the-fog'
-      && response?.choiceId === 'flashlight'
-      && healthDamage < 0;
+    const fogAttack = eventId === 'man-in-the-fog' && healthDamage < 0;
     const lostSupply = eventId === 'restless-waves'
       && response?.condition === 'lost';
     const brokenRing = eventId === 'restless-waves'
@@ -596,7 +597,7 @@ export class WeatherEventAnimator {
       this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
     }
 
-    if (damagingFlashlight) {
+    if (fogAttack) {
       const grab = pulse(progress, 0.08, 0.44, 0.9);
       this.showSilhouette(grab, grab, true);
       this.applyCameraPose(
@@ -716,9 +717,14 @@ export class WeatherEventAnimator {
         active.resolve(true);
         break;
       case 'react':
+        if (active.response === null) {
+          this.supplyDisplay.clearEventPose();
+          active.resolve();
+          break;
+        }
         if (
-          active.response?.condition === 'lost'
-          || active.response?.condition === 'consumed'
+          active.response.condition === 'lost'
+          || active.response.condition === 'consumed'
         ) {
           this.supplyDisplay.releaseEventActorOnNextSync();
         } else {

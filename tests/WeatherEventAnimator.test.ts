@@ -14,9 +14,9 @@ import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 
-function createSupplyDisplay(): BoatSupplyDisplay {
+function createSupplyDisplay(canPinEventActor = true): BoatSupplyDisplay {
   return {
-    pinEventActor: vi.fn(() => true),
+    pinEventActor: vi.fn(() => canPinEventActor),
     applyEventItemPose: vi.fn(() => true),
     applyEventAmbientPose: vi.fn(),
     clearEventMotion: vi.fn(),
@@ -47,7 +47,7 @@ function createEventModels(): EventModelLibrary {
   } as unknown as EventModelLibrary;
 }
 
-function createAnimator() {
+function createAnimator(canPinEventActor = true) {
   const cameraRig = new Group();
   const camera = new PerspectiveCamera(65, 1280 / 720, 0.08, 1000);
   camera.position.set(0, 0.88, 1.72);
@@ -56,10 +56,10 @@ function createAnimator() {
   cameraRig.add(camera);
   const animator = new WeatherEventAnimator(
     cameraRig,
-    createSupplyDisplay(),
+    createSupplyDisplay(canPinEventActor),
     createEventModels(),
   );
-  return { animator, camera };
+  return { animator, camera, cameraRig };
 }
 
 describe('WeatherEventAnimator fog staging', () => {
@@ -121,6 +121,86 @@ describe('WeatherEventAnimator fog staging', () => {
 
     animator.clear();
     await expect(itemUse).resolves.toBe(false);
+    animator.dispose();
+  });
+});
+
+describe('WeatherEventAnimator itemless outcome reactions', () => {
+  it('shows a Restless Waves hull impact without an item actor', async () => {
+    const { animator, cameraRig } = createAnimator(false);
+    animator.stage('restless-waves');
+
+    const reaction = animator.react(
+      'restless-waves',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The waves damage the boat.',
+        deltas: { hull: -25 },
+        cue: 'impact',
+      },
+      null,
+    );
+    animator.update(0.2, 0.2);
+
+    expect(cameraRig.position.x).toBeGreaterThan(0.1);
+
+    animator.update(0.84, 0.64);
+    await reaction;
+    expect(cameraRig.position.x).toBe(0);
+    animator.dispose();
+  });
+
+  it('shows a Man in the Fog hull impact without an item actor', async () => {
+    const { animator, cameraRig } = createAnimator(false);
+    animator.stage('man-in-the-fog');
+
+    const reaction = animator.react(
+      'man-in-the-fog',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The boat is damaged.',
+        deltas: { hull: -20, pressure: 1 },
+        cue: 'darkness',
+      },
+      null,
+    );
+    animator.update(0.21, 0.21);
+
+    expect(cameraRig.position.x).toBeGreaterThan(0.03);
+
+    animator.update(0.84, 0.63);
+    await reaction;
+    expect(cameraRig.position.x).toBe(0);
+    animator.dispose();
+  });
+
+  it('shows and clears a Man in the Fog attack without an item actor', async () => {
+    const { animator, cameraRig } = createAnimator(false);
+    animator.stage('man-in-the-fog');
+
+    const reaction = animator.react(
+      'man-in-the-fog',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'You are injured.',
+        deltas: { health: -20, pressure: 1, energy: 2 },
+        cue: 'darkness',
+      },
+      null,
+    );
+    animator.update(0.37, 0.37);
+
+    const silhouette = animator.worldRoot.getObjectByName('fog-man-silhouette')!;
+    expect(silhouette.visible).toBe(true);
+    expect(cameraRig.position.x).toBeLessThan(-0.1);
+
+    animator.update(0.84, 0.47);
+    await reaction;
+    expect(silhouette.visible).toBe(false);
+    expect(cameraRig.position.x).toBe(0);
     animator.dispose();
   });
 });
