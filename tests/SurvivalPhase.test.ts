@@ -3493,6 +3493,83 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('defers contextual focused choice resolution until visibility resumes', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const focusedChoice = deferred();
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+    });
+    const resolveEvent = vi.fn(() => {
+      current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: null,
+      });
+      return {
+        ...accepted(),
+        accepted: false as const,
+        code: 'requirements-unmet' as const,
+      };
+    });
+    const setDocumentHidden = vi.fn((hidden: boolean) => {
+      if (hidden) focusedChoice.resolve();
+    });
+    const playEventChoice = vi.fn(() => focusedChoice.promise);
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      setPaused: vi.fn(),
+      showFeedback: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent,
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        setEventEligibleItems: vi.fn(),
+        playEventChoice,
+        setDocumentHidden,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+    phase.start();
+    await flushPromises();
+
+    ui.onEventChoice?.('visit');
+    await flushPromises();
+    expect(playEventChoice).toHaveBeenCalledOnce();
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(setDocumentHidden).toHaveBeenCalledWith(true);
+    expect(focusedChoice.isSettled()).toBe(true);
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    phase.setPaused(false);
+    await flushPromises();
+    expect(resolveEvent).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
   it('defers item resolution and outcome feedback across hidden item and reaction boundaries', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
