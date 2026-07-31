@@ -45,6 +45,13 @@ describe('Skybox moon face', () => {
     expect(shader).toContain('vec4 sampleMoon');
     expect(shader).toContain('float eyeShape');
     expect(shader).toContain('float mouthShape');
+    expect(shader).toContain('p.x += p.y * skew');
+    expect(shader).toContain('float hollow');
+    expect(shader).toContain('0.655 + uMoonGrin');
+    expect(shader).toContain('faceUv.x +=');
+    expect(shader).toContain('float leftTear');
+    expect(shader).toContain('float eyeStreaks');
+    expect(shader).toContain('float noseSlit');
     expect(shader).toContain('leftEyeReveal');
     expect(shader).toContain('rightEyeReveal');
     expect(shader).toContain('mouthReveal');

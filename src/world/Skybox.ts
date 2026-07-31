@@ -163,15 +163,29 @@ const fragmentShader = `
     return tint * point * exists * brightness;
   }
 
-  float eyeShape(vec2 uv, vec2 center, vec2 scale) {
+  float eyeShape(vec2 uv, vec2 center, vec2 scale, float skew) {
     vec2 p = (uv - center) / scale;
+    p.x += p.y * skew;
     return 1.0 - smoothstep(0.72, 1.0, dot(p, p));
   }
 
   float mouthShape(vec2 uv, float grin) {
-    float curve = abs(uv.y - (0.31 + grin * uv.x * uv.x));
-    float width = smoothstep(0.36, 0.08, abs(uv.x));
-    return (1.0 - smoothstep(0.018, 0.045, curve)) * width;
+    vec2 warped = uv + vec2(grin * 0.025, grin * uv.x * 0.035);
+    warped.y += sin(warped.x * 19.0 + 0.7) * grin * 0.012;
+    float smile = 0.285
+      + grin * 0.1
+      + grin * 0.62 * warped.x * warped.x
+      + grin * warped.x * 0.12;
+    float curve = abs(warped.y - smile);
+    float width = smoothstep(0.48, 0.08, abs(warped.x));
+    float thickness = mix(0.035, 0.082, grin) * width;
+    float hollow = 1.0 - smoothstep(thickness, thickness + 0.025, curve);
+    float corners = 1.0 - smoothstep(
+      0.018,
+      0.045,
+      abs(abs(warped.x) - 0.405) + abs(warped.y - smile) * 0.42
+    );
+    return max(hollow, corners * grin) * width;
   }
 
   vec4 sampleMoon(
@@ -250,25 +264,53 @@ const fragmentShader = `
     float leftEyeReveal = smoothstep(0.02, 0.3, uMoonFaceReveal);
     float rightEyeReveal = smoothstep(0.3, 0.58, uMoonFaceReveal);
     float mouthReveal = smoothstep(0.58, 0.9, uMoonFaceReveal);
+    vec2 faceUv = moonUv;
+    faceUv.x += (faceUv.y - 0.5) * uMoonGrin * 0.055;
+    faceUv.y += sin((faceUv.x + 0.1) * 10.0) * uMoonGrin * 0.012;
     float leftEye = eyeShape(
-      moonUv,
-      vec2(0.36, 0.58),
-      vec2(0.065, 0.095)
+      faceUv,
+      vec2(0.35 - uMoonGrin * 0.018, 0.59 - uMoonGrin * 0.025),
+      vec2(0.075 + uMoonGrin * 0.018, 0.13 + uMoonGrin * 0.035),
+      0.24
     ) * leftEyeReveal;
     float rightEye = eyeShape(
-      moonUv,
-      vec2(0.64, 0.58),
-      vec2(0.065, 0.095)
+      faceUv,
+      vec2(0.655 + uMoonGrin * 0.012, 0.565 + uMoonGrin * 0.018),
+      vec2(0.066 + uMoonGrin * 0.012, 0.112 + uMoonGrin * 0.026),
+      -0.18
     ) * rightEyeReveal;
+    float leftTear = eyeShape(
+      faceUv,
+      vec2(0.325, 0.445),
+      vec2(0.026, 0.13 + uMoonGrin * 0.025),
+      0.32
+    ) * leftEyeReveal * uMoonGrin;
+    float rightTear = eyeShape(
+      faceUv,
+      vec2(0.69, 0.47),
+      vec2(0.02, 0.085 + uMoonGrin * 0.018),
+      -0.26
+    ) * rightEyeReveal * uMoonGrin;
     float mouth = mouthShape(
-      moonUv - vec2(0.5, 0.0),
+      faceUv - vec2(0.5, 0.0),
       mix(0.12, 0.42, uMoonGrin)
     ) * mouthReveal;
-    float faceInk = clamp(max(max(leftEye, rightEye), mouth), 0.0, 1.0);
+    float noseSlit = eyeShape(
+      faceUv,
+      vec2(0.515, 0.445),
+      vec2(0.018, 0.048 + uMoonGrin * 0.018),
+      0.3
+    ) * mouthReveal * uMoonGrin;
+    float eyeStreaks = max(leftTear, rightTear) * 0.76;
+    float faceInk = clamp(
+      max(max(max(max(leftEye, rightEye), eyeStreaks), noseSlit), mouth),
+      0.0,
+      1.0
+    );
     vec3 moonDisc = mix(
       uMoonColor * moonSample.rgb,
       vec3(0.035, 0.055, 0.065),
-      faceInk * 0.92
+      faceInk * 0.98
     );
     color += moonDisc
       * moonSample.a

@@ -115,19 +115,24 @@ describe('SupernaturalEventAnimator', () => {
     animator.dispose();
   });
 
-  it('uses the shared wave field to move and tilt the siren rock', () => {
+  it('anchors the siren island into the sea without floating or tilting', () => {
     const { animator } = createAnimator();
     animator.stage('eerie-melody');
     const tableau = animator.worldRoot.getObjectByName('siren-tableau')!;
 
     animator.update(2.35, 0);
+    const firstPosition = tableau.position.toArray();
+    const firstQuaternion = tableau.quaternion.toArray();
+    animator.update(7.8, 0);
 
-    expect(tableau.position.y).not.toBeCloseTo(0.3);
-    expect(tableau.quaternion.toArray()).not.toEqual([0, 0, 0, 1]);
+    expect(tableau.position.y).toBeCloseTo(-0.26);
+    expect(tableau.position.toArray()).toEqual(firstPosition);
+    expect(tableau.quaternion.toArray()).toEqual(firstQuaternion);
+    expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
     animator.dispose();
   });
 
-  it('keeps the revealed siren near the central foreground', () => {
+  it('keeps the revealed siren on the side and inside the fog', () => {
     const { animator } = createAnimator();
     animator.stage('eerie-melody');
     void animator.reveal('eerie-melody');
@@ -136,8 +141,14 @@ describe('SupernaturalEventAnimator', () => {
 
     const tableau = animator.worldRoot.getObjectByName('siren-tableau')!;
     expect(tableau.visible).toBe(true);
-    expect(Math.abs(tableau.position.x)).toBeLessThanOrEqual(2.2);
-    expect(tableau.position.z).toBeGreaterThanOrEqual(-8);
+    expect(tableau.position.x).toBeLessThanOrEqual(-4);
+    expect(tableau.position.z).toBeLessThanOrEqual(-9);
+    expect(animator.worldRoot.getObjectByName('supernatural-fog-curtain')?.visible)
+      .toBe(true);
+    expect(tableau.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    const siren = animator.worldRoot.getObjectByName('event-siren')!;
+    expect(Math.abs(siren.rotation.x)).toBeLessThan(0.01);
+    expect(Math.abs(siren.rotation.z)).toBeLessThan(0.01);
     animator.dispose();
   });
 
@@ -216,15 +227,14 @@ describe('SupernaturalEventAnimator', () => {
     animator.dispose();
   });
 
-  it('focuses the Flashlight on Ghost 1 and hides the other Ghosts', async () => {
+  it('hides every Ghost during item use', async () => {
     const { animator } = createAnimator();
     animator.stage('ghosts');
     const itemUse = animator.playItemUse('ghosts', 'flashlight', 'flashlight-1');
 
     animator.update(1, 0.68);
 
-    expect(animator.worldRoot.getObjectByName('ghost-1')?.visible).toBe(true);
-    for (let index = 2; index <= 5; index += 1) {
+    for (let index = 1; index <= 5; index += 1) {
       expect(animator.worldRoot.getObjectByName(`ghost-${index}`)?.visible).toBe(false);
     }
     animator.clear();
@@ -232,24 +242,32 @@ describe('SupernaturalEventAnimator', () => {
     animator.dispose();
   });
 
-  it('dissolves safe Ghosts and holds the left ghost after an energy result', async () => {
+  it('keeps a correct flare result clear and holds charging Ghosts after a wrong choice', async () => {
     const { animator } = createAnimator();
     animator.stage('ghosts');
-    const safe = animator.react('ghosts', safeOutcome, null);
+    const safe = animator.react('ghosts', safeOutcome, {
+      choiceId: 'flareGun',
+      instanceId: 'flareGun-1',
+      condition: 'consumed',
+    });
     animator.update(1, 0.84);
     await safe;
     expect(animator.worldRoot.getObjectByName('ghost-1')?.visible).toBe(false);
 
     animator.stage('ghosts');
-    const tiring = animator.react(
+    const wrong = animator.react(
       'ghosts',
-      { ...safeOutcome, deltas: { energy: -1 } },
-      null,
+      safeOutcome,
+      { choiceId: 'flashlight', instanceId: 'flashlight-1', condition: 'usable' },
     );
-    animator.update(2, 0.84);
-    await tiring;
-    expect(animator.worldRoot.getObjectByName('ghost-1')?.visible).toBe(true);
-    expect(animator.worldRoot.getObjectByName('ghost-2')?.visible).toBe(false);
+    const initialZ = animator.worldRoot.getObjectByName('ghost-3')!.position.z;
+    animator.update(2, 0.42);
+    expect(animator.worldRoot.getObjectByName('ghost-3')!.position.z).toBeGreaterThan(initialZ);
+    animator.update(3, 0.42);
+    await wrong;
+    for (let index = 1; index <= 5; index += 1) {
+      expect(animator.worldRoot.getObjectByName(`ghost-${index}`)?.visible).toBe(true);
+    }
     animator.dispose();
   });
 

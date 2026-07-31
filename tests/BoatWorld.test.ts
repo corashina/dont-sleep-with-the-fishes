@@ -841,7 +841,7 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('keeps the Eerie Melody rock, boat, and ocean on the calm wave scale', () => {
+  it('keeps the Eerie Melody island fixed while boat and ocean use the calm wave scale', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -852,13 +852,6 @@ describe('BoatWorld helpers', () => {
     const delta = 2.35;
     const profile = presentationWeatherProfile('calm');
     const expectedBoat = expectedSurvivalPose(time, delta, profile.waveScale);
-    const expectedRock = sampleWaveField(
-      DEFAULT_WAVES,
-      time,
-      1.85,
-      -7.4,
-      profile.waveScale,
-    );
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
     const tableau = world.scene.getObjectByName('siren-tableau')!;
     const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<
@@ -871,7 +864,8 @@ describe('BoatWorld helpers', () => {
     world.update(time, delta);
 
     expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
-    expect(tableau.position.y).toBeCloseTo(0.3 + expectedRock.height);
+    expect(tableau.position.toArray()).toEqual([-4.3, -0.26, -9.2]);
+    expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
     expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
 
     world.dispose();
@@ -1055,6 +1049,9 @@ describe('BoatWorld helpers', () => {
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0);
     expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(3.5);
+    const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
+    world.update(0.7, 0.7);
+    expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
 
     world.clearEvent();
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
@@ -1267,7 +1264,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('slides lost supplies starboard and crumples a broken Ring on one hull impact', async () => {
+  it('keeps Restless Waves supplies fixed while the camera shows hull impacts', async () => {
     const ring = savedItem('swimRing');
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1279,6 +1276,8 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([ring]));
     const ringRoot = world.scene.getObjectByName('boat-supply:swimRing')!;
     const baseX = ringRoot.position.x;
+    const baseScaleX = ringRoot.scale.x;
+    const baseYaw = ringRoot.rotation.y;
 
     const lost = world.reactToEventOutcome(
       'restless-waves',
@@ -1292,7 +1291,7 @@ describe('BoatWorld helpers', () => {
       { choiceId: 'swimRing', instanceId: ring.instanceId, condition: 'lost' },
     );
     world.update(0.42, 0.42);
-    expect(ringRoot.position.x).toBeGreaterThan(baseX + 0.3);
+    expect(ringRoot.position.x).toBe(baseX);
     world.clearEvent();
     await lost;
 
@@ -1310,8 +1309,8 @@ describe('BoatWorld helpers', () => {
     world.update(0.62, 0.2);
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
     expect(cameraRig.position.x).toBeGreaterThan(0.1);
-    expect(ringRoot.scale.x).toBeLessThan(0.9);
-    expect(Math.abs(ringRoot.rotation.y)).toBeGreaterThan(0.1);
+    expect(ringRoot.scale.x).toBe(baseScaleX);
+    expect(ringRoot.rotation.y).toBe(baseYaw);
 
     world.clearEvent();
     await broken;
