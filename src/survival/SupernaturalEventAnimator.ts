@@ -22,6 +22,10 @@ import {
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventModelLibrary } from './EventModelLibrary';
+import {
+  sampleEventPhysicalResponsePose,
+  type EventPhysicalResponsePose,
+} from './eventPhysicalResponseChoreography';
 import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 import type { ActionOutcome } from './survivalTypes';
 import {
@@ -248,6 +252,17 @@ export class SupernaturalEventAnimator {
     sirenLunge: 0,
     sirenStrike: 0,
   };
+  private readonly physicalResponsePose: EventPhysicalResponsePose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
   private readonly ghostMaterial = new MeshStandardMaterial({
     color: 0xb4c9c7,
     emissive: 0x526b72,
@@ -457,11 +472,11 @@ export class SupernaturalEventAnimator {
     });
   }
 
-  update(time: number, delta: number): void {
+  update(time: number, delta: number, amplitudeScale = 1): void {
     if (this.disposed) return;
     const active = this.active;
     if (active === null) {
-      this.updateSirenWave(time);
+      this.updateSirenWave(time, amplitudeScale);
       return;
     }
 
@@ -484,7 +499,7 @@ export class SupernaturalEventAnimator {
         this.updateReaction(active.eventId, active.outcome, active.response, progress);
         break;
     }
-    this.updateSirenWave(time);
+    this.updateSirenWave(time, amplitudeScale);
     if (progress >= 1) this.finishActive();
   }
 
@@ -597,6 +612,20 @@ export class SupernaturalEventAnimator {
       this.reactionSample,
     )) return;
     const sample = this.reactionSample;
+    if (
+      response !== null
+      && sampleEventPhysicalResponsePose(
+        eventId,
+        response,
+        progress,
+        this.physicalResponsePose,
+      )
+    ) {
+      this.supplyDisplay.applyEventItemPose(
+        response.instanceId,
+        this.physicalResponsePose,
+      );
+    }
     this.applyCameraPose(
       sample.cameraX,
       sample.cameraY,
@@ -626,7 +655,7 @@ export class SupernaturalEventAnimator {
     }
   }
 
-  private updateSirenWave(time: number): void {
+  private updateSirenWave(time: number, amplitudeScale: number): void {
     if (!this.sirenTableau.visible) return;
     sampleWaveFieldInto(
       this.waveSample,
@@ -634,6 +663,7 @@ export class SupernaturalEventAnimator {
       Number.isFinite(time) ? time : 0,
       SIREN_ROCK_X,
       SIREN_ROCK_Z,
+      amplitudeScale,
     );
     this.sirenTableau.position.set(
       SIREN_ROCK_X,

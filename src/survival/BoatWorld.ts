@@ -82,6 +82,10 @@ import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import type { EventModelLibrary } from './EventModelLibrary';
+import {
+  sampleEventPhysicalResponsePose,
+  type EventPhysicalResponsePose,
+} from './eventPhysicalResponseChoreography';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -212,6 +216,7 @@ interface ActiveMoonAnimation {
   readonly targetDim: number;
   readonly targetMoonScale: number;
   readonly targetCameraLower: number;
+  readonly response: EventPhysicalResponsePresentation | null;
   readonly resolve: () => void;
 }
 
@@ -536,6 +541,17 @@ export class BoatWorld {
   };
   private moonCameraLower = 0;
   private moonEventStaged = false;
+  private readonly moonPhysicalResponsePose: EventPhysicalResponsePose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
   private hasFishingCast = false;
@@ -868,7 +884,7 @@ export class BoatWorld {
       this.eventPresentation.react(eventId, outcome),
       this.weatherEventAnimator.react(eventId, outcome, response),
       this.supernaturalEventAnimator.react(eventId, outcome, response),
-      this.reactMoonEvent(eventId, outcome),
+      this.reactMoonEvent(eventId, outcome, response),
     ]);
   }
 
@@ -1372,7 +1388,7 @@ export class BoatWorld {
       this.eventPresentation.update(time, delta);
       this.driftingLootPresentation?.update(time, delta);
       this.weatherEventAnimator.update(time, delta);
-      this.supernaturalEventAnimator.update(time, delta);
+      this.supernaturalEventAnimator.update(time, delta, amplitudeScale);
       this.updateMoonEvent(delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
@@ -1897,18 +1913,39 @@ export class BoatWorld {
         targetDim: 0,
         targetMoonScale: MOON_FACE_MOON_SCALE,
         targetCameraLower: 0,
+        response: null,
         resolve,
       };
     });
   }
 
-  private reactMoonEvent(eventId: string, outcome: ActionOutcome): Promise<void> {
+  private reactMoonEvent(
+    eventId: string,
+    outcome: ActionOutcome,
+    response: EventPhysicalResponsePresentation | null,
+  ): Promise<void> {
     if (eventId !== 'face-on-the-moon') return Promise.resolve();
     if (!this.moonEventStaged) this.stageMoonEvent(eventId);
     this.cancelMoonAnimation();
     const pressureGain = (outcome.deltas.pressure ?? 0) > 0;
     const energyLoss = (outcome.deltas.energy ?? 0) < 0;
-    if (!pressureGain && !energyLoss) return Promise.resolve();
+    const hasPhysicalResponse = response !== null
+      && sampleEventPhysicalResponsePose(
+        eventId,
+        response,
+        0,
+        this.moonPhysicalResponsePose,
+      );
+    let activeResponse: EventPhysicalResponsePresentation | null = null;
+    if (hasPhysicalResponse && response !== null) {
+      this.supplyDisplay.clearEventPose();
+      if (this.supplyDisplay.pinEventActor(response.instanceId)) {
+        activeResponse = response;
+      }
+    }
+    if (!pressureGain && !energyLoss && activeResponse === null) {
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       this.activeMoonAnimation = {
         kind: 'reaction',
@@ -1932,6 +1969,7 @@ export class BoatWorld {
         targetCameraLower: energyLoss
           ? Math.max(this.moonCameraLower, MOON_FACE_CAMERA_LOWER)
           : this.moonCameraLower,
+        response: activeResponse,
         resolve,
       };
     });
@@ -1977,6 +2015,20 @@ export class BoatWorld {
           + (animation.targetMoonScale - animation.fromMoonScale) * eased;
         this.moonCameraLower = animation.fromCameraLower
           + (animation.targetCameraLower - animation.fromCameraLower) * eased;
+        if (
+          animation.response !== null
+          && sampleEventPhysicalResponsePose(
+            'face-on-the-moon',
+            animation.response,
+            progress,
+            this.moonPhysicalResponsePose,
+          )
+        ) {
+          this.supplyDisplay.applyEventItemPose(
+            animation.response.instanceId,
+            this.moonPhysicalResponsePose,
+          );
+        }
       }
       if (progress >= 1) this.finishMoonAnimation();
     }
@@ -1999,6 +2051,7 @@ export class BoatWorld {
     this.moonFace.dim = animation.targetDim;
     this.moonFace.scale = animation.targetMoonScale;
     this.moonCameraLower = animation.targetCameraLower;
+    this.releaseMoonPhysicalResponse(animation);
     animation.resolve();
   }
 
@@ -2027,7 +2080,15 @@ export class BoatWorld {
   private cancelMoonAnimation(): void {
     const animation = this.activeMoonAnimation;
     this.activeMoonAnimation = null;
-    animation?.resolve();
+    if (animation === null) return;
+    this.releaseMoonPhysicalResponse(animation);
+    animation.resolve();
+  }
+
+  private releaseMoonPhysicalResponse(animation: ActiveMoonAnimation): void {
+    if (animation.response === null) return;
+    this.supplyDisplay.clearEventPose();
+    this.supplyDisplay.releaseEventActor();
   }
 
   private cancelActiveSequence(): void {

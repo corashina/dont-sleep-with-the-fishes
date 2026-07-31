@@ -841,6 +841,43 @@ describe('BoatWorld helpers', () => {
     }
   });
 
+  it('keeps the Eerie Melody rock, boat, and ocean on the calm wave scale', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const time = 2.35;
+    const delta = 2.35;
+    const profile = presentationWeatherProfile('calm');
+    const expectedBoat = expectedSurvivalPose(time, delta, profile.waveScale);
+    const expectedRock = sampleWaveField(
+      DEFAULT_WAVES,
+      time,
+      1.85,
+      -7.4,
+      profile.waveScale,
+    );
+    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
+    const tableau = world.scene.getObjectByName('siren-tableau')!;
+    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<
+      BufferGeometry,
+      ShaderMaterial
+    >;
+
+    world.stageEvent('eerie-melody');
+    world.setPresentationWeather('calm');
+    world.update(time, delta);
+
+    expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
+    expect(tableau.position.y).toBeCloseTo(0.3 + expectedRock.height);
+    expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('stages the loaded fog man and hides it when the event clears', () => {
     const propModels = createTestPropModels();
     const fogMan = new Group();
@@ -954,6 +991,41 @@ describe('BoatWorld helpers', () => {
     supernaturalSupport.mockRestore();
   });
 
+  it('drops a broken Bucket during the Eerie Melody result', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
+
+    world.stageEvent('eerie-melody');
+    const reaction = world.reactToEventOutcome(
+      'eerie-melody',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The bucket breaks.',
+        deltas: { energy: -79 },
+        cue: 'none',
+      },
+      { choiceId: 'bucket', instanceId: bucket.instanceId, condition: 'broken' },
+    );
+    world.update(0.5, 0.5);
+
+    expect(bucketRoot.position.y).toBeLessThan(-0.2);
+    expect(Math.abs(bucketRoot.rotation.z)).toBeGreaterThan(0.4);
+
+    world.clearEvent();
+    await reaction;
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('reveals the moon face after a normal-moon hold and clears every sky transient', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1039,6 +1111,47 @@ describe('BoatWorld helpers', () => {
     world.clearEvent();
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
     expect(cameraRig.position.y).toBe(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('snaps broken Binoculars back during the Face on the Moon result', async () => {
+    const binoculars = savedItem('spyglass');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [binoculars],
+    );
+    world.syncInventory(snapshot([binoculars]));
+    const binocularsRoot = world.scene.getObjectByName('boat-supply:spyglass')!;
+
+    world.stageEvent('face-on-the-moon');
+    const reaction = world.reactToEventOutcome(
+      'face-on-the-moon',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The binoculars break.',
+        deltas: { energy: -79 },
+        cue: 'none',
+      },
+      {
+        choiceId: 'spyglass',
+        instanceId: binoculars.instanceId,
+        condition: 'broken',
+      },
+    );
+    world.update(0.24, 0.24);
+
+    expect(binocularsRoot.position.z).toBeGreaterThan(0.3);
+    expect(Math.abs(binocularsRoot.rotation.x)).toBeGreaterThan(0.3);
+
+    world.update(1.1, 0.86);
+    await reaction;
+    expect(binocularsRoot.position.toArray()).toEqual([0, 0, 0]);
 
     world.dispose();
     propModels.dispose();
