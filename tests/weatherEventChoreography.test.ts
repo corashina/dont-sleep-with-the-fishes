@@ -150,8 +150,8 @@ describe('weather event choreography', () => {
 
     expect(bucket.y).toBeGreaterThanOrEqual(0.4);
     expect(bucket.y).toBeLessThanOrEqual(0.48);
-    expect(umbrella.y).toBeGreaterThanOrEqual(0.45);
-    expect(umbrella.y).toBeLessThanOrEqual(0.6);
+    expect(umbrella.y).toBeGreaterThanOrEqual(0.62);
+    expect(umbrella.y).toBeLessThanOrEqual(0.7);
   });
 
   it('sequences two Windy Night broken actors', () => {

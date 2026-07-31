@@ -496,7 +496,7 @@ export function sampleWeatherItemUse(
           output.effect = hold;
           break;
         case 'umbrella':
-          output.y = 0.55 * hold;
+          output.y = 0.66 * hold;
           output.pitch = -0.14 * hold;
           output.roll = -0.18 * pulse(t, 0.2, 0.58, 0.86);
           output.scaleY = 1 - 0.1 * pulse(t, 0.28, 0.6, 0.84);
