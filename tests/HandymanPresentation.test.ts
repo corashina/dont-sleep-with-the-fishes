@@ -1,10 +1,15 @@
 import {
+  Bone,
   BoxGeometry,
+  Float32BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
   Quaternion,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
   Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -88,15 +93,45 @@ function snapshot(): SurvivalSnapshot {
   };
 }
 
-function riggedHand(): Group {
-  const root = new Group();
-  root.name = 'event-model:riggedHand';
-  const body = new Mesh(
-    new BoxGeometry(1.1, 0.22, 0.75),
+function createSkinnedBody(
+  name: string,
+  skeleton: Skeleton,
+): SkinnedMesh {
+  const geometry = new BoxGeometry(1.1, 0.22, 0.75);
+  const vertexCount = geometry.getAttribute('position').count;
+  const skinIndices = new Uint16Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+  for (let index = 0; index < vertexCount; index += 1) {
+    skinWeights[index * 4] = 1;
+  }
+  geometry.setAttribute(
+    'skinIndex',
+    new Uint16BufferAttribute(skinIndices, 4),
+  );
+  geometry.setAttribute(
+    'skinWeight',
+    new Float32BufferAttribute(skinWeights, 4),
+  );
+  const body = new SkinnedMesh(
+    geometry,
     new MeshStandardMaterial(),
   );
-  body.name = 'rigged-hand-test-mesh';
-  root.add(body);
+  body.name = name;
+  body.bind(skeleton);
+  return body;
+}
+
+function riggedHand(options: {
+  readonly disconnected?: boolean;
+  readonly unbound?: boolean;
+  readonly sharedSkeletonMeshes?: boolean;
+} = {}): Group {
+  const root = new Group();
+  root.name = 'event-model:riggedHand';
+  const handMain = new Bone();
+  handMain.name = 'HandMain';
+  root.add(handMain);
+  const bones: Bone[] = [handMain];
   const names = [
     ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
     ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
@@ -105,13 +140,23 @@ function riggedHand(): Group {
     ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
   ] as const;
   for (const chain of names) {
-    let parent: Group = root;
+    let parent: Bone | Group = handMain;
     for (const name of chain) {
-      const joint = new Group();
+      const joint = new Bone();
       joint.name = name;
-      parent.add(joint);
+      if (options.disconnected === true) root.add(joint);
+      else parent.add(joint);
+      bones.push(joint);
       parent = joint;
     }
+  }
+  root.updateMatrixWorld(true);
+  const skeleton = new Skeleton(
+    options.unbound === true ? [handMain] : bones,
+  );
+  root.add(createSkinnedBody('rigged-hand-test-mesh', skeleton));
+  if (options.sharedSkeletonMeshes === true) {
+    root.add(createSkinnedBody('rigged-hand-test-mesh-2', skeleton));
   }
   return root;
 }
@@ -119,14 +164,28 @@ function riggedHand(): Group {
 function createHarness(options: {
   readonly importedHand?: boolean;
   readonly invalidHand?: boolean;
+  readonly disconnectedHand?: boolean;
+  readonly unboundHand?: boolean;
+  readonly sharedSkeletonMeshes?: boolean;
 } = {}) {
   const propModels = createTestPropModels();
-  if (options.importedHand === true || options.invalidHand === true) {
+  if (
+    options.importedHand === true
+    || options.invalidHand === true
+    || options.disconnectedHand === true
+    || options.unboundHand === true
+  ) {
     const createEventModel = propModels.createEventModel.bind(propModels);
     vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => {
       if (id !== 'riggedHand') return createEventModel(id);
       return {
-        root: options.importedHand === true ? riggedHand() : new Group(),
+        root: options.invalidHand === true
+          ? new Group()
+          : riggedHand({
+            disconnected: options.disconnectedHand,
+            unbound: options.unboundHand,
+            sharedSkeletonMeshes: options.sharedSkeletonMeshes,
+          }),
         animations: [],
       };
     });
@@ -396,6 +455,16 @@ describe('HandymanPresentation', () => {
     expect(harness.presentation.root.userData.hullKicks).toBe(1);
     expect(supply.position.toArray()).not.toEqual(supplyPosition.toArray());
     await finish(harness, reaction, 4);
+    const heldPosition = harness.cameraRig.position.clone();
+    const heldQuaternion = harness.cameraRig.quaternion.clone();
+
+    harness.cameraRig.position.set(0, 0, 0);
+    harness.cameraRig.quaternion.identity();
+    harness.presentation.update(5, 1 / 60);
+    expect(harness.cameraRig.position.toArray())
+      .toEqual(heldPosition.toArray());
+    expect(harness.cameraRig.quaternion.toArray())
+      .toEqual(heldQuaternion.toArray());
 
     harness.presentation.clear();
     harness.supplyDisplay.update(0);
@@ -455,25 +524,62 @@ describe('HandymanPresentation', () => {
     fallback.dispose();
   });
 
-  it('settles promises and disposes the imported hand once', async () => {
-    const harness = createHarness({ importedHand: true });
+  it('rejects disconnected or inactive imported finger chains', () => {
+    const disconnected = createHarness({ disconnectedHand: true });
+    expect(
+      disconnected.presentation.root.getObjectByName('handyman-palm')
+        ?.userData.modelKind,
+    ).toBe('procedural');
+    expect(
+      disconnected.presentation.root.getObjectByName(
+        'event-model:riggedHand',
+      ),
+    ).toBeUndefined();
+    disconnected.dispose();
+
+    const unbound = createHarness({ unboundHand: true });
+    expect(
+      unbound.presentation.root.getObjectByName('handyman-palm')
+        ?.userData.modelKind,
+    ).toBe('procedural');
+    expect(
+      unbound.presentation.root.getObjectByName('event-model:riggedHand'),
+    ).toBeUndefined();
+    unbound.dispose();
+  });
+
+  it('settles promises and disposes each imported Skeleton once', async () => {
+    const harness = createHarness({
+      importedHand: true,
+      sharedSkeletonMeshes: true,
+    });
     harness.presentation.stage();
     const pending = harness.presentation.reveal();
     harness.presentation.settleForVisibilityChange();
     await pending;
     const mesh = harness.presentation.root.getObjectByName(
       'rigged-hand-test-mesh',
-    ) as Mesh;
+    ) as SkinnedMesh;
     const dispose = vi.spyOn(mesh.geometry, 'dispose');
     const material = Array.isArray(mesh.material)
       ? mesh.material[0]!
       : mesh.material;
     const materialDispose = vi.spyOn(material, 'dispose');
+    mesh.skeleton.computeBoneTexture();
+    const boneTexture = mesh.skeleton.boneTexture!;
+    const skeletonDispose = vi.spyOn(mesh.skeleton, 'dispose');
+    const boneTextureDispose = vi.spyOn(boneTexture, 'dispose');
+    const secondMesh = harness.presentation.root.getObjectByName(
+      'rigged-hand-test-mesh-2',
+    ) as SkinnedMesh;
+    expect(secondMesh.skeleton).toBe(mesh.skeleton);
 
     harness.presentation.dispose();
     harness.presentation.dispose();
     expect(dispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+    expect(skeletonDispose).toHaveBeenCalledOnce();
+    expect(boneTextureDispose).toHaveBeenCalledOnce();
     harness.dispose();
   });
 
