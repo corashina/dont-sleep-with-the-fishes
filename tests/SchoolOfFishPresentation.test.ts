@@ -245,6 +245,7 @@ describe('SchoolOfFishPresentation', () => {
     const presentation = new SchoolOfFishPresentation(fixture.environment);
     const flash = presentation.worldRoot.getObjectByName('school-surface-flash-1') as Mesh;
     const splash = presentation.worldRoot.getObjectByName('school-splash-1') as Mesh;
+    const fin = presentation.worldRoot.getObjectByName('school-surface-fin-1') as Mesh;
     const catchMesh = fixture.modelMeshes[24]!;
     const flashGeometryDispose = vi.spyOn(flash.geometry, 'dispose');
     const flashMaterialDispose = vi.spyOn(
@@ -254,6 +255,11 @@ describe('SchoolOfFishPresentation', () => {
     const splashGeometryDispose = vi.spyOn(splash.geometry, 'dispose');
     const splashMaterialDispose = vi.spyOn(
       splash.material as MeshStandardMaterial,
+      'dispose',
+    );
+    const finGeometryDispose = vi.spyOn(fin.geometry, 'dispose');
+    const finMaterialDispose = vi.spyOn(
+      fin.material as MeshStandardMaterial,
       'dispose',
     );
     const catchGeometryDispose = vi.spyOn(catchMesh.geometry, 'dispose');
@@ -271,6 +277,8 @@ describe('SchoolOfFishPresentation', () => {
     expect(flashMaterialDispose).toHaveBeenCalledOnce();
     expect(splashGeometryDispose).toHaveBeenCalledOnce();
     expect(splashMaterialDispose).toHaveBeenCalledOnce();
+    expect(finGeometryDispose).toHaveBeenCalledOnce();
+    expect(finMaterialDispose).toHaveBeenCalledOnce();
     expect(fixture.modelDisposes[24]).toHaveBeenCalledOnce();
     expect(catchGeometryDispose).toHaveBeenCalledOnce();
     expect(catchMaterialDispose).toHaveBeenCalledOnce();
