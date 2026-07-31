@@ -1,9 +1,11 @@
 // Importance: 5/5. Protects survival orchestration and lifecycle.
 import { PerspectiveCamera, Scene } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
+import { BoatWorld } from '../src/survival/BoatWorld';
 import { SURVIVAL_EVENTS } from '../src/survival/events';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
@@ -28,7 +30,9 @@ import type {
   SurvivalUI,
 } from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
+import { createTestPropModels } from './helpers/propModels';
 import { sequenceRandom } from './helpers/random';
+import { createTestMoonTexture } from './helpers/skyAssets';
 
 function inventory(
   overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
@@ -2119,6 +2123,37 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('plays thunder only after the lightning sample becomes visible', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const calls: string[] = [];
+    const thunder = vi.spyOn(SurvivalAudio.prototype, 'thunder').mockImplementation(() => {
+      const lightning = world.scene.getObjectByName('weather-lightning-light');
+      calls.push(lightning?.visible === true ? 'visible' : 'hidden');
+    });
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world,
+      ui: {},
+    });
+
+    try {
+      phase.setWeatherOverride('thunderstorm');
+      phase.start();
+      phase.update(1.35, 1.35);
+
+      expect(calls).toEqual(['visible']);
+    } finally {
+      phase.dispose();
+      thunder.mockRestore();
+      propModels.dispose();
+    }
+  });
+
   it('keeps forced weather above automatic weather and restores the active event weather', async () => {
     let phase!: SurvivalPhase;
     const calls: string[] = [];
@@ -2377,6 +2412,119 @@ describe('SurvivalPhase orchestration', () => {
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
+  });
+
+  it('keeps Bad Sleep gaps through the choice and closes them before dawn', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'bad-sleep',
+    });
+    const badSleepProfile = deferred();
+    const solidProfile = deferred();
+    const calls: string[] = [];
+    const outcome = accepted({
+      code: 'event-resolved',
+      message: 'You wake in short, frightened bursts.',
+      cue: 'impact',
+    });
+    const beginDawn = vi.fn(() => {
+      calls.push('dawn');
+      current = snapshot({ state: 'day', day: 2 });
+      return accepted({ code: 'dawn', cue: 'dawn' });
+    });
+    const showFeedback = vi.fn();
+    const showEventOutcome = vi.fn(() => calls.push('outcome'));
+    const holdEventOutcome = vi.fn(() => {
+      calls.push('hold');
+      return Promise.resolve();
+    });
+    const restoreCommandFocus = vi.fn(() => calls.push('focus'));
+    const setEventSelection = vi.fn(() => calls.push('selection'));
+    const setSleepCovered = vi.fn((covered: boolean) => {
+      calls.push(covered ? 'cover' : 'uncover');
+      return Promise.resolve();
+    });
+    const setSleepCoverProfile = vi.fn((profile: 'solid' | 'bad-sleep') => {
+      calls.push(`profile:${profile}`);
+      return profile === 'bad-sleep' ? badSleepProfile.promise : solidProfile.promise;
+    });
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+          });
+          return outcome;
+        }),
+        beginDawn,
+      },
+      world: {
+        scene: new Scene(),
+        stageEvent: vi.fn(() => calls.push('stage')),
+        revealEvent: vi.fn(() => {
+          calls.push('reveal');
+          return Promise.resolve();
+        }),
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => {
+          calls.push('reaction');
+          return Promise.resolve();
+        }),
+        clearEvent: vi.fn(() => calls.push('clear')),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered,
+        setSleepCoverProfile,
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        setBusy: vi.fn(),
+        showFeedback,
+        showEventOutcome,
+        holdEventOutcome,
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        restoreCommandFocus,
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(calls).toContain('profile:bad-sleep');
+    expect(calls).not.toContain('uncover');
+    expect(setEventSelection).not.toHaveBeenCalled();
+
+    badSleepProfile.resolve();
+    await flushPromises();
+
+    expect(calls.indexOf('profile:bad-sleep')).toBeLessThan(calls.indexOf('reveal'));
+    expect(setEventSelection).toHaveBeenCalledOnce();
+    expect(calls).not.toContain('uncover');
+
+    phase.handleEndure();
+    await flushPromises();
+
+    expect(calls.indexOf('reaction')).toBeLessThan(calls.indexOf('outcome'));
+    expect(calls.indexOf('outcome')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls.at(-1)).toBe('profile:solid');
+    expect(showFeedback).not.toHaveBeenCalled();
+    expect(beginDawn).not.toHaveBeenCalled();
+
+    solidProfile.resolve();
+    await flushPromises();
+
+    expect(calls.indexOf('profile:solid')).toBeLessThan(calls.indexOf('dawn'));
+    expect(calls.indexOf('dawn')).toBeLessThan(calls.indexOf('uncover'));
+    expect(calls.at(-1)).toBe('focus');
+    expect(restoreCommandFocus).toHaveBeenCalledOnce();
+    phase.dispose();
   });
 
   it('runs the full Dangerous Waters lifecycle while choices stay locked until reveal completes', async () => {
@@ -3090,7 +3238,7 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('routes one eligible physical item through the presentation lock and resolved condition', async () => {
+  it('derives the selected item before random changed actors without an early inventory sync', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     const cue = deferred();
     let current = snapshot({
@@ -3098,6 +3246,7 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventId: event.id,
       inventory: inventory({
         'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'usable' },
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
       }),
     });
     const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
@@ -3107,18 +3256,24 @@ describe('SurvivalPhase orchestration', () => {
         pendingEventId: null,
         inventory: inventory({
           'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'broken' },
+          'map-1': { instanceId: 'map-1', type: 'map', condition: 'broken' },
         }),
       });
       return outcome;
     });
     const playEventItemUse = vi.fn(() => cue.promise);
-    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const syncInventory = vi.fn();
+    const reactToEventOutcome = vi.fn(() => {
+      expect(syncInventory).not.toHaveBeenCalledWith(current);
+      return Promise.resolve();
+    });
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
         play: vi.fn(() => Promise.resolve()),
         playEventItemUse,
         reactToEventOutcome,
+        syncInventory,
         dispose: vi.fn(),
       },
       ui: {
@@ -3152,7 +3307,148 @@ describe('SurvivalPhase orchestration', () => {
     expect(reactToEventOutcome).toHaveBeenCalledWith(
       'shower-night',
       outcome,
-      { choiceId: 'bucket', instanceId: 'bucket-1', condition: 'broken' },
+      {
+        choiceId: 'bucket',
+        actors: [
+          { instanceId: 'bucket-1', condition: 'broken' },
+          { instanceId: 'map-1', condition: 'broken' },
+        ],
+      },
+    );
+  });
+
+  it('derives two Windy Night Sleep actors in stable order', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'windy-night',
+      inventory: inventory({
+        'umbrella-1': {
+          instanceId: 'umbrella-1',
+          type: 'umbrella',
+          condition: 'usable',
+        },
+        'map-1': {
+          instanceId: 'map-1',
+          type: 'map',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            inventory: inventory({
+              'umbrella-1': {
+                instanceId: 'umbrella-1',
+                type: 'umbrella',
+                condition: 'broken',
+              },
+              'map-1': {
+                instanceId: 'map-1',
+                type: 'map',
+                condition: 'broken',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'windy-night',
+      outcome,
+      {
+        choiceId: 'sleep',
+        actors: [
+          { instanceId: 'map-1', condition: 'broken' },
+          { instanceId: 'umbrella-1', condition: 'broken' },
+        ],
+      },
+    );
+  });
+
+  it('derives a random Thunderstorm loss for Sleep', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'thunderstorm',
+      inventory: inventory({
+        'umbrella-1': {
+          instanceId: 'umbrella-1',
+          type: 'umbrella',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const ui: Partial<SurvivalUI> = {
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            inventory: inventory({
+              'umbrella-1': {
+                instanceId: 'umbrella-1',
+                type: 'umbrella',
+                condition: 'lost',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'thunderstorm',
+      outcome,
+      {
+        choiceId: 'sleep',
+        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
+      },
     );
   });
 
@@ -3521,10 +3817,10 @@ describe('SurvivalPhase orchestration', () => {
     });
     const syncInventory = vi.fn();
     const reactToEventOutcome = vi.fn(() => {
-      expect(syncInventory).toHaveBeenLastCalledWith(current);
+      expect(syncInventory).not.toHaveBeenCalledWith(current);
       return reaction.promise;
     });
-    const showFeedback = vi.fn();
+    const showEventOutcome = vi.fn();
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
@@ -3542,7 +3838,7 @@ describe('SurvivalPhase orchestration', () => {
         showEventReveal: vi.fn(() => Promise.resolve()),
         setEventSelection: vi.fn(),
         setPaused: vi.fn(),
-        showFeedback,
+        showEventOutcome,
         holdEventOutcome: vi.fn(() => hold.promise),
         dispose: vi.fn(),
       },
@@ -3561,17 +3857,17 @@ describe('SurvivalPhase orchestration', () => {
     phase.setPaused(false);
     await flushPromises();
     expect(resolveEvent).toHaveBeenCalledOnce();
-    expect(showFeedback).not.toHaveBeenCalled();
+    expect(showEventOutcome).not.toHaveBeenCalled();
 
     fakeDocument.hidden = true;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
-    expect(showFeedback).not.toHaveBeenCalled();
+    expect(showEventOutcome).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
     phase.setPaused(false);
     await flushPromises();
-    expect(showFeedback).not.toHaveBeenCalled();
+    expect(showEventOutcome).toHaveBeenCalledWith(outcome);
     hold.resolve();
     phase.dispose();
   });

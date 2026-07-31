@@ -41,6 +41,9 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
+import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
+import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
@@ -71,6 +74,62 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
   type,
 });
+
+class FakeBoatSupplyDisplay {
+  readonly pinCalls: ItemInstanceId[] = [];
+  readonly pinHistory: ItemInstanceId[] = [];
+  readonly poses = new Map<ItemInstanceId, SupplyAdditivePose>();
+  ambientRoll = 0;
+  ambientLift = 0;
+  clearCount = 0;
+  private pinnedActor: ItemInstanceId | null = null;
+
+  constructor(private readonly rejectedActorId: ItemInstanceId | null = null) {}
+
+  applyEventAmbientPose(roll: number, lift: number): void {
+    this.ambientRoll = roll;
+    this.ambientLift = lift;
+  }
+
+  applyEventItemPose(instanceId: ItemInstanceId, pose: SupplyAdditivePose): boolean {
+    this.poses.set(instanceId, { ...pose });
+    return true;
+  }
+
+  pinEventActor(instanceId: ItemInstanceId): boolean {
+    this.pinCalls.push(instanceId);
+    if (instanceId === this.rejectedActorId) return false;
+    if (instanceId !== this.pinnedActor) {
+      this.pinnedActor = instanceId;
+      this.pinHistory.push(instanceId);
+    }
+    return true;
+  }
+
+  releaseEventActorOnNextSync(): void {
+    this.pinnedActor = null;
+  }
+
+  releaseEventActor(): void {
+    this.pinnedActor = null;
+  }
+
+  resetEventPoseForFrame(): void {
+    this.ambientRoll = 0;
+    this.ambientLift = 0;
+    this.poses.clear();
+  }
+
+  clearEventPose(): void {
+    this.resetEventPoseForFrame();
+  }
+
+  clearEventMotion(): void {
+    this.resetEventPoseForFrame();
+    this.pinnedActor = null;
+    this.clearCount += 1;
+  }
+}
 
 function firstMesh(root: Object3D): Mesh {
   let found: Mesh | undefined;
@@ -503,6 +562,199 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('applies the Bad Sleep reveal to the camera and supplies', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const reveal = animator.reveal('bad-sleep');
+    animator.update(1.7, 1.7);
+
+    expect(cameraRig.position.y).not.toBe(0);
+    expect(supplies.ambientRoll).not.toBe(0);
+
+    animator.clear();
+    await reveal;
+    animator.dispose();
+  });
+
+  it.each(['bucket', 'flashlight', 'swimRing', 'umbrella'] as const)(
+    'returns the Bad Sleep %s to its base pose',
+    async (choiceId) => {
+      const cameraRig = new Group();
+      const supplies = new FakeBoatSupplyDisplay();
+      const animator = new WeatherEventAnimator(
+        cameraRig,
+        supplies as unknown as BoatSupplyDisplay,
+      );
+      const instanceId = `${choiceId}-1` as ItemInstanceId;
+
+      const itemUse = animator.playItemUse('bad-sleep', choiceId, instanceId);
+      animator.update(2, 2);
+      await itemUse;
+
+      expect(supplies.poses.size).toBe(0);
+      expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+      expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      animator.dispose();
+    },
+  );
+
+  it.each([
+    ['shower-night', 'bucket', 'bucket-1'],
+    ['windy-night', 'umbrella', 'umbrella-1'],
+    ['thunderstorm', 'anchor', 'anchor-1'],
+  ] as const)(
+    'moves only the camera for %s item use and result',
+    async (eventId, choiceId, instanceId) => {
+      const cameraRig = new Group();
+      const supplies = new FakeBoatSupplyDisplay();
+      const animator = new WeatherEventAnimator(
+        cameraRig,
+        supplies as unknown as BoatSupplyDisplay,
+      );
+
+      const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
+      animator.update(0.6, 0.6);
+
+      expect(supplies.poses.size).toBe(0);
+      expect(supplies.pinCalls).toHaveLength(0);
+      expect(
+        Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
+      ).toBeGreaterThan(0.01);
+
+      animator.update(2, 2);
+      await itemUse;
+      const result = animator.react(
+        eventId,
+        {
+          accepted: true,
+          code: 'event-resolved',
+          message: 'The night passes.',
+          deltas: { hull: -20 },
+          cue: 'impact',
+        },
+        {
+          choiceId,
+          actors: [{ instanceId, condition: 'broken' }],
+        },
+      );
+      animator.update(0.55, 0.55);
+
+      expect(supplies.poses.size).toBe(0);
+      expect(supplies.pinCalls).toHaveLength(0);
+      expect(
+        Math.abs(cameraRig.position.x) + Math.abs(cameraRig.position.y)
+        + Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.rotation.z),
+      ).toBeGreaterThan(0.01);
+
+      animator.update(2, 2);
+      await result;
+      animator.dispose();
+    },
+  );
+
+  it('keeps the Bad Sleep broken Umbrella collapsed through the result hold', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const result = animator.react(
+      'bad-sleep',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The umbrella breaks.',
+        deltas: {},
+        cue: 'none',
+      },
+      {
+        choiceId: 'umbrella',
+        actors: [{ instanceId: 'umbrella-1', condition: 'broken' }],
+      },
+    );
+    animator.update(2, 2);
+    await result;
+
+    expect(supplies.poses.get('umbrella-1')?.scaleY).toBeLessThan(0.8);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
+  it('keeps Thunderstorm lightning off the lost item', () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    void animator.react(
+      'thunderstorm',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'Lightning takes the umbrella.',
+        deltas: { hull: -40 },
+        cue: 'impact',
+      },
+      {
+        choiceId: 'sleep',
+        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
+      },
+    );
+    animator.update(0.45, 0.45);
+
+    expect(
+      animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible,
+    ).toBe(true);
+    expect(supplies.pinCalls).toHaveLength(0);
+    expect(supplies.poses.size).toBe(0);
+    expect(Math.abs(cameraRig.rotation.z)).toBeGreaterThan(0.05);
+    animator.dispose();
+  });
+
+  it('restores the camera and every supply pose on animator clear', () => {
+    const cameraRig = new Group();
+    cameraRig.position.set(2, 3, 4);
+    cameraRig.rotation.set(0.1, 0.2, 0.3);
+    const basePosition = cameraRig.position.toArray();
+    const baseRotation = [
+      cameraRig.rotation.x,
+      cameraRig.rotation.y,
+      cameraRig.rotation.z,
+    ] as const;
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    void animator.reveal('windy-night');
+    animator.update(0.9, 0.9);
+    expect(supplies.ambientRoll).toBe(0);
+    expect(Math.abs(cameraRig.rotation.y)).toBeGreaterThan(0.01);
+
+    animator.clear();
+
+    expect(cameraRig.position.toArray()).toEqual(basePosition);
+    cameraRig.rotation.toArray().slice(0, 3).forEach((value, index) => {
+      expect(value).toBeCloseTo(baseRotation[index]!);
+    });
+    expect(supplies.poses.size).toBe(0);
+    expect(supplies.ambientRoll).toBe(0);
+    expect(supplies.ambientLift).toBe(0);
+    animator.dispose();
+  });
+
   it('owns and routes the full Shower Night reveal before restoring the base camera', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -518,7 +770,7 @@ describe('BoatWorld helpers', () => {
 
     expect(world.scene.getObjectByName('weather-event-world')).toBeDefined();
     expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
-    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeDefined();
+    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeUndefined();
     const reveal = world.revealEvent('shower-night');
     world.update(3.39, 3.39);
     expect(await remainsPending(reveal)).toBe(true);
@@ -533,7 +785,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses event-specific Bucket choreography and retains generic fallback', async () => {
+  it('uses camera-only Shower choreography and retains generic fallback', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -544,6 +796,7 @@ describe('BoatWorld helpers', () => {
     );
     world.syncInventory(snapshot([bucket]));
     const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
 
     const showerUse = world.playEventItemUse(
       'shower-night',
@@ -552,7 +805,10 @@ describe('BoatWorld helpers', () => {
     );
     world.update(0.66, 0.66);
     expect(await remainsPending(showerUse)).toBe(true);
-    expect(bucketGroup.position.toArray()).not.toEqual([0, 0, 0]);
+    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+    expect(
+      Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
+    ).toBeGreaterThan(0.01);
     world.update(2, 2);
     await showerUse;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
@@ -678,8 +934,7 @@ describe('BoatWorld helpers', () => {
       },
       {
         choiceId: 'anchor',
-        instanceId: anchor.instanceId,
-        condition: 'usable',
+        actors: [{ instanceId: anchor.instanceId, condition: 'usable' }],
       },
     );
 
@@ -726,8 +981,7 @@ describe('BoatWorld helpers', () => {
 
     const response = {
       choiceId: 'bucket',
-      instanceId: bucket.instanceId,
-      condition: 'usable' as const,
+      actors: [{ instanceId: bucket.instanceId, condition: 'usable' as const }],
     };
     const outcome: ActionOutcome = {
       accepted: true,
@@ -788,7 +1042,7 @@ describe('BoatWorld helpers', () => {
         deltas: { hull: -10 },
         cue: 'impact',
       },
-      { choiceId: 'bucket', instanceId: bucket.instanceId, condition: 'usable' },
+      { choiceId: 'bucket', actors: [{ instanceId: bucket.instanceId, condition: 'usable' }] },
     );
     world.update(3, 0.2);
     world.setDocumentHidden(true);
@@ -869,7 +1123,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps a selected lost duplicate visible through its terminal reaction', async () => {
+  it('keeps a selected lost duplicate still through its camera-only reaction', async () => {
     const maps = [savedItem('map', 1), savedItem('map', 2)] as const;
     const inventory = new SurvivalInventoryState(maps);
     const propModels = createTestPropModels();
@@ -904,12 +1158,16 @@ describe('BoatWorld helpers', () => {
         deltas: {},
         cue: 'none',
       },
-      { choiceId: 'map', instanceId: maps[1].instanceId, condition: 'lost' },
+      { choiceId: 'map', actors: [{ instanceId: maps[1].instanceId, condition: 'lost' }] },
     );
-    world.update(2, 0.84);
+    world.update(2, 0.5);
+    expect(mapRoot.visible).toBe(true);
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
+
+    world.update(3, 1.23);
     await reaction;
     expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.x).toBeLessThan(base.x - 1);
+    expect(mapRoot.position.toArray()).toEqual(base.toArray());
 
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
     expect(mapRoot.visible).toBe(true);

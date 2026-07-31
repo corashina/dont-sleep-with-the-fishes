@@ -83,16 +83,14 @@ import type {
   DangerousWatersBoatReaction,
   DangerousWatersItemPose,
 } from './DangerousWatersPresentation';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import { isFeaturedEventId, type FeaturedEventId } from './FeaturedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
-import {
-  WeatherEventAnimator,
-  type EventPhysicalResponsePresentation,
-} from './WeatherEventAnimator';
+import { WeatherEventAnimator } from './WeatherEventAnimator';
 import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,
@@ -135,6 +133,10 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   death: 1.5,
   sinking: 1.5,
 };
+const EMPTY_EVENT_PHYSICAL_RESPONSE: EventPhysicalResponsePresentation = Object.freeze({
+  choiceId: 'sleep',
+  actors: Object.freeze([]),
+});
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
 const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
@@ -536,6 +538,11 @@ export class BoatWorld {
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private weatherEventOperation = 0;
+  private lightningStrikePending = false;
+  private lightningStrikeListener: (() => void) | null = null;
+  private readonly queueLightningStrike = (): void => {
+    this.lightningStrikePending = true;
+  };
   private disposed = false;
 
   constructor(
@@ -559,6 +566,7 @@ export class BoatWorld {
       },
     );
     this.weatherEffects = new WeatherEffects(this.scene);
+    this.weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
     this.camera = camera;
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
@@ -670,7 +678,6 @@ export class BoatWorld {
       this.featuredEventCameraRig,
       this.driftingLootSternRest,
     );
-
     this.ocean = new OceanRenderer(
       waterQuality,
       SURVIVAL_CELESTIAL_DIRECTION,
@@ -726,7 +733,7 @@ export class BoatWorld {
   }
 
   setLightningStrikeListener(listener: () => void): void {
-    this.weatherEffects.setLightningStrikeListener(listener);
+    this.lightningStrikeListener = listener;
   }
 
   setWaterQuality(value: WaterQuality): void {
@@ -881,7 +888,7 @@ export class BoatWorld {
   async reactToEventOutcome(
     eventId: string,
     outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null = null,
+    response: EventPhysicalResponsePresentation = EMPTY_EVENT_PHYSICAL_RESPONSE,
   ): Promise<void> {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
@@ -1432,6 +1439,10 @@ export class BoatWorld {
     ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
+    if (this.lightningStrikePending) {
+      this.lightningStrikePending = false;
+      this.lightningStrikeListener?.();
+    }
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
 
@@ -1442,6 +1453,8 @@ export class BoatWorld {
       () => {
         this.disposed = true;
         this.weatherEventOperation += 1;
+        this.lightningStrikePending = false;
+        this.lightningStrikeListener = null;
       },
       () => this.cancelActiveSequence(),
       () => this.weatherEventAnimator.dispose(),
