@@ -495,8 +495,12 @@ describe('BoatWorld helpers', () => {
       expect(presenter.stage).toHaveBeenCalledOnce();
       expect(world.scene.getObjectByName(`focused-event:${eventId}`)?.visible)
         .toBe(true);
-      expect(world.scene.getObjectByName(`event-prop:${eventId}`)?.visible)
-        .toBe(false);
+      const generic = world.scene.getObjectByName(`event-prop:${eventId}`);
+      if (eventId === 'night-trader' || eventId === 'handyman') {
+        expect(generic).toBeUndefined();
+      } else {
+        expect(generic?.visible).toBe(false);
+      }
       await world.revealEvent(eventId);
       expect(presenter.reveal).toHaveBeenCalledOnce();
       const choice = {
@@ -544,7 +548,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('registers the authored Chest Attack and Midnight Tour presenters', () => {
+  it('registers the four authored focused event presenters', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -562,6 +566,17 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
       .toBe(false);
     expect(world.scene.getObjectByName('focused-event:midnight-tour')?.visible)
+      .toBe(true);
+
+    world.stageEvent('night-trader');
+    expect(world.scene.getObjectByName('event-prop:night-trader'))
+      .toBeUndefined();
+    expect(world.scene.getObjectByName('focused-event:night-trader')?.visible)
+      .toBe(true);
+
+    world.stageEvent('handyman');
+    expect(world.scene.getObjectByName('event-prop:handyman')).toBeUndefined();
+    expect(world.scene.getObjectByName('focused-event:handyman')?.visible)
       .toBe(true);
 
     world.dispose();
@@ -601,6 +616,50 @@ describe('BoatWorld helpers', () => {
     await pending;
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('clears generic item motion before a focused trade reaction starts', async () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('night-trader');
+    const clearEventMotion = vi.spyOn(
+      BoatSupplyDisplay.prototype,
+      'clearEventMotion',
+    );
+    active.react.mockImplementation(() => {
+      expect(clearEventMotion).toHaveBeenCalled();
+      return Promise.resolve();
+    });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'night-trader': () => active.presenter },
+    );
+    world.stageEvent('night-trader');
+    clearEventMotion.mockClear();
+
+    await world.reactToEventOutcome('night-trader', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The trader gives you a compass.',
+      deltas: {},
+      cue: 'none',
+      eventResult: {
+        eventId: 'night-trader',
+        choiceId: 'map',
+        resultId: 'trader-reward',
+      },
+    });
+
+    expect(clearEventMotion).toHaveBeenCalledOnce();
+    expect(active.react).toHaveBeenCalledOnce();
+    world.dispose();
+    clearEventMotion.mockRestore();
     propModels.dispose();
   });
 
