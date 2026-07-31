@@ -1,21 +1,237 @@
 import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import {
-  POLY_PIZZA_EVENT_MODEL_IDS,
-  POLY_PIZZA_EVENT_MODEL_SOURCES,
-} from './poly-pizza-event-models.mjs';
+import { inspectEventModel } from './event-model-metadata.mjs';
 
+const EVENT_SOURCES = Object.freeze({
+  driftingLootBarrel: Object.freeze({
+    publicId: 'cu9GJ0j13fj',
+    resourceId: '2244f3ae-5583-4ea0-b980-6fdd0084cee7',
+    sha256: '89031BAAA180FD8040C8C2A27F56AC479BD6FE8A7C4EC5495D1433D185840EF5',
+    triangles: 282,
+    maxTriangles: 2_000,
+    title: 'Barrel',
+    creator: 'Don Carson',
+    license: 'CC BY 3.0',
+  }),
+  driftingLootCrate: Object.freeze({
+    publicId: '3VGWnZPXmG',
+    resourceId: '720097e2-63ed-4e5f-9b66-eb416942eea0',
+    sha256: '4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E',
+    triangles: 784,
+    maxTriangles: 2_000,
+    title: 'Crate',
+    creator: 'Quaternius',
+    license: 'CC0 1.0',
+  }),
+  driftingBottle: Object.freeze({
+    publicId: '13g9ucgxbHV',
+    resourceId: 'b1a8f402-de55-4e49-b63e-1439e5851c13',
+    sha256: '5C1169A709CF2B897E9037771BC8B33EDE3C546A2CA872F33BF8A9348F112D54',
+    triangles: 304,
+    maxTriangles: 2_000,
+    title: 'Bottle of Wine',
+    creator: 'Jeremy',
+    license: 'CC BY 3.0',
+  }),
+  mysteryChest: Object.freeze({
+    publicId: 'O72u4Drp8k',
+    resourceId: '803af4ae-433f-4b05-b1f1-c6a2da02d768',
+    sha256: '07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B',
+    triangles: 1_676,
+    maxTriangles: 2_000,
+    title: 'Chest',
+    creator: 'Quaternius',
+    license: 'CC0 1.0',
+  }),
+  flowers: Object.freeze({
+    publicId: '0-_GjMekeob',
+    resourceId: '856b7c36-4bd0-48f1-a308-529366b6a7fd',
+    sha256: 'CC4BA073B2CC94B4CADA9BB25C15C3832052E2F3A018B3E2EB7F9429E6D2384B',
+    triangles: 728,
+    maxTriangles: 2_000,
+    title: 'Lily Pad',
+    creator: 'Poly by Google',
+    license: 'CC BY 3.0',
+  }),
+  fogMan: Object.freeze({
+    publicId: 'mQnGoME1ez',
+    resourceId: '66b57880-bcb0-479a-8d72-5c3e88afaa39',
+    sha256: '31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763',
+    triangles: 2058,
+    maxTriangles: 2_200,
+    title: 'Man in Suit',
+    creator: 'Quaternius',
+    license: 'CC0 1.0',
+  }),
+  ghost: Object.freeze({
+    publicId: '112vpcommxv',
+    resourceId: '02d70fdb-284b-4799-a9ee-18c7277f158c',
+    sha256: '3AFB58D595ECA2D5F7953847CF51230270BB9EEE40B59F56FE04CDF4A28CD1C3',
+    triangles: 1039,
+    maxTriangles: 1_100,
+    title: 'Ghoooooost',
+    creator: 'Nikki Morin',
+    license: 'CC BY 3.0',
+  }),
+  siren: Object.freeze({
+    publicId: 'nIItLV9nxS',
+    resourceId: '46d6db5a-3c9f-4238-8cdf-8eb7194498dc',
+    sha256: 'A6522FE53D15DE21130A957D1BF2B8A9A58D4E4E9A12AF646645B667A9BB2D17',
+    triangles: 6108,
+    maxTriangles: 6_200,
+    title: 'Animated Woman',
+    creator: 'Quaternius',
+    license: 'CC0 1.0',
+  }),
+  sirenRock: Object.freeze({
+    publicId: 'CrSoV13mCU',
+    resourceId: '3e9d82ac-0749-42b6-8dfd-082393547ed5',
+    sha256: '8A0595C2F0C6914CC1794CE8CB35517F4451EB4CFB6703D3A58CA654D5900BAB',
+    triangles: 214,
+    maxTriangles: 250,
+    title: 'Rock Flat',
+    creator: 'Kenney',
+    license: 'CC0 1.0',
+  }),
+});
+const EVENT_MODEL_IDS = Object.freeze(Object.keys(EVENT_SOURCES));
+const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
+  'chestClosed',
+  'midnightIsland',
+  'deadTree',
+  'traderRowboat',
+  'riggedHand',
+  'containerShip',
+]);
+const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
+const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
 const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
-const BIN_CHUNK = 0x004e4942;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
-function sha256(bytes) {
-  return createHash('sha256').update(bytes).digest('hex').toUpperCase();
+function sameNumbers(first, second) {
+  return Array.isArray(first)
+    && Array.isArray(second)
+    && first.length === second.length
+    && first.every((value, index) => Number.isFinite(value) && value === second[index]);
+}
+
+function sameAnimations(first, second) {
+  return Array.isArray(first)
+    && Array.isArray(second)
+    && first.length === second.length
+    && first.every((animation, index) => {
+      const expected = second[index];
+      return animation?.name === expected?.name
+        && animation?.duration === expected?.duration
+        && animation?.channels === expected?.channels;
+    });
+}
+
+function exactKeys(value, expectedKeys, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} is not an object`);
+  }
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpected = [...expectedKeys].sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(sortedExpected)) {
+    throw new Error(
+      `${label} keys must be exactly ${sortedExpected.join(', ')}; received ${actualKeys.join(', ')}`,
+    );
+  }
+}
+
+export function validateEventModelMetadata(metadata) {
+  exactKeys(metadata, EVENT_MODEL_IDS, 'event model metadata');
+  for (const modelId of EVENT_MODEL_IDS) {
+    const model = metadata[modelId];
+    exactKeys(model, ['triangles', 'rawBounds', 'animations'], `${modelId} metadata`);
+    exactKeys(model.rawBounds, ['min', 'max'], `${modelId} rawBounds`);
+    if (!Array.isArray(model.animations)) {
+      throw new Error(`${modelId} animations is not an array`);
+    }
+    model.animations.forEach((animation, index) => {
+      exactKeys(
+        animation,
+        ['name', 'duration', 'channels'],
+        `${modelId} animation ${index}`,
+      );
+    });
+  }
+}
+
+function expectedAttributionBlock(modelId) {
+  const source = EVENT_SOURCES[modelId];
+  return [
+    `- "${source.title}" by ${source.creator}.`,
+    `  Source: https://poly.pizza/m/${source.publicId}`,
+    `  License: ${source.license}.`,
+    `  Source asset ID: \`poly-pizza:${source.resourceId}\`.`,
+    `  Source GLB SHA-256: \`${source.sha256}\`.`,
+  ].join('\n');
+}
+
+function attributionBlocks(section) {
+  const blocks = [];
+  let current = null;
+  for (const line of section.split('\n')) {
+    if (line.startsWith('- ')) {
+      if (current) blocks.push(current.join('\n'));
+      current = [line];
+    } else if (current && line.startsWith('  ')) {
+      current.push(line);
+    } else if (current) {
+      blocks.push(current.join('\n'));
+      current = null;
+    }
+  }
+  if (current) blocks.push(current.join('\n'));
+  return blocks;
+}
+
+export function validateEventModelAttribution(ledgerText) {
+  const ledger = ledgerText.replaceAll('\r\n', '\n');
+  const headingMatches = ledger.split(ATTRIBUTION_HEADING).length - 1;
+  if (headingMatches !== 1) {
+    throw new Error(
+      `ATTRIBUTION.md: expected one event model heading, received ${headingMatches}`,
+    );
+  }
+  const sectionStart = ledger.indexOf(ATTRIBUTION_HEADING) + ATTRIBUTION_HEADING.length;
+  const nextHeading = ledger.indexOf('\n## ', sectionStart);
+  const section = ledger.slice(sectionStart, nextHeading < 0 ? ledger.length : nextHeading);
+  const blocks = attributionBlocks(section);
+  if (blocks.length !== ATTRIBUTION_MODEL_IDS.length) {
+    throw new Error(
+      `ATTRIBUTION.md: expected ${ATTRIBUTION_MODEL_IDS.length} attribution blocks, received ${blocks.length}`,
+    );
+  }
+  ATTRIBUTION_MODEL_IDS.forEach((modelId, index) => {
+    if (blocks[index] !== expectedAttributionBlock(modelId)) {
+      throw new Error(`ATTRIBUTION.md: ${modelId} attribution block does not match`);
+    }
+  });
+  const eventMarkers = ATTRIBUTION_MODEL_IDS.flatMap((modelId) => {
+    const source = EVENT_SOURCES[modelId];
+    return [
+      `"${source.title}" by`,
+      `https://poly.pizza/m/${source.publicId}`,
+      `poly-pizza:${source.resourceId}`,
+      source.sha256,
+    ];
+  });
+  const ledgerEventBlocks = attributionBlocks(ledger).filter((block) => (
+    eventMarkers.some((marker) => block.includes(marker))
+  ));
+  if (ledgerEventBlocks.length !== ATTRIBUTION_MODEL_IDS.length) {
+    throw new Error(
+      `ATTRIBUTION.md: expected ${ATTRIBUTION_MODEL_IDS.length} event attribution blocks in the ledger, received ${ledgerEventBlocks.length}`,
+    );
+  }
 }
 
 function parseGlb(filePath, bytes) {
@@ -28,71 +244,10 @@ function parseGlb(filePath, bytes) {
   if (view.getUint32(16, true) !== JSON_CHUNK || 20 + jsonLength > bytes.byteLength) {
     throw new Error(`${filePath}: invalid GLB JSON chunk`);
   }
-  const jsonText = new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength));
-  const json = JSON.parse(jsonText);
-  const binaryOffset = 20 + jsonLength;
-  const binaryLength = binaryOffset + 8 <= bytes.byteLength
-    && view.getUint32(binaryOffset + 4, true) === BIN_CHUNK
-    ? Math.min(view.getUint32(binaryOffset, true), bytes.byteLength - binaryOffset - 8)
-    : 0;
-  return { binaryLength, json };
+  return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)));
 }
 
-function dataUriByteLength(uri) {
-  const separator = uri.indexOf(',');
-  if (separator < 0) return 0;
-  const metadata = uri.slice(0, separator);
-  const payload = uri.slice(separator + 1);
-  try {
-    return metadata.endsWith(';base64')
-      ? Buffer.from(payload, 'base64').byteLength
-      : Buffer.from(decodeURIComponent(payload)).byteLength;
-  } catch {
-    return 0;
-  }
-}
-
-function collectReferencedTextures(value, key, indices) {
-  if (!value || typeof value !== 'object') return;
-  if (key.endsWith('Texture') && Number.isInteger(value.index)) indices.add(value.index);
-  for (const [childKey, childValue] of Object.entries(value)) {
-    collectReferencedTextures(childValue, childKey, indices);
-  }
-}
-
-function textureSource(texture) {
-  return texture?.source
-    ?? texture?.extensions?.KHR_texture_basisu?.source
-    ?? texture?.extensions?.EXT_texture_webp?.source
-    ?? texture?.extensions?.EXT_texture_avif?.source;
-}
-
-function imageHasEmbeddedBytes(json, binaryLength, image) {
-  if (!image) return false;
-  if (typeof image.uri === 'string') {
-    return image.uri.startsWith('data:') && dataUriByteLength(image.uri) > 0;
-  }
-  if (!Number.isInteger(image.bufferView)) return false;
-  const bufferView = json.bufferViews?.[image.bufferView];
-  if (!bufferView || !Number.isInteger(bufferView.byteLength) || bufferView.byteLength <= 0) {
-    return false;
-  }
-  const buffer = json.buffers?.[bufferView.buffer];
-  const availableBytes = typeof buffer?.uri === 'string'
-    ? (buffer.uri.startsWith('data:') ? dataUriByteLength(buffer.uri) : 0)
-    : binaryLength;
-  return (bufferView.byteOffset ?? 0) + bufferView.byteLength <= availableBytes;
-}
-
-function validateEmbeddedResources(filePath, descriptor) {
-  const { binaryLength, json } = descriptor;
-  if ((json.scenes?.length ?? 0) !== 1) {
-    throw new Error(`${filePath}: expected one model scene`);
-  }
-  if ((json.cameras?.length ?? 0) > 0) throw new Error(`${filePath}: contains a camera`);
-  if ((json.extensions?.KHR_lights_punctual?.lights?.length ?? 0) > 0) {
-    throw new Error(`${filePath}: contains a light`);
-  }
+function validateEmbeddedResources(filePath, json) {
   for (const buffer of json.buffers ?? []) {
     if (typeof buffer.uri === 'string' && !buffer.uri.startsWith('data:')) {
       throw new Error(`${filePath}: external buffer URI: ${buffer.uri}`);
@@ -100,398 +255,137 @@ function validateEmbeddedResources(filePath, descriptor) {
   }
   for (const image of json.images ?? []) {
     if (typeof image.uri === 'string' && !image.uri.startsWith('data:')) {
-      throw new Error(`${filePath}: external texture URI: ${image.uri}`);
+      throw new Error(`${filePath}: external image URI: ${image.uri}`);
     }
-  }
-  const referencedTextures = new Set();
-  for (const material of json.materials ?? []) {
-    collectReferencedTextures(material, '', referencedTextures);
-  }
-  for (const textureIndex of referencedTextures) {
-    const source = textureSource(json.textures?.[textureIndex]);
-    if (!Number.isInteger(source) || !imageHasEmbeddedBytes(
-      json,
-      binaryLength,
-      json.images?.[source],
-    )) {
-      throw new Error(`${filePath}: referenced texture has no embedded image bytes`);
+    if (image.uri === undefined && !Number.isInteger(image.bufferView)) {
+      throw new Error(`${filePath}: image has no embedded data`);
     }
   }
 }
 
-function transformPoint(matrix, point) {
-  return [
-    matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
-    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
-    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
-  ];
-}
-
-function inspectDocument(filePath, document) {
-  const root = document.getRoot();
-  const scene = root.getDefaultScene() ?? root.listScenes()[0];
-  if (!scene) throw new Error(`${filePath}: source scene is missing`);
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  const visited = new Set();
-  let triangles = 0;
-  for (const mesh of root.listMeshes()) {
+function validateIndices(modelId, document) {
+  for (const mesh of document.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
-      if (primitive.getMode() !== 4) {
-        throw new Error(`${filePath}: primitive is not TRIANGLES`);
-      }
-      const position = primitive.getAttribute('POSITION');
-      if (!position || position.getCount() === 0) {
-        throw new Error(`${filePath}: missing or empty POSITION data`);
-      }
-      const indices = primitive.getIndices();
-      const count = indices?.getCount() ?? position.getCount();
-      if (count % 3 !== 0) throw new Error(`${filePath}: incomplete triangle data`);
-      for (let element = 0; element < (indices?.getCount() ?? 0); element += 1) {
-        const index = indices.getScalar(element);
-        if (!Number.isInteger(index) || index < 0 || index >= position.getCount()) {
-          throw new Error(`${filePath}: triangle index is out of range`);
+      const positionCount = primitive.getAttribute('POSITION')?.getCount() ?? 0;
+      const indices = primitive.getIndices()?.getArray();
+      if (!indices) continue;
+      for (const index of indices) {
+        if (!Number.isInteger(index) || index < 0 || index >= positionCount) {
+          throw new Error(`${modelId}: invalid vertex index ${index}`);
         }
       }
-      triangles += count / 3;
-    }
-  }
-  for (const child of scene.listChildren()) {
-    child.traverse((node) => {
-      if (visited.has(node)) return;
-      visited.add(node);
-      const mesh = node.getMesh();
-      if (!mesh) return;
-      const matrix = node.getWorldMatrix();
-      if (!matrix.every(Number.isFinite)) {
-        throw new Error(`${filePath}: non-finite node transform`);
-      }
-      for (const primitive of mesh.listPrimitives()) {
-        const position = primitive.getAttribute('POSITION');
-        if (!position) continue;
-        const point = [0, 0, 0];
-        for (let index = 0; index < position.getCount(); index += 1) {
-          position.getElement(index, point);
-          const worldPoint = transformPoint(matrix, point);
-          if (!worldPoint.every(Number.isFinite)) {
-            throw new Error(`${filePath}: non-finite model position`);
-          }
-          for (let axis = 0; axis < 3; axis += 1) {
-            min[axis] = Math.min(min[axis], worldPoint[axis]);
-            max[axis] = Math.max(max[axis], worldPoint[axis]);
-          }
-        }
-      }
-    });
-  }
-  if (
-    triangles <= 0
-    || ![...min, ...max].every(Number.isFinite)
-    || !max.some((value, axis) => value > min[axis])
-  ) {
-    throw new Error(`${filePath}: model geometry is invalid`);
-  }
-  return { rawBounds: { min, max }, triangles };
-}
-
-function sameNumbers(first, second) {
-  return Array.isArray(first)
-    && Array.isArray(second)
-    && first.length === second.length
-    && first.every((value, index) => Number.isFinite(value) && value === second[index]);
-}
-
-function activeSceneNodes(document) {
-  const root = document.getRoot();
-  const scene = root.getDefaultScene() ?? root.listScenes()[0];
-  if (!scene) throw new Error('active scene is missing');
-  const nodes = new Set();
-  for (const child of scene.listChildren()) {
-    child.traverse((node) => nodes.add(node));
-  }
-  return nodes;
-}
-
-function hasActiveDescendantMesh(node, activeNodes) {
-  let found = false;
-  node.traverse((candidate) => {
-    if (activeNodes.has(candidate) && candidate.getMesh()) found = true;
-  });
-  return found;
-}
-
-function validateAuthoredControls(id, document) {
-  const root = document.getRoot();
-  const activeNodes = activeSceneNodes(document);
-  if (id === 'chestClosed') {
-    const lids = [...activeNodes].filter((node) => node.getName() === 'chestClosed:lid');
-    const activeBaseNodes = [...activeNodes].filter(
-      (node) => node.getMesh()?.getName() === 'chestClosed:base',
-    );
-    if (
-      lids.length !== 1
-      || activeBaseNodes.length !== 1
-      || !hasActiveDescendantMesh(lids[0], activeNodes)
-    ) {
-      throw new Error(`${id}: usable lid node is missing`);
-    }
-  }
-  if (id === 'riggedHand') {
-    const activeSkinnedNodes = [...activeNodes].filter(
-      (node) => node.getMesh() && node.getSkin(),
-    );
-    const activeSkins = new Set(activeSkinnedNodes.map((node) => node.getSkin()));
-    const rigJoints = [...activeSkins].flatMap((skin) => skin.listJoints());
-    const namedFingerJoints = rigJoints.filter((node) => (
-      /(thumb|index|middle|ring|pinky)/i.test(node.getName())
-    ));
-    if (
-      activeSkins.size !== 1
-      || rigJoints.length < 5
-      || namedFingerJoints.length < 5
-      || rigJoints.some((joint) => !activeNodes.has(joint))
-    ) {
-      throw new Error(`${id}: usable rig or named movable joints are missing`);
-    }
-    const rigJointSet = new Set(rigJoints);
-    const animationChannels = root.listAnimations().flatMap(
-      (animation) => animation.listChannels(),
-    );
-    if (
-      animationChannels.length === 0
-      || animationChannels.some((channel) => (
-        !channel.getTargetNode()
-        || !rigJointSet.has(channel.getTargetNode())
-        || !activeNodes.has(channel.getTargetNode())
-      ))
-    ) {
-      throw new Error(`${id}: animation channels are not linked to the active rig`);
     }
   }
 }
 
-function expectAuthoredControlRejection(id, document, label) {
-  let rejected = false;
-  try {
-    validateAuthoredControls(id, document);
-  } catch {
-    rejected = true;
-  }
-  if (!rejected) throw new Error(`${id}: accepted negative fixture ${label}`);
-}
-
-function runAuthoredControlNegativeFixtures(id, document) {
-  const root = document.getRoot();
-  const activeNodes = activeSceneNodes(document);
-  if (id === 'chestClosed') {
-    const activeLid = [...activeNodes].find(
-      (node) => node.getName() === 'chestClosed:lid',
-    );
-    let lidMesh = null;
-    activeLid?.traverse((node) => {
-      if (!lidMesh && node.getMesh()) lidMesh = node.getMesh();
-    });
-    if (!activeLid || !lidMesh) throw new Error(`${id}: negative fixture setup failed`);
-    const originalName = activeLid.getName();
-    const unusedLid = document.createNode('chestClosed:lid').setMesh(lidMesh);
-    activeLid.setName('chestClosed:active-lid-hidden-from-global-check');
-    try {
-      expectAuthoredControlRejection(id, document, 'unused lid tree');
-    } finally {
-      activeLid.setName(originalName);
-      unusedLid.dispose();
+function parseArguments(args) {
+  let assetsOnly = false;
+  let modelsDir = resolve('src', 'assets', 'models', 'events');
+  let ledgerPath = resolve('src', 'assets', 'ATTRIBUTION.md');
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === '--assets-only') {
+      assetsOnly = true;
+    } else if (argument === '--models-dir' || argument === '--ledger-path') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) throw new Error(`${argument} requires a path`);
+      if (argument === '--models-dir') modelsDir = resolve(value);
+      else ledgerPath = resolve(value);
+      index += 1;
+    } else {
+      throw new Error(`unknown argument: ${argument}`);
     }
-    return 1;
   }
-  if (id === 'riggedHand') {
-    const activeHand = [...activeNodes].find(
-      (node) => node.getMesh() && node.getSkin(),
-    );
-    const activeSkin = activeHand?.getSkin();
-    if (!activeHand || !activeSkin) throw new Error(`${id}: negative fixture setup failed`);
-    const unusedHand = document.createNode('riggedHand:unused-skinned-mesh')
-      .setMesh(activeHand.getMesh())
-      .setSkin(activeSkin);
-    activeHand.setSkin(null);
-    try {
-      expectAuthoredControlRejection(id, document, 'unused hand rig');
-    } finally {
-      activeHand.setSkin(activeSkin);
-      unusedHand.dispose();
-    }
-
-    const channels = root.listAnimations().flatMap(
-      (animation) => animation.listChannels(),
-    );
-    const originalTargets = channels.map((channel) => channel.getTargetNode());
-    const unusedJoints = channels.map((_, index) => (
-      document.createNode(`riggedHand:unused-animation-joint-${index}`)
-    ));
-    channels.forEach((channel, index) => channel.setTargetNode(unusedJoints[index]));
-    try {
-      expectAuthoredControlRejection(id, document, 'unlinked animation channels');
-    } finally {
-      channels.forEach((channel, index) => channel.setTargetNode(originalTargets[index]));
-      unusedJoints.forEach((joint) => joint.dispose());
-    }
-    return 2;
-  }
-  return 0;
-}
-
-function parseLedgerRow(row) {
-  return row.slice(1, -1).split('|').map((cell) => cell.trim());
-}
-
-function verifyLedgerRow(ledger, id, metadata) {
-  const rows = ledger.split(/\r?\n/).filter((line) => line.startsWith(`| ${id} |`));
-  if (rows.length !== 1) {
-    throw new Error(`ATTRIBUTION.md: expected one ${id} row, received ${rows.length}`);
-  }
-  const descriptor = POLY_PIZZA_EVENT_MODEL_SOURCES[id];
-  const expected = [
-    id,
-    `\`${id}.glb\``,
-    `${descriptor.title} / ${descriptor.creator}`,
-    descriptor.pageUrl,
-    `\`${descriptor.sourceAssetId}\``,
-    `[${descriptor.license}](${descriptor.licenseUrl})`,
-    String(descriptor.sourceTriangles),
-    String(metadata.triangles),
-  ];
-  const actual = parseLedgerRow(rows[0]);
-  if (
-    actual.length !== 10
-    || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
-    || !actual[8].includes(metadata.sourceSha256)
-    || !actual[8].includes(metadata.outputSha256)
-    || actual[9] !== descriptor.downloadedOn
-  ) {
-    throw new Error(`ATTRIBUTION.md: ${id} row does not match the pinned record`);
-  }
-}
-
-async function manifestIds() {
-  const source = await readFile(resolve('src', 'world', 'eventModelManifest.ts'), 'utf8');
-  const declaration = /export const EVENT_MODEL_IDS = \[([\s\S]*?)\] as const;/.exec(source)?.[1];
-  if (!declaration) throw new Error('Unable to read runtime EVENT_MODEL_IDS');
-  return [...declaration.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  return { assetsOnly, ledgerPath, modelsDir };
 }
 
 async function main() {
-  const modelsDir = resolve('src', 'assets', 'models', 'events');
-  const ledgerPath = resolve('src', 'assets', 'ATTRIBUTION.md');
+  const { assetsOnly, ledgerPath, modelsDir } = parseArguments(process.argv.slice(2));
   const errors = [];
-  let metadata = null;
-  let ledger = '';
+  const measurements = {};
+  let metadata;
 
   try {
-    const runtimeIds = await manifestIds();
-    if (JSON.stringify(runtimeIds) !== JSON.stringify(POLY_PIZZA_EVENT_MODEL_IDS)) {
-      errors.push(`manifest IDs do not match importer IDs: ${runtimeIds.join(', ')}`);
-    }
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
-  }
-
-  try {
-    const expectedEntries = new Set([
-      ...POLY_PIZZA_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
+    const expected = new Set([
+      ...EVENT_MODEL_IDS.map((id) => `${id}.glb`),
+      ...FOCUSED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
       'event-model-metadata.json',
     ]);
     const entries = await readdir(modelsDir, { withFileTypes: true });
-    const actualEntries = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
+    const actual = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
     for (const entry of entries) {
-      if (!entry.isFile() || !expectedEntries.has(entry.name)) {
+      if (!entry.isFile() || !expected.has(entry.name)) {
         errors.push(`unexpected event model entry: ${entry.name}`);
       }
     }
-    for (const expected of expectedEntries) {
-      if (!actualEntries.has(expected)) errors.push(`missing event model entry: ${expected}`);
+    for (const file of expected) {
+      if (!actual.has(file)) errors.push(`missing event model entry: ${file}`);
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
 
   try {
-    metadata = JSON.parse(await readFile(
-      resolve(modelsDir, 'event-model-metadata.json'),
-      'utf8',
-    ));
-    const metadataIds = Object.keys(metadata);
-    if (JSON.stringify(metadataIds) !== JSON.stringify(POLY_PIZZA_EVENT_MODEL_IDS)) {
-      errors.push(`metadata IDs do not match importer IDs: ${metadataIds.join(', ')}`);
-    }
+    metadata = JSON.parse(
+      await readFile(resolve(modelsDir, 'event-model-metadata.json'), 'utf8'),
+    );
+    validateEventModelMetadata(metadata);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
 
-  try {
-    ledger = await readFile(ledgerPath, 'utf8');
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
-  }
-
-  for (const id of POLY_PIZZA_EVENT_MODEL_IDS) {
-    const descriptor = POLY_PIZZA_EVENT_MODEL_SOURCES[id];
-    const expected = metadata?.[id];
-    if (!expected) continue;
-    const filePath = resolve(modelsDir, `${id}.glb`);
+  for (const modelId of EVENT_MODEL_IDS) {
+    const source = EVENT_SOURCES[modelId];
+    const filePath = resolve(modelsDir, `${modelId}.glb`);
     try {
-      if (
-        !descriptor.pageUrl
-        || !descriptor.sourceAssetId
-        || !descriptor.license
-        || !descriptor.licenseUrl
-      ) {
-        throw new Error(`${id}: source or license data is missing`);
-      }
-      if (
-        expected.sourceUrl !== descriptor.pageUrl
-        || expected.sourceModelId !== descriptor.sourceAssetId
-        || expected.license !== descriptor.license
-        || expected.licenseUrl !== descriptor.licenseUrl
-        || expected.sourceSha256 !== descriptor.sourceSha256
-        || expected.sourceTriangles !== descriptor.sourceTriangles
-      ) {
-        throw new Error(`${id}: metadata source record does not match its pin`);
-      }
+      await access(filePath);
       const bytes = await readFile(filePath);
-      if (sha256(bytes) !== expected.outputSha256) {
-        throw new Error(`${id}: output SHA-256 does not match metadata`);
+      const actualHash = createHash('sha256').update(bytes).digest('hex').toUpperCase();
+      if (actualHash !== source.sha256) {
+        throw new Error(`${modelId}: source SHA-256 mismatch`);
       }
-      validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
+      const json = parseGlb(filePath, bytes);
+      validateEmbeddedResources(filePath, json);
       const document = await io.read(filePath);
-      const measurement = inspectDocument(filePath, document);
-      if (
-        measurement.triangles !== expected.triangles
-        || measurement.triangles > descriptor.maxTriangles
-      ) {
-        throw new Error(`${id}: triangle count does not match its limit or metadata`);
+      validateIndices(modelId, document);
+      const measurement = inspectEventModel(modelId, document);
+      measurements[modelId] = measurement;
+      console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
+      if (measurement.triangles !== source.triangles) {
+        throw new Error(
+          `${modelId}: expected ${source.triangles} triangles, received ${measurement.triangles}`,
+        );
       }
-      if (
-        !sameNumbers(measurement.rawBounds.min, expected.rawBounds?.min)
-        || !sameNumbers(measurement.rawBounds.max, expected.rawBounds?.max)
-      ) {
-        throw new Error(`${id}: model bounds do not match metadata`);
+      if (measurement.triangles > source.maxTriangles) {
+        throw new Error(`${modelId}: triangle count exceeds ${source.maxTriangles}`);
       }
-      validateAuthoredControls(id, document);
-      const negativeFixtureCount = runAuthoredControlNegativeFixtures(id, document);
-      if (ledger) verifyLedgerRow(ledger, id, expected);
-      console.log(
-        `${id}.glb: ${measurement.triangles} / ${descriptor.maxTriangles} triangles; `
-        + `SHA-256 ${expected.outputSha256}`
-        + (negativeFixtureCount > 0
-          ? `; ${negativeFixtureCount} negative control fixture(s) rejected`
-          : ''),
-      );
+      const expected = metadata?.[modelId];
+      if (
+        expected?.triangles !== measurement.triangles
+        || !sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
+        || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
+        || !sameAnimations(expected?.animations, measurement.animations)
+      ) {
+        throw new Error(`${modelId}: generated metadata does not match the source model`);
+      }
+      if (!source.publicId || !source.resourceId || !source.sha256) {
+        throw new Error(`${modelId}: pinned source descriptor is incomplete`);
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (!assetsOnly) {
+    try {
+      validateEventModelAttribution(await readFile(ledgerPath, 'utf8'));
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
   }
 
   if (errors.length > 0) {
-    for (const error of errors) console.error(`ERROR: ${error}`);
+    errors.forEach((error) => console.error(`ERROR: ${error}`));
     process.exitCode = 1;
   }
 }

@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
 
 import { Box3, Euler, Matrix4, Vector3 } from 'three';
-import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
 import type {
   GeneratedRuntimeModelMetadata,
   RuntimeModelSpec,
 } from './itemModelManifest';
+import { FOCUSED_EVENT_MODEL_METADATA } from './focusedEventModelMetadata';
 
 export const EVENT_MODEL_IDS = [
   'chestClosed',
@@ -87,7 +87,7 @@ const presentations = {
   },
 } as const satisfies Readonly<Record<EventModelId, EventModelPresentation>>;
 
-const generatedMetadata = generatedMetadataJson as unknown as Readonly<
+const generatedMetadata = FOCUSED_EVENT_MODEL_METADATA as unknown as Readonly<
   Partial<Record<EventModelId, GeneratedRuntimeModelMetadata>>
 >;
 const INVALID_METADATA: GeneratedRuntimeModelMetadata = Object.freeze({

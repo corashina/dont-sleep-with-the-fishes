@@ -17,7 +17,9 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
   type DriftingLootResultView,
+  type EventOutcomeView,
   type EventContextChoice,
+  type EventResultView,
   type FishingResultView,
 } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -30,7 +32,10 @@ import {
   resolvePresentationWeather,
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
-import { BoatWorld } from './BoatWorld';
+import {
+  BoatWorld,
+  createEmptyEventModelLibraryForTest,
+} from './BoatWorld';
 import {
   FOCUSED_EVENT_IDS,
   type EventChoicePresentation,
@@ -38,6 +43,10 @@ import {
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
+import {
+  deriveEventPhysicalResponse,
+  type EventPhysicalResponsePresentation,
+} from './EventPhysicalResponse';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -49,12 +58,14 @@ import type {
   DayActionId,
   DayActionOption,
   DriftingLootVariant,
+  EventPresentationKey,
   EventResponse,
   EventResponseId,
   RewardSummary,
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -92,6 +103,23 @@ type EventPresentationState =
   | 'retrieving'
   | 'result'
   | 'receding';
+
+const EVENT_RESULT_CAPTIONS: Readonly<Partial<Record<EventPresentationKey, string>>> = {
+  'drifting-loot.food': 'Recovered',
+  'drifting-loot.bait': 'Recovered',
+  'drifting-loot.repair': 'Recovered',
+  'drifting-loot.energy-bar': 'Recovered',
+  'drifting-loot.drift': 'Slipped away',
+  'drifting-bottle.retrieve': 'Paper inside',
+  'drifting-bottle.lost': 'Lost in the wake',
+  'check-the-back.fish': 'A fish',
+  'check-the-back.empty': 'Only water',
+  'check-the-back.face': 'It was me',
+  'check-the-back.ignore': 'Left unseen',
+  'mystery-chest.safe': 'A real chest',
+  'mystery-chest.mimic': 'Teeth',
+  'mystery-chest.leave': 'Left below',
+};
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
@@ -150,20 +178,34 @@ export function formatFishingResult(
   };
 }
 
+export function formatDangerousWatersOutcome(
+  outcome: ActionOutcome,
+): EventOutcomeView {
+  const hullDamage = Math.max(0, -(outcome.deltas.hull ?? 0));
+  if (hullDamage === 0) {
+    return {
+      title: 'CLEAR WATER',
+      detail: 'The route opens ahead.',
+      result: 'HULL HOLDS',
+      state: 'safe',
+    };
+  }
+  const severe = hullDamage >= 25;
+  return {
+    title: `HULL \u2212${hullDamage}`,
+    detail: outcome.message,
+    result: severe ? 'SEVERE ROCK STRIKE' : 'ROCK STRIKE',
+    state: severe ? 'severe' : 'damage',
+  };
+}
+
 export function formatDriftingLootResult(
   reward: RewardSummary,
 ): DriftingLootResultView {
-  const title = reward.kind === 'item'
-    ? ITEM_DEFINITIONS[reward.id].label
-    : `+${reward.quantity} ${
-      reward.id === 'repairMaterial'
-        ? 'REPAIR MATERIAL'
-        : reward.id.toLocaleUpperCase('en-US')
-    }`;
   return {
     caption: 'SALVAGE RECOVERED',
-    title,
-    detail: '−3 ENERGY',
+    reward,
+    energyCost: 3,
     target: null,
   };
 }
@@ -189,6 +231,7 @@ function testContext(
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
+    supernaturalEventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
@@ -197,6 +240,7 @@ function testContext(
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
     audio,
+    eventModels: EMPTY_SURVIVAL_EVENT_MODELS,
   };
 }
 
@@ -223,8 +267,6 @@ export class SurvivalPhase implements GamePhase {
   private presentedTerminalState: SurvivalState | null = null;
   private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
-  private pendingDayEventDay: number | null = null;
-  private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
@@ -279,6 +321,8 @@ export class SurvivalPhase implements GamePhase {
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
+          context.eventModels,
+          context.supernaturalEventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -405,8 +449,6 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     this.audio.action(action, selectedOption);
-    const day = this.session.snapshot().day;
-    if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     void this.runDayAction(outcome, action);
   }
 
@@ -514,7 +556,6 @@ export class SurvivalPhase implements GamePhase {
     this.onInvariantError = onInvariantError;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
-    this.requestedDayEventDays.clear();
     this.wireUI();
   }
 
@@ -806,8 +847,8 @@ export class SurvivalPhase implements GamePhase {
     this.fishingPresentation = 'ready';
     this.activeFishing = null;
     this.setBusy(false);
-    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.ui.setFishingViewExitVisible?.(true);
+    this.ui.setFishingState?.({ mode: 'ready', message: '', biteTarget: null });
   }
 
   private exitReadyFishingView(): void {
@@ -841,6 +882,7 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.transitionFishingView('exit', generation)) return;
     if (!this.isContinuationActive(generation)) return;
     this.fishingPresentation = 'idle';
+    this.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null });
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }
@@ -873,43 +915,15 @@ export class SurvivalPhase implements GamePhase {
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
     if (action === 'dive') this.audio.finishDive();
     if (this.disposed) return;
-    let snapshot = this.renderSnapshot(false, false);
+    const snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
     if (isTerminal(snapshot.state)) {
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
       return;
     }
-    snapshot = await this.openScheduledDayEvent(snapshot);
-    if (this.disposed) return;
-    if (snapshot.pendingEventId !== null) {
-      await this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
-      return;
-    }
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
-  }
-
-  private async openScheduledDayEvent(
-    snapshot: SurvivalSnapshot,
-    generation?: number,
-  ): Promise<SurvivalSnapshot> {
-    if (
-      this.pendingDayEventDay === null
-      || snapshot.day !== this.pendingDayEventDay
-      || snapshot.state !== 'day'
-    ) return snapshot;
-
-    const eventDay = this.pendingDayEventDay;
-    this.pendingDayEventDay = null;
-    this.requestedDayEventDays.add(eventDay);
-    const eventOutcome = this.session.requestDayEvent?.();
-    if (eventOutcome === undefined) return snapshot;
-    if (!eventOutcome.accepted) {
-      this.ui.showFeedback?.(eventOutcome);
-      return this.renderSnapshot(false, false);
-    }
-    return this.renderSnapshot(false, false);
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
@@ -1021,15 +1035,24 @@ export class SurvivalPhase implements GamePhase {
       instanceId,
       condition,
     };
-    if (!focusedResult || isTerminal(resolved.state)) {
+    if (!focusedResult) {
+      this.cancelDeferredPresentationSync(generation);
+    } else if (isTerminal(resolved.state)) {
       this.flushDeferredPresentationSync(resolved, generation);
     }
+    const response = deriveEventPhysicalResponse(
+      choiceId,
+      pending.inventory,
+      resolved.inventory,
+      instanceId,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
       eventState,
       generation,
       resolvedChoice,
+      response,
       focusedResult,
     );
   }
@@ -1046,18 +1069,23 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveDriftingLootChoice(choiceId, generation);
       return;
     }
+    this.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.audio.sleep();
     else this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
-    await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
     const choice: EventChoicePresentation = {
       choiceId,
       instanceId: null,
       condition: null,
     };
-    await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+    await Promise.all([
+      this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve(),
+      this.world.playEventChoice?.(
+        eventId,
+        FOCUSED_EVENT_ID_SET.has(eventId) ? choice : choiceId,
+      ) ?? Promise.resolve(),
+    ]);
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1074,6 +1102,7 @@ export class SurvivalPhase implements GamePhase {
     if (!outcome.accepted) {
       this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
+      this.ui.setEventSleepMask?.(eventId, false);
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.restoreEventSelection();
@@ -1104,6 +1133,12 @@ export class SurvivalPhase implements GamePhase {
       pending.state,
       generation,
       choice,
+      deriveEventPhysicalResponse(
+        choiceId,
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
       focusedResult,
     );
   }
@@ -1230,6 +1265,12 @@ export class SurvivalPhase implements GamePhase {
       eventState,
       generation,
       choice,
+      deriveEventPhysicalResponse(
+        'endure',
+        pending.inventory,
+        resolved.inventory,
+        null,
+      ),
       focusedResult,
     );
   }
@@ -1240,14 +1281,21 @@ export class SurvivalPhase implements GamePhase {
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
     choice: EventChoicePresentation,
+    physicalResponse: EventPhysicalResponsePresentation,
     focusedResult: boolean,
   ): Promise<void> {
     this.setBusy(true);
+    this.audio.beginEventReaction(eventId, outcome);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(eventId, outcome, choice)
+      this.world.reactToEventOutcome?.(
+        eventId,
+        outcome,
+        focusedResult ? choice : physicalResponse,
+      )
         ?? Promise.resolve(),
     ]);
+    this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1258,8 +1306,31 @@ export class SurvivalPhase implements GamePhase {
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
-    if (focusedResult) this.ui.showEventOutcome?.(outcome);
-    else this.ui.showFeedback?.(outcome);
+    if (focusedResult) {
+      this.ui.showEventOutcome?.(outcome);
+    } else {
+      if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
+      const resultCaption = outcome.eventPresentationKey === undefined
+        ? undefined
+        : EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey];
+      if (eventId !== 'drifting-loot' && resultCaption !== undefined) {
+        const resultView: EventResultView = {
+          caption: resultCaption,
+          detail: outcome.message,
+          target: this.world.projectEventResultBounds?.(
+            eventId,
+            this.viewportWidth,
+            this.viewportHeight,
+          ) ?? null,
+        };
+        this.ui.showEventResult?.(resultView);
+      }
+      if (eventId === 'dangerous-waters') {
+        this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
+      } else if (eventState === 'nightEvent' && resultCaption === undefined) {
+        this.ui.showEventOutcome?.(outcome);
+      }
+    }
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
@@ -1272,7 +1343,11 @@ export class SurvivalPhase implements GamePhase {
 
     await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (eventId === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
@@ -1452,6 +1527,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
+    this.audio.beginEvent(event.id);
     this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
@@ -1477,20 +1553,17 @@ export class SurvivalPhase implements GamePhase {
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     this.world.stageEvent?.(event.id, driftingLootVariant);
     this.eventPresentation = 'revealing';
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    if (event.id === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('bad-sleep') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    }
+    if (!this.isContinuationActive(generation)) return;
+    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
     await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-
-    if (event.id === 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
-    if (!await this.renderAndSettleCoveredScene(generation)) return;
-    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-    if (event.id !== 'drifting-loot') {
-      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    }
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
@@ -1576,6 +1649,10 @@ export class SurvivalPhase implements GamePhase {
     if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';
     if (eventId === 'handyman' && choiceId === 'touch') return 'handyman:hand';
     if (eventId === 'handyman' && choiceId === 'chest') return 'persistent-chest';
+    if (eventId === 'drifting-bottle' && choiceId === 'sleep') return 'event:drifting-bottle';
+    if (eventId === 'check-the-back' && choiceId === 'check') return 'event:check-the-back';
+    if (eventId === 'mystery-chest' && choiceId === 'take') return 'event:mystery-chest';
+    if (eventId === 'flowers' && choiceId === 'sleep') return 'event:flowers';
     return null;
   }
 
@@ -1601,6 +1678,7 @@ export class SurvivalPhase implements GamePhase {
 
   private clearEventPresentation(): void {
     this.cancelDeferredPresentationSync();
+    this.audio.clearEvent();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.activeDriftingLootVariant = null;

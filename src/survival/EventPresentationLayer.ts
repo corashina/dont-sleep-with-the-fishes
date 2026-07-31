@@ -28,6 +28,11 @@ import {
   type BoatInteractionAnchor,
   type BoatObjectBoundsCache,
 } from './BoatInteraction';
+import {
+  DangerousWatersPresentation,
+  type DangerousWatersBoatReaction,
+  type DangerousWatersItemPose,
+} from './DangerousWatersPresentation';
 import type { ActionOutcome } from './survivalTypes';
 import { ChestAttackPresentation } from './ChestAttackPresentation';
 import {
@@ -315,6 +320,7 @@ function keyedRevealProgress(progress: number): number {
 
 export class EventPresentationLayer {
   readonly root = new Group();
+  private readonly dangerousWaters = new DangerousWatersPresentation();
   private readonly tableaus = new Map<string, EventTableau>();
   private readonly focused = new Map<string, FocusedEventPresentation>();
   private readonly ownedFocused = new Set<FocusedEventPresentation>();
@@ -365,6 +371,7 @@ export class EventPresentationLayer {
         ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
       if (factory !== undefined) this.registerFocusedFactory(eventId, factory);
     }
+    this.root.add(this.dangerousWaters.root);
   }
 
   registerFocusedFactory(
@@ -447,14 +454,20 @@ export class EventPresentationLayer {
   stage(eventId: string): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.dangerousWaters.clear();
     this.clearActiveFocused();
     const focused = this.focused.get(eventId) ?? null;
     this.activeFocused = focused;
-    this.stagedEventId = focused === null && this.tableaus.has(eventId)
+    this.stagedEventId = focused === null
+      && (eventId === 'dangerous-waters' || this.tableaus.has(eventId))
       ? eventId
       : null;
     this.held = false;
     this.resetGenericTableaus();
+    if (eventId === 'dangerous-waters') {
+      this.dangerousWaters.stage();
+      return;
+    }
     if (focused === null) return;
     focused.root.visible = true;
     focused.stage();
@@ -470,15 +483,21 @@ export class EventPresentationLayer {
       this.stage(eventId);
     }
     if (this.activeFocused !== null) return this.activeFocused.reveal();
+    if (eventId === 'dangerous-waters') return this.dangerousWaters.reveal();
     if (this.stagedEventId === null) return Promise.resolve();
     return this.startAnimation('reveal', eventId);
   }
 
   playChoice(
     eventId: string,
-    choice: EventChoicePresentation,
+    choice: EventChoicePresentation | string,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    if (eventId === 'dangerous-waters' && typeof choice === 'string') {
+      if (this.stagedEventId !== eventId) this.stage(eventId);
+      return this.dangerousWaters.playChoice(choice);
+    }
+    if (typeof choice === 'string') return Promise.resolve();
     const focused = this.focused.get(eventId) ?? null;
     if (this.activeFocused !== focused) this.stage(eventId);
     return this.activeFocused?.playChoice(choice) ?? Promise.resolve();
@@ -500,6 +519,7 @@ export class EventPresentationLayer {
       }
       return this.activeFocused.react(result, outcome);
     }
+    if (eventId === 'dangerous-waters') return this.dangerousWaters.react(outcome);
     if (this.stagedEventId === null) return Promise.resolve();
     this.held = true;
     this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
@@ -511,6 +531,7 @@ export class EventPresentationLayer {
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.dangerousWaters.clear();
     this.clearActiveFocused();
     this.stagedEventId = null;
     this.held = false;
@@ -519,6 +540,7 @@ export class EventPresentationLayer {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    this.dangerousWaters.settleForVisibilityChange();
     if (this.activeFocused !== null) {
       this.activeFocused.settleForVisibilityChange();
       return;
@@ -547,15 +569,26 @@ export class EventPresentationLayer {
     presenter.setRescueCue(progress);
   }
 
+  copyDangerousWatersBoatReaction(
+    target: DangerousWatersBoatReaction,
+  ): boolean {
+    return this.dangerousWaters.copyBoatReaction(target);
+  }
+
+  copyDangerousWatersItemPose(target: DangerousWatersItemPose): boolean {
+    return this.dangerousWaters.copyItemPose(target);
+  }
+
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
+    this.dangerousWaters.update(time, delta);
     if (this.activeFocused !== null) {
       this.activeFocused.update(time, delta);
       return;
     }
     const staged = this.stagedEventId === null
       ? null
-      : this.tableaus.get(this.stagedEventId)!;
+      : this.tableaus.get(this.stagedEventId) ?? null;
 
     if (staged !== null) this.applyWavePose(staged, time);
 
@@ -591,6 +624,7 @@ export class EventPresentationLayer {
   dispose(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
+    this.dangerousWaters.dispose();
     this.disposed = true;
     this.activeFocused = null;
     for (const presenter of this.ownedFocused) presenter.dispose();

@@ -11,13 +11,23 @@ import {
 import { sequenceRandom } from './helpers/random';
 
 const INCLUDED = {
-  'dangerous-waters': 'day', leak: 'day', 'school-of-fish': 'day',
-  snatcher: 'day', 'death-stare': 'day', 'swarm-of-anglerfish': 'day',
-  whirlpool: 'day', 'shark-men': 'day',
+  'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
+  snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
+  whirlpool: 'night',
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
 } as const;
+
+const MOVED_NIGHT_EVENT_IDS = [
+  'dangerous-waters',
+  'leak',
+  'school-of-fish',
+  'snatcher',
+  'death-stare',
+  'swarm-of-anglerfish',
+  'whirlpool',
+] as const;
 
 const resource = (resourceName: string, operation: string, value: unknown) => ({
   resource: resourceName, operation, value,
@@ -41,6 +51,18 @@ const outcome = (
     ...(items.length ? { items } : {}),
   },
 });
+const dangerousWatersOutcome = (
+  weight: number,
+  message: string,
+  resources: readonly unknown[] = [],
+) => ({
+  weight,
+  message,
+  effects: {
+    ...(resources.length ? { resources } : {}),
+    flags: { set: ['direction2'] },
+  },
+});
 const choice = (id: string, label: string, itemId: string | undefined, ...outcomes: unknown[]) => ({
   id, label, ...(itemId ? { itemId } : {}), outcomes,
 });
@@ -53,7 +75,6 @@ const EXPECTED_METADATA = {
   'death-stare': ['Death Stare', 'impact', 160, 9, undefined, 32],
   'swarm-of-anglerfish': ['Swarm of Anglerfish', 'fish', 12, 10, undefined, 38],
   whirlpool: ['Whirlpool', 'impact', 5, 12, undefined, 30],
-  'shark-men': ['Shark Men', 'impact', 15, 15, undefined, 30],
   'shower-night': ['Shower Night', 'storm', 35, 2, undefined, 35],
   'windy-night': ['Windy Night', 'storm', 40, 2, undefined, 40],
   'bad-sleep': ['Bad Sleep', 'darkness', 40, 2, 10, 40],
@@ -73,7 +94,6 @@ const EXPECTED_REVEAL_TEXT = {
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
   whirlpool: 'The sea begins circling faster around the boat.',
-  'shark-men': 'Figures cut through the water and surround the hull.',
   'shower-night': 'Rain starts falling over the exposed boat.',
   'windy-night': 'Wind catches every loose object on the boat.',
   'bad-sleep': 'Uneasy darkness settles over the boat.',
@@ -88,13 +108,22 @@ const EXPECTED_REVEAL_TEXT = {
 const EXPECTED_CHOICES = {
   'dangerous-waters': [
     choice('map', 'Use Map', 'map',
-      outcome(80, 'Nothing happens.'),
-      outcome(20, 'The rocks damage the boat.', [subtract('hull', { min: 5, max: 10 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(80, 'Nothing happens.'),
+      dangerousWatersOutcome(20, 'The rocks damage the boat.', [
+        subtract('hull', { min: 5, max: 10 }),
+        add('pressure', 1),
+      ])),
     choice('compass', 'Use Compass', 'compass',
-      outcome(50, 'Nothing happens.'),
-      outcome(50, 'The rocks damage the boat.', [subtract('hull', { min: 5, max: 8 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(50, 'Nothing happens.'),
+      dangerousWatersOutcome(50, 'The rocks damage the boat.', [
+        subtract('hull', { min: 5, max: 8 }),
+        add('pressure', 1),
+      ])),
     choice('sleep', 'Sleep', undefined,
-      outcome(1, 'The rocks damage the boat.', [subtract('hull', { min: 25, max: 45 }), subtract('rescueProgress', 5)])),
+      dangerousWatersOutcome(1, 'The rocks damage the boat.', [
+        subtract('hull', { min: 25, max: 45 }),
+        add('pressure', 1),
+      ])),
   ],
   leak: [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', [], [item('consume', 'ductTape')])),
@@ -137,12 +166,6 @@ const EXPECTED_CHOICES = {
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })]), outcome(50, 'The boat is damaged and the swim ring breaks.', [subtract('hull', { min: 20, max: 40 })], [item('break', 'swimRing')])),
     choice('sleep', 'Sleep', undefined, outcome(80, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 }), set('energy', 0)]), outcome(30, 'The boat is badly damaged and two items are lost.', [subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [randomItem('loseRandom', 2)])),
   ],
-  'shark-men': [
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'The harpoon is used.', [], [item('consume', 'harpoonGun')])),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(85, 'The swim ring is lost.', [], [item('lose', 'swimRing')]), outcome(35, 'The shark men attack.', [subtract('hull', { min: 50, max: 70 }), subtract('health', 50)], [item('break', 'swimRing')])),
-    choice('scubaSet', 'Use Scuba Gear', 'scubaSet', outcome(70, 'You gain four food.', [set('energy', 2), add('food', 4)], [item('break', 'scubaSet')]), outcome(36, 'The shark men attack.', [set('energy', 1), subtract('hull', { min: 20, max: 30 }), subtract('health', 80)], [item('break', 'scubaSet')])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'The shark men attack.', [subtract('hull', { min: 50, max: 70 }), subtract('health', 50)]), outcome(20, 'Nothing happens.')),
-  ],
   'shower-night': [
     choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket breaks.', [], [item('break', 'bucket')])),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters you.'), outcome(50, 'The umbrella breaks.', [], [item('break', 'umbrella')])),
@@ -175,9 +198,9 @@ const EXPECTED_CHOICES = {
   ],
   'man-in-the-fog': [
     choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [subtract('rescueProgress', 10), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [subtract('rescueProgress', 10), add('pressure', 1)])),
-    choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [subtract('rescueProgress', 5), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [subtract('rescueProgress', 5), subtract('health', 20), set('energy', 2)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [add('pressure', 1)])),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [add('pressure', 2), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [add('pressure', 2)])),
+    choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [add('pressure', 1), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [add('pressure', 1), subtract('health', 20), set('energy', 2)])),
   ],
   ghosts: [
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The flare is used.', [], [item('consume', 'flareGun')])),
@@ -199,6 +222,19 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
+  it('keeps only Drifting Loot in the random day catalog', () => {
+    expect(
+      SURVIVAL_EVENTS
+        .filter(({ phase }) => phase === 'day')
+        .map(({ id }) => id),
+    ).toEqual(['drifting-loot']);
+    expect(
+      MOVED_NIGHT_EVENT_IDS.every((id) => (
+        SURVIVAL_EVENTS.find((event) => event.id === id)?.phase === 'night'
+      )),
+    ).toBe(true);
+  });
+
 
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
@@ -283,6 +319,33 @@ describe('survival events', () => {
     expect(resultIds('other-people', 'pass')).toEqual(['people-pass']);
   });
 
+  it('sets supernatural event pressure bounds and effects', () => {
+    const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
+    const manInTheFog = byId['man-in-the-fog'];
+
+    expect(byId['man-in-the-fog']?.minimumPressure).toBe(1);
+    expect(byId.ghosts?.minimumPressure).toBe(1);
+    expect(byId['eerie-melody']?.minimumPressure).toBe(2);
+    expect(byId['face-on-the-moon']?.minimumPressure).toBe(3);
+
+    for (const eventId of ['man-in-the-fog', 'face-on-the-moon'] as const) {
+      const serialized = JSON.stringify(byId[eventId]?.choices);
+      expect(serialized).not.toContain('rescueProgress');
+    }
+
+    const outcomeResources = (choiceId: string) => manInTheFog?.choices
+      .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
+    expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
+    expect(outcomeResources('flashlight')).toEqual([
+      [add('pressure', 2), subtract('health', 20), set('energy', 1)],
+      [add('pressure', 2)],
+    ]);
+    expect(outcomeResources('sleep')).toEqual([
+      [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
+      [add('pressure', 1), subtract('health', 20), set('energy', 2)],
+    ]);
+  });
+
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
     const bottle = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle');
 
@@ -340,6 +403,42 @@ describe('survival events', () => {
     expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
   });
 
+  it('encodes the exact rules and presentation keys for the five featured events', () => {
+    const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
+
+    expect(event('drifting-loot')).toMatchObject({ phase: 'day', weight: 18, earliestDay: 3 });
+    expect(event('drifting-bottle')).toMatchObject({
+      weight: 30,
+      earliestDay: 2,
+      maximumAppearances: 1,
+      absentItemIds: ['bottledPaper'],
+    });
+    expect(event('check-the-back').choices[0]?.outcomes).toMatchObject([
+      { weight: 500, presentationKey: 'check-the-back.fish' },
+      { weight: 50, presentationKey: 'check-the-back.empty' },
+      {
+        weight: 1,
+        presentationKey: 'check-the-back.face',
+        minimumPriorAppearances: 1,
+      },
+    ]);
+    expect(event('mystery-chest').choices[0]?.outcomes).toMatchObject([
+      { weight: 80, presentationKey: 'mystery-chest.safe' },
+      {
+        weight: 30,
+        presentationKey: 'mystery-chest.mimic',
+        effects: { resources: [{ resource: 'health', operation: 'subtract', value: 25 }] },
+      },
+    ]);
+    expect(event('flowers')).toMatchObject({
+      weight: 2,
+      earliestDay: 2,
+      latestDay: 13,
+      maximumAppearances: 1,
+    });
+    expect(event('flowers').maximumPressure).toBeUndefined();
+  });
+
   it('blocks one-time, absent-item, and rescue-progress events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
@@ -372,25 +471,46 @@ describe('survival events', () => {
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
     const events = eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
+      phase: 'night', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
-    expect(events.every((event) => event.phase === 'day' && event.earliestDay <= 9)).toBe(true);
+    expect(events.every((event) => event.phase === 'night' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
     expect(events.map((event) => event.id)).not.toContain('death-stare');
     expect(events.map((event) => event.id)).toContain('leak');
     expect(eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
+  it('assigns Dangerous Waters to the night with its authored one-time rule', () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters');
+
+    expect(event).toMatchObject({
+      phase: 'night',
+      weight: 15,
+      earliestDay: 2,
+      latestDay: 30,
+      maximumAppearances: 1,
+    });
+  });
+
+  it('limits Dangerous Waters to one appearance per run', () => {
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      phase: 'night', day: 12, weather: 'calm', lastEventId: null,
+      lastSeenDay: new Map(), targetableItemIds: new Set(),
+      appearanceCounts: new Map([['dangerous-waters', 1]]),
+      inventoryItemIds: new Set(), rescueProgress: 0,
+    }).map(({ id }) => id)).not.toContain('dangerous-waters');
+  });
+
   it('excludes Snatcher from the draw pool without a canonical target', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'day', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
+      phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
     });
@@ -401,7 +521,7 @@ describe('survival events', () => {
   });
 
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
-    const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'day').slice(0, 2);
+    const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'night').slice(0, 2);
     expect(drawWeightedEvent(pool, sequenceRandom([0])).id).toBe(pool[0]!.id);
     expect(drawWeightedEvent(pool, sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)])).id).toBe(pool[1]!.id);
     expect(drawWeightedEvent([], sequenceRandom([0]), 'day').id).toBe('day-calm-fallback');

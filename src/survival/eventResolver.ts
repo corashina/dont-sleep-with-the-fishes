@@ -17,12 +17,16 @@ function resolveEffect(effect: ResourceEffect, random: RandomSource): ResourceEf
 export function resolveWeightedOutcome(
   choice: EventChoiceDefinition,
   random: RandomSource,
+  priorAppearanceCount = 0,
 ): WeightedEventOutcome {
-  const total = choice.outcomes.reduce((sum, outcome) => sum + Math.max(0, outcome.weight), 0);
+  const eligible = choice.outcomes.filter(
+    (outcome) => (outcome.minimumPriorAppearances ?? 0) <= priorAppearanceCount,
+  );
+  const total = eligible.reduce((sum, outcome) => sum + Math.max(0, outcome.weight), 0);
   const roll = random.next() * total;
   let boundary = 0;
-  let selected = choice.outcomes[choice.outcomes.length - 1]!;
-  for (const outcome of choice.outcomes) {
+  let selected = eligible[eligible.length - 1] ?? choice.outcomes[0]!;
+  for (const outcome of eligible) {
     if (outcome.weight <= 0) continue;
     boundary += outcome.weight;
     if (roll < boundary) {
@@ -35,6 +39,12 @@ export function resolveWeightedOutcome(
     ...(selected.resultId === undefined ? {} : { resultId: selected.resultId }),
     weight: selected.weight,
     message: selected.message,
+    ...(selected.presentationKey === undefined
+      ? {}
+      : { presentationKey: selected.presentationKey }),
+    ...(selected.minimumPriorAppearances === undefined
+      ? {}
+      : { minimumPriorAppearances: selected.minimumPriorAppearances }),
     effects: {
       ...(selected.effects.resources
         ? { resources: selected.effects.resources.map((effect) => resolveEffect(effect, random)) }

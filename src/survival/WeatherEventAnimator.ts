@@ -2,39 +2,35 @@ import {
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
-  CylinderGeometry,
   DoubleSide,
-  DodecahedronGeometry,
   Euler,
   Group,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Texture,
   TorusGeometry,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-import type {
-  ActionOutcome,
-  ItemCondition,
-} from './survivalTypes';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
+import type { EventModelLibrary } from './EventModelLibrary';
+import type { ActionOutcome, ItemCondition } from './survivalTypes';
 import {
+  isCameraOnlyWeatherEvent,
   sampleWeatherItemUse,
+  sampleWeatherReaction,
   sampleWeatherReveal,
   weatherItemUseDuration,
+  weatherReactionDuration,
   weatherRevealDuration,
   type WeatherItemSample,
+  type WeatherReactionSample,
   type WeatherRevealSample,
 } from './weatherEventChoreography';
-
-export interface EventPhysicalResponsePresentation {
-  readonly choiceId: string;
-  readonly instanceId: ItemInstanceId;
-  readonly condition: ItemCondition;
-}
 
 type ActiveWeatherAnimation =
   | {
@@ -57,15 +53,21 @@ type ActiveWeatherAnimation =
       readonly kind: 'react';
       readonly eventId: string;
       readonly response: EventPhysicalResponsePresentation | null;
+      readonly actors: readonly WeatherReactionActor[];
       readonly outcome: ActionOutcome;
       elapsed: number;
       readonly duration: number;
       readonly resolve: () => void;
     };
 
-const REACTION_DURATION = 0.84;
-const CLOSE_FIGURE_Z = -3.2;
-const DISTANT_FIGURE_Z = -8.6;
+interface WeatherReactionActor {
+  readonly instanceId: ItemInstanceId;
+  readonly condition: ItemCondition | null;
+}
+
+const DISTANT_FIGURE_Z = -9.2;
+const REVEAL_FIGURE_X = -2.1;
+const REVEAL_FIGURE_Y = 0;
 
 function clamp01(value: number): number {
   if (value <= 0 || !Number.isFinite(value)) return 0;
@@ -101,42 +103,27 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.effectKind = 'none';
 }
 
-function createFogMan(material: Material): Group {
+function prepareFogMan(model: Group, material: Material): Group {
+  const replacedMaterials = new Set<Material>();
+  const replacedTextures = new Set<Texture>();
+  model.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const replaced of materials) {
+      replacedMaterials.add(replaced);
+      for (const value of Object.values(replaced)) {
+        if (value instanceof Texture) replacedTextures.add(value);
+      }
+    }
+    object.material = material;
+  });
+  disposeResourceSets(replacedTextures, replacedMaterials);
+
   const root = new Group();
   root.name = 'fog-man-silhouette';
-  root.position.set(3.4, 1.2, DISTANT_FIGURE_Z);
-
-  const body = new Mesh(new CylinderGeometry(0.34, 0.47, 1.25, 5), material);
-  body.name = 'fog-man-body';
-  body.position.y = 0.46;
-  body.rotation.z = -0.025;
-  root.add(body);
-
-  const coat = new Mesh(new CylinderGeometry(0.43, 0.68, 1.45, 5), material);
-  coat.name = 'fog-man-coat';
-  coat.position.set(0.04, -0.26, -0.025);
-  coat.rotation.y = 0.13;
-  root.add(coat);
-
-  const head = new Mesh(new DodecahedronGeometry(0.29, 0), material);
-  head.name = 'fog-man-head';
-  head.position.set(-0.035, 1.28, 0.015);
-  head.scale.set(0.82, 1.08, 0.74);
-  root.add(head);
-
-  const shoulders = new Mesh(new BoxGeometry(1.08, 0.18, 0.34, 1, 1, 1), material);
-  shoulders.name = 'fog-man-uneven-shoulders';
-  shoulders.position.set(0.08, 0.83, -0.03);
-  shoulders.rotation.set(0.03, -0.08, -0.09);
-  root.add(shoulders);
-
-  const nearShoulder = new Mesh(new BoxGeometry(0.33, 0.28, 0.31), material);
-  nearShoulder.name = 'fog-man-raised-shoulder';
-  nearShoulder.position.set(-0.43, 0.86, -0.02);
-  nearShoulder.rotation.z = 0.18;
-  root.add(nearShoulder);
-
+  root.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
   root.visible = false;
+  root.add(model);
   return root;
 }
 
@@ -145,7 +132,7 @@ function createFlashlightBeam(material: Material): Group {
   root.name = 'weather-flashlight-beam';
   const beam = new Mesh(new ConeGeometry(0.72, 4.8, 8, 1, true), material);
   beam.name = 'weather-flashlight-beam-cone';
-  beam.position.set(0.15, 1.45, -2.1);
+  beam.position.set(0.15, 1.45, -3);
   beam.rotation.x = -Math.PI / 2;
   beam.scale.set(0.01, 0.01, 0.01);
   root.add(beam);
@@ -172,28 +159,6 @@ function createAnchorChain(material: Material): Group {
     root.add(link);
   }
   root.position.set(1.52, 0.2, -0.3);
-  root.visible = false;
-  return root;
-}
-
-function createRainSplash(material: Material): Group {
-  const root = new Group();
-  root.name = 'weather-rain-bucket-splash';
-  const ring = new Mesh(new TorusGeometry(0.23, 0.018, 4, 10), material);
-  ring.name = 'weather-rain-splash-ring';
-  ring.rotation.x = Math.PI / 2;
-  root.add(ring);
-  const left = new Mesh(new ConeGeometry(0.035, 0.34, 5), material);
-  left.name = 'weather-rain-splash-left';
-  left.position.set(-0.12, 0.18, 0.03);
-  left.rotation.z = -0.3;
-  root.add(left);
-  const right = new Mesh(new ConeGeometry(0.028, 0.27, 5), material);
-  right.name = 'weather-rain-splash-right';
-  right.position.set(0.14, 0.15, -0.05);
-  right.rotation.z = 0.42;
-  root.add(right);
-  root.position.set(-0.8, 1.02, -0.45);
   root.visible = false;
   return root;
 }
@@ -260,29 +225,48 @@ export class WeatherEventAnimator {
     supplyRoll: 0,
     effectKind: 'none',
   };
+  private readonly reactionSample: WeatherReactionSample = {
+    actorX: 0,
+    actorY: 0,
+    actorZ: 0,
+    actorYaw: 0,
+    actorPitch: 0,
+    actorRoll: 0,
+    actorScaleX: 1,
+    actorScaleY: 1,
+    actorScaleZ: 1,
+    actorEffect: 0,
+    cameraX: 0,
+    cameraY: 0,
+    cameraZ: 0,
+    cameraYaw: 0,
+    cameraPitch: 0,
+    cameraRoll: 0,
+    effectKind: 'none',
+  };
   private readonly figureMaterial: MeshStandardMaterial;
   private readonly beamMaterial: MeshBasicMaterial;
   private readonly lightningMaterial: MeshBasicMaterial;
-  private readonly splashMaterial: MeshStandardMaterial;
   private readonly silhouette: Group;
   private readonly flashlightBeam: Group;
   private readonly flashlightBeamCone: Mesh;
   private readonly anchorChain: Group;
-  private readonly rainSplash: Group;
   private readonly lightningFlash: Group;
   private active: ActiveWeatherAnimation | null = null;
+  private selectedActorId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
     private readonly cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
+    eventModels?: EventModelLibrary,
   ) {
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
     this.figureMaterial = new MeshStandardMaterial({
-      color: 0x17151e,
-      emissive: 0x08070b,
-      emissiveIntensity: 0.18,
+      color: 0x504b45,
+      emissive: 0x62594f,
+      emissiveIntensity: 1.25,
       roughness: 1,
       flatShading: true,
       transparent: true,
@@ -309,25 +293,17 @@ export class WeatherEventAnimator {
       roughness: 0.72,
       flatShading: true,
     });
-    this.splashMaterial = new MeshStandardMaterial({
-      color: 0x8cb6bd,
-      emissive: 0x557b83,
-      emissiveIntensity: 0.2,
-      roughness: 0.5,
-      flatShading: true,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
-
-    this.silhouette = createFogMan(this.figureMaterial);
+    this.ownedMaterials.add(this.figureMaterial);
+    this.silhouette = eventModels === undefined
+      ? new Group()
+      : prepareFogMan(eventModels.create('fogMan'), this.figureMaterial);
+    this.silhouette.name = 'fog-man-silhouette';
     this.flashlightBeam = createFlashlightBeam(this.beamMaterial);
     this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
     this.anchorChain = createAnchorChain(chainMaterial);
-    this.rainSplash = createRainSplash(this.splashMaterial);
     this.lightningFlash = createLightningFlash(this.lightningMaterial);
     this.worldRoot.add(this.silhouette, this.lightningFlash);
-    this.boatRoot.add(this.flashlightBeam, this.anchorChain, this.rainSplash);
+    this.boatRoot.add(this.flashlightBeam, this.anchorChain);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
     this.rememberCameraBase();
@@ -338,6 +314,11 @@ export class WeatherEventAnimator {
     this.cancelActive();
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.selectedActorId = null;
+  }
+
+  supportsItemUse(eventId: string, choiceId: string): boolean {
+    return weatherItemUseDuration(eventId, choiceId) !== null;
   }
 
   reveal(eventId: string): Promise<void> {
@@ -370,6 +351,21 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     resetItemSample(this.itemSample);
+    if (isCameraOnlyWeatherEvent(eventId)) {
+      this.supplyDisplay.clearEventMotion();
+      this.selectedActorId = null;
+      return new Promise((resolve) => {
+        this.active = {
+          kind: 'item',
+          eventId,
+          choiceId,
+          instanceId,
+          elapsed: 0,
+          duration,
+          resolve,
+        };
+      });
+    }
     if (!this.supplyDisplay.pinEventActor(instanceId)) {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve(false);
@@ -378,6 +374,7 @@ export class WeatherEventAnimator {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve(false);
     }
+    this.selectedActorId = instanceId;
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
@@ -397,7 +394,13 @@ export class WeatherEventAnimator {
     response: EventPhysicalResponsePresentation | null,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (response === null || weatherRevealDuration(eventId) === null) {
+    const actors: readonly WeatherReactionActor[] = (response?.actors.length ?? 0) > 0
+      ? response!.actors
+      : this.selectedActorId === null
+        ? []
+        : [{ instanceId: this.selectedActorId, condition: null }];
+    const duration = weatherReactionDuration(eventId, response?.choiceId ?? '', actors.length);
+    if (duration === null) {
       this.cancelActive();
       return Promise.resolve();
     }
@@ -405,18 +408,20 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
-    if (!this.supplyDisplay.pinEventActor(response.instanceId)) {
-      this.supplyDisplay.clearEventMotion();
-      return Promise.resolve();
+    if (!isCameraOnlyWeatherEvent(eventId)) {
+      for (const actor of actors) {
+        this.supplyDisplay.pinEventActor(actor.instanceId);
+      }
     }
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
         eventId,
         response,
+        actors,
         outcome,
         elapsed: 0,
-        duration: REACTION_DURATION,
+        duration,
         resolve,
       };
     });
@@ -443,7 +448,7 @@ export class WeatherEventAnimator {
         this.updateItem(active.eventId, active.choiceId, active.instanceId, progress);
         break;
       case 'react':
-        this.updateReaction(active.eventId, active.outcome, active.response, progress);
+        this.updateReaction(active, progress);
         break;
     }
 
@@ -467,7 +472,7 @@ export class WeatherEventAnimator {
     this.disposed = true;
     this.worldRoot.removeFromParent();
     this.boatRoot.removeFromParent();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, new Set());
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
 
   private updateReveal(eventId: string, progress: number): void {
@@ -481,9 +486,11 @@ export class WeatherEventAnimator {
       sample.cameraPitch,
       sample.cameraRoll,
     );
-    this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
+    if (!isCameraOnlyWeatherEvent(eventId)) {
+      this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
+    }
     if (eventId === 'man-in-the-fog') {
-      this.showSilhouette(sample.figureVisibility, sample.figureDistance, false);
+      this.showSilhouette(sample.figureVisibility);
     }
     if (eventId === 'thunderstorm' && sample.lightningEmphasis > 0.015) {
       this.lightningFlash.visible = true;
@@ -499,9 +506,7 @@ export class WeatherEventAnimator {
     progress: number,
   ): void {
     if (!sampleWeatherItemUse(eventId, choiceId, progress, this.itemSample)) return;
-    this.supplyDisplay.applyEventItemPose(instanceId, this.itemSample);
-    this.supplyDisplay.applyEventAmbientPose(this.itemSample.supplyRoll, 0);
-    if (this.itemSample.cameraYaw !== 0 || this.itemSample.cameraPush !== 0) {
+    if (isCameraOnlyWeatherEvent(eventId)) {
       this.applyCameraPose(
         0,
         0,
@@ -510,17 +515,20 @@ export class WeatherEventAnimator {
         0,
         0,
       );
+      return;
+    }
+    this.supplyDisplay.applyEventItemPose(instanceId, this.itemSample);
+    this.supplyDisplay.applyEventAmbientPose(this.itemSample.supplyRoll, 0);
+    if (this.itemSample.cameraYaw !== 0 || this.itemSample.cameraPush !== 0) {
+      this.applyCameraPose(0, 0, -this.itemSample.cameraPush, this.itemSample.cameraYaw, 0, 0);
     }
     const effect = this.itemSample.effect;
     if (effect <= 0.01) return;
     switch (this.itemSample.effectKind) {
-      case 'storm-anchor-check':
       case 'wave-anchor-stabilize':
         this.anchorChain.visible = true;
         this.anchorChain.scale.y = 0.18 + effect * 0.82;
-        this.anchorChain.rotation.z = this.itemSample.effectKind === 'storm-anchor-check'
-          ? -0.08 * effect
-          : 0.04 * effect;
+        this.anchorChain.rotation.z = 0.04 * effect;
         break;
       case 'fog-flashlight-sweep':
         this.flashlightBeam.visible = true;
@@ -532,57 +540,85 @@ export class WeatherEventAnimator {
         );
         this.beamMaterial.opacity = effect * 0.24;
         break;
-      case 'shower-rain-catch':
-        this.rainSplash.visible = true;
-        this.rainSplash.position.set(-0.8, 1.02, -0.45);
-        this.rainSplash.scale.setScalar(0.48 + effect * 0.68);
-        this.splashMaterial.opacity = effect * 0.66;
-        break;
-      case 'storm-bucket-bail':
-        this.rainSplash.visible = true;
-        this.rainSplash.position.set(0.72, 0.86, -0.75);
-        this.rainSplash.rotation.z = -0.32 * effect;
-        this.rainSplash.scale.setScalar(0.58 + effect * 0.78);
-        this.splashMaterial.opacity = effect * 0.7;
-        break;
       default:
         break;
     }
   }
 
   private updateReaction(
-    eventId: string,
-    outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null,
+    active: Extract<ActiveWeatherAnimation, { readonly kind: 'react' }>,
     progress: number,
   ): void {
+    const { eventId, outcome, response } = active;
     resetItemSample(this.itemSample);
     const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
     const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
-    const damagingFlashlight = eventId === 'man-in-the-fog'
-      && response?.choiceId === 'flashlight'
-      && healthDamage < 0;
+    const fogAttack = eventId === 'man-in-the-fog' && healthDamage < 0;
+    const actorCount = active.actors.length;
+    const sampleCount = Math.max(1, actorCount);
+    for (let actorIndex = 0; actorIndex < sampleCount; actorIndex += 1) {
+      const actor = active.actors[actorIndex];
+      const condition = actor?.condition === 'broken'
+        ? 'broken'
+        : actor?.condition === 'lost' || actor?.condition === 'consumed'
+          ? 'lost'
+          : null;
+      if (!sampleWeatherReaction(
+        eventId,
+        response?.choiceId ?? '',
+        actorIndex,
+        actorCount,
+        condition,
+        hullDamage,
+        progress,
+        this.reactionSample,
+      )) return;
 
-    if (response?.condition === 'broken') {
-      const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
-        * (1 - smoothstep((progress - 0.46) / 0.54));
-      this.itemSample.y = -0.12 * settle;
-      this.itemSample.roll = 0.26 * settle;
-      this.itemSample.scaleY = 1 - 0.08 * settle;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
-    } else if (response?.condition === 'lost' || response?.condition === 'consumed') {
-      const departure = smoothstep((progress - 0.08) / 0.82);
-      this.itemSample.x = -1.8 * departure;
-      this.itemSample.y = 0.52 * departure;
-      this.itemSample.z = -1.25 * departure;
-      this.itemSample.yaw = 1.1 * departure;
-      this.itemSample.roll = -0.55 * departure;
-      this.supplyDisplay.applyEventItemPose(response.instanceId, this.itemSample);
+      if (actor !== undefined && !isCameraOnlyWeatherEvent(eventId)) {
+        const sample = this.reactionSample;
+        this.itemSample.x = sample.actorX;
+        this.itemSample.y = sample.actorY;
+        this.itemSample.z = sample.actorZ;
+        this.itemSample.yaw = sample.actorYaw;
+        this.itemSample.pitch = sample.actorPitch;
+        this.itemSample.roll = sample.actorRoll;
+        this.itemSample.scaleX = sample.actorScaleX;
+        this.itemSample.scaleY = sample.actorScaleY;
+        this.itemSample.scaleZ = sample.actorScaleZ;
+        if (sample.effectKind === 'none' && actor.condition === 'broken') {
+          const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
+            * (1 - smoothstep((progress - 0.46) / 0.54));
+          this.itemSample.y = -0.12 * settle;
+          this.itemSample.roll = 0.26 * settle;
+          this.itemSample.scaleY = 1 - 0.08 * settle;
+        } else if (
+          sample.effectKind === 'none'
+          && (actor.condition === 'lost' || actor.condition === 'consumed')
+        ) {
+          const departure = smoothstep((progress - 0.08) / 0.82);
+          this.itemSample.x = -1.8 * departure;
+          this.itemSample.y = 0.52 * departure;
+          this.itemSample.z = -1.25 * departure;
+          this.itemSample.yaw = 1.1 * departure;
+          this.itemSample.roll = -0.55 * departure;
+        }
+        this.supplyDisplay.applyEventItemPose(actor.instanceId, this.itemSample);
+      }
+      this.applyReactionEffect(this.reactionSample);
     }
 
-    if (damagingFlashlight) {
+    const sample = this.reactionSample;
+    this.applyCameraPose(
+      sample.cameraX,
+      sample.cameraY,
+      sample.cameraZ,
+      sample.cameraYaw,
+      sample.cameraPitch,
+      sample.cameraRoll,
+    );
+
+    if (fogAttack) {
       const grab = pulse(progress, 0.08, 0.44, 0.9);
-      this.showSilhouette(grab, grab, true);
       this.applyCameraPose(
         -0.14 * grab,
         0.05 * grab,
@@ -593,7 +629,25 @@ export class WeatherEventAnimator {
       );
       return;
     }
-    if (hullDamage < 0) {
+    if (eventId === 'restless-waves' && hullDamage < 0) {
+      const impact = pulse(progress, 0.04, 0.24, 0.62);
+      this.applyCameraPose(
+        0.14 * impact,
+        -0.025 * impact,
+        0,
+        -0.06 * impact,
+        0,
+        0.09 * impact,
+      );
+      return;
+    }
+    if (
+      hullDamage < 0
+      && eventId !== 'shower-night'
+      && eventId !== 'windy-night'
+      && eventId !== 'bad-sleep'
+      && eventId !== 'thunderstorm'
+    ) {
       const impact = Math.sin(Math.PI * progress) * (1 - smoothstep(progress));
       this.applyCameraPose(
         0.08 * impact,
@@ -603,6 +657,20 @@ export class WeatherEventAnimator {
         0,
         0.05 * impact,
       );
+    }
+  }
+
+  private applyReactionEffect(sample: WeatherReactionSample): void {
+    const effect = sample.actorEffect;
+    if (effect <= 0.01) return;
+    switch (sample.effectKind) {
+      case 'storm-loss-lightning':
+        this.lightningFlash.visible = true;
+        this.lightningFlash.scale.setScalar(0.92 + effect * 0.18);
+        this.lightningMaterial.opacity = 0.28 + effect * 0.68;
+        break;
+      default:
+        break;
     }
   }
 
@@ -622,25 +690,16 @@ export class WeatherEventAnimator {
     this.cameraRig.rotateZ(roll);
   }
 
-  private showSilhouette(visibility: number, distance: number, close: boolean): void {
+  private showSilhouette(visibility: number): void {
     if (visibility <= 0.015) return;
     this.silhouette.visible = true;
-    this.figureMaterial.opacity = Math.min(0.76, visibility * 0.72);
-    if (close) {
-      this.silhouette.position.set(
-        1.15 - distance * 0.28,
-        1.06,
-        DISTANT_FIGURE_Z + (CLOSE_FIGURE_Z - DISTANT_FIGURE_Z) * distance,
-      );
-      this.silhouette.scale.setScalar(1 + distance * 0.34);
-      return;
-    }
+    this.figureMaterial.opacity = Math.min(0.38, visibility * 0.36);
     this.silhouette.position.set(
-      3.4 - distance * 0.52,
-      1.2,
-      DISTANT_FIGURE_Z + distance * 2.6,
+      REVEAL_FIGURE_X,
+      REVEAL_FIGURE_Y,
+      DISTANT_FIGURE_Z,
     );
-    this.silhouette.scale.setScalar(1);
+    this.silhouette.scale.setScalar(0.86);
   }
 
   private rememberCameraBase(): void {
@@ -655,7 +714,7 @@ export class WeatherEventAnimator {
 
   private hideTransientEffects(): void {
     this.silhouette.visible = false;
-    this.silhouette.position.set(3.4, 1.2, DISTANT_FIGURE_Z);
+    this.silhouette.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
     this.silhouette.scale.setScalar(1);
     this.figureMaterial.opacity = 0;
     this.flashlightBeam.visible = false;
@@ -665,12 +724,6 @@ export class WeatherEventAnimator {
     this.anchorChain.visible = false;
     this.anchorChain.scale.set(1, 1, 1);
     this.anchorChain.rotation.set(0, 0, 0);
-    this.rainSplash.visible = false;
-    this.rainSplash.position.set(-0.8, 1.02, -0.45);
-    this.rainSplash.rotation.set(0, 0, 0);
-    this.rainSplash.scale.set(1, 1, 1);
-    this.splashMaterial.opacity = 0;
-    this.splashMaterial.emissiveIntensity = 0.2;
     this.lightningFlash.visible = false;
     this.lightningFlash.scale.set(1, 1, 1);
     this.lightningMaterial.opacity = 0;
@@ -680,26 +733,32 @@ export class WeatherEventAnimator {
     const active = this.active;
     if (active === null) return;
     this.active = null;
-    this.restoreCamera();
-    this.hideTransientEffects();
     switch (active.kind) {
       case 'item':
+        this.restoreCamera();
+        this.hideTransientEffects();
         this.supplyDisplay.clearEventPose();
         active.resolve(true);
         break;
       case 'react':
+        if (active.response === null) {
+          this.supplyDisplay.clearEventPose();
+          active.resolve();
+          break;
+        }
         if (
-          active.response?.condition === 'lost'
-          || active.response?.condition === 'consumed'
+          !isCameraOnlyWeatherEvent(active.eventId)
+          && active.actors.some(
+            ({ condition }) => condition === 'lost' || condition === 'consumed',
+          )
         ) {
           this.supplyDisplay.releaseEventActorOnNextSync();
-        } else {
-          this.supplyDisplay.clearEventPose();
-          this.supplyDisplay.releaseEventActor();
         }
         active.resolve();
         break;
       case 'reveal':
+        this.restoreCamera();
+        this.hideTransientEffects();
         this.supplyDisplay.clearEventPose();
         active.resolve();
         break;
@@ -712,6 +771,7 @@ export class WeatherEventAnimator {
     if (active !== null) this.restoreCamera();
     this.supplyDisplay.clearEventMotion();
     this.hideTransientEffects();
+    this.selectedActorId = null;
     if (active?.kind === 'item') {
       active.resolve(false);
     } else if (active !== null) {
