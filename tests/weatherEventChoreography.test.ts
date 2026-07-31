@@ -141,6 +141,17 @@ describe('weather event choreography', () => {
     expect(new Set(effects).size).toBe(effects.length);
   });
 
+  it('lifts near-deck Bad Sleep props into the lower dream gap', () => {
+    const bucket = item();
+    const umbrella = item();
+
+    sampleWeatherItemUse('bad-sleep', 'bucket', 0.5, bucket);
+    sampleWeatherItemUse('bad-sleep', 'umbrella', 0.5, umbrella);
+
+    expect(bucket.y).toBeGreaterThanOrEqual(0.48);
+    expect(umbrella.y).toBeGreaterThanOrEqual(0.62);
+  });
+
   it('sequences two Windy Night broken actors', () => {
     const first = reaction();
     const second = reaction();
