@@ -1,22 +1,14 @@
 import {
   Box3,
   BoxGeometry,
-  BufferGeometry,
-  CylinderGeometry,
-  DoubleSide,
   Group,
-  Material,
   Mesh,
   MeshStandardMaterial,
   OctahedronGeometry,
-  SphereGeometry,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import {
-  disposeResourceSets,
-  runCleanupSteps,
-} from '../../world/SceneResources';
+import { disposeResourceSets, runCleanupSteps } from '../../world/SceneResources';
 import type {
   BorrowedSupplyActor,
 } from '../BoatSupplyDisplay';
@@ -58,10 +50,10 @@ type ActiveSnatcherAnimation =
       readonly resolve: () => void;
     };
 
-const CREATURE_X = 1.48;
-const CREATURE_Y = 0.65;
-const CREATURE_Z = -0.7;
-const CREATURE_SCALE = 1.08;
+const TENTACLE_X = 1.52;
+const TENTACLE_Y = -0.62;
+const TENTACLE_Z = -0.66;
+const TENTACLE_SCALE = 0.94;
 const WARNING_PADDING = 0.02;
 
 interface MutableSupplyPose {
@@ -76,7 +68,7 @@ interface MutableSupplyPose {
   scaleZ: number;
 }
 
-function setCreatureMaterial(root: Group): void {
+function setTentacleMaterial(root: Group): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     const materials = Array.isArray(object.material)
@@ -84,9 +76,9 @@ function setCreatureMaterial(root: Group): void {
       : [object.material];
     for (const material of materials) {
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.multiplyScalar(0.7);
-      material.roughness = 0.88;
-      material.metalness = 0.04;
+      material.color.multiplyScalar(0.62);
+      material.roughness = 0.82;
+      material.metalness = 0.02;
       material.flatShading = true;
       material.needsUpdate = true;
     }
@@ -245,34 +237,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   readonly targetOutline = new SnatcherTargetOutline();
 
   private readonly modelInstance;
-  private readonly creature = new Group();
-  private readonly fingerMaterial = new MeshStandardMaterial({
-    color: 0x172724,
-    emissive: 0x07110f,
-    emissiveIntensity: 0.08,
-    roughness: 0.94,
-    metalness: 0.02,
-    flatShading: true,
-  });
-  private readonly eyeMaterial = new MeshStandardMaterial({
-    color: 0xd8d0a8,
-    emissive: 0x756c42,
-    emissiveIntensity: 0.34,
-    roughness: 0.48,
-    metalness: 0,
-    flatShading: true,
-  });
-  private readonly pupilMaterial = new MeshStandardMaterial({
-    color: 0x121715,
-    roughness: 0.82,
-    metalness: 0,
-    flatShading: true,
-  });
-  private readonly ownedGeometries = new Set<BufferGeometry>();
-  private readonly ownedMaterials = new Set<Material>();
-  private readonly fingers: readonly Mesh[];
-  private readonly eyes: readonly Mesh[];
-  private readonly pupils: readonly Mesh[];
+  private readonly tentacle = new Group();
   private readonly sample: SnatcherSample = identitySnatcherSample();
   private readonly itemPose: MutableSupplyPose = {
     x: 0,
@@ -293,77 +258,16 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
-    this.worldRoot.name = 'snatcher-world';
-    this.boatRoot.name = 'snatcher-boat';
-    this.creature.name = 'snatcher-creature';
-    this.creature.position.set(CREATURE_X, CREATURE_Y, CREATURE_Z);
+    this.worldRoot.name = 'tentacle-attack-world';
+    this.boatRoot.name = 'tentacle-attack-boat';
+    this.tentacle.name = 'tentacle-attack-tentacle';
+    this.tentacle.position.set(TENTACLE_X, TENTACLE_Y, TENTACLE_Z);
 
     this.modelInstance = environment.eventModels.create('snatcher');
-    this.modelInstance.root.name = 'snatcher-model';
-    setCreatureMaterial(this.modelInstance.root);
-    this.creature.add(this.modelInstance.root);
-
-    this.ownedMaterials.add(this.fingerMaterial);
-    this.ownedMaterials.add(this.eyeMaterial);
-    this.ownedMaterials.add(this.pupilMaterial);
-
-    const fingerGeometry = new CylinderGeometry(0.035, 0.082, 0.98, 5, 3);
-    this.ownedGeometries.add(fingerGeometry);
-    const fingers: Mesh[] = [];
-    for (let index = 0; index < 2; index += 1) {
-      const finger = new Mesh(fingerGeometry, this.fingerMaterial);
-      finger.name = index === 0 ? 'snatcher-finger-left' : 'snatcher-finger-right';
-      finger.position.set(
-        index === 0 ? -0.38 : 0.44,
-        -0.08 + index * 0.06,
-        0.14 - index * 0.09,
-      );
-      finger.rotation.set(
-        -0.36 + index * 0.12,
-        0.06 - index * 0.17,
-        index === 0 ? -0.76 : 0.68,
-      );
-      finger.castShadow = true;
-      fingers.push(finger);
-      this.creature.add(finger);
-    }
-    this.fingers = fingers;
-
-    const eyeGeometry = new SphereGeometry(0.13, 7, 5);
-    const pupilGeometry = new SphereGeometry(0.052, 6, 4);
-    this.ownedGeometries.add(eyeGeometry);
-    this.ownedGeometries.add(pupilGeometry);
-    const eyes: Mesh[] = [];
-    const pupils: Mesh[] = [];
-    for (let index = 0; index < 2; index += 1) {
-      const eye = new Mesh(eyeGeometry, this.eyeMaterial);
-      eye.name = index === 0 ? 'snatcher-eye-left' : 'snatcher-eye-right';
-      eye.position.set(index === 0 ? -0.14 : 0.18, 0.39, 0.45);
-      eye.scale.set(
-        index === 0 ? 1.14 : 0.9,
-        index === 0 ? 1.28 : 1.04,
-        index === 0 ? 0.92 : 1.08,
-      );
-      eye.rotation.z = index === 0 ? -0.12 : 0.17;
-      eye.castShadow = true;
-      eyes.push(eye);
-      this.creature.add(eye);
-
-      const pupil = new Mesh(pupilGeometry, this.pupilMaterial);
-      pupil.name = `snatcher-pupil-${index + 1}`;
-      pupil.position.set(
-        eye.position.x + (index === 0 ? 0.012 : -0.014),
-        eye.position.y + (index === 0 ? -0.012 : 0.008),
-        eye.position.z + 0.11,
-      );
-      pupil.scale.copy(eye.scale);
-      pupils.push(pupil);
-      this.creature.add(pupil);
-    }
-    this.eyes = eyes;
-    this.pupils = pupils;
-
-    this.boatRoot.add(this.creature);
+    this.modelInstance.root.name = 'tentacle-attack-model';
+    setTentacleMaterial(this.modelInstance.root);
+    this.tentacle.add(this.modelInstance.root);
+    this.boatRoot.add(this.tentacle);
     this.hideScene();
   }
 
@@ -373,7 +277,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.staged = true;
     this.targetInstanceId = context.targetInstanceId;
     this.boatRoot.visible = true;
-    this.creature.visible = false;
+    this.tentacle.visible = false;
     if (this.targetInstanceId !== null && this.borrowActor(this.targetInstanceId)) {
       this.targetOutline.setTarget(this.targetInstanceId, this.borrowedActor!.root);
       this.targetOutline.applyStrength(1);
@@ -509,7 +413,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       () => this.modelInstance.dispose(),
-      () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
 
@@ -574,56 +477,35 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   private applySample(): void {
-    this.creature.visible = this.sample.headVisibility > 0.008
-      || this.sample.fingerVisibility > 0.008;
-    this.modelInstance.root.visible = this.sample.headVisibility > 0.008;
-    this.creature.position.set(
-      CREATURE_X + this.sample.creatureX,
-      CREATURE_Y + this.sample.creatureY,
-      CREATURE_Z + this.sample.creatureZ,
+    const visibility = Math.max(this.sample.headVisibility, this.sample.fingerVisibility);
+    this.tentacle.visible = visibility > 0.008;
+    this.modelInstance.root.visible = visibility > 0.008;
+    this.tentacle.position.set(
+      TENTACLE_X + this.sample.creatureX,
+      TENTACLE_Y + this.sample.creatureY,
+      TENTACLE_Z + this.sample.creatureZ,
     );
-    this.creature.rotation.set(
-      this.sample.creaturePitch,
-      this.sample.creatureYaw,
-      this.sample.creatureRoll,
+    this.tentacle.rotation.set(
+      -0.12 + this.sample.creaturePitch,
+      -0.32 + this.sample.creatureYaw,
+      -0.2 + this.sample.creatureRoll,
     );
-    const crouchScale = 1 - this.sample.crouchStrength * 0.05;
-    this.creature.scale.set(
-      CREATURE_SCALE * 1.02,
-      CREATURE_SCALE * crouchScale,
-      CREATURE_SCALE * 0.98,
+    const riseScale = 0.72 + this.sample.crouchStrength * 0.28;
+    this.tentacle.scale.set(
+      TENTACLE_SCALE * (0.9 + this.sample.pointStrength * 0.1),
+      TENTACLE_SCALE * riseScale,
+      TENTACLE_SCALE * (0.92 + this.sample.pointStrength * 0.08),
     );
-
-    for (let index = 0; index < this.fingers.length; index += 1) {
-      const finger = this.fingers[index]!;
-      finger.visible = this.sample.fingerVisibility > 0.008;
-      const extension = this.sample.fingerVisibility
-        * (0.82 + this.sample.pointStrength * (index === 0 ? 0.3 : 0.2));
-      finger.scale.set(
-        0.82 + extension * 0.18,
-        Math.max(0.01, extension),
-        0.82 + extension * 0.18,
-      );
-    }
-    for (const eye of this.eyes) {
-      eye.visible = this.sample.headVisibility > 0.008;
-    }
-    for (const pupil of this.pupils) {
-      pupil.visible = this.sample.headVisibility > 0.008;
-    }
     this.targetOutline.applyStrength(this.sample.warningStrength);
   }
 
   private hideScene(): void {
     this.boatRoot.visible = false;
     this.worldRoot.visible = false;
-    this.creature.visible = false;
+    this.tentacle.visible = false;
     this.modelInstance.root.visible = false;
-    this.creature.position.set(CREATURE_X, CREATURE_Y, CREATURE_Z);
-    this.creature.rotation.set(0, 0, 0);
-    this.creature.scale.setScalar(CREATURE_SCALE);
-    for (const finger of this.fingers) finger.visible = false;
-    for (const eye of this.eyes) eye.visible = false;
-    for (const pupil of this.pupils) pupil.visible = false;
+    this.tentacle.position.set(TENTACLE_X, TENTACLE_Y, TENTACLE_Z);
+    this.tentacle.rotation.set(-0.12, -0.32, -0.2);
+    this.tentacle.scale.setScalar(TENTACLE_SCALE);
   }
 }

@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects Snatcher timing, target theft, and distinct item actions.
+// Importance: 5/5. Protects Tentacle Attack timing, target theft, and item actions.
 import { describe, expect, it } from 'vitest';
 import {
   identitySnatcherSample,
@@ -10,14 +10,14 @@ import {
   SNATCHER_REVEAL_DURATION,
 } from '../src/survival/events/snatcherChoreography';
 
-describe('snatcher choreography', () => {
+describe('tentacle attack choreography', () => {
   it('uses the fixed event durations', () => {
     expect(SNATCHER_REVEAL_DURATION).toBe(2.5);
     expect(SNATCHER_ITEM_DURATION).toBe(1.15);
     expect(SNATCHER_REACTION_DURATION).toBe(1.2);
   });
 
-  it('reveals fingers before the head and holds the crouched threat', () => {
+  it('raises the lower tentacle before the full curled threat', () => {
     const sample = identitySnatcherSample();
 
     sampleSnatcherReveal(0.2, sample);

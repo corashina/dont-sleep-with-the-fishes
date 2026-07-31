@@ -42,24 +42,24 @@
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
   "snatcher": {
-    "triangles": 1572,
+    "triangles": 3874,
     "rawBounds": {
       "min": [
-        -0.45942808501422405,
-        1.5033785640096318,
-        -0.3947358200688904
+        -1.3740633614361286,
+        0.0179130079328367,
+        -1.143396799864073
       ],
       "max": [
-        0.45942808501422405,
-        3.1806769877701146,
-        0.5217115401921293
+        1.3740625232458115,
+        19.71022718180538,
+        1.0382514448020383
       ]
     },
-    "sourceSha256": "B4D6CB3E0920058EAB20D079DC57FA6BDBAECAD6806803F0F3D504EE730891DD",
-    "sourceTriangles": 1572,
-    "outputSha256": "D1B822654A5371468EE40CB8E438FCE9FAB8939C6A1171B3235D8B8DD4541AAA",
+    "sourceSha256": "B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931",
+    "sourceTriangles": 3874,
+    "outputSha256": "F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E",
     "hasSkins": true,
-    "animationCount": 8,
+    "animationCount": 4,
     "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
   "anglerFish": {

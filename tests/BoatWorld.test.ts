@@ -1037,7 +1037,7 @@ describe('BoatWorld helpers', () => {
     expect(coordinatorWorld.children.map(({ name }) => name)).toEqual([
       'leak-world',
       'school-of-fish-world',
-      'snatcher-world',
+      'tentacle-attack-world',
       'death-stare-world',
       'anglerfish-swarm-world',
       'whirlpool-world',
@@ -1045,7 +1045,7 @@ describe('BoatWorld helpers', () => {
     expect(coordinatorBoat.children.map(({ name }) => name)).toEqual([
       'leak-boat',
       'school-of-fish-boat',
-      'snatcher-boat',
+      'tentacle-attack-boat',
       'death-stare-boat',
       'anglerfish-swarm-boat',
       'whirlpool-boat',
@@ -1074,7 +1074,7 @@ describe('BoatWorld helpers', () => {
 
   it('cleans completed event and world siblings when coordinator construction fails', () => {
     const propModels = createTestPropModels();
-    const leakModelDispose = vi.fn();
+    const schoolModelDispose = vi.fn();
     const constructionFailure = new Error('school model failed');
     let createCount = 0;
     const eventModels = {
@@ -1083,7 +1083,7 @@ describe('BoatWorld helpers', () => {
         if (createCount === 2) throw constructionFailure;
         return {
           root: new Group(),
-          dispose: leakModelDispose,
+          dispose: schoolModelDispose,
         } satisfies EventModelInstance;
       }),
       dispose: vi.fn(),
@@ -1100,7 +1100,7 @@ describe('BoatWorld helpers', () => {
       'low',
       eventModels,
     )).toThrow(constructionFailure);
-    expect(leakModelDispose).toHaveBeenCalledOnce();
+    expect(schoolModelDispose).toHaveBeenCalledOnce();
     expect(disposeSupplies).toHaveBeenCalledOnce();
     expect(eventModels.dispose).not.toHaveBeenCalled();
 
