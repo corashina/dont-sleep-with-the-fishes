@@ -160,6 +160,9 @@ describe('AnglerfishSwarmPresentation', () => {
     const lureLights = presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('swarm-lure-light-'),
     );
+    const lureMarkers = presentation.worldRoot.children.filter(
+      ({ name }) => name.startsWith('swarm-lure-marker-'),
+    );
 
     expect(fixture.create).toHaveBeenCalledTimes(18);
     expect(fixture.create).toHaveBeenCalledWith('anglerFish');
@@ -168,6 +171,8 @@ describe('AnglerfishSwarmPresentation', () => {
     expect(anglerRoots.every(({ scale }) => scale.x < 1)).toBe(true);
     expect(lureLights).toHaveLength(18);
     expect(lureLights.every((light) => light instanceof PointLight)).toBe(true);
+    expect(lureMarkers).toHaveLength(18);
+    expect(lureMarkers.every((marker) => marker instanceof Mesh)).toBe(true);
     const catches = presentation.boatRoot.children.filter(
       ({ name }) => name.startsWith('swarm-catch-actor-'),
     );
@@ -193,18 +198,53 @@ describe('AnglerfishSwarmPresentation', () => {
 
     const reveal = presentation.reveal();
     presentation.update(0.522, 0.522);
+    const firstWaveSamples = fixture.sampleWorldWaveInto.mock.calls
+      .slice(0, 18)
+      .map(([sample]) => sample);
+    const secondWaveSamples = fixture.sampleWorldWaveInto.mock.calls
+      .slice(18, 36)
+      .map(([sample]) => sample);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-lure-light-') && visible,
+    )).toHaveLength(3);
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('swarm-lure-marker-') && visible,
     )).toHaveLength(3);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
     )).toHaveLength(0);
     expect(fixture.sampleWorldWaveInto).toHaveBeenCalledTimes(36);
+    expect(secondWaveSamples).toEqual(firstWaveSamples);
 
     presentation.update(1.798, 1.276);
     expect(fixture.cameraEffectsRoot.rotation.y).not.toBe(0);
     presentation.update(2.9, 1.102);
     await reveal;
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible, position }) => (
+        name.startsWith('swarm-angler-') && visible && position.y > 0.9
+      ),
+    )).toHaveLength(18);
+    expect(presentation.worldRoot.children.filter(
+      ({ name, visible, scale }) => (
+        name.startsWith('swarm-angler-') && visible && scale.x > 0.65
+      ),
+    ).length).toBeGreaterThan(12);
+    const heldAnglers = presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
+    );
+    const heldLures = presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('swarm-lure-marker-') && visible,
+    );
+    expect(heldAnglers.filter(({ position }) => position.z < -3).length)
+      .toBeGreaterThanOrEqual(6);
+    expect(heldAnglers.some(({ position }) => position.z > 2.5)).toBe(true);
+    expect(heldAnglers.some(({ position }) => position.x < -1.7)).toBe(true);
+    expect(heldAnglers.some(({ position }) => position.x > 1.7)).toBe(true);
+    expect(heldLures).toHaveLength(18);
+    expect(heldLures.every(({ position }) => position.y > 1.1)).toBe(true);
+    expect(heldLures.filter(({ position }) => position.z < -3).length)
+      .toBeGreaterThanOrEqual(6);
     expect(fixture.create).not.toHaveBeenCalled();
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
     expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
@@ -231,6 +271,12 @@ describe('AnglerfishSwarmPresentation', () => {
     expect(presentation.boatRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-catch-actor-') && visible,
     )).toHaveLength(2);
+    const remainingAnglers = presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
+    );
+    expect(remainingAnglers).toHaveLength(16);
+    expect(remainingAnglers.filter(({ position }) => position.z < -3).length)
+      .toBeGreaterThanOrEqual(6);
     expect(fixture.cameraBase.rotation.toArray()).toEqual(baseRotation);
   });
 

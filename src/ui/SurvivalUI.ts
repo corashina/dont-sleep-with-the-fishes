@@ -714,7 +714,9 @@ export class SurvivalUI {
           ? 'lost'
           : line.endsWith(' CONSUMED')
             ? 'consumed'
-            : 'resource';
+            : / -\d+$/.test(line)
+              ? 'resource-negative'
+              : 'resource';
       return item;
     }));
     this.eventResultLines.hidden = result.lines.length === 0;
@@ -2074,6 +2076,31 @@ export class SurvivalUI {
         event.preventDefault();
         this.activateEventChoice(choice);
         return;
+      }
+      const itemAnchor = target.closest<HTMLButtonElement>(
+        'button[data-target-kind="item"]',
+      );
+      const instanceId = itemAnchor?.dataset.backingInstanceId as ItemInstanceId | undefined
+        ?? (
+          itemAnchor?.dataset.anchorId?.startsWith('supply:')
+            ? undefined
+            : itemAnchor?.dataset.anchorId as ItemInstanceId | undefined
+        );
+      const choiceId = instanceId === undefined
+        ? undefined
+        : this.eventEligibility?.get(instanceId);
+      if (
+        itemAnchor !== null
+        && this.anchorLayer.contains(itemAnchor)
+        && !itemAnchor.disabled
+        && itemAnchor.getAttribute('aria-disabled') !== 'true'
+        && instanceId !== undefined
+        && choiceId !== undefined
+        && !this.busy
+        && this.eventSelectedInstanceId === null
+      ) {
+        event.preventDefault();
+        this.onEventItem(choiceId, instanceId);
       }
     }
   };

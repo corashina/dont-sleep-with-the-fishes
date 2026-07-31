@@ -734,6 +734,47 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it.each([
+    ['death-stare', 'flashlight', 'flashlight'],
+    ['swarm-of-anglerfish', 'flashlight', 'flashlight'],
+    ['swarm-of-anglerfish', 'baitTin', 'baitTin'],
+    ['whirlpool', 'swimRing', 'swimRing'],
+  ] as const)(
+    'settles the %s %s item action after elapsed time and across visibility',
+    async (eventId, choiceId, itemType) => {
+      const item = savedItem(itemType);
+      const propModels = createTestPropModels();
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [item],
+        undefined,
+        undefined,
+        'high',
+        createTestEventModels(),
+      );
+      world.syncInventory(snapshot([item]));
+      world.stageEvent({ eventId, targetInstanceId: null, variantSeed: 27 });
+
+      const elapsedUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
+      world.update(0.6, 0.6);
+      expect(await remainsPending(elapsedUse)).toBe(true);
+      world.update(1.3, 0.7);
+      await expect(elapsedUse).resolves.toBeUndefined();
+
+      const hiddenUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
+      world.update(1.5, 0.2);
+      expect(await remainsPending(hiddenUse)).toBe(true);
+      world.setDocumentHidden(true);
+      await expect(hiddenUse).resolves.toBeUndefined();
+      world.setDocumentHidden(false);
+
+      world.dispose();
+      propModels.dispose();
+    },
+  );
+
   it('cancels a generic item-use fallback when the event is cleared', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
@@ -1296,6 +1337,9 @@ describe('BoatWorld helpers', () => {
     expect(secondActor.root.visible).toBe(true);
     expect(firstMesh(firstActor.root).geometry).toBe(
       firstMesh(secondActor.root).geometry,
+    );
+    expect(firstMesh(firstActor.root).material).toBe(
+      firstMesh(secondActor.root).material,
     );
     const firstRemove = vi.spyOn(firstActor.root, 'removeFromParent');
     const secondRemove = vi.spyOn(secondActor.root, 'removeFromParent');

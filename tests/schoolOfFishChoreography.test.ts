@@ -8,6 +8,8 @@ import {
   sampleSchoolItemUse,
   sampleSchoolReaction,
   sampleSchoolReveal,
+  SCHOOL_CENTER_X,
+  SCHOOL_CENTER_Z,
   SCHOOL_ITEM_DURATION,
   SCHOOL_REACTION_DURATION,
   SCHOOL_REVEAL_DURATION,
@@ -34,13 +36,19 @@ describe('schoolOfFishChoreography', () => {
     sampleSchoolFishPose(variant, 0, sample, pose);
     expect(sample.gather).toBe(0);
     expect(sample.schoolAlpha).toBe(0);
-    const scatteredDistance = Math.hypot(pose.x - 4.15, pose.z + 0.35);
+    const scatteredDistance = Math.hypot(
+      pose.x - SCHOOL_CENTER_X,
+      pose.z - SCHOOL_CENTER_Z,
+    );
 
     sampleSchoolReveal(1, sample);
     sampleSchoolFishPose(variant, 0, sample, pose);
     expect(sample.gather).toBe(1);
     expect(sample.schoolAlpha).toBe(1);
-    expect(Math.hypot(pose.x - 4.15, pose.z + 0.35)).toBeLessThan(scatteredDistance);
+    expect(Math.hypot(
+      pose.x - SCHOOL_CENTER_X,
+      pose.z - SCHOOL_CENTER_Z,
+    )).toBeLessThan(scatteredDistance);
   });
 
   it('authors distinct net, bucket, and telescope actions', () => {

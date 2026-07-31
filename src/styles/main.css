@@ -1072,6 +1072,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .event-result__lines li[data-state="broken"]::before { content: '!'; }
 .event-result__lines li[data-state="lost"]::before { content: 'X'; }
 .event-result__lines li[data-state="consumed"]::before { content: '-'; }
+.event-result__lines li[data-state="resource-negative"]::before { content: '-'; }
 .event-choices {
   display: flex;
   flex-wrap: wrap;

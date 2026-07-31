@@ -153,6 +153,15 @@ describe('WhirlpoolPresentation', () => {
       visualOnly: true,
       sourceModel: 'Tornado',
     });
+    expect(
+      presentation.worldRoot.getObjectByName('whirlpool-core')!.position.y,
+    ).toBeGreaterThan(0);
+    expect(
+      presentation.worldRoot.getObjectByName('whirlpool-core')!.position.z,
+    ).toBeLessThan(-5);
+    expect(
+      presentation.worldRoot.getObjectByName('whirlpool-core')!.scale.x,
+    ).toBeLessThan(0.35);
     expect(presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('whirlpool-foam-ribbon-'),
     )).toHaveLength(14);
@@ -163,7 +172,7 @@ describe('WhirlpoolPresentation', () => {
       ({ name }) => name.startsWith('whirlpool-chain-link-'),
     )).toHaveLength(10);
     expect(presentation.boatRoot.getObjectByName('whirlpool-ring-shell')).toBeDefined();
-    expect(presentation.worldRoot.getObjectByName('whirlpool-core')!.scale.y).toBe(0.18);
+    expect(presentation.worldRoot.getObjectByName('whirlpool-core')!.scale.y).toBe(0.08);
   });
 
   it('mutates the shared vortex and samples every surface actor', async () => {
@@ -179,11 +188,22 @@ describe('WhirlpoolPresentation', () => {
 
     expect(fixture.environment.vortexWave).toBe(sharedVortex);
     expect(fixture.vortexWave).toMatchObject({
-      centerX: 0,
-      centerZ: -6.4,
-      radius: 8.6,
+      centerX: 0.6,
+      centerZ: -5.6,
+      radius: 8.2,
       strength: 1,
     });
+    const foam = presentation.worldRoot.children.filter(
+      ({ name, visible }) => name.startsWith('whirlpool-foam-ribbon-') && visible,
+    );
+    expect(foam).toHaveLength(14);
+    expect(foam.every(({ position, rotation, scale }) => (
+      position.z < -5
+        && position.y > 0.8
+        && rotation.x > 0.8
+        && rotation.x < 1.3
+        && scale.x <= 2.2
+    ))).toBe(true);
     expect(fixture.vortexWave.depression).toBeGreaterThan(1);
     expect(fixture.vortexWave.tangentStrength).toBeGreaterThan(0.8);
     expect(fixture.sampleWorldWaveInto).toHaveBeenCalledTimes(26);

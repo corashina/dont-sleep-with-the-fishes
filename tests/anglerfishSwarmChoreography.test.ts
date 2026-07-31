@@ -44,9 +44,15 @@ describe('anglerfishSwarmChoreography', () => {
     expect(held.visibleCount).toBe(18);
     expect(held.bodyVisibleCount).toBe(18);
 
-    sampleSwarmFishPose(variants[9]!, 0, held, pose);
-    expect(Math.hypot(pose.x, pose.z)).toBeGreaterThan(2);
-    expect(pose.scale).toBeLessThan(1);
+    const heldPoses = variants.map((variant) => {
+      sampleSwarmFishPose(variant, 0, held, pose);
+      return { ...pose };
+    });
+    expect(heldPoses.filter(({ z }) => z < -3).length).toBeGreaterThanOrEqual(6);
+    expect(heldPoses.some(({ z }) => z > 2.5)).toBe(true);
+    expect(heldPoses.some(({ x }) => x < -1.7)).toBe(true);
+    expect(heldPoses.some(({ x }) => x > 1.7)).toBe(true);
+    expect(heldPoses.every(({ scale }) => scale < 1)).toBe(true);
   });
 
   it('authors net, harpoon, flashlight, and bait actions', () => {

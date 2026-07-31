@@ -82,9 +82,11 @@ const DEBRIS_COUNT = 12;
 const CHAIN_LINK_COUNT = 10;
 const MAX_LOST_ACTORS = 2;
 const WATERLINE = 0.04;
-const VORTEX_X = 0;
-const VORTEX_Z = -6.4;
-const VORTEX_RADIUS = 8.6;
+const VORTEX_X = 0.6;
+const VORTEX_Z = -5.6;
+const VORTEX_RADIUS = 8.2;
+const FOAM_RING_LIFT = 0.72;
+const FOAM_RING_TILT = Math.PI * 0.34;
 
 const IDENTITY_ITEM_POSE: MutableSupplyPose = {
   x: 0,
@@ -116,9 +118,10 @@ function styleCore(root: Group): void {
     for (let index = 0; index < materials.length; index += 1) {
       const material = materials[index]!;
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.setHex(0x102b31);
-      material.emissive.setHex(0x061216);
-      material.emissiveIntensity = 0.12;
+      material.color.setHex(0x1b4650);
+      material.emissive.setHex(0x0b252b);
+      material.emissiveIntensity = 0.2;
+      material.map = null;
       material.roughness = 0.74;
       material.metalness = 0.02;
       material.flatShading = true;
@@ -216,8 +219,8 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.coreModel.root.name = 'whirlpool-core';
     this.coreModel.root.userData.visualOnly = true;
     this.coreModel.root.userData.sourceModel = 'Tornado';
-    this.coreModel.root.position.set(VORTEX_X, -0.72, VORTEX_Z);
-    this.coreModel.root.scale.set(1, 0.18, 1);
+    this.coreModel.root.position.set(VORTEX_X, 0.12, VORTEX_Z);
+    this.coreModel.root.scale.set(0.3, 0.08, 0.3);
     styleCore(this.coreModel.root);
     this.worldRoot.add(this.coreModel.root);
 
@@ -226,8 +229,8 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.ownedMaterials.add(this.chainMaterial);
     this.ownedMaterials.add(this.ringMaterial);
 
-    const foamGeometry = new TorusGeometry(0.72, 0.035, 4, 18, 1.4);
-    const debrisGeometry = new TetrahedronGeometry(0.18, 0);
+    const foamGeometry = new TorusGeometry(1, 0.06, 5, 28, Math.PI * 1.75);
+    const debrisGeometry = new TetrahedronGeometry(0.26, 0);
     const chainGeometry = new TorusGeometry(0.095, 0.018, 4, 8);
     const ringGeometry = new TorusGeometry(0.44, 0.105, 7, 18);
     this.ownedGeometries.add(foamGeometry);
@@ -242,18 +245,14 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       mesh.name = `whirlpool-foam-ribbon-${index + 1}`;
       mesh.renderOrder = 2;
       mesh.rotation.x = Math.PI / 2;
-      mesh.scale.set(
-        0.78 + (index % 5) * 0.07,
-        0.74 + (index % 3) * 0.08,
-        0.7 + (index % 4) * 0.06,
-      );
+      mesh.scale.set(1, 1, 1);
       const actor = {
         mesh,
         wave: waveSample(),
         angle,
-        radius: 2.35 + (index % 4) * 0.72,
+        radius: 1.15 + (index % 7) * 0.18,
         speed: 0.72 + (index % 5) * 0.08,
-        inwardTravel: 0.36 + (index % 3) * 0.12,
+        inwardTravel: 0.18 + (index % 3) * 0.06,
       };
       this.foamRibbons.push(actor);
       this.worldRoot.add(mesh);
@@ -273,7 +272,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
         mesh,
         wave: waveSample(),
         angle,
-        radius: 3.2 + (index % 5) * 0.74,
+        radius: 1.4 + (index % 5) * 0.24,
         speed: 0.48 + (index % 4) * 0.09,
         inwardTravel: 0.58 + (index % 4) * 0.14,
       };
@@ -547,25 +546,26 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   }
 
   private applySurfaceActors(time: number): void {
-    this.foamMaterial.opacity = Math.min(0.78, this.sample.foamStrength * 0.76);
+    this.foamMaterial.opacity = Math.min(0.9, this.sample.foamStrength * 0.88);
     for (let index = 0; index < this.foamRibbons.length; index += 1) {
       const actor = this.foamRibbons[index]!;
       const angle = actor.angle + this.sample.vortexPhase * actor.speed * 0.16;
       const radius = actor.radius - this.sample.debrisPull * actor.inwardTravel;
-      const x = VORTEX_X + Math.cos(angle) * radius;
-      const z = VORTEX_Z + Math.sin(angle) * radius;
-      this.environment.sampleWorldWaveInto(actor.wave, time, x, z, 1);
+      const sampleX = VORTEX_X + Math.cos(angle) * radius;
+      const sampleZ = VORTEX_Z + Math.sin(angle) * radius;
+      this.environment.sampleWorldWaveInto(actor.wave, time, sampleX, sampleZ, 1);
       actor.mesh.visible = this.sample.foamStrength > 0.012;
       actor.mesh.position.set(
-        x + actor.wave.displacementX,
-        WATERLINE + actor.wave.height + 0.025,
-        z + actor.wave.displacementZ,
+        VORTEX_X + actor.wave.displacementX * 0.2,
+        WATERLINE + actor.wave.height + FOAM_RING_LIFT,
+        VORTEX_Z + actor.wave.displacementZ * 0.2,
       );
       actor.mesh.rotation.set(
-        Math.PI / 2 + actor.wave.normal.z * 0.08,
-        -angle,
-        -actor.wave.normal.x * 0.08,
+        FOAM_RING_TILT + actor.wave.normal.z * 0.04,
+        actor.wave.normal.x * 0.02,
+        angle,
       );
+      actor.mesh.scale.setScalar(radius);
     }
 
     for (let index = 0; index < this.debris.length; index += 1) {
@@ -578,7 +578,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       actor.mesh.visible = this.sample.debrisPull > 0.012;
       actor.mesh.position.set(
         x + actor.wave.displacementX,
-        WATERLINE + actor.wave.height + 0.07,
+        WATERLINE + actor.wave.height + 0.16,
         z + actor.wave.displacementZ,
       );
       actor.mesh.rotation.set(

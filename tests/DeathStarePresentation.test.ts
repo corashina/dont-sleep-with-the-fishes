@@ -174,6 +174,11 @@ describe('DeathStarePresentation', () => {
     presentation.update(2.3, 2.3);
     const heldPosition = presentation.worldRoot
       .getObjectByName('death-stare-angler')!.position.toArray();
+    const angler = presentation.worldRoot.getObjectByName('death-stare-angler')!;
+    expect(angler.position.y).toBeGreaterThan(1);
+    expect(angler.position.y).toBeLessThan(1.3);
+    expect(angler.position.z).toBeLessThan(-5.5);
+    expect(angler.scale.x).toBeLessThanOrEqual(1);
     presentation.update(2.82, 0.52);
     expect(presentation.worldRoot
       .getObjectByName('death-stare-angler')!.position.toArray()).toEqual(heldPosition);
@@ -301,6 +306,7 @@ describe('DeathStarePresentation', () => {
     const mouthTarget = presentation.worldRoot.getObjectByName(
       'death-stare-mouth-target',
     )!;
+    expect(angler.position.z).toBeLessThan(-5.5);
     lostActor.root.getWorldPosition(actorWorld);
     mouthTarget.getWorldPosition(mouthWorld);
 

@@ -3693,7 +3693,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(beginDawn).not.toHaveBeenCalled();
   });
 
-  it('pauses while hidden and requires the UI resume action before updates continue', () => {
+  it('resumes updates when a visibility-owned pause ends', () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -3717,9 +3717,45 @@ describe('SurvivalPhase orchestration', () => {
     expect(setPaused).toHaveBeenCalledWith(true);
     expect(update).toHaveBeenCalledOnce();
     fakeDocument.hidden = false;
-    (ui.onPauseChange as (paused: boolean) => void)(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     phase.update(3, 0.016);
+    expect(setPaused).toHaveBeenLastCalledWith(false);
     expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a manual pause across hide and restore', () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const update = vi.fn();
+    const updateAmbient = vi.fn();
+    const setPaused = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        update,
+        updateAmbient,
+        setDocumentHidden: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: { render: vi.fn(), setPaused, dispose: vi.fn() },
+    });
+    phase.start();
+    phase.setPaused(true);
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    phase.update(3, 0.016);
+
+    expect(setPaused).not.toHaveBeenCalledWith(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateAmbient).toHaveBeenCalledOnce();
   });
 
   it('keeps ambient boat motion active while gameplay is paused', () => {
@@ -3742,7 +3778,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('settles a hidden event reveal but keeps choices locked until explicit resume', async () => {
+  it('settles a hidden event reveal and restores choices when visible', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -3789,7 +3825,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setEventSelection).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(setEventSelection).toHaveBeenCalledOnce();
     phase.dispose();
@@ -3882,7 +3918,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(resolveEvent).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(resolveEvent).toHaveBeenCalledOnce();
     expect(showFeedback).not.toHaveBeenCalled();
@@ -3893,12 +3929,103 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFeedback).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(showFeedback).toHaveBeenCalledWith(outcome);
     hold.resolve();
     phase.dispose();
   });
+
+  it.each([
+    ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-anglerfish', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
+    ['whirlpool', 'swimRing', 'swimRing-1', 'swimRing'],
+  ] as const)(
+    'continues %s %s result text after hide and restore',
+    async (eventId, choiceId, instanceId, itemType) => {
+      const listeners = new Map<string, EventListener>();
+      const fakeDocument = {
+        hidden: false,
+        addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+        removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+      };
+      vi.stubGlobal('document', fakeDocument);
+      const itemUse = deferred();
+      let current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: eventId,
+        inventory: inventory({
+          [instanceId]: { instanceId, type: itemType, condition: 'usable' as const },
+        }),
+      });
+      const outcome = accepted({
+        code: 'event-resolved',
+        message: `${eventId} result`,
+        deltas: {},
+        cue: 'none',
+      });
+      const resolveEvent = vi.fn(() => {
+        current = snapshot({
+          state: 'nightEvent',
+          pendingEventId: null,
+          inventory: current.inventory,
+        });
+        return outcome;
+      });
+      const showEventResult = vi.fn();
+      const setDocumentHidden = vi.fn((hidden: boolean) => {
+        if (hidden) itemUse.resolve();
+      });
+      const phase = SurvivalPhase.forTest({
+        session: { snapshot: vi.fn(() => current), resolveEvent },
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          playEventItemUse: vi.fn(() => itemUse.promise),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          syncInventory: vi.fn(),
+          setDocumentHidden,
+          dispose: vi.fn(),
+        },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          setEventUsing: vi.fn(),
+          setBusy: vi.fn(),
+          setPaused: vi.fn(),
+          showEventResult,
+          holdEventOutcome: vi.fn(() => new Promise<void>(() => undefined)),
+          dispose: vi.fn(),
+        },
+      });
+      phase.start();
+      await flushPromises();
+      phase.handleEventItem(choiceId, instanceId);
+      phase.update(0.2, 0.2);
+      expect(showEventResult).not.toHaveBeenCalled();
+
+      fakeDocument.hidden = true;
+      listeners.get('visibilitychange')!(new Event('visibilitychange'));
+      await flushPromises();
+      expect(resolveEvent).not.toHaveBeenCalled();
+
+      fakeDocument.hidden = false;
+      listeners.get('visibilitychange')!(new Event('visibilitychange'));
+      await flushPromises();
+
+      expect(setDocumentHidden).toHaveBeenNthCalledWith(1, true);
+      expect(setDocumentHidden).toHaveBeenNthCalledWith(2, false);
+      expect(resolveEvent).toHaveBeenCalledOnce();
+      expect(showEventResult).toHaveBeenCalledOnce();
+      expect(showEventResult).toHaveBeenCalledWith(expect.objectContaining({
+        message: `${eventId} result`,
+      }));
+      phase.dispose();
+    },
+  );
 
   it('wires command, pause, journal, and restart callbacks without legacy camera input', () => {
     const perform = vi.fn(() => ({ ...accepted(), accepted: false }));

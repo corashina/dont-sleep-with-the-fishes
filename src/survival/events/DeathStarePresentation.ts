@@ -80,9 +80,10 @@ interface MutableSupplyPose extends SupplyAdditivePose {
 }
 
 const FACE_X = 0;
-const FACE_Y = 0.78;
-const FACE_Z = -4.4;
+const FACE_Y = 1.15;
+const FACE_Z = -5.85;
 const FACE_LONGEST_DIMENSION = 5.6;
+const FACE_PRESENTATION_SCALE = 1;
 const WATERLINE = 0.02;
 const WATER_STRAND_COUNT = 12;
 const IDENTITY_ITEM_POSE: Readonly<SupplyAdditivePose> = {
@@ -228,6 +229,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.boatRoot.name = 'death-stare-boat';
     this.angler.name = 'death-stare-angler';
     this.angler.userData.faceLongestDimension = FACE_LONGEST_DIMENSION;
+    this.angler.userData.presentationScale = FACE_PRESENTATION_SCALE;
+    this.angler.scale.setScalar(FACE_PRESENTATION_SCALE);
 
     this.modelInstance = environment.eventModels.create('anglerFish');
     this.modelInstance.root.name = 'death-stare-angler-model';

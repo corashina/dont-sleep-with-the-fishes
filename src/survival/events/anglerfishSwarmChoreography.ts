@@ -2,6 +2,7 @@ export const SWARM_REVEAL_DURATION = 2.9;
 export const SWARM_ITEM_DURATION = 1.2;
 export const SWARM_REACTION_DURATION = 1.15;
 export const SWARM_FISH_COUNT = 18;
+export const SWARM_CENTER_Z = -0.8;
 
 export type SwarmItemEffectKind =
   | 'none'
@@ -134,9 +135,9 @@ export function createSwarmVariants(
     variants.push({
       scale: 0.54 + variantUnit(seed, index, 1) * 0.32,
       hullAngle: angle,
-      radiusX: 3.15 + variantUnit(seed, index, 2) * 0.52,
-      radiusZ: 2.05 + variantUnit(seed, index, 3) * 0.44,
-      approachDistance: 3.8 + variantUnit(seed, index, 4) * 2.4,
+      radiusX: 2 + variantUnit(seed, index, 2) * 0.5,
+      radiusZ: 3.8 + variantUnit(seed, index, 3) * 0.6,
+      approachDistance: 1.4 + variantUnit(seed, index, 4) * 0.8,
       depth: 0.22 + variantUnit(seed, index, 5) * 0.48,
       speed: 0.68 + variantUnit(seed, index, 6) * 0.62,
       roll: (variantUnit(seed, index, 7) - 0.5) * 0.2,
@@ -365,7 +366,7 @@ export function sampleSwarmFishPose(
   const bow = Math.cos(variant.hullAngle);
   const openingWeight = Math.max(0, bow * 0.75 + 0.25);
   radiusX += swarm.opening * openingWeight * 2.1;
-  radiusZ += swarm.opening * openingWeight * 1.2;
+  radiusZ += swarm.opening * openingWeight * 0.25;
 
   const diversionSide = side >= 0 ? 1 : -1;
   const diversionX = swarm.baitDiversion * (2.8 + diversionSide * 0.48);
@@ -376,7 +377,8 @@ export function sampleSwarmFishPose(
 
   output.x = Math.cos(variant.hullAngle) * (radiusX - lunge - pull * 0.8)
     + diversionX;
-  output.z = Math.sin(variant.hullAngle) * (radiusZ - lunge - pull * 0.55)
+  output.z = SWARM_CENTER_Z
+    + Math.sin(variant.hullAngle) * (radiusZ - lunge - pull * 0.55)
     + diversionZ;
   output.yaw = Math.atan2(-output.x, -output.z);
   output.pitch = pulseOffset * 0.35;

@@ -380,8 +380,10 @@ export class SurvivalPhase implements GamePhase {
       this.visibilityDocument = document;
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
       if (document.hidden) {
-        this.visibilityPauseActive = true;
-        this.setPaused(true);
+        if (!this.paused) {
+          this.visibilityPauseActive = true;
+          this.setPaused(true);
+        }
         this.world.setDocumentHidden?.(true);
       }
     }
@@ -1584,8 +1586,12 @@ export class SurvivalPhase implements GamePhase {
   private readonly handleVisibilityChange = (): void => {
     const hidden = this.visibilityDocument?.hidden === true;
     if (hidden) {
-      this.visibilityPauseActive = true;
-      this.setPaused(true);
+      if (!this.paused) {
+        this.visibilityPauseActive = true;
+        this.setPaused(true);
+      }
+    } else if (this.visibilityPauseActive) {
+      this.setPaused(false);
     }
     this.world.setDocumentHidden?.(hidden);
   };
