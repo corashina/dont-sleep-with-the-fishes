@@ -70,8 +70,8 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
-const SURFACE_BODY_LIFT = 0.82;
-const SURFACE_EFFECT_LIFT = 0.68;
+const BODY_DEPTH = 0.48;
+const SURFACE_EFFECT_LIFT = 0.02;
 
 const DEFAULT_VARIANT: SchoolVariant = {
   scale: 1,
@@ -121,6 +121,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   readonly boatRoot = new Group();
 
   private readonly fishActors: FishActor[] = [];
+  private readonly surfaceFins: Mesh[] = [];
   private readonly surfaceFlashes: Mesh[] = [];
   private readonly splashes: Mesh[] = [];
   private readonly catchModel: EventModelInstance;
@@ -151,6 +152,18 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     flatShading: true,
     side: DoubleSide,
   });
+  private readonly finMaterial = new MeshStandardMaterial({
+    color: 0x244951,
+    emissive: 0x10282d,
+    emissiveIntensity: 0.16,
+    roughness: 0.86,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false,
+    flatShading: true,
+    side: DoubleSide,
+  });
   private readonly sample: SchoolSample = identitySchoolSample();
   private readonly reactionState: {
     foodDelta: number;
@@ -170,6 +183,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.boatRoot.name = 'school-of-fish-boat';
     this.ownedMaterials.add(this.silverMaterial);
     this.ownedMaterials.add(this.splashMaterial);
+    this.ownedMaterials.add(this.finMaterial);
 
     for (let index = 0; index < MAX_FISH; index += 1) {
       const model = environment.eventModels.create('schoolFish');
@@ -186,7 +200,18 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       });
     }
 
-    const flashGeometry = new RingGeometry(0.07, 0.2, 8, 1);
+    const finGeometry = new ConeGeometry(0.055, 0.16, 3, 1, false);
+    this.ownedGeometries.add(finGeometry);
+    for (let index = 0; index < 8; index += 1) {
+      const fin = new Mesh(finGeometry, this.finMaterial);
+      fin.name = `school-surface-fin-${index + 1}`;
+      fin.scale.z = 0.18;
+      fin.renderOrder = 2;
+      this.surfaceFins.push(fin);
+      this.worldRoot.add(fin);
+    }
+
+    const flashGeometry = new RingGeometry(0.06, 0.15, 8, 1);
     this.ownedGeometries.add(flashGeometry);
     for (let index = 0; index < 8; index += 1) {
       const flash = new Mesh(flashGeometry, this.silverMaterial);
@@ -426,7 +451,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.environment.sampleWorldWaveInto(fish.wave, time, pose.x, pose.z, 1);
       fish.root.position.set(
         pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height + SURFACE_BODY_LIFT - variant.depth * 0.12,
+        WATERLINE + fish.wave.height - BODY_DEPTH - variant.depth * 0.32,
         pose.z + fish.wave.displacementZ,
       );
       fish.root.rotation.set(
@@ -438,15 +463,26 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       fish.root.visible = index < this.activeFish && (!showCatch || index !== 0);
     }
 
-    const heldBreaching = this.sample.schoolAlpha > 0.98
-      && this.sample.gather > 0.98
-      && this.sample.scatter < 0.01;
+    for (let index = 0; index < this.surfaceFins.length; index += 1) {
+      const fin = this.surfaceFins[index]!;
+      const fishIndex = (index * 3 + 1) % this.activeFish;
+      const fish = this.fishActors[fishIndex]!;
+      fin.visible = this.sample.schoolAlpha > 0.12 && fish.root.visible;
+      fin.position.set(
+        fish.root.position.x,
+        WATERLINE + fish.wave.height + SURFACE_EFFECT_LIFT,
+        fish.root.position.z,
+      );
+      fin.rotation.y = fish.pose.yaw;
+      const finScale = 0.72 + fish.variant.scale * 0.14;
+      fin.scale.set(finScale, finScale, finScale * 0.18);
+    }
+
     const flashStrength = Math.max(
-      this.sample.surfaceFlash,
-      heldBreaching ? 0.24 : 0,
+      this.sample.surfaceFlash * 0.34,
       this.sample.effectKind === 'telescope-track' ? this.sample.effect * 0.34 : 0,
     );
-    this.silverMaterial.opacity = Math.min(0.68, flashStrength * 0.7);
+    this.silverMaterial.opacity = Math.min(0.2, flashStrength * 0.24);
     for (let index = 0; index < this.surfaceFlashes.length; index += 1) {
       const flash = this.surfaceFlashes[index]!;
       const fishIndex = (index * 3) % this.activeFish;
@@ -462,18 +498,13 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       flash.scale.set(flashScale, flashScale, flashScale);
     }
 
-    const splashStrength = Math.max(
-      this.sample.splash,
-      heldBreaching ? 0.26 : 0,
-    );
+    const splashStrength = this.sample.splash;
     this.splashMaterial.opacity = Math.min(0.72, splashStrength * 0.74);
     for (let index = 0; index < this.splashes.length; index += 1) {
       const splash = this.splashes[index]!;
       const fishIndex = (index * 4 + 1) % this.activeFish;
       const fish = this.fishActors[fishIndex]!;
-      splash.visible = (
-        heldBreaching || this.sample.splash > index * 0.09
-      ) && fish.root.visible;
+      splash.visible = this.sample.splash > index * 0.09 && fish.root.visible;
       splash.position.set(
         fish.root.position.x,
         WATERLINE + fish.wave.height + SURFACE_EFFECT_LIFT,
@@ -494,6 +525,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.boatRoot.visible = false;
     this.silverMaterial.opacity = 0;
     this.splashMaterial.opacity = 0;
+    this.finMaterial.opacity = 0.24;
     this.catchActor.visible = false;
     this.catchActor.position.y = 0.86;
     this.catchActor.scale.set(1, 1, 1);
@@ -506,6 +538,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       fish.root.scale.set(1, 1, 1);
     }
     for (const flash of this.surfaceFlashes) flash.visible = false;
+    for (const fin of this.surfaceFins) fin.visible = false;
     for (const splash of this.splashes) splash.visible = false;
   }
 }
