@@ -835,6 +835,163 @@ describe('BoatWorld helpers', () => {
     animator.dispose();
   });
 
+  it('keeps every Windy Night break actor posed after the result resolves', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const result = animator.react(
+      'windy-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The wind breaks two supplies.',
+        deltas: { hull: -20 },
+        cue: 'impact',
+      },
+      {
+        choiceId: 'sleep',
+        actors: [
+          { instanceId: 'map-1', condition: 'broken' },
+          { instanceId: 'umbrella-1', condition: 'broken' },
+        ],
+      },
+    );
+    animator.update(2.1, 2.1);
+    await result;
+
+    expect(Math.abs(supplies.poses.get('map-1')?.roll ?? 0)).toBeGreaterThan(0.1);
+    expect(Math.abs(supplies.poses.get('umbrella-1')?.roll ?? 0)).toBeGreaterThan(0.1);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
+  it('keeps an unchanged safe Shower Night actor and splash through the result hold', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const itemUse = animator.playItemUse('shower-night', 'bucket', 'bucket-1');
+    animator.update(2, 2);
+    await itemUse;
+    const result = animator.react(
+      'shower-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The bucket catches the rain.',
+        deltas: {},
+        cue: 'none',
+      },
+      { choiceId: 'bucket', actors: [] },
+    );
+    animator.update(2, 2);
+    await result;
+
+    expect(Math.abs(supplies.poses.get('bucket-1')?.y ?? 0)).toBeGreaterThan(0.04);
+    expect(
+      animator.boatRoot.getObjectByName('weather-rain-bucket-splash')?.visible,
+    ).toBe(true);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
+  it('keeps the Bad Sleep broken Umbrella collapsed through the result hold', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const result = animator.react(
+      'bad-sleep',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The umbrella breaks.',
+        deltas: {},
+        cue: 'none',
+      },
+      {
+        choiceId: 'umbrella',
+        actors: [{ instanceId: 'umbrella-1', condition: 'broken' }],
+      },
+    );
+    animator.update(2, 2);
+    await result;
+
+    expect(supplies.poses.get('umbrella-1')?.scaleY).toBeLessThan(0.8);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
+  it('keeps Thunderstorm Anchor and lightning effects through result holds', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const itemUse = animator.playItemUse('thunderstorm', 'anchor', 'anchor-1');
+    animator.update(2, 2);
+    await itemUse;
+    const anchorResult = animator.react(
+      'thunderstorm',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The anchor steadies the boat.',
+        deltas: {},
+        cue: 'none',
+      },
+      { choiceId: 'anchor', actors: [] },
+    );
+    animator.update(2, 2);
+    await anchorResult;
+
+    expect(animator.boatRoot.getObjectByName('weather-anchor-chain')?.visible).toBe(true);
+    expect(Math.abs(supplies.poses.get('anchor-1')?.pitch ?? 0)).toBeGreaterThan(0.1);
+
+    animator.clear();
+    const lossResult = animator.react(
+      'thunderstorm',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'Lightning takes the umbrella.',
+        deltas: {},
+        cue: 'impact',
+      },
+      {
+        choiceId: 'sleep',
+        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
+      },
+    );
+    animator.update(2, 2);
+    await lossResult;
+
+    expect(animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible).toBe(true);
+    expect(Math.abs(supplies.poses.get('umbrella-1')?.x ?? 0)).toBeGreaterThan(0.3);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
   it('does not retry a failed actor pin from the update path', () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay('map-1');

@@ -326,6 +326,26 @@ describe('SharkMenPresentation', () => {
     presentation.dispose();
   });
 
+  it('withdraws the rail hand after a safe Sleep result resolves', async () => {
+    const { presentation } = createPresentation();
+    presentation.stage();
+    const reveal = presentation.reveal();
+    presentation.update(4, 4);
+    await reveal;
+    const hand = presentation.root.getObjectByName('shark-men-hand')!;
+    expect(hand.visible).toBe(true);
+    const reaction = presentation.react(
+      outcome({}),
+      { choiceId: 'sleep', actors: [] },
+    );
+
+    presentation.update(1.6, 1.6);
+    await reaction;
+
+    expect(hand.visible).toBe(false);
+    presentation.dispose();
+  });
+
   it('restores every base pose on clear', () => {
     const { cameraRig, presentation, supplies } = createPresentation(createModel());
     const hand = presentation.root.getObjectByName('shark-men-hand')!;

@@ -163,6 +163,31 @@ describe('weather event choreography', () => {
     expect(first.actorEffect).toBeGreaterThan(second.actorEffect);
   });
 
+  it.each([
+    ['shower-night', 'bucket', null, 'shower-safe-settle'],
+    ['windy-night', 'sleep', 'broken', 'wind-break-fold'],
+    ['bad-sleep', 'umbrella', 'broken', 'bad-sleep-umbrella-collapse'],
+    ['thunderstorm', 'anchor', null, 'storm-anchor-steady'],
+    ['thunderstorm', 'sleep', 'lost', 'storm-loss-lightning'],
+  ] as const)(
+    'keeps the final %s %s result pose and effect',
+    (eventId, choiceId, condition, effectKind) => {
+      const output = reaction();
+
+      sampleWeatherReaction(eventId, choiceId, 0, 1, condition, 0, 1, output);
+
+      expect(output.effectKind).toBe(effectKind);
+      expect(output.actorEffect).toBeGreaterThan(0);
+      expect(
+        Math.abs(output.actorX)
+        + Math.abs(output.actorY)
+        + Math.abs(output.actorRoll)
+        + Math.abs(output.actorPitch)
+        + Math.abs(output.actorScaleY - 1),
+      ).toBeGreaterThan(0.04);
+    },
+  );
+
   it('gives Thunderstorm one main kick and smaller settle', () => {
     const impact = reaction();
     const settle = reaction();

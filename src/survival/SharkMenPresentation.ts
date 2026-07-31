@@ -741,6 +741,9 @@ export class SharkMenPresentation {
       return;
     }
     const retreat = smoothstep(progress);
+    this.hand.position.copy(this.handBasePosition);
+    this.hand.position.y -= retreat * 0.72;
+    this.hand.visible = retreat < 0.98;
     for (let index = 0; index < this.fins.length; index += 1) {
       const fin = this.fins[index]!;
       fin.visible = index < 2 && retreat < 0.98;
