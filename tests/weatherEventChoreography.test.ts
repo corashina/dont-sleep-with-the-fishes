@@ -148,8 +148,8 @@ describe('weather event choreography', () => {
     sampleWeatherItemUse('bad-sleep', 'bucket', 0.5, bucket);
     sampleWeatherItemUse('bad-sleep', 'umbrella', 0.5, umbrella);
 
-    expect(bucket.y).toBeGreaterThanOrEqual(0.48);
-    expect(umbrella.y).toBeGreaterThanOrEqual(0.62);
+    expect(bucket.y).toBeGreaterThanOrEqual(1.2);
+    expect(umbrella.y).toBeGreaterThanOrEqual(1.4);
   });
 
   it('sequences two Windy Night broken actors', () => {
