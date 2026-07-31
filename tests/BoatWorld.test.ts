@@ -499,6 +499,13 @@ describe('BoatWorld helpers', () => {
         .toBe(false);
       await world.revealEvent(eventId);
       expect(presenter.reveal).toHaveBeenCalledOnce();
+      const choice = {
+        choiceId: 'test-choice',
+        instanceId: null,
+        condition: null,
+      };
+      await world.playEventChoice(eventId, choice);
+      expect(presenter.playChoice).toHaveBeenCalledWith(choice);
       await world.reactToEventOutcome(eventId, {
         accepted: true,
         code: 'event-resolved',
@@ -556,6 +563,42 @@ describe('BoatWorld helpers', () => {
       .toBe(false);
     expect(world.scene.getObjectByName('focused-event:midnight-tour')?.visible)
       .toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the world choice pending until its focused presenter finishes', async () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('chest-attack');
+    let finishChoice!: () => void;
+    const choiceTimeline = new Promise<void>((resolve) => {
+      finishChoice = resolve;
+    });
+    active.playChoice.mockReturnValue(choiceTimeline);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'chest-attack': () => active.presenter },
+    );
+    const choice = {
+      choiceId: 'fishingNet',
+      instanceId: 'fishingNet-1' as ItemInstanceId,
+      condition: 'usable' as const,
+    };
+
+    world.stageEvent('chest-attack');
+    const pending = world.playEventChoice('chest-attack', choice);
+
+    expect(active.playChoice).toHaveBeenCalledWith(choice);
+    expect(await remainsPending(pending)).toBe(true);
+    finishChoice();
+    await pending;
 
     world.dispose();
     propModels.dispose();
