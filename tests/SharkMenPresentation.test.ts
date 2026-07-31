@@ -151,13 +151,50 @@ describe('SharkMenPresentation', () => {
     presentation.dispose();
   });
 
+  it('holds a readable rail hand and stages one fin on each side', async () => {
+    const { presentation } = createPresentation();
+    presentation.stage();
+    const reveal = presentation.reveal();
+    presentation.update(2, 2);
+    await reveal;
+
+    const hand = presentation.root.getObjectByName('shark-men-hand')!;
+    const palm = hand.getObjectByName('shark-men-palm') as Mesh;
+    for (const time of [18, 72]) {
+      presentation.update(time, 16);
+
+      expect(hand.visible).toBe(true);
+      expect(hand.position.y).toBeGreaterThan(0);
+      expect(hand.scale.x).toBeGreaterThanOrEqual(1.1);
+      expect((palm.material as MeshStandardMaterial).emissiveIntensity)
+        .toBeGreaterThanOrEqual(0.12);
+
+      const visibleFins = Array.from({ length: 5 }, (_, index) =>
+        presentation.root.getObjectByName(`shark-men-fin-${index + 1}`)!,
+      ).filter((fin) => fin.visible);
+      expect(visibleFins).toHaveLength(2);
+      expect(visibleFins[0]!.parent!.position.x).toBeLessThan(-1.5);
+      expect(visibleFins[1]!.parent!.position.x).toBeGreaterThan(1.5);
+      visibleFins.forEach((fin) => {
+        expect(fin.scale.x).toBeGreaterThanOrEqual(1.25);
+        const blade = fin.children.find((child) => child instanceof Mesh) as Mesh;
+        const material = blade.material as MeshStandardMaterial;
+        expect(Math.max(material.color.r, material.color.g, material.color.b))
+          .toBeGreaterThanOrEqual(0.12);
+        expect(material.emissiveIntensity).toBeGreaterThanOrEqual(0.12);
+      });
+    }
+
+    presentation.dispose();
+  });
+
   it('uses the configured presentation wave scale without dampening the sample', () => {
     const { presentation } = createPresentation();
     const time = 2.37;
     const waveScale = 1.55;
-    const angle = 0.18 + time * 0.29;
-    const x = -2.9 + Math.cos(angle) * 0.72;
-    const z = -3.7 + Math.sin(angle) * 0.48;
+    const angle = 0.18 + time * 0.16;
+    const x = -2.35 + Math.cos(angle) * 0.38;
+    const z = -3.1 + Math.sin(angle) * 0.3;
     const expected = sampleWaveField(DEFAULT_WAVES, time, x, z, waveScale);
 
     presentation.stage();
