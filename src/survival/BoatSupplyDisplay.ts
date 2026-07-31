@@ -12,6 +12,7 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
   ITEM_IDS,
   type ItemId,
@@ -117,6 +118,13 @@ interface MutableSupplyPose {
   scaleX: number;
   scaleY: number;
   scaleZ: number;
+}
+
+interface BorrowedSupplyBinding {
+  readonly groupId: BoatSupplyGroupId;
+  readonly motionIndex: number;
+  readonly root: Group;
+  readonly pose: MutableSupplyPose;
 }
 
 const EVENT_ITEM_USE_DURATION = 0.65;
@@ -251,9 +259,9 @@ export class BoatSupplyDisplay {
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
   private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
-  private readonly borrowedGroupById = new Map<ItemInstanceId, BoatSupplyGroupId>();
-  private readonly borrowedIdByGroup = new Map<BoatSupplyGroupId, ItemInstanceId>();
-  private readonly borrowedPoses = new Map<ItemInstanceId, MutableSupplyPose>();
+  private readonly borrowedBindings =
+    new Map<ItemInstanceId, BorrowedSupplyBinding>();
+  private readonly borrowedCountByGroup = new Map<BoatSupplyGroupId, number>();
   private readonly releaseBorrowedOnSync = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
@@ -369,9 +377,11 @@ export class BoatSupplyDisplay {
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
       if (
         groupId !== this.pinnedEventGroupId
-        && !this.borrowedIdByGroup.has(groupId)
+        && !this.hasBorrowedGroup(groupId)
       ) {
         this.syncGroup(groupId, snapshot);
+      } else if (this.hasBorrowedGroup(groupId)) {
+        this.recordsById.get(groupId)!.root.visible = false;
       }
     }
     if (
@@ -458,17 +468,19 @@ export class BoatSupplyDisplay {
   }
 
   borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
-    if (!this.pinBorrowedEventActor(instanceId)) return null;
     const existing = this.borrowedActors.get(instanceId);
-    if (existing !== undefined) return existing;
-    const groupId = this.groupByInstanceId.get(instanceId)!;
-    const root = this.recordsById.get(groupId)!.root;
+    if (existing !== undefined) {
+      this.releaseBorrowedOnSync.delete(instanceId);
+      return existing;
+    }
+    const binding = this.createBorrowedEventBinding(instanceId);
+    if (binding === null) return null;
     const actor: BorrowedSupplyActor = {
       instanceId,
-      root,
+      root: binding.root,
       applyPose: (pose) => {
-        const target = this.borrowedPoses.get(instanceId);
-        if (target === undefined) return;
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
+        const target = binding.pose;
         target.x = pose.x;
         target.y = pose.y;
         target.z = pose.z;
@@ -480,10 +492,11 @@ export class BoatSupplyDisplay {
         target.scaleZ = pose.scaleZ;
       },
       releaseOnNextSync: () => {
-        if (!this.borrowedGroupById.has(instanceId)) return;
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
         this.releaseBorrowedOnSync.add(instanceId);
       },
       release: () => {
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
         this.releaseBorrowedEventActor(instanceId, true);
       },
     };
@@ -499,7 +512,7 @@ export class BoatSupplyDisplay {
     }
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined) return false;
-    if (this.borrowedIdByGroup.has(groupId)) return false;
+    if (this.hasBorrowedGroup(groupId)) return false;
     const previousSelectedItemId = this.eventSelectedItemId;
     if (this.currentSnapshot !== null) {
       this.eventSelectedItemId = instanceId;
@@ -750,26 +763,21 @@ export class BoatSupplyDisplay {
     }
   }
 
-  private pinBorrowedEventActor(instanceId: ItemInstanceId): boolean {
-    if (this.disposed) return false;
-    if (this.borrowedGroupById.has(instanceId)) {
-      this.releaseBorrowedOnSync.delete(instanceId);
-      return true;
-    }
+  private createBorrowedEventBinding(
+    instanceId: ItemInstanceId,
+  ): BorrowedSupplyBinding | null {
+    if (this.disposed || this.currentSnapshot === null) return null;
     const groupId = this.groupByInstanceId.get(instanceId);
     if (
       groupId === undefined
       || groupId === this.pinnedEventGroupId
-      || this.borrowedIdByGroup.has(groupId)
     ) {
-      return false;
+      return null;
     }
 
     const previousSelectedItemId = this.eventSelectedItemId;
-    if (this.currentSnapshot !== null) {
-      this.eventSelectedItemId = instanceId;
-      this.syncGroup(groupId, this.currentSnapshot);
-    }
+    this.eventSelectedItemId = instanceId;
+    this.syncGroup(groupId, this.currentSnapshot);
     const record = this.recordsById.get(groupId);
     if (
       record === undefined
@@ -777,43 +785,74 @@ export class BoatSupplyDisplay {
       || record.backingInstanceId !== instanceId
     ) {
       this.eventSelectedItemId = previousSelectedItemId;
-      if (this.currentSnapshot !== null) {
-        this.syncGroup(groupId, this.currentSnapshot);
+      this.syncGroup(groupId, this.currentSnapshot);
+      if (record !== undefined && this.hasBorrowedGroup(groupId)) {
+        record.root.visible = false;
       }
-      return false;
+      return null;
     }
 
+    const root = cloneSkeleton(record.root) as Group;
+    root.name = `boat-supply-event:${instanceId}`;
+    root.userData.supplyInstanceId = instanceId;
+    for (let index = 1; index < root.children.length; index += 1) {
+      root.children[index]!.visible = false;
+    }
+    record.root.parent!.add(root);
+
     this.eventSelectedItemId = previousSelectedItemId;
-    this.borrowedGroupById.set(instanceId, groupId);
-    this.borrowedIdByGroup.set(groupId, instanceId);
-    this.borrowedPoses.set(instanceId, createIdentitySupplyPose());
+    this.syncGroup(groupId, this.currentSnapshot);
+    record.root.visible = false;
+    const binding: BorrowedSupplyBinding = {
+      groupId,
+      motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
+      root,
+      pose: createIdentitySupplyPose(),
+    };
+    this.borrowedBindings.set(instanceId, binding);
+    this.borrowedCountByGroup.set(
+      groupId,
+      (this.borrowedCountByGroup.get(groupId) ?? 0) + 1,
+    );
     this.releaseBorrowedOnSync.delete(instanceId);
-    return true;
+    return binding;
   }
 
   private releaseBorrowedEventActor(
     instanceId: ItemInstanceId,
     syncLatestSnapshot: boolean,
   ): void {
-    const groupId = this.borrowedGroupById.get(instanceId);
-    if (groupId === undefined) return;
-    this.borrowedGroupById.delete(instanceId);
-    this.borrowedIdByGroup.delete(groupId);
-    this.borrowedPoses.delete(instanceId);
+    const binding = this.borrowedBindings.get(instanceId);
+    if (binding === undefined) return;
+    const groupId = binding.groupId;
+    this.borrowedBindings.delete(instanceId);
+    this.borrowedActors.delete(instanceId);
     this.releaseBorrowedOnSync.delete(instanceId);
-    const root = this.recordsById.get(groupId)!.root;
-    root.position.copy(this.basePositionById.get(groupId)!);
-    root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
-    root.scale.set(1, 1, 1);
-    if (syncLatestSnapshot && this.currentSnapshot !== null) {
+    const remaining = (this.borrowedCountByGroup.get(groupId) ?? 1) - 1;
+    if (remaining <= 0) this.borrowedCountByGroup.delete(groupId);
+    else this.borrowedCountByGroup.set(groupId, remaining);
+    binding.root.position.copy(this.basePositionById.get(groupId)!);
+    binding.root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
+    binding.root.scale.set(1, 1, 1);
+    binding.root.visible = false;
+    binding.root.removeFromParent();
+    if (
+      syncLatestSnapshot
+      && this.currentSnapshot !== null
+      && !this.hasBorrowedGroup(groupId)
+    ) {
       this.syncGroup(groupId, this.currentSnapshot);
     }
   }
 
   private releaseAllBorrowedEventActors(syncLatestSnapshot: boolean): void {
-    for (const instanceId of this.borrowedGroupById.keys()) {
+    for (const instanceId of this.borrowedBindings.keys()) {
       this.releaseBorrowedEventActor(instanceId, syncLatestSnapshot);
     }
+  }
+
+  private hasBorrowedGroup(groupId: BoatSupplyGroupId): boolean {
+    return (this.borrowedCountByGroup.get(groupId) ?? 0) > 0;
   }
 
   private applyEventMotion(): void {
@@ -829,10 +868,13 @@ export class BoatSupplyDisplay {
       root.scale.set(1, 1, 1);
       root.position.y += this.eventAmbientLift;
       root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
-      const borrowedId = this.borrowedIdByGroup.get(groupId);
-      const pose = borrowedId === undefined
-        ? groupId === selectedGroupId ? this.eventItemPose : undefined
-        : this.borrowedPoses.get(borrowedId);
+      if (this.hasBorrowedGroup(groupId)) {
+        root.visible = false;
+        continue;
+      }
+      const pose = groupId === selectedGroupId
+        ? this.eventItemPose
+        : undefined;
       if (pose !== undefined) {
         root.position.x += pose.x;
         root.position.y += pose.y;
@@ -842,6 +884,23 @@ export class BoatSupplyDisplay {
         root.rotateZ(pose.roll);
         root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
       }
+    }
+    for (const binding of this.borrowedBindings.values()) {
+      const root = binding.root;
+      const pose = binding.pose;
+      root.visible = true;
+      root.position.copy(this.basePositionById.get(binding.groupId)!);
+      root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
+      root.scale.set(1, 1, 1);
+      root.position.y += this.eventAmbientLift;
+      root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
+      root.position.x += pose.x;
+      root.position.y += pose.y;
+      root.position.z += pose.z;
+      root.rotateY(pose.yaw);
+      root.rotateX(pose.pitch);
+      root.rotateZ(pose.roll);
+      root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
     }
   }
 

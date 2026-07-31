@@ -969,7 +969,9 @@ describe('BoatWorld helpers', () => {
     expect(actor).not.toBeNull();
     expect(sameActor).toBe(actor);
     expect(actor?.instanceId).toBe(map.instanceId);
-    expect(actor?.root).toBe(parent.getObjectByName('boat-supply:map'));
+    expect(actor?.root.name).toBe(`boat-supply-event:${map.instanceId}`);
+    expect(actor?.root.parent).toBe(parent);
+    expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
 
     const mesh = firstMesh(actor!.root);
     const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
@@ -992,6 +994,8 @@ describe('BoatWorld helpers', () => {
     actor!.releaseOnNextSync();
     display.sync(snapshot([map]));
     expect(actor!.root.position.toArray()).toEqual([0, 0, 0]);
+    expect(actor!.root.parent).toBeNull();
+    expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(true);
     expect(geometryDispose).not.toHaveBeenCalled();
     materialDisposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
 
@@ -999,13 +1003,17 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('drives two exact borrowed supply actors until each owner releases it', () => {
-    const map = savedItem('map', 3);
-    const ring = savedItem('swimRing', 6);
+  it('drives two exact same-group actors until each owner releases it', () => {
+    const firstMap = savedItem('map', 3);
+    const secondMap = savedItem('map', 6);
     const propModels = createTestPropModels();
     const parent = new Group();
-    const display = new BoatSupplyDisplay(propModels, parent, [map, ring]);
-    display.sync(snapshot([map, ring]));
+    const display = new BoatSupplyDisplay(
+      propModels,
+      parent,
+      [firstMap, secondMap],
+    );
+    display.sync(snapshot([firstMap, secondMap]));
     const releaseBorrowedActor = vi.spyOn(
       display as unknown as {
         releaseBorrowedEventActor(
@@ -1016,24 +1024,29 @@ describe('BoatWorld helpers', () => {
       'releaseBorrowedEventActor',
     );
 
-    const mapActor = display.borrowEventActor(map.instanceId)!;
-    const ringActor = display.borrowEventActor(ring.instanceId)!;
-    expect(display.borrowEventActor(map.instanceId)).toBe(mapActor);
-    expect(display.borrowEventActor(ring.instanceId)).toBe(ringActor);
-    expect(mapActor.root).toBe(parent.getObjectByName('boat-supply:map'));
-    expect(ringActor.root).toBe(parent.getObjectByName('boat-supply:swimRing'));
-    expect(display.recordFor('map')).toMatchObject({
-      backingInstanceId: map.instanceId,
-      visibleCopies: 1,
-    });
-    expect(display.recordFor('swimRing')).toMatchObject({
-      backingInstanceId: ring.instanceId,
-      visibleCopies: 1,
-    });
-    expect(mapActor.root.visible).toBe(true);
-    expect(ringActor.root.visible).toBe(true);
+    const firstActor = display.borrowEventActor(firstMap.instanceId)!;
+    const secondActor = display.borrowEventActor(secondMap.instanceId)!;
+    expect(display.borrowEventActor(firstMap.instanceId)).toBe(firstActor);
+    expect(display.borrowEventActor(secondMap.instanceId)).toBe(secondActor);
+    expect(firstActor.root).not.toBe(secondActor.root);
+    expect(firstActor.root.name).toBe(
+      `boat-supply-event:${firstMap.instanceId}`,
+    );
+    expect(secondActor.root.name).toBe(
+      `boat-supply-event:${secondMap.instanceId}`,
+    );
+    expect(firstActor.root.parent).toBe(parent);
+    expect(secondActor.root.parent).toBe(parent);
+    expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
+    expect(firstActor.root.visible).toBe(true);
+    expect(secondActor.root.visible).toBe(true);
+    expect(firstMesh(firstActor.root).geometry).toBe(
+      firstMesh(secondActor.root).geometry,
+    );
+    const firstRemove = vi.spyOn(firstActor.root, 'removeFromParent');
+    const secondRemove = vi.spyOn(secondActor.root, 'removeFromParent');
 
-    mapActor.applyPose({
+    firstActor.applyPose({
       x: 1.2,
       y: 0.3,
       z: -0.4,
@@ -1044,7 +1057,7 @@ describe('BoatWorld helpers', () => {
       scaleY: 0.8,
       scaleZ: 0.8,
     });
-    ringActor.applyPose({
+    secondActor.applyPose({
       x: -1.4,
       y: 0.5,
       z: -0.7,
@@ -1057,11 +1070,11 @@ describe('BoatWorld helpers', () => {
     });
     display.update(0);
 
-    expect(mapActor.root.position.toArray()).toEqual([1.2, 0.3, -0.4]);
-    expect(ringActor.root.position.toArray()).toEqual([-1.4, 0.5, -0.7]);
+    expect(firstActor.root.position.toArray()).toEqual([1.2, 0.3, -0.4]);
+    expect(secondActor.root.position.toArray()).toEqual([-1.4, 0.5, -0.7]);
 
-    mapActor.release();
-    ringActor.applyPose({
+    firstActor.release();
+    secondActor.applyPose({
       x: -1.8,
       y: 0.6,
       z: -0.9,
@@ -1073,23 +1086,31 @@ describe('BoatWorld helpers', () => {
       scaleZ: 0.6,
     });
     display.update(0);
-    expect(mapActor.root.position.toArray()).toEqual([0, 0, 0]);
-    expect(ringActor.root.position.toArray()).toEqual([-1.8, 0.6, -0.9]);
+    expect(firstActor.root.parent).toBeNull();
+    expect(secondActor.root.position.toArray()).toEqual([-1.8, 0.6, -0.9]);
+    expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
 
-    ringActor.releaseOnNextSync();
-    display.sync(snapshot([map, ring]));
-    expect(ringActor.root.position.toArray()).toEqual([0, 0, 0]);
+    secondActor.releaseOnNextSync();
+    display.sync(snapshot([]));
+    expect(secondActor.root.parent).toBeNull();
+    expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
+    expect(display.recordFor('map')).toMatchObject({
+      backingInstanceId: null,
+      visibleCopies: 0,
+    });
 
     display.dispose();
+    expect(firstRemove).toHaveBeenCalledOnce();
+    expect(secondRemove).toHaveBeenCalledOnce();
     expect(releaseBorrowedActor).toHaveBeenCalledTimes(2);
     expect(releaseBorrowedActor).toHaveBeenNthCalledWith(
       1,
-      map.instanceId,
+      firstMap.instanceId,
       true,
     );
     expect(releaseBorrowedActor).toHaveBeenNthCalledWith(
       2,
-      ring.instanceId,
+      secondMap.instanceId,
       false,
     );
     propModels.dispose();
