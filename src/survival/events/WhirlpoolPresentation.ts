@@ -25,6 +25,7 @@ import type {
 } from '../eventPresentationTypes';
 import {
   createWhirlpoolSample,
+  resetWhirlpoolSample,
   sampleWhirlpoolItemUse,
   sampleWhirlpoolReaction,
   sampleWhirlpoolReveal,
@@ -368,17 +369,18 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       && this.lastChoiceId === 'anchor';
     this.reactionState.ringBroken = selectedBroken
       && this.lastChoiceId === 'swimRing';
-    this.reactionState.lostItemCount = Math.min(
-      MAX_LOST_ACTORS,
-      result.lostInstanceIds.length,
-    );
+    this.reactionState.lostItemCount = 0;
 
-    if (this.reactionState.lostItemCount > 0) {
+    if (result.lostInstanceIds.length > 0) {
       this.releaseItemActor();
-      for (let index = 0; index < this.reactionState.lostItemCount; index += 1) {
-        this.lostActors[index] = this.environment.supplies.borrowEventActor(
+      const lostLimit = Math.min(MAX_LOST_ACTORS, result.lostInstanceIds.length);
+      for (let index = 0; index < lostLimit; index += 1) {
+        const actor = this.environment.supplies.borrowEventActor(
           result.lostInstanceIds[index]!,
         );
+        if (actor === null) continue;
+        this.lostActors[this.reactionState.lostItemCount] = actor;
+        this.reactionState.lostItemCount += 1;
       }
     } else if (
       selectedId !== null
@@ -426,23 +428,10 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    const active = this.active;
-    if (active !== null) {
-      active.elapsed = active.duration;
-      if (active.kind === 'reveal') {
-        sampleWhirlpoolReveal(1, this.sample);
-      } else if (active.kind === 'item') {
-        sampleWhirlpoolItemUse(active.choiceId, 1, this.sample);
-        this.applyItemPose();
-      } else {
-        sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
-        this.applyReactionPoses();
-      }
-      this.applySample(0);
-      this.finishActive();
-    }
-    this.resetEffectRoots();
-    this.resetVortex();
+    this.cancelActive();
+    this.releaseItemActor();
+    this.releaseLostActors(false);
+    this.resetPresentationState();
   }
 
   clear(): void {
@@ -450,11 +439,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.cancelActive();
     this.releaseItemActor();
     this.releaseLostActors(false);
-    this.lastChoiceId = '';
-    this.staged = false;
-    this.hideScene();
-    this.resetEffectRoots();
-    this.resetVortex();
+    this.resetPresentationState();
   }
 
   dispose(): void {
@@ -469,9 +454,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     runCleanupSteps([
       () => itemActor?.release(),
       () => this.releaseLostActors(false),
-      () => this.resetEffectRoots(),
-      () => this.resetVortex(),
-      () => this.hideScene(),
+      () => this.resetPresentationState(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
       () => this.boatRoot.removeFromParent(),
@@ -695,6 +678,19 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.environment.boatEffectsRoot?.position.set(0, 0, 0);
     this.environment.boatEffectsRoot?.rotation.set(0, 0, 0);
     this.environment.boatEffectsRoot?.scale.set(1, 1, 1);
+  }
+
+  private resetPresentationState(): void {
+    this.lastChoiceId = '';
+    this.staged = false;
+    this.reactionState.hullDamage = 0;
+    this.reactionState.anchorBroken = false;
+    this.reactionState.ringBroken = false;
+    this.reactionState.lostItemCount = 0;
+    resetWhirlpoolSample(this.sample);
+    this.hideScene();
+    this.resetEffectRoots();
+    this.resetVortex();
   }
 
   private resetVortex(): void {

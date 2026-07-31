@@ -59,7 +59,7 @@ function pulse(progress: number, start: number, peak: number, end: number): numb
     : 1 - smoothstep((progress - peak) / (end - peak));
 }
 
-function resetSample(output: WhirlpoolSample): void {
+export function resetWhirlpoolSample(output: WhirlpoolSample): void {
   output.vortexStrength = 0;
   output.vortexDepression = 0;
   output.vortexTangentStrength = 0;
@@ -98,7 +98,7 @@ function holdVortex(output: WhirlpoolSample): void {
 
 export function createWhirlpoolSample(): WhirlpoolSample {
   const sample = {} as WhirlpoolSample;
-  resetSample(sample);
+  resetWhirlpoolSample(sample);
   return sample;
 }
 
@@ -108,7 +108,7 @@ export function sampleWhirlpoolReveal(
   progress: number,
   output: WhirlpoolSample,
 ): boolean {
-  resetSample(output);
+  resetWhirlpoolSample(output);
   const t = clamp01(progress);
   const firstBeat = smoothstep(t / 0.3) * 0.32;
   const secondBeat = smoothstep((t - 0.3) / 0.27) * 0.35;
@@ -134,7 +134,7 @@ export function sampleWhirlpoolItemUse(
   progress: number,
   output: WhirlpoolSample,
 ): boolean {
-  resetSample(output);
+  resetWhirlpoolSample(output);
   if (choiceId !== 'anchor' && choiceId !== 'swimRing') return false;
   holdVortex(output);
   const t = clamp01(progress);
@@ -181,7 +181,7 @@ export function sampleWhirlpoolReaction(
   progress: number,
   output: WhirlpoolSample,
 ): boolean {
-  resetSample(output);
+  resetWhirlpoolSample(output);
   holdVortex(output);
   const t = clamp01(progress);
   const damage = Number.isFinite(reaction.hullDamage)

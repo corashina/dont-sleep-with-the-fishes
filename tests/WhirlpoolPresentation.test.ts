@@ -239,9 +239,9 @@ describe('WhirlpoolPresentation', () => {
   });
 
   it('uses the two exact lost IDs during one severe roll', async () => {
-    const nearbyId = 'map-1' as ItemInstanceId;
-    const firstLostId = 'flashlight-3' as ItemInstanceId;
-    const secondLostId = 'bucket-8' as ItemInstanceId;
+    const nearbyId = 'bucket-1' as ItemInstanceId;
+    const firstLostId = 'map-3' as ItemInstanceId;
+    const secondLostId = 'map-8' as ItemInstanceId;
     const fixture = setup([nearbyId, firstLostId, secondLostId]);
     const presentation = new WhirlpoolPresentation(fixture.environment);
     stage(presentation);
@@ -270,18 +270,53 @@ describe('WhirlpoolPresentation', () => {
     expect(fixture.actors.get(secondLostId)!.release).not.toHaveBeenCalled();
   });
 
-  it('resets both additive roots and the full vortex identity', async () => {
-    const fixture = setup();
+  it('compacts successful lost actors when an exact actor is unavailable', async () => {
+    const unavailableId = 'map-3' as ItemInstanceId;
+    const availableId = 'map-8' as ItemInstanceId;
+    const fixture = setup([availableId]);
     const presentation = new WhirlpoolPresentation(fixture.environment);
     stage(presentation);
-    const reveal = presentation.reveal();
-    presentation.update(2.4, 2.4);
+
+    const reaction = presentation.react(outcome({
+      hull: -72,
+      lost: [unavailableId, availableId],
+    }));
+    presentation.update(0.7, 0.7);
+
+    expect(fixture.borrowEventActor).toHaveBeenNthCalledWith(1, unavailableId);
+    expect(fixture.borrowEventActor).toHaveBeenNthCalledWith(2, availableId);
+    expect(fixture.actors.get(availableId)!.applyPose.mock.lastCall![0].x)
+      .toBeGreaterThan(0);
+
+    presentation.update(1.4, 0.7);
+    await reaction;
+    expect(fixture.actors.get(availableId)!.releaseOnNextSync).toHaveBeenCalledOnce();
+    expect(fixture.actors.get(availableId)!.release).not.toHaveBeenCalled();
+  });
+
+  it('settles handles, visuals, effects, and vortex to a stable identity', async () => {
+    const firstLostId = 'map-3' as ItemInstanceId;
+    const secondLostId = 'map-8' as ItemInstanceId;
+    const fixture = setup([firstLostId, secondLostId]);
+    const presentation = new WhirlpoolPresentation(fixture.environment);
+    stage(presentation);
+    const reaction = presentation.react(outcome({
+      hull: -72,
+      lost: [firstLostId, secondLostId],
+    }));
+    presentation.update(0.7, 0.7);
 
     expect(fixture.vortexWave.strength).toBeGreaterThan(0);
     expect(fixture.boatEffectsRoot.rotation.y).not.toBe(0);
     presentation.settleForVisibilityChange();
-    await reveal;
+    await reaction;
 
+    expect(fixture.actors.get(firstLostId)!.release).toHaveBeenCalledOnce();
+    expect(fixture.actors.get(secondLostId)!.release).toHaveBeenCalledOnce();
+    expect(fixture.actors.get(firstLostId)!.releaseOnNextSync).not.toHaveBeenCalled();
+    expect(fixture.actors.get(secondLostId)!.releaseOnNextSync).not.toHaveBeenCalled();
+    expect(presentation.worldRoot.visible).toBe(false);
+    expect(presentation.boatRoot.visible).toBe(false);
     expect(fixture.cameraEffectsRoot.position.toArray()).toEqual([0, 0, 0]);
     expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     expect(fixture.cameraEffectsRoot.scale.toArray()).toEqual([1, 1, 1]);
@@ -298,8 +333,12 @@ describe('WhirlpoolPresentation', () => {
       strength: 0,
     });
 
-    presentation.clear();
+    presentation.update(4, 1);
+    expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(fixture.boatEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     expect(fixture.vortexWave.strength).toBe(0);
+    expect(presentation.worldRoot.visible).toBe(false);
+    expect(presentation.boatRoot.visible).toBe(false);
   });
 
   it('disposes active actors, the model, and authored resources once', async () => {
