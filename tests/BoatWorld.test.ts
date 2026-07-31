@@ -1050,6 +1050,17 @@ describe('BoatWorld helpers', () => {
       'anglerfish-swarm-boat',
       'whirlpool-boat',
     ]);
+    const whirlpoolWorld = coordinatorWorld.getObjectByName('whirlpool-world')!;
+    const whirlpoolBoat = coordinatorBoat.getObjectByName('whirlpool-boat')!;
+    expect(whirlpoolWorld.children.map(({ name }) => name)).toEqual([
+      'whirlpool-water-stream-1',
+      'whirlpool-water-stream-2',
+      'whirlpool-water-stream-3',
+      'whirlpool-water-stream-4',
+      'whirlpool-water-stream-5',
+      'whirlpool-water-stream-6',
+    ]);
+    expect(whirlpoolBoat.children).toHaveLength(0);
     expect(cameraEffects.parent?.name).toBe('boat-cue-camera-rig');
     expect(cameraEffects.getObjectByName('boat-camera-rig')).toBeDefined();
     expect(boatEffects.parent?.name).toBe('boat-motion-rig');

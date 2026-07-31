@@ -145,7 +145,8 @@ describe('LeakPresentation', () => {
 
     expect(jetMaterial.opacity).toBeGreaterThan(0.5);
     expect(interiorWater.visible).toBe(true);
-    expect(interiorWater.position.y).toBeLessThan(0.1);
+    expect(interiorWater.position.y).toBeGreaterThan(-0.315);
+    expect(interiorWater.position.y).toBeLessThan(-0.29);
     expect(fixture.sampleWorldWaveInto).toHaveBeenCalled();
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
 

@@ -4,8 +4,8 @@ export const WHIRLPOOL_REACTION_DURATION = 1.4;
 
 export type WhirlpoolItemEffectKind =
   | 'none'
-  | 'anchor-catch'
-  | 'ring-compression';
+  | 'anchor-cast'
+  | 'ring-cast';
 
 export interface WhirlpoolReactionState {
   readonly hullDamage: number;
@@ -19,16 +19,8 @@ export interface WhirlpoolSample {
   vortexDepression: number;
   vortexTangentStrength: number;
   vortexPhase: number;
-  foamStrength: number;
-  debrisPull: number;
-  cameraRoll: number;
-  boatYaw: number;
-  boatRoll: number;
-  anchorCatch: number;
-  chainTension: number;
-  chainSnap: number;
-  ringCompression: number;
-  ringSlip: number;
+  streamStrength: number;
+  streamFlow: number;
   supplyTravel: number;
   itemX: number;
   itemY: number;
@@ -64,16 +56,8 @@ export function resetWhirlpoolSample(output: WhirlpoolSample): void {
   output.vortexDepression = 0;
   output.vortexTangentStrength = 0;
   output.vortexPhase = 0;
-  output.foamStrength = 0;
-  output.debrisPull = 0;
-  output.cameraRoll = 0;
-  output.boatYaw = 0;
-  output.boatRoll = 0;
-  output.anchorCatch = 0;
-  output.chainTension = 0;
-  output.chainSnap = 0;
-  output.ringCompression = 0;
-  output.ringSlip = 0;
+  output.streamStrength = 0;
+  output.streamFlow = 0;
   output.supplyTravel = 0;
   output.itemX = 0;
   output.itemY = 0;
@@ -89,11 +73,11 @@ export function resetWhirlpoolSample(output: WhirlpoolSample): void {
 
 function holdVortex(output: WhirlpoolSample): void {
   output.vortexStrength = 1;
-  output.vortexDepression = 1.18;
-  output.vortexTangentStrength = 0.86;
+  output.vortexDepression = 1.55;
+  output.vortexTangentStrength = 1.08;
   output.vortexPhase = Math.PI * 5.5;
-  output.foamStrength = 1;
-  output.debrisPull = 1;
+  output.streamStrength = 1;
+  output.streamFlow = 1;
 }
 
 export function createWhirlpoolSample(): WhirlpoolSample {
@@ -116,16 +100,11 @@ export function sampleWhirlpoolReveal(
   const pull = firstBeat + secondBeat + thirdBeat;
 
   output.vortexStrength = pull;
-  output.vortexDepression = 1.18 * smoothstep((t - 0.06) / 0.78);
-  output.vortexTangentStrength = 0.86 * smoothstep((t - 0.12) / 0.7);
+  output.vortexDepression = 1.55 * smoothstep((t - 0.06) / 0.78);
+  output.vortexTangentStrength = 1.08 * smoothstep((t - 0.12) / 0.7);
   output.vortexPhase = Math.PI * 5.5 * smoothstep(t);
-  output.foamStrength = smoothstep((t - 0.03) / 0.52);
-  output.debrisPull = smoothstep((t - 0.14) / 0.7);
-
-  const heavyTurn = smoothstep((t - 0.62) / 0.28);
-  output.boatYaw = -0.17 * heavyTurn;
-  output.boatRoll = 0.035 * heavyTurn;
-  output.cameraRoll = pulse(t, 0.58, 0.78, 0.98) * -0.035;
+  output.streamStrength = smoothstep((t - 0.09) / 0.58);
+  output.streamFlow = smoothstep((t - 0.03) / 0.8);
   return true;
 }
 
@@ -138,41 +117,18 @@ export function sampleWhirlpoolItemUse(
   if (choiceId !== 'anchor' && choiceId !== 'swimRing') return false;
   holdVortex(output);
   const t = clamp01(progress);
-  const lift = Math.min(
-    smoothstep(t / 0.24),
-    1 - smoothstep((t - 0.82) / 0.18),
-  );
-  const action = pulse(t, 0.12, 0.62, 0.94);
+  const action = pulse(t, 0.08, 0.6, 0.96);
 
-  if (choiceId === 'anchor') {
-    output.anchorCatch = action;
-    output.chainTension = smoothstep(t / 0.58)
-      * (1 - smoothstep((t - 0.88) / 0.12));
-    output.itemX = 0.18 * lift;
-    output.itemY = -0.72 * action;
-    output.itemZ = -0.26 * lift;
-    output.itemPitch = -0.34 * action;
-    output.itemRoll = 0.12 * lift;
-    output.boatYaw = -0.17 * (1 - action * 0.72);
-    output.boatRoll = -0.045 * action;
-    output.cameraRoll = -0.022 * action;
-    output.effectKind = 'anchor-catch';
-  } else {
-    output.ringCompression = action;
-    output.ringSlip = smoothstep((t - 0.48) / 0.42);
-    output.itemX = 0.82 * lift;
-    output.itemY = -0.2 * action;
-    output.itemZ = -0.34 * lift;
-    output.itemYaw = -0.34 * lift;
-    output.itemPitch = 0.24 * action;
-    output.itemRoll = -0.42 * action;
-    output.itemScaleX = 1 + action * 0.22;
-    output.itemScaleY = 1 - action * 0.64;
-    output.itemScaleZ = 1 + action * 0.12;
-    output.boatYaw = -0.17 + action * 0.04;
-    output.boatRoll = 0.055 * action;
-    output.effectKind = 'ring-compression';
-  }
+  output.itemX = 0.7 * action;
+  output.itemY = 0.24 * action;
+  output.itemZ = -0.62 * action;
+  output.itemYaw = -0.38 * action;
+  output.itemPitch = -0.24 * action;
+  output.itemRoll = choiceId === 'anchor' ? 0.26 * action : -0.48 * action;
+  output.itemScaleX = 1 - action * 0.08;
+  output.itemScaleY = 1 - action * 0.08;
+  output.itemScaleZ = 1 - action * 0.08;
+  output.effectKind = choiceId === 'anchor' ? 'anchor-cast' : 'ring-cast';
   return true;
 }
 
@@ -192,55 +148,27 @@ export function sampleWhirlpoolReaction(
     : 0;
   const severe = damage >= 60 || lostCount === 2;
 
-  if (reaction.anchorBroken) {
-    output.chainTension = 1 - smoothstep((t - 0.24) / 0.32);
-    output.chainSnap = pulse(t, 0.18, 0.42, 0.84);
-    output.boatYaw = -0.17 - output.chainSnap * 0.11;
-    output.boatRoll = output.chainSnap * 0.11;
-    output.cameraRoll = output.chainSnap * 0.055;
-  } else if (reaction.ringBroken) {
-    const tear = smoothstep((t - 0.08) / 0.62);
-    output.ringCompression = 1 - tear * 0.42;
-    output.ringSlip = tear;
-    output.itemX = 1.18 * tear;
-    output.itemY = -0.34 * tear;
-    output.itemZ = -0.66 * tear;
-    output.itemRoll = -1.2 * tear;
-    output.itemScaleX = 1 + tear * 0.34;
-    output.itemScaleY = 1 - tear * 0.78;
-    output.itemScaleZ = 1 + tear * 0.16;
-    output.boatYaw = -0.17;
-    output.boatRoll = 0.08 * tear;
-  } else if (!severe) {
-    const release = smoothstep((t - 0.12) / 0.76);
-    output.vortexStrength = 1 - release * 0.52;
-    output.vortexDepression = 1.18 - release * 0.5;
-    output.vortexTangentStrength = 0.86 - release * 0.46;
-    output.foamStrength = 1 - release * 0.42;
-    output.debrisPull = 1 - release * 0.34;
-    output.boatYaw = -0.17 * (1 - release);
+  if (reaction.anchorBroken || reaction.ringBroken) {
+    const slip = smoothstep((t - 0.08) / 0.68);
+    output.itemX = 1.08 * slip;
+    output.itemY = 0.36 * slip;
+    output.itemZ = -0.92 * slip;
+    output.itemRoll = (reaction.anchorBroken ? 1.1 : -1.3) * slip;
+    output.itemScaleX = 1 - slip * 0.22;
+    output.itemScaleY = 1 - slip * 0.22;
+    output.itemScaleZ = 1 - slip * 0.22;
   }
 
-  if (damage > 0 && !severe) {
-    const hit = pulse(t, 0.08, 0.38, 0.82);
-    output.boatRoll += hit * Math.min(0.14, damage * 0.0026);
-    output.cameraRoll += hit * Math.min(0.065, damage * 0.0012);
+  if (lostCount > 0) {
+    output.supplyTravel = smoothstep((t - 0.12) / 0.7);
   }
 
-  if (severe) {
-    const roll = pulse(t, 0.04, 0.48, 0.94);
-    const heldAngle = smoothstep((t - 0.16) / 0.32)
-      * (1 - smoothstep((t - 0.72) / 0.28));
-    const release = smoothstep((t - 0.72) / 0.28);
-    output.boatYaw = -0.17 - roll * 0.24;
-    output.boatRoll = heldAngle === 0 ? 0 : -0.42 * heldAngle;
-    output.cameraRoll = -0.14 * roll;
-    output.supplyTravel = smoothstep((t - 0.14) / 0.62);
-    output.vortexStrength = 1 - release * 0.82;
-    output.vortexDepression = 1.18 - release * 0.76;
-    output.vortexTangentStrength = 0.86 - release * 0.58;
-    output.foamStrength = 1 - release * 0.54;
-    output.debrisPull = 1 - release * 0.42;
-  }
+  const releaseStart = severe ? 0.7 : 0.22;
+  const release = smoothstep((t - releaseStart) / (1 - releaseStart));
+  output.vortexStrength = 1 - release * (severe ? 0.76 : 0.48);
+  output.vortexDepression = 1.55 - release * (severe ? 0.82 : 0.56);
+  output.vortexTangentStrength = 1.08 - release * (severe ? 0.58 : 0.42);
+  output.streamStrength = 1 - release * (severe ? 0.62 : 0.38);
+  output.streamFlow = 1 - release * 0.2;
   return true;
 }

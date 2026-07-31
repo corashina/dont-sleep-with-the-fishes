@@ -59,9 +59,9 @@ type ActiveLeakAnimation =
     };
 
 const LEAK_HOLES = [
-  { y: 0.7, z: -0.94, scaleX: 0.2, scaleY: 0.15, rotation: -0.16 },
-  { y: 0.57, z: -0.34, scaleX: 0.16, scaleY: 0.12, rotation: 0.23 },
-  { y: 0.76, z: 0.18, scaleX: 0.18, scaleY: 0.14, rotation: -0.08 },
+  { y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
+  { y: -0.03, z: -0.34, scaleX: 0.16, scaleY: 0.1, rotation: 0.23, streamScale: 0.55 },
+  { y: 0.12, z: 0.18, scaleX: 0.18, scaleY: 0.11, rotation: -0.08, streamScale: 0.84 },
 ] as const;
 const HOLE_X = 1.57;
 const STREAM_X = 1.34;
@@ -167,7 +167,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
 
       const stream = new Mesh(streamGeometry, this.streamMaterial);
       stream.name = `leak-stream-${index + 1}`;
-      stream.position.set(STREAM_X, placement.y - 0.24, placement.z);
+      stream.position.set(STREAM_X, (placement.y - 0.307) * 0.5, placement.z);
       stream.rotation.set(0, 0, 0.72 + index * 0.08);
       stream.renderOrder = 2;
       streams.push(stream);
@@ -182,7 +182,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.ownedGeometries.add(interiorGeometry);
     this.interiorWater = new Mesh(interiorGeometry, this.interiorMaterial);
     this.interiorWater.name = 'leak-interior-water';
-    this.interiorWater.position.set(0.48, 0.082, -0.32);
+    this.interiorWater.position.set(0.48, -0.307, -0.32);
     this.interiorWater.renderOrder = 1;
 
     this.boatRoot.add(
@@ -421,7 +421,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
       stream.visible = localStrength > 0.025;
       stream.scale.set(
         0.7 + index * 0.08,
-        0.08 + localStrength * 0.58,
+        (0.1 + localStrength * 0.96) * LEAK_HOLES[index]!.streamScale,
         0.7 + index * 0.08,
       );
     }
@@ -458,7 +458,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
       -0.32,
       0.16,
     );
-    this.interiorWater.position.y = 0.082
+    this.interiorWater.position.y = -0.307
       + this.sample.interiorWater * 0.006
       + this.waveSample.height * 0.003;
     this.interiorWater.rotation.set(

@@ -1,12 +1,11 @@
 import {
   BufferGeometry,
   DoubleSide,
+  Float32BufferAttribute,
   Group,
   Material,
   Mesh,
   MeshStandardMaterial,
-  TetrahedronGeometry,
-  TorusGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
@@ -14,9 +13,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
-import type {
-  BorrowedSupplyActor,
-} from '../BoatSupplyDisplay';
+import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
@@ -56,13 +53,10 @@ type ActiveWhirlpoolAnimation =
       readonly resolve: () => void;
     };
 
-interface SurfaceActor {
+interface SpiralStreamActor {
   readonly mesh: Mesh;
-  readonly wave: WaveSample;
-  readonly angle: number;
-  readonly radius: number;
+  readonly phase: number;
   readonly speed: number;
-  readonly inwardTravel: number;
 }
 
 interface MutableSupplyPose {
@@ -77,16 +71,13 @@ interface MutableSupplyPose {
   scaleZ: number;
 }
 
-const FOAM_RIBBON_COUNT = 14;
-const DEBRIS_COUNT = 12;
-const CHAIN_LINK_COUNT = 10;
+const STREAM_COUNT = 6;
 const MAX_LOST_ACTORS = 2;
 const WATERLINE = 0.04;
-const VORTEX_X = 0.6;
-const VORTEX_Z = -5.6;
-const VORTEX_RADIUS = 8.2;
-const FOAM_RING_LIFT = 0.72;
-const FOAM_RING_TILT = Math.PI * 0.34;
+const VORTEX_X = 4.6;
+const VORTEX_Z = -6.8;
+const VORTEX_RADIUS = 2.35;
+const VORTEX_DISTANCE = Math.hypot(VORTEX_X, VORTEX_Z);
 
 const IDENTITY_ITEM_POSE: MutableSupplyPose = {
   x: 0,
@@ -109,25 +100,35 @@ function waveSample(): WaveSample {
   };
 }
 
-function styleCore(root: Group): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-    for (let index = 0; index < materials.length; index += 1) {
-      const material = materials[index]!;
-      if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.setHex(0x1b4650);
-      material.emissive.setHex(0x0b252b);
-      material.emissiveIntensity = 0.2;
-      material.map = null;
-      material.roughness = 0.74;
-      material.metalness = 0.02;
-      material.flatShading = true;
-      material.needsUpdate = true;
-    }
-  });
+function createSpiralStreamGeometry(): BufferGeometry {
+  const segmentCount = 48;
+  const positions = new Float32Array((segmentCount + 1) * 6);
+  const indices: number[] = [];
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const t = index / segmentCount;
+    const angle = t * Math.PI * 6.4;
+    const radius = 1.9 - t * 1.68;
+    const width = 0.11 - t * 0.045;
+    const y = -0.08 - t * 2.72;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const offset = index * 6;
+    positions[offset] = cos * (radius - width);
+    positions[offset + 1] = y;
+    positions[offset + 2] = sin * (radius - width);
+    positions[offset + 3] = cos * (radius + width);
+    positions[offset + 4] = y - 0.035;
+    positions[offset + 5] = sin * (radius + width);
+    if (index === segmentCount) continue;
+    const vertex = index * 2;
+    indices.push(vertex, vertex + 2, vertex + 1, vertex + 1, vertex + 2, vertex + 3);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
 }
 
 function supportedChoice(choiceId: string): boolean {
@@ -139,18 +140,14 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
 
-  private readonly coreModel;
-  private readonly foamRibbons: SurfaceActor[] = [];
-  private readonly debris: SurfaceActor[] = [];
-  private readonly chainLinks: Mesh[] = [];
-  private readonly ringShell: Mesh;
+  private readonly streams: SpiralStreamActor[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly foamMaterial = new MeshStandardMaterial({
-    color: 0xb5d6d4,
-    emissive: 0x315a5d,
-    emissiveIntensity: 0.2,
-    roughness: 0.38,
+  private readonly streamMaterial = new MeshStandardMaterial({
+    color: 0x79b7be,
+    emissive: 0x164852,
+    emissiveIntensity: 0.34,
+    roughness: 0.26,
     metalness: 0,
     transparent: true,
     opacity: 0,
@@ -158,32 +155,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     flatShading: true,
     side: DoubleSide,
   });
-  private readonly debrisMaterial = new MeshStandardMaterial({
-    color: 0x493a2c,
-    emissive: 0x130d09,
-    emissiveIntensity: 0.08,
-    roughness: 0.92,
-    metalness: 0,
-    flatShading: true,
-  });
-  private readonly chainMaterial = new MeshStandardMaterial({
-    color: 0x455153,
-    emissive: 0x101819,
-    emissiveIntensity: 0.08,
-    roughness: 0.62,
-    metalness: 0.48,
-    flatShading: true,
-  });
-  private readonly ringMaterial = new MeshStandardMaterial({
-    color: 0xd2a44d,
-    emissive: 0x4d2f0d,
-    emissiveIntensity: 0.18,
-    roughness: 0.68,
-    metalness: 0,
-    transparent: true,
-    opacity: 0,
-    flatShading: true,
-  });
+  private readonly rimWave = waveSample();
   private readonly sample: WhirlpoolSample = createWhirlpoolSample();
   private readonly reactionState: {
     hullDamage: number;
@@ -211,96 +183,27 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   constructor(private readonly environment: DedicatedEventEnvironment) {
     this.worldRoot.name = 'whirlpool-world';
     this.boatRoot.name = 'whirlpool-boat';
-    this.worldRoot.userData.foamRibbonCount = FOAM_RIBBON_COUNT;
-    this.worldRoot.userData.debrisCount = DEBRIS_COUNT;
-    this.boatRoot.userData.chainLinkCount = CHAIN_LINK_COUNT;
+    this.worldRoot.userData.streamCount = STREAM_COUNT;
+    this.worldRoot.userData.vortexCenter = [VORTEX_X, VORTEX_Z];
+    this.worldRoot.userData.vortexRadius = VORTEX_RADIUS;
+    this.worldRoot.userData.distanceFromBoat = VORTEX_DISTANCE;
 
-    this.coreModel = environment.eventModels.create('whirlpoolCore');
-    this.coreModel.root.name = 'whirlpool-core';
-    this.coreModel.root.userData.visualOnly = true;
-    this.coreModel.root.userData.sourceModel = 'Tornado';
-    this.coreModel.root.position.set(VORTEX_X, 0.12, VORTEX_Z);
-    this.coreModel.root.scale.set(0.3, 0.08, 0.3);
-    styleCore(this.coreModel.root);
-    this.worldRoot.add(this.coreModel.root);
-
-    this.ownedMaterials.add(this.foamMaterial);
-    this.ownedMaterials.add(this.debrisMaterial);
-    this.ownedMaterials.add(this.chainMaterial);
-    this.ownedMaterials.add(this.ringMaterial);
-
-    const foamGeometry = new TorusGeometry(1, 0.06, 5, 28, Math.PI * 1.75);
-    const debrisGeometry = new TetrahedronGeometry(0.26, 0);
-    const chainGeometry = new TorusGeometry(0.095, 0.018, 4, 8);
-    const ringGeometry = new TorusGeometry(0.44, 0.105, 7, 18);
-    this.ownedGeometries.add(foamGeometry);
-    this.ownedGeometries.add(debrisGeometry);
-    this.ownedGeometries.add(chainGeometry);
-    this.ownedGeometries.add(ringGeometry);
-
-    for (let index = 0; index < FOAM_RIBBON_COUNT; index += 1) {
-      const mesh = new Mesh(foamGeometry, this.foamMaterial);
-      const angle = index / FOAM_RIBBON_COUNT * Math.PI * 2
-        + (index % 3) * 0.08;
-      mesh.name = `whirlpool-foam-ribbon-${index + 1}`;
+    const streamGeometry = createSpiralStreamGeometry();
+    this.ownedGeometries.add(streamGeometry);
+    this.ownedMaterials.add(this.streamMaterial);
+    for (let index = 0; index < STREAM_COUNT; index += 1) {
+      const mesh = new Mesh(streamGeometry, this.streamMaterial);
+      mesh.name = `whirlpool-water-stream-${index + 1}`;
       mesh.renderOrder = 2;
-      mesh.rotation.x = Math.PI / 2;
-      mesh.scale.set(1, 1, 1);
+      mesh.visible = false;
       const actor = {
         mesh,
-        wave: waveSample(),
-        angle,
-        radius: 1.15 + (index % 7) * 0.18,
-        speed: 0.72 + (index % 5) * 0.08,
-        inwardTravel: 0.18 + (index % 3) * 0.06,
+        phase: index / STREAM_COUNT * Math.PI * 2,
+        speed: 0.86 + index % 3 * 0.09,
       };
-      this.foamRibbons.push(actor);
+      this.streams.push(actor);
       this.worldRoot.add(mesh);
     }
-
-    for (let index = 0; index < DEBRIS_COUNT; index += 1) {
-      const mesh = new Mesh(debrisGeometry, this.debrisMaterial);
-      const angle = index / DEBRIS_COUNT * Math.PI * 2 + 0.14;
-      mesh.name = `whirlpool-debris-${index + 1}`;
-      mesh.castShadow = true;
-      mesh.scale.set(
-        0.58 + (index % 4) * 0.13,
-        0.28 + (index % 3) * 0.08,
-        0.72 + (index % 5) * 0.09,
-      );
-      const actor = {
-        mesh,
-        wave: waveSample(),
-        angle,
-        radius: 1.4 + (index % 5) * 0.24,
-        speed: 0.48 + (index % 4) * 0.09,
-        inwardTravel: 0.58 + (index % 4) * 0.14,
-      };
-      this.debris.push(actor);
-      this.worldRoot.add(mesh);
-    }
-
-    for (let index = 0; index < CHAIN_LINK_COUNT; index += 1) {
-      const link = new Mesh(chainGeometry, this.chainMaterial);
-      link.name = `whirlpool-chain-link-${index + 1}`;
-      link.position.set(0.46, 0.58 - index * 0.14, -0.32);
-      link.rotation.set(
-        index % 2 === 0 ? Math.PI / 2 : 0,
-        0,
-        index % 2 === 0 ? 0 : Math.PI / 2,
-      );
-      link.scale.set(1, 1.16, 0.88);
-      link.castShadow = true;
-      this.chainLinks.push(link);
-      this.boatRoot.add(link);
-    }
-
-    this.ringShell = new Mesh(ringGeometry, this.ringMaterial);
-    this.ringShell.name = 'whirlpool-ring-shell';
-    this.ringShell.position.set(0.78, 0.36, -0.42);
-    this.ringShell.rotation.set(Math.PI / 2, 0.12, -0.22);
-    this.ringShell.castShadow = true;
-    this.boatRoot.add(this.ringShell);
     this.hideScene();
     this.resetVortex();
   }
@@ -331,11 +234,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   }
 
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
-    if (
-      this.disposed
-      || !this.staged
-      || !supportedChoice(choiceId)
-    ) {
+    if (this.disposed || !this.staged || !supportedChoice(choiceId)) {
       return Promise.resolve(false);
     }
     this.cancelActive();
@@ -364,10 +263,8 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     const selectedBroken = selectedId !== null
       && result.brokenInstanceIds.includes(selectedId);
     this.reactionState.hullDamage = result.resourceDeltas.hull ?? 0;
-    this.reactionState.anchorBroken = selectedBroken
-      && this.lastChoiceId === 'anchor';
-    this.reactionState.ringBroken = selectedBroken
-      && this.lastChoiceId === 'swimRing';
+    this.reactionState.anchorBroken = selectedBroken && this.lastChoiceId === 'anchor';
+    this.reactionState.ringBroken = selectedBroken && this.lastChoiceId === 'swimRing';
     this.reactionState.lostItemCount = 0;
 
     if (result.lostInstanceIds.length > 0) {
@@ -381,10 +278,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
         this.lostActors[this.reactionState.lostItemCount] = actor;
         this.reactionState.lostItemCount += 1;
       }
-    } else if (
-      selectedId !== null
-      && this.itemActor?.instanceId !== selectedId
-    ) {
+    } else if (selectedId !== null && this.itemActor?.instanceId !== selectedId) {
       this.borrowItemActor(selectedId);
     }
 
@@ -457,7 +351,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.active = null;
     this.itemActor = null;
     this.resolveCancelled(active);
-
     runCleanupSteps([
       () => itemActor?.release(),
       () => this.releaseLostActors(false),
@@ -466,7 +359,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       () => this.worldRoot.clear(),
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
-      () => this.coreModel.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
@@ -523,19 +415,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   private applySample(time: number): void {
     this.applyVortex();
-    this.coreModel.root.visible = this.sample.vortexStrength > 0.012;
-    this.applySurfaceActors(time);
-    this.applyChain();
-    this.applyRingShell();
-
-    const cameraRoot = this.environment.cameraEffectsRoot;
-    if (cameraRoot !== undefined) {
-      cameraRoot.rotation.set(0, 0, this.sample.cameraRoll);
-    }
-    const boatRoot = this.environment.boatEffectsRoot;
-    if (boatRoot !== undefined) {
-      boatRoot.rotation.set(0, this.sample.boatYaw, this.sample.boatRoll);
-    }
+    this.applyStreams(time);
   }
 
   private applyVortex(): void {
@@ -553,87 +433,40 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     vortex.strength = this.sample.vortexStrength;
   }
 
-  private applySurfaceActors(time: number): void {
-    this.foamMaterial.opacity = Math.min(0.9, this.sample.foamStrength * 0.88);
-    for (let index = 0; index < this.foamRibbons.length; index += 1) {
-      const actor = this.foamRibbons[index]!;
-      const angle = actor.angle + this.sample.vortexPhase * actor.speed * 0.16;
-      const radius = actor.radius - this.sample.debrisPull * actor.inwardTravel;
-      const sampleX = VORTEX_X + Math.cos(angle) * radius;
-      const sampleZ = VORTEX_Z + Math.sin(angle) * radius;
-      this.environment.sampleWorldWaveInto(actor.wave, time, sampleX, sampleZ, 1);
-      actor.mesh.visible = this.sample.foamStrength > 0.012;
+  private applyStreams(time: number): void {
+    const visible = this.sample.streamStrength > 0.012;
+    this.streamMaterial.opacity = Math.min(0.82, this.sample.streamStrength * 0.78);
+    if (visible) {
+      this.environment.sampleWorldWaveInto(
+        this.rimWave,
+        time,
+        VORTEX_X + VORTEX_RADIUS,
+        VORTEX_Z,
+        1,
+      );
+    }
+    const revealScale = Math.max(0.04, this.sample.vortexStrength);
+    const flow = this.sample.streamFlow * 0.46;
+    for (let index = 0; index < this.streams.length; index += 1) {
+      const actor = this.streams[index]!;
+      actor.mesh.visible = visible;
+      if (!visible) continue;
       actor.mesh.position.set(
-        VORTEX_X + actor.wave.displacementX * 0.2,
-        WATERLINE + actor.wave.height + FOAM_RING_LIFT,
-        VORTEX_Z + actor.wave.displacementZ * 0.2,
+        VORTEX_X + this.rimWave.displacementX * 0.08,
+        WATERLINE + this.rimWave.height + 0.08,
+        VORTEX_Z + this.rimWave.displacementZ * 0.08,
       );
       actor.mesh.rotation.set(
-        FOAM_RING_TILT + actor.wave.normal.z * 0.04,
-        actor.wave.normal.x * 0.02,
-        angle,
+        this.rimWave.normal.z * 0.025,
+        actor.phase + this.sample.vortexPhase * 0.06 + time * actor.speed * flow,
+        -this.rimWave.normal.x * 0.025,
       );
-      actor.mesh.scale.setScalar(radius);
-    }
-
-    for (let index = 0; index < this.debris.length; index += 1) {
-      const actor = this.debris[index]!;
-      const angle = actor.angle + this.sample.vortexPhase * actor.speed * 0.19;
-      const radius = actor.radius - this.sample.debrisPull * actor.inwardTravel;
-      const x = VORTEX_X + Math.cos(angle) * radius;
-      const z = VORTEX_Z + Math.sin(angle) * radius;
-      this.environment.sampleWorldWaveInto(actor.wave, time, x, z, 1);
-      actor.mesh.visible = this.sample.debrisPull > 0.012;
-      actor.mesh.position.set(
-        x + actor.wave.displacementX,
-        WATERLINE + actor.wave.height + 0.16,
-        z + actor.wave.displacementZ,
-      );
-      actor.mesh.rotation.set(
-        actor.wave.normal.z * 0.16 + index * 0.11,
-        angle + time * actor.speed,
-        -actor.wave.normal.x * 0.14 + index * 0.07,
+      actor.mesh.scale.set(
+        revealScale,
+        0.68 + this.sample.vortexDepression * 0.24,
+        revealScale,
       );
     }
-  }
-
-  private applyChain(): void {
-    const visible = this.sample.anchorCatch > 0.01
-      || this.sample.chainTension > 0.01
-      || this.sample.chainSnap > 0.01;
-    for (let index = 0; index < this.chainLinks.length; index += 1) {
-      const link = this.chainLinks[index]!;
-      const snapSide = index >= 6 ? 1 : 0;
-      link.visible = visible;
-      link.position.set(
-        0.46 + snapSide * this.sample.chainSnap * (index - 5) * 0.12,
-        0.58 - index * (0.08 + this.sample.chainTension * 0.06)
-          + snapSide * this.sample.chainSnap * 0.08,
-        -0.32 - this.sample.anchorCatch * index * 0.018,
-      );
-      link.rotation.z = snapSide * this.sample.chainSnap * 0.46;
-    }
-  }
-
-  private applyRingShell(): void {
-    const strength = Math.max(this.sample.ringCompression, this.sample.ringSlip);
-    this.ringShell.visible = strength > 0.01;
-    this.ringMaterial.opacity = Math.min(0.62, strength * 0.68);
-    this.ringShell.position.set(
-      0.78 + this.sample.ringSlip * 0.72,
-      0.36 - this.sample.ringCompression * 0.18,
-      -0.42 - this.sample.ringSlip * 0.34,
-    );
-    this.ringShell.rotation.set(
-      Math.PI / 2,
-      0.12,
-      -0.22 - this.sample.ringSlip * 0.52,
-    );
-    this.ringShell.scale.set(
-      1 + this.sample.ringCompression * 0.24,
-      1 - this.sample.ringCompression * 0.72,
-      1 + this.sample.ringCompression * 0.12,
-    );
   }
 
   private applyItemPose(): void {
@@ -665,27 +498,18 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
         Math.min(1, this.sample.supplyTravel * 1.24 - index * 0.24),
       );
       const pose = this.lostPoses[index]!;
-      pose.x = (index === 0 ? 2.8 : -2.4) * travel;
-      pose.y = (0.46 + index * 0.18) * travel;
-      pose.z = (-1.1 - index * 0.42) * travel;
-      pose.yaw = (index === 0 ? 1.4 : -1.1) * travel;
-      pose.pitch = -0.34 * travel;
-      pose.roll = (index === 0 ? -2.2 : 1.8) * travel;
+      pose.x = (2.6 + index * 0.32) * travel;
+      pose.y = (0.38 + index * 0.14) * travel;
+      pose.z = (-1.54 - index * 0.32) * travel;
+      pose.yaw = (1.3 + index * 0.28) * travel;
+      pose.pitch = -0.32 * travel;
+      pose.roll = (index === 0 ? -2.1 : 1.7) * travel;
       const scale = 1 - travel * 0.42;
       pose.scaleX = scale;
       pose.scaleY = scale;
       pose.scaleZ = scale;
       actor.applyPose(pose);
     }
-  }
-
-  private resetEffectRoots(): void {
-    this.environment.cameraEffectsRoot?.position.set(0, 0, 0);
-    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
-    this.environment.cameraEffectsRoot?.scale.set(1, 1, 1);
-    this.environment.boatEffectsRoot?.position.set(0, 0, 0);
-    this.environment.boatEffectsRoot?.rotation.set(0, 0, 0);
-    this.environment.boatEffectsRoot?.scale.set(1, 1, 1);
   }
 
   private resetPresentationState(): void {
@@ -697,7 +521,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.reactionState.lostItemCount = 0;
     resetWhirlpoolSample(this.sample);
     this.hideScene();
-    this.resetEffectRoots();
     this.resetVortex();
   }
 
@@ -715,19 +538,9 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private hideScene(): void {
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
-    this.coreModel.root.visible = false;
-    this.foamMaterial.opacity = 0;
-    this.ringMaterial.opacity = 0;
-    for (let index = 0; index < this.foamRibbons.length; index += 1) {
-      this.foamRibbons[index]!.mesh.visible = false;
+    this.streamMaterial.opacity = 0;
+    for (let index = 0; index < this.streams.length; index += 1) {
+      this.streams[index]!.mesh.visible = false;
     }
-    for (let index = 0; index < this.debris.length; index += 1) {
-      this.debris[index]!.mesh.visible = false;
-    }
-    for (let index = 0; index < this.chainLinks.length; index += 1) {
-      this.chainLinks[index]!.visible = false;
-    }
-    this.ringShell.visible = false;
-    this.ringShell.scale.set(1, 1, 1);
   }
 }

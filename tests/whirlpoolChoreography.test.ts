@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects inward beats, choice motion, severe roll, and exact loss travel.
+// Importance: 5/5. Protects the water-hole reveal, item casts, and exact loss travel.
 import { describe, expect, it } from 'vitest';
 import {
   createWhirlpoolSample,
@@ -17,7 +17,7 @@ describe('whirlpool choreography', () => {
     expect(WHIRLPOOL_REACTION_DURATION).toBe(1.4);
   });
 
-  it('pulls inward in three clear beats before choices', () => {
+  it('opens the depression in three clear beats without view motion', () => {
     const sample = createWhirlpoolSample();
 
     sampleWhirlpoolReveal(0.28, sample);
@@ -29,52 +29,30 @@ describe('whirlpool choreography', () => {
     expect(firstPull).toBeGreaterThan(0.2);
     expect(secondPull).toBeGreaterThan(firstPull);
     expect(sample.vortexStrength).toBeGreaterThan(secondPull);
-    expect(sample.boatYaw).not.toBe(0);
+    expect(sample.vortexDepression).toBeGreaterThan(1.4);
+    expect(sample.streamStrength).toBeGreaterThan(0.9);
   });
 
-  it('drops the Anchor to a taut final catch', () => {
+  it('casts the Anchor toward the starboard water hole', () => {
     const sample = createWhirlpoolSample();
 
-    expect(sampleWhirlpoolItemUse('anchor', 0.62, sample)).toBe(true);
-    expect(sample.effectKind).toBe('anchor-catch');
-    expect(sample.anchorCatch).toBeGreaterThan(0.9);
-    expect(sample.chainTension).toBeGreaterThan(0.8);
-    expect(sample.itemY).toBeLessThan(-0.5);
+    expect(sampleWhirlpoolItemUse('anchor', 0.6, sample)).toBe(true);
+    expect(sample.effectKind).toBe('anchor-cast');
+    expect(sample.itemX).toBeGreaterThan(0.6);
+    expect(sample.itemZ).toBeLessThan(-0.5);
+    expect(sample.itemScaleY).toBeGreaterThan(0.85);
   });
 
-  it('compresses the Ring between the hull and water', () => {
+  it('casts the Ring without a compression shell', () => {
     const sample = createWhirlpoolSample();
 
-    expect(sampleWhirlpoolItemUse('swimRing', 0.62, sample)).toBe(true);
-    expect(sample.effectKind).toBe('ring-compression');
-    expect(sample.ringCompression).toBeGreaterThan(0.9);
-    expect(sample.itemScaleY).toBeLessThan(0.5);
+    expect(sampleWhirlpoolItemUse('swimRing', 0.6, sample)).toBe(true);
+    expect(sample.effectKind).toBe('ring-cast');
+    expect(sample.itemX).toBeGreaterThan(0.6);
+    expect(sample.itemScaleY).toBeGreaterThan(0.85);
   });
 
-  it('snaps a broken Anchor chain and tears a broken Ring', () => {
-    const anchor = createWhirlpoolSample();
-    const ring = createWhirlpoolSample();
-
-    sampleWhirlpoolReaction({
-      hullDamage: -8,
-      anchorBroken: true,
-      ringBroken: false,
-      lostItemCount: 0,
-    }, 0.42, anchor);
-    sampleWhirlpoolReaction({
-      hullDamage: -30,
-      anchorBroken: false,
-      ringBroken: true,
-      lostItemCount: 0,
-    }, 0.7, ring);
-
-    expect(anchor.chainSnap).toBeGreaterThan(0.9);
-    expect(anchor.boatYaw).toBeLessThan(-0.2);
-    expect(ring.ringSlip).toBeGreaterThan(0.5);
-    expect(ring.itemScaleY).toBeLessThan(0.5);
-  });
-
-  it('holds a severe roll while two supplies travel overboard', () => {
+  it('moves lost supplies while the distant vortex releases', () => {
     const sample = createWhirlpoolSample();
 
     sampleWhirlpoolReaction({
@@ -84,9 +62,9 @@ describe('whirlpool choreography', () => {
       lostItemCount: 2,
     }, 0.5, sample);
 
-    expect(Math.abs(sample.boatRoll)).toBeGreaterThan(0.35);
-    expect(Math.abs(sample.cameraRoll)).toBeGreaterThan(0.1);
-    expect(sample.supplyTravel).toBeGreaterThan(0.5);
+    expect(sample.supplyTravel).toBeGreaterThan(0.4);
+    expect(sample.vortexStrength).toBe(1);
+    expect(sample.streamStrength).toBe(1);
 
     sampleWhirlpoolReaction({
       hullDamage: -70,
@@ -94,7 +72,7 @@ describe('whirlpool choreography', () => {
       ringBroken: false,
       lostItemCount: 2,
     }, 1, sample);
-    expect(sample.vortexStrength).toBeLessThan(0.25);
-    expect(sample.boatRoll).toBe(0);
+    expect(sample.vortexStrength).toBeLessThan(0.3);
+    expect(sample.streamStrength).toBeLessThan(0.5);
   });
 });
