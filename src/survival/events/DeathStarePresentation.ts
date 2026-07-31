@@ -214,6 +214,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly reactionState = {
     attacked: false,
     lostItem: false,
+    brokenItem: false,
   };
   private readonly borrowedBasePosition = new Vector3();
   private readonly mouthWorldPosition = new Vector3();
@@ -417,12 +418,18 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.cancelActive();
     this.resetBorrowedPose();
 
+    const selectedId = result.selectedInstanceId;
+    const selectedBroken = selectedId !== null
+      && result.brokenInstanceIds.includes(selectedId);
     const lostId = result.lostInstanceIds[0] ?? null;
     if (lostId !== null) this.borrowActor(lostId);
+    else if (selectedBroken && selectedId !== null) this.borrowActor(selectedId);
 
     this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
       || (result.resourceDeltas.health ?? 0) < 0;
     this.reactionState.lostItem = lostId !== null && this.borrowedActor?.instanceId === lostId;
+    this.reactionState.brokenItem = selectedBroken
+      && this.borrowedActor?.instanceId === selectedId;
     sampleDeathStareReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
     this.applyReactionBorrowedPose();

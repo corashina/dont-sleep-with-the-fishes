@@ -426,11 +426,19 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed) return;
-    this.cancelActive();
-    this.releaseItemActor();
-    this.releaseLostActors(false);
-    this.resetPresentationState();
+    if (this.disposed || this.active === null) return;
+    this.active.elapsed = this.active.duration;
+    if (this.active.kind === 'reveal') {
+      sampleWhirlpoolReveal(1, this.sample);
+    } else if (this.active.kind === 'item') {
+      sampleWhirlpoolItemUse(this.active.choiceId, 1, this.sample);
+      this.applyItemPose();
+    } else {
+      sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
+      this.applyReactionPoses();
+    }
+    this.applySample(0);
+    this.finishActive();
   }
 
   clear(): void {

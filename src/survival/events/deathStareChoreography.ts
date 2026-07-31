@@ -13,6 +13,7 @@ export type DeathStareItemEffectKind =
 export interface DeathStareReactionState {
   readonly attacked: boolean;
   readonly lostItem: boolean;
+  readonly brokenItem: boolean;
 }
 
 export interface DeathStareSample {
@@ -296,6 +297,17 @@ export function sampleDeathStareReaction(
     output.itemScaleY = itemScale;
     output.itemScaleZ = itemScale;
     output.jawOpen += mouthTravel * 0.46;
+  } else if (reaction.brokenItem) {
+    const collapse = smoothstep((t - 0.14) / 0.56);
+    output.itemX = 0.22 * collapse;
+    output.itemY = -0.46 * collapse;
+    output.itemZ = 0.12 * collapse;
+    output.itemYaw = -0.34 * collapse;
+    output.itemPitch = 0.42 * collapse;
+    output.itemRoll = 1.18 * collapse;
+    output.itemScaleX = 1 + collapse * 0.12;
+    output.itemScaleY = 1 - collapse * 0.76;
+    output.itemScaleZ = 1 - collapse * 0.18;
   }
   return true;
 }

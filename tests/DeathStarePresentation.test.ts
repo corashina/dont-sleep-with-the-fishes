@@ -43,6 +43,7 @@ function outcome(options: {
   hull?: number;
   health?: number;
   selected?: ItemInstanceId | null;
+  broken?: readonly ItemInstanceId[];
   lost?: readonly ItemInstanceId[];
 } = {}): EventOutcomePresentation {
   const deltas = {
@@ -58,7 +59,7 @@ function outcome(options: {
       cue: 'impact',
     },
     resourceDeltas: deltas,
-    brokenInstanceIds: [],
+    brokenInstanceIds: options.broken ?? [],
     lostInstanceIds: options.lost ?? [],
     consumedInstanceIds: [],
     selectedInstanceId: options.selected ?? null,
@@ -217,6 +218,34 @@ describe('DeathStarePresentation', () => {
     });
     presentation.update(1.25, 1.25);
     await reaction;
+  });
+
+  it('collapses the exact broken selected supply into a held pose', async () => {
+    const umbrellaId = 'umbrella-7' as ItemInstanceId;
+    const otherId = 'fishingNet-2' as ItemInstanceId;
+    const fixture = setup([umbrellaId, otherId]);
+    const presentation = new DeathStarePresentation(fixture.environment);
+    stage(presentation);
+
+    const reaction = presentation.react(outcome({
+      hull: -44,
+      health: -60,
+      selected: umbrellaId,
+      broken: [umbrellaId],
+    }));
+    presentation.update(0.8, 0.8);
+
+    expect(fixture.borrowEventActor).toHaveBeenCalledExactlyOnceWith(umbrellaId);
+    expect(fixture.borrowEventActor).not.toHaveBeenCalledWith(otherId);
+    expect(fixture.actors.get(umbrellaId)!.applyPose.mock.lastCall![0].scaleY)
+      .toBeLessThan(0.5);
+    expect(Math.abs(fixture.actors.get(umbrellaId)!.applyPose.mock.lastCall![0].roll))
+      .toBeGreaterThan(0.5);
+
+    presentation.update(1.25, 0.45);
+    await reaction;
+    expect(fixture.actors.get(umbrellaId)!.applyPose.mock.lastCall![0].scaleY)
+      .toBeLessThan(0.5);
   });
 
   it('uses the exact lost ID and pulls only that supply into the mouth', async () => {

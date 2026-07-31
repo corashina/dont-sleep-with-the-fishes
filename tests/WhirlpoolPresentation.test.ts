@@ -314,7 +314,7 @@ describe('WhirlpoolPresentation', () => {
     expect(fixture.actors.get(availableId)!.release).not.toHaveBeenCalled();
   });
 
-  it('settles handles, visuals, effects, and vortex to a stable identity', async () => {
+  it('settles a hidden reaction, then clears effects and vortex', async () => {
     const firstLostId = 'map-3' as ItemInstanceId;
     const secondLostId = 'map-8' as ItemInstanceId;
     const fixture = setup([firstLostId, secondLostId]);
@@ -331,18 +331,27 @@ describe('WhirlpoolPresentation', () => {
     presentation.settleForVisibilityChange();
     await reaction;
 
-    expect(fixture.actors.get(firstLostId)!.release).toHaveBeenCalledOnce();
-    expect(fixture.actors.get(secondLostId)!.release).toHaveBeenCalledOnce();
-    expect(fixture.actors.get(firstLostId)!.releaseOnNextSync).not.toHaveBeenCalled();
-    expect(fixture.actors.get(secondLostId)!.releaseOnNextSync).not.toHaveBeenCalled();
-    expect(presentation.worldRoot.visible).toBe(false);
-    expect(presentation.boatRoot.visible).toBe(false);
+    expect(fixture.actors.get(firstLostId)!.release).not.toHaveBeenCalled();
+    expect(fixture.actors.get(secondLostId)!.release).not.toHaveBeenCalled();
+    expect(fixture.actors.get(firstLostId)!.releaseOnNextSync).toHaveBeenCalledOnce();
+    expect(fixture.actors.get(secondLostId)!.releaseOnNextSync).toHaveBeenCalledOnce();
+    expect(presentation.worldRoot.visible).toBe(true);
+    expect(presentation.boatRoot.visible).toBe(true);
     expect(fixture.cameraEffectsRoot.position.toArray()).toEqual([0, 0, 0]);
-    expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(Math.abs(fixture.cameraEffectsRoot.rotation.x)
+      + Math.abs(fixture.cameraEffectsRoot.rotation.y)
+      + Math.abs(fixture.cameraEffectsRoot.rotation.z)).toBe(0);
     expect(fixture.cameraEffectsRoot.scale.toArray()).toEqual([1, 1, 1]);
     expect(fixture.boatEffectsRoot.position.toArray()).toEqual([0, 0, 0]);
-    expect(fixture.boatEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(fixture.boatEffectsRoot.rotation.x).toBe(0);
+    expect(fixture.boatEffectsRoot.rotation.y).toBeCloseTo(-0.17);
+    expect(Math.abs(fixture.boatEffectsRoot.rotation.z)).toBe(0);
     expect(fixture.boatEffectsRoot.scale.toArray()).toEqual([1, 1, 1]);
+    expect(fixture.vortexWave.strength).toBeGreaterThan(0);
+
+    presentation.clear();
+    expect(presentation.worldRoot.visible).toBe(false);
+    expect(presentation.boatRoot.visible).toBe(false);
     expect(fixture.vortexWave).toEqual({
       centerX: 0,
       centerZ: 0,
@@ -359,6 +368,39 @@ describe('WhirlpoolPresentation', () => {
     expect(fixture.vortexWave.strength).toBe(0);
     expect(presentation.worldRoot.visible).toBe(false);
     expect(presentation.boatRoot.visible).toBe(false);
+  });
+
+  it('settles a hidden reveal without clearing later item and reaction presentation', async () => {
+    const anchorId = 'anchor-4' as ItemInstanceId;
+    const fixture = setup([anchorId]);
+    const presentation = new WhirlpoolPresentation(fixture.environment);
+    stage(presentation);
+    const reveal = presentation.reveal();
+    presentation.update(0.4, 0.4);
+
+    presentation.settleForVisibilityChange();
+    await reveal;
+
+    expect(presentation.worldRoot.visible).toBe(true);
+    expect(presentation.boatRoot.visible).toBe(true);
+
+    const use = presentation.playItemUse('anchor', anchorId);
+    expect(fixture.borrowEventActor).toHaveBeenCalledExactlyOnceWith(anchorId);
+    presentation.update(1.25, 1.25);
+    await expect(use).resolves.toBe(true);
+
+    const reaction = presentation.react(outcome({
+      hull: -42,
+      selected: anchorId,
+      broken: [anchorId],
+    }));
+    presentation.update(1.95, 0.7);
+
+    expect(presentation.boatRoot.getObjectByName('whirlpool-chain-link-8')!.visible)
+      .toBe(true);
+    expect(fixture.boatEffectsRoot.rotation.z).not.toBe(0);
+    presentation.update(2.65, 0.7);
+    await reaction;
   });
 
   it('disposes active actors, the model, and authored resources once', async () => {
