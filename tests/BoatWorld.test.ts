@@ -528,7 +528,7 @@ describe('BoatWorld helpers', () => {
           choiceId: 'test-choice',
           resultId: 'test-result',
         },
-      });
+      }, choice);
       expect(presenter.react).toHaveBeenCalledWith(
         {
           eventId,
@@ -606,6 +606,44 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('rejects a focused result that does not match the played choice', async () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('night-trader');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'night-trader': () => active.presenter },
+    );
+    const choice = {
+      choiceId: 'map',
+      instanceId: 'map-1' as ItemInstanceId,
+      condition: 'lost' as const,
+    };
+    world.stageEvent('night-trader');
+
+    await expect(world.reactToEventOutcome('night-trader', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The trader gives you a compass.',
+      deltas: {},
+      cue: 'none',
+      eventResult: {
+        eventId: 'night-trader',
+        choiceId: 'umbrella',
+        resultId: 'trader-reward',
+      },
+    }, choice)).rejects.toThrow('does not match choice map');
+    expect(active.react).not.toHaveBeenCalled();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the world choice pending until its focused presenter finishes', async () => {
     const propModels = createTestPropModels();
     const active = focusedPresenterTestDouble('chest-attack');
@@ -677,6 +715,10 @@ describe('BoatWorld helpers', () => {
         choiceId: 'map',
         resultId: 'trader-reward',
       },
+    }, {
+      choiceId: 'map',
+      instanceId: 'map-1',
+      condition: 'lost',
     });
 
     expect(clearEventMotion).toHaveBeenCalledOnce();
@@ -714,6 +756,10 @@ describe('BoatWorld helpers', () => {
         choiceId: 'touch',
         resultId: 'handyman-touch',
       },
+    }, {
+      choiceId: 'touch',
+      instanceId: null,
+      condition: null,
     });
     world.update(2, 2);
     await reaction;

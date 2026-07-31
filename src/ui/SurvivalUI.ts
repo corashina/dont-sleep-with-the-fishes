@@ -672,6 +672,7 @@ export class SurvivalUI {
     event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    delete this.eventCaption.dataset.result;
     this.updateText('event:title', this.eventTitle, event.title);
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
@@ -684,6 +685,15 @@ export class SurvivalUI {
     this.eventCaption.setAttribute('aria-hidden', 'false');
     this.syncCommandState();
     return Promise.resolve();
+  }
+
+  showEventOutcome(outcome: ActionOutcome): void {
+    if (this.disposed) return;
+    this.eventCaption.dataset.result = 'true';
+    this.updateText('event:title', this.eventTitle, outcome.message);
+    this.eventCaption.setAttribute('aria-label', outcome.message);
+    this.eventCaption.classList.add('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'false');
   }
 
   setEventSelection(
@@ -761,6 +771,7 @@ export class SurvivalUI {
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    delete this.eventCaption.dataset.result;
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
