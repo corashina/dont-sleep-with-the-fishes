@@ -1019,6 +1019,11 @@ export class SurvivalPhase implements GamePhase {
       ?? Promise.resolve()
     );
     if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
+    if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
