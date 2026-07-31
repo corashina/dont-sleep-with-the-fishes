@@ -370,11 +370,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('chest-attack', 'Chest Attack', 'impact', 1, 1, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
-    contextualChoice('fight', 'Fight It',
-      outcome(1, 'The chest bites your arm before you smash it.', {
-        resources: [subtract('health', 25)],
-        chest: 'destroy',
-      }, 'chest-fight')),
     contextualChoice('sleep', 'Hide',
       outcome(1, 'The chest tears into you before it falls overboard.', {
         resources: [subtract('health', 40)],
@@ -400,16 +395,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.', {}, 'tour-pass')),
   ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
   event('night-trader', 'Night Trader', 'sighting', 14, 10, 35, [
-    {
-      ...contextualChoice('food', 'Food for Duct Tape', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
-      requirements: [{ resource: 'food', minimum: 1 }],
-    },
-    {
-      ...contextualChoice('bait', 'Bait for Energy Bar', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
-      requirements: [{ resource: 'bait', minimum: 1 }],
-    },
-    choice('map', 'Map for Compass', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
-    choice('umbrella', 'Umbrella for Medkit', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
+    choice('food', 'Offer Food', 'cannedFood', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
+    choice('bait', 'Offer Bait', 'baitTin', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
+    choice('map', 'Offer Map', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
+    choice('umbrella', 'Offer Umbrella', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
     contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.', {}, 'trader-refuse')),
   ]),
   event('handyman', 'Handyman', 'repair', 12, 20, 50, [

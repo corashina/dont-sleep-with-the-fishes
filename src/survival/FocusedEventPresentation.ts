@@ -1,4 +1,4 @@
-import type { Group } from 'three';
+import type { Group, Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -26,6 +26,16 @@ export interface EventChoicePresentation {
   readonly condition: ItemCondition | null;
 }
 
+export interface FocusedEventInteractionTarget {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly choiceId: string;
+  readonly root: Object3D;
+  readonly minimumHitWidth?: number;
+  readonly minimumHitHeight?: number;
+}
+
 export interface FocusedEventPresentation {
   readonly root: Group;
   stage(): void;
@@ -38,6 +48,7 @@ export interface FocusedEventPresentation {
   clear(): void;
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;
+  interactionTargets?(): readonly FocusedEventInteractionTarget[];
   dispose(): void;
 }
 
@@ -45,6 +56,7 @@ export interface FocusedEventPresentationDependencies {
   readonly propModels: PropModelLibrary;
   readonly waves: readonly WaveComponent[];
   readonly cameraRig: Group;
+  readonly boatMotionRoot?: Group;
   readonly supplyDisplay: BoatSupplyDisplay;
   readonly chestDisplay: ChestDisplay;
 }

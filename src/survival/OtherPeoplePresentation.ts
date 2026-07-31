@@ -61,23 +61,24 @@ interface MutableSupplyPose {
 
 type VectorTuple = readonly [number, number, number];
 
-const REVEAL_DURATION = 1.35;
+const REVEAL_DURATION = 3.4;
 const FLARE_DURATION = 1.25;
 const FLASHLIGHT_DURATION = 1.8;
 const PASS_CHOICE_DURATION = 0.32;
-const RESCUE_DURATION = 2.4;
-const EXIT_DURATION = 1.75;
+const RESCUE_DURATION = 3.2;
+const EXIT_DURATION = 4.2;
 const SHIP_YAW = -0.08;
 const RESCUE_YAW = SHIP_YAW + 0.58;
-const SHIP_HIDDEN = new Vector3(-17, 0.68, -48.7);
+const SHIP_HIDDEN = new Vector3(-15, 0.68, -48.7);
 const SHIP_BASE = new Vector3(-8.5, 0.68, -48);
 const SHIP_APPROACH = new Vector3(-3.8, 0.8, -21);
-const SHIP_EXIT = new Vector3(24, 0.68, -45.4);
+const SHIP_EXIT = new Vector3(11, 0.68, -45.4);
 const FLARE_START = new Vector3(1.4, 1.8, -1.8);
 const FLARE_END = new Vector3(-2.4, 19, -23);
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
-const HORIZON_LIGHT_INTENSITY = 0.34;
+const HORIZON_LIGHT_INTENSITY = 0.82;
+const CRUISE_SPEED = 0.7;
 const RED_WASH_COLOR = 0xff3b2f;
 const NO_RED_WASH_TARGETS = Object.freeze([] as string[]);
 const RED_WASH_TARGETS = Object.freeze([
@@ -191,6 +192,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     1.8,
   );
   private readonly flare = new Group();
+  private readonly shipFillLight = new PointLight(0xa8c6cf, 3, 48, 1.15);
+  private readonly shipDeckLight = new PointLight(0xe8b56c, 2.2, 30, 1.35);
   private readonly flareGlow = new PointLight(
     0xff4836,
     3.4,
@@ -270,6 +273,11 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.y = SHIP_YAW;
     this.buildShip();
+    this.shipFillLight.name = 'other-people-ship-fill';
+    this.shipFillLight.position.set(0, 11, 8);
+    this.shipDeckLight.name = 'other-people-ship-deck-light';
+    this.shipDeckLight.position.set(6.5, 7.5, 1.5);
+    this.ship.add(this.shipFillLight, this.shipDeckLight);
 
     this.buildBeacon(
       this.portBeacon,
@@ -433,19 +441,28 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   update(_time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
     const animation = this.activeAnimation;
-    if (animation === null) return;
-    animation.elapsed = Math.min(
-      animation.duration,
-      animation.elapsed + Math.max(0, delta),
-    );
-    const progress = animation.duration <= 0
-      ? 1
-      : animation.elapsed / animation.duration;
-    this.applyAnimation(animation.kind, progress);
-    if (progress < 1) return;
-    this.activeAnimation = null;
-    this.finishAnimation(animation.kind);
-    animation.resolve();
+    if (animation !== null) {
+      animation.elapsed = Math.min(
+        animation.duration,
+        animation.elapsed + Math.max(0, delta),
+      );
+      const progress = animation.duration <= 0
+        ? 1
+        : animation.elapsed / animation.duration;
+      this.applyAnimation(animation.kind, progress);
+      if (progress >= 1) {
+        this.activeAnimation = null;
+        this.finishAnimation(animation.kind);
+        animation.resolve();
+      }
+    }
+    if (
+      this.ship.visible
+      && !this.terminalRescue
+      && (animation === null || animation.kind.startsWith('choice-'))
+    ) {
+      this.advanceCruise(delta);
+    }
   }
 
   settleForVisibilityChange(): void {
@@ -645,7 +662,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.ship.visible = true;
       (this.root.userData.revealOrder as string[]).push('ship');
     }
-    const travel = keyedTravel((progress - 0.24) / 0.76);
+    const travel = smoothstep((progress - 0.24) / 0.76);
     this.ship.position.lerpVectors(SHIP_HIDDEN, SHIP_BASE, travel);
     this.ship.rotation.y = SHIP_YAW;
     this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
@@ -741,7 +758,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyExitResult(progress: number): void {
-    const travel = smoothstep(progress);
+    const travel = clamp01(progress);
     this.ship.position.lerpVectors(
       this.shipStartPosition,
       SHIP_EXIT,
@@ -755,6 +772,15 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.setPlayerSignalsDark();
     this.updateBeaconPose();
     this.applyCameraPose(-0.08 * (1 - travel), -0.012 * (1 - travel));
+    this.updateOpenWaterDistance();
+  }
+
+  private advanceCruise(delta: number): void {
+    const travel = Math.max(0, delta) * CRUISE_SPEED;
+    this.ship.position.x += travel;
+    this.ship.position.z += travel * 0.05;
+    this.updateBeaconPose();
+    this.updateLightTargetPose();
     this.updateOpenWaterDistance();
   }
 

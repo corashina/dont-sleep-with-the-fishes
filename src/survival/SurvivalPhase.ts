@@ -1535,6 +1535,7 @@ export class SurvivalPhase implements GamePhase {
     return event.choices
       .filter((choice) => choice.itemId === undefined)
       .map((choice) => {
+        const anchorId = this.contextualEventAnchorId(event.id, choice.id);
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
         ) ?? [];
@@ -1553,9 +1554,11 @@ export class SurvivalPhase implements GamePhase {
           id: choice.id,
           label: choice.label,
           unavailableReason: unavailableReasons.length === 0 ? null : unavailableReasons.join(' '),
+          ...(anchorId === null
+            ? {}
+            : { anchorId }),
           ...(event.id === 'drifting-loot' && choice.id === 'retrieve'
             ? {
-                anchorId: 'drifting-loot',
                 energyCost: choice.requirements?.find(
                   ({ resource }) => resource === 'energy',
                 )?.minimum ?? 0,
@@ -1563,6 +1566,17 @@ export class SurvivalPhase implements GamePhase {
             : {}),
         };
       });
+  }
+
+  private contextualEventAnchorId(
+    eventId: string,
+    choiceId: string,
+  ): string | null {
+    if (eventId === 'drifting-loot' && choiceId === 'retrieve') return 'drifting-loot';
+    if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';
+    if (eventId === 'handyman' && choiceId === 'touch') return 'handyman:hand';
+    if (eventId === 'handyman' && choiceId === 'chest') return 'persistent-chest';
+    return null;
   }
 
   private restoreEventSelection(): void {

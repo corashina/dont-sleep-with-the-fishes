@@ -57,7 +57,7 @@ function createHarness(imported: boolean) {
   }
   const boat = new Group();
   const supplyDisplay = new BoatSupplyDisplay(propModels, boat, []);
-  const sharedChest = new ChestDisplay();
+  const sharedChest = new ChestDisplay(imported ? importedChest() : null);
   boat.add(sharedChest.root);
   sharedChest.sync({ state: 'mimic', acquiredDay: 2 });
   const cameraRig = new Group();
@@ -102,7 +102,7 @@ describe('ChestAttackPresentation', () => {
     const reveal = harness.presentation.reveal();
     await finish(harness.presentation, reveal);
 
-    const mimic = harness.boat.getObjectByName('chest-attack-mimic')!;
+    const mimic = harness.sharedChest.root;
     expect(harness.presentation.root.userData.revealRattles).toBe(2);
     expect(mimic.userData.mouthOpen).toBe(1);
     expect(mimic.userData.bite).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ describe('ChestAttackPresentation', () => {
     });
     await finish(harness.presentation, choice, 2);
 
-    const mimic = harness.boat.getObjectByName('chest-attack-mimic')!;
+    const mimic = harness.sharedChest.root;
     expect(mimic.userData.mouthOpen).toBe(0);
     expect(mimic.userData.bound).toBe(1);
     expect(harness.presentation.root.getObjectByName('chest-attack-net')?.visible)
@@ -140,30 +140,14 @@ describe('ChestAttackPresentation', () => {
     harness.dispose();
   });
 
-  it('shows one bite and one strike for Fight', async () => {
+  it('rejects the removed Fight route', () => {
     const harness = createHarness(false);
     harness.presentation.stage();
-    const reveal = harness.presentation.reveal();
-    harness.presentation.settleForVisibilityChange();
-    await reveal;
-    const choice = harness.presentation.playChoice({
+    expect(() => harness.presentation.playChoice({
       choiceId: 'fight',
       instanceId: null,
       condition: null,
-    });
-    harness.presentation.settleForVisibilityChange();
-    await choice;
-    const reaction = harness.presentation.react({
-      eventId: 'chest-attack',
-      choiceId: 'fight',
-      resultId: 'chest-fight',
-    }, outcome);
-    await finish(harness.presentation, reaction, 3);
-
-    expect(harness.presentation.root.userData.bites).toBe(1);
-    expect(harness.presentation.root.userData.strikes).toBe(1);
-    expect(harness.boat.getObjectByName('chest-attack-mimic')?.userData.broken)
-      .toBe(1);
+    })).toThrow('Unsupported Chest Attack choice: fight');
 
     harness.dispose();
   });
@@ -193,16 +177,15 @@ describe('ChestAttackPresentation', () => {
     }, outcome);
     await finish(harness.presentation, reaction, 3);
     expect(harness.presentation.root.userData.bites).toBe(1);
-    expect(harness.boat.getObjectByName('chest-attack-mimic')?.visible).toBe(false);
+    expect(harness.sharedChest.root.visible).toBe(false);
 
     harness.dispose();
   });
 
-  it('routes only the three stable Chest Attack results', async () => {
+  it('routes only the two remaining Chest Attack results', async () => {
     const harness = createHarness(false);
     const routes = [
       ['chest-bound', 'held-bound'],
-      ['chest-fight', 'held-destroyed'],
       ['chest-hide', 'held-overboard'],
     ] as const;
     for (const [resultId, state] of routes) {
@@ -228,14 +211,14 @@ describe('ChestAttackPresentation', () => {
 
   it('uses imported and procedural Chest forms', () => {
     const selected = createHarness(true);
-    const selectedMimic = selected.boat.getObjectByName('chest-attack-mimic')!;
+    const selectedMimic = selected.sharedChest.root;
     expect(selectedMimic.userData.modelKind).toBe('imported');
     expect(selectedMimic.getObjectByName('event-model:chestClosed')).toBeDefined();
     expect(selectedMimic.getObjectByName('chest-lid')).toBeDefined();
     selected.dispose();
 
     const fallback = createHarness(false);
-    const fallbackMimic = fallback.boat.getObjectByName('chest-attack-mimic')!;
+    const fallbackMimic = fallback.sharedChest.root;
     expect(fallbackMimic.userData.modelKind).toBe('procedural');
     expect(fallbackMimic.getObjectByName('chest-body')).toBeDefined();
     fallback.dispose();
@@ -263,19 +246,19 @@ describe('ChestAttackPresentation', () => {
     expect(harness.cameraRig.quaternion.toArray()).toEqual(cameraQuaternion.toArray());
     expect(harness.sharedChest.root.visible).toBe(true);
     expect(harness.sharedChest.root.userData.mouthOpen).toBeCloseTo(0.46);
-    expect(harness.boat.getObjectByName('chest-attack-mimic')?.visible).toBe(false);
+    expect(harness.boat.getObjectByName('persistent-chest')).toBe(harness.sharedChest.root);
 
     harness.dispose();
   });
 
-  it('settles promises and disposes owned mouth and model resources once', async () => {
+  it('settles promises without disposing the shared Chest', async () => {
     const harness = createHarness(true);
     harness.presentation.stage();
     const pending = harness.presentation.reveal();
     harness.presentation.settleForVisibilityChange();
     await pending;
 
-    const mimic = harness.boat.getObjectByName('chest-attack-mimic')!;
+    const mimic = harness.sharedChest.root;
     const mouth = mimic.getObjectByName('mimic-mouth-shadow') as Mesh;
     const model = mimic.getObjectByName('chestClosed:base') as Mesh;
     const mouthDispose = vi.spyOn(mouth.geometry, 'dispose');
@@ -284,9 +267,11 @@ describe('ChestAttackPresentation', () => {
     harness.presentation.dispose();
     harness.presentation.dispose();
 
+    expect(mouthDispose).not.toHaveBeenCalled();
+    expect(modelDispose).not.toHaveBeenCalled();
+    harness.sharedChest.dispose();
     expect(mouthDispose).toHaveBeenCalledOnce();
     expect(modelDispose).toHaveBeenCalledOnce();
-    harness.sharedChest.dispose();
     harness.dispose();
   });
 

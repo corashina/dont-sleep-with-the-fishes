@@ -21,6 +21,7 @@ import {
 } from '../world/SceneResources';
 import type {
   EventChoicePresentation,
+  FocusedEventInteractionTarget,
   FocusedEventPresentation,
   FocusedEventPresentationDependencies,
 } from './FocusedEventPresentation';
@@ -244,6 +245,18 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.cancelActiveAnimation(true);
   }
 
+  interactionTargets(): readonly FocusedEventInteractionTarget[] {
+    return [{
+      id: 'midnight-tour:island',
+      label: 'ISLAND',
+      description: 'Turn the boat toward the small island.',
+      choiceId: 'visit',
+      root: this.island,
+      minimumHitWidth: 96,
+      minimumHitHeight: 78,
+    }];
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation(false);
@@ -458,6 +471,16 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       this.island.userData.islandModel = 'procedural';
     } else {
       islandModel.root.name = 'event-model:midnightIsland';
+      islandModel.root.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const materials = Array.isArray(object.material)
+          ? object.material
+          : [object.material];
+        for (const material of materials) {
+          if (!(material instanceof MeshStandardMaterial)) continue;
+          material.color.offsetHSL(0, -0.08, 0.08);
+        }
+      });
       this.island.add(islandModel.root);
       this.island.userData.islandModel = 'imported';
     }
@@ -492,16 +515,23 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     }
     this.island.add(treeRest);
 
-    const shoreLight = new PointLight(0xd69b56, 0.48, 8.5, 2);
+    const shoreLight = new PointLight(0xe2a45e, 2.2, 24, 1.1);
     shoreLight.name = 'midnight-tour-shore-light';
-    shoreLight.position.set(2.25, 1.1, 0.7);
+    shoreLight.position.set(-1, 3, 6);
     this.island.add(shoreLight);
+    const moonFill = new PointLight(0x91b5c1, 1.4, 30, 1.05);
+    moonFill.name = 'midnight-tour-moon-fill';
+    moonFill.position.set(1, 5, 7);
+    this.island.add(moonFill);
+    const emberMaterial = createMaterial(0xc38243, 0.72);
+    emberMaterial.emissive.setHex(0xc38243);
+    emberMaterial.emissiveIntensity = 1.3;
     const ember = new Mesh(
-      new SphereGeometry(0.09, 6, 4),
-      createMaterial(0xc38243, 0.72),
+      new SphereGeometry(0.16, 6, 4),
+      emberMaterial,
     );
     ember.name = 'midnight-tour-shore-ember';
-    ember.position.copy(shoreLight.position);
+    ember.position.set(-1.4, 1.8, 3.8);
     this.island.add(ember);
   }
 

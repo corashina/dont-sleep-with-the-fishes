@@ -27,6 +27,7 @@ import {
 } from '../world/SceneResources';
 import type {
   EventChoicePresentation,
+  FocusedEventInteractionTarget,
   FocusedEventPresentation,
   FocusedEventPresentationDependencies,
 } from './FocusedEventPresentation';
@@ -76,13 +77,13 @@ const SLEEP_CHOICE_DURATION = 0.38;
 const RESULT_DURATION = 1.12;
 const TOUCH_RESULT_DURATION = 1.05;
 const SLEEP_RESULT_DURATION = 1.22;
-const WRIST_BASE = new Vector3(-3.55, 0.02, -5.2);
-const WRIST_HIDDEN = new Vector3(-3.55, -2.35, -5.2);
-const WRIST_SUNK = new Vector3(-4.1, -2.7, -6.05);
+const WRIST_BASE = new Vector3(-2.35, 0.45, -2.15);
+const WRIST_HIDDEN = new Vector3(-2.35, -2.05, -2.15);
+const WRIST_SUNK = new Vector3(-2.55, -2.4, -2.55);
 const PALM_TARGET = new Vector3(0.05, 0.32, 0.05);
 const PAYMENT_START = new Vector3(3.05, 0.38, 3.9);
 const REWARD_END = new Vector3(2.85, 0.55, 3.6);
-const CHEST_PALM_TARGET = new Vector3(-3.45, 0.62, -5.05);
+const CHEST_PALM_TARGET = new Vector3(-2.22, 0.9, -2.08);
 const TOUCH_HELD_CAMERA_YAW = -0.22;
 const TOUCH_HELD_CAMERA_PITCH = -0.2;
 const TOUCH_HELD_CAMERA_X = -0.16;
@@ -249,6 +250,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private readonly fingerJoints: FingerJoint[] = [];
   private readonly wristMotionBase = WRIST_BASE.clone();
   private readonly waveQuaternion = new Quaternion();
+  private readonly boatQuaternion = new Quaternion();
   private readonly waveSample: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -459,6 +461,29 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.cancelActiveAnimation(true);
   }
 
+  interactionTargets(): readonly FocusedEventInteractionTarget[] {
+    return [
+      {
+        id: 'handyman:hand',
+        label: 'HAND',
+        description: 'Reach toward the waiting hand.',
+        choiceId: 'touch',
+        root: this.handVisual,
+        minimumHitWidth: 82,
+        minimumHitHeight: 82,
+      },
+      {
+        id: 'persistent-chest',
+        label: 'CHEST',
+        description: 'Offer the closed chest to the hand.',
+        choiceId: 'chest',
+        root: this.dependencies.chestDisplay.root,
+        minimumHitWidth: 54,
+        minimumHitHeight: 54,
+      },
+    ];
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation(false);
@@ -612,7 +637,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     ) {
       this.supplyPose.x = -2.95 * travel;
       this.supplyPose.y = 0.48 * travel;
-      this.supplyPose.z = -3.95 * travel;
+      this.supplyPose.z = -2.2 * travel;
       this.supplyPose.yaw = 0.28 * travel;
       this.supplyPose.pitch = -0.18 * travel;
       this.supplyPose.roll = 0.14 * travel;
@@ -729,23 +754,29 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private applySharedWave(time: number): void {
+    this.wrist.position.copy(this.wristMotionBase);
+    if (this.dependencies.boatMotionRoot !== undefined) {
+      this.dependencies.boatMotionRoot.localToWorld(this.wrist.position);
+      this.dependencies.boatMotionRoot.getWorldQuaternion(this.boatQuaternion);
+    } else {
+      this.boatQuaternion.identity();
+    }
     sampleWaveFieldInto(
       this.waveSample,
       this.dependencies.waves,
       time,
-      this.wristMotionBase.x,
-      this.wristMotionBase.z,
+      this.wrist.position.x,
+      this.wrist.position.z,
       1,
     );
-    this.wrist.position.copy(this.wristMotionBase);
     this.wrist.position.x += this.waveSample.displacementX * 0.12;
-    this.wrist.position.y += this.waveSample.height * 0.38;
+    this.wrist.position.y += this.waveSample.height * 0.1;
     this.wrist.position.z += this.waveSample.displacementZ * 0.12;
     this.waveQuaternion.setFromAxisAngle(
       X_AXIS,
       this.waveSample.normal.z * 0.1,
     );
-    this.wrist.quaternion.copy(this.waveQuaternion);
+    this.wrist.quaternion.copy(this.boatQuaternion).multiply(this.waveQuaternion);
     this.waveQuaternion.setFromAxisAngle(
       Z_AXIS,
       -this.waveSample.normal.x * 0.1,
@@ -1089,7 +1120,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
       && hasRenderableBounds(selected)
     ) {
       selected.name = 'event-model:riggedHand';
-      selected.scale.setScalar(2.45);
+      selected.scale.setScalar(1.7);
       selected.rotation.set(0.08, -0.32, 0.04);
       selected.traverse((object) => {
         if (!(object instanceof Mesh)) return;
@@ -1099,6 +1130,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
         for (const material of materials) {
           if (!(material instanceof MeshStandardMaterial)) continue;
           material.color.setHex(0x9b8069);
+          material.emissive.setHex(0x2c2018);
+          material.emissiveIntensity = 0.42;
           material.roughness = Math.max(0.9, material.roughness);
           material.metalness = 0;
           material.flatShading = true;

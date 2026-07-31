@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,
@@ -14,10 +13,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import {
-  ChestDisplay,
-  type ChestEventPose,
-} from './ChestDisplay';
+import type { ChestEventPose } from './ChestDisplay';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,
@@ -31,10 +27,8 @@ import type {
 type ChestAttackAnimationKind =
   | 'reveal'
   | 'choice-net'
-  | 'choice-fight'
   | 'choice-hide'
   | 'result-bound'
-  | 'result-fight'
   | 'result-hide';
 
 interface ActiveAnimation {
@@ -90,9 +84,7 @@ function createMaterial(color: number, roughness: number, metalness = 0): MeshSt
 
 export class ChestAttackPresentation implements FocusedEventPresentation {
   readonly root = new Group();
-  private readonly chest: ChestDisplay;
   private readonly net = new Group();
-  private readonly strike = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly cameraBasePosition = new Vector3();
@@ -100,8 +92,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   private readonly cameraKickQuaternion = new Quaternion();
   private readonly netStart = new Vector3(-1.55, 1.45, -1.75);
   private readonly netEnd = new Vector3(-0.72, 0.67, -1.06);
-  private readonly strikeStart = new Vector3(0.65, 1.1, -1.1);
-  private readonly strikeEnd = new Vector3(-0.48, 0.62, -1.2);
   private readonly supplyNetPose: MutableSupplyPose = {
     x: 0,
     y: 0,
@@ -135,21 +125,11 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.visible = false;
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.strikes = 0;
     this.root.userData.cameraLoweredBeforeBite = false;
 
-    const selected = dependencies.propModels.createEventModel('chestClosed');
-    this.chest = new ChestDisplay(selected?.root ?? null);
-    this.chest.root.name = 'chest-attack-mimic';
-    const chestParent = dependencies.chestDisplay.root.parent ?? this.root;
-    chestParent.add(this.chest.root);
-    this.chest.root.visible = false;
-
     this.buildNet();
-    this.buildStrike();
-    this.root.add(this.net, this.strike);
+    this.root.add(this.net);
     collectMeshResources(this.net, this.geometries, this.materials);
-    collectMeshResources(this.strike, this.geometries, this.materials);
     this.resetActors();
   }
 
@@ -161,14 +141,12 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.captureCamera();
     this.staged = true;
     this.root.visible = true;
-    this.dependencies.chestDisplay.root.visible = false;
-    this.chest.stageMimic();
+    this.dependencies.chestDisplay.stageMimic();
     this.resetPose();
     this.resetActors();
     this.root.userData.state = 'staged';
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.strikes = 0;
     this.root.userData.cameraLoweredBeforeBite = false;
   }
 
@@ -189,10 +167,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
         this.net.visible = !this.usingSupplyNet;
         this.root.userData.state = 'binding';
         return this.startAnimation('choice-net', CHOICE_DURATION);
-      case 'fight':
-        this.strike.visible = true;
-        this.root.userData.state = 'fighting';
-        return this.startAnimation('choice-fight', CHOICE_DURATION);
       case 'sleep':
         this.root.userData.state = 'hiding';
         return this.startAnimation('choice-hide', CHOICE_DURATION);
@@ -215,10 +189,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
         this.net.visible = !this.usingSupplyNet;
         this.root.userData.state = 'bound-result';
         return this.startAnimation('result-bound', RESULT_DURATION * 0.7);
-      case 'chest-fight':
-        this.strike.visible = true;
-        this.root.userData.state = 'fight-result';
-        return this.startAnimation('result-fight', RESULT_DURATION);
       case 'chest-hide':
         this.root.userData.state = 'hide-result';
         return this.startAnimation('result-hide', RESULT_DURATION);
@@ -234,8 +204,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.restoreCamera();
-    this.chest.restorePose();
-    this.chest.root.visible = false;
     this.dependencies.chestDisplay.restorePose();
     this.root.visible = false;
     this.root.userData.state = 'idle';
@@ -272,7 +240,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.clearEventPose();
     this.disposed = true;
     this.staged = false;
-    this.chest.dispose();
     this.root.removeFromParent();
     disposeResourceSets(this.geometries, this.materials);
   }
@@ -297,17 +264,11 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       case 'choice-net':
         this.applyNetChoice(normalized);
         break;
-      case 'choice-fight':
-        this.applyFightChoice(normalized);
-        break;
       case 'choice-hide':
         this.applyHideChoice(normalized);
         break;
       case 'result-bound':
         this.applyBoundResult(normalized);
-        break;
-      case 'result-fight':
-        this.applyFightResult(normalized);
         break;
       case 'result-hide':
         this.applyHideResult(normalized);
@@ -324,17 +285,11 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       case 'choice-net':
         this.root.userData.state = 'choice-bound';
         break;
-      case 'choice-fight':
-        this.root.userData.state = 'choice-fight-held';
-        break;
       case 'choice-hide':
         this.root.userData.state = 'choice-hidden';
         break;
       case 'result-bound':
         this.root.userData.state = 'held-bound';
-        break;
-      case 'result-fight':
-        this.root.userData.state = 'held-destroyed';
         break;
       case 'result-hide':
         this.root.userData.state = 'held-overboard';
@@ -360,7 +315,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     if (progress >= 0.62 && progress < 0.72) {
       this.pose.mouthOpen = smoothstep((progress - 0.62) / 0.1) * 0.18;
     }
-    this.chest.applyEventPose(this.pose as ChestEventPose);
+    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
   private applyNetChoice(progress: number): void {
@@ -387,22 +342,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.pose.mouthOpen = 1 - smoothstep((progress - 0.48) / 0.52);
     this.pose.bound = smoothstep((progress - 0.55) / 0.45);
     this.pose.bite = 0.2 * (1 - travel);
-    this.chest.applyEventPose(this.pose as ChestEventPose);
-  }
-
-  private applyFightChoice(progress: number): void {
-    const anticipation = smoothstep(progress);
-    this.strike.position.lerpVectors(
-      this.strikeStart,
-      this.strikeEnd,
-      anticipation * 0.28,
-    );
-    this.strike.rotation.z = -0.55 - anticipation * 0.62;
-    this.resetPose();
-    this.pose.mouthOpen = 1;
-    this.pose.bite = 0.2;
-    this.pose.rattle = Math.sin(progress * Math.PI) * -0.24;
-    this.chest.applyEventPose(this.pose as ChestEventPose);
+    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
   private applyHideChoice(progress: number): void {
@@ -411,7 +351,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.resetPose();
     this.pose.mouthOpen = 1;
     this.pose.bite = 0.2;
-    this.chest.applyEventPose(this.pose as ChestEventPose);
+    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
     if (progress >= 1) {
       this.root.userData.cameraLoweredBeforeBite = true;
     }
@@ -422,32 +362,8 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.pose.mouthOpen = 0;
     this.pose.bound = 1;
     this.pose.rattle = Math.sin(progress * Math.PI * 2) * (1 - progress) * 0.18;
-    this.chest.applyEventPose(this.pose as ChestEventPose);
+    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
     this.net.scale.set(1 + Math.sin(progress * Math.PI) * 0.08, 1, 1);
-  }
-
-  private applyFightResult(progress: number): void {
-    this.resetPose();
-    this.pose.mouthOpen = 1;
-    if (progress < 0.44) {
-      const biteProgress = progress / 0.44;
-      this.pose.bite = Math.sin(biteProgress * Math.PI);
-      if (progress >= 0.08) this.root.userData.bites = 1;
-    } else {
-      const strikeProgress = smoothstep((progress - 0.44) / 0.34);
-      this.root.userData.bites = 1;
-      this.root.userData.strikes = strikeProgress > 0 ? 1 : 0;
-      this.strike.position.lerpVectors(this.strikeStart, this.strikeEnd, strikeProgress);
-      this.strike.rotation.z = -1.17 + strikeProgress * 1.58;
-      this.pose.broken = smoothstep((progress - 0.58) / 0.42);
-      this.pose.mouthOpen = 1 - this.pose.broken * 0.7;
-      this.applyCameraOffset(
-        0,
-        Math.sin(strikeProgress * Math.PI) * 0.05,
-        -Math.sin(strikeProgress * Math.PI) * 0.12,
-      );
-    }
-    this.chest.applyEventPose(this.pose as ChestEventPose);
   }
 
   private applyHideResult(progress: number): void {
@@ -467,7 +383,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       this.pose.overboard = smoothstep((progress - 0.46) / 0.54);
       this.applyCameraOffset(-0.58, 0.06, 0);
     }
-    this.chest.applyEventPose(this.pose as ChestEventPose);
+    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
   private applyCameraOffset(
@@ -514,9 +430,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.net.position.copy(this.netStart);
     this.net.rotation.set(-Math.PI / 2, 0.16, -0.22);
     this.net.scale.set(1, 1, 1);
-    this.strike.visible = false;
-    this.strike.position.copy(this.strikeStart);
-    this.strike.rotation.set(0.12, 0.08, -0.55);
   }
 
   private buildNet(): void {
@@ -539,20 +452,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     cross.name = 'chest-attack-net-cross-strand';
     cross.rotation.z = Math.PI / 2;
     this.net.add(cross);
-  }
-
-  private buildStrike(): void {
-    this.strike.name = 'chest-attack-strike';
-    const wood = createMaterial(0x5a3d2c, 0.96);
-    const iron = createMaterial(0x5f6665, 0.7, 0.38);
-    const handle = new Mesh(new BoxGeometry(0.08, 0.72, 0.08), wood);
-    handle.name = 'chest-attack-strike-handle';
-    handle.position.y = -0.25;
-    const head = new Mesh(new BoxGeometry(0.48, 0.18, 0.2), iron);
-    head.name = 'chest-attack-strike-head';
-    head.position.set(-0.11, 0.16, 0);
-    head.rotation.z = -0.08;
-    this.strike.add(handle, head);
   }
 
   private cancelActiveAnimation(settle: boolean): void {

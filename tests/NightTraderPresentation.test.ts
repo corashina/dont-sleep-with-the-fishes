@@ -157,6 +157,12 @@ describe('NightTraderPresentation', () => {
     expect(
       harness.presentation.root.getObjectByName('event-model:traderRowboat'),
     ).toBeDefined();
+    expect((harness.presentation.root.getObjectByName(
+      'night-trader-lantern-light',
+    ) as PointLight).intensity).toBeGreaterThan(5);
+    expect((harness.presentation.root.getObjectByName(
+      'night-trader-cool-fill',
+    ) as PointLight).intensity).toBeGreaterThan(1.5);
     harness.dispose();
   });
 

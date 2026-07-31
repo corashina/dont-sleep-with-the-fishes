@@ -191,6 +191,8 @@ function createHarness(options: {
     });
   }
   const boat = new Group();
+  const boatMotionRoot = new Group();
+  boatMotionRoot.add(boat);
   const supplyDisplay = new BoatSupplyDisplay(propModels, boat, []);
   supplyDisplay.sync(snapshot());
   const chestDisplay = new ChestDisplay();
@@ -204,11 +206,13 @@ function createHarness(options: {
     propModels,
     waves: DEFAULT_WAVES,
     cameraRig,
+    boatMotionRoot,
     supplyDisplay,
     chestDisplay,
   };
   const presentation = new HandymanPresentation(dependencies);
-  boat.add(presentation.root);
+  const scene = new Group();
+  scene.add(boatMotionRoot, presentation.root);
   const dispose = () => {
     presentation.dispose();
     chestDisplay.dispose();
@@ -217,6 +221,8 @@ function createHarness(options: {
   };
   return {
     boat,
+    scene,
+    boatMotionRoot,
     cameraRig,
     chestDisplay,
     supplyDisplay,
@@ -257,6 +263,10 @@ describe('HandymanPresentation', () => {
     expect(
       harness.presentation.root.getObjectByName('handyman-palm')?.visible,
     ).toBe(true);
+    expect(harness.presentation.interactionTargets()).toMatchObject([
+      { id: 'handyman:hand', choiceId: 'touch' },
+      { id: 'persistent-chest', choiceId: 'chest' },
+    ]);
     harness.dispose();
   });
 
@@ -279,6 +289,23 @@ describe('HandymanPresentation', () => {
     expect(wrist.userData.waveSampleTime).toBe(9);
     expect(wrist.position.y).not.toBe(firstY);
     expect(wrist.userData.waveHeight).not.toBe(firstHeight);
+    harness.dispose();
+  });
+
+  it('keeps the lurking hand beside the moving boat', async () => {
+    const harness = createHarness();
+    harness.presentation.stage();
+    harness.presentation.settleForVisibilityChange();
+    harness.presentation.update(2, 0);
+    const wrist = harness.presentation.root.getObjectByName('handyman-wrist')!;
+    const before = wrist.position.clone();
+
+    harness.boatMotionRoot.position.set(1.4, 0.3, -0.8);
+    harness.presentation.update(2, 0);
+
+    expect(wrist.position.x - before.x).toBeCloseTo(1.4, 1);
+    expect(wrist.position.y - before.y).toBeCloseTo(0.3, 1);
+    expect(wrist.position.z - before.z).toBeCloseTo(-0.8, 1);
     harness.dispose();
   });
 

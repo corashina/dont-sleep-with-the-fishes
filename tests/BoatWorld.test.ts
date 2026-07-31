@@ -911,7 +911,7 @@ describe('BoatWorld helpers', () => {
       world.stageEvent(eventId);
       expect(doubles.get(eventId)!.stage).toHaveBeenCalledOnce();
     }
-    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length);
+    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 1);
 
     world.dispose();
     propModels.dispose();
@@ -1428,6 +1428,47 @@ describe('BoatWorld helpers', () => {
     world.setHighlightedItem('persistent-chest');
     expect(world.scene.getObjectByName('persistent-chest')
       ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('projects and outlines focused event subjects as physical choices', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('midnight-tour');
+    const islandReveal = world.revealEvent('midnight-tour');
+    world.setDocumentHidden(true);
+    await islandReveal;
+    world.setDocumentHidden(false);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'midnight-tour:island',
+        eventChoiceId: 'visit',
+      }),
+    ]));
+    world.setHighlightedItem('midnight-tour:island');
+    expect(world.scene.getObjectByName('midnight-tour-island')
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.clearEvent();
+    world.syncInventory(snapshot([], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    world.stageEvent('handyman');
+    const handReveal = world.revealEvent('handyman');
+    world.setDocumentHidden(true);
+    await handReveal;
+    world.setDocumentHidden(false);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'handyman:hand', eventChoiceId: 'touch' }),
+      expect.objectContaining({ id: 'persistent-chest', eventChoiceId: 'chest' }),
+    ]));
 
     world.dispose();
     propModels.dispose();
