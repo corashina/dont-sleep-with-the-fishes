@@ -682,9 +682,9 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const time = 2.37;
-    const angle = 0.18 + time * 0.29;
-    const x = -2.9 + Math.cos(angle) * 0.72;
-    const z = -3.7 + Math.sin(angle) * 0.48;
+    const angle = 0.18 + time * 0.16;
+    const x = -2.35 + Math.cos(angle) * 0.38;
+    const z = -3.1 + Math.sin(angle) * 0.3;
     const waveScale = presentationWeatherProfile('thunderstorm').waveScale;
     const expected = sampleWaveField(DEFAULT_WAVES, time, x, z, waveScale);
 

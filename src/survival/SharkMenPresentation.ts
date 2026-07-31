@@ -88,19 +88,19 @@ type ActiveSharkMenAnimation =
 
 const SHARK_PATHS: readonly AuthoredSharkPath[] = Object.freeze([
   Object.freeze({
-    centerX: -2.9,
-    centerZ: -3.7,
-    radiusX: 0.72,
-    radiusZ: 0.48,
-    speed: 0.29,
+    centerX: -2.35,
+    centerZ: -3.1,
+    radiusX: 0.38,
+    radiusZ: 0.3,
+    speed: 0.16,
     phase: 0.18,
   }),
   Object.freeze({
-    centerX: -0.95,
-    centerZ: -5.25,
-    radiusX: 1.06,
-    radiusZ: 0.54,
-    speed: -0.23,
+    centerX: 2.15,
+    centerZ: -3.45,
+    radiusX: 0.36,
+    radiusZ: 0.28,
+    speed: -0.14,
     phase: 1.42,
   }),
   Object.freeze({
@@ -133,7 +133,7 @@ const REVEAL_DURATION = 1.8;
 const ITEM_DURATION = 1.1;
 const CONTEXT_DURATION = 1;
 const REACTION_DURATION = 1.6;
-const HAND_POSITION = Object.freeze({ x: 1.36, y: -0.44, z: -1.56 });
+const HAND_POSITION = Object.freeze({ x: 1.48, y: 0.18, z: -1.45 });
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -202,6 +202,7 @@ function createRailHand(
   hand.name = 'shark-men-hand';
   hand.position.set(HAND_POSITION.x, HAND_POSITION.y, HAND_POSITION.z);
   hand.rotation.set(-0.18, 0.1, -0.18);
+  hand.scale.setScalar(1.15);
 
   const palm = new Mesh(new BoxGeometry(0.64, 0.56, 0.24), skin);
   palm.name = 'shark-men-palm';
@@ -323,7 +324,9 @@ export class SharkMenPresentation {
     this.root.userData.strikeCount = 0;
     const finGeometry = new ConeGeometry(0.34, 0.88, 3);
     const finMaterial = new MeshStandardMaterial({
-      color: 0x263f46,
+      color: 0x3f646b,
+      emissive: 0x091719,
+      emissiveIntensity: 0.16,
       roughness: 0.86,
       metalness: 0.02,
       flatShading: true,
@@ -335,7 +338,9 @@ export class SharkMenPresentation {
       flatShading: true,
     });
     const skinMaterial = new MeshStandardMaterial({
-      color: 0x455c5c,
+      color: 0x607878,
+      emissive: 0x0a1515,
+      emissiveIntensity: 0.14,
       roughness: 0.9,
       metalness: 0,
       flatShading: true,
@@ -373,6 +378,7 @@ export class SharkMenPresentation {
       fin.name = `shark-men-fin-${index + 1}`;
       fin.position.set(0, -0.08, 0.12);
       fin.rotation.set(-0.04, 0, index % 2 === 0 ? -0.035 : 0.035);
+      if (index < 2) fin.scale.setScalar(1.35);
       const finMesh = new Mesh(finGeometry, finMaterial);
       finMesh.position.y = 0.31;
       finMesh.scale.z = 0.18;
