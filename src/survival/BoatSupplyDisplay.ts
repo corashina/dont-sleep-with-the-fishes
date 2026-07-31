@@ -107,8 +107,34 @@ interface ActiveAnimation {
   readonly resolve: () => void;
 }
 
+interface MutableSupplyPose {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  roll: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+}
+
 const EVENT_ITEM_USE_DURATION = 0.65;
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
+
+function createIdentitySupplyPose(): MutableSupplyPose {
+  return {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
+}
 
 function visibleCopyCount(quantity: number): 0 | 1 | 2 | 3 {
   return Math.min(3, Math.max(0, Math.floor(quantity))) as 0 | 1 | 2 | 3;
@@ -225,6 +251,10 @@ export class BoatSupplyDisplay {
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
   private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
+  private readonly borrowedGroupById = new Map<ItemInstanceId, BoatSupplyGroupId>();
+  private readonly borrowedIdByGroup = new Map<BoatSupplyGroupId, ItemInstanceId>();
+  private readonly borrowedPoses = new Map<ItemInstanceId, MutableSupplyPose>();
+  private readonly releaseBorrowedOnSync = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -237,17 +267,7 @@ export class BoatSupplyDisplay {
   private pinnedEventActorId: ItemInstanceId | null = null;
   private pinnedEventGroupId: BoatSupplyGroupId | null = null;
   private releasePinnedActorOnSync = false;
-  private readonly eventItemPose = {
-    x: 0,
-    y: 0,
-    z: 0,
-    yaw: 0,
-    pitch: 0,
-    roll: 0,
-    scaleX: 1,
-    scaleY: 1,
-    scaleZ: 1,
-  };
+  private readonly eventItemPose = createIdentitySupplyPose();
   private disposed = false;
 
   constructor(
@@ -343,8 +363,16 @@ export class BoatSupplyDisplay {
       this.groupByInstanceId.set(item.instanceId, item.type);
     }
     if (this.releasePinnedActorOnSync) this.releasePinnedEventActor(false);
+    for (const instanceId of this.releaseBorrowedOnSync) {
+      this.releaseBorrowedEventActor(instanceId, false);
+    }
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
-      if (groupId !== this.pinnedEventGroupId) this.syncGroup(groupId, snapshot);
+      if (
+        groupId !== this.pinnedEventGroupId
+        && !this.borrowedIdByGroup.has(groupId)
+      ) {
+        this.syncGroup(groupId, snapshot);
+      }
     }
     if (
       this.highlightedGroupId !== null
@@ -430,7 +458,7 @@ export class BoatSupplyDisplay {
   }
 
   borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
-    if (!this.pinEventActor(instanceId)) return null;
+    if (!this.pinBorrowedEventActor(instanceId)) return null;
     const existing = this.borrowedActors.get(instanceId);
     if (existing !== undefined) return existing;
     const groupId = this.groupByInstanceId.get(instanceId)!;
@@ -439,16 +467,24 @@ export class BoatSupplyDisplay {
       instanceId,
       root,
       applyPose: (pose) => {
-        if (this.pinnedEventActorId !== instanceId) return;
-        this.applyEventItemPose(instanceId, pose);
+        const target = this.borrowedPoses.get(instanceId);
+        if (target === undefined) return;
+        target.x = pose.x;
+        target.y = pose.y;
+        target.z = pose.z;
+        target.yaw = pose.yaw;
+        target.pitch = pose.pitch;
+        target.roll = pose.roll;
+        target.scaleX = pose.scaleX;
+        target.scaleY = pose.scaleY;
+        target.scaleZ = pose.scaleZ;
       },
       releaseOnNextSync: () => {
-        if (this.pinnedEventActorId !== instanceId) return;
-        this.releaseEventActorOnNextSync();
+        if (!this.borrowedGroupById.has(instanceId)) return;
+        this.releaseBorrowedOnSync.add(instanceId);
       },
       release: () => {
-        if (this.pinnedEventActorId !== instanceId) return;
-        this.releaseEventActor();
+        this.releaseBorrowedEventActor(instanceId, true);
       },
     };
     this.borrowedActors.set(instanceId, actor);
@@ -463,6 +499,7 @@ export class BoatSupplyDisplay {
     }
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined) return false;
+    if (this.borrowedIdByGroup.has(groupId)) return false;
     const previousSelectedItemId = this.eventSelectedItemId;
     if (this.currentSnapshot !== null) {
       this.eventSelectedItemId = instanceId;
@@ -517,6 +554,7 @@ export class BoatSupplyDisplay {
     this.resetEventPose();
     this.cancelActiveAnimation();
     this.releasePinnedEventActor(false);
+    this.releaseAllBorrowedEventActors(false);
     this.restoreEventMotionBase();
     if (this.currentSnapshot !== null) {
       for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
@@ -712,6 +750,72 @@ export class BoatSupplyDisplay {
     }
   }
 
+  private pinBorrowedEventActor(instanceId: ItemInstanceId): boolean {
+    if (this.disposed) return false;
+    if (this.borrowedGroupById.has(instanceId)) {
+      this.releaseBorrowedOnSync.delete(instanceId);
+      return true;
+    }
+    const groupId = this.groupByInstanceId.get(instanceId);
+    if (
+      groupId === undefined
+      || groupId === this.pinnedEventGroupId
+      || this.borrowedIdByGroup.has(groupId)
+    ) {
+      return false;
+    }
+
+    const previousSelectedItemId = this.eventSelectedItemId;
+    if (this.currentSnapshot !== null) {
+      this.eventSelectedItemId = instanceId;
+      this.syncGroup(groupId, this.currentSnapshot);
+    }
+    const record = this.recordsById.get(groupId);
+    if (
+      record === undefined
+      || record.visibleCopies === 0
+      || record.backingInstanceId !== instanceId
+    ) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      if (this.currentSnapshot !== null) {
+        this.syncGroup(groupId, this.currentSnapshot);
+      }
+      return false;
+    }
+
+    this.eventSelectedItemId = previousSelectedItemId;
+    this.borrowedGroupById.set(instanceId, groupId);
+    this.borrowedIdByGroup.set(groupId, instanceId);
+    this.borrowedPoses.set(instanceId, createIdentitySupplyPose());
+    this.releaseBorrowedOnSync.delete(instanceId);
+    return true;
+  }
+
+  private releaseBorrowedEventActor(
+    instanceId: ItemInstanceId,
+    syncLatestSnapshot: boolean,
+  ): void {
+    const groupId = this.borrowedGroupById.get(instanceId);
+    if (groupId === undefined) return;
+    this.borrowedGroupById.delete(instanceId);
+    this.borrowedIdByGroup.delete(groupId);
+    this.borrowedPoses.delete(instanceId);
+    this.releaseBorrowedOnSync.delete(instanceId);
+    const root = this.recordsById.get(groupId)!.root;
+    root.position.copy(this.basePositionById.get(groupId)!);
+    root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
+    root.scale.set(1, 1, 1);
+    if (syncLatestSnapshot && this.currentSnapshot !== null) {
+      this.syncGroup(groupId, this.currentSnapshot);
+    }
+  }
+
+  private releaseAllBorrowedEventActors(syncLatestSnapshot: boolean): void {
+    for (const instanceId of this.borrowedGroupById.keys()) {
+      this.releaseBorrowedEventActor(instanceId, syncLatestSnapshot);
+    }
+  }
+
   private applyEventMotion(): void {
     const selectedGroupId = this.eventItemId === null
       ? undefined
@@ -725,8 +829,11 @@ export class BoatSupplyDisplay {
       root.scale.set(1, 1, 1);
       root.position.y += this.eventAmbientLift;
       root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
-      if (groupId === selectedGroupId) {
-        const pose = this.eventItemPose;
+      const borrowedId = this.borrowedIdByGroup.get(groupId);
+      const pose = borrowedId === undefined
+        ? groupId === selectedGroupId ? this.eventItemPose : undefined
+        : this.borrowedPoses.get(borrowedId);
+      if (pose !== undefined) {
         root.position.x += pose.x;
         root.position.y += pose.y;
         root.position.z += pose.z;

@@ -999,6 +999,102 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('drives two exact borrowed supply actors until each owner releases it', () => {
+    const map = savedItem('map', 3);
+    const ring = savedItem('swimRing', 6);
+    const propModels = createTestPropModels();
+    const parent = new Group();
+    const display = new BoatSupplyDisplay(propModels, parent, [map, ring]);
+    display.sync(snapshot([map, ring]));
+    const releaseBorrowedActor = vi.spyOn(
+      display as unknown as {
+        releaseBorrowedEventActor(
+          instanceId: ItemInstanceId,
+          syncLatestSnapshot: boolean,
+        ): void;
+      },
+      'releaseBorrowedEventActor',
+    );
+
+    const mapActor = display.borrowEventActor(map.instanceId)!;
+    const ringActor = display.borrowEventActor(ring.instanceId)!;
+    expect(display.borrowEventActor(map.instanceId)).toBe(mapActor);
+    expect(display.borrowEventActor(ring.instanceId)).toBe(ringActor);
+    expect(mapActor.root).toBe(parent.getObjectByName('boat-supply:map'));
+    expect(ringActor.root).toBe(parent.getObjectByName('boat-supply:swimRing'));
+    expect(display.recordFor('map')).toMatchObject({
+      backingInstanceId: map.instanceId,
+      visibleCopies: 1,
+    });
+    expect(display.recordFor('swimRing')).toMatchObject({
+      backingInstanceId: ring.instanceId,
+      visibleCopies: 1,
+    });
+    expect(mapActor.root.visible).toBe(true);
+    expect(ringActor.root.visible).toBe(true);
+
+    mapActor.applyPose({
+      x: 1.2,
+      y: 0.3,
+      z: -0.4,
+      yaw: 0.2,
+      pitch: 0,
+      roll: -0.5,
+      scaleX: 0.8,
+      scaleY: 0.8,
+      scaleZ: 0.8,
+    });
+    ringActor.applyPose({
+      x: -1.4,
+      y: 0.5,
+      z: -0.7,
+      yaw: -0.3,
+      pitch: 0.1,
+      roll: 0.6,
+      scaleX: 0.7,
+      scaleY: 0.7,
+      scaleZ: 0.7,
+    });
+    display.update(0);
+
+    expect(mapActor.root.position.toArray()).toEqual([1.2, 0.3, -0.4]);
+    expect(ringActor.root.position.toArray()).toEqual([-1.4, 0.5, -0.7]);
+
+    mapActor.release();
+    ringActor.applyPose({
+      x: -1.8,
+      y: 0.6,
+      z: -0.9,
+      yaw: -0.4,
+      pitch: 0.15,
+      roll: 0.8,
+      scaleX: 0.6,
+      scaleY: 0.6,
+      scaleZ: 0.6,
+    });
+    display.update(0);
+    expect(mapActor.root.position.toArray()).toEqual([0, 0, 0]);
+    expect(ringActor.root.position.toArray()).toEqual([-1.8, 0.6, -0.9]);
+
+    ringActor.releaseOnNextSync();
+    display.sync(snapshot([map, ring]));
+    expect(ringActor.root.position.toArray()).toEqual([0, 0, 0]);
+
+    display.dispose();
+    expect(releaseBorrowedActor).toHaveBeenCalledTimes(2);
+    expect(releaseBorrowedActor).toHaveBeenNthCalledWith(
+      1,
+      map.instanceId,
+      true,
+    );
+    expect(releaseBorrowedActor).toHaveBeenNthCalledWith(
+      2,
+      ring.instanceId,
+      false,
+    );
+    propModels.dispose();
+  });
+
   it('ignores stale borrowed actor commands after another supply becomes active', () => {
     const map = savedItem('map');
     const ring = savedItem('swimRing');

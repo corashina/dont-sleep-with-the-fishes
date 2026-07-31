@@ -51,6 +51,7 @@ export interface DedicatedEventEnvironment {
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly cameraEffectsRoot?: Group;
+  readonly boatEffectsRoot?: Group;
 }
 
 export interface DedicatedEventPresentation {
