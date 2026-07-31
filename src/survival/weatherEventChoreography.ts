@@ -477,7 +477,7 @@ export function sampleWeatherItemUse(
     case 'bad-sleep':
       switch (choiceId) {
         case 'bucket':
-          output.y = 1.25 * hold;
+          output.y = 0.46 * hold;
           output.roll = 0.16 * Math.sin(2 * Math.PI * t) * hold;
           output.effect = pulse(t, 0.12, 0.5, 0.86);
           break;
@@ -496,7 +496,7 @@ export function sampleWeatherItemUse(
           output.effect = hold;
           break;
         case 'umbrella':
-          output.y = 1.45 * hold;
+          output.y = 0.55 * hold;
           output.pitch = -0.14 * hold;
           output.roll = -0.18 * pulse(t, 0.2, 0.58, 0.86);
           output.scaleY = 1 - 0.1 * pulse(t, 0.28, 0.6, 0.84);
