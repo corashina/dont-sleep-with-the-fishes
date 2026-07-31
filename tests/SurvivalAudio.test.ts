@@ -102,6 +102,15 @@ describe('SurvivalAudio', () => {
     expect(scope.play).toHaveBeenNthCalledWith(6, 'harpoonGun');
   });
 
+  it('uses the dive cue for Scuba Gear event actions', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+
+    audio.tool('scubaSet');
+
+    expect(scope.play).toHaveBeenCalledWith('diveEntry');
+  });
+
   it('plays the selected terminal sound', () => {
     const scope = createScope();
     const audio = new SurvivalAudio(scope);

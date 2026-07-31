@@ -63,6 +63,7 @@ const TOOL_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
   flashlight: 'flashlight',
   flareGun: 'flareGun',
   harpoonGun: 'harpoonGun',
+  scubaSet: 'diveEntry',
 });
 
 const ROUGH_WEATHER = new Set<PresentationWeatherId>([

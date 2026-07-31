@@ -1152,7 +1152,8 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    this.ui.showFeedback?.(outcome);
+    if (eventState === 'nightEvent') this.ui.showEventOutcome?.(outcome);
+    else this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
@@ -1165,7 +1166,11 @@ export class SurvivalPhase implements GamePhase {
 
     await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (eventId === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
@@ -1296,7 +1301,11 @@ export class SurvivalPhase implements GamePhase {
       if (!this.isContinuationActive(generation)) return;
     }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
-    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (event.id === 'bad-sleep') {
+      await (this.ui.setSleepCoverProfile?.('bad-sleep') ?? Promise.resolve());
+    } else {
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    }
     if (!this.isContinuationActive(generation)) return;
     if (event.id !== 'drifting-loot') {
       await (this.world.revealEvent?.(event.id) ?? Promise.resolve());

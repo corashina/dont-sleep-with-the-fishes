@@ -501,6 +501,11 @@ export class BoatWorld {
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private weatherEventOperation = 0;
+  private lightningStrikePending = false;
+  private lightningStrikeListener: (() => void) | null = null;
+  private readonly queueLightningStrike = (): void => {
+    this.lightningStrikePending = true;
+  };
   private disposed = false;
 
   constructor(
@@ -523,6 +528,7 @@ export class BoatWorld {
       },
     );
     this.weatherEffects = new WeatherEffects(this.scene);
+    this.weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
     this.camera = camera;
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
@@ -686,7 +692,7 @@ export class BoatWorld {
   }
 
   setLightningStrikeListener(listener: () => void): void {
-    this.weatherEffects.setLightningStrikeListener(listener);
+    this.lightningStrikeListener = listener;
   }
 
   setWaterQuality(value: WaterQuality): void {
@@ -1356,6 +1362,10 @@ export class BoatWorld {
     ]);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
+    if (this.lightningStrikePending) {
+      this.lightningStrikePending = false;
+      this.lightningStrikeListener?.();
+    }
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
 
@@ -1366,6 +1376,8 @@ export class BoatWorld {
       () => {
         this.disposed = true;
         this.weatherEventOperation += 1;
+        this.lightningStrikePending = false;
+        this.lightningStrikeListener = null;
       },
       () => this.cancelActiveSequence(),
       () => this.sharkMenPresentation.dispose(),
