@@ -134,6 +134,42 @@ function result(
   };
 }
 
+async function rescueWashAfter(
+  partitions: readonly number[],
+): Promise<readonly [number, number]> {
+  const harness = createHarness();
+  harness.presentation.stage();
+  const choice = harness.presentation.playChoice({
+    choiceId: 'flareGun',
+    instanceId: flareGunId,
+    condition: 'usable',
+  });
+  await finish(harness, choice);
+  const reaction = harness.presentation.react(
+    result('people-rescue', 'flareGun'),
+    outcome,
+  );
+  let time = 0;
+  for (const delta of partitions) {
+    time += delta;
+    harness.presentation.update(time, delta);
+  }
+  const boatWash = harness.presentation.root.getObjectByName(
+    'other-people-flare-lifeboat-wash',
+  ) as SpotLight;
+  const shipWash = harness.presentation.root.getObjectByName(
+    'other-people-flare-ship-wash',
+  ) as SpotLight;
+  const intensities = [
+    boatWash.intensity,
+    shipWash.intensity,
+  ] as const;
+  harness.presentation.settleForVisibilityChange();
+  await reaction;
+  harness.dispose();
+  return intensities;
+}
+
 describe('OtherPeoplePresentation', () => {
   it('shows two weak lights before the selected ship silhouette', async () => {
     const harness = createHarness();
@@ -221,6 +257,23 @@ describe('OtherPeoplePresentation', () => {
     await finish(harness, choice, 2);
     expect(harness.presentation.root.userData.flareLaunches).toBe(1);
     harness.dispose();
+  });
+
+  it('keeps rescue wash fade stable across frame partitions', async () => {
+    const coarse = await rescueWashAfter([0.6]);
+    const fine = await rescueWashAfter([
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+    ]);
+
+    expect(coarse[0]).toBeGreaterThan(0);
+    expect(coarse[1]).toBeGreaterThan(0);
+    expect(fine[0]).toBeCloseTo(coarse[0], 10);
+    expect(fine[1]).toBeCloseTo(coarse[1], 10);
   });
 
   it('sends three readable Flashlight signal pulses', async () => {

@@ -245,6 +245,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private activeAnimation: ActiveAnimation | null = null;
   private selectedInstanceId: ItemInstanceId | null = null;
   private shipStartYaw = SHIP_YAW;
+  private rescueLifeboatWashStart = 0;
+  private rescueShipWashStart = 0;
   private cameraCaptured = false;
   private supplyPinned = false;
   private portRevealed = false;
@@ -379,6 +381,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.courseTurns = 0;
     switch (result.resultId) {
       case 'people-rescue':
+        this.cancelActiveAnimation(true);
+        this.rescueLifeboatWashStart =
+          this.flareLifeboatWash.intensity;
+        this.rescueShipWashStart = this.flareShipWash.intensity;
         this.root.userData.state = 'answering';
         return this.startAnimation('result-rescue', RESCUE_DURATION);
       case 'people-missed':
@@ -719,8 +725,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       + (RESCUE_YAW - this.shipStartYaw) * turn;
     this.root.userData.courseTurns = turn > 0 ? 1 : 0;
     const signalFade = 1 - smoothstep(progress / 0.46);
-    this.flareLifeboatWash.intensity *= signalFade;
-    this.flareShipWash.intensity *= signalFade;
+    this.flareLifeboatWash.intensity =
+      this.rescueLifeboatWashStart * signalFade;
+    this.flareShipWash.intensity =
+      this.rescueShipWashStart * signalFade;
     this.flashlightBeam.intensity = 0;
     this.beamVisual.visible = false;
     this.updateBeaconPose();
@@ -888,6 +896,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.flare.rotation.set(0, 0, -0.18);
     this.flare.scale.setScalar(1);
     this.setPlayerSignalsDark();
+    this.rescueLifeboatWashStart = 0;
+    this.rescueShipWashStart = 0;
     this.portRevealed = false;
     this.starboardRevealed = false;
     this.shipRevealed = false;
