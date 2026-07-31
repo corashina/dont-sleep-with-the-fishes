@@ -14,19 +14,19 @@ import {
 } from '../src/survival/events/anglerfishSwarmChoreography';
 
 describe('anglerfishSwarmChoreography', () => {
-  it('creates 18 stable fish below the Death Stare scale', () => {
-    const first = createSwarmVariants(18, 27);
-    const second = createSwarmVariants(18, 27);
+  it('creates six stable fish below the Death Stare scale', () => {
+    const first = createSwarmVariants(6, 27);
+    const second = createSwarmVariants(6, 27);
 
     expect(first).toEqual(second);
-    expect(first).toHaveLength(18);
+    expect(first).toHaveLength(6);
     expect(first.every(({ scale }) => scale >= 0.54 && scale <= 0.86)).toBe(true);
-    expect(new Set(first.map(({ scale }) => scale)).size).toBeGreaterThan(6);
-    expect(createSwarmVariants(40, 27)).toHaveLength(18);
+    expect(new Set(first.map(({ scale }) => scale)).size).toBe(6);
+    expect(createSwarmVariants(40, 27)).toHaveLength(6);
   });
 
-  it('shows three lures first, then closes four uneven groups around the hull', () => {
-    const variants = createSwarmVariants(18, 27);
+  it('shows two lures first, then holds six fish around the full hull', () => {
+    const variants = createSwarmVariants(6, 27);
     const early = createSwarmSample();
     const middle = createSwarmSample();
     const held = createSwarmSample();
@@ -37,18 +37,18 @@ describe('anglerfishSwarmChoreography', () => {
     sampleSwarmReveal(0.62, variants, middle);
     sampleSwarmReveal(1, variants, held);
 
-    expect(early.visibleCount).toBe(3);
+    expect(early.visibleCount).toBe(2);
     expect(early.bodyVisibleCount).toBe(0);
-    expect(middle.visibleCount).toBeGreaterThan(9);
-    expect(middle.cameraYaw).not.toBe(0);
-    expect(held.visibleCount).toBe(18);
-    expect(held.bodyVisibleCount).toBe(18);
+    expect(middle.visibleCount).toBe(6);
+    expect(middle.cameraYaw).toBe(0);
+    expect(held.visibleCount).toBe(6);
+    expect(held.bodyVisibleCount).toBe(6);
 
     const heldPoses = variants.map((variant) => {
       sampleSwarmFishPose(variant, 0, held, pose);
       return { ...pose };
     });
-    expect(heldPoses.filter(({ z }) => z < -3).length).toBeGreaterThanOrEqual(6);
+    expect(heldPoses.filter(({ z }) => z < -3).length).toBe(2);
     expect(heldPoses.some(({ z }) => z > 2.5)).toBe(true);
     expect(heldPoses.some(({ x }) => x < -1.7)).toBe(true);
     expect(heldPoses.some(({ x }) => x > 1.7)).toBe(true);
@@ -91,7 +91,7 @@ describe('anglerfishSwarmChoreography', () => {
       brokenItem: false,
     }, 0.48, sample);
     expect(sample.attack).toBeGreaterThan(0.9);
-    expect(sample.cameraYaw).not.toBe(0);
+    expect(sample.cameraYaw).toBe(0);
     expect(sample.splash).toBeGreaterThan(0);
 
     sampleSwarmReaction({
