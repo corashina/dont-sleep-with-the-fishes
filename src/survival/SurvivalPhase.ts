@@ -31,6 +31,7 @@ import {
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
+import type { EventChoicePresentation } from './FocusedEventPresentation';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
@@ -952,6 +953,21 @@ export class SurvivalPhase implements GamePhase {
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
     ) return;
+    if (!this.isContinuationActive(generation)) return;
+    const choice: EventChoicePresentation = {
+      choiceId,
+      instanceId,
+      condition: pending.inventory[instanceId]?.condition ?? null,
+    };
+    await (
+      this.world.playEventChoice?.(eventId, choice)
+      ?? Promise.resolve()
+    );
+    if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForEventResume(generation)
+    ) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
@@ -993,6 +1009,15 @@ export class SurvivalPhase implements GamePhase {
     this.eventPresentation = 'using';
     this.setBusy(true);
     await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    await (
+      this.world.playEventChoice?.(eventId, {
+        choiceId,
+        instanceId: null,
+        condition: null,
+      })
+      ?? Promise.resolve()
+    );
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });

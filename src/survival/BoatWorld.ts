@@ -81,7 +81,10 @@ import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
-import type { FocusedEventPresentationFactories } from './FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventPresentationFactories,
+} from './FocusedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -738,6 +741,14 @@ export class BoatWorld {
     }
     if (this.disposed || operation !== this.weatherEventOperation) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
+  }
+
+  playEventChoice(
+    eventId: string,
+    choice: EventChoicePresentation,
+  ): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    return this.eventPresentation.playChoice(eventId, choice);
   }
 
   stageEvent(eventId: string, variant: DriftingLootVariant | null = null): void {
