@@ -204,6 +204,7 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result';
+export type SleepCoverProfile = 'solid' | 'bad-sleep';
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -389,7 +390,11 @@ export class SurvivalUI {
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover aria-hidden="true"></div>
+      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
+        <span data-dream-shutter="top"></span>
+        <span data-dream-shutter="middle"></span>
+        <span data-dream-shutter="bottom"></span>
+      </div>
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
           <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
@@ -761,6 +766,8 @@ export class SurvivalUI {
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
+    delete this.eventCaption.dataset.result;
+    void this.setSleepCoverProfile('solid');
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
@@ -783,6 +790,24 @@ export class SurvivalUI {
     this.feedbackTimer = window.setTimeout(() => {
       if (!this.disposed) this.feedback.classList.remove('is-visible');
     }, 2600);
+  }
+
+  showEventOutcome(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
+    if (this.disposed) return;
+    this.updateText('event:title', this.eventTitle, outcome.message);
+    this.eventCaption.dataset.result = 'true';
+    this.eventCaption.setAttribute('aria-label', `Event result: ${outcome.message}`);
+    this.eventCaption.classList.add('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.eventPresentationActive = true;
+    this.syncCommandState();
+    this.publishAnnouncement(outcome.message);
+  }
+
+  setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.sleepCover.dataset.profile = profile;
+    return Promise.resolve();
   }
 
   setSleepCovered(covered: boolean): Promise<void> {

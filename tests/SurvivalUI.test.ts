@@ -545,6 +545,49 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('opens narrow Bad Sleep gaps while keeping event controls visible', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map());
+    await ui.setSleepCovered(true);
+    await ui.setSleepCoverProfile('bad-sleep');
+
+    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
+    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
+    expect(cover.dataset.profile).toBe('bad-sleep');
+    expect(mount.querySelectorAll('[data-dream-shutter]')).toHaveLength(3);
+    expect(endure.hidden).toBe(false);
+    endure.focus();
+    expect(document.activeElement).toBe(endure);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
+    expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
+  });
+
+  it('reuses the event caption for the exact held result', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.showEventOutcome({
+      accepted: true,
+      message: 'The wind breaks two supplies.',
+    });
+
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.querySelector('[data-event-title]')?.textContent)
+      .toBe('The wind breaks two supplies.');
+    expect(caption.dataset.result).toBe('true');
+    expect(caption.classList).toContain('is-visible');
+    await Promise.resolve();
+    expect(mount.querySelector('[data-survival-announcer]')?.textContent)
+      .toBe('The wind breaks two supplies.');
+
+    void ui.setSleepCoverProfile('bad-sleep');
+    ui.clearEventPresentation();
+    expect(caption.dataset.result).toBeUndefined();
+    expect(mount.querySelector<HTMLElement>('[data-sleep-cover]')?.dataset.profile).toBe('solid');
+  });
+
   it('shows quantity only when an item represents more than one copy', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
