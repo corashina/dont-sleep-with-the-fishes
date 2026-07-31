@@ -81,9 +81,10 @@ import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
 import { EventPresentationLayer } from './EventPresentationLayer';
-import type {
-  EventChoicePresentation,
-  FocusedEventPresentationFactories,
+import {
+  FOCUSED_EVENT_IDS,
+  type EventChoicePresentation,
+  type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
@@ -805,12 +806,19 @@ export class BoatWorld {
     if (this.disposed) return;
     const result = outcome.eventResult;
     if (
-      this.eventPresentation.hasFocused(eventId)
-      && result !== undefined
-      && result.choiceId !== choice.choiceId
+      FOCUSED_EVENT_IDS.some((focusedEventId) => focusedEventId === eventId)
+      && (
+        result === undefined
+        || result.eventId !== eventId
+        || result.choiceId !== choice.choiceId
+      )
     ) {
+      const received = result === undefined
+        ? 'missing'
+        : `${result.eventId}/${result.choiceId}`;
       throw new Error(
-        `Focused event result ${result.choiceId} does not match choice ${choice.choiceId}.`,
+        `Focused event ${eventId} requires result ${eventId}/${choice.choiceId}; `
+        + `received ${received}.`,
       );
     }
     const response: EventPhysicalResponsePresentation | null = (

@@ -31,7 +31,10 @@ import {
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
-import type { EventChoicePresentation } from './FocusedEventPresentation';
+import {
+  FOCUSED_EVENT_IDS,
+  type EventChoicePresentation,
+} from './FocusedEventPresentation';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
@@ -59,10 +62,12 @@ export interface SurvivalPhaseTestDependencies {
   ui: Partial<SurvivalUI>;
   audio?: AudioSystem;
   onRestart?: () => void;
+  onInvariantError?: (error: Error) => void;
   sceneRenderer?: SceneRenderer;
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const FOCUSED_EVENT_ID_SET = new Set<string>(FOCUSED_EVENT_IDS);
 
 type FishingPresentationState =
   | 'idle'
@@ -94,6 +99,10 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
   return value === 'barrel' || value === 'crate';
+}
+
+function reportInvariantError(error: Error): void {
+  console.error(error);
 }
 
 export function formatFishingResult(
@@ -236,6 +245,7 @@ export class SurvivalPhase implements GamePhase {
   private readonly visibilityResumeWaiters = new Set<() => void>();
   private cameraLook: SurvivalCameraLook | null = null;
   private audio!: SurvivalAudio;
+  private onInvariantError: (error: Error) => void = reportInvariantError;
 
   constructor(
     context: PhaseContext,
@@ -284,6 +294,7 @@ export class SurvivalPhase implements GamePhase {
       testDependencies.ui,
       scavengeElapsedSeconds,
       testDependencies.onRestart ?? onRestart,
+      testDependencies.onInvariantError,
     );
   }
 
@@ -492,6 +503,7 @@ export class SurvivalPhase implements GamePhase {
     ui: Partial<SurvivalUI>,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
+    onInvariantError: (error: Error) => void = reportInvariantError,
   ): void {
     this.context = context;
     this.session = session;
@@ -499,6 +511,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui = ui;
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
+    this.onInvariantError = onInvariantError;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.requestedDayEventDays.clear();
@@ -979,7 +992,6 @@ export class SurvivalPhase implements GamePhase {
       this.cancelDeferredPresentationSync(generation);
       return;
     }
-    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
       this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
@@ -990,13 +1002,25 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
+    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const invariantError = focusedResult
+      ? this.focusedEventResultError(eventId, choiceId, outcome)
+      : null;
+    if (invariantError !== null) {
+      await this.recoverInvalidFocusedEventResult(
+        invariantError,
+        eventState,
+        generation,
+      );
+      return;
+    }
+    const resolved = this.session.snapshot();
     const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
     const resolvedChoice: EventChoicePresentation = {
       choiceId,
       instanceId,
       condition,
     };
-    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
     if (!focusedResult || isTerminal(resolved.state)) {
       this.flushDeferredPresentationSync(resolved, generation);
     }
@@ -1047,7 +1071,6 @@ export class SurvivalPhase implements GamePhase {
       this.cancelDeferredPresentationSync(generation);
       return;
     }
-    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
       this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
@@ -1057,7 +1080,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
+    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const invariantError = focusedResult
+      ? this.focusedEventResultError(eventId, choiceId, outcome)
+      : null;
+    if (invariantError !== null) {
+      await this.recoverInvalidFocusedEventResult(
+        invariantError,
+        pending.state,
+        generation,
+      );
+      return;
+    }
+    const resolved = this.session.snapshot();
     if (!focusedResult) {
       this.cancelDeferredPresentationSync(generation);
     } else if (isTerminal(resolved.state)) {
@@ -1163,7 +1198,6 @@ export class SurvivalPhase implements GamePhase {
       this.cancelDeferredPresentationSync(generation);
       return;
     }
-    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
       this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
@@ -1172,7 +1206,19 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
+    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const invariantError = focusedResult
+      ? this.focusedEventResultError(eventId, choice.choiceId, outcome)
+      : null;
+    if (invariantError !== null) {
+      await this.recoverInvalidFocusedEventResult(
+        invariantError,
+        eventState,
+        generation,
+      );
+      return;
+    }
+    const resolved = this.session.snapshot();
     if (!focusedResult) {
       this.cancelDeferredPresentationSync(generation);
     } else if (isTerminal(resolved.state)) {
@@ -1340,11 +1386,53 @@ export class SurvivalPhase implements GamePhase {
     this.deferredPresentationSync = null;
   }
 
-  private hasFocusedEventResult(
+  private focusedEventResultError(
     eventId: string,
+    choiceId: string,
     outcome: ActionOutcome,
-  ): boolean {
-    return outcome.eventResult?.eventId === eventId;
+  ): Error | null {
+    const result = outcome.eventResult;
+    if (result?.eventId === eventId && result.choiceId === choiceId) return null;
+    const received = result === undefined
+      ? 'missing'
+      : `${result.eventId}/${result.choiceId}`;
+    return new Error(
+      `Focused event ${eventId} requires result ${eventId}/${choiceId}; `
+      + `received ${received}.`,
+    );
+  }
+
+  private async recoverInvalidFocusedEventResult(
+    error: Error,
+    eventState: SurvivalState,
+    generation: number,
+  ): Promise<void> {
+    this.cancelDeferredPresentationSync(generation);
+    if (!this.isContinuationActive(generation)) return;
+    this.clearEventPresentation();
+    this.onInvariantError(error);
+    const resolved = this.session.snapshot();
+    if (isTerminal(resolved.state)) {
+      const snapshot = this.renderSnapshot(false, false);
+      this.setBusy(false);
+      this.presentTerminalOnce(snapshot);
+      return;
+    }
+
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    const snapshot = eventState === 'nightEvent'
+      ? await this.runDawn(generation)
+      : this.renderSnapshot(false, false);
+    if (!this.isContinuationActive(generation)) return;
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.eventPresentation = 'idle';
+    this.setBusy(false);
+    this.presentTerminalOnce(snapshot);
+    this.ui.restoreCommandFocus?.();
   }
 
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
