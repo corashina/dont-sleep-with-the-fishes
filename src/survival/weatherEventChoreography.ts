@@ -31,6 +31,7 @@ export type WeatherReactionEffectKind =
   | 'none'
   | 'shower-safe-settle'
   | 'shower-break-collapse'
+  | 'wind-safe-settle'
   | 'wind-break-fold'
   | 'wind-loss-depart'
   | 'bad-sleep-exhale'
@@ -587,11 +588,16 @@ export function sampleWeatherReaction(
         output.actorX = -1.45 * actorBeat;
         output.actorY = 0.22 * actorBeat;
         output.actorYaw = 0.6 * actorBeat;
-      } else {
+      } else if (condition === 'broken') {
         output.effectKind = 'wind-break-fold';
         output.actorY = -0.26 * actorBeat;
         output.actorRoll = 0.44 * actorBeat;
         output.actorScaleY = 1 - 0.26 * actorBeat;
+      } else {
+        output.effectKind = 'wind-safe-settle';
+        output.actorY = -0.06 * actorBeat;
+        output.actorRoll = -0.11 * actorBeat;
+        output.actorScaleY = 1 - 0.02 * actorBeat;
       }
       output.actorEffect = actorBeat;
       output.cameraRoll = 0.08 * hullBeat;
