@@ -1,5 +1,6 @@
 import {
   Clock,
+  Group,
   PCFSoftShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
@@ -45,6 +46,7 @@ import {
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
 import { AudioSystem } from './audio/AudioSystem';
+import type { EventModelLibrary } from './survival/EventModelLibrary';
 
 export interface GameFactories {
   createScavenge(
@@ -91,6 +93,7 @@ export interface GameTestOptions {
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
   shipAssets?: ShipAssets;
+  eventModels?: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode?: PhysicsMode;
   clock?: GameClock;
@@ -123,6 +126,7 @@ export class Game {
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
+  private eventModels!: EventModelLibrary;
   private audio!: AudioSystem;
   private context!: PhaseContext;
   private factories!: GameFactories;
@@ -147,6 +151,7 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
@@ -190,6 +195,7 @@ export class Game {
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        eventModels,
         physicsRuntime,
         physicsMode,
         audioSystem,
@@ -263,6 +269,13 @@ export class Game {
         new Texture(),
         new Texture(),
       ),
+      options.eventModels ?? {
+        create: () => ({
+          root: new Group(),
+          dispose: () => undefined,
+        }),
+        dispose: () => undefined,
+      } as unknown as EventModelLibrary,
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
@@ -305,6 +318,7 @@ export class Game {
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
       () => this.shipAssets.dispose(),
+      () => this.eventModels.dispose(),
       () => this.audio.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
@@ -325,6 +339,7 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
@@ -340,6 +355,7 @@ export class Game {
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
+    this.eventModels = eventModels;
     this.audio = audioSystem;
     this.factories = factories;
     this.createSeed = createSeed;
@@ -365,6 +381,7 @@ export class Game {
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        eventModels,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,

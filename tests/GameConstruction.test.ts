@@ -7,6 +7,7 @@ import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
 import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 import type { ShipAssets } from '../src/world/ShipAssets';
+import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const physicsRuntime = await testPhysicsRuntime();
@@ -65,6 +66,7 @@ describe('Game construction rollback', () => {
         {} as SkyAssets,
         {} as LifeboatAssets,
         {} as ShipAssets,
+        {} as EventModelLibrary,
         physicsRuntime,
       );
     } catch (error) {

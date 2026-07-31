@@ -1,5 +1,6 @@
 import type { ItemId } from '../game/ItemState';
 import type { FishingTerminalResult } from '../survival/FishingSession';
+import type { DedicatedEventId } from '../survival/eventPresentationTypes';
 import type {
   DayActionId,
   DayActionOption,
@@ -177,6 +178,23 @@ export class SurvivalAudio {
     if (this.disposed) return;
     this.scope.play('eventReveal');
     if (eventId === 'drifting-loot') this.scope.play('driftingCargo');
+  }
+
+  eventAction(eventId: DedicatedEventId, choiceId: string): void {
+    if (this.disposed) return;
+    if (choiceId === 'damage') {
+      this.scope.play('hardWaveImpact');
+    } else if (eventId === 'leak' && choiceId === 'ductTape') {
+      this.scope.play('tapeRepair');
+    } else if (eventId === 'school-of-fish') {
+      this.scope.play('fishCatch');
+    } else if (choiceId === 'harpoonGun') {
+      this.scope.play('harpoonGun');
+    } else if (eventId === 'whirlpool' && choiceId === 'anchor') {
+      this.scope.play('anchorChain');
+    } else {
+      this.scope.play('itemHandling');
+    }
   }
 
   journal(): void {
