@@ -33,7 +33,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.free
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
   leak: 'Water pushes through a split in the hull.',
   'school-of-fish': 'A dense school churns the water beside the boat.',
-  snatcher: 'Something reaches over the gunwale and grabs one of your supplies.',
+  snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
   whirlpool: 'The sea begins circling faster around the boat.',
@@ -191,7 +191,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
   ], undefined, { minimumPressure: 1 }),
   {
-    ...event('snatcher', 'Snatcher', 'impact', 28, 8, 45, [
+    ...event('snatcher', 'Tentacle Attack', 'impact', 28, 8, 45, [
       choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The binoculars break.', effects(undefined, [breakItem('spyglass')]))),
       choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
       choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),

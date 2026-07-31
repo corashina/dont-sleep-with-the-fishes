@@ -140,15 +140,15 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 
 These five models support authored night-event presentations.
 Static models use safe vertex welding.
-The snatcher keeps its source rig and eight animation clips.
+The Tentacle Attack model keeps its source rig and four animation clips.
 
 | Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source SHA-256 | Source triangles | Committed triangles | Modifications | Downloaded |
 |---|---|---|---|---|---|---|---:|---:|---|---|
-| leakPlanks | `leakPlanks.glb` | Wood Planks / Quaternius | https://poly.pizza/m/hwQ1Fx5P8U | `poly-pizza:27afd21d-e642-4ec8-8688-d99f693388d1` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `6E3DAA7AEDFBD2FD0B999555B165895552D80D0A6B413C181FFFE4CF4A8E9987` | 150 | 150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
-| schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
-| snatcher | `snatcher.glb` | Enemy Small / Quaternius | https://poly.pizza/m/4LjT020LQh | `poly-pizza:4d23d8b4-4e88-4e88-9fd8-176e1abb66c0` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B4D6CB3E0920058EAB20D079DC57FA6BDBAECAD6806803F0F3D504EE730891DD` | 1572 | 1572 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-30 |
-| anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
-| whirlpoolCore | `whirlpoolCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-30 |
+| leakPlanks | `leakPlanks.glb` | Wood Planks / Quaternius | https://poly.pizza/m/hwQ1Fx5P8U | `poly-pizza:27afd21d-e642-4ec8-8688-d99f693388d1` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `6E3DAA7AEDFBD2FD0B999555B165895552D80D0A6B413C181FFFE4CF4A8E9987` | 150 | 150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| snatcher | `snatcher.glb` | Tentacle / Quaternius | https://poly.pizza/m/BR1vpIvvvv | `poly-pizza:b39d86e5-e51f-4bd8-bc63-c7fc0cdea864` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931` | 3874 | 3874 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-31 |
+| anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| whirlpoolCore | `whirlpoolCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 
 ## Runtime audio ledger
 

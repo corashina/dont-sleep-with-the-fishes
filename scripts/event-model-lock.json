@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-07-30",
+  "generatedOn": "2026-07-31",
   "sources": {
     "leakPlanks": {
       "id": "leakPlanks",
@@ -18,7 +18,7 @@
       "sourceTriangles": 150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-30"
+      "downloadedOn": "2026-07-31"
     },
     "schoolFish": {
       "id": "schoolFish",
@@ -36,25 +36,25 @@
       "sourceTriangles": 233,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-30"
+      "downloadedOn": "2026-07-31"
     },
     "snatcher": {
       "id": "snatcher",
-      "pageUrl": "https://poly.pizza/m/4LjT020LQh",
-      "publicId": "4LjT020LQh",
-      "resourceId": "4d23d8b4-4e88-4e88-9fd8-176e1abb66c0",
-      "downloadUrl": "https://static.poly.pizza/4d23d8b4-4e88-4e88-9fd8-176e1abb66c0.glb",
-      "sourceAssetId": "poly-pizza:4d23d8b4-4e88-4e88-9fd8-176e1abb66c0",
-      "modelName": "Enemy Small",
+      "pageUrl": "https://poly.pizza/m/BR1vpIvvvv",
+      "publicId": "BR1vpIvvvv",
+      "resourceId": "b39d86e5-e51f-4bd8-bc63-c7fc0cdea864",
+      "downloadUrl": "https://static.poly.pizza/b39d86e5-e51f-4bd8-bc63-c7fc0cdea864.glb",
+      "sourceAssetId": "poly-pizza:b39d86e5-e51f-4bd8-bc63-c7fc0cdea864",
+      "modelName": "Tentacle",
       "author": "Quaternius",
       "license": "CC0 1.0",
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
       "pageAnimated": true,
-      "sha256": "B4D6CB3E0920058EAB20D079DC57FA6BDBAECAD6806803F0F3D504EE730891DD",
-      "sourceTriangles": 1572,
+      "sha256": "B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931",
+      "sourceTriangles": 3874,
       "sourceHasSkins": true,
-      "sourceAnimationCount": 8,
-      "downloadedOn": "2026-07-30"
+      "sourceAnimationCount": 4,
+      "downloadedOn": "2026-07-31"
     },
     "anglerFish": {
       "id": "anglerFish",
@@ -72,7 +72,7 @@
       "sourceTriangles": 2150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-30"
+      "downloadedOn": "2026-07-31"
     },
     "whirlpoolCore": {
       "id": "whirlpoolCore",
@@ -90,7 +90,7 @@
       "sourceTriangles": 324,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-30"
+      "downloadedOn": "2026-07-31"
     }
   }
 }

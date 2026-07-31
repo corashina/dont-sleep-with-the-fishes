@@ -30,7 +30,7 @@ export const EVENT_MODEL_MAX_TOTAL_TRIANGLES = 12_000;
 const presentation = {
   leakPlanks: { targetLongestDimension: 1.7, rotation: [0, 0, 0], offset: [0, 0, 0] },
   schoolFish: { targetLongestDimension: 0.62, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
-  snatcher: { targetLongestDimension: 1.25, rotation: [0, 0, 0], offset: [0, 0.5, 0] },
+  snatcher: { targetLongestDimension: 2.5, rotation: [0, 0, 0], offset: [0, 1.25, 0] },
   anglerFish: { targetLongestDimension: 1.0, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
   whirlpoolCore: { targetLongestDimension: 7.0, rotation: [Math.PI / 2, 0, 0], offset: [0, -0.45, 0] },
 } as const;

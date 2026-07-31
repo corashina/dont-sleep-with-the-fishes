@@ -185,8 +185,21 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.ownedMaterials.add(this.splashMaterial);
     this.ownedMaterials.add(this.finMaterial);
 
+    const models: EventModelInstance[] = [];
+    try {
+      for (let index = 0; index <= MAX_FISH; index += 1) {
+        models.push(environment.eventModels.create('schoolFish'));
+      }
+    } catch (error) {
+      runCleanupSteps([
+        ...models.map((model) => () => model.dispose()),
+        () => disposeResourceSets(this.ownedMaterials),
+      ]);
+      throw error;
+    }
+
     for (let index = 0; index < MAX_FISH; index += 1) {
-      const model = environment.eventModels.create('schoolFish');
+      const model = models[index]!;
       const root = model.root;
       root.name = `school-fish-${index + 1}`;
       setFlatShading(root);
@@ -233,7 +246,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.worldRoot.add(splash);
     }
 
-    this.catchModel = environment.eventModels.create('schoolFish');
+    this.catchModel = models[MAX_FISH]!;
     this.catchActor = this.catchModel.root;
     this.catchActor.name = 'school-catch-actor';
     this.catchActor.position.set(1.52, 0.86, -0.42);

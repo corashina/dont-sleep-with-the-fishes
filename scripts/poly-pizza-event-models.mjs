@@ -15,7 +15,7 @@ import {
 export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   leakPlanks: 'https://poly.pizza/m/hwQ1Fx5P8U',
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
-  snatcher: 'https://poly.pizza/m/4LjT020LQh',
+  snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
   whirlpoolCore: 'https://poly.pizza/m/2TBzV_5N0ci',
 });
@@ -164,6 +164,7 @@ async function inspectBinary(id, bytes) {
   return {
     document,
     triangles,
+    rawBounds,
     hasSkins: root.listSkins().length > 0,
     animationCount: root.listAnimations().length,
   };
@@ -274,18 +275,19 @@ async function processEventModel(id, sourcePath, outputPath, descriptor) {
   if (triangles <= 0 || triangles > limit) {
     throw new Error(`${id}: processed triangle count ${triangles} exceeds ${limit}`);
   }
-  const rawBounds = sceneBounds(id, source.document);
+  sceneBounds(id, source.document);
   await mkdir(dirname(outputPath), { recursive: true });
   await io.write(outputPath, source.document);
   const outputBytes = await readFile(outputPath);
+  const output = await inspectBinary(id, outputBytes);
   return {
-    triangles,
-    rawBounds,
+    triangles: output.triangles,
+    rawBounds: output.rawBounds,
     sourceSha256: descriptor.sha256,
     sourceTriangles: descriptor.sourceTriangles,
     outputSha256: sha256(outputBytes),
-    hasSkins: root.listSkins().length > 0,
-    animationCount: root.listAnimations().length,
+    hasSkins: output.hasSkins,
+    animationCount: output.animationCount,
     processing: staticSource
       ? 'pruned, deduplicated, welded, unpartitioned, renamed, and embedded'
       : 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data',

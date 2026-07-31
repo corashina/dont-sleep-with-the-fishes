@@ -50,7 +50,7 @@ const EXPECTED_METADATA = {
   'dangerous-waters': ['Dangerous Waters', 'impact', 15, 2, 30, 0],
   leak: ['Leak', 'impact', 10, 4, undefined, 0],
   'school-of-fish': ['School of Fish', 'fish', 66, 8, undefined, 39],
-  snatcher: ['Snatcher', 'impact', 28, 8, undefined, 45],
+  snatcher: ['Tentacle Attack', 'impact', 28, 8, undefined, 45],
   'death-stare': ['Death Stare', 'impact', 160, 9, undefined, 32],
   'swarm-of-anglerfish': ['Swarm of Anglerfish', 'fish', 12, 10, undefined, 38],
   whirlpool: ['Whirlpool', 'impact', 5, 12, undefined, 30],
@@ -70,7 +70,7 @@ const EXPECTED_REVEAL_TEXT = {
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
   leak: 'Water pushes through a split in the hull.',
   'school-of-fish': 'A dense school churns the water beside the boat.',
-  snatcher: 'Something reaches over the gunwale and grabs one of your supplies.',
+  snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
   whirlpool: 'The sea begins circling faster around the boat.',
@@ -318,7 +318,7 @@ describe('survival events', () => {
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
-  it('excludes Snatcher from the draw pool without a canonical target', () => {
+  it('excludes Tentacle Attack from the draw pool without a canonical target', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'day', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,

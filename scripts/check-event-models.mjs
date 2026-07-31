@@ -21,6 +21,22 @@ function sameNumbers(first, second) {
     && first.every((value, index) => Number.isFinite(value) && value === second[index]);
 }
 
+function metadataMismatches(expected, measurement, source) {
+  const mismatches = [];
+  if (!expected) return ['metadata entry is missing'];
+  if (expected.triangles !== measurement.triangles) mismatches.push('triangles');
+  if (!sameNumbers(expected.rawBounds?.min, measurement.rawBounds.min)) mismatches.push('rawBounds.min');
+  if (!sameNumbers(expected.rawBounds?.max, measurement.rawBounds.max)) mismatches.push('rawBounds.max');
+  if (expected.outputSha256 !== measurement.outputSha256) mismatches.push('outputSha256');
+  if (expected.hasSkins !== measurement.hasSkins) mismatches.push('hasSkins');
+  if (expected.animationCount !== measurement.animationCount) mismatches.push('animationCount');
+  if (expected.sourceSha256 !== source?.sha256) mismatches.push('sourceSha256');
+  if (expected.sourceTriangles !== source?.sourceTriangles) mismatches.push('sourceTriangles');
+  if (expected.hasSkins !== source?.sourceHasSkins) mismatches.push('sourceHasSkins');
+  if (expected.animationCount !== source?.sourceAnimationCount) mismatches.push('sourceAnimationCount');
+  return mismatches;
+}
+
 async function inspectModel(filePath) {
   const bytes = await readFile(filePath);
   const document = await io.readBinary(new Uint8Array(bytes));
@@ -154,20 +170,9 @@ async function main() {
       }
       const expected = metadata?.[id];
       const source = lock?.sources?.[id];
-      if (
-        !expected
-        || expected.triangles !== measurement.triangles
-        || !sameNumbers(expected.rawBounds?.min, measurement.rawBounds.min)
-        || !sameNumbers(expected.rawBounds?.max, measurement.rawBounds.max)
-        || expected.outputSha256 !== measurement.outputSha256
-        || expected.hasSkins !== measurement.hasSkins
-        || expected.animationCount !== measurement.animationCount
-        || expected.sourceSha256 !== source?.sha256
-        || expected.sourceTriangles !== source?.sourceTriangles
-        || expected.hasSkins !== source?.sourceHasSkins
-        || expected.animationCount !== source?.sourceAnimationCount
-      ) {
-        throw new Error(`${id}: generated metadata does not match the model and lock`);
+      const mismatches = metadataMismatches(expected, measurement, source);
+      if (mismatches.length > 0) {
+        throw new Error(`${id}: generated metadata mismatch: ${mismatches.join(', ')}`);
       }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));

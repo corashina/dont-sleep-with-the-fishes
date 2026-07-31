@@ -103,17 +103,16 @@ function setup(actorIds: readonly ItemInstanceId[]) {
   };
 }
 
-describe('SnatcherPresentation', () => {
-  it('builds the authored creature pool from the approved model', () => {
+describe('Tentacle Attack presentation', () => {
+  it('builds one authored tentacle from the approved model', () => {
     const targetId = 'map-1' as ItemInstanceId;
     const fixture = setup([targetId]);
     const presentation = new SnatcherPresentation(fixture.environment);
 
     expect(fixture.create).toHaveBeenCalledExactlyOnceWith('snatcher');
-    expect(presentation.boatRoot.getObjectByName('snatcher-finger-left')).toBeDefined();
-    expect(presentation.boatRoot.getObjectByName('snatcher-finger-right')).toBeDefined();
-    expect(presentation.boatRoot.getObjectByName('snatcher-eye-left')).toBeDefined();
-    expect(presentation.boatRoot.getObjectByName('snatcher-eye-right')).toBeDefined();
+    expect(presentation.boatRoot.getObjectByName('tentacle-attack-tentacle')).toBeDefined();
+    expect(presentation.boatRoot.getObjectByName('tentacle-attack-model')).toBeDefined();
+    expect(presentation.boatRoot.getObjectByName('snatcher-finger-left')).toBeUndefined();
     expect(presentation.targetOutline.objectForTest().getObjectByName(
       'snatcher-warning-cage',
     )).toBeDefined();
@@ -179,7 +178,7 @@ describe('SnatcherPresentation', () => {
     hiddenSibling.material.dispose();
   });
 
-  it('keeps the crouched creature and target warning visible after reveal', async () => {
+  it('keeps the raised tentacle and target warning visible after reveal', async () => {
     const targetId = 'map-1' as ItemInstanceId;
     const fixture = setup([targetId]);
     const presentation = new SnatcherPresentation(fixture.environment);
@@ -194,17 +193,17 @@ describe('SnatcherPresentation', () => {
     await reveal;
 
     expect(presentation.boatRoot.visible).toBe(true);
-    const creature = presentation.boatRoot.getObjectByName('snatcher-creature')!;
-    expect(creature.visible).toBe(true);
-    expect(creature.position.x).toBeLessThan(1.6);
-    expect(creature.position.y).toBeLessThan(0.8);
-    expect(creature.scale.x).toBeGreaterThan(1);
-    expect(creature.scale.x).toBeLessThan(1.15);
+    const tentacle = presentation.boatRoot.getObjectByName('tentacle-attack-tentacle')!;
+    expect(tentacle.visible).toBe(true);
+    expect(tentacle.position.x).toBeLessThan(1.6);
+    expect(tentacle.position.y).toBeLessThan(0);
+    expect(tentacle.scale.y).toBeGreaterThan(0.9);
+    expect(tentacle.rotation.y).toBeLessThan(0);
     expect(presentation.targetOutline.visibleForTest()).toBe(true);
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
   });
 
-  it('shows finger extensions before the model head during reveal', async () => {
+  it('raises the tentacle from below the rail during reveal', async () => {
     const targetId = 'map-1' as ItemInstanceId;
     const fixture = setup([targetId]);
     const presentation = new SnatcherPresentation(fixture.environment);
@@ -213,17 +212,18 @@ describe('SnatcherPresentation', () => {
       targetInstanceId: targetId,
       variantSeed: 7,
     });
-    const model = presentation.boatRoot.getObjectByName('snatcher-model')!;
-    const finger = presentation.boatRoot.getObjectByName('snatcher-finger-left')!;
+    const model = presentation.boatRoot.getObjectByName('tentacle-attack-model')!;
+    const tentacle = presentation.boatRoot.getObjectByName('tentacle-attack-tentacle')!;
 
     const reveal = presentation.reveal();
     presentation.update(0, 0.5);
 
-    expect(finger.visible).toBe(true);
-    expect(model.visible).toBe(false);
+    expect(tentacle.visible).toBe(true);
+    expect(model.visible).toBe(true);
+    expect(tentacle.scale.y).toBeLessThan(0.9);
 
     presentation.update(0, 0.95);
-    expect(model.visible).toBe(true);
+    expect(tentacle.scale.y).toBeGreaterThan(0.8);
     presentation.update(0, 1.05);
     await reveal;
   });
