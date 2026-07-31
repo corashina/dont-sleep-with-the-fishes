@@ -129,6 +129,31 @@ cardboard box `81982A2F0CF2D04CB60B5194897D9CB76E688E01DB5A7F8FA757E5B55679D7C2`
 storage shelf `5AB0C13CC921F63C16F07C63AD4D29B5FDE0E8E7F150114D406728B12DA9C667`;
 pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
 
+## Runtime survival-event model ledger
+
+- "Ghoooooost" by Nikki Morin.
+  Source: https://poly.pizza/m/112vpcommxv
+  License: CC BY 3.0.
+  Source asset ID: `poly-pizza:02d70fdb-284b-4799-a9ee-18c7277f158c`.
+  Source GLB SHA-256: `3AFB58D595ECA2D5F7953847CF51230270BB9EEE40B59F56FE04CDF4A28CD1C3`.
+- "Man in Suit" by Quaternius.
+  Source: https://poly.pizza/m/mQnGoME1ez
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:66b57880-bcb0-479a-8d72-5c3e88afaa39`.
+  Source GLB SHA-256: `31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763`.
+- "Animated Woman" by Quaternius.
+  Source: https://poly.pizza/m/nIItLV9nxS
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:46d6db5a-3c9f-4238-8cdf-8eb7194498dc`.
+  Source GLB SHA-256: `A6522FE53D15DE21130A957D1BF2B8A9A58D4E4E9A12AF646645B667A9BB2D17`.
+- "Rock Flat" by Kenney.
+  Source: https://poly.pizza/m/CrSoV13mCU
+  License: CC0 1.0.
+  Source asset ID: `poly-pizza:3e9d82ac-0749-42b6-8dfd-082393547ed5`.
+  Source GLB SHA-256: `8A0595C2F0C6914CC1794CE8CB35517F4451EB4CFB6703D3A58CA654D5900BAB`.
+
+These files keep their source geometry. Runtime code normalizes scale, rotation, and offset.
+
 ## Runtime fishing-catch model ledger
 
 These models are loaded only for a successful catch reveal and disposed when
@@ -151,6 +176,19 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 | boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 
+## Runtime featured-event model ledger
+
+These individual low-poly models show the five featured survival events.
+Runtime setup normalizes their scale and applies the game palette.
+
+| Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source triangles | Committed triangles | Modifications | Downloaded |
+|---|---|---|---|---|---|---:|---:|---|---|
+| driftingLootBarrel | `driftingLootBarrel.glb` | Barrel / Don Carson | https://poly.pizza/m/cu9GJ0j13fj | `poly-pizza:2244f3ae-5583-4ea0-b980-6fdd0084cee7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 282 | 282 | Source GLB SHA-256 `89031BAAA180FD8040C8C2A27F56AC479BD6FE8A7C4EC5495D1433D185840EF5`; committed without geometry changes. | 2026-07-30 |
+| driftingLootCrate | `driftingLootCrate.glb` | Crate / Quaternius | https://poly.pizza/m/3VGWnZPXmG | `poly-pizza:720097e2-63ed-4e5f-9b66-eb416942eea0` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 784 | 784 | Source GLB SHA-256 `4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E`; committed without geometry changes. | 2026-07-30 |
+| driftingBottle | `driftingBottle.glb` | Bottle of Wine / Jeremy | https://poly.pizza/m/13g9ucgxbHV | `poly-pizza:b1a8f402-de55-4e49-b63e-1439e5851c13` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 304 | 304 | Source GLB SHA-256 `5C1169A709CF2B897E9037771BC8B33EDE3C546A2CA872F33BF8A9348F112D54`; committed without geometry changes. | 2026-07-30 |
+| mysteryChest | `mysteryChest.glb` | Chest / Quaternius | https://poly.pizza/m/O72u4Drp8k | `poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1676 | 1676 | Source GLB SHA-256 `07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B`; committed without geometry changes. | 2026-07-30 |
+| flowers | `flowers.glb` | Lily Pad / Poly by Google | https://poly.pizza/m/0-_GjMekeob | `poly-pizza:856b7c36-4bd0-48f1-a308-529366b6a7fd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 728 | 728 | Source GLB SHA-256 `CC4BA073B2CC94B4CADA9BB25C15C3832052E2F3A018B3E2EB7F9429E6D2384B`; committed without geometry changes. | 2026-07-30 |
+
 ## Runtime audio ledger
 
 All audio in this ledger uses
@@ -159,6 +197,10 @@ All audio in this ledger uses
 Freesound files use the public high-quality MP3 preview of the approved recording.
 
 The dawn file contains the first eight seconds of its source WAVE file.
+
+- "woman humming cathedral" by Pennywind.
+  Source: https://freesound.org/people/Pennywind/sounds/816687/
+  License: CC0 1.0.
 
 | Runtime ID | File | Source / creator |
 |---|---|---|
@@ -203,6 +245,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | driftingCargo | `driftingCargo.mp3` | [Dragging a Crate / hz37](https://freesound.org/people/hz37/sounds/792375/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |

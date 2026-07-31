@@ -87,16 +87,28 @@ interface ConditionMaterialBinding {
   readonly mutedBroken: Material | Material[];
 }
 
-interface HighlightState {
-  readonly emissive: number;
-  readonly emissiveIntensity: number;
-}
-
 interface ActiveAnimation {
   readonly root: Group;
   elapsed: number;
   readonly duration: number;
   readonly resolve: () => void;
+}
+
+interface MutableSupplyPose extends SupplyAdditivePose {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  roll: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+}
+
+interface EventItemPoseBinding {
+  instanceId: ItemInstanceId;
+  readonly pose: MutableSupplyPose;
 }
 
 const EVENT_ITEM_USE_DURATION = 0.65;
@@ -132,28 +144,6 @@ function mutedMaterial(material: Material): Material {
     clone.roughness = Math.max(0.8, clone.roughness);
   }
   return clone;
-}
-
-function setEmissiveHighlighted(root: Object3D, highlighted: boolean): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    const material = object.material;
-    const state = material.userData.supplyHighlight as HighlightState | undefined;
-    if (state === undefined) {
-      material.userData.supplyHighlight = {
-        emissive: material.emissive.getHex(),
-        emissiveIntensity: material.emissiveIntensity,
-      } satisfies HighlightState;
-    }
-    const original = material.userData.supplyHighlight as HighlightState;
-    if (highlighted) {
-      material.emissive.setHex(0x6f4218);
-      material.emissiveIntensity = Math.max(0.65, original.emissiveIntensity);
-    } else {
-      material.emissive.setHex(original.emissive);
-      material.emissiveIntensity = original.emissiveIntensity;
-    }
-  });
 }
 
 function createRepairMaterialBundle(index: number): Group {
@@ -221,24 +211,18 @@ export class BoatSupplyDisplay {
   private eventSelectedItemId: ItemInstanceId | null = null;
   private highlightedGroupId: BoatSupplyGroupId | null = null;
   private readonly hoverOutline = new HoverOutline();
+  private readonly eventEligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
   private activeAnimation: ActiveAnimation | null = null;
   private eventAmbientRoll = 0;
   private eventAmbientLift = 0;
-  private eventItemId: ItemInstanceId | null = null;
+  private readonly eventItemPosesByGroupId = new Map<
+    BoatSupplyGroupId,
+    EventItemPoseBinding
+  >();
   private pinnedEventActorId: ItemInstanceId | null = null;
   private pinnedEventGroupId: BoatSupplyGroupId | null = null;
+  private readonly preparedEventActorIds = new Set<ItemInstanceId>();
   private releasePinnedActorOnSync = false;
-  private readonly eventItemPose = {
-    x: 0,
-    y: 0,
-    z: 0,
-    yaw: 0,
-    pitch: 0,
-    roll: 0,
-    scaleX: 1,
-    scaleY: 1,
-    scaleZ: 1,
-  };
   private disposed = false;
 
   constructor(
@@ -343,6 +327,7 @@ export class BoatSupplyDisplay {
     ) {
       this.setHighlighted(null);
     }
+    this.syncEventEligibleOutlines();
   }
 
   setHighlighted(anchorId: string | null): void {
@@ -357,7 +342,9 @@ export class BoatSupplyDisplay {
     const groupId = rawGroupId as BoatSupplyGroupId;
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return;
-    this.hoverOutline.setTarget(record.root);
+    if (!this.eventEligibleOutlines.has(groupId)) {
+      this.hoverOutline.setTarget(record.root);
+    }
     this.highlightedGroupId = groupId;
   }
 
@@ -371,6 +358,32 @@ export class BoatSupplyDisplay {
       this.eventSelectedItemId = null;
     }
     if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
+  }
+
+  private syncEventEligibleOutlines(): void {
+    const eligibleGroups = new Set<BoatSupplyGroupId>();
+    for (const instanceId of this.eventEligibleItemIds ?? []) {
+      const groupId = this.groupByInstanceId.get(instanceId);
+      if (groupId !== undefined) eligibleGroups.add(groupId);
+    }
+
+    for (const [groupId, outline] of this.eventEligibleOutlines) {
+      if (
+        eligibleGroups.has(groupId)
+        && this.recordsById.get(groupId)?.visibleCopies !== 0
+      ) continue;
+      outline.dispose();
+      this.eventEligibleOutlines.delete(groupId);
+    }
+
+    for (const groupId of eligibleGroups) {
+      if (this.eventEligibleOutlines.has(groupId)) continue;
+      const record = this.recordsById.get(groupId);
+      if (record === undefined || record.visibleCopies === 0) continue;
+      const outline = new HoverOutline();
+      outline.setTarget(record.root);
+      this.eventEligibleOutlines.set(groupId, outline);
+    }
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -405,24 +418,31 @@ export class BoatSupplyDisplay {
 
   applyEventItemPose(instanceId: ItemInstanceId, pose: SupplyAdditivePose): boolean {
     if (this.disposed) return false;
+    if (
+      this.pinnedEventActorId !== instanceId
+      && !this.preparedEventActorIds.has(instanceId)
+    ) return false;
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined || this.recordsById.get(groupId)?.visibleCopies === 0) return false;
-    this.eventItemId = instanceId;
-    this.eventItemPose.x = pose.x;
-    this.eventItemPose.y = pose.y;
-    this.eventItemPose.z = pose.z;
-    this.eventItemPose.yaw = pose.yaw;
-    this.eventItemPose.pitch = pose.pitch;
-    this.eventItemPose.roll = pose.roll;
-    this.eventItemPose.scaleX = pose.scaleX;
-    this.eventItemPose.scaleY = pose.scaleY;
-    this.eventItemPose.scaleZ = pose.scaleZ;
+    const binding = this.eventItemPosesByGroupId.get(groupId);
+    if (binding === undefined || binding.instanceId !== instanceId) return false;
+    const target = binding.pose;
+    target.x = pose.x;
+    target.y = pose.y;
+    target.z = pose.z;
+    target.yaw = pose.yaw;
+    target.pitch = pose.pitch;
+    target.roll = pose.roll;
+    target.scaleX = pose.scaleX;
+    target.scaleY = pose.scaleY;
+    target.scaleZ = pose.scaleZ;
     return true;
   }
 
   pinEventActor(instanceId: ItemInstanceId): boolean {
     if (this.disposed) return false;
     if (this.pinnedEventActorId === instanceId) {
+      this.preparedEventActorIds.add(instanceId);
       this.releasePinnedActorOnSync = false;
       return true;
     }
@@ -441,17 +461,39 @@ export class BoatSupplyDisplay {
     ) return false;
     this.pinnedEventActorId = instanceId;
     this.pinnedEventGroupId = groupId;
+    this.preparedEventActorIds.add(instanceId);
+    const binding = this.eventItemPosesByGroupId.get(groupId);
+    if (binding === undefined) {
+      this.eventItemPosesByGroupId.set(groupId, {
+        instanceId,
+        pose: {
+          x: 0,
+          y: 0,
+          z: 0,
+          yaw: 0,
+          pitch: 0,
+          roll: 0,
+          scaleX: 1,
+          scaleY: 1,
+          scaleZ: 1,
+        },
+      });
+    } else {
+      binding.instanceId = instanceId;
+    }
     this.releasePinnedActorOnSync = false;
     return true;
   }
 
   releaseEventActorOnNextSync(): void {
     if (this.disposed || this.pinnedEventActorId === null) return;
+    this.preparedEventActorIds.clear();
     this.releasePinnedActorOnSync = true;
   }
 
   releaseEventActor(): void {
     if (this.disposed) return;
+    this.preparedEventActorIds.clear();
     this.releasePinnedEventActor(true);
   }
 
@@ -474,7 +516,9 @@ export class BoatSupplyDisplay {
   clearEventMotion(): void {
     this.resetEventPose();
     this.cancelActiveAnimation();
+    this.preparedEventActorIds.clear();
     this.releasePinnedEventActor(false);
+    this.eventItemPosesByGroupId.clear();
     this.restoreEventMotionBase();
     if (this.currentSnapshot !== null) {
       for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
@@ -514,6 +558,8 @@ export class BoatSupplyDisplay {
     if (this.disposed) return;
     this.setHighlighted(null);
     this.hoverOutline.dispose();
+    for (const outline of this.eventEligibleOutlines.values()) outline.dispose();
+    this.eventEligibleOutlines.clear();
     this.clearEventMotion();
     this.cancelActiveAnimation();
     this.disposed = true;
@@ -609,7 +655,6 @@ export class BoatSupplyDisplay {
   }
 
   private applyCopyMaterials(groupId: BoatSupplyGroupId, copy: CopyBinding): void {
-    setEmissiveHighlighted(copy.root, false);
     let groupEligible = false;
     if (this.eventEligibleItemIds !== null) {
       for (const id of this.eventEligibleItemIds) {
@@ -627,11 +672,6 @@ export class BoatSupplyDisplay {
         ? muted ? binding.mutedBroken : binding.broken
         : muted ? binding.mutedUsable : binding.usable;
     }
-    const highlighted = copy.instanceId !== null && (
-      this.eventSelectedItemId === copy.instanceId
-      || this.eventEligibleItemIds?.has(copy.instanceId) === true
-    );
-    if (highlighted) setEmissiveHighlighted(copy.root, true);
   }
 
   private cancelActiveAnimation(): void {
@@ -645,16 +685,22 @@ export class BoatSupplyDisplay {
   private resetEventPose(): void {
     this.eventAmbientRoll = 0;
     this.eventAmbientLift = 0;
-    this.eventItemId = null;
-    this.eventItemPose.x = 0;
-    this.eventItemPose.y = 0;
-    this.eventItemPose.z = 0;
-    this.eventItemPose.yaw = 0;
-    this.eventItemPose.pitch = 0;
-    this.eventItemPose.roll = 0;
-    this.eventItemPose.scaleX = 1;
-    this.eventItemPose.scaleY = 1;
-    this.eventItemPose.scaleZ = 1;
+    for (let index = 0; index < this.eventMotionRecords.length; index += 1) {
+      const binding = this.eventItemPosesByGroupId.get(
+        this.eventMotionRecords[index]!.groupId,
+      );
+      if (binding === undefined) continue;
+      const pose = binding.pose;
+      pose.x = 0;
+      pose.y = 0;
+      pose.z = 0;
+      pose.yaw = 0;
+      pose.pitch = 0;
+      pose.roll = 0;
+      pose.scaleX = 1;
+      pose.scaleY = 1;
+      pose.scaleZ = 1;
+    }
   }
 
   private releasePinnedEventActor(syncLatestSnapshot: boolean): void {
@@ -670,9 +716,6 @@ export class BoatSupplyDisplay {
   }
 
   private applyEventMotion(): void {
-    const selectedGroupId = this.eventItemId === null
-      ? undefined
-      : this.groupByInstanceId.get(this.eventItemId);
     for (let index = 0; index < this.eventMotionRecords.length; index += 1) {
       const record = this.eventMotionRecords[index]!;
       const groupId = record.groupId;
@@ -682,8 +725,9 @@ export class BoatSupplyDisplay {
       root.scale.set(1, 1, 1);
       root.position.y += this.eventAmbientLift;
       root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
-      if (groupId === selectedGroupId) {
-        const pose = this.eventItemPose;
+      const binding = this.eventItemPosesByGroupId.get(groupId);
+      if (binding !== undefined) {
+        const pose = binding.pose;
         root.position.x += pose.x;
         root.position.y += pose.y;
         root.position.z += pose.z;

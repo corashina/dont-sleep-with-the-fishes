@@ -41,6 +41,24 @@ export interface ResourceDelta {
 
 export type DriftingLootVariant = 'barrel' | 'crate';
 
+export type EventPresentationKey =
+  | 'drifting-loot.food'
+  | 'drifting-loot.bait'
+  | 'drifting-loot.repair'
+  | 'drifting-loot.energy-bar'
+  | 'drifting-loot.drift'
+  | 'drifting-bottle.retrieve'
+  | 'drifting-bottle.lost'
+  | 'check-the-back.fish'
+  | 'check-the-back.empty'
+  | 'check-the-back.face'
+  | 'check-the-back.ignore'
+  | 'mystery-chest.safe'
+  | 'mystery-chest.mimic'
+  | 'mystery-chest.leave'
+  | 'flowers.collect'
+  | 'flowers.drift';
+
 export type RewardSummary =
   | {
       readonly kind: 'resource';
@@ -61,6 +79,7 @@ export interface ActionOutcome {
   cue: PresentationCue;
   readonly rewardSummary?: RewardSummary;
   readonly eventResult?: EventResultPresentation;
+  readonly eventPresentationKey?: EventPresentationKey;
 }
 
 export type BeginFishingResult =
@@ -110,6 +129,8 @@ export interface WeightedEventOutcome {
   readonly resultId?: string;
   readonly weight: number;
   readonly message: string;
+  readonly presentationKey?: EventPresentationKey;
+  readonly minimumPriorAppearances?: number;
   readonly effects: EventEffects;
 }
 export interface EventChoiceDefinition {
