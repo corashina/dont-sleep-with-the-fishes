@@ -545,6 +545,44 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('replaces the reveal title with a held result caption and clears its state', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    await ui.showEventReveal(testEvent());
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    const title = caption.querySelector<HTMLElement>('[data-event-title]')!;
+
+    expect(title.textContent).toBe('A shadow');
+    expect(caption.dataset.result).toBeUndefined();
+
+    ui.showEventOutcome({
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The trader gives you a compass.',
+      deltas: {},
+      cue: 'none',
+    });
+    const hold = ui.holdEventOutcome();
+    await vi.advanceTimersByTimeAsync(1_999);
+
+    expect(title.textContent).toBe('The trader gives you a compass.');
+    expect(caption.dataset.result).toBe('true');
+    expect(caption.getAttribute('aria-label')).toBe('The trader gives you a compass.');
+    expect(caption.classList).toContain('is-visible');
+
+    await vi.advanceTimersByTimeAsync(1);
+    await hold;
+    expect(caption.classList).toContain('is-visible');
+    expect(caption.dataset.result).toBe('true');
+
+    ui.clearEventPresentation();
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.dataset.result).toBeUndefined();
+    expect(caption.getAttribute('aria-label')).toBeNull();
+    expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
+  });
+
   it('shows quantity only when an item represents more than one copy', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);

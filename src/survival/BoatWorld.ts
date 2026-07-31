@@ -800,9 +800,28 @@ export class BoatWorld {
   async reactToEventOutcome(
     eventId: string,
     outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null = null,
+    choice: EventChoicePresentation,
   ): Promise<void> {
     if (this.disposed) return;
+    const result = outcome.eventResult;
+    if (
+      this.eventPresentation.hasFocused(eventId)
+      && result !== undefined
+      && result.choiceId !== choice.choiceId
+    ) {
+      throw new Error(
+        `Focused event result ${result.choiceId} does not match choice ${choice.choiceId}.`,
+      );
+    }
+    const response: EventPhysicalResponsePresentation | null = (
+      choice.instanceId === null || choice.condition === null
+    )
+      ? null
+      : {
+          choiceId: choice.choiceId,
+          instanceId: choice.instanceId,
+          condition: choice.condition,
+        };
     this.weatherEventOperation += 1;
     await Promise.all([
       this.weatherEventAnimator.react(eventId, outcome, response),

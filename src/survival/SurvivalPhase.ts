@@ -52,7 +52,6 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
-import type { EventPhysicalResponsePresentation } from './WeatherEventAnimator';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -224,6 +223,10 @@ export class SurvivalPhase implements GamePhase {
   private fishingPresentation: FishingPresentationState = 'idle';
   private fishingSettlementInProgress = false;
   private eventPresentation: EventPresentationState = 'idle';
+  private deferredPresentationSync: {
+    readonly generation: number;
+    readonly before: SurvivalSnapshot;
+  } | null = null;
   private activeDriftingLootVariant: DriftingLootVariant | null = null;
   private eventEligibility = new Map<ItemInstanceId, EventResponseId>();
   private automaticWeather: PresentationWeatherId | null = null;
@@ -968,10 +971,17 @@ export class SurvivalPhase implements GamePhase {
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
     ) return;
+    if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
+    this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.session.resolveEvent?.({ kind: 'item', choiceId, instanceId });
-    if (outcome === undefined || !this.isContinuationActive(generation)) return;
+    if (outcome === undefined || !this.isContinuationActive(generation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
+      this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
@@ -980,15 +990,23 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const resolved = this.session.snapshot();
     const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
-    this.syncPresentation(resolved);
+    const resolvedChoice: EventChoicePresentation = {
+      choiceId,
+      instanceId,
+      condition,
+    };
+    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
+    if (!focusedResult || isTerminal(resolved.state)) {
+      this.flushDeferredPresentationSync(resolved, generation);
+    }
     await this.runEventResolution(
       eventId,
       outcome,
       eventState,
       generation,
-      { choiceId, instanceId, condition },
+      resolvedChoice,
+      focusedResult,
     );
   }
 
@@ -1010,14 +1028,12 @@ export class SurvivalPhase implements GamePhase {
     this.setBusy(true);
     await (this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (
-      this.world.playEventChoice?.(eventId, {
-        choiceId,
-        instanceId: null,
-        condition: null,
-      })
-      ?? Promise.resolve()
-    );
+    const choice: EventChoicePresentation = {
+      choiceId,
+      instanceId: null,
+      condition: null,
+    };
+    await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1025,9 +1041,15 @@ export class SurvivalPhase implements GamePhase {
     ) return;
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
+    this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
-    if (outcome === undefined || !this.isContinuationActive(generation)) return;
+    if (outcome === undefined || !this.isContinuationActive(generation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
+      this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
@@ -1035,7 +1057,20 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, pending.state, generation, null);
+    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
+    if (!focusedResult) {
+      this.cancelDeferredPresentationSync(generation);
+    } else if (isTerminal(resolved.state)) {
+      this.flushDeferredPresentationSync(resolved, generation);
+    }
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      pending.state,
+      generation,
+      choice,
+      focusedResult,
+    );
   }
 
   private async resolveDriftingLootChoice(
@@ -1117,16 +1152,40 @@ export class SurvivalPhase implements GamePhase {
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     this.audio.confirm();
+    const choice: EventChoicePresentation = {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    };
+    this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.session.resolveEvent?.({ kind: 'endure' });
-    if (outcome === undefined) return;
+    if (outcome === undefined || !this.isContinuationActive(generation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    const resolved = this.session.snapshot();
     if (!outcome.accepted) {
+      this.cancelDeferredPresentationSync(generation);
       this.audio.deny();
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.setBusy(false);
       return;
     }
-    await this.runEventResolution(eventId, outcome, eventState, generation, null);
+    const focusedResult = this.hasFocusedEventResult(eventId, outcome);
+    if (!focusedResult) {
+      this.cancelDeferredPresentationSync(generation);
+    } else if (isTerminal(resolved.state)) {
+      this.flushDeferredPresentationSync(resolved, generation);
+    }
+    await this.runEventResolution(
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      choice,
+      focusedResult,
+    );
   }
 
   private async runEventResolution(
@@ -1134,12 +1193,13 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
-    physicalResponse: EventPhysicalResponsePresentation | null = null,
+    choice: EventChoicePresentation,
+    focusedResult: boolean,
   ): Promise<void> {
     this.setBusy(true);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
+      this.world.reactToEventOutcome?.(eventId, outcome, choice)
         ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
@@ -1147,8 +1207,13 @@ export class SurvivalPhase implements GamePhase {
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
     ) return;
+    if (!this.isContinuationActive(generation)) return;
     const terminal = this.session.snapshot();
-    this.ui.showFeedback?.(outcome);
+    if (focusedResult && !isTerminal(terminal.state)) {
+      this.flushDeferredPresentationSync(terminal, generation);
+    }
+    if (focusedResult) this.ui.showEventOutcome?.(outcome);
+    else this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
@@ -1233,13 +1298,53 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private syncPresentation(snapshot: SurvivalSnapshot): void {
-    if (snapshot !== this.presentedInventorySnapshot) {
-      this.presentedInventorySnapshot = snapshot;
-      this.world.syncInventory?.(snapshot);
+    const presentationSnapshot = this.deferredPresentationSync?.before ?? snapshot;
+    if (presentationSnapshot !== this.presentedInventorySnapshot) {
+      this.presentedInventorySnapshot = presentationSnapshot;
+      this.world.syncInventory?.(presentationSnapshot);
     }
     this.ui.setAnchors?.(
       this.world.projectInteractionAnchors?.(this.viewportWidth, this.viewportHeight) ?? [],
     );
+  }
+
+  private beginDeferredPresentationSync(
+    snapshot: SurvivalSnapshot,
+    generation: number,
+  ): void {
+    if (!this.isContinuationActive(generation)) return;
+    this.syncPresentation(snapshot);
+    this.deferredPresentationSync = {
+      generation,
+      before: snapshot,
+    };
+  }
+
+  private flushDeferredPresentationSync(
+    snapshot: SurvivalSnapshot,
+    generation: number,
+  ): void {
+    if (this.deferredPresentationSync?.generation !== generation) return;
+    this.deferredPresentationSync = null;
+    this.syncPresentation(snapshot);
+  }
+
+  private cancelDeferredPresentationSync(generation?: number): void {
+    if (
+      this.deferredPresentationSync === null
+      || (
+        generation !== undefined
+        && this.deferredPresentationSync.generation !== generation
+      )
+    ) return;
+    this.deferredPresentationSync = null;
+  }
+
+  private hasFocusedEventResult(
+    eventId: string,
+    outcome: ActionOutcome,
+  ): boolean {
+    return outcome.eventResult?.eventId === eventId;
   }
 
   private openPendingEvent(snapshot: SurvivalSnapshot): void {
@@ -1384,6 +1489,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private retainTerminalEventTableau(): void {
+    this.cancelDeferredPresentationSync();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.world.setEventSelectedItem?.(null);
@@ -1392,6 +1498,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private clearEventPresentation(): void {
+    this.cancelDeferredPresentationSync();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.activeDriftingLootVariant = null;
