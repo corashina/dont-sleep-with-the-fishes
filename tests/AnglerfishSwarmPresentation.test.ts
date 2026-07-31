@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects swarm scale, waves, camera yaw, catches, and cleanup.
+// Importance: 5/5. Protects sparse swarm scale, shared assets, catches, and cleanup.
 import {
   Group,
   Mesh,
@@ -150,7 +150,7 @@ function stage(presentation: AnglerfishSwarmPresentation, variantSeed = 27): voi
 }
 
 describe('AnglerfishSwarmPresentation', () => {
-  it('preallocates 18 varied anglers, 18 cold lures, two catches, and eight splashes', () => {
+  it('preallocates six anglers, two cold lights, two catches, and two splashes', () => {
     const fixture = setup();
     const presentation = new AnglerfishSwarmPresentation(fixture.environment);
     stage(presentation);
@@ -164,14 +164,14 @@ describe('AnglerfishSwarmPresentation', () => {
       ({ name }) => name.startsWith('swarm-lure-marker-'),
     );
 
-    expect(fixture.create).toHaveBeenCalledTimes(18);
+    expect(fixture.create).toHaveBeenCalledOnce();
     expect(fixture.create).toHaveBeenCalledWith('anglerFish');
-    expect(anglerRoots).toHaveLength(18);
-    expect(new Set(anglerRoots.map(({ scale }) => scale.x)).size).toBeGreaterThan(6);
+    expect(anglerRoots).toHaveLength(6);
+    expect(new Set(anglerRoots.map(({ scale }) => scale.x)).size).toBe(6);
     expect(anglerRoots.every(({ scale }) => scale.x < 1)).toBe(true);
-    expect(lureLights).toHaveLength(18);
+    expect(lureLights).toHaveLength(2);
     expect(lureLights.every((light) => light instanceof PointLight)).toBe(true);
-    expect(lureMarkers).toHaveLength(18);
+    expect(lureMarkers).toHaveLength(6);
     expect(lureMarkers.every((marker) => marker instanceof Mesh)).toBe(true);
     const catches = presentation.boatRoot.children.filter(
       ({ name }) => name.startsWith('swarm-catch-actor-'),
@@ -183,13 +183,19 @@ describe('AnglerfishSwarmPresentation', () => {
     )).toBe(true);
     expect(presentation.worldRoot.children.filter(
       ({ name }) => name.startsWith('swarm-splash-'),
-    )).toHaveLength(8);
+    )).toHaveLength(2);
+    expect(anglerRoots.slice(1).every((root) => (
+      (root.children[0] as Mesh).geometry === (anglerRoots[0]!.children[0] as Mesh).geometry
+    ))).toBe(true);
+    expect(anglerRoots.slice(1).every((root) => (
+      (root.children[0] as Mesh).material === (anglerRoots[0]!.children[0] as Mesh).material
+    ))).toBe(true);
     expect(fixture.modelMeshes.every(
       ({ material }) => (material as MeshStandardMaterial).flatShading,
     )).toBe(true);
   });
 
-  it('shows three lure lights before the bodies and samples every fish without setup', async () => {
+  it('shows two lure lights before the bodies and samples every fish without setup', async () => {
     const fixture = setup();
     const presentation = new AnglerfishSwarmPresentation(fixture.environment);
     stage(presentation);
@@ -199,37 +205,37 @@ describe('AnglerfishSwarmPresentation', () => {
     const reveal = presentation.reveal();
     presentation.update(0.522, 0.522);
     const firstWaveSamples = fixture.sampleWorldWaveInto.mock.calls
-      .slice(0, 18)
+      .slice(0, 6)
       .map(([sample]) => sample);
     const secondWaveSamples = fixture.sampleWorldWaveInto.mock.calls
-      .slice(18, 36)
+      .slice(6, 12)
       .map(([sample]) => sample);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-lure-light-') && visible,
-    )).toHaveLength(3);
+    )).toHaveLength(2);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-lure-marker-') && visible,
-    )).toHaveLength(3);
+    )).toHaveLength(2);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
     )).toHaveLength(0);
-    expect(fixture.sampleWorldWaveInto).toHaveBeenCalledTimes(36);
+    expect(fixture.sampleWorldWaveInto).toHaveBeenCalledTimes(12);
     expect(secondWaveSamples).toEqual(firstWaveSamples);
 
     presentation.update(1.798, 1.276);
-    expect(fixture.cameraEffectsRoot.rotation.y).not.toBe(0);
+    expect(fixture.cameraEffectsRoot.rotation.y).toBe(0);
     presentation.update(2.9, 1.102);
     await reveal;
     expect(presentation.worldRoot.children.filter(
       ({ name, visible, position }) => (
         name.startsWith('swarm-angler-') && visible && position.y > 0.9
       ),
-    )).toHaveLength(18);
+    )).toHaveLength(6);
     expect(presentation.worldRoot.children.filter(
       ({ name, visible, scale }) => (
         name.startsWith('swarm-angler-') && visible && scale.x > 0.65
       ),
-    ).length).toBeGreaterThan(12);
+    )).toHaveLength(6);
     const heldAnglers = presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
     );
@@ -237,20 +243,20 @@ describe('AnglerfishSwarmPresentation', () => {
       ({ name, visible }) => name.startsWith('swarm-lure-marker-') && visible,
     );
     expect(heldAnglers.filter(({ position }) => position.z < -3).length)
-      .toBeGreaterThanOrEqual(6);
+      .toBe(2);
     expect(heldAnglers.some(({ position }) => position.z > 2.5)).toBe(true);
     expect(heldAnglers.some(({ position }) => position.x < -1.7)).toBe(true);
     expect(heldAnglers.some(({ position }) => position.x > 1.7)).toBe(true);
-    expect(heldLures).toHaveLength(18);
+    expect(heldLures).toHaveLength(6);
     expect(heldLures.every(({ position }) => position.y > 1.1)).toBe(true);
     expect(heldLures.filter(({ position }) => position.z < -3).length)
-      .toBeGreaterThanOrEqual(6);
+      .toBe(2);
     expect(fixture.create).not.toHaveBeenCalled();
     expect(fixture.environment.vortexWave).toEqual(fixture.vortexBefore);
     expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
   });
 
-  it('uses exact actors, shows two catches, and keeps camera yaw additive', async () => {
+  it('uses exact actors, shows two catches, and keeps the camera fixed', async () => {
     const harpoonId = 'harpoonGun-4' as ItemInstanceId;
     const fixture = setup([harpoonId]);
     const baseRotation = fixture.cameraBase.rotation.toArray();
@@ -274,13 +280,14 @@ describe('AnglerfishSwarmPresentation', () => {
     const remainingAnglers = presentation.worldRoot.children.filter(
       ({ name, visible }) => name.startsWith('swarm-angler-') && visible,
     );
-    expect(remainingAnglers).toHaveLength(16);
+    expect(remainingAnglers).toHaveLength(4);
     expect(remainingAnglers.filter(({ position }) => position.z < -3).length)
-      .toBeGreaterThanOrEqual(6);
+      .toBeGreaterThanOrEqual(1);
     expect(fixture.cameraBase.rotation.toArray()).toEqual(baseRotation);
+    expect(fixture.cameraEffectsRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
   });
 
-  it('uses only the camera effect yaw during an attack and restores it', async () => {
+  it('keeps the camera fixed during an attack', async () => {
     const fixture = setup();
     const baseRotation = fixture.cameraBase.rotation.toArray();
     const presentation = new AnglerfishSwarmPresentation(fixture.environment);
@@ -288,7 +295,7 @@ describe('AnglerfishSwarmPresentation', () => {
 
     const reaction = presentation.react(outcome({ hull: -30, health: -50 }));
     presentation.update(0.55, 0.55);
-    expect(fixture.cameraEffectsRoot.rotation.y).not.toBe(0);
+    expect(fixture.cameraEffectsRoot.rotation.y).toBe(0);
     expect(fixture.cameraEffectsRoot.rotation.x).toBe(0);
     expect(fixture.cameraEffectsRoot.rotation.z).toBe(0);
     expect(fixture.cameraBase.rotation.toArray()).toEqual(baseRotation);
@@ -322,7 +329,7 @@ describe('AnglerfishSwarmPresentation', () => {
     presentation.dispose();
     presentation.dispose();
 
-    expect(fixture.modelDisposes).toHaveLength(18);
+    expect(fixture.modelDisposes).toHaveLength(1);
     expect(fixture.modelDisposes.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
     expect(splashGeometryDispose).toHaveBeenCalledOnce();
     expect(splashMaterialDispose).toHaveBeenCalledOnce();

@@ -1,7 +1,7 @@
 export const SWARM_REVEAL_DURATION = 2.9;
 export const SWARM_ITEM_DURATION = 1.2;
 export const SWARM_REACTION_DURATION = 1.15;
-export const SWARM_FISH_COUNT = 18;
+export const SWARM_FISH_COUNT = 6;
 export const SWARM_CENTER_Z = -0.8;
 
 export type SwarmItemEffectKind =
@@ -72,7 +72,7 @@ export interface SwarmFishPose {
   scale: number;
 }
 
-const GROUP_SIZES = [3, 4, 5, 6] as const;
+const GROUP_SIZES = [2, 2, 1, 1] as const;
 const GROUP_REVEAL = [0.06, 0.24, 0.38, 0.52] as const;
 
 function clamp01(value: number): number {
@@ -219,10 +219,6 @@ export function sampleSwarmReveal(
   }
   output.closure = smoothstep((t - 0.1) / 0.78);
   output.lureStrength = 0.24 + smoothstep(t / 0.42) * 0.48;
-  output.cameraYaw = t === 0 || t === 1
-    ? 0
-    : Math.sin(Math.PI * t) * 0.052
-      + Math.sin(Math.PI * t * 3) * 0.008;
   return true;
 }
 
@@ -278,7 +274,6 @@ export function sampleSwarmItemUse(
     output.z = -0.18 * lift;
     output.yaw = (-0.72 + t * 1.44) * lift;
     output.pitch = -0.34 * lift;
-    output.cameraYaw = Math.sin((t - 0.5) * Math.PI) * action * 0.04;
     output.lureDim = action * 0.72;
     output.effectKind = 'flashlight-sweep';
   } else {
@@ -314,9 +309,6 @@ export function sampleSwarmReaction(
   if (reaction.attacked) {
     output.attack = pulse(t, 0.04, 0.48, 0.96);
     output.splash = pulse(t, 0.02, 0.34, 0.82);
-    output.cameraYaw = output.attack === 0
-      ? 0
-      : (0.052 + Math.sin(Math.PI * t * 4) * 0.018) * output.attack;
     output.hullRoll = output.attack === 0
       ? 0
       : Math.sin(Math.PI * t * 3) * output.attack * 0.055;

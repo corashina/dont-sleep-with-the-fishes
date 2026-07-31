@@ -65,9 +65,8 @@ type ActiveSwarmAnimation =
     };
 
 interface AnglerActor {
-  readonly model: EventModelInstance;
   readonly root: Group;
-  readonly lure: PointLight;
+  readonly lure: PointLight | null;
   readonly lureMarker: Mesh;
   readonly wave: WaveSample;
   readonly pose: SwarmFishPose;
@@ -79,7 +78,8 @@ const SURFACE_BODY_LIFT = 0.82;
 const BODY_PRESENTATION_SCALE = 1.25;
 const SWARM_BODY_TINT = new Color(0x31535b);
 const CATCH_COUNT = 2;
-const SPLASH_COUNT = 8;
+const SPLASH_COUNT = 2;
+const LURE_LIGHT_COUNT = 2;
 const DEFAULT_VARIANT: SwarmVariant = {
   scale: 0.54,
   hullAngle: 0,
@@ -135,6 +135,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
 
+  private readonly modelInstance: EventModelInstance;
   private readonly anglers: AnglerActor[] = [];
   private readonly variants: SwarmVariant[] = Array.from(
     { length: SWARM_FISH_COUNT },
@@ -207,20 +208,25 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
 
     const swarmLureGeometry = new SphereGeometry(0.075, 6, 4);
     this.ownedGeometries.add(swarmLureGeometry);
+    this.modelInstance = environment.eventModels.create('anglerFish');
+    styleAngler(this.modelInstance.root);
     for (let index = 0; index < SWARM_FISH_COUNT; index += 1) {
-      const model = environment.eventModels.create('anglerFish');
-      const root = model.root;
+      const root = index === 0
+        ? this.modelInstance.root
+        : this.modelInstance.root.clone(true);
       root.name = `swarm-angler-${index + 1}`;
       root.userData.presentationScaleMaximum = 1.08;
-      styleAngler(root);
-      const lure = new PointLight(0x67cde4, 0, 4.2, 1.8);
-      lure.name = `swarm-lure-light-${index + 1}`;
-      lure.userData.palette = 'cold-cyan';
+      const lure = index < LURE_LIGHT_COUNT
+        ? new PointLight(0x67cde4, 0, 4.2, 1.8)
+        : null;
+      if (lure !== null) {
+        lure.name = `swarm-lure-light-${index + 1}`;
+        lure.userData.palette = 'cold-cyan';
+      }
       const lureMarker = new Mesh(swarmLureGeometry, this.catchLureMaterial);
       lureMarker.name = `swarm-lure-marker-${index + 1}`;
       lureMarker.renderOrder = 3;
       this.anglers.push({
-        model,
         root,
         lure,
         lureMarker,
@@ -228,7 +234,8 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         pose: createSwarmFishPose(),
         variant: DEFAULT_VARIANT,
       });
-      this.worldRoot.add(root, lureMarker, lure);
+      this.worldRoot.add(root, lureMarker);
+      if (lure !== null) this.worldRoot.add(lure);
     }
 
     const catchBodyGeometry = new SphereGeometry(0.44, 7, 5);
@@ -413,7 +420,6 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.releaseActor();
     this.staged = false;
     this.hideScene();
-    this.resetCameraEffect();
   }
 
   dispose(): void {
@@ -426,13 +432,12 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.resolveCancelled(active);
     runCleanupSteps([
       () => actor?.release(),
-      () => this.resetCameraEffect(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
-      ...this.anglers.map(({ model }) => () => model.dispose()),
+      () => this.modelInstance.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
@@ -463,11 +468,9 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     if (active.kind === 'item') {
       sampleSwarmItemUse(active.choiceId, 1, this.sample);
       this.borrowedActor?.applyPose(this.sample);
-      this.resetCameraEffect();
       active.resolve(true);
       return;
     }
-    this.resetCameraEffect();
     active.resolve();
   }
 
@@ -475,7 +478,6 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     const active = this.active;
     this.active = null;
     this.resolveCancelled(active);
-    this.resetCameraEffect();
   }
 
   private resolveCancelled(active: ActiveSwarmAnimation | null): void {
@@ -510,22 +512,28 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         && this.sample.catchStrength > 0.008;
       fish.root.visible = index < this.sample.bodyVisibleCount && !caught;
 
-      fish.lure.visible = index < this.sample.visibleCount;
-      fish.lureMarker.visible = fish.lure.visible;
-      fish.lure.position.set(
+      fish.lureMarker.visible = index < this.sample.visibleCount;
+      fish.lure?.position.set(
         fish.root.position.x,
         fish.root.position.y + fish.variant.scale * 0.56,
         fish.root.position.z + fish.variant.scale * 0.12,
       );
-      fish.lureMarker.position.copy(fish.lure.position);
+      fish.lureMarker.position.set(
+        fish.root.position.x,
+        fish.root.position.y + fish.variant.scale * 0.56,
+        fish.root.position.z + fish.variant.scale * 0.12,
+      );
       const lurePulse = 0.9
         + Math.sin(time * fish.variant.speed * 1.7 + fish.variant.lurePhase) * 0.1;
       fish.lureMarker.scale.setScalar(
         lurePulse * (0.82 + this.sample.lureStrength * 0.28),
       );
-      fish.lure.intensity = fish.lure.visible
-        ? this.sample.lureStrength * (1 - this.sample.lureDim) * lurePulse
-        : 0;
+      if (fish.lure !== null) {
+        fish.lure.visible = fish.lureMarker.visible;
+        fish.lure.intensity = fish.lure.visible
+          ? this.sample.lureStrength * (1 - this.sample.lureDim) * lurePulse
+          : 0;
+      }
     }
 
     const catchCount = Math.max(
@@ -547,7 +555,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       const splash = this.splashes[index]!;
       const fish = this.anglers[(index * 5 + 1) % SWARM_FISH_COUNT]!;
       splash.visible = this.sample.splash > index * 0.075
-        && fish.lure.visible;
+        && fish.lureMarker.visible;
       splash.position.set(
         fish.root.position.x,
         WATERLINE + fish.wave.height + 0.12,
@@ -558,17 +566,6 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     }
 
     this.boatRoot.rotation.z = this.sample.hullRoll;
-    this.applyCameraEffect();
-  }
-
-  private applyCameraEffect(): void {
-    const effectsRoot = this.environment.cameraEffectsRoot;
-    if (effectsRoot === undefined) return;
-    effectsRoot.rotation.set(0, this.sample.cameraYaw, 0);
-  }
-
-  private resetCameraEffect(): void {
-    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
   }
 
   private hideScene(): void {
@@ -584,10 +581,12 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       fish.root.position.set(0, 0, 0);
       fish.root.rotation.set(0, 0, 0);
       fish.root.scale.setScalar(1);
-      fish.lure.visible = false;
+      if (fish.lure !== null) fish.lure.visible = false;
       fish.lureMarker.visible = false;
-      fish.lure.intensity = 0;
-      fish.lure.position.set(0, 0, 0);
+      if (fish.lure !== null) {
+        fish.lure.intensity = 0;
+        fish.lure.position.set(0, 0, 0);
+      }
       fish.lureMarker.position.set(0, 0, 0);
       fish.lureMarker.scale.set(1, 1, 1);
     }

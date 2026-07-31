@@ -176,6 +176,9 @@ describe('DeathStarePresentation', () => {
     const heldPosition = presentation.worldRoot
       .getObjectByName('death-stare-angler')!.position.toArray();
     const angler = presentation.worldRoot.getObjectByName('death-stare-angler')!;
+    expect(angler.rotation.y).toBe(0);
+    expect(angler.rotation.x).toBeGreaterThan(0);
+    expect(angler.userData.fixedPlayerFacingPose).toBe(true);
     expect(angler.position.y).toBeGreaterThan(1);
     expect(angler.position.y).toBeLessThan(1.3);
     expect(angler.position.z).toBeLessThan(-5.5);

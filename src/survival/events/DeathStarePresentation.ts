@@ -84,6 +84,8 @@ const FACE_Y = 1.15;
 const FACE_Z = -5.85;
 const FACE_LONGEST_DIMENSION = 5.6;
 const FACE_PRESENTATION_SCALE = 1;
+const FACE_PLAYER_YAW = 0;
+const FACE_PLAYER_PITCH = 0.04;
 const WATERLINE = 0.02;
 const WATER_STRAND_COUNT = 12;
 const IDENTITY_ITEM_POSE: Readonly<SupplyAdditivePose> = {
@@ -231,6 +233,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.angler.name = 'death-stare-angler';
     this.angler.userData.faceLongestDimension = FACE_LONGEST_DIMENSION;
     this.angler.userData.presentationScale = FACE_PRESENTATION_SCALE;
+    this.angler.userData.fixedPlayerFacingPose = true;
     this.angler.scale.setScalar(FACE_PRESENTATION_SCALE);
 
     this.modelInstance = environment.eventModels.create('anglerFish');
@@ -590,8 +593,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
       FACE_Z + this.sample.fishZ,
     );
     this.angler.rotation.set(
-      this.sample.fishPitch,
-      this.sample.fishYaw,
+      FACE_PLAYER_PITCH + this.sample.fishPitch,
+      FACE_PLAYER_YAW + this.sample.fishYaw,
       this.sample.fishRoll,
     );
 
@@ -711,7 +714,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.boatRoot.visible = false;
     this.angler.visible = false;
     this.angler.position.set(FACE_X, FACE_Y, FACE_Z);
-    this.angler.rotation.set(0, 0, 0);
+    this.angler.rotation.set(FACE_PLAYER_PITCH, FACE_PLAYER_YAW, 0);
     this.boatRoot.rotation.set(0, 0, 0);
     this.waterMaterial.opacity = 0;
     for (const strand of this.waterStrands) strand.mesh.visible = false;
