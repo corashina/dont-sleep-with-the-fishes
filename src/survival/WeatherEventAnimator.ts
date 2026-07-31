@@ -65,7 +65,9 @@ type ActiveWeatherAnimation =
 
 const REACTION_DURATION = 0.84;
 const CLOSE_FIGURE_Z = -3.2;
-const DISTANT_FIGURE_Z = -8.6;
+const DISTANT_FIGURE_Z = -6.2;
+const REVEAL_FIGURE_X = -1.5;
+const REVEAL_FIGURE_Y = 0;
 
 function clamp01(value: number): number {
   if (value <= 0 || !Number.isFinite(value)) return 0;
@@ -101,10 +103,10 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.effectKind = 'none';
 }
 
-function prepareFogMan(root: Group, material: Material): Group {
+function prepareFogMan(model: Group, material: Material): Group {
   const replacedMaterials = new Set<Material>();
   const replacedTextures = new Set<Texture>();
-  root.traverse((object) => {
+  model.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const replaced of materials) {
@@ -117,9 +119,11 @@ function prepareFogMan(root: Group, material: Material): Group {
   });
   disposeResourceSets(replacedTextures, replacedMaterials);
 
+  const root = new Group();
   root.name = 'fog-man-silhouette';
-  root.position.set(3.4, 1.2, DISTANT_FIGURE_Z);
+  root.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
   root.visible = false;
+  root.add(model);
   return root;
 }
 
@@ -128,7 +132,7 @@ function createFlashlightBeam(material: Material): Group {
   root.name = 'weather-flashlight-beam';
   const beam = new Mesh(new ConeGeometry(0.72, 4.8, 8, 1, true), material);
   beam.name = 'weather-flashlight-beam-cone';
-  beam.position.set(0.15, 1.45, -2.1);
+  beam.position.set(0.15, 1.45, -3);
   beam.rotation.x = -Math.PI / 2;
   beam.scale.set(0.01, 0.01, 0.01);
   root.add(beam);
@@ -264,9 +268,9 @@ export class WeatherEventAnimator {
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
     this.figureMaterial = new MeshStandardMaterial({
-      color: 0x17151e,
-      emissive: 0x08070b,
-      emissiveIntensity: 0.18,
+      color: 0x504b45,
+      emissive: 0x62594f,
+      emissiveIntensity: 1.25,
       roughness: 1,
       flatShading: true,
       transparent: true,
@@ -649,20 +653,20 @@ export class WeatherEventAnimator {
   private showSilhouette(visibility: number, distance: number, close: boolean): void {
     if (visibility <= 0.015) return;
     this.silhouette.visible = true;
-    this.figureMaterial.opacity = Math.min(0.76, visibility * 0.72);
+    this.figureMaterial.opacity = Math.min(0.96, visibility * 0.94);
     if (close) {
       this.silhouette.position.set(
         1.15 - distance * 0.28,
-        1.06,
+        -0.14,
         DISTANT_FIGURE_Z + (CLOSE_FIGURE_Z - DISTANT_FIGURE_Z) * distance,
       );
       this.silhouette.scale.setScalar(1 + distance * 0.34);
       return;
     }
     this.silhouette.position.set(
-      3.4 - distance * 0.52,
-      1.2,
-      DISTANT_FIGURE_Z + distance * 2.6,
+      REVEAL_FIGURE_X - distance * 0.25,
+      REVEAL_FIGURE_Y,
+      DISTANT_FIGURE_Z + distance * 1.6,
     );
     this.silhouette.scale.setScalar(1);
   }
@@ -679,7 +683,7 @@ export class WeatherEventAnimator {
 
   private hideTransientEffects(): void {
     this.silhouette.visible = false;
-    this.silhouette.position.set(3.4, 1.2, DISTANT_FIGURE_Z);
+    this.silhouette.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
     this.silhouette.scale.setScalar(1);
     this.figureMaterial.opacity = 0;
     this.flashlightBeam.visible = false;
