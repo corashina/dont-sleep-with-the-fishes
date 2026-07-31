@@ -166,6 +166,7 @@ describe('weather event choreography', () => {
   it.each([
     ['shower-night', 'bucket', null, 'shower-safe-settle'],
     ['windy-night', 'sleep', 'broken', 'wind-break-fold'],
+    ['windy-night', 'umbrella', null, 'wind-safe-settle'],
     ['bad-sleep', 'umbrella', 'broken', 'bad-sleep-umbrella-collapse'],
     ['thunderstorm', 'anchor', null, 'storm-anchor-steady'],
     ['thunderstorm', 'sleep', 'lost', 'storm-loss-lightning'],

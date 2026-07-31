@@ -906,6 +906,40 @@ describe('BoatWorld helpers', () => {
     animator.dispose();
   });
 
+  it('keeps a safe Windy Night Umbrella settled after the result resolves', async () => {
+    const cameraRig = new Group();
+    const supplies = new FakeBoatSupplyDisplay();
+    const animator = new WeatherEventAnimator(
+      cameraRig,
+      supplies as unknown as BoatSupplyDisplay,
+    );
+
+    const itemUse = animator.playItemUse('windy-night', 'umbrella', 'umbrella-1');
+    animator.update(2, 2);
+    await itemUse;
+    const result = animator.react(
+      'windy-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'You wake with two energy.',
+        deltas: { energy: 2 },
+        cue: 'none',
+      },
+      { choiceId: 'umbrella', actors: [] },
+    );
+    animator.update(2, 2);
+    await result;
+
+    const held = supplies.poses.get('umbrella-1');
+    expect(Math.abs(held?.roll ?? 0)).toBeGreaterThan(0.04);
+    expect(held?.scaleY).toBeGreaterThan(0.95);
+
+    animator.clear();
+    expect(supplies.poses.size).toBe(0);
+    animator.dispose();
+  });
+
   it('keeps the Bad Sleep broken Umbrella collapsed through the result hold', async () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay();
