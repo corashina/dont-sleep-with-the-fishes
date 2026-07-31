@@ -15,6 +15,7 @@ import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { AudioSystem } from '../audio/AudioSystem';
 import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary';
+import type { EventModelLibrary } from '../survival/EventModelLibrary';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -24,6 +25,7 @@ export interface PhaseContext {
   waterQuality: WaterQualityPreference;
   camera: PerspectiveCamera;
   propModels: PropModelLibrary;
+  readonly supernaturalEventModels: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   maxTextureAnisotropy: number;
   skyAssets: SkyAssets;

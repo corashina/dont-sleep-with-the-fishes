@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AudioScope } from '../src/audio/AudioScope';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import type { FishingTerminalResult } from '../src/survival/FishingSession';
+import type { ActionOutcome } from '../src/survival/survivalTypes';
 
 function createScope(): AudioScope {
   return {
@@ -123,4 +124,75 @@ describe('SurvivalAudio', () => {
     expect(scope.play).toHaveBeenNthCalledWith(2, 'deathEnding');
     expect(scope.play).toHaveBeenNthCalledWith(3, 'sinkingEnding');
   });
+
+  it('starts the melody only for Eerie Melody', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+
+    audio.beginEvent('ghosts');
+    audio.beginEvent('face-on-the-moon');
+    expect(scope.startLoop).not.toHaveBeenCalledWith('eerieMelody');
+
+    audio.beginEvent('eerie-melody');
+    expect(scope.startLoop).toHaveBeenCalledWith('eerieMelody');
+  });
+
+  it('stops a safe Eerie Melody result before its motion', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+    const safeOutcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The melody fades.',
+      deltas: { energy: -1 },
+      cue: 'none',
+    };
+
+    audio.beginEvent('eerie-melody');
+    audio.beginEventReaction('eerie-melody', safeOutcome);
+
+    expect(scope.stopLoop).toHaveBeenCalledWith('eerieMelody', 0.02);
+  });
+
+  it('keeps an attack melody active until its result motion finishes', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+    const attackOutcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The siren attacks.',
+      deltas: { hull: -50, health: -20 },
+      cue: 'impact',
+    };
+
+    audio.beginEvent('eerie-melody');
+    audio.beginEventReaction('eerie-melody', attackOutcome);
+
+    expect(scope.stopLoop).not.toHaveBeenCalledWith('eerieMelody', 0.02);
+
+    audio.finishEventReaction('eerie-melody');
+    expect(scope.stopLoop).toHaveBeenCalledWith('eerieMelody', 0.08);
+  });
+
+  it.each(['clear', 'dispose'] as const)(
+    'stops the active melody once during %s cleanup',
+    (cleanup) => {
+      const scope = createScope();
+      const audio = new SurvivalAudio(scope);
+
+      audio.beginEvent('eerie-melody');
+      if (cleanup === 'clear') {
+        audio.clearEvent();
+        audio.clearEvent();
+        audio.dispose();
+      } else {
+        audio.dispose();
+        audio.dispose();
+      }
+
+      expect(scope.stopLoop).toHaveBeenCalledTimes(1);
+      expect(scope.stopLoop).toHaveBeenCalledWith('eerieMelody', 0.08);
+      expect(scope.dispose).toHaveBeenCalledOnce();
+    },
+  );
 });

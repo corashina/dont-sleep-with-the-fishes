@@ -32,7 +32,10 @@ import {
   resolvePresentationWeather,
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
-import { BoatWorld } from './BoatWorld';
+import {
+  BoatWorld,
+  createEmptyEventModelLibraryForTest,
+} from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
 import { fishingCatchFood } from './fishingCatalog';
@@ -218,6 +221,7 @@ function testContext(
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
+    supernaturalEventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
@@ -303,6 +307,7 @@ export class SurvivalPhase implements GamePhase {
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
           context.eventModels,
+          context.supernaturalEventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -1000,6 +1005,7 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveDriftingLootChoice(choiceId, generation);
       return;
     }
+    this.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.audio.sleep();
     else this.audio.confirm();
     this.eventPresentation = 'using';
@@ -1014,6 +1020,7 @@ export class SurvivalPhase implements GamePhase {
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
     if (!outcome.accepted) {
       this.audio.deny();
+      this.ui.setEventSleepMask?.(eventId, false);
       this.ui.showFeedback?.(outcome);
       this.eventPresentation = 'choosing';
       this.restoreEventSelection();
@@ -1146,11 +1153,13 @@ export class SurvivalPhase implements GamePhase {
     physicalResponse: EventPhysicalResponsePresentation,
   ): Promise<void> {
     this.setBusy(true);
+    this.audio.beginEventReaction(eventId, outcome);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
       this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
         ?? Promise.resolve(),
     ]);
+    this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1292,6 +1301,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
+    this.audio.beginEvent(event.id);
     this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
@@ -1428,6 +1438,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private clearEventPresentation(): void {
+    this.audio.clearEvent();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
     this.activeDriftingLootVariant = null;

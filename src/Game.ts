@@ -50,6 +50,8 @@ import {
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
 import { AudioSystem } from './audio/AudioSystem';
+import type { EventModelLibrary } from './survival/EventModelLibrary';
+import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
 
 export interface GameFactories {
   createScavenge(
@@ -92,6 +94,7 @@ export const GAME_CAMERA = Object.freeze({
 
 export interface GameTestOptions {
   propModels: PropModelLibrary;
+  supernaturalEventModels?: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
@@ -125,6 +128,7 @@ export class Game {
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private propModels!: PropModelLibrary;
+  private supernaturalEventModels!: EventModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
@@ -150,6 +154,7 @@ export class Game {
   constructor(
     mount: HTMLElement,
     propModels: PropModelLibrary,
+    supernaturalEventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
@@ -194,6 +199,7 @@ export class Game {
         camera,
         clock,
         propModels,
+        supernaturalEventModels,
         shipFurniture,
         skyAssets,
         lifeboatAssets,
@@ -261,6 +267,7 @@ export class Game {
       ),
       clock,
       options.propModels,
+      options.supernaturalEventModels ?? createEmptyEventModelLibraryForTest(),
       options.shipFurniture,
       options.skyAssets,
       options.lifeboatAssets ?? LifeboatAssets.fromTextures(
@@ -313,6 +320,7 @@ export class Game {
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
+      () => this.supernaturalEventModels.dispose(),
       () => this.shipFurniture.dispose(),
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
@@ -334,6 +342,7 @@ export class Game {
     camera: PerspectiveCamera,
     clock: GameClock,
     propModels: PropModelLibrary,
+    supernaturalEventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
@@ -351,6 +360,7 @@ export class Game {
     this.camera = camera;
     this.clock = clock;
     this.propModels = propModels;
+    this.supernaturalEventModels = supernaturalEventModels;
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
@@ -376,6 +386,7 @@ export class Game {
         waterQuality,
         camera,
         propModels,
+        supernaturalEventModels,
         shipFurniture,
         maxTextureAnisotropy,
         skyAssets,

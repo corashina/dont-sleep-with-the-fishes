@@ -1,6 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 import type { FishingTerminalResult } from '../survival/FishingSession';
 import type {
+  ActionOutcome,
   DayActionId,
   DayActionOption,
   SurvivalState,
@@ -76,6 +77,7 @@ export class SurvivalAudio {
   private weather: PresentationWeatherId = 'calm';
   private waveClock = 0;
   private diveActive = false;
+  private eventMelodyActive = false;
   private disposed = false;
 
   constructor(private readonly scope: AudioScope) {}
@@ -180,6 +182,33 @@ export class SurvivalAudio {
     if (eventId === 'drifting-loot') this.scope.play('driftingCargo');
   }
 
+  beginEvent(eventId: string): void {
+    this.clearEvent();
+    if (this.disposed || eventId !== 'eerie-melody') return;
+    this.eventMelodyActive = true;
+    this.scope.startLoop('eerieMelody');
+  }
+
+  beginEventReaction(eventId: string, outcome: ActionOutcome): void {
+    if (
+      this.disposed
+      || !this.eventMelodyActive
+      || eventId !== 'eerie-melody'
+    ) return;
+    const attack = (outcome.deltas.hull ?? 0) < 0
+      || (outcome.deltas.health ?? 0) < 0;
+    if (!attack) this.stopEventMelody(0.02);
+  }
+
+  finishEventReaction(eventId: string): void {
+    if (this.disposed || eventId !== 'eerie-melody') return;
+    this.clearEvent();
+  }
+
+  clearEvent(): void {
+    this.stopEventMelody(0.08);
+  }
+
   journal(): void {
     if (!this.disposed) this.scope.play('journal');
   }
@@ -213,6 +242,7 @@ export class SurvivalAudio {
 
   dispose(): void {
     if (this.disposed) return;
+    this.clearEvent();
     this.disposed = true;
     this.scope.dispose();
   }
@@ -222,5 +252,11 @@ export class SurvivalAudio {
     this.diveActive = true;
     this.scope.play('diveEntry');
     this.scope.startLoop('underwaterMovement');
+  }
+
+  private stopEventMelody(fadeSeconds: number): void {
+    if (!this.eventMelodyActive) return;
+    this.eventMelodyActive = false;
+    this.scope.stopLoop('eerieMelody', fadeSeconds);
   }
 }
