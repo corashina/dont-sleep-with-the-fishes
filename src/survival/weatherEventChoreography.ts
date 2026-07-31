@@ -557,11 +557,12 @@ export function sampleWeatherReaction(
   }
 
   const t = clamp01(progress);
-  if (t === 0 || t === 1) return true;
+  if (t === 0) return true;
   const index = Math.max(0, Math.floor(actorIndex));
   const count = Math.max(0, Math.floor(actorCount));
   const staggered = clamp01((t - Math.min(index, count) * 0.16) / 0.72);
-  const actorBeat = pulse(staggered, 0.04, 0.42, 0.88);
+  const actorBeat = smoothstep(staggered / 0.72)
+    + 0.12 * pulse(staggered, 0.18, 0.46, 0.74);
   const hullBeat = pulse(t, 0.14, 0.38, 0.62);
   const hullImpact = clamp01(-hullDelta / 40) * hullBeat;
 
@@ -583,7 +584,7 @@ export function sampleWeatherReaction(
     case 'windy-night':
       if (condition === 'lost') {
         output.effectKind = 'wind-loss-depart';
-        output.actorX = -0.8 * actorBeat;
+        output.actorX = -1.45 * actorBeat;
         output.actorY = 0.22 * actorBeat;
         output.actorYaw = 0.6 * actorBeat;
       } else {
@@ -639,16 +640,6 @@ export function sampleWeatherReaction(
   }
 
   const envelope = smoothstep(t / 0.08) * (1 - smoothstep((t - 0.76) / 0.24));
-  output.actorX *= envelope;
-  output.actorY *= envelope;
-  output.actorZ *= envelope;
-  output.actorYaw *= envelope;
-  output.actorPitch *= envelope;
-  output.actorRoll *= envelope;
-  output.actorScaleX = 1 + (output.actorScaleX - 1) * envelope;
-  output.actorScaleY = 1 + (output.actorScaleY - 1) * envelope;
-  output.actorScaleZ = 1 + (output.actorScaleZ - 1) * envelope;
-  output.actorEffect *= envelope;
   output.cameraX *= envelope;
   output.cameraY *= envelope;
   output.cameraZ *= envelope;

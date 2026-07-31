@@ -18,7 +18,7 @@ import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
-import type { ActionOutcome } from './survivalTypes';
+import type { ActionOutcome, ItemCondition } from './survivalTypes';
 import {
   sampleWeatherItemUse,
   sampleWeatherReaction,
@@ -52,12 +52,17 @@ type ActiveWeatherAnimation =
       readonly kind: 'react';
       readonly eventId: string;
       readonly response: EventPhysicalResponsePresentation;
+      readonly actors: readonly WeatherReactionActor[];
       readonly outcome: ActionOutcome;
       elapsed: number;
       readonly duration: number;
-      activeActorIndex: number;
       readonly resolve: () => void;
     };
+
+interface WeatherReactionActor {
+  readonly instanceId: ItemInstanceId;
+  readonly condition: ItemCondition | null;
+}
 
 const CLOSE_FIGURE_Z = -3.2;
 const DISTANT_FIGURE_Z = -8.6;
@@ -285,6 +290,7 @@ export class WeatherEventAnimator {
   private readonly rainSplash: Group;
   private readonly lightningFlash: Group;
   private active: ActiveWeatherAnimation | null = null;
+  private selectedActorId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
@@ -352,6 +358,7 @@ export class WeatherEventAnimator {
     this.cancelActive();
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.selectedActorId = null;
   }
 
   reveal(eventId: string): Promise<void> {
@@ -392,6 +399,7 @@ export class WeatherEventAnimator {
       this.supplyDisplay.clearEventMotion();
       return Promise.resolve(false);
     }
+    this.selectedActorId = instanceId;
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
@@ -411,11 +419,12 @@ export class WeatherEventAnimator {
     response: EventPhysicalResponsePresentation,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const duration = weatherReactionDuration(
-      eventId,
-      response.choiceId,
-      response.actors.length,
-    );
+    const actors: readonly WeatherReactionActor[] = response.actors.length > 0
+      ? response.actors
+      : this.selectedActorId === null
+        ? []
+        : [{ instanceId: this.selectedActorId, condition: null }];
+    const duration = weatherReactionDuration(eventId, response.choiceId, actors.length);
     if (duration === null) {
       this.cancelActive();
       return Promise.resolve();
@@ -424,7 +433,7 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
-    for (const actor of response.actors) {
+    for (const actor of actors) {
       this.supplyDisplay.pinEventActor(actor.instanceId);
     }
     return new Promise((resolve) => {
@@ -432,10 +441,10 @@ export class WeatherEventAnimator {
         kind: 'react',
         eventId,
         response,
+        actors,
         outcome,
         elapsed: 0,
         duration,
-        activeActorIndex: -1,
         resolve,
       };
     });
@@ -580,59 +589,57 @@ export class WeatherEventAnimator {
     const damagingFlashlight = eventId === 'man-in-the-fog'
       && response.choiceId === 'flashlight'
       && healthDamage < 0;
-    const actorCount = response.actors.length;
-    const actorIndex = actorCount === 0
-      ? 0
-      : Math.min(actorCount - 1, Math.floor(progress * actorCount));
-    const actor = response.actors[actorIndex];
-    const condition = actor?.condition === 'broken'
-      ? 'broken'
-      : actor?.condition === 'lost' || actor?.condition === 'consumed'
-        ? 'lost'
-        : null;
-    if (!sampleWeatherReaction(
-      eventId,
-      response.choiceId,
-      actorIndex,
-      actorCount,
-      condition,
-      hullDamage,
-      progress,
-      this.reactionSample,
-    )) return;
+    const actorCount = active.actors.length;
+    const sampleCount = Math.max(1, actorCount);
+    for (let actorIndex = 0; actorIndex < sampleCount; actorIndex += 1) {
+      const actor = active.actors[actorIndex];
+      const condition = actor?.condition === 'broken'
+        ? 'broken'
+        : actor?.condition === 'lost' || actor?.condition === 'consumed'
+          ? 'lost'
+          : null;
+      if (!sampleWeatherReaction(
+        eventId,
+        response.choiceId,
+        actorIndex,
+        actorCount,
+        condition,
+        hullDamage,
+        progress,
+        this.reactionSample,
+      )) return;
 
-    if (actor !== undefined && active.activeActorIndex !== actorIndex) {
-      active.activeActorIndex = actorIndex;
-    }
-    if (actor !== undefined) {
-      const sample = this.reactionSample;
-      this.itemSample.x = sample.actorX;
-      this.itemSample.y = sample.actorY;
-      this.itemSample.z = sample.actorZ;
-      this.itemSample.yaw = sample.actorYaw;
-      this.itemSample.pitch = sample.actorPitch;
-      this.itemSample.roll = sample.actorRoll;
-      this.itemSample.scaleX = sample.actorScaleX;
-      this.itemSample.scaleY = sample.actorScaleY;
-      this.itemSample.scaleZ = sample.actorScaleZ;
-      if (sample.effectKind === 'none' && actor.condition === 'broken') {
-        const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
-          * (1 - smoothstep((progress - 0.46) / 0.54));
-        this.itemSample.y = -0.12 * settle;
-        this.itemSample.roll = 0.26 * settle;
-        this.itemSample.scaleY = 1 - 0.08 * settle;
-      } else if (
-        sample.effectKind === 'none'
-        && (actor.condition === 'lost' || actor.condition === 'consumed')
-      ) {
-        const departure = smoothstep((progress - 0.08) / 0.82);
-        this.itemSample.x = -1.8 * departure;
-        this.itemSample.y = 0.52 * departure;
-        this.itemSample.z = -1.25 * departure;
-        this.itemSample.yaw = 1.1 * departure;
-        this.itemSample.roll = -0.55 * departure;
+      if (actor !== undefined) {
+        const sample = this.reactionSample;
+        this.itemSample.x = sample.actorX;
+        this.itemSample.y = sample.actorY;
+        this.itemSample.z = sample.actorZ;
+        this.itemSample.yaw = sample.actorYaw;
+        this.itemSample.pitch = sample.actorPitch;
+        this.itemSample.roll = sample.actorRoll;
+        this.itemSample.scaleX = sample.actorScaleX;
+        this.itemSample.scaleY = sample.actorScaleY;
+        this.itemSample.scaleZ = sample.actorScaleZ;
+        if (sample.effectKind === 'none' && actor.condition === 'broken') {
+          const settle = Math.sin(Math.PI * Math.min(1, progress / 0.58))
+            * (1 - smoothstep((progress - 0.46) / 0.54));
+          this.itemSample.y = -0.12 * settle;
+          this.itemSample.roll = 0.26 * settle;
+          this.itemSample.scaleY = 1 - 0.08 * settle;
+        } else if (
+          sample.effectKind === 'none'
+          && (actor.condition === 'lost' || actor.condition === 'consumed')
+        ) {
+          const departure = smoothstep((progress - 0.08) / 0.82);
+          this.itemSample.x = -1.8 * departure;
+          this.itemSample.y = 0.52 * departure;
+          this.itemSample.z = -1.25 * departure;
+          this.itemSample.yaw = 1.1 * departure;
+          this.itemSample.roll = -0.55 * departure;
+        }
+        this.supplyDisplay.applyEventItemPose(actor.instanceId, this.itemSample);
       }
-      this.supplyDisplay.applyEventItemPose(actor.instanceId, this.itemSample);
+      this.applyReactionEffect(this.reactionSample);
     }
 
     const sample = this.reactionSample;
@@ -644,7 +651,6 @@ export class WeatherEventAnimator {
       sample.cameraPitch,
       sample.cameraRoll,
     );
-    this.applyReactionEffect(sample);
 
     if (damagingFlashlight) {
       const grab = pulse(progress, 0.08, 0.44, 0.9);
@@ -778,26 +784,26 @@ export class WeatherEventAnimator {
     const active = this.active;
     if (active === null) return;
     this.active = null;
-    this.restoreCamera();
-    this.hideTransientEffects();
     switch (active.kind) {
       case 'item':
+        this.restoreCamera();
+        this.hideTransientEffects();
         this.supplyDisplay.clearEventPose();
         active.resolve(true);
         break;
       case 'react':
-        const actor = active.activeActorIndex < 0
-          ? undefined
-          : active.response.actors[active.activeActorIndex];
-        if (actor?.condition === 'lost' || actor?.condition === 'consumed') {
+        if (
+          active.actors.some(
+            ({ condition }) => condition === 'lost' || condition === 'consumed',
+          )
+        ) {
           this.supplyDisplay.releaseEventActorOnNextSync();
-        } else {
-          this.supplyDisplay.clearEventPose();
-          this.supplyDisplay.releaseEventActor();
         }
         active.resolve();
         break;
       case 'reveal':
+        this.restoreCamera();
+        this.hideTransientEffects();
         this.supplyDisplay.clearEventPose();
         active.resolve();
         break;
@@ -810,6 +816,7 @@ export class WeatherEventAnimator {
     if (active !== null) this.restoreCamera();
     this.supplyDisplay.clearEventMotion();
     this.hideTransientEffects();
+    this.selectedActorId = null;
     if (active?.kind === 'item') {
       active.resolve(false);
     } else if (active !== null) {
