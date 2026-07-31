@@ -1232,12 +1232,17 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    if (isDedicatedEventId(eventId)) {
+    const isDedicatedEvent = isDedicatedEventId(eventId);
+    if (isDedicatedEvent) {
       this.ui.showEventResult?.(formatEventResult(presentation));
     } else {
       this.ui.showFeedback?.(outcome);
     }
     if (isTerminal(terminal.state)) {
+      if (isDedicatedEvent) {
+        await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
+        if (!this.isContinuationActive(generation)) return;
+      }
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
       else this.clearEventPresentation();

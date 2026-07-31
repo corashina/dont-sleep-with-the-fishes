@@ -3357,6 +3357,129 @@ describe('SurvivalPhase orchestration', () => {
     });
   });
 
+  it.each([
+    {
+      terminalState: 'dead' as const,
+      eventId: 'death-stare',
+      initialResources: { health: 7 },
+      terminalResources: { health: 0 },
+      deltas: { health: -7 },
+      expectedLine: 'HEALTH -7',
+    },
+    {
+      terminalState: 'sunk' as const,
+      eventId: 'whirlpool',
+      initialResources: { hull: 11 },
+      terminalResources: { hull: 0 },
+      deltas: { hull: -11 },
+      expectedLine: 'HULL -11',
+    },
+  ])(
+    'holds a dedicated $terminalState result before clearing it for the ending',
+    async ({
+      terminalState,
+      eventId,
+      initialResources,
+      terminalResources,
+      deltas,
+      expectedLine,
+    }) => {
+      let current = snapshot({
+        state: 'dayEvent',
+        day: 6,
+        pendingEventId: eventId,
+        ...initialResources,
+      });
+      const hold = deferred();
+      const calls: string[] = [];
+      let visibleLines: readonly string[] | null = null;
+      const resolveEvent = vi.fn(() => {
+        current = snapshot({
+          state: terminalState,
+          day: 6,
+          ...initialResources,
+          ...terminalResources,
+        });
+        return accepted({
+          code: 'event-resolved',
+          message: `The event leaves you ${terminalState}.`,
+          deltas,
+          cue: terminalState === 'dead' ? 'impact' : 'sinking',
+        });
+      });
+      const clearEventPresentation = vi.fn(() => {
+        calls.push('clear-ui');
+        visibleLines = null;
+      });
+      const showEnding = vi.fn(() => {
+        calls.push('ending');
+        expect(visibleLines).toBeNull();
+      });
+      const setBusy = vi.fn();
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent,
+        },
+        world: {
+          scene: new Scene(),
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          play: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          clearEvent: vi.fn(() => { calls.push('clear-world'); }),
+          dispose: vi.fn(),
+        },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          showEventResult: vi.fn((view) => {
+            calls.push('result');
+            visibleLines = view.lines;
+          }),
+          holdEventOutcome: vi.fn(() => {
+            calls.push('hold');
+            return hold.promise;
+          }),
+          clearEventPresentation,
+          setBusy,
+          render: vi.fn(),
+          setJournalUnread: vi.fn(),
+          showEnding,
+          dispose: vi.fn(),
+        },
+      });
+
+      phase.start();
+      await flushPromises();
+      calls.length = 0;
+      setBusy.mockClear();
+
+      phase.handleEndure();
+      await flushPromises();
+
+      expect(visibleLines).toEqual([expectedLine]);
+      expect(calls).toEqual(['result', 'hold']);
+      expect(showEnding).not.toHaveBeenCalled();
+      expect(clearEventPresentation).not.toHaveBeenCalled();
+      expect(setBusy).not.toHaveBeenCalledWith(false);
+
+      phase.handleEndure();
+      await flushPromises();
+      expect(resolveEvent).toHaveBeenCalledOnce();
+
+      hold.resolve();
+      await flushPromises();
+
+      expect(calls).toEqual(['result', 'hold', 'clear-world', 'clear-ui', 'ending']);
+      expect(visibleLines).toBeNull();
+      expect(showEnding).toHaveBeenCalledOnce();
+      expect(setBusy).toHaveBeenLastCalledWith(false);
+    },
+  );
+
   it('keeps the Sleep response free of physical item animation', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot')!;
     let current = snapshot({
