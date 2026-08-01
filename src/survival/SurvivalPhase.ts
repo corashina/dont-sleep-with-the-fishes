@@ -18,6 +18,7 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
   type DriftingLootResultView,
+  type DiveResultView,
   type EventOutcomeView,
   type EventContextChoice,
   type EventResultView,
@@ -269,6 +270,26 @@ export function formatDriftingLootResult(
   };
 }
 
+export function formatDiveResult(outcome: ActionOutcome): DiveResultView {
+  const lines: string[] = [];
+  const rewards = [
+    ['food', 'FOOD'],
+    ['bait', 'BAIT'],
+    ['repairMaterial', 'REPAIR MATERIAL'],
+    ['rescueProgress', 'RESCUE PROGRESS'],
+  ] as const;
+  for (const [resource, label] of rewards) {
+    const delta = outcome.deltas[resource];
+    if (delta !== undefined && delta !== 0) {
+      lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
+    }
+  }
+  if (lines.length === 0) lines.push('NOTHING FOUND');
+  const health = outcome.deltas.health;
+  if (health !== undefined && health < 0) lines.push(`HEALTH ${health}`);
+  return { title: 'DIVE RESULT', lines };
+}
+
 function testContext(
   sceneRenderer: SceneRenderer = {
     render: () => undefined,
@@ -510,8 +531,12 @@ export class SurvivalPhase implements GamePhase {
       void this.runEndDay(outcome);
       return;
     }
+    if (action === 'dive') {
+      void this.runDiveAction(outcome);
+      return;
+    }
     this.audio.action(action, selectedOption);
-    void this.runDayAction(outcome, action);
+    void this.runDayAction(outcome);
   }
 
   handleEventItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
@@ -969,13 +994,9 @@ export class SurvivalPhase implements GamePhase {
       && (generation === undefined || generation === this.lifecycleGeneration);
   }
 
-  private async runDayAction(
-    outcome: ActionOutcome,
-    action: DayActionId,
-  ): Promise<void> {
+  private async runDayAction(outcome: ActionOutcome): Promise<void> {
     this.setBusy(true);
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
-    if (action === 'dive') this.audio.finishDive();
     if (this.disposed) return;
     const snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
@@ -986,6 +1007,49 @@ export class SurvivalPhase implements GamePhase {
     }
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
+  }
+
+  private async runDiveAction(outcome: ActionOutcome): Promise<void> {
+    const generation = ++this.lifecycleGeneration;
+    const scuba = Object.values(this.session.snapshot().inventory).find(
+      (item) => item?.type === 'scubaSet' && item.condition === 'usable',
+    );
+    const instanceId = scuba?.instanceId ?? 'scubaSet-1';
+    this.setBusy(true);
+
+    await (this.world.playDive?.(instanceId, () => {
+      if (this.isContinuationActive(generation)) this.audio.beginDive();
+    }) ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+
+    await (this.ui.setSleepCoverProfile?.('dive') ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+
+    this.world.clearDivePresentation?.();
+    this.audio.finishDive();
+    const snapshot = this.renderSnapshot(false, false);
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    if (!await this.waitForVisibilityResume(generation)) return;
+    await (this.ui.holdDiveCovered?.() ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+    await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    if (!await this.waitForVisibilityResume(generation)) return;
+
+    const resultHold = this.ui.showDiveResult?.(formatDiveResult(outcome)) ?? Promise.resolve();
+    if (!isTerminal(snapshot.state)) {
+      this.setBusy(false);
+      this.ui.restoreCommandFocus?.();
+      return;
+    }
+
+    await resultHold;
+    if (!await this.waitForVisibilityResume(generation)) return;
+    this.setBusy(false);
+    this.presentTerminalOnce(snapshot);
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
@@ -1044,7 +1108,7 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForEventResume(generation)
+      && !await this.waitForVisibilityResume(generation)
     ) return;
     if (!this.isContinuationActive(generation)) return;
     const choice: EventChoicePresentation = {
@@ -1059,7 +1123,7 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForEventResume(generation)
+      && !await this.waitForVisibilityResume(generation)
     ) return;
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
@@ -1161,7 +1225,7 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForEventResume(generation)
+      && !await this.waitForVisibilityResume(generation)
     ) return;
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
@@ -1402,7 +1466,7 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForEventResume(generation)
+      && !await this.waitForVisibilityResume(generation)
     ) return;
     if (!this.isContinuationActive(generation)) return;
     const terminal = this.session.snapshot();
@@ -1695,7 +1759,7 @@ export class SurvivalPhase implements GamePhase {
     }
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForEventResume(generation)
+      && !await this.waitForVisibilityResume(generation)
     ) return;
 
     const revealed = this.session.snapshot();
@@ -1914,7 +1978,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.setDocumentHidden?.(hidden);
   };
 
-  private waitForEventResume(generation: number): Promise<boolean> {
+  private waitForVisibilityResume(generation: number): Promise<boolean> {
     if (!this.isContinuationActive(generation)) return Promise.resolve(false);
     if (!this.visibilityPauseActive && !this.documentIsHidden()) {
       return Promise.resolve(true);

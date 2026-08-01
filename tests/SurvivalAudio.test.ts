@@ -50,11 +50,15 @@ describe('SurvivalAudio', () => {
     expect(scope.play).toHaveBeenCalledWith('eating');
   });
 
-  it('uses the short dive sequence', () => {
+  it('starts the dive audio at impact and finishes it once', () => {
     const scope = createScope();
     const audio = new SurvivalAudio(scope);
 
     audio.action('dive');
+    expect(scope.play).not.toHaveBeenCalledWith('diveEntry');
+
+    audio.beginDive();
+    audio.finishDive();
     audio.finishDive();
 
     expect(scope.play).toHaveBeenNthCalledWith(1, 'diveEntry');
