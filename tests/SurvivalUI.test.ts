@@ -703,6 +703,10 @@ describe('SurvivalUI', () => {
     endure.focus();
     expect(document.activeElement).toBe(endure);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
+    expect(mainStyles).toMatch(/\.sleep-cover \[data-dream-eyelid\]\s*\{[^}]*display:\s*none/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\[data-profile="bad-sleep"\]\s*\{[^}]*background:\s*transparent/s);
+    expect(mainStyles).toMatch(/\.sleep-cover\[data-profile="bad-sleep"\] \[data-dream-eyelid\]\s*\{[^}]*display:\s*block/s);
     expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
     expect(mainStyles).toMatch(/@keyframes bad-sleep-top-eyelid/);
     expect(mainStyles).toMatch(/@keyframes bad-sleep-bottom-eyelid/);

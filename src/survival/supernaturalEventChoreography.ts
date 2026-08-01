@@ -1,3 +1,5 @@
+import { clamp01, pulse, smoothstep } from './animationMath';
+
 export type SupernaturalAnimationEventId = 'ghosts' | 'eerie-melody';
 
 export interface SupernaturalRevealSample {
@@ -78,23 +80,6 @@ export const GHOST_FLIGHT_PATHS = Object.freeze([
   Object.freeze({ start: [6.1, 1.52, -13.4] as const, end: [-4.7, 1.26, -12.2] as const }),
   Object.freeze({ start: [-4.2, 1.04, -15.2] as const, end: [6.7, 1.42, -14.1] as const }),
 ] as const);
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const t = clamp01(value);
-  return t * t * (3 - 2 * t);
-}
-
-function pulse(progress: number, start: number, peak: number, end: number): number {
-  if (progress <= start || progress >= end) return 0;
-  return progress < peak
-    ? smoothstep((progress - start) / (peak - start))
-    : 1 - smoothstep((progress - peak) / (end - peak));
-}
 
 function isSupernaturalEventId(eventId: string): eventId is SupernaturalAnimationEventId {
   return Object.hasOwn(REVEAL_DURATIONS, eventId);

@@ -58,7 +58,12 @@ import type {
   PropModelLibrary,
   PropPresentation,
 } from './PropModelLibrary';
-import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  ignoreCleanupError as attemptCleanup,
+  runCleanupSteps,
+} from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
@@ -75,14 +80,6 @@ export type WorldConstructionStage =
 export interface WorldConstructionDependencies {
   readonly checkpoint?: (stage: WorldConstructionStage) => void;
   readonly physicsMode?: PhysicsMode;
-}
-
-function attemptCleanup(action: () => void): void {
-  try {
-    action();
-  } catch {
-    // Constructor rollback preserves the original construction error.
-  }
 }
 
 function sampleDefaultWaveInto(

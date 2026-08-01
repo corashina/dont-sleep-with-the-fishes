@@ -1,3 +1,5 @@
+import { clamp01, smootherStep } from './easing';
+
 export interface SinkingState {
   progress: number;
   rollRadians: number;
@@ -5,14 +7,6 @@ export interface SinkingState {
   sinkOffset: number;
   alarmRate: number;
   waveAmplitudeScale: number;
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smootherStep(value: number): number {
-  return value * value * value * (value * (value * 6 - 15) + 10);
 }
 
 export function getSinkingState(elapsedSeconds: number, durationSeconds: number): SinkingState {

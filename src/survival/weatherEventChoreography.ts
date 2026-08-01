@@ -1,3 +1,5 @@
+import { clamp01, pulse, smoothstep } from './animationMath';
+
 export type WeatherAnimationEventId =
   | 'shower-night'
   | 'windy-night'
@@ -135,23 +137,6 @@ const ITEM_CHOREOGRAPHY: Readonly<
     umbrella: Object.freeze({ duration: 1.4, effectKind: 'bad-sleep-umbrella-fold' }),
   }),
 });
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const t = clamp01(value);
-  return t * t * (3 - 2 * t);
-}
-
-function pulse(progress: number, start: number, peak: number, end: number): number {
-  if (progress <= start || progress >= end) return 0;
-  return progress < peak
-    ? smoothstep((progress - start) / (peak - start))
-    : 1 - smoothstep((progress - peak) / (end - peak));
-}
 
 function resetReveal(output: WeatherRevealSample): void {
   output.cameraX = 0;

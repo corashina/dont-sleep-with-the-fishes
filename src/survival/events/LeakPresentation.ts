@@ -18,9 +18,12 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
+import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
+import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
+  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -35,28 +38,6 @@ import {
   sampleLeakReveal,
   type LeakSample,
 } from './leakChoreography';
-
-type ActiveLeakAnimation =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | {
-      readonly kind: 'item';
-      readonly choiceId: string;
-      readonly instanceId: ItemInstanceId;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    }
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
 
 const LEAK_HOLES = [
   { y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
@@ -125,7 +106,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     displacementZ: 0,
     normal: { x: 0, y: 1, z: 0 },
   };
-  private active: ActiveLeakAnimation | null = null;
+  private active: DedicatedEventAnimation<{ readonly instanceId: ItemInstanceId }> | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private sprayElapsed = 0;
   private sprayHoleIndex = 0;
@@ -344,7 +325,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    this.resolveCancelled(active);
+    resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
       () => actor?.release(),
@@ -359,18 +340,14 @@ export class LeakPresentation implements DedicatedEventPresentation {
   }
 
   private borrowActor(instanceId: ItemInstanceId): boolean {
-    if (this.borrowedActor?.instanceId === instanceId) return true;
-    this.releaseActor();
-    const actor = this.environment.supplies.borrowEventActor(instanceId);
-    if (actor === null) return false;
-    this.borrowedActor = actor;
-    return true;
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor, this.environment.supplies, instanceId,
+    );
+    return this.borrowedActor !== null;
   }
 
   private releaseActor(): void {
-    const actor = this.borrowedActor;
-    this.borrowedActor = null;
-    actor?.release();
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 
   private finishActive(time: number): void {
@@ -390,12 +367,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    this.resolveCancelled(active);
-  }
-
-  private resolveCancelled(active: ActiveLeakAnimation | null): void {
-    if (active?.kind === 'item') active.resolve(false);
-    else active?.resolve();
+    resolveCancelledEventAnimation(active);
   }
 
   private applyHeldLeak(time: number): void {

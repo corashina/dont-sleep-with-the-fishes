@@ -25,17 +25,6 @@ $expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) + @('fishing-model-m
 
 . (Join-Path $PSScriptRoot 'item-model-publication.ps1')
 
-function Assert-FileSha256 {
-  param(
-    [Parameter(Mandatory = $true)][string]$Path,
-    [Parameter(Mandatory = $true)][string]$Expected
-  )
-  $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
-  if (-not $actual.Equals($Expected, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Source SHA-256 mismatch for $Path`: expected $Expected, received $actual"
-  }
-}
-
 try {
   New-Item -ItemType Directory -Force -Path $modelsRoot | Out-Null
   $stagedRoot = Get-GuardedSwapPath `

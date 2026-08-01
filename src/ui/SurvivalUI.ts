@@ -20,6 +20,7 @@ import type {
   SurvivalState,
   WeatherId,
 } from '../survival/survivalTypes';
+import { createElementRequirement } from './dom';
 import { formatDuration } from './formatDuration';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
@@ -208,11 +209,7 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage
   },
 };
 
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Missing survival UI element: ${selector}`);
-  return element;
-}
+const requireElement = createElementRequirement('survival UI');
 
 function meterMarkup(meter: MeterDefinition): string {
   return `

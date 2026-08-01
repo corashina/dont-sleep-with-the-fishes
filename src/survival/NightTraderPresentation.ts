@@ -1,5 +1,4 @@
 import {
-  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -20,9 +19,19 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import {
+  disposeRejectedModel,
+  hasRenderableBounds,
+} from '../rendering/modelPresentation';
+import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import {
+  clamp01Unchecked as clamp01,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,
@@ -40,24 +49,7 @@ type NightTraderAnimationKind =
   | 'result-reward'
   | 'result-refuse';
 
-interface ActiveAnimation {
-  readonly kind: NightTraderAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
-
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-}
+type ActiveAnimation = TimedAnimation<NightTraderAnimationKind>;
 
 const REVEAL_DURATION = 1.6;
 const PAYMENT_DURATION = 1.05;
@@ -79,15 +71,6 @@ const TRADER_REWARDS: Readonly<Partial<Record<string, ItemId>>> = Object.freeze(
   map: 'compass',
   umbrella: 'medicalKit',
 });
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
 
 function keyedTravel(progress: number): number {
   if (progress < 0.15) return -0.04 * smoothstep(progress / 0.15);
@@ -116,27 +99,6 @@ function createMaterial(
     opacity: options.opacity ?? 1,
     flatShading: true,
   });
-}
-
-function hasRenderableBounds(root: Group): boolean {
-  let hasMesh = false;
-  root.traverse((object) => {
-    if (object instanceof Mesh) hasMesh = true;
-  });
-  if (!hasMesh) return false;
-  const box = new Box3().setFromObject(root);
-  const size = box.getSize(new Vector3());
-  return !box.isEmpty()
-    && [size.x, size.y, size.z].every(Number.isFinite)
-    && Math.max(size.x, size.y, size.z) > 0;
-}
-
-function disposeRejectedModel(root: Group): void {
-  const geometries = new Set<BufferGeometry>();
-  const materials = new Set<Material>();
-  collectMeshResources(root, geometries, materials);
-  disposeResourceSets(geometries, materials);
-  root.clear();
 }
 
 export class NightTraderPresentation implements FocusedEventPresentation {

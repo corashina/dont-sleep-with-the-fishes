@@ -16,6 +16,10 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import {
+  collectMaterialTextures,
+  modelTriangleCount,
+} from '../rendering/modelPresentation';
+import {
   SURVIVAL_EVENT_MODEL_IDS,
   SURVIVAL_EVENT_MODEL_SPECS,
   type SurvivalEventModelId,
@@ -48,25 +52,6 @@ class GltfSurvivalEventModelLoader implements SurvivalEventModelLoader {
   }
 }
 
-function collectTextures(materials: Iterable<Material>, textures: Set<Texture>): void {
-  for (const material of materials) {
-    for (const value of Object.values(material)) {
-      if (value instanceof Texture) textures.add(value);
-    }
-  }
-}
-
-function triangleCount(root: Object3D): number {
-  let triangles = 0;
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const position = object.geometry.getAttribute('position');
-    if (!position) throw new Error('Event model has no position data.');
-    triangles += (object.geometry.index?.count ?? position.count) / 3;
-  });
-  return triangles;
-}
-
 function prepareLoadedTemplate(
   id: SurvivalEventModelId,
   source: Object3D,
@@ -83,7 +68,7 @@ function prepareLoadedTemplate(
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   collectMeshResources(root, geometries, materials);
-  const triangles = triangleCount(root);
+  const triangles = modelTriangleCount(root, 'Event model has no position data.');
   if (geometries.size === 0 || triangles <= 0 || triangles > spec.maxTriangles) {
     disposeResourceSets(geometries, materials);
     throw new Error(`Event model ${id} failed its geometry budget.`);
@@ -161,7 +146,7 @@ export class SurvivalEventModelLibrary implements SurvivalEventModels {
       this.templates.set(id, root);
       collectMeshResources(root, this.geometries, this.materials);
     }
-    collectTextures(this.materials, this.textures);
+    collectMaterialTextures(this.materials, this.textures);
   }
 
   static async load(

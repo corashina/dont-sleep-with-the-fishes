@@ -1,3 +1,5 @@
+import { clamp01, pulse, smoothstep } from '../animationMath';
+
 export const SNATCHER_REVEAL_DURATION = 2.5;
 export const SNATCHER_ITEM_DURATION = 1.15;
 export const SNATCHER_REACTION_DURATION = 1.2;
@@ -40,23 +42,6 @@ export interface SnatcherSample {
   itemScaleZ: number;
   effectStrength: number;
   effectKind: SnatcherItemEffectKind;
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const t = clamp01(value);
-  return t * t * (3 - 2 * t);
-}
-
-function pulse(progress: number, start: number, peak: number, end: number): number {
-  if (progress <= start || progress >= end) return 0;
-  return progress < peak
-    ? smoothstep((progress - start) / (peak - start))
-    : 1 - smoothstep((progress - peak) / (end - peak));
 }
 
 function resetSnatcherSample(output: SnatcherSample): void {

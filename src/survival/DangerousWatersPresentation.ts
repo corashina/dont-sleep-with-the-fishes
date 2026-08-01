@@ -19,9 +19,14 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import {
+  addTransformedMesh as addMesh,
+  type VectorTuple,
+} from '../rendering/addTransformedMesh';
+import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import { clamp01, smoothstep, type TimedAnimation } from './animationMath';
 import type { ActionOutcome } from './survivalTypes';
 
 export interface DangerousWatersBoatReaction {
@@ -51,13 +56,9 @@ export interface DangerousWatersItemPose {
 type DangerousWatersChoiceId = 'map' | 'compass' | 'sleep';
 type MotionKind = 'reveal' | 'choice' | 'safe' | 'damage' | 'severe';
 
-interface ActiveMotion {
-  readonly kind: MotionKind;
+type ActiveMotion = TimedAnimation<MotionKind, {
   readonly choiceId: DangerousWatersChoiceId | null;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+}>;
 
 interface PoolMember {
   readonly mesh: Mesh;
@@ -86,23 +87,11 @@ interface DangerousWatersMaterials {
   readonly fragment: MeshStandardMaterial;
 }
 
-type VectorTuple = readonly [number, number, number];
-
 const REVEAL_DURATION = 2.4;
 const CHOICE_DURATION = 1.1;
 const REACTION_DURATION = 0.9;
 const FOAM_COUNT = 12;
 const FRAGMENT_COUNT = 8;
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const progress = clamp01(value);
-  return progress * progress * (3 - 2 * progress);
-}
 
 function keyedTravel(progress: number): number {
   const value = clamp01(progress);
@@ -163,24 +152,6 @@ function createMaterials(): DangerousWatersMaterials {
       flatShading: true,
     }),
   };
-}
-
-function addMesh(
-  parent: Group,
-  name: string,
-  geometry: BufferGeometry,
-  material: Material,
-  position: VectorTuple = [0, 0, 0],
-  rotation: VectorTuple = [0, 0, 0],
-  scale: VectorTuple = [1, 1, 1],
-): Mesh {
-  const mesh = new Mesh(geometry, material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.scale.set(...scale);
-  parent.add(mesh);
-  return mesh;
 }
 
 function createRockGroup(

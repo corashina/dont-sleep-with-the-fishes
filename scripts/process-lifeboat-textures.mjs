@@ -1,6 +1,9 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import sharp from 'sharp';
+import { resolve } from 'node:path';
+import {
+  prepareTextureOutput,
+  resizedTexture,
+  writeDataMap,
+} from './texture-processing.mjs';
 
 const [colorSource, roughnessSource, normalSource, outputDirectory] = process.argv.slice(2);
 if (!colorSource || !roughnessSource || !normalSource || !outputDirectory) {
@@ -10,26 +13,15 @@ if (!colorSource || !roughnessSource || !normalSource || !outputDirectory) {
   );
 }
 
-const outputRoot = resolve(outputDirectory);
-for (const source of [colorSource, roughnessSource, normalSource]) {
-  if (dirname(resolve(source)) === outputRoot) {
-    throw new Error('Source and output directories must be distinct.');
-  }
-}
-await mkdir(outputRoot, { recursive: true });
+const outputRoot = await prepareTextureOutput(
+  [colorSource, roughnessSource, normalSource],
+  outputDirectory,
+);
 
 async function writeColor(source, destination) {
-  await sharp(resolve(source))
-    .resize(512, 512, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+  await resizedTexture(source)
     .modulate({ brightness: 0.62, saturation: 0.68 })
     .linear([0.92, 0.88, 0.82], [4, 3, 2])
-    .webp({ lossless: true, effort: 6 })
-    .toFile(resolve(destination));
-}
-
-async function writeDataMap(source, destination) {
-  await sharp(resolve(source))
-    .resize(512, 512, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
     .webp({ lossless: true, effort: 6 })
     .toFile(resolve(destination));
 }

@@ -1,19 +1,13 @@
 import { Group, type Object3D } from 'three';
 import type { EventPresentationKey } from './survivalTypes';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
-
-interface ActiveAnimation {
-  readonly kind: string;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+import type { TimedAnimation } from './animationMath';
 
 export abstract class KeyedEventPresentation implements FeaturedEventPresentation {
   readonly root = new Group();
   protected readonly subject = new Group();
   protected settledKind = 'staged';
-  private active: ActiveAnimation | null = null;
+  private active: TimedAnimation<string> | null = null;
   private disposed = false;
 
   protected constructor(name: string) {

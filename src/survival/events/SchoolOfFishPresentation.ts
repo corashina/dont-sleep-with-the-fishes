@@ -9,15 +9,19 @@ import {
   RingGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import type { WaveSample } from '../../ocean/WaveField';
+import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
+import { setFlatShading } from '../../rendering/modelPresentation';
 import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
+import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
 import type { EventModelInstance } from '../EventModelLibrary';
+import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
+  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -37,27 +41,6 @@ import {
   type SchoolSample,
   type SchoolVariant,
 } from './schoolOfFishChoreography';
-
-type ActiveSchoolAnimation =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | {
-      readonly kind: 'item';
-      readonly choiceId: string;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    }
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
 
 interface FishActor {
   readonly model: EventModelInstance;
@@ -85,29 +68,6 @@ const DEFAULT_VARIANT: SchoolVariant = {
   bank: 0,
   flashOffset: 0,
 };
-
-function waveSample(): WaveSample {
-  return {
-    height: 0,
-    displacementX: 0,
-    displacementZ: 0,
-    normal: { x: 0, y: 1, z: 0 },
-  };
-}
-
-function setFlatShading(root: Group): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-    for (const material of materials) {
-      if (!(material instanceof MeshStandardMaterial)) continue;
-      material.flatShading = true;
-      material.needsUpdate = true;
-    }
-  });
-}
 
 function activeFishCount(seed: number): number {
   const safeSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
@@ -173,7 +133,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     brokenItem: false,
   };
   private activeFish = MAX_FISH;
-  private active: ActiveSchoolAnimation | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -399,7 +359,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    this.resolveCancelled(active);
+    resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
       () => actor?.release(),
@@ -415,18 +375,14 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   }
 
   private borrowActor(instanceId: ItemInstanceId): boolean {
-    if (this.borrowedActor?.instanceId === instanceId) return true;
-    this.releaseActor();
-    const actor = this.environment.supplies.borrowEventActor(instanceId);
-    if (actor === null) return false;
-    this.borrowedActor = actor;
-    return true;
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor, this.environment.supplies, instanceId,
+    );
+    return this.borrowedActor !== null;
   }
 
   private releaseActor(): void {
-    const actor = this.borrowedActor;
-    this.borrowedActor = null;
-    actor?.release();
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 
   private finishActive(): void {
@@ -445,12 +401,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    this.resolveCancelled(active);
-  }
-
-  private resolveCancelled(active: ActiveSchoolAnimation | null): void {
-    if (active?.kind === 'item') active.resolve(false);
-    else active?.resolve();
+    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {

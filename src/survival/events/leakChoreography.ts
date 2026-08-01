@@ -1,3 +1,5 @@
+import { clamp01, pulse, smoothstep } from '../animationMath';
+
 export const LEAK_REVEAL_DURATION = 2.4;
 export const LEAK_ITEM_DURATION = 1.1;
 export const LEAK_REACTION_DURATION = 1;
@@ -43,23 +45,6 @@ export interface LeakSample {
   boatKick: number;
   surgeStrength: number;
   effectKind: LeakItemEffectKind;
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const t = clamp01(value);
-  return t * t * (3 - 2 * t);
-}
-
-function pulse(progress: number, start: number, peak: number, end: number): number {
-  if (progress <= start || progress >= end) return 0;
-  return progress < peak
-    ? smoothstep((progress - start) / (peak - start))
-    : 1 - smoothstep((progress - peak) / (end - peak));
 }
 
 function resetLeakSample(output: LeakSample): void {

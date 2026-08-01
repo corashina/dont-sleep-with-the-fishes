@@ -11,9 +11,13 @@ import type { ItemInstanceId } from '../../game/ItemState';
 import { disposeResourceSets, runCleanupSteps } from '../../world/SceneResources';
 import type {
   BorrowedSupplyActor,
+  MutableSupplyPose,
 } from '../BoatSupplyDisplay';
+import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
+import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
+  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -29,44 +33,11 @@ import {
   type SnatcherSample,
 } from './snatcherChoreography';
 
-type ActiveSnatcherAnimation =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | {
-      readonly kind: 'item';
-      readonly choiceId: string;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    }
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
-
 const TENTACLE_X = 1.52;
 const TENTACLE_Y = -0.62;
 const TENTACLE_Z = -0.66;
 const TENTACLE_SCALE = 0.94;
 const WARNING_PADDING = 0.02;
-
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-}
 
 function setTentacleMaterial(root: Group): void {
   root.traverse((object) => {
@@ -251,7 +222,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     scaleZ: 1,
   };
   private readonly reactionState = { targetLost: false };
-  private active: ActiveSnatcherAnimation | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private targetInstanceId: ItemInstanceId | null = null;
   private staged = false;
@@ -402,7 +373,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    this.resolveCancelled(active);
+    resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
       () => this.targetOutline.dispose(),
@@ -417,18 +388,14 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   private borrowActor(instanceId: ItemInstanceId): boolean {
-    if (this.borrowedActor?.instanceId === instanceId) return true;
-    this.releaseActor();
-    const actor = this.environment.supplies.borrowEventActor(instanceId);
-    if (actor === null) return false;
-    this.borrowedActor = actor;
-    return true;
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor, this.environment.supplies, instanceId,
+    );
+    return this.borrowedActor !== null;
   }
 
   private releaseActor(): void {
-    const actor = this.borrowedActor;
-    this.borrowedActor = null;
-    actor?.release();
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 
   private applyBorrowedPose(): void {
@@ -468,12 +435,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    this.resolveCancelled(active);
-  }
-
-  private resolveCancelled(active: ActiveSnatcherAnimation | null): void {
-    if (active?.kind === 'item') active.resolve(false);
-    else active?.resolve();
+    resolveCancelledEventAnimation(active);
   }
 
   private applySample(): void {

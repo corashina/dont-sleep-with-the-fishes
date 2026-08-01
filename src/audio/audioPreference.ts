@@ -42,14 +42,6 @@ function readState(
   }
 }
 
-function browserStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
-  try {
-    return globalThis.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 export function createAudioPreference(
   onChange: (state: Readonly<AudioControlState>) => void,
   storage: Pick<Storage, 'getItem' | 'setItem'> | null = browserStorage(),
@@ -79,3 +71,4 @@ export function createAudioPreference(
     }),
   };
 }
+import { browserStorage } from '../browser/storage';

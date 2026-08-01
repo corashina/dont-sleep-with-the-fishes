@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
 
-import { Box3, Euler, Matrix4, Vector3 } from 'three';
 import type {
   GeneratedRuntimeModelMetadata,
   RuntimeModelSpec,
 } from './itemModelManifest';
 import { FOCUSED_EVENT_MODEL_METADATA } from './focusedEventModelMetadata';
+import { normalizeGeneratedBounds } from './modelNormalization';
 
 export const EVENT_MODEL_IDS = [
   'chestClosed',
@@ -97,8 +97,6 @@ const INVALID_METADATA: GeneratedRuntimeModelMetadata = Object.freeze({
     max: Object.freeze([0, 0, 0] as const),
   }),
 });
-const BOUNDS_EPSILON = 1e-9;
-
 function generatedNormalization(
   metadata: GeneratedRuntimeModelMetadata,
   authored: EventModelPresentation,
@@ -122,35 +120,12 @@ function generatedNormalization(
     };
   }
 
-  const raw = new Box3(new Vector3(...min), new Vector3(...max));
-  const corners = [
-    new Vector3(raw.min.x, raw.min.y, raw.min.z),
-    new Vector3(raw.min.x, raw.min.y, raw.max.z),
-    new Vector3(raw.min.x, raw.max.y, raw.min.z),
-    new Vector3(raw.min.x, raw.max.y, raw.max.z),
-    new Vector3(raw.max.x, raw.min.y, raw.min.z),
-    new Vector3(raw.max.x, raw.min.y, raw.max.z),
-    new Vector3(raw.max.x, raw.max.y, raw.min.z),
-    new Vector3(raw.max.x, raw.max.y, raw.max.z),
-  ];
-  const rotation = new Matrix4().makeRotationFromEuler(new Euler(...authored.rotation));
-  const rotated = new Box3().setFromPoints(
-    corners.map((point) => point.applyMatrix4(rotation)),
+  return normalizeGeneratedBounds(
+    { min, max },
+    authored.rotation,
+    authored.targetLongestDimension,
+    authored.translation,
   );
-  const size = rotated.getSize(new Vector3());
-  const scale = authored.targetLongestDimension / Math.max(size.x, size.y, size.z);
-  const normalizedSize = size.multiplyScalar(scale);
-  const halfSize = normalizedSize.clone().multiplyScalar(0.5);
-  const translation = new Vector3(...authored.translation);
-  return {
-    normalizedSize: normalizedSize.toArray() as [number, number, number],
-    normalizedBounds: {
-      min: halfSize.clone().multiplyScalar(-1).add(translation)
-        .addScalar(-BOUNDS_EPSILON).toArray() as [number, number, number],
-      max: halfSize.add(translation)
-        .addScalar(BOUNDS_EPSILON).toArray() as [number, number, number],
-    },
-  };
 }
 
 function createEventModelSpec(id: EventModelId): EventModelSpec {

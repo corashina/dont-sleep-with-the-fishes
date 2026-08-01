@@ -1,6 +1,9 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import sharp from 'sharp';
+import { resolve } from 'node:path';
+import {
+  prepareTextureOutput,
+  resizedTexture,
+  writeDataMap,
+} from './texture-processing.mjs';
 
 const [
   darkWoodColorSource,
@@ -29,32 +32,18 @@ if (
   );
 }
 
-const outputRoot = resolve(outputDirectory);
-for (const source of [
+const outputRoot = await prepareTextureOutput([
   darkWoodColorSource,
   darkWoodRoughnessSource,
   darkWoodNormalSource,
   roomWallColorSource,
   roomWallRoughnessSource,
   roomWallNormalSource,
-]) {
-  if (dirname(resolve(source)) === outputRoot) {
-    throw new Error('Source and output directories must be distinct.');
-  }
-}
-await mkdir(outputRoot, { recursive: true });
+], outputDirectory);
 
 async function writeColor(source, destination) {
-  await sharp(resolve(source))
-    .resize(512, 512, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+  await resizedTexture(source)
     .webp({ quality: 88, effort: 6 })
-    .toFile(resolve(destination));
-}
-
-async function writeDataMap(source, destination) {
-  await sharp(resolve(source))
-    .resize(512, 512, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-    .webp({ lossless: true, effort: 6 })
     .toFile(resolve(destination));
 }
 

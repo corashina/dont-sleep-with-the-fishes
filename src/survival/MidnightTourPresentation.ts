@@ -19,6 +19,11 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import {
+  clamp01Unchecked as clamp01,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type {
   EventChoicePresentation,
   FocusedEventInteractionTarget,
@@ -40,12 +45,7 @@ type MidnightTourAnimationKind =
   | 'result-pass'
   | 'result-food';
 
-interface ActiveAnimation {
-  readonly kind: MidnightTourAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+type ActiveAnimation = TimedAnimation<MidnightTourAnimationKind>;
 
 const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
@@ -53,15 +53,6 @@ const VISIT_DURATION = 1.5;
 const RESULT_DURATION = 1.05;
 const Y_AXIS = new Vector3(0, 1, 0);
 const X_AXIS = new Vector3(1, 0, 0);
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
 
 function keyedTravel(progress: number): number {
   if (progress < 0.16) return -0.045 * smoothstep(progress / 0.16);

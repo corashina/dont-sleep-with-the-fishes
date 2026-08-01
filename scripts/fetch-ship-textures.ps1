@@ -50,18 +50,7 @@ $runtimeFiles = @(
   'room-painted-wood-normal.webp',
   'room-painted-wood-roughness.webp'
 )
-
-function Assert-ContainedPath {
-  param(
-    [Parameter(Mandatory = $true)][string]$Parent,
-    [Parameter(Mandatory = $true)][string]$Child
-  )
-  $resolvedParent = [IO.Path]::GetFullPath($Parent).TrimEnd('\') + '\'
-  $resolvedChild = [IO.Path]::GetFullPath($Child)
-  if (-not $resolvedChild.StartsWith($resolvedParent, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Refusing path outside guarded directory: $resolvedChild"
-  }
-}
+. (Join-Path $PSScriptRoot 'texture-publication.ps1')
 
 try {
   New-Item -ItemType Directory -Force -Path (
@@ -92,34 +81,8 @@ try {
     throw "Texture processing failed with exit code $LASTEXITCODE"
   }
 
-  $stagedNames = @(
-    Get-ChildItem -LiteralPath $stagingDirectory -File |
-      Sort-Object Name |
-      ForEach-Object Name
-  )
-  if ([string]::Join('|', $stagedNames) -ne [string]::Join('|', ($runtimeFiles | Sort-Object))) {
-    throw "Unexpected staged runtime files: $([string]::Join(', ', $stagedNames))"
-  }
-
-  New-Item -ItemType Directory -Force -Path $runtimeDirectory | Out-Null
-  foreach ($name in $runtimeFiles) {
-    $sourcePath = Join-Path $stagingDirectory $name
-    $destinationPath = Join-Path $runtimeDirectory $name
-    Assert-ContainedPath -Parent $runtimeDirectory -Child $destinationPath
-    Move-Item -Force -LiteralPath $sourcePath -Destination $destinationPath
-  }
-
-  foreach ($name in $runtimeFiles) {
-    $path = Join-Path $runtimeDirectory $name
-    Write-Output "$name SHA-256: $((Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash)"
-  }
+  Publish-TextureFiles $stagingDirectory $runtimeDirectory $runtimeFiles
+  Write-TextureHashes $runtimeDirectory $runtimeFiles
 } finally {
-  $resolvedTemporaryRoot = [IO.Path]::GetFullPath($temporaryRoot)
-  $resolvedSystemTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-  if (
-    $resolvedTemporaryRoot.StartsWith($resolvedSystemTemp, [StringComparison]::OrdinalIgnoreCase) `
-    -and (Split-Path -Leaf $resolvedTemporaryRoot).StartsWith('dont-sleep-ship-textures-')
-  ) {
-    Remove-Item -Recurse -Force -LiteralPath $resolvedTemporaryRoot -ErrorAction SilentlyContinue
-  }
+  Remove-GuardedTextureTempDirectory $temporaryRoot 'dont-sleep-ship-textures-'
 }

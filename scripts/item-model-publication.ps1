@@ -1,3 +1,14 @@
+function Assert-FileSha256 {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Expected
+  )
+  $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  if (-not $actual.Equals($Expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "SHA-256 mismatch for $Path`: expected $Expected, received $actual"
+  }
+}
+
 function Get-GuardedSwapPath {
   param(
     [Parameter(Mandatory = $true)][string]$ModelsRoot,

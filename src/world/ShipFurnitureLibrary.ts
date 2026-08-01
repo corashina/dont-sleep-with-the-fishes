@@ -15,7 +15,12 @@ import {
   type ShipFurnitureAssetId,
   type ShipFurnitureModelSpec,
 } from './shipFurnitureManifest';
-import { collectMeshResources, disposeResourceSets } from './SceneResources';
+import { finiteBox, validatedGeometryTriangles } from './modelValidation';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  ignoreCleanupError as attemptCleanup,
+} from './SceneResources';
 
 export interface ShipFurnitureModelLoader {
   load(url: string): Promise<Group>;
@@ -40,27 +45,6 @@ class GltfShipFurnitureLoader implements ShipFurnitureModelLoader {
   }
 }
 
-function finiteBox(box: Box3): boolean {
-  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
-}
-
-function geometryTriangles(modelId: ShipFurnitureAssetId, geometry: BufferGeometry): number {
-  const position = geometry.getAttribute('position');
-  if (!position || position.count === 0) {
-    throw new ShipFurnitureLoadError(modelId, 'mesh has missing or empty position data');
-  }
-  for (let index = 0; index < position.count; index += 1) {
-    if (![position.getX(index), position.getY(index), position.getZ(index)].every(Number.isFinite)) {
-      throw new ShipFurnitureLoadError(modelId, 'mesh contains non-finite position data');
-    }
-  }
-  const elementCount = geometry.index?.count ?? position.count;
-  if (elementCount % 3 !== 0) {
-    throw new ShipFurnitureLoadError(modelId, 'mesh element count does not describe complete triangles');
-  }
-  return elementCount / 3;
-}
-
 function normalizeTemplate(
   modelId: ShipFurnitureAssetId,
   root: Group,
@@ -72,7 +56,10 @@ function normalizeTemplate(
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     meshCount += 1;
-    triangles += geometryTriangles(modelId, object.geometry);
+    triangles += validatedGeometryTriangles(
+      object.geometry,
+      (message) => new ShipFurnitureLoadError(modelId, message),
+    );
     if (!object.geometry.getAttribute('normal')) {
       object.geometry.computeVertexNormals();
     }
@@ -135,14 +122,6 @@ function normalizeTemplate(
 
 function materialTextures(material: Material): readonly Texture[] {
   return Object.values(material).filter((value): value is Texture => value instanceof Texture);
-}
-
-function attemptCleanup(action: () => void): void {
-  try {
-    action();
-  } catch {
-    // Load rollback preserves the primary load or validation error.
-  }
 }
 
 function disposeRoots(roots: Iterable<Group>): void {

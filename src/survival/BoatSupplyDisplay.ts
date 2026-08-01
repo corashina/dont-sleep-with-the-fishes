@@ -70,6 +70,25 @@ export interface BorrowedSupplyActor {
   release(): void;
 }
 
+export function borrowSupplyActor(
+  current: BorrowedSupplyActor | null,
+    supplies: Pick<BoatSupplyDisplay, 'borrowEventActor'>,
+    instanceId: ItemInstanceId,
+    prepare?: (actor: BorrowedSupplyActor) => void,
+): BorrowedSupplyActor | null {
+    if (current?.instanceId === instanceId) return current;
+    current?.release();
+    const actor = supplies.borrowEventActor(instanceId);
+    if (actor === null) return null;
+    prepare?.(actor);
+    return actor;
+}
+
+export function releaseSupplyActor(actor: BorrowedSupplyActor | null): null {
+  actor?.release();
+  return null;
+}
+
 interface MutableRecord {
   readonly groupId: BoatSupplyGroupId;
   readonly root: Group;
@@ -103,7 +122,7 @@ interface ActiveAnimation {
   readonly resolve: () => void;
 }
 
-interface MutableSupplyPose extends SupplyAdditivePose {
+export interface MutableSupplyPose extends SupplyAdditivePose {
   x: number;
   y: number;
   z: number;

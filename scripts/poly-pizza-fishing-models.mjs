@@ -1,38 +1,15 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPolyPizzaModels } from './poly-pizza-models.mjs';
+import {
+  buildPolyPizzaModels,
+  createPolyPizzaSource,
+} from './poly-pizza-models.mjs';
 
-const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
-const CC_BY_3 = 'https://creativecommons.org/licenses/by/3.0/';
-
-function source({
-  id,
-  publicId,
-  resourceId,
-  title,
-  creator,
-  license,
-  sha256,
-  sourceTriangles,
-  downloadedOn = '2026-07-26',
-}) {
-  return Object.freeze({
-    id,
-    pageUrl: `https://poly.pizza/m/${publicId}`,
-    downloadUrl: `https://static.poly.pizza/${resourceId}.glb`,
-    sourceAssetId: `poly-pizza:${resourceId}`,
-    publicId,
-    resourceId,
-    title,
-    creator,
-    license,
-    licenseUrl: license === 'CC0 1.0' ? CC0 : CC_BY_3,
-    sha256,
-    sourceTriangles,
-    downloadedOn,
-    maxTriangles: 2_000,
-  });
-}
+const source = (options) => createPolyPizzaSource({
+  ...options,
+  downloadedOn: options.downloadedOn ?? '2026-07-26',
+  maxTriangles: 2_000,
+});
 
 export const POLY_PIZZA_FISHING_MODEL_SOURCES = Object.freeze({
   cod: source({

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { inspectEventModel } from './event-model-metadata.mjs';
+import { parseModelCheckArguments } from './model-check-arguments.mjs';
+import { parseGlb, validateEmbeddedResources } from './glb-validation.mjs';
 
 const EVENT_SOURCES = Object.freeze({
   driftingLootBarrel: Object.freeze({
@@ -109,8 +111,6 @@ const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
 ]);
 const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
 const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
-const GLB_MAGIC = 0x46546c67;
-const JSON_CHUNK = 0x4e4f534a;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function sameNumbers(first, second) {
@@ -238,35 +238,6 @@ export function validateEventModelAttribution(ledgerText) {
   }
 }
 
-function parseGlb(filePath, bytes) {
-  if (bytes.byteLength < 20) throw new Error(`${filePath}: invalid GLB header`);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint32(0, true) !== GLB_MAGIC || view.getUint32(4, true) !== 2) {
-    throw new Error(`${filePath}: invalid glTF 2.0 binary`);
-  }
-  const jsonLength = view.getUint32(12, true);
-  if (view.getUint32(16, true) !== JSON_CHUNK || 20 + jsonLength > bytes.byteLength) {
-    throw new Error(`${filePath}: invalid GLB JSON chunk`);
-  }
-  return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)));
-}
-
-function validateEmbeddedResources(filePath, json) {
-  for (const buffer of json.buffers ?? []) {
-    if (typeof buffer.uri === 'string' && !buffer.uri.startsWith('data:')) {
-      throw new Error(`${filePath}: external buffer URI: ${buffer.uri}`);
-    }
-  }
-  for (const image of json.images ?? []) {
-    if (typeof image.uri === 'string' && !image.uri.startsWith('data:')) {
-      throw new Error(`${filePath}: external image URI: ${image.uri}`);
-    }
-    if (image.uri === undefined && !Number.isInteger(image.bufferView)) {
-      throw new Error(`${filePath}: image has no embedded data`);
-    }
-  }
-}
-
 function validateIndices(modelId, document) {
   for (const mesh of document.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
@@ -282,29 +253,11 @@ function validateIndices(modelId, document) {
   }
 }
 
-function parseArguments(args) {
-  let assetsOnly = false;
-  let modelsDir = resolve('src', 'assets', 'models', 'events');
-  let ledgerPath = resolve('src', 'assets', 'ATTRIBUTION.md');
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--assets-only') {
-      assetsOnly = true;
-    } else if (argument === '--models-dir' || argument === '--ledger-path') {
-      const value = args[index + 1];
-      if (!value || value.startsWith('--')) throw new Error(`${argument} requires a path`);
-      if (argument === '--models-dir') modelsDir = resolve(value);
-      else ledgerPath = resolve(value);
-      index += 1;
-    } else {
-      throw new Error(`unknown argument: ${argument}`);
-    }
-  }
-  return { assetsOnly, ledgerPath, modelsDir };
-}
-
 async function main() {
-  const { assetsOnly, ledgerPath, modelsDir } = parseArguments(process.argv.slice(2));
+  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
+    process.argv.slice(2),
+    ['src', 'assets', 'models', 'events'],
+  );
   const errors = [];
   const measurements = {};
   let metadata;
@@ -348,8 +301,7 @@ async function main() {
       if (actualHash !== source.sha256) {
         throw new Error(`${modelId}: source SHA-256 mismatch`);
       }
-      const json = parseGlb(filePath, bytes);
-      validateEmbeddedResources(filePath, json);
+      validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
       const document = await io.read(filePath);
       validateIndices(modelId, document);
       const measurement = inspectEventModel(modelId, document);
