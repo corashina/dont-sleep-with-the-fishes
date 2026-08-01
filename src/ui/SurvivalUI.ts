@@ -1032,18 +1032,22 @@ export class SurvivalUI {
     }));
     this.diveResultLayer.classList.add('is-visible');
     this.diveResultLayer.setAttribute('aria-hidden', 'false');
-    this.publishAnnouncement([view.title, ...view.lines].join('. '));
     return this.createDiveHold(
       DIVE_RESULT_HOLD_MS,
       (pending) => { this.pendingDiveResultHold = pending; },
       () => this.pendingDiveResultHold,
       () => { this.pendingDiveResultHold = null; },
+      () => this.clearDiveResultView(),
     );
   }
 
   hideDiveResult(): void {
     if (this.disposed) return;
     this.pendingDiveResultHold?.finish();
+    this.clearDiveResultView();
+  }
+
+  private clearDiveResultView(): void {
     this.diveResultLayer.classList.remove('is-visible');
     this.diveResultLayer.setAttribute('aria-hidden', 'true');
     this.diveResultTitle.textContent = '';
@@ -1055,6 +1059,7 @@ export class SurvivalUI {
     setPending: (pending: PendingFade) => void,
     getPending: () => PendingFade | null,
     clearPending: () => void,
+    onCurrentFinish?: () => void,
   ): Promise<void> {
     return new Promise((resolve) => {
       let settled = false;
@@ -1063,7 +1068,10 @@ export class SurvivalUI {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
-        if (getPending()?.finish === finish) clearPending();
+        if (getPending()?.finish === finish) {
+          clearPending();
+          onCurrentFinish?.();
+        }
         resolve();
       };
       timer = window.setTimeout(finish, delay);

@@ -2787,8 +2787,16 @@ describe('BoatWorld helpers', () => {
     const initialQuaternion = camera.quaternion.clone();
     const internals = world as unknown as {
       divePresentation: DivePresentation;
+      sampleWorldWaveInto: (
+        output: ReturnType<typeof sampleWaveField>,
+        time: number,
+        x: number,
+        z: number,
+        amplitudeScale: number,
+      ) => void;
     };
     const updateDive = vi.spyOn(internals.divePresentation, 'update');
+    const sampleDiveWave = vi.spyOn(internals, 'sampleWorldWaveInto');
     const impact = vi.fn();
 
     const pending = world.playDive(scuba.instanceId, impact);
@@ -2796,13 +2804,24 @@ describe('BoatWorld helpers', () => {
 
     world.update(81.1, 1.1);
     expect(updateDive).toHaveBeenCalledWith(1.1, 1.1, expect.any(Number));
-    expect(updateDive.mock.calls[0]![2]).toBeCloseTo(sampleWaveField(
+    const entryPosition = internals.divePresentation.copyWaterEntryWorldPosition(
+      new Vector3(),
+    );
+    expect(sampleDiveWave).toHaveBeenCalledWith(
+      expect.any(Object),
+      81.1,
+      entryPosition.x,
+      entryPosition.z,
+      presentationWeatherProfile('calm').waveScale,
+    );
+    const entryWaveHeight = sampleWaveField(
       DEFAULT_WAVES,
       81.1,
-      0.72,
-      -3.8,
+      entryPosition.x,
+      entryPosition.z,
       presentationWeatherProfile('calm').waveScale,
-    ).height);
+    ).height;
+    expect(updateDive.mock.calls[0]![2]).toBeCloseTo(entryWaveHeight);
     expect(camera.position.toArray()).not.toEqual(initialPosition.toArray());
     world.update(83.6, 2.5);
     world.update(84, 0.4);
@@ -2814,6 +2833,43 @@ describe('BoatWorld helpers', () => {
     expect(camera.position.toArray()).toEqual(initialPosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(initialQuaternion.toArray());
     expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('restores the old gear before a second world dive hides a new instance', async () => {
+    const scuba = savedItem('scubaSet');
+    const secondScuba = savedItem('scubaSet', 2);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [scuba, secondScuba],
+    );
+    world.syncInventory(snapshot([scuba, secondScuba]));
+    const internals = world as unknown as {
+      supplyDisplay: BoatSupplyDisplay;
+    };
+    const setHidden = vi.spyOn(
+      internals.supplyDisplay,
+      'setPresentationItemHidden',
+    );
+    const secondId = secondScuba.instanceId;
+
+    const first = world.playDive(scuba.instanceId, () => undefined);
+    const second = world.playDive(secondId, () => undefined);
+    await first;
+
+    expect(setHidden.mock.calls.slice(0, 3)).toEqual([
+      [scuba.instanceId, true],
+      [scuba.instanceId, false],
+      [secondId, true],
+    ]);
+    world.clearDivePresentation();
+    await second;
+    expect(setHidden).toHaveBeenLastCalledWith(secondId, false);
 
     world.dispose();
     propModels.dispose();

@@ -285,8 +285,10 @@ export function formatDiveResult(outcome: ActionOutcome): DiveResultView {
     }
   }
   if (lines.length === 0) lines.push('NOTHING FOUND');
-  const health = outcome.deltas.health;
-  if (health !== undefined && health < 0) lines.push(`HEALTH ${health}`);
+  const appliedHealthDelta = outcome.deltas.health;
+  if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
+    lines.push(`HEALTH ${appliedHealthDelta}`);
+  }
   return { title: 'DIVE RESULT', lines };
 }
 
@@ -594,6 +596,7 @@ export class SurvivalPhase implements GamePhase {
   requestRestart(): void {
     if (this.disposed || this.restartRequested) return;
     this.clearEventPresentation();
+    this.audio.cancelDive();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
     this.releaseVisibilityResumeWaiters();
@@ -1030,9 +1033,11 @@ export class SurvivalPhase implements GamePhase {
     this.world.clearDivePresentation?.();
     this.audio.finishDive();
     const snapshot = this.renderSnapshot(false, false);
-    if (!await this.renderAndSettleCoveredScene(generation)) return;
-    if (!await this.waitForVisibilityResume(generation)) return;
-    await (this.ui.holdDiveCovered?.() ?? Promise.resolve());
+    const [coveredSceneSettled] = await Promise.all([
+      this.renderAndSettleCoveredScene(generation),
+      this.ui.holdDiveCovered?.() ?? Promise.resolve(),
+    ]);
+    if (!coveredSceneSettled) return;
     if (!await this.waitForVisibilityResume(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!await this.waitForVisibilityResume(generation)) return;
@@ -1968,6 +1973,7 @@ export class SurvivalPhase implements GamePhase {
   private readonly handleVisibilityChange = (): void => {
     const hidden = this.visibilityDocument?.hidden === true;
     if (hidden) {
+      this.audio.cancelDive();
       if (!this.paused) {
         this.visibilityPauseActive = true;
         this.setPaused(true);

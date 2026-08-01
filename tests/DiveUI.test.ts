@@ -35,7 +35,7 @@ describe('DiveUI', () => {
     await pending;
   });
 
-  it('shows and announces the exact dive result, then settles its hold', async () => {
+  it('shows one live result, then hides and clears it after its hold', async () => {
     vi.useFakeTimers();
     const { mount, ui } = createUI();
     const focusTarget = document.createElement('button');
@@ -52,10 +52,29 @@ describe('DiveUI', () => {
       .map((line) => line.textContent)).toEqual(['FOOD +1', 'HEALTH -10']);
     expect(document.activeElement).toBe(focusTarget);
     await Promise.resolve();
-    expect(mount.querySelector('[data-survival-announcer]')?.textContent)
-      .toBe('DIVE RESULT. FOOD +1. HEALTH -10');
+    const liveMessages = [...mount.querySelectorAll<HTMLElement>('[role="status"], [aria-live]')]
+      .filter((region) => region.textContent?.includes('FOOD +1'));
+    expect(liveMessages).toEqual([result]);
     await vi.advanceTimersByTimeAsync(2_600);
     await hold;
+    expect(result.classList.contains('is-visible')).toBe(false);
+    expect(result.getAttribute('aria-hidden')).toBe('true');
+    expect(result.textContent?.trim()).toBe('');
+  });
+
+  it('shows and automatically clears a later result', async () => {
+    vi.useFakeTimers();
+    const { mount, ui } = createUI();
+    const first = ui.showDiveResult({ title: 'DIVE RESULT', lines: ['FOOD +1'] });
+    await vi.advanceTimersByTimeAsync(2_600);
+    await first;
+
+    const second = ui.showDiveResult({ title: 'DIVE RESULT', lines: ['BAIT +1'] });
+    const result = mount.querySelector<HTMLElement>('[data-dive-result]')!;
+    expect(result.textContent).toContain('BAIT +1');
+    await vi.advanceTimersByTimeAsync(2_600);
+    await second;
+    expect(result.textContent?.trim()).toBe('');
   });
 
   it('settles superseded cover, covered hold, and result promises', async () => {
