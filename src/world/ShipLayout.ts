@@ -137,6 +137,22 @@ export interface ShipMastSpec {
   readonly sails: readonly ShipSailSpec[];
 }
 
+export interface ShipCrowsNestSpec {
+  readonly id: 'mainmast-lookout';
+  readonly mastId: ShipMastSpec['id'];
+  readonly floorOffsetY: number;
+  readonly outerWidth: number;
+  readonly openingSize: number;
+  readonly guardHeight: number;
+  readonly ladder: {
+    readonly id: 'mainmast-ladder';
+    readonly width: number;
+    readonly mastOffset: number;
+    readonly rungSpacing: number;
+    readonly outwardZ: -1;
+  };
+}
+
 export const SHIP_SAIL_CLOTH_CLEARANCE_Y = 5.2;
 export const SHIP_SAIL_CLOTH_MIN_Y = 5.21;
 export const SHIP_SAIL_TOP_OFFSET = 0.25;
@@ -160,6 +176,7 @@ export function shipSailGeometryLimits(
 
 export interface ShipRiggingSpec {
   readonly masts: readonly ShipMastSpec[];
+  readonly crowsNest: ShipCrowsNestSpec;
 }
 
 export interface ShipNavigationTargetSpec {
@@ -974,53 +991,70 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       rungSpacing: 0.32,
     },
   ],
-  rigging: { masts: [{
-    id: 'mainmast',
-    position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
-    height: 14.5,
-    baseDiameter: 0.72,
-    boomLength: 17.2,
-    stays: [
-      {
-        id: 'fore-port',
-        anchor: [crewBounds.minX + 0.42, 3.72, crewBounds.minZ + 0.42],
+  rigging: {
+    masts: [{
+      id: 'mainmast',
+      position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
+      height: 14.5,
+      baseDiameter: 0.72,
+      boomLength: 17.2,
+      stays: [
+        {
+          id: 'fore-port',
+          anchor: [crewBounds.minX + 0.42, 3.72, crewBounds.minZ + 0.42],
+        },
+        {
+          id: 'fore-starboard',
+          anchor: [crewBounds.maxX - 0.42, 3.72, crewBounds.minZ + 0.42],
+        },
+        {
+          id: 'aft-port',
+          anchor: [storageBounds.minX + 0.42, 3.72, storageBounds.maxZ - 0.42],
+        },
+        {
+          id: 'aft-starboard',
+          anchor: [storageBounds.maxX - 0.42, 3.72, storageBounds.maxZ - 0.42],
+        },
+      ],
+      sails: [
+        {
+          id: 'mainsail',
+          kind: 'boom',
+          furled: true,
+          rotationY: Math.PI / 2,
+          topY: 14.1,
+          footY: 5.85,
+          clewZ: -8.6,
+          billow: 0.85,
+        },
+        {
+          id: 'staysail',
+          kind: 'stay',
+          furled: true,
+          rotationY: Math.PI / 2,
+          topY: 13.6,
+          footY: 5.85,
+          clewZ: 8.6,
+          billow: 0.72,
+        },
+      ],
+    }],
+    crowsNest: {
+      id: 'mainmast-lookout',
+      mastId: 'mainmast',
+      floorOffsetY: 10.5,
+      outerWidth: 2.4,
+      openingSize: 0.9,
+      guardHeight: 1.05,
+      ladder: {
+        id: 'mainmast-ladder',
+        width: 0.8,
+        mastOffset: 0.18,
+        rungSpacing: 0.32,
+        outwardZ: -1,
       },
-      {
-        id: 'fore-starboard',
-        anchor: [crewBounds.maxX - 0.42, 3.72, crewBounds.minZ + 0.42],
-      },
-      {
-        id: 'aft-port',
-        anchor: [storageBounds.minX + 0.42, 3.72, storageBounds.maxZ - 0.42],
-      },
-      {
-        id: 'aft-starboard',
-        anchor: [storageBounds.maxX - 0.42, 3.72, storageBounds.maxZ - 0.42],
-      },
-    ],
-    sails: [
-      {
-        id: 'mainsail',
-        kind: 'boom',
-        furled: true,
-        rotationY: Math.PI / 2,
-        topY: 14.1,
-        footY: 5.85,
-        clewZ: -8.6,
-        billow: 0.85,
-      },
-      {
-        id: 'staysail',
-        kind: 'stay',
-        furled: true,
-        rotationY: Math.PI / 2,
-        topY: 13.6,
-        footY: 5.85,
-        clewZ: 8.6,
-        billow: 0.72,
-      },
-    ],
-  }] },
+    },
+  },
   targets: navigationTargets(doors, furniture),
   rail: {
     height: 1.05,
@@ -1621,6 +1655,23 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     }
     return { id: spec.id, bounds };
   });
+  const crowsNest = layout.rigging.crowsNest;
+  const crowsNestMast = layout.rigging.masts.find(({ id }) => id === crowsNest.mastId);
+  if (!crowsNestMast) {
+    throw new Error(`Crow's nest ${crowsNest.id} references missing mast ${crowsNest.mastId}`);
+  }
+  if (!positive(crowsNest.floorOffsetY) || !positive(crowsNest.outerWidth)
+    || !positive(crowsNest.openingSize) || !positive(crowsNest.guardHeight)
+    || !positive(crowsNest.ladder.width) || !positive(crowsNest.ladder.mastOffset)
+    || !positive(crowsNest.ladder.rungSpacing)) {
+    throw new Error(`Crow's nest ${crowsNest.id} must have positive finite dimensions`);
+  }
+  if (crowsNest.openingSize < 0.9) {
+    throw new Error(`Crow's nest ${crowsNest.id} opening must be at least 0.9 metres`);
+  }
+  if (crowsNest.floorOffsetY > crowsNestMast.height) {
+    throw new Error(`Crow's nest ${crowsNest.id} floor exceeds mast height`);
+  }
 
   const physicalSlots = new Map<string, {
     readonly ownerId: string;
