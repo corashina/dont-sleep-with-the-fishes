@@ -67,10 +67,12 @@ export function createCrowsNest(
     const octagonInset = index === 0 || index === 7 ? 0.42 : index === 1 || index === 6 ? 0.14 : 0;
     const width = spec.outerWidth - octagonInset - 0.02 * (index % 3);
     if (z < -0.35) {
-      const sideWidth = (width - spec.openingSize) / 2;
+      const outerEdge = width / 2;
+      const openingEdge = spec.openingSize / 2;
+      const sideWidth = outerEdge - openingEdge;
       ([
-        [-halfWidth + sideWidth / 2, 'port'],
-        [halfWidth - sideWidth / 2, 'starboard'],
+        [-(outerEdge + openingEdge) / 2, 'port'],
+        [(outerEdge + openingEdge) / 2, 'starboard'],
       ] as const).forEach(([x, side]) => {
         const size: readonly [number, number, number] = [sideWidth, floorThickness, 0.22];
         const position: readonly [number, number, number] = [
