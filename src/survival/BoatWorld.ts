@@ -90,6 +90,11 @@ import type {
   EventModelInstance,
   EventModelLibrary,
 } from './EventModelLibrary';
+import {
+  FOCUSED_EVENT_IDS,
+  type EventChoicePresentation,
+  type FocusedEventPresentationFactories,
+} from './FocusedEventPresentation';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import { isFeaturedEventId, type FeaturedEventId } from './FeaturedEventPresentation';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
@@ -467,10 +472,20 @@ export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
 }
 
 function isEventModelLibrary(
-  models: SurvivalEventModels | EventModelLibrary | undefined,
+  models: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories | undefined,
 ): models is EventModelLibrary {
   return models !== undefined && 'create' in models;
 }
+
+function isFocusedEventFactoryMap(
+  models: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories | undefined,
+): models is FocusedEventPresentationFactories {
+  return models !== undefined
+    && !('clone' in models)
+    && !('create' in models);
+}
+
+const FOCUSED_EVENT_ID_SET = new Set<string>(FOCUSED_EVENT_IDS);
 
 export class BoatWorld {
   readonly scene: Scene;
@@ -703,10 +718,17 @@ export class BoatWorld {
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
     waterQuality: WaterQuality = 'low',
-    models?: SurvivalEventModels | EventModelLibrary,
+    models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
+    focusedEventFactories: FocusedEventPresentationFactories = {},
   ) {
-    const featuredEventModels = isEventModelLibrary(models) ? undefined : models;
+    const resolvedFocusedFactories = isFocusedEventFactoryMap(models)
+      ? models
+      : focusedEventFactories;
+    const featuredEventModels = isEventModelLibrary(models)
+      || isFocusedEventFactoryMap(models)
+      ? undefined
+      : models;
     const dedicatedEventModels = eventModels
       ?? (isEventModelLibrary(models) ? models : undefined);
     this.eventModels = dedicatedEventModels ?? createEmptyEventModelLibraryForTest();
@@ -775,7 +797,9 @@ export class BoatWorld {
       savedItems,
     );
     this.chestDisplay = new ChestDisplay(
-      featuredEventModels === undefined ? undefined : resolvedEventModels.clone('mysteryChest'),
+      featuredEventModels === undefined
+        ? propModels.createEventModel('chestClosed')?.root ?? null
+        : resolvedEventModels.clone('mysteryChest'),
     );
     this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
     this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
@@ -873,7 +897,14 @@ export class BoatWorld {
 
     this.fishingCatches = new FishingCatchLibrary();
     this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
-    this.eventPresentation = new EventPresentationLayer();
+    this.eventPresentation = new EventPresentationLayer({
+      propModels,
+      waves: DEFAULT_WAVES,
+      cameraRig: this.cameraRig,
+      boatMotionRoot: this.motionRig,
+      supplyDisplay: this.supplyDisplay,
+      chestDisplay: this.chestDisplay,
+    }, resolvedFocusedFactories);
     this.featuredEvents = new FeaturedEventPresentations(
       resolvedEventModels,
       this.featuredEventCameraRig,
@@ -956,6 +987,9 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
+    const focusedRoot = instanceId === null
+      ? null
+      : this.eventPresentation.interactionRoot(instanceId);
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
@@ -963,6 +997,8 @@ export class BoatWorld {
           ? this.lantern.root
           : instanceId === 'persistent-chest'
             ? this.chestDisplay.root
+          : focusedRoot !== null
+            ? focusedRoot
           : instanceId === 'drifting-loot' || instanceId?.startsWith('event:') === true
             ? this.activeFeaturedEventId === null
               ? null
@@ -1022,10 +1058,13 @@ export class BoatWorld {
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
-  playEventChoice(eventId: string, choiceId: string): Promise<void> {
+  playEventChoice(
+    eventId: string,
+    choice: string | EventChoicePresentation,
+  ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.weatherEventOperation += 1;
-    return this.eventPresentation.playChoice(eventId, choiceId);
+    return this.eventPresentation.playChoice(eventId, choice);
   }
 
   stageEvent(context: EventSceneContext): void;
@@ -1050,13 +1089,26 @@ export class BoatWorld {
       this.eventPresentation.clear();
       this.weatherEventAnimator.clear();
       this.featuredEvents.clear();
+      this.activeFeaturedEventId = null;
+      this.activeDriftingLootVariant = null;
       this.supernaturalEventAnimator.clear();
+      this.clearMoonEvent();
       this.dedicatedEvents.stage(context);
       return;
     }
     this.dedicatedEvents?.clear();
     this.resetDedicatedEffects();
     Object.assign(this.vortexWave, createInactiveVortexWaveState());
+    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+      this.featuredEvents.clear();
+      this.activeFeaturedEventId = null;
+      this.activeDriftingLootVariant = null;
+      this.stageMoonEvent(eventId);
+      this.eventPresentation.stage(eventId);
+      this.weatherEventAnimator.stage(eventId);
+      this.supernaturalEventAnimator.clear();
+      return;
+    }
     if (isFeaturedEventId(eventId)) {
       this.eventPresentation.clear();
       this.featuredEvents.stage(eventId, variant);
@@ -1081,6 +1133,13 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     if (this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.reveal();
+      return;
+    }
+    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+      await Promise.all([
+        this.eventPresentation.reveal(eventId),
+        this.weatherEventAnimator.reveal(eventId),
+      ]);
       return;
     }
     if (isFeaturedEventId(eventId)) {
@@ -1141,14 +1200,36 @@ export class BoatWorld {
   async reactToEventOutcome(
     eventId: string,
     outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | {
-      readonly choiceId: string;
-      readonly instanceId: ItemInstanceId;
-      readonly condition: string;
-    } = EMPTY_EVENT_PHYSICAL_RESPONSE,
+    response: EventPhysicalResponsePresentation | EventChoicePresentation =
+      EMPTY_EVENT_PHYSICAL_RESPONSE,
     presentation?: EventOutcomePresentation,
   ): Promise<void> {
     if (this.disposed) return;
+    const focusedChoice = 'actors' in response ? null : response;
+    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+      const result = outcome.eventResult;
+      if (
+        focusedChoice === null
+        || result === undefined
+        || result.eventId !== eventId
+        || result.choiceId !== focusedChoice.choiceId
+      ) {
+        const received = result === undefined
+          ? 'missing'
+          : `${result.eventId}/${result.choiceId}`;
+        throw new Error(
+          `Focused event ${eventId} requires result ${eventId}/${focusedChoice?.choiceId ?? 'missing-choice'}; received ${received}.`,
+        );
+      }
+    }
+    const physicalResponse: EventPhysicalResponsePresentation = 'actors' in response
+      ? response
+      : {
+          choiceId: response.choiceId,
+          actors: response.instanceId === null || response.condition === null
+            ? []
+            : [{ instanceId: response.instanceId, condition: response.condition }],
+        };
     this.weatherEventOperation += 1;
     if (this.dedicatedEvents?.handles(eventId)) {
       if (presentation === undefined) {
@@ -1161,14 +1242,13 @@ export class BoatWorld {
       && isFeaturedEventId(eventId)
       ? this.featuredEvents.react(eventId, outcome.eventPresentationKey)
       : Promise.resolve();
-    const physicalResponse = 'actors' in response
-      ? response
-      : EMPTY_EVENT_PHYSICAL_RESPONSE;
     await Promise.all([
-      isFeaturedEventId(eventId)
+      this.weatherEventAnimator.react(eventId, outcome, physicalResponse),
+      FOCUSED_EVENT_ID_SET.has(eventId)
+        ? this.eventPresentation.react(eventId, outcome)
+        : isFeaturedEventId(eventId)
         ? featuredReaction
         : this.eventPresentation.react(eventId, outcome),
-      this.weatherEventAnimator.react(eventId, outcome, physicalResponse),
       this.supernaturalEventAnimator.react(eventId, outcome, physicalResponse),
       this.reactMoonEvent(eventId, outcome, physicalResponse),
     ]);
@@ -1406,13 +1486,20 @@ export class BoatWorld {
         depth: chestDepth,
       },
     } satisfies BoatInteractionAnchor;
+    const focusedEventAnchors = this.eventPresentation.projectInteractionAnchors(
+      this.camera,
+      width,
+      height,
+    );
+    const focusedIds = new Set(focusedEventAnchors.map(({ id }) => id));
     return [
       ...itemAnchors,
       fishingAnchor,
       repairAnchor,
       lanternAnchor,
-      chestAnchor,
+      ...(focusedIds.has(chestAnchor.id) ? [] : [chestAnchor]),
       ...(featuredAnchor === null ? [] : [featuredAnchor]),
+      ...focusedEventAnchors,
     ];
   }
 

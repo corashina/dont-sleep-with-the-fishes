@@ -83,6 +83,8 @@ const breakRandom = (quantity: number): EventInventoryMutation => ({ kind: 'brea
 const loseEventTarget = (): EventInventoryMutation => ({ kind: 'loseEventTarget', quantity: 1 });
 const gain = (itemId: ItemId): EventInventoryMutation =>
   ({ kind: 'gain', itemId, quantity: 1, fallbackFood: 1 });
+const gainChest = (): EventInventoryMutation =>
+  ({ kind: 'gainChest', quantity: 1, fallbackFood: 1 });
 
 function effects(
   resources?: readonly ResourceEffect[],
@@ -107,7 +109,13 @@ const outcome = (
   weight: number,
   message: string,
   outcomeEffects: WeightedEventOutcome['effects'] = {},
-): WeightedEventOutcome => ({ weight, message, effects: outcomeEffects });
+  resultId?: string,
+): WeightedEventOutcome => ({
+  ...(resultId === undefined ? {} : { resultId }),
+  weight,
+  message,
+  effects: outcomeEffects,
+});
 
 const featuredOutcome = (
   presentationKey: EventPresentationKey,
@@ -404,72 +412,77 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], 13, { maximumAppearances: 1 }),
   event('chest-attack', 'Chest Attack', 'impact', 1, 1, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      outcome(1, 'The net binds the chest shut.', { chest: 'close' })),
-    contextualChoice('fight', 'Fight It',
-      outcome(1, 'The chest bites your arm before you smash it.', {
-        resources: [subtract('health', 25)],
-        chest: 'destroy',
-      })),
+      outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
     contextualChoice('sleep', 'Hide',
       outcome(1, 'The chest tears into you before it falls overboard.', {
         resources: [subtract('health', 40)],
         chest: 'destroy',
-      })),
+      }, 'chest-hide')),
   ], undefined, { allowedChestStates: ['mimic'] }),
   event('midnight-tour', 'Midnight Tour', 'sighting', 18, 7, 30, [
     contextualChoice('visit', 'Visit the Island',
-      outcome(50, 'You find duct tape.', effects([set('energy', 2)], [gain('ductTape')])),
-      outcome(50, 'You find an energy bar.', effects([set('energy', 2)], [gain('energyBar')])),
-      outcome(50, 'You find a medkit.', effects([set('energy', 2)], [gain('medicalKit')])),
-      outcome(150, 'You find one bait.', effects([add('bait', 1)])),
-      outcome(36, 'Something drops from the rocks.', effects([subtract('health', 35)])),
+      outcome(50, 'You find a chest.', {
+        resources: [set('energy', 2), add('pressure', 1)],
+        items: [gainChest()],
+        flags: { set: ['direction3'] },
+      }, 'tour-chest'),
+      outcome(50, 'You find one bait.', {
+        resources: [add('bait', 1)],
+        flags: { set: ['direction3'] },
+      }, 'tour-bait'),
+      outcome(12, 'Something drops from the rocks.', {
+        resources: [subtract('health', 35)],
+        flags: { set: ['direction3'] },
+      }, 'tour-attack'),
     ),
-    contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.')),
-  ], 40),
+    contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.', {}, 'tour-pass')),
+  ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
   event('night-trader', 'Night Trader', 'sighting', 14, 10, 35, [
-    {
-      ...contextualChoice('food', 'Food for Duct Tape', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]))),
-      requirements: [{ resource: 'food', minimum: 1 }],
-    },
-    {
-      ...contextualChoice('bait', 'Bait for Energy Bar', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]))),
-      requirements: [{ resource: 'bait', minimum: 1 }],
-    },
-    choice('map', 'Map for Compass', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]))),
-    choice('umbrella', 'Umbrella for Medkit', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]))),
-    contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.')),
+    choice('food', 'Offer Food', 'cannedFood', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
+    choice('bait', 'Offer Bait', 'baitTin', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
+    choice('map', 'Offer Map', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
+    choice('umbrella', 'Offer Umbrella', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
+    contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.', {}, 'trader-refuse')),
   ]),
   event('handyman', 'Handyman', 'repair', 12, 20, 50, [
-    choice('spyglass', 'Spyglass for Flashlight', 'spyglass', outcome(1, 'The handyman gives you a flashlight.', effects(undefined, [lose('spyglass'), gain('flashlight')]))),
-    choice('flashlight', 'Flashlight for Spyglass', 'flashlight', outcome(1, 'The handyman gives you binoculars.', effects(undefined, [lose('flashlight'), gain('spyglass')]))),
-    choice('flareGun', 'Flare Gun for Harpoon Gun', 'flareGun', outcome(1, 'The handyman gives you a harpoon gun.', effects(undefined, [consume('flareGun'), gain('harpoonGun')]))),
-    choice('harpoonGun', 'Harpoon Gun for Flare Gun', 'harpoonGun', outcome(1, 'The handyman gives you a flare gun.', effects(undefined, [consume('harpoonGun'), gain('flareGun')]))),
-    choice('scubaSet', 'Scuba Gear for Medkit', 'scubaSet', outcome(1, 'The handyman gives you a medkit.', effects(undefined, [lose('scubaSet'), gain('medicalKit')]))),
-    choice('medicalKit', 'Medkit for Scuba Gear', 'medicalKit', outcome(1, 'The handyman gives you scuba gear.', effects(undefined, [consume('medicalKit'), gain('scubaSet')]))),
-    choice('fishingNet', 'Fishing Net for Bucket', 'fishingNet', outcome(1, 'The handyman gives you a bucket.', effects(undefined, [lose('fishingNet'), gain('bucket')]))),
-    choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]))),
-    choice('ductTape', 'Duct Tape for Energy Bar', 'ductTape', outcome(1, 'The handyman gives you an energy bar.', effects(undefined, [consume('ductTape'), gain('energyBar')]))),
-    choice('energyBar', 'Energy Bar for Duct Tape', 'energyBar', outcome(1, 'The handyman gives you duct tape.', effects(undefined, [consume('energyBar'), gain('ductTape')]))),
+    choice('spyglass', 'Spyglass for Flashlight', 'spyglass', outcome(1, 'The handyman gives you a flashlight.', effects(undefined, [lose('spyglass'), gain('flashlight')]), 'handyman-reward')),
+    choice('flashlight', 'Flashlight for Spyglass', 'flashlight', outcome(1, 'The handyman gives you binoculars.', effects(undefined, [lose('flashlight'), gain('spyglass')]), 'handyman-reward')),
+    choice('flareGun', 'Flare Gun for Harpoon Gun', 'flareGun', outcome(1, 'The handyman gives you a harpoon gun.', effects(undefined, [consume('flareGun'), gain('harpoonGun')]), 'handyman-reward')),
+    choice('harpoonGun', 'Harpoon Gun for Flare Gun', 'harpoonGun', outcome(1, 'The handyman gives you a flare gun.', effects(undefined, [consume('harpoonGun'), gain('flareGun')]), 'handyman-reward')),
+    choice('scubaSet', 'Scuba Gear for Medkit', 'scubaSet', outcome(1, 'The handyman gives you a medkit.', effects(undefined, [lose('scubaSet'), gain('medicalKit')]), 'handyman-reward')),
+    choice('medicalKit', 'Medkit for Scuba Gear', 'medicalKit', outcome(1, 'The handyman gives you scuba gear.', effects(undefined, [consume('medicalKit'), gain('scubaSet')]), 'handyman-reward')),
+    choice('fishingNet', 'Fishing Net for Bucket', 'fishingNet', outcome(1, 'The handyman gives you a bucket.', effects(undefined, [lose('fishingNet'), gain('bucket')]), 'handyman-reward')),
+    choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]), 'handyman-reward')),
+    choice('ductTape', 'Duct Tape for Energy Bar', 'ductTape', outcome(1, 'The handyman gives you an energy bar.', effects(undefined, [consume('ductTape'), gain('energyBar')]), 'handyman-reward')),
+    choice('energyBar', 'Energy Bar for Duct Tape', 'energyBar', outcome(1, 'The handyman gives you duct tape.', effects(undefined, [consume('energyBar'), gain('ductTape')]), 'handyman-reward')),
+    choice('anchor', 'Anchor for Chest', 'anchor', outcome(1, 'The handyman gives you a chest.', effects(undefined, [lose('anchor'), gainChest()]), 'handyman-reward')),
+    {
+      ...contextualChoice('chest', 'Chest for Anchor', outcome(1, 'The handyman gives you an anchor.', {
+        chest: 'destroy',
+        items: [gain('anchor')],
+      }, 'handyman-reward')),
+      requiredChestState: 'closed',
+    },
     contextualChoice('touch', 'Touch the Hand', outcome(
       1,
       'The hand closes around you.',
-      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 70)]),
+      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 70)]), 'handyman-touch',
     )),
-    contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.')),
-  ]),
+    contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.', {}, 'handyman-sleep')),
+  ], undefined, { minimumPressure: 2 }),
   event('other-people', 'Other People', 'sighting', 10, 15, 20, [
-    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The other boat sees your flare.', { rescue: true, items: [consume('flareGun')] })),
+    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The other boat sees your flare.', { rescue: true, items: [consume('flareGun')] }, 'people-rescue')),
     choice('flashlight', 'Use Flashlight', 'flashlight',
-      outcome(40, 'The other boat sees your signal.', { rescue: true }),
-      outcome(60, 'The other boat disappears into the dark.')),
-    contextualChoice('pass', 'Let It Pass', outcome(1, 'You let the other boat pass.')),
-  ], undefined, { minimumRescueProgress: 15 }),
+      outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
+      outcome(60, 'The other boat disappears into the dark.', {}, 'people-missed')),
+    contextualChoice('pass', 'Let It Pass', outcome(1, 'You let the other boat pass.', {}, 'people-pass')),
+  ], undefined, { minimumRescueProgress: 15, maximumAppearances: 2 }),
 ]);
 
 const EVENT_RESOURCES: readonly EventResource[] = [
   'pressure', 'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueProgress',
 ];
-const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'breakRandom', 'loseRandom', 'loseEventTarget'];
+const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'gainChest', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
 type PlainRecord = Record<PropertyKey, unknown>;
 
@@ -539,7 +552,9 @@ function validateMutation(candidate: unknown, path: string): void {
   const itemSpecific = kind === 'consume' || kind === 'break' || kind === 'lose' || kind === 'gain';
   const allowed = kind === 'gain'
     ? ['kind', 'itemId', 'quantity', 'fallbackFood']
-    : itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
+    : kind === 'gainChest'
+      ? ['kind', 'quantity', 'fallbackFood']
+      : itemSpecific ? ['kind', 'itemId', 'quantity'] : ['kind', 'quantity'];
   assertExactKeys(candidate, path, `${kind} mutation`, allowed, allowed);
   const quantity = candidate.quantity;
   if (!Number.isInteger(quantity) || (quantity as number) < 1) {
@@ -547,6 +562,12 @@ function validateMutation(candidate: unknown, path: string): void {
   }
   if (kind === 'loseEventTarget') {
     if (quantity !== 1) throw new Error(`${path} has an invalid quantity`);
+    return;
+  }
+  if (kind === 'gainChest') {
+    if (quantity !== 1 || candidate.fallbackFood !== 1) {
+      throw new Error(`${path} has an invalid gain quantity or fallback food`);
+    }
     return;
   }
   if (!itemSpecific) return;
@@ -570,10 +591,14 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
     candidateOutcome,
     path,
     'outcome',
-    ['weight', 'message', 'presentationKey', 'minimumPriorAppearances', 'effects'],
+    ['resultId', 'weight', 'message', 'presentationKey', 'minimumPriorAppearances', 'effects'],
     ['weight', 'message', 'effects'],
   );
   const outcomeEntry = candidateOutcome as unknown as WeightedEventOutcome;
+  if (outcomeEntry.resultId !== undefined
+    && (typeof outcomeEntry.resultId !== 'string' || outcomeEntry.resultId.trim().length === 0)) {
+    throw new Error(`${path} result ID is blank`);
+  }
   if (!Number.isFinite(outcomeEntry.weight) || outcomeEntry.weight <= 0) throw new Error(`${path} outcome weight is invalid`);
   if (typeof outcomeEntry.message !== 'string' || outcomeEntry.message.trim().length === 0) throw new Error(`${path} message is blank`);
   if (outcomeEntry.presentationKey !== undefined
@@ -756,6 +781,10 @@ export function validateSurvivalEventCatalog(
       if (choiceIds.has(eventChoice.id)) throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
       choiceIds.add(eventChoice.id);
       if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
+      if (eventChoice.requiredChestState !== undefined
+        && !['none', 'closed', 'mimic'].includes(eventChoice.requiredChestState)) {
+        throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid required chest state`);
+      }
       if (eventChoice.requirements !== undefined) {
         if (!Array.isArray(eventChoice.requirements)) {
           throw new Error(`${eventEntry.id}.${eventChoice.id} requirements must be an array`);

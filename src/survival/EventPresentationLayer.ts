@@ -7,13 +7,14 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
+  PerspectiveCamera,
   Quaternion,
   SphereGeometry,
   TorusGeometry,
   Vector3,
 } from 'three';
 import {
-  DEFAULT_WAVES,
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
@@ -22,11 +23,32 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import {
+  createBoatObjectBoundsCache,
+  projectCachedBoatObjectBounds,
+  type BoatInteractionAnchor,
+  type BoatObjectBoundsCache,
+} from './BoatInteraction';
+import {
   DangerousWatersPresentation,
   type DangerousWatersBoatReaction,
   type DangerousWatersItemPose,
 } from './DangerousWatersPresentation';
 import type { ActionOutcome } from './survivalTypes';
+import { ChestAttackPresentation } from './ChestAttackPresentation';
+import {
+  FOCUSED_EVENT_IDS,
+  type EventChoicePresentation,
+  type FocusedEventInteractionTarget,
+  type FocusedEventId,
+  type FocusedEventPresentation,
+  type FocusedEventPresentationDependencies,
+  type FocusedEventPresentationFactories,
+  type FocusedEventPresentationFactory,
+} from './FocusedEventPresentation';
+import { HandymanPresentation } from './HandymanPresentation';
+import { MidnightTourPresentation } from './MidnightTourPresentation';
+import { NightTraderPresentation } from './NightTraderPresentation';
+import { OtherPeoplePresentation } from './OtherPeoplePresentation';
 
 interface ActiveEventAnimation {
   readonly kind: 'reveal' | 'react';
@@ -57,22 +79,34 @@ interface MaritimeMaterials {
   readonly eye: MeshStandardMaterial;
   readonly earth: MeshStandardMaterial;
   readonly foliage: MeshStandardMaterial;
-  readonly vessel: MeshStandardMaterial;
+}
+
+interface RescueCuePresentation extends FocusedEventPresentation {
+  setRescueCue(progress: number | null): void;
 }
 
 type VectorTuple = readonly [number, number, number];
 
 const TABLEAU_EVENT_IDS = [
+  'drifting-bottle',
+  'check-the-back',
+  'mystery-chest',
   'chest-attack',
+  'flowers',
   'midnight-tour',
-  'night-trader',
-  'handyman',
-  'other-people',
   'death-stare',
 ] as const;
 
 const REVEAL_DURATION = 0.9;
 const REACTION_DURATION = 0.7;
+
+export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFactories = {
+  'chest-attack': (dependencies) => new ChestAttackPresentation(dependencies),
+  'midnight-tour': (dependencies) => new MidnightTourPresentation(dependencies),
+  'night-trader': (dependencies) => new NightTraderPresentation(dependencies),
+  handyman: (dependencies) => new HandymanPresentation(dependencies),
+  'other-people': (dependencies) => new OtherPeoplePresentation(dependencies),
+};
 
 function createMaterial(
   color: number,
@@ -108,7 +142,6 @@ function createMaterials(): MaritimeMaterials {
     eye: createMaterial(0xc9aa68, 0.48, { emissive: 0x302008 }),
     earth: createMaterial(0x403a31, 1),
     foliage: createMaterial(0x344f42, 0.96),
-    vessel: createMaterial(0x222d31, 0.9, { metalness: 0.12 }),
   };
 }
 
@@ -254,44 +287,6 @@ function islandTableau(materials: MaritimeMaterials): Group {
   return root;
 }
 
-function traderTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'trader-skiff-hull', new BoxGeometry(1.65, 0.35, 0.72), materials.darkWood, [0, -0.08, 0], [0, -0.12, 0], [1, 1, 0.82]);
-  addMesh(root, 'trader-skiff-prow', new ConeGeometry(0.38, 0.75, 4), materials.wood, [-1.12, -0.02, 0], [0, 0, Math.PI / 2]);
-  for (const x of [-0.48, 0.15]) {
-    addMesh(root, `trader-skiff-rib:${x}`, new BoxGeometry(0.08, 0.26, 0.82), materials.rope, [x, 0.12, 0]);
-  }
-  addMesh(root, 'trader-case', new BoxGeometry(0.62, 0.4, 0.2), materials.wood, [0.38, 0.37, -0.15], [-0.42, 0.08, 0]);
-  addMesh(root, 'trader-oar', new BoxGeometry(1.8, 0.055, 0.10), materials.wood, [0.1, 0.22, 0.52], [0, 0.25, -0.05]);
-  addMesh(root, 'trader-cloaked-silhouette', new ConeGeometry(0.34, 1.05, 6), materials.vessel, [-0.26, 0.75, -0.03], [0, 0.08, -0.04]);
-  addMesh(root, 'trader-cloaked-head', new SphereGeometry(0.19, 7, 5), materials.fishDark, [-0.26, 1.28, -0.03]);
-  return root;
-}
-
-function handTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'hand-palm', new BoxGeometry(0.55, 0.22, 0.72), materials.paper, [0, 0.16, 0], [0.06, -0.16, 0.02]);
-  for (let index = 0; index < 4; index += 1) {
-    addMesh(root, `hand-finger:${index}`, new CylinderGeometry(0.055, 0.07, 0.58 + index * 0.035, 6), materials.paper, [-0.24 + index * 0.16, 0.57, -0.08 + Math.abs(index - 1.5) * 0.03], [0.05, 0, -0.08 + index * 0.035]);
-  }
-  addMesh(root, 'hand-cuff', new CylinderGeometry(0.28, 0.34, 0.48, 7), materials.vessel, [0, -0.22, 0], [0, 0, 0.04], [1, 1, 0.82]);
-  return root;
-}
-
-function cargoVesselTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'cargo-vessel-hull', new BoxGeometry(8.5, 1.05, 1.3), materials.vessel, [0, 0, 0], [0, 0.04, 0]);
-  addMesh(root, 'cargo-vessel-bow', new ConeGeometry(0.68, 1.7, 4), materials.vessel, [-5.05, 0, 0], [0, 0, Math.PI / 2], [1, 1, 1.2]);
-  addMesh(root, 'cargo-vessel-deck', new BoxGeometry(5.4, 0.24, 1.02), materials.metal, [0.55, 0.66, 0]);
-  addMesh(root, 'cargo-vessel-cabin', new BoxGeometry(1.65, 1.25, 0.92), materials.paper, [2.15, 1.25, 0]);
-  addMesh(root, 'cargo-vessel-wheelhouse', new BoxGeometry(1.05, 0.48, 1.02), materials.vessel, [2.14, 2.06, 0]);
-  addMesh(root, 'cargo-vessel-mast', new CylinderGeometry(0.07, 0.09, 3.4, 6), materials.metal, [-0.78, 2.05, 0], [0, 0, 0.04]);
-  for (const x of [-2.1, -1.2, -0.3, 0.6]) {
-    addMesh(root, `cargo-vessel-crate:${x}`, new BoxGeometry(0.72, 0.62, 0.78), materials.wood, [x, 1.02, 0], [0, x * 0.025, 0]);
-  }
-  return root;
-}
-
 function createTableau(
   eventId: string,
   content: Group,
@@ -327,8 +322,15 @@ export class EventPresentationLayer {
   readonly root = new Group();
   private readonly dangerousWaters = new DangerousWatersPresentation();
   private readonly tableaus = new Map<string, EventTableau>();
+  private readonly focused = new Map<string, FocusedEventPresentation>();
+  private readonly ownedFocused = new Set<FocusedEventPresentation>();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly interactionTargets = new Map<
+    FocusedEventPresentation,
+    readonly FocusedEventInteractionTarget[]
+  >();
+  private readonly interactionBounds = new Map<Object3D, BoatObjectBoundsCache | null>();
   private readonly positionScratch = new Vector3();
   private readonly quaternionScratch = new Quaternion();
   private readonly waveSample: WaveSample = {
@@ -338,21 +340,25 @@ export class EventPresentationLayer {
     normal: { x: 0, y: 1, z: 0 },
   };
   private activeAnimation: ActiveEventAnimation | null = null;
+  private activeFocused: FocusedEventPresentation | null = null;
   private stagedEventId: string | null = null;
   private held = false;
-  private rescueProgress: number | null = null;
   private reactionDirection = 1;
   private disposed = false;
 
-  constructor() {
+  constructor(
+    private readonly dependencies: FocusedEventPresentationDependencies,
+    focusedFactories: FocusedEventPresentationFactories = {},
+  ) {
     this.root.name = 'event-presentation-layer';
     const materials = createMaterials();
     const tableaus = [
+      createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
+      createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
+      createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
       createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
+      createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
-      createTableau('night-trader', traderTableau(materials), [4.4, 0.02, -7.2], [1.6, -0.38, -0.5]),
-      createTableau('handyman', handTableau(materials), [-3.8, 0.05, -5.4], [-0.9, -0.52, 0.25]),
-      createTableau('other-people', cargoVesselTableau(materials), [-9, 1.25, -48], [-5.2, -0.75, -1.5]),
       createTableau('death-stare', fishTableau(materials, true), [0, -0.8, -7.4], [0, -2.3, -1.4]),
     ];
     for (const tableau of tableaus) {
@@ -360,42 +366,161 @@ export class EventPresentationLayer {
       this.root.add(tableau.root);
     }
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+    for (const eventId of FOCUSED_EVENT_IDS) {
+      const factory = focusedFactories[eventId]
+        ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
+      if (factory !== undefined) this.registerFocusedFactory(eventId, factory);
+    }
     this.root.add(this.dangerousWaters.root);
+  }
+
+  registerFocusedFactory(
+    eventId: FocusedEventId,
+    factory: FocusedEventPresentationFactory,
+  ): boolean {
+    if (this.disposed || this.focused.has(eventId)) return false;
+    let presenter: FocusedEventPresentation | null;
+    try {
+      presenter = factory(this.dependencies);
+    } catch {
+      return false;
+    }
+    if (presenter === null || this.ownedFocused.has(presenter)) return false;
+    presenter.root.visible = false;
+    this.focused.set(eventId, presenter);
+    this.ownedFocused.add(presenter);
+    const interactionTargets = presenter.interactionTargets?.() ?? [];
+    this.interactionTargets.set(presenter, interactionTargets);
+    for (const target of interactionTargets) {
+      this.interactionBounds.set(
+        target.root,
+        createBoatObjectBoundsCache(target.root),
+      );
+    }
+    this.root.add(presenter.root);
+    return true;
+  }
+
+  projectInteractionAnchors(
+    camera: PerspectiveCamera,
+    width: number,
+    height: number,
+  ): BoatInteractionAnchor[] {
+    if (this.disposed || this.activeFocused === null) return [];
+    return (this.interactionTargets.get(this.activeFocused) ?? []).map((target) => {
+      const projection = projectCachedBoatObjectBounds(
+        target.root,
+        this.interactionBounds.get(target.root) ?? null,
+        camera,
+        width,
+        height,
+      );
+      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
+      return {
+        id: target.id,
+        label: target.label,
+        description: target.description,
+        eventChoiceId: target.choiceId,
+        itemType: null,
+        toolId: null,
+        action: null,
+        ...point,
+        visible: target.root.visible && point.visible,
+        depleted: false,
+        remainingUses: null,
+        quantity: 1,
+        usableQuantity: 1,
+        brokenQuantity: 0,
+        backingInstanceId: null,
+        hitArea: {
+          width: Math.max(target.minimumHitWidth ?? 64, hitWidth),
+          height: Math.max(target.minimumHitHeight ?? 64, hitHeight),
+          depth,
+        },
+      } satisfies BoatInteractionAnchor;
+    });
+  }
+
+  interactionRoot(anchorId: string): Object3D | null {
+    if (this.disposed || this.activeFocused === null) return null;
+    return (this.interactionTargets.get(this.activeFocused) ?? [])
+      .find(({ id }) => id === anchorId)?.root ?? null;
+  }
+
+  hasFocused(eventId: string): boolean {
+    return this.focused.has(eventId);
   }
 
   stage(eventId: string): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.dangerousWaters.clear();
-    this.stagedEventId = eventId === 'dangerous-waters' || this.tableaus.has(eventId)
+    this.clearActiveFocused();
+    const focused = this.focused.get(eventId) ?? null;
+    this.activeFocused = focused;
+    this.stagedEventId = focused === null
+      && (eventId === 'dangerous-waters' || this.tableaus.has(eventId))
       ? eventId
       : null;
-    if (eventId === 'dangerous-waters') this.dangerousWaters.stage();
     this.held = false;
-    for (const id of TABLEAU_EVENT_IDS) {
-      const tableau = this.tableaus.get(id)!;
-      tableau.heldReactionTilt = 0;
-      tableau.root.visible = id === this.stagedEventId || (
-        id === 'other-people' && this.rescueProgress !== null
-      );
-      this.resetTableauPose(tableau);
-      this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
+    this.resetGenericTableaus();
+    if (eventId === 'dangerous-waters') {
+      this.dangerousWaters.stage();
+      return;
     }
+    if (focused === null) return;
+    focused.root.visible = true;
+    focused.stage();
   }
 
   reveal(eventId: string): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.stagedEventId !== eventId) this.stage(eventId);
-    if (this.stagedEventId === null) return Promise.resolve();
+    const focused = this.focused.get(eventId) ?? null;
+    if (
+      this.activeFocused !== focused
+      || (focused === null && this.stagedEventId !== eventId)
+    ) {
+      this.stage(eventId);
+    }
+    if (this.activeFocused !== null) return this.activeFocused.reveal();
     if (eventId === 'dangerous-waters') return this.dangerousWaters.reveal();
+    if (this.stagedEventId === null) return Promise.resolve();
     return this.startAnimation('reveal', eventId);
+  }
+
+  playChoice(
+    eventId: string,
+    choice: EventChoicePresentation | string,
+  ): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (eventId === 'dangerous-waters' && typeof choice === 'string') {
+      if (this.stagedEventId !== eventId) this.stage(eventId);
+      return this.dangerousWaters.playChoice(choice);
+    }
+    if (typeof choice === 'string') return Promise.resolve();
+    const focused = this.focused.get(eventId) ?? null;
+    if (this.activeFocused !== focused) this.stage(eventId);
+    return this.activeFocused?.playChoice(choice) ?? Promise.resolve();
   }
 
   react(eventId: string, outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.stagedEventId !== eventId) this.stage(eventId);
-    if (this.stagedEventId === null) return Promise.resolve();
+    const focused = this.focused.get(eventId) ?? null;
+    if (
+      this.activeFocused !== focused
+      || (focused === null && this.stagedEventId !== eventId)
+    ) {
+      this.stage(eventId);
+    }
+    if (this.activeFocused !== null) {
+      const result = outcome.eventResult;
+      if (result === undefined || result.eventId !== eventId) {
+        throw new Error(`Focused event ${eventId} requires a matching event result.`);
+      }
+      return this.activeFocused.react(result, outcome);
+    }
     if (eventId === 'dangerous-waters') return this.dangerousWaters.react(outcome);
+    if (this.stagedEventId === null) return Promise.resolve();
     this.held = true;
     this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
       (value) => typeof value === 'number' && value < 0,
@@ -403,39 +528,23 @@ export class EventPresentationLayer {
     return this.startAnimation('react', eventId);
   }
 
-  playChoice(eventId: string, choiceId: string): Promise<void> {
-    if (this.disposed || eventId !== 'dangerous-waters') return Promise.resolve();
-    if (this.stagedEventId !== eventId) this.stage(eventId);
-    return this.dangerousWaters.playChoice(choiceId);
-  }
-
-  copyDangerousWatersBoatReaction(
-    target: DangerousWatersBoatReaction,
-  ): boolean {
-    return this.dangerousWaters.copyBoatReaction(target);
-  }
-
-  copyDangerousWatersItemPose(target: DangerousWatersItemPose): boolean {
-    return this.dangerousWaters.copyItemPose(target);
-  }
-
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.dangerousWaters.clear();
+    this.clearActiveFocused();
     this.stagedEventId = null;
     this.held = false;
-    for (const id of TABLEAU_EVENT_IDS) {
-      const tableau = this.tableaus.get(id)!;
-      tableau.heldReactionTilt = 0;
-      this.resetTableauPose(tableau);
-      tableau.root.visible = id === 'other-people' && this.rescueProgress !== null;
-    }
+    this.resetGenericTableaus();
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     this.dangerousWaters.settleForVisibilityChange();
+    if (this.activeFocused !== null) {
+      this.activeFocused.settleForVisibilityChange();
+      return;
+    }
     const animation = this.activeAnimation;
     if (animation === null) return;
     this.activeAnimation = null;
@@ -451,33 +560,42 @@ export class EventPresentationLayer {
 
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
-    this.rescueProgress = progress === null ? null : Math.min(1, Math.max(0, progress));
-    const cargo = this.tableaus.get('other-people')!;
-    cargo.root.visible = this.stagedEventId === 'other-people' || this.rescueProgress !== null;
-    if (this.stagedEventId !== 'other-people' && this.rescueProgress !== null) {
-      this.resetTableauPose(cargo);
-      this.applyRevealPose(cargo, this.rescueProgress, 0);
-    }
+    const presenter = this.focused.get('other-people');
+    if (
+      presenter === undefined
+      || presenter === this.activeFocused
+      || !this.supportsRescueCue(presenter)
+    ) return;
+    presenter.setRescueCue(progress);
+  }
+
+  copyDangerousWatersBoatReaction(
+    target: DangerousWatersBoatReaction,
+  ): boolean {
+    return this.dangerousWaters.copyBoatReaction(target);
+  }
+
+  copyDangerousWatersItemPose(target: DangerousWatersItemPose): boolean {
+    return this.dangerousWaters.copyItemPose(target);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
     this.dangerousWaters.update(time, delta);
+    if (this.activeFocused !== null) {
+      this.activeFocused.update(time, delta);
+      return;
+    }
     const staged = this.stagedEventId === null
       ? null
       : this.tableaus.get(this.stagedEventId) ?? null;
-    const cargo = this.tableaus.get('other-people')!;
 
     if (staged !== null) this.applyWavePose(staged, time);
-    if (this.rescueProgress !== null && staged !== cargo) this.applyWavePose(cargo, time);
 
     const animation = this.activeAnimation;
     if (animation === null) {
       if (staged !== null) {
         this.applyRevealPose(staged, this.held ? 1 : 0, staged.heldReactionTilt);
-      }
-      if (this.rescueProgress !== null && staged !== cargo) {
-        this.applyRevealPose(cargo, this.rescueProgress, 0);
       }
       return;
     }
@@ -508,8 +626,42 @@ export class EventPresentationLayer {
     this.cancelActiveAnimation();
     this.dangerousWaters.dispose();
     this.disposed = true;
+    this.activeFocused = null;
+    for (const presenter of this.ownedFocused) presenter.dispose();
+    this.focused.clear();
+    this.ownedFocused.clear();
+    this.interactionTargets.clear();
+    this.interactionBounds.clear();
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+  }
+
+  private clearActiveFocused(): void {
+    const focused = this.activeFocused;
+    this.activeFocused = null;
+    if (focused === null) return;
+    focused.clear();
+    if (focused.root.userData.holdOnClear !== true) {
+      focused.root.visible = false;
+    }
+  }
+
+  private resetGenericTableaus(): void {
+    for (const id of TABLEAU_EVENT_IDS) {
+      const tableau = this.tableaus.get(id)!;
+      tableau.heldReactionTilt = 0;
+      this.resetTableauPose(tableau);
+      tableau.root.visible = id === this.stagedEventId;
+      this.applyRevealPose(tableau, id === this.stagedEventId ? 0 : 1, 0);
+    }
+  }
+
+  private supportsRescueCue(
+    presenter: FocusedEventPresentation,
+  ): presenter is RescueCuePresentation {
+    return typeof (
+      presenter as Partial<RescueCuePresentation>
+    ).setRescueCue === 'function';
   }
 
   private startAnimation(
@@ -531,7 +683,7 @@ export class EventPresentationLayer {
   private applyWavePose(tableau: EventTableau, time: number): void {
     sampleWaveFieldInto(
       this.waveSample,
-      DEFAULT_WAVES,
+      this.dependencies.waves,
       time,
       tableau.basePosition.x,
       tableau.basePosition.z,

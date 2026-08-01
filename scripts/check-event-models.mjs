@@ -99,6 +99,14 @@ const EVENT_SOURCES = Object.freeze({
   }),
 });
 const EVENT_MODEL_IDS = Object.freeze(Object.keys(EVENT_SOURCES));
+const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
+  'chestClosed',
+  'midnightIsland',
+  'deadTree',
+  'traderRowboat',
+  'riggedHand',
+  'containerShip',
+]);
 const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
 const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
 const GLB_MAGIC = 0x46546c67;
@@ -304,6 +312,7 @@ async function main() {
   try {
     const expected = new Set([
       ...EVENT_MODEL_IDS.map((id) => `${id}.glb`),
+      ...FOCUSED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
       'event-model-metadata.json',
     ]);
     const entries = await readdir(modelsDir, { withFileTypes: true });
