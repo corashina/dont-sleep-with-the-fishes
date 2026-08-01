@@ -72,9 +72,9 @@ describe('ScavengeHands', () => {
     expect(hands.root.parent).toBe(camera);
     expect(hands.available).toBe(true);
     expect(hands.root.getObjectByName('scavenge-hand:left')!.children[0]!.scale.x)
-      .toBe(-0.22);
+      .toBe(-0.25);
     expect(hands.root.getObjectByName('scavenge-hand:right')!.children[0]!.scale.x)
-      .toBe(0.22);
+      .toBe(0.25);
     const leftWrist = hands.root.getObjectByName('scavenge-hand:left')!;
     const rightWrist = hands.root.getObjectByName('scavenge-hand:right')!;
     expect(leftWrist.children[0]!.rotation.z).toBeCloseTo(Math.PI / 2);
@@ -84,10 +84,10 @@ describe('ScavengeHands', () => {
     expect((material as MeshStandardMaterial).roughness).toBe(0.92);
     expect((material as MeshStandardMaterial).metalness).toBe(0);
 
-    hands.update(0.016, 0, true, false, true);
+    hands.update(0, 0, true, false, true);
     expect(hands.root.visible).toBe(true);
-    expect(leftWrist.position.y).toBeLessThan(-0.5);
-    expect(rightWrist.position.y).toBeLessThan(-0.5);
+    expect(leftWrist.position.y).toBe(-0.51);
+    expect(rightWrist.position.y).toBe(-0.52);
     expect(Math.abs(leftWrist.position.x)).toBeLessThan(0.3);
     expect(Math.abs(rightWrist.position.x)).toBeLessThan(0.3);
     hands.playGesture('pickup');
