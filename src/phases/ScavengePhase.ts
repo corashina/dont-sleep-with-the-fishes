@@ -71,6 +71,7 @@ export class ScavengePhase implements GamePhase {
   private presentation: ScavengePresentation = 'title';
   private introElapsed = 0;
   private introPaused = false;
+  private pausedIntroExitCarry = false;
   private introCrashHandled = false;
   private readonly introFrame = createScavengeIntroFrame();
   private readonly introPose = {
@@ -184,7 +185,9 @@ export class ScavengePhase implements GamePhase {
       && !this.introPaused
       && this.input.pointerLocked
       && !document.hidden;
-    const worldDeltaSeconds = introFrameStarted && !introActive ? 0 : deltaSeconds;
+    const worldDeltaSeconds = (
+      (introFrameStarted && !introActive) || this.pausedIntroExitCarry
+    ) ? 0 : deltaSeconds;
     if (
       this.presentation === 'title'
       || introActive
@@ -200,7 +203,7 @@ export class ScavengePhase implements GamePhase {
     if (introActive) {
       this.updateIntro(deltaSeconds);
       current = this.session.snapshot();
-      this.input.consumeLook();
+      this.input.clearLook();
     } else if (directControlActive) {
       this.session.tick(deltaSeconds, containsPointXZ(
         this.world.evacuationBounds,
@@ -236,9 +239,9 @@ export class ScavengePhase implements GamePhase {
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
         current = this.session.snapshot();
       }
-      this.input.consumeLook();
+      this.input.clearLook();
     } else if (this.ending.stage === 'playing') {
-      this.input.consumeLook();
+      this.input.clearLook();
     }
 
     sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
@@ -291,7 +294,9 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.position,
       simulatePhysics,
     );
-    if (simulatePhysics || introFrameStarted) this.player.placeCamera();
+    if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
+      this.player.placeCamera();
+    }
     this.ui.render(next);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'
@@ -557,7 +562,10 @@ export class ScavengePhase implements GamePhase {
     this.presentation = 'playing';
     this.ui.setPresentation('playing');
     this.session.start();
-    if (resumeRequired) this.session.pause();
+    if (resumeRequired) {
+      this.pausedIntroExitCarry = true;
+      this.session.pause();
+    }
   }
 
   private handlePointerLockChange(locked: boolean): void {
@@ -576,6 +584,7 @@ export class ScavengePhase implements GamePhase {
     } else if (transition === 'resume') {
       this.escapeResumeArmed = false;
       this.session.resume();
+      this.pausedIntroExitCarry = false;
       this.ui.clearPointerLockError();
       this.ui.setPaused(false);
       this.audio.setPaused(false);
