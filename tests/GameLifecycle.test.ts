@@ -21,6 +21,7 @@ import {
   ENDING_HOLD_SECONDS,
   SINKING_CINEMATIC_SECONDS,
 } from '../src/game/scavengeEnding';
+import { createScavengeIntroFrame } from '../src/game/scavengeIntro';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
@@ -176,6 +177,49 @@ function createUpdateHarness(
   return { phase, input, updateWorld, attachPhysicsBarrelsToShip };
 }
 
+function introHarness(elapsed = 0) {
+  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+  const sessionStart = vi.fn();
+  const sessionTick = vi.fn();
+  const crash = vi.fn();
+  const triggerCrash = vi.fn();
+  const anchors = {
+    seatedPosition: [0, 13.67, -0.85],
+    standingPosition: [0, 14.22, -0.85],
+    ladderBottomPosition: [0, 3.72, -0.54],
+    exitPosition: [0, 3.72, -1.3],
+  } as const;
+  const introFrame = createScavengeIntroFrame();
+  Object.assign(phase, {
+    disposed: false,
+    presentation: 'intro',
+    introElapsed: elapsed,
+    introPaused: false,
+    introCrashHandled: false,
+    introFrame,
+    introPose: {
+      position: introFrame.cameraPosition,
+      yaw: Math.PI,
+      pitch: 0,
+      floorEyeY: 0,
+    },
+    world: {
+      scavengeIntroAnchors: anchors,
+      setScavengeIntroImpact: vi.fn(),
+      triggerScavengeIntroCrash: triggerCrash,
+    },
+    player: { setScriptedPose: vi.fn(), placeCamera: vi.fn() },
+    audio: { crash, setPaused: vi.fn() },
+    ui: { setPresentation: vi.fn(), setPaused: vi.fn() },
+    session: {
+      start: sessionStart,
+      tick: sessionTick,
+      snapshot: () => ({ status: 'idle' }),
+    },
+  });
+  return { phase, sessionStart, sessionTick, crash, triggerCrash };
+}
+
 describe('ScavengePhase lifecycle integration', () => {
   it('keeps an animated title world while the session and sinking clock stay idle', () => {
     const propModels = createTestPropModels();
@@ -229,16 +273,39 @@ describe('ScavengePhase lifecycle integration', () => {
     skyAssets.dispose();
   });
 
-  it('places the player camera before revealing play and starting the session', () => {
+  it('begins the intro before revealing play or starting the session', () => {
     const order: string[] = [];
+    const sessionStart = vi.fn();
+    const introFrame = createScavengeIntroFrame();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       presentation: 'title',
-      audio: scavengeAudioStub(),
-      player: { placeCamera: () => order.push('camera') },
+      introElapsed: 0,
+      introPaused: false,
+      introFrame,
+      introPose: {
+        position: introFrame.cameraPosition,
+        yaw: Math.PI,
+        pitch: 0,
+        floorEyeY: 0,
+      },
+      audio: { setPaused: () => order.push('audio:resume') },
+      world: {
+        scavengeIntroAnchors: {
+          seatedPosition: [0, 13.67, -0.85],
+          standingPosition: [0, 14.22, -0.85],
+          ladderBottomPosition: [0, 3.72, -0.54],
+          exitPosition: [0, 3.72, -1.3],
+        },
+        setScavengeIntroImpact: vi.fn(),
+      },
+      player: {
+        setScriptedPose: () => order.push('scripted-pose'),
+        placeCamera: () => order.push('camera'),
+      },
       session: {
         snapshot: () => ({ status: 'idle' }),
-        start: () => order.push('session'),
+        start: sessionStart,
       },
       ui: {
         setPresentation: (presentation: string) => order.push(`ui:${presentation}`),
@@ -251,12 +318,73 @@ describe('ScavengePhase lifecycle integration', () => {
       .handlePointerLockChange(true);
 
     expect(order).toEqual([
-      'camera',
-      'ui:playing',
+      'ui:intro',
       'clear-error',
       'hide-title',
-      'session',
+      'audio:resume',
+      'scripted-pose',
+      'camera',
     ]);
+    expect(sessionStart).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session idle before ten seconds', () => {
+    const { phase, sessionStart, sessionTick } = introHarness(2);
+    (phase as unknown as { updateIntro(delta: number): void }).updateIntro(3);
+    expect(sessionStart).not.toHaveBeenCalled();
+    expect(sessionTick).not.toHaveBeenCalled();
+  });
+
+  it('fires the crash once across a large delta', () => {
+    const { phase, crash, triggerCrash } = introHarness(5.9);
+    const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
+    updateIntro.call(phase, 2);
+    updateIntro.call(phase, 0.2);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
+  });
+
+  it('completes naturally and starts once', () => {
+    const { phase, sessionStart } = introHarness(9.9);
+    const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
+    updateIntro.call(phase, 0.2);
+    updateIntro.call(phase, 0.2);
+    expect(sessionStart).toHaveBeenCalledOnce();
+  });
+
+  it('skips with Space without playing the missed crash', () => {
+    const { phase, sessionStart, crash } = introHarness(2);
+    const event = new KeyboardEvent('keydown', {
+      code: 'Space', key: ' ', cancelable: true,
+    });
+    (phase as unknown as { handleKeyDown(event: KeyboardEvent): void }).handleKeyDown(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(sessionStart).toHaveBeenCalledOnce();
+    expect(crash).not.toHaveBeenCalled();
+  });
+
+  it('pauses and resumes across pointer-lock loss', () => {
+    const { phase } = introHarness(4);
+    const handle = (phase as unknown as {
+      handlePointerLockChange(locked: boolean): void;
+    }).handlePointerLockChange;
+    handle.call(phase, false);
+    expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(true);
+    handle.call(phase, true);
+    expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(false);
+    expect((phase as unknown as { introElapsed: number }).introElapsed).toBe(4);
+  });
+
+  it('pauses when the page becomes hidden', () => {
+    const { phase } = introHarness(4);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    try {
+      (phase as unknown as { handleVisibilityChange(): void }).handleVisibilityChange();
+      expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(true);
+      expect((phase as unknown as { introElapsed: number }).introElapsed).toBe(4);
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    }
   });
 
   it('does not pause when pointer lock is released for the AO overlay', () => {
@@ -714,12 +842,14 @@ describe('ScavengePhase lifecycle integration', () => {
       const fresh = phases[1] as unknown as {
         session: ScavengeSession;
         presentation: string;
+        introElapsed: number;
       };
       expect(fresh.session.snapshot()).toMatchObject({
         status: 'idle',
         remainingSeconds: SCAVENGE_DURATION_SECONDS,
       });
       expect(fresh.presentation).toBe('title');
+      expect(fresh.introElapsed).toBe(0);
       expect(mount.querySelector('[data-start]')?.classList).toContain('is-visible');
       expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
     } finally {

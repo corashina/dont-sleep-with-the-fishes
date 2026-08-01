@@ -143,6 +143,18 @@ describe('InputController', () => {
     expect(input.consumeJump()).toBe(false);
   });
 
+  it('does not queue a jump from a prevented Space key', () => {
+    const { input } = createInput();
+    const event = new Event('keydown', { cancelable: true });
+    Object.defineProperties(event, {
+      code: { configurable: true, value: 'Space' },
+      repeat: { configurable: true, value: false },
+    });
+    event.preventDefault();
+    browserWindow.dispatchEvent(event);
+    expect(input.consumeJump()).toBe(false);
+  });
+
   it('clears a queued jump on blur', () => {
     const { input } = createInput();
     dispatch('keydown', { code: 'Space', repeat: false });
