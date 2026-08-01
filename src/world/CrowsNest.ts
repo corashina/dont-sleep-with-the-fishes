@@ -61,6 +61,7 @@ export function createCrowsNest(
   const floorY = mast.position[1] + spec.floorOffsetY;
   const halfWidth = spec.outerWidth / 2;
   const floorThickness = 0.14;
+  const floorSurfaceY = floorY + floorThickness / 2;
 
   for (let index = 0; index < 8; index += 1) {
     const z = -0.875 + index * 0.25;
@@ -91,7 +92,7 @@ export function createCrowsNest(
     colliders.push(boxCollider(position, size));
   }
 
-  const guardY = floorY + spec.guardHeight / 2;
+  const guardY = floorSurfaceY + spec.guardHeight / 2;
   const addGuard = (
     name: string,
     size: readonly [number, number, number],
@@ -100,20 +101,23 @@ export function createCrowsNest(
     addBox(`crows-nest:guard:${name}`, size, position, materials.timber);
     colliders.push(boxCollider(position, size));
   };
-  addGuard('port', [0.14, spec.guardHeight, 1.64], [
-    mast.position[0] - halfWidth + 0.07, guardY, mast.position[2],
+  const sideGuardThickness = 0.1;
+  addGuard('port', [sideGuardThickness, spec.guardHeight, 1.64], [
+    mast.position[0] - halfWidth + sideGuardThickness / 2, guardY, mast.position[2],
   ]);
-  addGuard('starboard', [0.14, spec.guardHeight, 1.64], [
-    mast.position[0] + halfWidth - 0.07, guardY, mast.position[2],
+  addGuard('starboard', [sideGuardThickness, spec.guardHeight, 1.64], [
+    mast.position[0] + halfWidth - sideGuardThickness / 2, guardY, mast.position[2],
   ]);
   addGuard('forward', [1.58, spec.guardHeight, 0.14], [
     mast.position[0], guardY, mast.position[2] + 0.94,
   ]);
-  addGuard('aft', [0.14, spec.guardHeight, 0.14], [
-    mast.position[0] - halfWidth + 0.07, guardY, mast.position[2] - 0.94,
+  const aftGuardWidth = halfWidth - spec.openingSize / 2;
+  const aftGuardOffsetX = spec.openingSize / 2 + aftGuardWidth / 2;
+  addGuard('aft-port', [aftGuardWidth, spec.guardHeight, 0.14], [
+    mast.position[0] - aftGuardOffsetX, guardY, mast.position[2] - 0.94,
   ]);
-  addGuard('aft-opening', [0.14, spec.guardHeight, 0.14], [
-    mast.position[0] + halfWidth - 0.07, guardY, mast.position[2] - 0.94,
+  addGuard('aft-starboard', [aftGuardWidth, spec.guardHeight, 0.14], [
+    mast.position[0] + aftGuardOffsetX, guardY, mast.position[2] - 0.94,
   ]);
 
   ([
@@ -163,7 +167,7 @@ export function createCrowsNest(
   }
 
   const bottomEyeY = mast.position[1] + 1.5;
-  const topEyeY = floorY + 1.5;
+  const topEyeY = floorSurfaceY + 1.5;
   const climbZone: LadderClimbZone = {
     id: spec.ladder.id,
     climbX: mast.position[0],
@@ -174,12 +178,12 @@ export function createCrowsNest(
     topEyeY,
     topFloor: { minX: -1.05, maxX: 1.05, minZ: -1.05, maxZ: 1.05 },
     bottomEntry: { minX: -0.4, maxX: 0.4, minZ: -1.35, maxZ: climbZ - 0.05 },
-    topEntry: { minX: -0.4, maxX: 0.4, minZ: -1.05, maxZ: climbZ - 0.05 },
+    topEntry: { minX: 0.63, maxX: 0.83, minZ: -0.12, maxZ: 0.08 },
     bottomDismount: [0, -1.3],
-    topDismount: [0, -0.85],
+    topDismount: [0.73, -0.02],
   };
   const introAnchors: ScavengeIntroAnchors = {
-    seatedPosition: [0, floorY + 0.95, -0.85],
+    seatedPosition: [0, floorSurfaceY + 0.95, -0.85],
     standingPosition: [0, topEyeY, -0.85],
     ladderBottomPosition: [0, bottomEyeY, climbZ],
     exitPosition: [0, bottomEyeY, -1.3],
