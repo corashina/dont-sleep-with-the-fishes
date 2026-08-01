@@ -41,8 +41,12 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import {
+  FOCUSED_EVENT_IDS,
+  type FocusedEventPresentation,
+  type FocusedEventPresentationFactories,
+} from '../src/survival/FocusedEventPresentation';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
-import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import type {
@@ -53,6 +57,7 @@ import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
+import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import {
   boatStorageTransform,
   boatSupplyTransform,
@@ -236,6 +241,52 @@ async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
   });
   await Promise.resolve();
   return !settled;
+}
+
+interface FocusedPresenterTestDouble {
+  readonly presenter: FocusedEventPresentation;
+  readonly stage: ReturnType<typeof vi.fn>;
+  readonly reveal: ReturnType<typeof vi.fn>;
+  readonly playChoice: ReturnType<typeof vi.fn>;
+  readonly react: ReturnType<typeof vi.fn>;
+  readonly clear: ReturnType<typeof vi.fn>;
+  readonly update: ReturnType<typeof vi.fn>;
+  readonly settle: ReturnType<typeof vi.fn>;
+  readonly dispose: ReturnType<typeof vi.fn>;
+}
+
+function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble {
+  const root = new Group();
+  root.name = `focused-event:${eventId}`;
+  const stage = vi.fn();
+  const reveal = vi.fn(() => Promise.resolve());
+  const playChoice = vi.fn(() => Promise.resolve());
+  const react = vi.fn(() => Promise.resolve());
+  const clear = vi.fn();
+  const update = vi.fn();
+  const settle = vi.fn();
+  const dispose = vi.fn();
+  return {
+    presenter: {
+      root,
+      stage,
+      reveal,
+      playChoice,
+      react,
+      clear,
+      update,
+      settleForVisibilityChange: settle,
+      dispose,
+    },
+    stage,
+    reveal,
+    playChoice,
+    react,
+    clear,
+    update,
+    settle,
+    dispose,
+  };
 }
 
 function expectedSurvivalPose(
@@ -470,27 +521,510 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('forwards event staging and keeps the cargo vessel held for natural rescue', async () => {
+  it('keeps the focused cargo vessel held for natural rescue', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
       createTestMoonTexture(),
     );
-    world.stageEvent('drifting-bottle');
-    expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(true);
-    const reveal = world.revealEvent('drifting-bottle');
+    world.stageEvent('death-stare');
+    expect(world.scene.getObjectByName('event-prop:death-stare')?.visible).toBe(true);
+    const reveal = world.revealEvent('death-stare');
     world.update(1, 1);
     await reveal;
     world.clearEvent();
-    expect(world.scene.getObjectByName('event-prop:drifting-bottle')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('event-prop:death-stare')?.visible).toBe(false);
 
     const rescue = world.play('rescue');
     world.skipSequence();
     await rescue;
-    expect(world.scene.getObjectByName('event-prop:other-people')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('event-prop:other-people')).toBeUndefined();
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes all five focused event IDs and keeps generic tableaus as fallback', async () => {
+    const propModels = createTestPropModels();
+    const doubles = new Map(
+      FOCUSED_EVENT_IDS.map((eventId) => [
+        eventId,
+        focusedPresenterTestDouble(eventId),
+      ]),
+    );
+    const factories = Object.fromEntries(
+      FOCUSED_EVENT_IDS.map((eventId) => [
+        eventId,
+        () => doubles.get(eventId)!.presenter,
+      ]),
+    ) as FocusedEventPresentationFactories;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    for (const eventId of FOCUSED_EVENT_IDS) {
+      const presenter = doubles.get(eventId)!;
+      world.stageEvent(eventId);
+      expect(presenter.stage).toHaveBeenCalledOnce();
+      expect(world.scene.getObjectByName(`focused-event:${eventId}`)?.visible)
+        .toBe(true);
+      const generic = world.scene.getObjectByName(`event-prop:${eventId}`);
+      if (
+        eventId === 'night-trader'
+        || eventId === 'handyman'
+        || eventId === 'other-people'
+      ) {
+        expect(generic).toBeUndefined();
+      } else {
+        expect(generic?.visible).toBe(false);
+      }
+      await world.revealEvent(eventId);
+      expect(presenter.reveal).toHaveBeenCalledOnce();
+      const choice = {
+        choiceId: 'test-choice',
+        instanceId: null,
+        condition: null,
+      };
+      await world.playEventChoice(eventId, choice);
+      expect(presenter.playChoice).toHaveBeenCalledWith(choice);
+      await world.reactToEventOutcome(eventId, {
+        accepted: true,
+        code: 'event-resolved',
+        message: `${eventId} resolved.`,
+        deltas: {},
+        cue: 'none',
+        eventResult: {
+          eventId,
+          choiceId: 'test-choice',
+          resultId: 'test-result',
+        },
+      }, choice);
+      expect(presenter.react).toHaveBeenCalledWith(
+        {
+          eventId,
+          choiceId: 'test-choice',
+          resultId: 'test-result',
+        },
+        expect.objectContaining({ code: 'event-resolved' }),
+      );
+      world.clearEvent();
+      expect(presenter.clear).toHaveBeenCalledOnce();
+    }
+
+    world.stageEvent('death-stare');
+    expect(world.scene.getObjectByName('event-prop:death-stare')?.visible)
+      .toBe(true);
+    for (const presenter of doubles.values()) {
+      expect(presenter.stage).toHaveBeenCalledOnce();
+    }
+
+    world.dispose();
+    for (const presenter of doubles.values()) {
+      expect(presenter.dispose).toHaveBeenCalledOnce();
+    }
+    propModels.dispose();
+  });
+
+  it('registers the five authored focused event presenters', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('chest-attack');
+    expect(world.scene.getObjectByName('event-prop:chest-attack')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('focused-event:chest-attack')?.visible)
+      .toBe(true);
+
+    world.stageEvent('midnight-tour');
+    expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('focused-event:midnight-tour')?.visible)
+      .toBe(true);
+
+    world.stageEvent('night-trader');
+    expect(world.scene.getObjectByName('event-prop:night-trader'))
+      .toBeUndefined();
+    expect(world.scene.getObjectByName('focused-event:night-trader')?.visible)
+      .toBe(true);
+
+    world.stageEvent('handyman');
+    expect(world.scene.getObjectByName('event-prop:handyman')).toBeUndefined();
+    expect(world.scene.getObjectByName('focused-event:handyman')?.visible)
+      .toBe(true);
+
+    world.stageEvent('other-people');
+    expect(world.scene.getObjectByName('event-prop:other-people'))
+      .toBeUndefined();
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
+    const ship = world.scene.getObjectByName(
+      'other-people-container-ship',
+    )!;
+    const heldPosition = ship.position.clone();
+    world.update(2, 1 / 60);
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.visible,
+    ).toBe(true);
+    expect(ship.position.toArray()).toEqual(heldPosition.toArray());
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it.each([
+    {
+      label: 'a missing event result',
+      eventResult: undefined,
+      received: 'missing',
+    },
+    {
+      label: 'a wrong event id',
+      eventResult: {
+        eventId: 'handyman',
+        choiceId: 'map',
+        resultId: 'trader-reward',
+      },
+      received: 'handyman/map',
+    },
+    {
+      label: 'a wrong choice id',
+      eventResult: {
+        eventId: 'night-trader',
+        choiceId: 'umbrella',
+        resultId: 'trader-reward',
+      },
+      received: 'night-trader/umbrella',
+    },
+  ])('rejects $label before any focused or weather reaction', async ({
+    eventResult,
+    received,
+  }) => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('night-trader');
+    const weatherReact = vi.spyOn(WeatherEventAnimator.prototype, 'react');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'night-trader': () => active.presenter },
+    );
+    const choice = {
+      choiceId: 'map',
+      instanceId: 'map-1' as ItemInstanceId,
+      condition: 'lost' as const,
+    };
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The trader gives you a compass.',
+      deltas: {},
+      cue: 'none',
+      ...(eventResult === undefined ? {} : { eventResult }),
+    };
+    world.stageEvent('night-trader');
+
+    await expect(
+      world.reactToEventOutcome('night-trader', outcome, choice),
+    ).rejects.toThrow(
+      `Focused event night-trader requires result night-trader/map; received ${received}.`,
+    );
+    expect(active.react).not.toHaveBeenCalled();
+    expect(weatherReact).not.toHaveBeenCalled();
+
+    world.dispose();
+    weatherReact.mockRestore();
+    propModels.dispose();
+  });
+
+  it('keeps the world choice pending until its focused presenter finishes', async () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('chest-attack');
+    let finishChoice!: () => void;
+    const choiceTimeline = new Promise<void>((resolve) => {
+      finishChoice = resolve;
+    });
+    active.playChoice.mockReturnValue(choiceTimeline);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'chest-attack': () => active.presenter },
+    );
+    const choice = {
+      choiceId: 'fishingNet',
+      instanceId: 'fishingNet-1' as ItemInstanceId,
+      condition: 'usable' as const,
+    };
+
+    world.stageEvent('chest-attack');
+    const pending = world.playEventChoice('chest-attack', choice);
+
+    expect(active.playChoice).toHaveBeenCalledWith(choice);
+    expect(await remainsPending(pending)).toBe(true);
+    finishChoice();
+    await pending;
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('clears generic item motion before a focused trade reaction starts', async () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('night-trader');
+    const clearEventMotion = vi.spyOn(
+      BoatSupplyDisplay.prototype,
+      'clearEventMotion',
+    );
+    active.react.mockImplementation(() => {
+      expect(clearEventMotion).toHaveBeenCalled();
+      return Promise.resolve();
+    });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'night-trader': () => active.presenter },
+    );
+    world.stageEvent('night-trader');
+    clearEventMotion.mockClear();
+
+    await world.reactToEventOutcome('night-trader', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The trader gives you a compass.',
+      deltas: {},
+      cue: 'none',
+      eventResult: {
+        eventId: 'night-trader',
+        choiceId: 'map',
+        resultId: 'trader-reward',
+      },
+    }, {
+      choiceId: 'map',
+      instanceId: 'map-1',
+      condition: 'lost',
+    });
+
+    expect(clearEventMotion).toHaveBeenCalledOnce();
+    expect(active.react).toHaveBeenCalledOnce();
+    world.dispose();
+    clearEventMotion.mockRestore();
+    propModels.dispose();
+  });
+
+  it('reapplies the held Handyman Touch camera after each base reset', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    world.stageEvent('handyman');
+    const choice = world.playEventChoice('handyman', {
+      choiceId: 'touch',
+      instanceId: null,
+      condition: null,
+    });
+    world.update(1, 1);
+    await choice;
+
+    const reaction = world.reactToEventOutcome('handyman', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The hand closes around the camera.',
+      deltas: {},
+      cue: 'none',
+      eventResult: {
+        eventId: 'handyman',
+        choiceId: 'touch',
+        resultId: 'handyman-touch',
+      },
+    }, {
+      choiceId: 'touch',
+      instanceId: null,
+      condition: null,
+    });
+    world.update(2, 2);
+    await reaction;
+    const heldPosition = cameraRig.position.toArray();
+    const heldQuaternion = cameraRig.quaternion.toArray();
+    expect(heldPosition).not.toEqual([0, 0, 0]);
+    expect(
+      world.scene.getObjectByName('focused-event:handyman')?.userData.state,
+    ).toBe('held-touch');
+
+    world.update(3, 1 / 60);
+    expect(cameraRig.position.toArray()).toEqual(heldPosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(heldQuaternion);
+
+    world.clearEvent();
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the generic tableau when focused construction fails', () => {
+    const propModels = createTestPropModels();
+    const factories: FocusedEventPresentationFactories = {
+      'chest-attack': () => {
+        throw new Error('Chest presenter construction failed.');
+      },
+    };
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    world.stageEvent('chest-attack');
+    expect(world.scene.getObjectByName('event-prop:chest-attack')?.visible)
+      .toBe(true);
+    expect(world.scene.getObjectByName('focused-event:chest-attack'))
+      .toBeUndefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('rejects one focused presenter registered for two events and disposes it once', () => {
+    const propModels = createTestPropModels();
+    const shared = focusedPresenterTestDouble('shared');
+    const factories: FocusedEventPresentationFactories = {
+      'chest-attack': () => shared.presenter,
+      'midnight-tour': () => shared.presenter,
+    };
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    world.stageEvent('chest-attack');
+    expect(shared.stage).toHaveBeenCalledOnce();
+    expect(world.scene.getObjectByName('focused-event:shared')?.visible)
+      .toBe(true);
+
+    world.stageEvent('midnight-tour');
+    expect(shared.stage).toHaveBeenCalledOnce();
+    expect(shared.clear).toHaveBeenCalledOnce();
+    expect(world.scene.getObjectByName('focused-event:shared')?.visible)
+      .toBe(false);
+    expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
+      .toBe(true);
+
+    world.dispose();
+    world.dispose();
+    expect(shared.dispose).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
+  it('keeps focused routing when optional event models are missing', () => {
+    const propModels = createTestPropModels();
+    const createEventModel = vi.spyOn(propModels, 'createEventModel')
+      .mockReturnValue(null);
+    const doubles = new Map(
+      FOCUSED_EVENT_IDS.map((eventId) => [
+        eventId,
+        focusedPresenterTestDouble(eventId),
+      ]),
+    );
+    const factories = Object.fromEntries(
+      FOCUSED_EVENT_IDS.map((eventId) => [
+        eventId,
+        (dependencies) => {
+          dependencies.propModels.createEventModel('chestClosed');
+          return doubles.get(eventId)!.presenter;
+        },
+      ]),
+    ) as FocusedEventPresentationFactories;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    for (const eventId of FOCUSED_EVENT_IDS) {
+      world.stageEvent(eventId);
+      expect(doubles.get(eventId)!.stage).toHaveBeenCalledOnce();
+    }
+    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes active focused update, visibility settle, clear, and dispose once', () => {
+    const propModels = createTestPropModels();
+    const active = focusedPresenterTestDouble('handyman');
+    const factories: FocusedEventPresentationFactories = {
+      handyman: () => active.presenter,
+    };
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      factories,
+    );
+
+    world.stageEvent('handyman');
+    world.update(4, 0.25);
+    expect(active.update).toHaveBeenLastCalledWith(4, 0.25);
+    world.setDocumentHidden(true);
+    expect(active.settle).toHaveBeenCalledOnce();
+    world.clearEvent();
+    expect(active.clear).toHaveBeenCalledOnce();
+    world.stageEvent('handyman');
+    world.dispose();
+    world.dispose();
+    expect(active.dispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
@@ -1808,6 +2342,47 @@ describe('BoatWorld helpers', () => {
     world.setHighlightedItem('persistent-chest');
     expect(world.scene.getObjectByName('persistent-chest')
       ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('projects and outlines focused event subjects as physical choices', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('midnight-tour');
+    const islandReveal = world.revealEvent('midnight-tour');
+    world.setDocumentHidden(true);
+    await islandReveal;
+    world.setDocumentHidden(false);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'midnight-tour:island',
+        eventChoiceId: 'visit',
+      }),
+    ]));
+    world.setHighlightedItem('midnight-tour:island');
+    expect(world.scene.getObjectByName('midnight-tour-island')
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.clearEvent();
+    world.syncInventory(snapshot([], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    world.stageEvent('handyman');
+    const handReveal = world.revealEvent('handyman');
+    world.setDocumentHidden(true);
+    await handReveal;
+    world.setDocumentHidden(false);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'handyman:hand', eventChoiceId: 'touch' }),
+      expect.objectContaining({ id: 'persistent-chest', eventChoiceId: 'chest' }),
+    ]));
 
     world.dispose();
     propModels.dispose();

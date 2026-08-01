@@ -78,6 +78,7 @@ export interface ActionOutcome {
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
   readonly rewardSummary?: RewardSummary;
+  readonly eventResult?: EventResultPresentation;
   readonly eventPresentationKey?: EventPresentationKey;
 }
 
@@ -114,26 +115,30 @@ export interface ResourceEffect {
 export type EventInventoryMutation =
   | { readonly kind: 'consume' | 'break' | 'lose'; readonly itemId: ItemId; readonly quantity: number }
   | { readonly kind: 'gain'; readonly itemId: ItemId; readonly quantity: 1; readonly fallbackFood: 1 }
+  | { readonly kind: 'gainChest'; readonly quantity: 1; readonly fallbackFood: 1 }
   | { readonly kind: 'breakRandom' | 'loseRandom'; readonly quantity: number }
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
+export interface EventEffects {
+  readonly resources?: readonly ResourceEffect[];
+  readonly items?: readonly EventInventoryMutation[];
+  readonly chest?: ChestEventEffect;
+  readonly flags?: EventFlagEffects;
+  readonly rescue?: boolean;
+}
 export interface WeightedEventOutcome {
+  readonly resultId?: string;
   readonly weight: number;
   readonly message: string;
   readonly presentationKey?: EventPresentationKey;
   readonly minimumPriorAppearances?: number;
-  readonly effects: {
-    readonly resources?: readonly ResourceEffect[];
-    readonly items?: readonly EventInventoryMutation[];
-    readonly chest?: ChestEventEffect;
-    readonly flags?: EventFlagEffects;
-    readonly rescue?: boolean;
-  };
+  readonly effects: EventEffects;
 }
 export interface EventChoiceDefinition {
   readonly id: string;
   readonly label: string;
   readonly itemId?: ItemId;
   readonly requirements?: readonly EventChoiceRequirement[];
+  readonly requiredChestState?: ChestState;
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
@@ -143,6 +148,11 @@ export interface EventChoiceRequirement {
 }
 
 export type EventResponseId = string;
+export interface EventResultPresentation {
+  readonly eventId: string;
+  readonly choiceId: EventResponseId;
+  readonly resultId: string;
+}
 export type EventResponse =
   | {
       readonly kind: 'item';

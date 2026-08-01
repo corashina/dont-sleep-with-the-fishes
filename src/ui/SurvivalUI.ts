@@ -86,7 +86,7 @@ interface MeterDefinition {
 const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
-  { id: 'eat', label: 'EAT', cost: '1 ENERGY + 1 FOOD', energyCost: SURVIVAL_BALANCE.actions.eatEnergy, effect: 'HUNGER -35', risk: 'safe' },
+  { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
   { id: 'repair', label: 'REPAIR', cost: '1 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
   { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
@@ -750,6 +750,7 @@ export class SurvivalUI {
     event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    delete this.eventCaption.dataset.result;
     this.updateText('event:title', this.eventTitle, event.title);
     this.updateText('event:detail', this.eventDetail, event.revealText);
     this.eventOutcomeResult.textContent = '';
@@ -810,13 +811,13 @@ export class SurvivalUI {
   }
 
   showEventOutcome(
-    view: EventOutcomeView | Pick<ActionOutcome, 'accepted' | 'message'>,
+    view: EventOutcomeView | ActionOutcome | Pick<ActionOutcome, 'accepted' | 'message'>,
   ): void {
     if (this.disposed) return;
     if (!('title' in view)) {
       this.updateText('event:title', this.eventTitle, view.message);
       this.eventCaption.dataset.result = 'true';
-      this.eventCaption.setAttribute('aria-label', `Event result: ${view.message}`);
+      this.eventCaption.setAttribute('aria-label', view.message);
       this.eventCaption.classList.add('is-visible');
       this.eventCaption.setAttribute('aria-hidden', 'false');
       this.eventPresentationActive = true;
