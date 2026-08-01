@@ -1,7 +1,7 @@
 # Scavenging Level and Placement Redesign
 
 **Date:** 2026-08-01
-**Status:** Approved design, pending written-spec review
+**Status:** Approved for implementation
 
 ## Goal
 
