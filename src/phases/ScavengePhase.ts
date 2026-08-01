@@ -539,6 +539,7 @@ export class ScavengePhase implements GamePhase {
 
   private completeIntro(): void {
     if (this.presentation !== 'intro') return;
+    const resumeRequired = this.introPaused;
     const exit = this.world.scavengeIntroAnchors.exitPosition;
     this.world.setScavengeIntroImpact(0, 0, 0);
     this.player.setScriptedPose({
@@ -548,9 +549,11 @@ export class ScavengePhase implements GamePhase {
       floorEyeY: exit[1],
     });
     this.player.placeCamera();
+    this.introPaused = false;
     this.presentation = 'playing';
     this.ui.setPresentation('playing');
     this.session.start();
+    if (resumeRequired) this.session.pause();
   }
 
   private handlePointerLockChange(locked: boolean): void {
