@@ -614,7 +614,7 @@ export class ScavengePhase implements GamePhase {
     this.world.setScavengeIntroImpact(0, 0, 0);
     this.player.setScriptedPose({
       position: exit,
-      yaw: Math.PI,
+      yaw: 0,
       pitch: 0,
       floorEyeY: exit[1],
     });

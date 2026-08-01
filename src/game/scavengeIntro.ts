@@ -1,5 +1,5 @@
-export const SCAVENGE_INTRO_DURATION_SECONDS = 10;
-export const SCAVENGE_INTRO_CRASH_SECONDS = 6;
+export const SCAVENGE_INTRO_DURATION_SECONDS = 12;
+export const SCAVENGE_INTRO_CRASH_SECONDS = 6.2;
 
 export interface ScavengeIntroAnchors {
   readonly seatedPosition: readonly [number, number, number];
@@ -23,16 +23,18 @@ export interface ScavengeIntroFrame {
 
 const VIEW_KEYS = [
   [0, Math.PI, 0],
-  [1, Math.PI, 0],
-  [3.5, Math.PI + 0.65, 0],
-  [6, Math.PI - 0.65, 0],
-  [6.5, Math.PI, -0.45],
-  [7, Math.PI, -0.65],
-  [7.2, Math.PI * 2, -1.05],
-  [7.5, Math.PI * 2, -0.35],
-  [9.5, Math.PI * 2, -0.15],
-  [9.7, Math.PI * 2, -0.1],
-  [10, Math.PI, 0],
+  [1.2, Math.PI, 0],
+  [3.8, Math.PI + 0.65, 0],
+  [SCAVENGE_INTRO_CRASH_SECONDS, Math.PI - 0.65, 0],
+  [7.2, Math.PI - 0.65, 0],
+  [7.7, Math.PI, -0.35],
+  [8.1, Math.PI * 1.5, -0.75],
+  [8.4, Math.PI * 2, -1.05],
+  [9, Math.PI * 2, -0.7],
+  [9.3, Math.PI * 2, -0.35],
+  [11.5, Math.PI * 2, -0.15],
+  [11.7, Math.PI * 2, -0.1],
+  [SCAVENGE_INTRO_DURATION_SECONDS, Math.PI * 2, 0],
 ] as const;
 
 function clamp01(value: number): number {
@@ -79,7 +81,7 @@ function sampleView(output: ScavengeIntroFrame, elapsed: number): void {
     output.cameraPitch = start[2] + (end[2] - start[2]) * t;
     return;
   }
-  output.cameraYaw = Math.PI;
+  output.cameraYaw = Math.PI * 2;
   output.cameraPitch = 0;
 }
 
@@ -120,36 +122,34 @@ export function sampleScavengeIntroFrameInto(
   const elapsed = Number.isFinite(elapsedSeconds)
     ? Math.max(0, Math.min(SCAVENGE_INTRO_DURATION_SECONDS, elapsedSeconds))
     : 0;
-  if (elapsed <= 1) {
+  if (elapsed <= 1.2) {
     interpolatePosition(
       output.cameraPosition,
       anchors.seatedPosition,
       anchors.standingPosition,
-      elapsed,
+      elapsed / 1.2,
     );
-  } else if (elapsed <= 6.5) {
+  } else if (elapsed <= 9) {
     copyPosition(output.cameraPosition, anchors.standingPosition);
-  } else if (elapsed <= 7) {
+  } else if (elapsed <= 9.3) {
     interpolatePosition(
       output.cameraPosition, anchors.standingPosition,
-      anchors.ladderApproachPosition, (elapsed - 6.5) / 0.5,
-    );
-  } else if (elapsed <= 7.2) {
-    copyPosition(output.cameraPosition, anchors.ladderApproachPosition);
-  } else if (elapsed <= 7.5) {
-    interpolatePosition(
-      output.cameraPosition, anchors.ladderApproachPosition,
-      anchors.ladderTopPosition, (elapsed - 7.2) / 0.3,
+      anchors.ladderApproachPosition, (elapsed - 9) / 0.3,
     );
   } else if (elapsed <= 9.5) {
     interpolatePosition(
+      output.cameraPosition, anchors.ladderApproachPosition,
+      anchors.ladderTopPosition, (elapsed - 9.3) / 0.2,
+    );
+  } else if (elapsed <= 11.5) {
+    interpolatePosition(
       output.cameraPosition, anchors.ladderTopPosition,
-      anchors.ladderBottomPosition, (elapsed - 7.5) / 2,
+      anchors.ladderBottomPosition, (elapsed - 9.5) / 2,
     );
   } else {
     interpolatePosition(
       output.cameraPosition, anchors.ladderBottomPosition,
-      anchors.exitPosition, (elapsed - 9.5) / 0.5,
+      anchors.exitPosition, (elapsed - 11.5) / 0.5,
     );
   }
   sampleView(output, elapsed);
@@ -164,7 +164,7 @@ export function sampleScavengeIntroFrameInto(
     output.impactPitch = 0.045 * pulse;
     output.impactRoll = -0.07 * pulse;
   }
-  output.debrisActive = elapsed >= 6 && elapsed < 7.5;
+  output.debrisActive = elapsed >= SCAVENGE_INTRO_CRASH_SECONDS && elapsed < 8.4;
   output.complete = elapsed >= SCAVENGE_INTRO_DURATION_SECONDS;
   return output;
 }

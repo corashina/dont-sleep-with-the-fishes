@@ -441,7 +441,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(sessionStart).not.toHaveBeenCalled();
   });
 
-  it('keeps the session idle before ten seconds', () => {
+  it('keeps the session idle before twelve seconds', () => {
     const { phase, sessionStart, sessionTick } = introHarness(2);
     (phase as unknown as { updateIntro(delta: number): void }).updateIntro(3);
     expect(sessionStart).not.toHaveBeenCalled();
@@ -458,7 +458,7 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it('completes naturally, clears queued jump, and starts once', () => {
-    const { phase, sessionStart, consumeJump } = introHarness(9.9);
+    const { phase, sessionStart, consumeJump } = introHarness(11.9);
     const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
     updateIntro.call(phase, 0.2);
     updateIntro.call(phase, 0.2);
@@ -532,7 +532,7 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it('places the intro camera after the world update on natural completion', () => {
-    const { phase, updateWorld, sessionStart, consumeLook, clearLook } = introHarness(9.9);
+    const { phase, updateWorld, sessionStart, consumeLook, clearLook } = introHarness(11.9);
     const player = (phase as unknown as {
       player: { placeCamera: ReturnType<typeof vi.fn> };
     }).player;
@@ -540,7 +540,7 @@ describe('ScavengePhase lifecycle integration', () => {
     updateWorld.mockImplementation(() => order.push('world'));
     player.placeCamera.mockImplementation(() => order.push('camera'));
 
-    phase.update(10.1, 0.2);
+    phase.update(12.1, 0.2);
 
     expect(sessionStart).toHaveBeenCalledOnce();
     expect(order.at(-2)).toBe('world');
@@ -659,7 +659,7 @@ describe('ScavengePhase lifecycle integration', () => {
       sessionResume,
       sessionTick,
       updateWorld,
-    } = introHarness(5.9);
+    } = introHarness(6.1);
     const internals = phase as unknown as {
       context: { camera: PerspectiveCamera };
       input: {
@@ -702,9 +702,9 @@ describe('ScavengePhase lifecycle integration', () => {
       ship.updateMatrixWorld(true);
     });
 
-    phase.update(6.1, 0.2);
+    phase.update(6.3, 0.2);
 
-    expect(internals.introElapsed).toBeCloseTo(6.1);
+    expect(internals.introElapsed).toBeCloseTo(6.3);
     expect(crash).toHaveBeenCalledOnce();
     expect(triggerCrash).toHaveBeenCalledOnce();
     expect(effectAge).toBeCloseTo(0.2);
@@ -775,13 +775,13 @@ describe('ScavengePhase lifecycle integration', () => {
       sessionSnapshot,
       sessionResume,
       updateWorld,
-    } = introHarness(5.9);
+    } = introHarness(6.1);
     const internals = phase as unknown as {
       input: { pointerLocked: boolean };
       pausedIntroExitCarry: boolean;
       worldTime: number;
     };
-    phase.update(6.1, 0.2);
+    phase.update(6.3, 0.2);
     expect(crash).toHaveBeenCalledOnce();
     expect(triggerCrash).toHaveBeenCalledOnce();
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
