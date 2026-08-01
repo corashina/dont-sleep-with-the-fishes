@@ -70,8 +70,9 @@ export class InputController {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.pressed.add(event.code);
     if (event.code === 'Space') {
+      const prevented = event.defaultPrevented;
       if (this.pointerLocked) event.preventDefault();
-      if (!event.repeat) this.jumpQueued = true;
+      if (!event.repeat && !prevented) this.jumpQueued = true;
     }
   };
 
