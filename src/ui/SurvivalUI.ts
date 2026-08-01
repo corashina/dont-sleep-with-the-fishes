@@ -170,6 +170,9 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
 
 const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
+const DIVE_TRANSITION_MS = 750;
+const DIVE_COVERED_HOLD_MS = 250;
+const DIVE_RESULT_HOLD_MS = 2_600;
 const FISHING_FADE_MS = 180;
 const EVENT_CHOICE_BEAT_MS = 240;
 const EVENT_OUTCOME_HOLD_MS = 2_000;
@@ -226,7 +229,12 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'bad-sleep';
+export type SleepCoverProfile = 'solid' | 'bad-sleep' | 'dive';
+
+export interface DiveResultView {
+  readonly title: 'DIVE RESULT';
+  readonly lines: readonly string[];
+}
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -334,6 +342,9 @@ export class SurvivalUI {
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
+  private readonly diveResultLayer: HTMLElement;
+  private readonly diveResultTitle: HTMLElement;
+  private readonly diveResultLines: HTMLElement;
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
@@ -423,6 +434,8 @@ export class SurvivalUI {
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFade | null = null;
   private pendingSleepTransition: PendingFade | null = null;
+  private pendingDiveCoveredHold: PendingFade | null = null;
+  private pendingDiveResultHold: PendingFade | null = null;
   private pendingEventChoiceBeat: PendingFade | null = null;
   private pendingEventOutcomeHold: PendingFade | null = null;
   private pendingCoveredSceneSettle: PendingFade | null = null;
@@ -447,6 +460,10 @@ export class SurvivalUI {
         <span data-dream-eyelid="top"></span>
         <span data-dream-eyelid="bottom"></span>
       </div>
+      <section class="dive-result" data-dive-result role="status" aria-hidden="true">
+        <h2 class="dive-result__title ui-role-display" data-dive-result-title></h2>
+        <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
+      </section>
       <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
         <i></i><i></i><i></i>
       </div>
@@ -573,6 +590,9 @@ export class SurvivalUI {
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
+    this.diveResultLayer = requireElement(this.root, '[data-dive-result]');
+    this.diveResultTitle = requireElement(this.root, '[data-dive-result-title]');
+    this.diveResultLines = requireElement(this.root, '[data-dive-result-lines]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
@@ -967,7 +987,9 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
-    const delay = SLEEP_TRANSITION_MS;
+    const delay = this.sleepCover.dataset.profile === 'dive'
+      ? DIVE_TRANSITION_MS
+      : SLEEP_TRANSITION_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -985,6 +1007,67 @@ export class SurvivalUI {
       this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
       timer = window.setTimeout(finish, delay);
       this.pendingSleepTransition = { finish };
+    });
+  }
+
+  holdDiveCovered(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingDiveCoveredHold?.finish();
+    return this.createDiveHold(
+      DIVE_COVERED_HOLD_MS,
+      (pending) => { this.pendingDiveCoveredHold = pending; },
+      () => this.pendingDiveCoveredHold,
+      () => { this.pendingDiveCoveredHold = null; },
+    );
+  }
+
+  showDiveResult(view: DiveResultView): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingDiveResultHold?.finish();
+    this.diveResultTitle.textContent = view.title;
+    this.diveResultLines.replaceChildren(...view.lines.map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      return item;
+    }));
+    this.diveResultLayer.classList.add('is-visible');
+    this.diveResultLayer.setAttribute('aria-hidden', 'false');
+    this.publishAnnouncement([view.title, ...view.lines].join('. '));
+    return this.createDiveHold(
+      DIVE_RESULT_HOLD_MS,
+      (pending) => { this.pendingDiveResultHold = pending; },
+      () => this.pendingDiveResultHold,
+      () => { this.pendingDiveResultHold = null; },
+    );
+  }
+
+  hideDiveResult(): void {
+    if (this.disposed) return;
+    this.pendingDiveResultHold?.finish();
+    this.diveResultLayer.classList.remove('is-visible');
+    this.diveResultLayer.setAttribute('aria-hidden', 'true');
+    this.diveResultTitle.textContent = '';
+    this.diveResultLines.replaceChildren();
+  }
+
+  private createDiveHold(
+    delay: number,
+    setPending: (pending: PendingFade) => void,
+    getPending: () => PendingFade | null,
+    clearPending: () => void,
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (getPending()?.finish === finish) clearPending();
+        resolve();
+      };
+      timer = window.setTimeout(finish, delay);
+      setPending({ finish });
     });
   }
 
@@ -1283,6 +1366,8 @@ export class SurvivalUI {
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
     this.pendingSleepTransition?.finish();
+    this.pendingDiveCoveredHold?.finish();
+    this.pendingDiveResultHold?.finish();
     this.pendingFishingFade?.finish();
     this.pendingEventChoiceBeat?.finish();
     this.pendingEventOutcomeHold?.finish();

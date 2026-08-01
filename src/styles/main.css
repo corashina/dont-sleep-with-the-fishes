@@ -1524,6 +1524,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   pointer-events: none;
 }
 .sleep-cover.is-covered { opacity: 1; }
+.sleep-cover[data-profile="dive"] {
+  background: #010405;
+  transition-duration: 750ms;
+}
 .sleep-cover [data-dream-eyelid] {
   position: absolute;
   left: -6%;
@@ -1547,6 +1551,49 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .sleep-cover[data-profile="bad-sleep"].is-covered [data-dream-eyelid="bottom"] {
   animation: bad-sleep-bottom-eyelid 3.4s cubic-bezier(.38, .04, .22, 1) forwards;
+}
+.dive-result {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(38px, 10dvh, 104px);
+  z-index: 10;
+  display: grid;
+  gap: 7px;
+  width: min(330px, calc(100vw - 48px));
+  padding: 13px 18px 14px;
+  border: 1px solid #4d9298;
+  background: #090c0df2;
+  box-shadow: inset 0 0 0 2px #020405, 4px 6px 0 #01020399;
+  clip-path: polygon(3% 4%, 97% 0, 100% 91%, 94% 100%, 2% 96%, 0 12%);
+  color: var(--ink-bone);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 10px);
+  transition: opacity 180ms ease-out, transform 180ms cubic-bezier(.22, .78, .28, 1);
+}
+.dive-result.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.dive-result__title,
+.dive-result__lines {
+  margin: 0;
+}
+.dive-result__title {
+  color: var(--ink-bone);
+  font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+  font-weight: 400;
+  letter-spacing: .08em;
+  text-shadow: 2px 2px 0 var(--ink-outline);
+}
+.dive-result__lines {
+  display: grid;
+  gap: 3px;
+  padding: 0;
+  color: #bde6e5;
+  font-size: .78rem;
+  letter-spacing: .08em;
+  list-style: none;
 }
 @keyframes bad-sleep-top-eyelid {
   0% { transform: translateY(0); }
