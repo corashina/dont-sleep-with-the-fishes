@@ -28,6 +28,7 @@ import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
+import { PlayerController } from '../src/player/PlayerController';
 import {
   ScavengePhase,
   TITLE_CAMERA_POSITION,
@@ -626,13 +627,141 @@ describe('ScavengePhase lifecycle integration', () => {
     );
   });
 
+  it('preserves post-crash effect and camera state through paused skip carry', () => {
+    const {
+      phase,
+      crash,
+      triggerCrash,
+      sessionStart,
+      sessionPause,
+      sessionResume,
+      sessionTick,
+      updateWorld,
+    } = introHarness(5.9);
+    const internals = phase as unknown as {
+      context: { camera: PerspectiveCamera };
+      input: {
+        pointerLocked: boolean;
+        movement: { x: number; z: number };
+        sprinting: boolean;
+        consumeLook: ReturnType<typeof vi.fn>;
+      };
+      player: PlayerController;
+      worldTime: number;
+      introElapsed: number;
+      pausedIntroExitCarry: boolean;
+    };
+    const ship = new Group();
+    const player = new PlayerController(
+      internals.context.camera,
+      ship,
+      new Vector3(0, 3.72, -1.3),
+      [],
+      {
+        safe: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
+        fall: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
+      },
+      vi.fn(),
+    );
+    internals.player = player;
+    Object.assign(internals.input, {
+      movement: { x: 0, z: 0 },
+      sprinting: false,
+    });
+    internals.input.consumeLook.mockReturnValue({ x: 0, y: 0 });
+
+    let effectStarted = false;
+    let effectAge = 0;
+    triggerCrash.mockImplementation(() => { effectStarted = true; });
+    updateWorld.mockImplementation((_time, deltaSeconds: number) => {
+      if (effectStarted) effectAge += deltaSeconds;
+      ship.position.x += deltaSeconds * 0.5;
+      ship.rotation.y += deltaSeconds * 0.1;
+      ship.updateMatrixWorld(true);
+    });
+
+    phase.update(6.1, 0.2);
+
+    expect(internals.introElapsed).toBeCloseTo(6.1);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
+    expect(effectAge).toBeCloseTo(0.2);
+
+    internals.input.pointerLocked = false;
+    (phase as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(false);
+    (phase as unknown as { handleKeyDown(event: KeyboardEvent): void }).handleKeyDown(
+      new KeyboardEvent('keydown', { code: 'Space', cancelable: true }),
+    );
+
+    const heldEffectAge = effectAge;
+    const heldShipPosition = ship.position.clone();
+    const heldShipQuaternion = ship.quaternion.clone();
+    const heldCameraPosition = internals.context.camera.position.clone();
+    const heldCameraQuaternion = internals.context.camera.quaternion.clone();
+    const heldWorldTime = internals.worldTime;
+
+    phase.update(26.1, 20);
+    phase.update(56.1, 30);
+    phase.update(106.1, 50);
+
+    expect(sessionStart).toHaveBeenCalledOnce();
+    expect(sessionPause).toHaveBeenCalledOnce();
+    expect(effectAge).toBe(heldEffectAge);
+    expect(ship.position.toArray()).toEqual(heldShipPosition.toArray());
+    expect(ship.quaternion.toArray()).toEqual(heldShipQuaternion.toArray());
+    expect(internals.context.camera.position.toArray()).toEqual(heldCameraPosition.toArray());
+    expect(internals.context.camera.quaternion.toArray())
+      .toEqual(heldCameraQuaternion.toArray());
+    expect(internals.worldTime).toBe(heldWorldTime);
+    expect(internals.pausedIntroExitCarry).toBe(true);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
+
+    internals.input.pointerLocked = true;
+    (phase as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(true);
+    phase.update(106.1, 0);
+
+    expect(sessionResume).toHaveBeenCalledOnce();
+    expect(internals.pausedIntroExitCarry).toBe(false);
+    expect(effectAge).toBe(heldEffectAge);
+    expect(ship.position.toArray()).toEqual(heldShipPosition.toArray());
+    expect(ship.quaternion.toArray()).toEqual(heldShipQuaternion.toArray());
+    expect(internals.context.camera.position.toArray()).toEqual(heldCameraPosition.toArray());
+    expect(internals.context.camera.quaternion.toArray())
+      .toEqual(heldCameraQuaternion.toArray());
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
+
+    phase.update(106.35, 0.25);
+
+    const expectedCameraPosition = ship.localToWorld(player.localPosition.clone());
+    expect(sessionStart).toHaveBeenCalledOnce();
+    expect(sessionTick).toHaveBeenLastCalledWith(0.25, false);
+    expect(effectAge).toBeCloseTo(heldEffectAge + 0.25);
+    expect(internals.context.camera.position.distanceTo(expectedCameraPosition)).toBeLessThan(1e-10);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
+  });
+
   it('carries a hidden intro skip until visible pointer-lock resume', () => {
-    const { phase, sessionSnapshot, sessionResume, updateWorld } = introHarness(6.2);
+    const {
+      phase,
+      crash,
+      triggerCrash,
+      sessionSnapshot,
+      sessionResume,
+      updateWorld,
+    } = introHarness(5.9);
     const internals = phase as unknown as {
       input: { pointerLocked: boolean };
       pausedIntroExitCarry: boolean;
       worldTime: number;
     };
+    phase.update(6.1, 0.2);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     try {
       (phase as unknown as { handleVisibilityChange(): void }).handleVisibilityChange();
@@ -644,9 +773,9 @@ describe('ScavengePhase lifecycle integration', () => {
 
       expect(sessionSnapshot()).toBe('paused');
       expect(internals.pausedIntroExitCarry).toBe(true);
-      expect(internals.worldTime).toBe(1);
+      expect(internals.worldTime).toBeCloseTo(1.2);
       expect(updateWorld).toHaveBeenLastCalledWith(
-        1,
+        1.2,
         0,
         expect.anything(),
         expect.any(Vector3),
@@ -661,6 +790,8 @@ describe('ScavengePhase lifecycle integration', () => {
       .handlePointerLockChange(true);
     expect(sessionResume).toHaveBeenCalledOnce();
     expect(internals.pausedIntroExitCarry).toBe(false);
+    expect(crash).toHaveBeenCalledOnce();
+    expect(triggerCrash).toHaveBeenCalledOnce();
   });
 
   it('pauses when the page becomes hidden', () => {
