@@ -105,6 +105,42 @@ function createCargoRack(
   }));
 }
 
+function createTimberBench(
+  parent: Group,
+  geometry: BoxGeometry,
+  materials: ShipMaterials,
+  size: readonly [number, number, number],
+): void {
+  const seatHeight = 0.16;
+  const legHeight = size[1] - seatHeight;
+  addBox(
+    parent,
+    geometry,
+    materials.hatchTimber,
+    'bench-seat',
+    [size[0], seatHeight, size[2]],
+    [0, size[1] - seatHeight / 2, 0],
+  );
+  ([-1, 1] as const).forEach((sign) => {
+    addBox(
+      parent,
+      geometry,
+      materials.hatchTimber,
+      `bench-leg-${sign}`,
+      [0.16, legHeight, size[2] * 0.78],
+      [sign * (size[0] / 2 - 0.24), legHeight / 2, 0],
+    );
+    addBox(
+      parent,
+      geometry,
+      materials.darkMetal,
+      `bench-band-${sign}`,
+      [0.06, 0.1, size[2] + 0.02],
+      [sign * (size[0] / 2 - 0.24), size[1] - 0.24, 0],
+    );
+  });
+}
+
 function createOpenShelf(
   parent: Group,
   library: ShipFurnitureLibrary,
@@ -250,6 +286,8 @@ export function createShipFurniture(
       );
     } else if (placementSpec.modelId === 'cargoRack') {
       createCargoRack(placementRoot, geometry.box, materials, placementSpec.colliderSize);
+    } else if (placementSpec.modelId === 'timberBench') {
+      createTimberBench(placementRoot, geometry.box, materials, placementSpec.colliderSize);
     } else if (placementSpec.modelId === 'bookcaseOpen') {
       createOpenShelf(placementRoot, library, placementSpec);
     } else {

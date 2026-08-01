@@ -16,6 +16,73 @@ import {
 import type { ShipZoneId } from '../src/world/ShipLayout';
 
 describe('scavenging ship layout', () => {
+  const minimumSpots = {
+    crewCabin: 10,
+    wheelhouse: 8,
+    storageWorkroom: 10,
+    centralCargo: 14,
+    bow: 4,
+    stern: 4,
+  } as const;
+
+  it('provides the approved spread of raised item spots', () => {
+    const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
+    expect(surfaces.length).toBeGreaterThanOrEqual(50);
+    for (const [regionId, minimum] of Object.entries(minimumSpots)) {
+      expect(surfaces.filter((surface) => surface.regionId === regionId).length)
+        .toBeGreaterThanOrEqual(minimum);
+    }
+    expect(surfaces.filter(({ branch }) => branch)).toHaveLength(8);
+  });
+
+  it('authors linked room loops and protected ship routes', () => {
+    const targetIds = SHIP_LAYOUT.targets.map(({ id }) => id);
+    const laneIds = SHIP_LAYOUT.lanes.map(({ id }) => id);
+    for (const room of ['crew', 'wheelhouse', 'workroom'] as const) {
+      expect(targetIds.filter((id) => id.startsWith(`${room}-loop-`))).toHaveLength(2);
+    }
+    expect(laneIds).toEqual(expect.arrayContaining([
+      'cargo-port-full-route',
+      'cargo-starboard-full-route',
+      'cargo-forward-cross-route',
+      'cargo-aft-cross-route',
+      'crew-loop-port',
+      'crew-loop-starboard',
+      'wheelhouse-loop-port',
+      'wheelhouse-loop-starboard',
+      'workroom-loop-port',
+      'workroom-loop-starboard',
+    ]));
+
+    expect(() => validateShipLayout(SHIP_LAYOUT)).not.toThrow();
+    expect(analyzeShipNavigation(SHIP_LAYOUT).unreachableTargetIds).toEqual([]);
+    expect(SHIP_LAYOUT.targets.map(({ id }) => id)).toEqual(expect.arrayContaining([
+      'crew-ladder-route',
+      'storage-ladder-route',
+      'deck-hatch-route',
+      'mainmast-route',
+      'evacuation',
+    ]));
+    SHIP_LAYOUT.doors.forEach(({ id }) => {
+      expect(SHIP_LAYOUT.targets.map(({ id: targetId }) => targetId))
+        .toEqual(expect.arrayContaining([`${id}-inside`, `${id}-outside`]));
+    });
+  });
+
+  it('uses plausible raised cargo owners at both end decks', () => {
+    const endSurfaces = SHIP_LAYOUT.furniture.flatMap((owner) =>
+      owner.surfaces
+        .filter(({ regionId }) => regionId === 'bow' || regionId === 'stern')
+        .map((surface) => ({ owner, surface })));
+
+    expect(endSurfaces).toHaveLength(8);
+    endSurfaces.forEach(({ owner, surface }) => {
+      expect(['cargoCrate', 'barrel', 'cargoBox']).toContain(owner.modelId);
+      expect(surface.branch).toBe(false);
+      expect(owner.position[1]).toBe(FREIGHTER_DIMENSIONS.deckY);
+    });
+  });
+
   it('defines the approved enlarged single-level plan', () => {
     expect(FREIGHTER_DIMENSIONS).toEqual({ width: 16.25, length: 55, deckY: 2.22 });
 
@@ -519,17 +586,17 @@ describe('scavenging ship layout', () => {
       .forEach(({ rotationY }) => expect(rotationY).toBe(0));
   });
 
-  it('aligns beds and desks exactly against interior wall faces', () => {
+  it('authors offset cabin bunks while keeping wall furniture aligned', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
     const fixtureRect = (id: string) => furnitureRect(
       SHIP_LAYOUT.furniture.find((fixture) => fixture.id === id)!,
     );
 
-    expect(fixtureRect('cabin-bunk-port').minX)
-      .toBeCloseTo(crew.minX + SHIP_ROOM_WALL_THICKNESS);
-    expect(fixtureRect('cabin-bunk-starboard').maxX)
-      .toBeCloseTo(crew.maxX - SHIP_ROOM_WALL_THICKNESS);
+    expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-port')?.position)
+      .toEqual([-1.7, FREIGHTER_DIMENSIONS.deckY, 7.7]);
+    expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-starboard')?.position)
+      .toEqual([1.7, FREIGHTER_DIMENSIONS.deckY, 10.8]);
     expect(fixtureRect('cabin-desk-aft').minZ)
       .toBeCloseTo(crew.minZ + SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cabin-cabinet-port-forward').minX)
@@ -537,8 +604,7 @@ describe('scavenging ship layout', () => {
     const cabinTable = SHIP_LAYOUT.furniture.find(
       ({ id }) => id === 'cabin-table-starboard-center',
     )!;
-    expect(cabinTable.position[0]).toBeCloseTo((crew.minX + crew.maxX) / 2);
-    expect(cabinTable.position[2]).toBeCloseTo((crew.minZ + crew.maxZ) / 2);
+    expect(cabinTable.position).toEqual([4.2, FREIGHTER_DIMENSIONS.deckY, 10.3]);
     expect(SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === 'wheelhouse'))
       .toHaveLength(2);
     const workroomCorkboard = SHIP_LAYOUT.decorations.find(
@@ -662,7 +728,7 @@ describe('scavenging ship layout', () => {
     const crowdedDetails = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'barrel-2'
-        ? { ...detail, position: [-2.5, 2.22, 4] as const }
+        ? { ...detail, position: [-4.65, 2.22, -0.85] as const }
         : detail),
     };
 
@@ -779,7 +845,7 @@ describe('scavenging ship layout', () => {
         : zone),
       furniture: [{
         id: 'fixture-table', modelId: 'table' as const, zoneId: 'storageWorkroom' as const,
-        position: [0, 2.22, -12] as const, rotationY: 0 as const,
+        position: [0, 2.22, -13] as const, rotationY: 0 as const,
         colliderSize: [1, 1, 1] as const, scale: [2, 1, 1] as const,
         surfaces: [{
           id: surfaceId,
@@ -797,7 +863,7 @@ describe('scavenging ship layout', () => {
       }],
       targets: [...SHIP_LAYOUT.targets, {
         id: `${surfaceId}-standing-0`,
-        position: [0, -12] as const,
+        position: [0, -13] as const,
         kind: 'surface' as const,
       }],
     };
@@ -807,7 +873,7 @@ describe('scavenging ship layout', () => {
     expect(result.minimumSecondaryClearance).toBeCloseTo(1.4);
     expect(result.secondaryAccessRectangles).toEqual([{
       id: `${surfaceId}-access-0`,
-      bounds: { minX: -0.35, maxX: 2.35, minZ: -12.35, maxZ: -11.65 },
+      bounds: { minX: -0.35, maxX: 2.35, minZ: -13.35, maxZ: -12.65 },
     }]);
     expect(() => validateShipLayout(fixture)).not.toThrow();
   });
