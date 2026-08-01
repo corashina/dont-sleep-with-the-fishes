@@ -112,6 +112,25 @@ describe('SurvivalAudio', () => {
     expect(scope.play).toHaveBeenCalledWith('diveEntry');
   });
 
+  it('maps dedicated event actions onto current cues', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+
+    audio.eventAction('leak', 'ductTape');
+    audio.eventAction('school-of-fish', 'fishingNet');
+    audio.eventAction('snatcher', 'harpoonGun');
+    audio.eventAction('whirlpool', 'anchor');
+    audio.eventAction('death-stare', 'damage');
+    audio.eventAction('swarm-of-anglerfish', 'fishingNet');
+
+    expect(scope.play).toHaveBeenNthCalledWith(1, 'tapeRepair');
+    expect(scope.play).toHaveBeenNthCalledWith(2, 'fishCatch');
+    expect(scope.play).toHaveBeenNthCalledWith(3, 'harpoonGun');
+    expect(scope.play).toHaveBeenNthCalledWith(4, 'anchorChain');
+    expect(scope.play).toHaveBeenNthCalledWith(5, 'hardWaveImpact');
+    expect(scope.play).toHaveBeenNthCalledWith(6, 'itemHandling');
+  });
+
   it('plays the selected terminal sound', () => {
     const scope = createScope();
     const audio = new SurvivalAudio(scope);

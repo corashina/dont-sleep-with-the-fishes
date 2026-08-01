@@ -71,12 +71,6 @@ export interface SurvivalSessionOptions {
   initialAppearanceCounts?: Readonly<Record<string, number>>;
 }
 
-declare module './survivalTypes' {
-  interface SurvivalSnapshot {
-    readonly pendingEventTargetId?: ItemInstanceId | null;
-  }
-}
-
 export type { DayActionOption } from './survivalTypes';
 export type { BeginFishingResult } from './survivalTypes';
 

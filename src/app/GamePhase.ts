@@ -31,10 +31,11 @@ export interface PhaseContext {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
+  eventModels: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode: PhysicsMode;
   audio: AudioSystem;
-  eventModels: SurvivalEventModels;
+  featuredEventModels: SurvivalEventModels;
 }
 
 export interface GamePhase {

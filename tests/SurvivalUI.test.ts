@@ -174,6 +174,94 @@ describe('SurvivalUI', () => {
     expect(onEventChoice).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['Enter', ' '] as const)(
+    'activates an eligible aggregate item anchor with %s',
+    (key) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const onEventItem = vi.fn();
+      const backingInstanceId = 'flashlight-2' as ItemInstanceId;
+      ui.onEventItem = onEventItem;
+      ui.render(new SurvivalSession(saved('flashlight', 'flashlight'), {
+        seed: 3,
+      }).snapshot(), () => null);
+      ui.setAnchors([{
+        id: 'supply:flashlight',
+        itemType: 'flashlight',
+        supplyGroupId: 'flashlight',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        quantity: 2,
+        usableQuantity: 2,
+        brokenQuantity: 0,
+        backingInstanceId,
+        x: 240,
+        y: 180,
+        visible: true,
+        depleted: false,
+      }]);
+      ui.beginEventPresentation();
+      ui.setEventSelection(new Map([[backingInstanceId, 'flashlight']]));
+      const anchor = mount.querySelector<HTMLButtonElement>(
+        '[data-anchor-id="supply:flashlight"]',
+      )!;
+
+      expect(anchor.dataset.backingInstanceId).toBe(backingInstanceId);
+      expect(anchor.getAttribute('aria-disabled')).toBe('false');
+      anchor.focus();
+      press('[data-anchor-id="supply:flashlight"]', key);
+
+      expect(onEventItem).toHaveBeenCalledExactlyOnceWith(
+        'flashlight',
+        backingInstanceId,
+      );
+    },
+  );
+
+  it('guards aggregate item keyboard activation when ineligible, busy, or selected', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventItem = vi.fn();
+    const backingInstanceId = 'baitTin-2' as ItemInstanceId;
+    ui.onEventItem = onEventItem;
+    ui.render(new SurvivalSession(saved('baitTin', 'baitTin'), {
+      seed: 3,
+    }).snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'supply:baitTin',
+      itemType: 'baitTin',
+      supplyGroupId: 'baitTin',
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      quantity: 2,
+      usableQuantity: 2,
+      brokenQuantity: 0,
+      backingInstanceId,
+      x: 240,
+      y: 180,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+
+    ui.setEventSelection(new Map([['baitTin-1', 'baitTin']]));
+    press('[data-anchor-id="supply:baitTin"]', 'Enter');
+
+    ui.setEventSelection(new Map([[backingInstanceId, 'baitTin']]));
+    ui.setBusy(true);
+    press('[data-anchor-id="supply:baitTin"]', 'Enter');
+
+    ui.setBusy(false);
+    ui.setEventUsing(backingInstanceId);
+    press('[data-anchor-id="supply:baitTin"]', ' ');
+
+    expect(onEventItem).not.toHaveBeenCalled();
+  });
+
   it('routes Drifting Loot through its projected prop instead of a response button', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -622,6 +710,47 @@ describe('SurvivalUI', () => {
       ui.setEventSleepMask(eventId, true);
       expect(mask?.classList.contains('is-visible')).toBe(false);
     }
+  });
+
+  it('renders exact event result lines with text states below the caption', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    await ui.showEventReveal(testEvent());
+    ui.showEventResult({
+      message: 'The haul tears the bucket loose.',
+      lines: [
+        'FOOD +3',
+        'HULL -18',
+        'BUCKET BROKEN',
+        'MAP LOST',
+        'DUCT TAPE CONSUMED',
+      ],
+    });
+
+    const result = mount.querySelector<HTMLElement>('[data-dedicated-event-result]')!;
+    const lines = [...result.querySelectorAll<HTMLElement>('li')];
+    expect(result.hidden).toBe(false);
+    expect(result.querySelector('[data-event-result-message]')?.textContent)
+      .toBe('The haul tears the bucket loose.');
+    expect(lines.map(({ textContent }) => textContent)).toEqual([
+      'FOOD +3',
+      'HULL -18',
+      'BUCKET BROKEN',
+      'MAP LOST',
+      'DUCT TAPE CONSUMED',
+    ]);
+    expect(lines.map(({ dataset }) => dataset.state)).toEqual([
+      'resource',
+      'resource-negative',
+      'broken',
+      'lost',
+      'consumed',
+    ]);
+
+    ui.clearEventPresentation();
+    expect(result.hidden).toBe(true);
+    expect(result.querySelectorAll('li')).toHaveLength(0);
   });
 
   it('shows quantity only when an item represents more than one copy', () => {

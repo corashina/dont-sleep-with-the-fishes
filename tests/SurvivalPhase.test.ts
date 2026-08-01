@@ -17,9 +17,12 @@ import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import {
   formatDangerousWatersOutcome,
   formatDriftingLootResult,
+  formatEventResult,
   formatFishingResult,
   SurvivalPhase,
 } from '../src/survival/SurvivalPhase';
+import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
+import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   RewardSummary,
@@ -51,6 +54,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     rescueProgress: 0, chest: { state: 'none', acquiredDay: null }, eventFlags: [],
     weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
+    pendingEventTargetId: null,
     pendingDriftingLootVariant: null,
     lastOutcome: null, seed: 8, ...overrides,
   };
@@ -135,6 +139,45 @@ describe('SurvivalPhase test context', () => {
 
     expect(context.supernaturalEventModels.animations('ghost')).toEqual([]);
     phase.dispose();
+  });
+});
+
+describe('formatEventResult', () => {
+  const result = (
+    overrides: Partial<EventOutcomePresentation> = {},
+  ): EventOutcomePresentation => ({
+    outcome: accepted({ message: 'The event settles.', deltas: {} }),
+    resourceDeltas: {},
+    brokenInstanceIds: [],
+    lostInstanceIds: [],
+    consumedInstanceIds: [],
+    selectedInstanceId: null,
+    selectedCondition: null,
+    targetInstanceId: null,
+    ...overrides,
+  });
+
+  it('lists exact resource and broken-item changes', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { food: 3 },
+      brokenInstanceIds: ['bucket-1'],
+    })).lines).toEqual([
+      'FOOD +3',
+      'BUCKET BROKEN',
+    ]);
+  });
+
+  it('lists hull damage and exact lost and consumed items', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { hull: -18 },
+      lostInstanceIds: ['map-1', 'swimRing-1'],
+      consumedInstanceIds: ['ductTape-1'],
+    })).lines).toEqual([
+      'HULL -18',
+      'MAP LOST',
+      'SWIM RING LOST',
+      'DUCT TAPE CONSUMED',
+    ]);
   });
 });
 
@@ -2018,6 +2061,66 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
+  it('stages a dedicated event with exact context and preserves reveal order', async () => {
+    const calls: string[] = [];
+    const stageEvent = vi.fn(() => { calls.push('stage:snatcher'); });
+    const current = snapshot({
+      state: 'dayEvent',
+      day: 6,
+      seed: 42,
+      pendingEventId: 'snatcher',
+      pendingEventTargetId: 'map-1',
+      inventory: inventory({
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+        'spyglass-1': {
+          instanceId: 'spyglass-1',
+          type: 'spyglass',
+          condition: 'usable',
+        },
+      }),
+    });
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        scene: new Scene(),
+        stageEvent,
+        revealEvent: vi.fn(async () => { calls.push('world:reveal'); }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover:on' : 'cover:off');
+        }),
+        showEventReveal: vi.fn(async () => { calls.push('ui:reveal'); }),
+        settleCoveredScene: vi.fn(async () => { calls.push('render:settle'); }),
+        setEventSelection: vi.fn(() => { calls.push('choices:on'); }),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(stageEvent).toHaveBeenCalledWith({
+      eventId: 'snatcher',
+      targetInstanceId: 'map-1',
+      variantSeed: deriveEventVariantSeed(42, 6, 'snatcher'),
+    });
+    expect(calls).toEqual([
+      'cover:on',
+      'stage:snatcher',
+      'ui:reveal',
+      'render:settle',
+      'cover:off',
+      'world:reveal',
+      'choices:on',
+    ]);
+  });
+
   it.each([
     ['shower-night', 'rain'],
     ['windy-night', 'wind'],
@@ -3470,6 +3573,232 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
+  it('passes an exact dedicated before-and-after diff to world and UI', async () => {
+    let current = snapshot({
+      state: 'dayEvent',
+      day: 6,
+      seed: 42,
+      hull: 88,
+      pendingEventId: 'snatcher',
+      pendingEventTargetId: 'map-1',
+      inventory: inventory({
+        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+        'spyglass-1': {
+          instanceId: 'spyglass-1',
+          type: 'spyglass',
+          condition: 'usable',
+        },
+      }),
+    });
+    const outcome = accepted({
+      code: 'event-resolved',
+      message: 'The spyglass breaks.',
+      deltas: { hull: -12 },
+      cue: 'impact',
+    });
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const showEventResult = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'day',
+            day: 6,
+            seed: 42,
+            hull: 76,
+            inventory: inventory({
+              'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
+              'spyglass-1': {
+                instanceId: 'spyglass-1',
+                type: 'spyglass',
+                condition: 'broken',
+              },
+            }),
+          });
+          return outcome;
+        }),
+      },
+      world: {
+        scene: new Scene(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome,
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        showEventResult,
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('spyglass', 'spyglass-1');
+    await flushPromises();
+
+    const presentation = {
+      outcome,
+      resourceDeltas: { hull: -12 },
+      brokenInstanceIds: ['spyglass-1'],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: 'spyglass-1',
+      selectedCondition: 'broken',
+      targetInstanceId: 'map-1',
+    };
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'snatcher',
+      outcome,
+      {
+        choiceId: 'spyglass',
+        instanceId: 'spyglass-1',
+        condition: 'broken',
+      },
+      presentation,
+    );
+    expect(showEventResult).toHaveBeenCalledWith({
+      message: 'The spyglass breaks.',
+      lines: ['HULL -12', 'BINOCULARS BROKEN'],
+    });
+  });
+
+  it.each([
+    {
+      terminalState: 'dead' as const,
+      eventId: 'death-stare',
+      initialResources: { health: 7 },
+      terminalResources: { health: 0 },
+      deltas: { health: -7 },
+      expectedLine: 'HEALTH -7',
+    },
+    {
+      terminalState: 'sunk' as const,
+      eventId: 'whirlpool',
+      initialResources: { hull: 11 },
+      terminalResources: { hull: 0 },
+      deltas: { hull: -11 },
+      expectedLine: 'HULL -11',
+    },
+  ])(
+    'holds a dedicated $terminalState result before clearing it for the ending',
+    async ({
+      terminalState,
+      eventId,
+      initialResources,
+      terminalResources,
+      deltas,
+      expectedLine,
+    }) => {
+      let current = snapshot({
+        state: 'dayEvent',
+        day: 6,
+        pendingEventId: eventId,
+        ...initialResources,
+      });
+      const hold = deferred();
+      const calls: string[] = [];
+      let visibleLines: readonly string[] | null = null;
+      const resolveEvent = vi.fn(() => {
+        current = snapshot({
+          state: terminalState,
+          day: 6,
+          ...initialResources,
+          ...terminalResources,
+        });
+        return accepted({
+          code: 'event-resolved',
+          message: `The event leaves you ${terminalState}.`,
+          deltas,
+          cue: terminalState === 'dead' ? 'impact' : 'sinking',
+        });
+      });
+      const clearEventPresentation = vi.fn(() => {
+        calls.push('clear-ui');
+        visibleLines = null;
+      });
+      const showEnding = vi.fn(() => {
+        calls.push('ending');
+        expect(visibleLines).toBeNull();
+      });
+      const setBusy = vi.fn();
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent,
+        },
+        world: {
+          scene: new Scene(),
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          play: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          clearEvent: vi.fn(() => { calls.push('clear-world'); }),
+          dispose: vi.fn(),
+        },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          showEventResult: vi.fn((view) => {
+            calls.push('result');
+            visibleLines = view.lines;
+          }),
+          holdEventOutcome: vi.fn(() => {
+            calls.push('hold');
+            return hold.promise;
+          }),
+          clearEventPresentation,
+          setBusy,
+          render: vi.fn(),
+          setJournalUnread: vi.fn(),
+          showEnding,
+          dispose: vi.fn(),
+        },
+      });
+
+      phase.start();
+      await flushPromises();
+      calls.length = 0;
+      setBusy.mockClear();
+
+      phase.handleEndure();
+      await flushPromises();
+
+      expect(visibleLines).toEqual([expectedLine]);
+      expect(calls).toEqual(['result', 'hold']);
+      expect(showEnding).not.toHaveBeenCalled();
+      expect(clearEventPresentation).not.toHaveBeenCalled();
+      expect(setBusy).not.toHaveBeenCalledWith(false);
+
+      phase.handleEndure();
+      await flushPromises();
+      expect(resolveEvent).toHaveBeenCalledOnce();
+
+      hold.resolve();
+      await flushPromises();
+
+      expect(calls).toEqual(['result', 'hold', 'clear-world', 'clear-ui', 'ending']);
+      expect(visibleLines).toBeNull();
+      expect(showEnding).toHaveBeenCalledOnce();
+      expect(setBusy).toHaveBeenLastCalledWith(false);
+    },
+  );
+
   it('keeps the Sleep response free of physical item animation', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot')!;
     let current = snapshot({
@@ -3755,7 +4084,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(beginDawn).not.toHaveBeenCalled();
   });
 
-  it('pauses while hidden and requires the UI resume action before updates continue', () => {
+  it('resumes updates when a visibility-owned pause ends', () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -3779,9 +4108,45 @@ describe('SurvivalPhase orchestration', () => {
     expect(setPaused).toHaveBeenCalledWith(true);
     expect(update).toHaveBeenCalledOnce();
     fakeDocument.hidden = false;
-    (ui.onPauseChange as (paused: boolean) => void)(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     phase.update(3, 0.016);
+    expect(setPaused).toHaveBeenLastCalledWith(false);
     expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a manual pause across hide and restore', () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const update = vi.fn();
+    const updateAmbient = vi.fn();
+    const setPaused = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        update,
+        updateAmbient,
+        setDocumentHidden: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: { render: vi.fn(), setPaused, dispose: vi.fn() },
+    });
+    phase.start();
+    phase.setPaused(true);
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    phase.update(3, 0.016);
+
+    expect(setPaused).not.toHaveBeenCalledWith(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateAmbient).toHaveBeenCalledOnce();
   });
 
   it('keeps ambient boat motion active while gameplay is paused', () => {
@@ -3804,7 +4169,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('settles a hidden event reveal but keeps choices locked until explicit resume', async () => {
+  it('settles a hidden event reveal and restores choices when visible', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -3851,7 +4216,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setEventSelection).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(setEventSelection).toHaveBeenCalledOnce();
     phase.dispose();
@@ -3944,7 +4309,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(resolveEvent).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(resolveEvent).toHaveBeenCalledOnce();
     expect(showEventOutcome).not.toHaveBeenCalled();
@@ -3955,7 +4320,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(showEventOutcome).not.toHaveBeenCalled();
 
     fakeDocument.hidden = false;
-    phase.setPaused(false);
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(showEventOutcome).toHaveBeenCalledWith(outcome);
     hold.resolve();
@@ -4052,6 +4417,97 @@ describe('SurvivalPhase orchestration', () => {
       phase.dispose();
       expect(melodyVoice.stop).toHaveBeenCalledOnce();
       hold.resolve();
+    },
+  );
+
+  it.each([
+    ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-anglerfish', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
+    ['whirlpool', 'swimRing', 'swimRing-1', 'swimRing'],
+  ] as const)(
+    'continues %s %s result text after hide and restore',
+    async (eventId, choiceId, instanceId, itemType) => {
+      const listeners = new Map<string, EventListener>();
+      const fakeDocument = {
+        hidden: false,
+        addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+        removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+      };
+      vi.stubGlobal('document', fakeDocument);
+      const itemUse = deferred();
+      let current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: eventId,
+        inventory: inventory({
+          [instanceId]: { instanceId, type: itemType, condition: 'usable' as const },
+        }),
+      });
+      const outcome = accepted({
+        code: 'event-resolved',
+        message: `${eventId} result`,
+        deltas: {},
+        cue: 'none',
+      });
+      const resolveEvent = vi.fn(() => {
+        current = snapshot({
+          state: 'nightEvent',
+          pendingEventId: null,
+          inventory: current.inventory,
+        });
+        return outcome;
+      });
+      const showEventResult = vi.fn();
+      const setDocumentHidden = vi.fn((hidden: boolean) => {
+        if (hidden) itemUse.resolve();
+      });
+      const phase = SurvivalPhase.forTest({
+        session: { snapshot: vi.fn(() => current), resolveEvent },
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          playEventItemUse: vi.fn(() => itemUse.promise),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          syncInventory: vi.fn(),
+          setDocumentHidden,
+          dispose: vi.fn(),
+        },
+        ui: {
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          setEventUsing: vi.fn(),
+          setBusy: vi.fn(),
+          setPaused: vi.fn(),
+          showEventResult,
+          holdEventOutcome: vi.fn(() => new Promise<void>(() => undefined)),
+          dispose: vi.fn(),
+        },
+      });
+      phase.start();
+      await flushPromises();
+      phase.handleEventItem(choiceId, instanceId);
+      phase.update(0.2, 0.2);
+      expect(showEventResult).not.toHaveBeenCalled();
+
+      fakeDocument.hidden = true;
+      listeners.get('visibilitychange')!(new Event('visibilitychange'));
+      await flushPromises();
+      expect(resolveEvent).not.toHaveBeenCalled();
+
+      fakeDocument.hidden = false;
+      listeners.get('visibilitychange')!(new Event('visibilitychange'));
+      await flushPromises();
+
+      expect(setDocumentHidden).toHaveBeenNthCalledWith(1, true);
+      expect(setDocumentHidden).toHaveBeenNthCalledWith(2, false);
+      expect(resolveEvent).toHaveBeenCalledOnce();
+      expect(showEventResult).toHaveBeenCalledOnce();
+      expect(showEventResult).toHaveBeenCalledWith(expect.objectContaining({
+        message: `${eventId} result`,
+      }));
+      phase.dispose();
     },
   );
 

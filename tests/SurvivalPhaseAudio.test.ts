@@ -56,6 +56,7 @@ function snapshot(
     inventory: {},
     savedItems: [],
     pendingEventId: null,
+    pendingEventTargetId: null,
     pendingDriftingLootVariant: null,
     lastOutcome: null,
     seed: 1,

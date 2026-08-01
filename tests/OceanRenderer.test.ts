@@ -6,6 +6,10 @@ import {
   OceanRenderer,
   type OceanSurfaceQuality,
 } from '../src/ocean/OceanRenderer';
+import {
+  createInactiveVortexWaveState,
+  type VortexWaveState,
+} from '../src/ocean/WaveField';
 
 function centerlineRadialDistances(ocean: OceanRenderer): number[] {
   const positions = ocean.horizonMesh.geometry.getAttribute(
@@ -34,6 +38,40 @@ function expectedHorizonVertexCount(
 }
 
 describe('OceanRenderer horizon geometry', () => {
+  it('copies active and inactive vortex state into shader uniforms', () => {
+    const ocean = new OceanRenderer('low');
+    const active: VortexWaveState = {
+      centerX: 0,
+      centerZ: -7,
+      radius: 8,
+      depression: 1.1,
+      tangentStrength: 0.8,
+      phase: 0.4,
+      strength: 1,
+    };
+
+    ocean.setVortex(active);
+    expect(ocean.vortexStateForTest()).toEqual(active);
+
+    active.strength = 0.25;
+    expect(ocean.vortexStateForTest()!.strength).toBe(1);
+
+    ocean.setVortex({
+      centerX: Number.NaN,
+      centerZ: Number.POSITIVE_INFINITY,
+      radius: Number.NEGATIVE_INFINITY,
+      depression: Number.NaN,
+      tangentStrength: Number.POSITIVE_INFINITY,
+      phase: Number.NaN,
+      strength: Number.NEGATIVE_INFINITY,
+    });
+    expect(Object.values(ocean.vortexStateForTest()).every(Number.isFinite)).toBe(true);
+
+    ocean.setVortex(createInactiveVortexWaveState());
+    expect(ocean.vortexStateForTest()!.strength).toBe(0);
+    ocean.dispose();
+  });
+
   it.each([
     ['low', [150, 650, 0.86]],
     ['high', [180, 750, 0.82]],

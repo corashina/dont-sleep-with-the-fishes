@@ -67,6 +67,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
+  'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'whirlpoolCore',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -77,7 +78,7 @@ export interface EventModelMetadata {
     readonly min: readonly [number, number, number];
     readonly max: readonly [number, number, number];
   };
-  readonly animations: readonly {
+  readonly animations?: readonly {
     readonly name: string;
     readonly duration: number;
     readonly channels: number;
@@ -92,6 +93,8 @@ export interface EventModelSpec {
   readonly maxTriangles: number;
   readonly generatedMetadata: EventModelMetadata;
 }
+
+export const EVENT_MODEL_MAX_TOTAL_TRIANGLES = 22_000;
 
 const PRESENTATION = {
   fogMan: {
@@ -117,6 +120,36 @@ const PRESENTATION = {
     rotation: [0, 0.15, 0],
     offset: [0, 0, 0],
     maxTriangles: 250,
+  },
+  leakPlanks: {
+    targetLongestDimension: 1.7,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_000,
+  },
+  schoolFish: {
+    targetLongestDimension: 0.62,
+    rotation: [0, Math.PI / 2, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_000,
+  },
+  snatcher: {
+    targetLongestDimension: 2.5,
+    rotation: [0, 0, 0],
+    offset: [0, 1.25, 0],
+    maxTriangles: 4_000,
+  },
+  anglerFish: {
+    targetLongestDimension: 1.0,
+    rotation: [0, Math.PI / 2, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 4_000,
+  },
+  whirlpoolCore: {
+    targetLongestDimension: 7.0,
+    rotation: [Math.PI / 2, 0, 0],
+    offset: [0, -0.45, 0],
+    maxTriangles: 3_000,
   },
 } as const satisfies Readonly<Record<
   EventModelId,

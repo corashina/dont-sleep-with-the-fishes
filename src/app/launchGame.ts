@@ -22,6 +22,7 @@ import {
   ShipAssets,
 } from '../world/ShipAssets';
 import { ShipItemPlacementError } from '../world/ShipItemPlacement';
+import { runCleanupSteps } from '../world/SceneResources';
 import {
   loadPhysicsRuntime,
   PhysicsLoadError,
@@ -48,78 +49,79 @@ export interface LaunchHandle {
 
 export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
-  loadSupernaturalEventModels(): Promise<EventModelLibrary>;
+  loadSupernaturalEventModels?(): Promise<EventModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
   loadShipAssets(): Promise<ShipAssets>;
+  loadEventModels?(): Promise<EventModelLibrary>;
   loadPhysicsRuntime(): Promise<PhysicsRuntime>;
   loadAudio?(): Promise<AudioSystem>;
-  loadEventModels?(): Promise<SurvivalEventModelLibrary>;
+  loadFeaturedEventModels?(): Promise<SurvivalEventModelLibrary>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
-    supernaturalEventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audio: AudioSystem,
-    eventModels?: SurvivalEventModelLibrary,
+    featuredEventModels?: SurvivalEventModelLibrary,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
-  loadSupernaturalEventModels: () => EventModelLibrary.load(),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
+  loadEventModels: () => EventModelLibrary.load(),
   loadPhysicsRuntime,
   loadAudio: () => AudioSystem.load(),
-  loadEventModels: () => SurvivalEventModelLibrary.load(),
+  loadFeaturedEventModels: () => SurvivalEventModelLibrary.load(),
   createGame: (
     mount,
     models,
-    supernaturalEventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    eventModels,
     physicsRuntime,
     physicsMode,
     audio,
-    eventModels,
+    featuredEventModels,
   ) => (
     new Game(
       mount,
       models,
-      supernaturalEventModels,
       shipFurniture,
       skyAssets,
       lifeboatAssets,
       shipAssets,
+      eventModels,
       physicsRuntime,
       physicsMode,
       audio,
-      eventModels,
+      featuredEventModels,
     )
   ),
 };
 
 interface LoadedGameAssets {
   models: PropModelLibrary;
-  supernaturalEventModels: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
+  eventModels: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   audio: AudioSystem;
-  eventModels: SurvivalEventModelLibrary | null;
+  featuredEventModels: SurvivalEventModelLibrary | null;
 }
 
 async function loadGameAssets(
@@ -129,35 +131,38 @@ async function loadGameAssets(
   const physicsRuntimePromise = physicsMode === 'off'
     ? Promise.resolve(null)
     : dependencies.loadPhysicsRuntime();
+  const eventModelsPromise = dependencies.loadEventModels?.()
+    ?? dependencies.loadSupernaturalEventModels?.()
+    ?? Promise.reject(new Error('No event model loader is configured.'));
   const [
     models,
-    supernaturalEventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    eventModels,
     physicsRuntime,
     audio,
-    eventModels,
+    featuredEventModels,
   ] =
     await Promise.allSettled([
       dependencies.loadModels(),
-      dependencies.loadSupernaturalEventModels(),
       dependencies.loadShipFurniture(),
       dependencies.loadSkyAssets(),
       dependencies.loadLifeboatAssets(),
       dependencies.loadShipAssets(),
+      eventModelsPromise,
       physicsRuntimePromise,
       dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
-      dependencies.loadEventModels?.() ?? Promise.resolve(null),
+      dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null),
     ]);
   const assetResults = [
     models,
-    supernaturalEventModels,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
     shipAssets,
+    featuredEventModels,
     audio,
     eventModels,
   ] as const;
@@ -178,11 +183,11 @@ async function loadGameAssets(
   }
   if (
     models.status !== 'fulfilled'
-    || supernaturalEventModels.status !== 'fulfilled'
     || shipFurniture.status !== 'fulfilled'
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
     || shipAssets.status !== 'fulfilled'
+    || featuredEventModels.status !== 'fulfilled'
     || physicsRuntime.status !== 'fulfilled'
     || audio.status !== 'fulfilled'
     || eventModels.status !== 'fulfilled'
@@ -191,47 +196,28 @@ async function loadGameAssets(
   }
   return {
     models: models.value,
-    supernaturalEventModels: supernaturalEventModels.value,
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
     shipAssets: shipAssets.value,
+    eventModels: eventModels.value,
     physicsRuntime: physicsRuntime.value,
     audio: audio.value,
-    eventModels: eventModels.value,
+    featuredEventModels: featuredEventModels.value,
   };
 }
 
 function disposeGameAssets(assets: LoadedGameAssets): void {
-  try {
-    assets.models.dispose();
-  } finally {
-    try {
-      assets.supernaturalEventModels.dispose();
-    } finally {
-      try {
-        assets.shipFurniture.dispose();
-      } finally {
-        try {
-          assets.skyAssets.dispose();
-        } finally {
-          try {
-            assets.lifeboatAssets.dispose();
-          } finally {
-            try {
-              assets.shipAssets.dispose();
-            } finally {
-              try {
-                assets.audio.dispose();
-              } finally {
-                assets.eventModels?.dispose();
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  runCleanupSteps([
+    () => assets.models.dispose(),
+    () => assets.shipFurniture.dispose(),
+    () => assets.skyAssets.dispose(),
+    () => assets.lifeboatAssets.dispose(),
+    () => assets.shipAssets.dispose(),
+    () => assets.eventModels.dispose(),
+    () => assets.audio.dispose(),
+    () => assets.featuredEventModels?.dispose(),
+  ]);
 }
 
 function renderSystemScreen(
@@ -431,32 +417,19 @@ export function launchGame(
 
     try {
       loading.remove();
-      const createdGame = unownedAssets.eventModels === null
-        ? dependencies.createGame(
-          mount,
-          unownedAssets.models,
-          unownedAssets.supernaturalEventModels,
-          unownedAssets.shipFurniture,
-          unownedAssets.skyAssets,
-          unownedAssets.lifeboatAssets,
-          unownedAssets.shipAssets,
-          unownedAssets.physicsRuntime,
-          physicsMode,
-          unownedAssets.audio,
-        )
-        : dependencies.createGame(
-          mount,
-          unownedAssets.models,
-          unownedAssets.supernaturalEventModels,
-          unownedAssets.shipFurniture,
-          unownedAssets.skyAssets,
-          unownedAssets.lifeboatAssets,
-          unownedAssets.shipAssets,
-          unownedAssets.physicsRuntime,
-          physicsMode,
-          unownedAssets.audio,
-          unownedAssets.eventModels,
-        );
+      const createdGame = dependencies.createGame(
+        mount,
+        unownedAssets.models,
+        unownedAssets.shipFurniture,
+        unownedAssets.skyAssets,
+        unownedAssets.lifeboatAssets,
+        unownedAssets.shipAssets,
+        unownedAssets.eventModels,
+        unownedAssets.physicsRuntime,
+        physicsMode,
+        unownedAssets.audio,
+        unownedAssets.featuredEventModels ?? undefined,
+      );
       game = createdGame;
       unownedAssets = null;
 

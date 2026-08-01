@@ -12,6 +12,7 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
   ITEM_IDS,
   type ItemId,
@@ -59,6 +60,14 @@ export interface SupplyAdditivePose {
   readonly scaleX: number;
   readonly scaleY: number;
   readonly scaleZ: number;
+}
+
+export interface BorrowedSupplyActor {
+  readonly instanceId: ItemInstanceId;
+  readonly root: Group;
+  applyPose(pose: SupplyAdditivePose): void;
+  releaseOnNextSync(): void;
+  release(): void;
 }
 
 interface MutableRecord {
@@ -111,8 +120,29 @@ interface EventItemPoseBinding {
   readonly pose: MutableSupplyPose;
 }
 
+interface BorrowedSupplyBinding {
+  readonly groupId: BoatSupplyGroupId;
+  readonly motionIndex: number;
+  readonly root: Group;
+  readonly pose: MutableSupplyPose;
+}
+
 const EVENT_ITEM_USE_DURATION = 0.65;
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
+
+function createIdentitySupplyPose(): MutableSupplyPose {
+  return {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
+}
 
 function visibleCopyCount(quantity: number): 0 | 1 | 2 | 3 {
   return Math.min(3, Math.max(0, Math.floor(quantity))) as 0 | 1 | 2 | 3;
@@ -206,6 +236,11 @@ export class BoatSupplyDisplay {
   private readonly ownedMaterials = new Set<Material>();
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
+  private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
+  private readonly borrowedBindings =
+    new Map<ItemInstanceId, BorrowedSupplyBinding>();
+  private readonly borrowedCountByGroup = new Map<BoatSupplyGroupId, number>();
+  private readonly releaseBorrowedOnSync = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -318,8 +353,18 @@ export class BoatSupplyDisplay {
       this.groupByInstanceId.set(item.instanceId, item.type);
     }
     if (this.releasePinnedActorOnSync) this.releasePinnedEventActor(false);
+    for (const instanceId of this.releaseBorrowedOnSync) {
+      this.releaseBorrowedEventActor(instanceId, false);
+    }
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
-      if (groupId !== this.pinnedEventGroupId) this.syncGroup(groupId, snapshot);
+      if (
+        groupId !== this.pinnedEventGroupId
+        && !this.hasBorrowedGroup(groupId)
+      ) {
+        this.syncGroup(groupId, snapshot);
+      } else if (this.hasBorrowedGroup(groupId)) {
+        this.recordsById.get(groupId)!.root.visible = false;
+      }
     }
     if (
       this.highlightedGroupId !== null
@@ -439,6 +484,43 @@ export class BoatSupplyDisplay {
     return true;
   }
 
+  borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
+    const existing = this.borrowedActors.get(instanceId);
+    if (existing !== undefined) {
+      this.releaseBorrowedOnSync.delete(instanceId);
+      return existing;
+    }
+    const binding = this.createBorrowedEventBinding(instanceId);
+    if (binding === null) return null;
+    const actor: BorrowedSupplyActor = {
+      instanceId,
+      root: binding.root,
+      applyPose: (pose) => {
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
+        const target = binding.pose;
+        target.x = pose.x;
+        target.y = pose.y;
+        target.z = pose.z;
+        target.yaw = pose.yaw;
+        target.pitch = pose.pitch;
+        target.roll = pose.roll;
+        target.scaleX = pose.scaleX;
+        target.scaleY = pose.scaleY;
+        target.scaleZ = pose.scaleZ;
+      },
+      releaseOnNextSync: () => {
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
+        this.releaseBorrowedOnSync.add(instanceId);
+      },
+      release: () => {
+        if (this.borrowedBindings.get(instanceId) !== binding) return;
+        this.releaseBorrowedEventActor(instanceId, true);
+      },
+    };
+    this.borrowedActors.set(instanceId, actor);
+    return actor;
+  }
+
   pinEventActor(instanceId: ItemInstanceId): boolean {
     if (this.disposed) return false;
     if (this.pinnedEventActorId === instanceId) {
@@ -446,9 +528,10 @@ export class BoatSupplyDisplay {
       this.releasePinnedActorOnSync = false;
       return true;
     }
-    if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
     const groupId = this.groupByInstanceId.get(instanceId);
     if (groupId === undefined) return false;
+    if (this.hasBorrowedGroup(groupId)) return false;
+    const previousSelectedItemId = this.eventSelectedItemId;
     if (this.currentSnapshot !== null) {
       this.eventSelectedItemId = instanceId;
       this.syncGroup(groupId, this.currentSnapshot);
@@ -458,7 +541,14 @@ export class BoatSupplyDisplay {
       record === undefined
       || record.visibleCopies === 0
       || record.backingInstanceId !== instanceId
-    ) return false;
+    ) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      if (this.currentSnapshot !== null) {
+        this.syncGroup(groupId, this.currentSnapshot);
+      }
+      return false;
+    }
+    if (this.pinnedEventActorId !== null) this.releasePinnedEventActor(true);
     this.pinnedEventActorId = instanceId;
     this.pinnedEventGroupId = groupId;
     this.preparedEventActorIds.add(instanceId);
@@ -519,6 +609,7 @@ export class BoatSupplyDisplay {
     this.preparedEventActorIds.clear();
     this.releasePinnedEventActor(false);
     this.eventItemPosesByGroupId.clear();
+    this.releaseAllBorrowedEventActors(false);
     this.restoreEventMotionBase();
     if (this.currentSnapshot !== null) {
       for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
@@ -567,6 +658,7 @@ export class BoatSupplyDisplay {
       for (const copy of copies) copy.presentation?.dispose();
     }
     for (const record of this.recordsById.values()) record.root.removeFromParent();
+    this.borrowedActors.clear();
     disposeResourceSets(
       this.ownedGeometries,
       this.ownedMaterials,
@@ -715,6 +807,98 @@ export class BoatSupplyDisplay {
     }
   }
 
+  private createBorrowedEventBinding(
+    instanceId: ItemInstanceId,
+  ): BorrowedSupplyBinding | null {
+    if (this.disposed || this.currentSnapshot === null) return null;
+    const groupId = this.groupByInstanceId.get(instanceId);
+    if (
+      groupId === undefined
+      || groupId === this.pinnedEventGroupId
+    ) {
+      return null;
+    }
+
+    const previousSelectedItemId = this.eventSelectedItemId;
+    this.eventSelectedItemId = instanceId;
+    this.syncGroup(groupId, this.currentSnapshot);
+    const record = this.recordsById.get(groupId);
+    if (
+      record === undefined
+      || record.visibleCopies === 0
+      || record.backingInstanceId !== instanceId
+    ) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      this.syncGroup(groupId, this.currentSnapshot);
+      if (record !== undefined && this.hasBorrowedGroup(groupId)) {
+        record.root.visible = false;
+      }
+      return null;
+    }
+
+    const root = cloneSkeleton(record.root) as Group;
+    root.name = `boat-supply-event:${instanceId}`;
+    root.userData.supplyInstanceId = instanceId;
+    for (let index = 1; index < root.children.length; index += 1) {
+      root.children[index]!.visible = false;
+    }
+    record.root.parent!.add(root);
+
+    this.eventSelectedItemId = previousSelectedItemId;
+    this.syncGroup(groupId, this.currentSnapshot);
+    record.root.visible = false;
+    const binding: BorrowedSupplyBinding = {
+      groupId,
+      motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
+      root,
+      pose: createIdentitySupplyPose(),
+    };
+    this.borrowedBindings.set(instanceId, binding);
+    this.borrowedCountByGroup.set(
+      groupId,
+      (this.borrowedCountByGroup.get(groupId) ?? 0) + 1,
+    );
+    this.releaseBorrowedOnSync.delete(instanceId);
+    return binding;
+  }
+
+  private releaseBorrowedEventActor(
+    instanceId: ItemInstanceId,
+    syncLatestSnapshot: boolean,
+  ): void {
+    const binding = this.borrowedBindings.get(instanceId);
+    if (binding === undefined) return;
+    const groupId = binding.groupId;
+    this.borrowedBindings.delete(instanceId);
+    this.borrowedActors.delete(instanceId);
+    this.releaseBorrowedOnSync.delete(instanceId);
+    const remaining = (this.borrowedCountByGroup.get(groupId) ?? 1) - 1;
+    if (remaining <= 0) this.borrowedCountByGroup.delete(groupId);
+    else this.borrowedCountByGroup.set(groupId, remaining);
+    binding.root.position.copy(this.basePositionById.get(groupId)!);
+    binding.root.quaternion.copy(this.baseQuaternionById.get(groupId)!);
+    binding.root.scale.set(1, 1, 1);
+    binding.root.visible = false;
+    binding.root.removeFromParent();
+    if (
+      syncLatestSnapshot
+      && this.currentSnapshot !== null
+      && !this.hasBorrowedGroup(groupId)
+    ) {
+      this.syncGroup(groupId, this.currentSnapshot);
+    }
+  }
+
+  private releaseAllBorrowedEventActors(syncLatestSnapshot: boolean): void {
+    for (const instanceId of this.borrowedBindings.keys()) {
+      this.releaseBorrowedEventActor(instanceId, syncLatestSnapshot);
+    }
+  }
+
+  private hasBorrowedGroup(groupId: BoatSupplyGroupId): boolean {
+    return (this.borrowedCountByGroup.get(groupId) ?? 0) > 0;
+  }
+
   private applyEventMotion(): void {
     for (let index = 0; index < this.eventMotionRecords.length; index += 1) {
       const record = this.eventMotionRecords[index]!;
@@ -725,6 +909,10 @@ export class BoatSupplyDisplay {
       root.scale.set(1, 1, 1);
       root.position.y += this.eventAmbientLift;
       root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
+      if (this.hasBorrowedGroup(groupId)) {
+        root.visible = false;
+        continue;
+      }
       const binding = this.eventItemPosesByGroupId.get(groupId);
       if (binding !== undefined) {
         const pose = binding.pose;
@@ -736,6 +924,23 @@ export class BoatSupplyDisplay {
         root.rotateZ(pose.roll);
         root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
       }
+    }
+    for (const binding of this.borrowedBindings.values()) {
+      const root = binding.root;
+      const pose = binding.pose;
+      root.visible = true;
+      root.position.copy(this.basePositionById.get(binding.groupId)!);
+      root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
+      root.scale.set(1, 1, 1);
+      root.position.y += this.eventAmbientLift;
+      root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
+      root.position.x += pose.x;
+      root.position.y += pose.y;
+      root.position.z += pose.z;
+      root.rotateY(pose.yaw);
+      root.rotateX(pose.pitch);
+      root.rotateZ(pose.roll);
+      root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
     }
   }
 

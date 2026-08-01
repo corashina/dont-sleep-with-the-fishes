@@ -292,7 +292,10 @@ function parseLedgerRow(row) {
 }
 
 function verifyLedgerRow(ledger, itemId, measurement) {
-  const rows = ledger.split(/\r?\n/).filter((line) => line.startsWith(`| ${itemId} |`));
+  const rows = ledger.split(/\r?\n/).filter((line) => (
+    line.startsWith(`| ${itemId} |`)
+    && parseLedgerRow(line)[1] === `\`${itemId}.glb\``
+  ));
   if (rows.length !== 1) {
     throw new Error(`ATTRIBUTION.md: expected one ${itemId} row, received ${rows.length}`);
   }
