@@ -15,6 +15,43 @@ import {
 } from '../src/world/ShipLayout';
 import type { ShipZoneId } from '../src/world/ShipLayout';
 
+interface TestRect {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
+function rectsOverlap(left: TestRect, right: TestRect): boolean {
+  return left.minX < right.maxX && left.maxX > right.minX
+    && left.minZ < right.maxZ && left.maxZ > right.minZ;
+}
+
+function expectClosedLaneCycle(prefix: string, minimumLaneCount = 4): void {
+  const lanes = SHIP_LAYOUT.lanes.filter(({ id }) => id.startsWith(prefix));
+  expect(lanes.length).toBeGreaterThanOrEqual(minimumLaneCount);
+  const neighbors = lanes.map((lane, index) => lanes
+    .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+    .filter(({ candidate, candidateIndex }) => candidateIndex !== index
+      && rectsOverlap(lane.bounds, candidate.bounds))
+    .map(({ candidateIndex }) => candidateIndex));
+  neighbors.forEach((laneNeighbors, index) => expect(
+    laneNeighbors.length,
+    lanes[index]!.id,
+  ).toBeGreaterThanOrEqual(2));
+  const visited = new Set<number>([0]);
+  const pending = [0];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    neighbors[current]!.forEach((neighbor) => {
+      if (visited.has(neighbor)) return;
+      visited.add(neighbor);
+      pending.push(neighbor);
+    });
+  }
+  expect(visited.size).toBe(lanes.length);
+}
+
 describe('scavenging ship layout', () => {
   const minimumSpots = {
     crewCabin: 10,
@@ -29,10 +66,17 @@ describe('scavenging ship layout', () => {
     const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
     expect(surfaces.length).toBeGreaterThanOrEqual(50);
     for (const [regionId, minimum] of Object.entries(minimumSpots)) {
-      expect(surfaces.filter((surface) => surface.regionId === regionId).length)
+      const regionSurfaces = surfaces.filter((surface) => surface.regionId === regionId);
+      expect(new Set(regionSurfaces.map(({ physicalSlotId }) => physicalSlotId)).size)
         .toBeGreaterThanOrEqual(minimum);
     }
     expect(surfaces.filter(({ branch }) => branch)).toHaveLength(8);
+  });
+
+  it('authors closed, connected room lane cycles', () => {
+    expectClosedLaneCycle('crew-loop-', 7);
+    expectClosedLaneCycle('wheelhouse-loop-');
+    expectClosedLaneCycle('workroom-loop-', 7);
   });
 
   it('authors linked room loops and protected ship routes', () => {
@@ -46,12 +90,12 @@ describe('scavenging ship layout', () => {
       'cargo-starboard-full-route',
       'cargo-forward-cross-route',
       'cargo-aft-cross-route',
-      'crew-loop-port',
-      'crew-loop-starboard',
+      'crew-loop-aft-cross',
+      'crew-loop-forward-cross',
       'wheelhouse-loop-port',
       'wheelhouse-loop-starboard',
-      'workroom-loop-port',
-      'workroom-loop-starboard',
+      'workroom-loop-aft-cross',
+      'workroom-loop-forward-cross',
     ]));
 
     expect(() => validateShipLayout(SHIP_LAYOUT)).not.toThrow();
@@ -579,8 +623,8 @@ describe('scavenging ship layout', () => {
     const boxRect = (id: string) => detailVisualRect(
       SHIP_LAYOUT.details.find((detail) => detail.id === id)!,
     );
-    expect(boxRect('cargoBox-1').maxX).toBeCloseTo(crew.minX);
-    expect(boxRect('cargoBox-2').minX).toBeCloseTo(storage.maxX);
+    expect(boxRect('cargoBox-1').maxZ).toBeLessThan(crew.minZ);
+    expect(boxRect('cargoBox-2').minZ).toBeCloseTo(storage.maxZ);
     expect(boxRect('cargoBox-3').maxX).toBeCloseTo(storage.minX);
     SHIP_LAYOUT.details.filter(({ kind }) => kind === 'cargoBox')
       .forEach(({ rotationY }) => expect(rotationY).toBe(0));
@@ -594,17 +638,16 @@ describe('scavenging ship layout', () => {
     );
 
     expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-port')?.position)
-      .toEqual([-1.7, FREIGHTER_DIMENSIONS.deckY, 7.7]);
+      .toEqual([-1.7, FREIGHTER_DIMENSIONS.deckY, 7.2]);
     expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-starboard')?.position)
-      .toEqual([1.7, FREIGHTER_DIMENSIONS.deckY, 10.8]);
-    expect(fixtureRect('cabin-desk-aft').minZ)
-      .toBeCloseTo(crew.minZ + SHIP_ROOM_WALL_THICKNESS);
+      .toEqual([1.5, FREIGHTER_DIMENSIONS.deckY, 10.8]);
+    expect(fixtureRect('cabin-desk-aft').minZ).toBeGreaterThanOrEqual(crew.minZ);
     expect(fixtureRect('cabin-cabinet-port-forward').minX)
       .toBeCloseTo(crew.minX + SHIP_ROOM_WALL_THICKNESS);
     const cabinTable = SHIP_LAYOUT.furniture.find(
       ({ id }) => id === 'cabin-table-starboard-center',
     )!;
-    expect(cabinTable.position).toEqual([4.2, FREIGHTER_DIMENSIONS.deckY, 10.3]);
+    expect(cabinTable.position).toEqual([4.55, FREIGHTER_DIMENSIONS.deckY, 10.7]);
     expect(SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === 'wheelhouse'))
       .toHaveLength(2);
     const workroomCorkboard = SHIP_LAYOUT.decorations.find(
@@ -635,6 +678,15 @@ describe('scavenging ship layout', () => {
     };
     expect(() => validateShipLayout(laneBarrel)).toThrow(/lane-barrel/i);
 
+    const secondaryLaneBox = {
+      ...SHIP_LAYOUT,
+      details: SHIP_LAYOUT.details.map((detail) => detail.id === 'cargoBox-3'
+        ? { ...detail, position: [-7, 2.22, 15] as const }
+        : detail),
+    };
+    expect(() => validateShipLayout(secondaryLaneBox))
+      .toThrow(/cargoBox-3.*secondary lane port-exterior-main/i);
+
     const zeroHeightMast = {
       ...SHIP_LAYOUT,
       rigging: {
@@ -656,6 +708,46 @@ describe('scavenging ship layout', () => {
       },
     };
     expect(() => validateShipLayout(evacuationMast)).toThrow(/mainmast/i);
+  });
+
+  it('keeps every detail visual footprint outside routes, doors, and evacuation', () => {
+    SHIP_LAYOUT.details.forEach((detail) => {
+      const bounds = detailVisualRect(detail);
+      SHIP_LAYOUT.lanes.forEach((lane) => expect(
+        rectsOverlap(bounds, lane.bounds),
+        `${detail.id} overlaps ${lane.id}`,
+      ).toBe(false));
+      SHIP_LAYOUT.doors.forEach((door) => expect(
+        rectsOverlap(bounds, door.approach),
+        `${detail.id} overlaps ${door.id}`,
+      ).toBe(false));
+      expect(rectsOverlap(bounds, SHIP_LAYOUT.evacuationRect), detail.id).toBe(false);
+    });
+  });
+
+  it('keeps stern standing points and their access paths aft of the storage wall', () => {
+    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
+    for (const id of ['stern-barrel-port-center', 'stern-box-starboard-center']) {
+      const owner = SHIP_LAYOUT.furniture.find((candidate) => candidate.id === id)!;
+      const localStanding = owner.surfaces[0]!.standingPoints[0]!;
+      const standingZ = owner.position[2] + localStanding[2] * owner.scale[2];
+      expect(standingZ).toBeLessThan(storage.minZ - PLAYER_LAYOUT_RADIUS);
+    }
+
+    const crossingWall = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((owner) => owner.id === 'stern-barrel-port-center'
+        ? {
+            ...owner,
+            surfaces: owner.surfaces.map((surface) => ({
+              ...surface,
+              standingPoints: [[0, 0, 1.4] as const],
+            })),
+          }
+        : owner),
+    };
+    expect(() => validateShipLayout(crossingWall))
+      .toThrow(/stern-barrel-port-center:top.*access.*wall/i);
   });
 
   it.each([
@@ -861,6 +953,7 @@ describe('scavenging ship layout', () => {
           fallback: false,
         }],
       }],
+      lanes: SHIP_LAYOUT.lanes.filter(({ id }) => !id.includes('-loop-')),
       targets: [...SHIP_LAYOUT.targets, {
         id: `${surfaceId}-standing-0`,
         position: [0, -13] as const,

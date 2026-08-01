@@ -466,6 +466,41 @@ describe('player movement helpers', () => {
     }
   });
 
+  it('follows both authored routes around each room island layout', () => {
+    const ship = createTestShip();
+    const point = (x: number, z: number) => new Vector3(x, PLAYER_Y, z);
+    try {
+      const crewMiddle = point(0, 9);
+      followPath(crewMiddle, [
+        point(-3, 9), point(-3, 5.4), point(3, 5.4), point(3, 9), crewMiddle,
+      ], ship.colliders);
+      followPath(crewMiddle, [
+        point(-3, 9), point(-3, 12.5), point(3, 12.5), point(3, 9), crewMiddle,
+      ], ship.colliders);
+
+      const wheelhousePort = laneCenter('wheelhouse-loop-port');
+      const wheelhouseStarboard = laneCenter('wheelhouse-loop-starboard');
+      followPath(wheelhousePort, [
+        point(-4.3, 18), point(4.3, 18), wheelhouseStarboard,
+      ], ship.colliders);
+      followPath(wheelhousePort, [
+        point(-4.3, 20.65), point(4.3, 20.65), wheelhouseStarboard,
+      ], ship.colliders);
+
+      const workroomMiddle = point(0, -13.75);
+      followPath(workroomMiddle, [
+        point(-2.9, -13.75), point(-2.15, -16.25), point(2.15, -16.25),
+        point(2.15, -15.7), point(2.5, -13.75), workroomMiddle,
+      ], ship.colliders);
+      followPath(workroomMiddle, [
+        point(-2.9, -13.75), point(-2.9, -11.55), point(1.6, -11.55),
+        point(2.5, -13.75), workroomMiddle,
+      ], ship.colliders);
+    } finally {
+      ship.dispose();
+    }
+  });
+
   it.each([
     [
       'starboard side window',
