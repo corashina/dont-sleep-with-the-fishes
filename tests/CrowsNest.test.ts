@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BoxGeometry, Mesh } from 'three';
 import { resolveLadderTraversal } from '../src/player/LadderTraversal';
 import { createCrowsNest } from '../src/world/CrowsNest';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
@@ -20,6 +21,23 @@ describe('mainmast crow\'s nest', () => {
       expect(build.introAnchors.exitPosition).toEqual([0, FREIGHTER_DIMENSIONS.deckY + 1.5, -1.3]);
       expect(build.root.getObjectByName('crows-nest-seat')).toBeDefined();
       expect(build.root.getObjectByName('mainmast-ladder:rung:0')).toBeDefined();
+
+      const aftSlat = (index: number, side: 'port' | 'starboard'): Mesh<BoxGeometry> =>
+        build.root.getObjectByName(`crows-nest:floor-slat:${index}:${side}`) as Mesh<BoxGeometry>;
+      const outerPortEdges: number[] = [];
+      [0, 1, 2].forEach((index) => {
+        const port = aftSlat(index, 'port');
+        const starboard = aftSlat(index, 'starboard');
+        const portInnerEdge = port.position.x + port.geometry.parameters.width / 2;
+        const starboardInnerEdge = starboard.position.x - starboard.geometry.parameters.width / 2;
+        outerPortEdges.push(port.position.x - port.geometry.parameters.width / 2);
+        expect(portInnerEdge).toBeCloseTo(-0.45);
+        expect(starboardInnerEdge).toBeCloseTo(0.45);
+        expect(starboardInnerEdge - portInnerEdge).toBeCloseTo(0.9);
+      });
+      [-0.99, -1.12, -1.18].forEach((edge, index) => {
+        expect(outerPortEdges[index]).toBeCloseTo(edge);
+      });
 
       const ascent = resolveLadderTraversal({
         position: {
