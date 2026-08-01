@@ -1,0 +1,9 @@
+export const SCAVENGE_WALK_SPEED = 3.8;
+export const SCAVENGE_SPRINT_SPEED = 6.2;
+
+export function scavengeSpeedMultiplier(carriedWeight: number): number {
+  if (!Number.isFinite(carriedWeight) || carriedWeight < 0) return 1;
+  if (carriedWeight >= 3) return 0.84;
+  if (carriedWeight >= 2) return 0.92;
+  return 1;
+}
