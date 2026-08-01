@@ -179,10 +179,19 @@ function createUpdateHarness(
 
 function introHarness(elapsed = 0) {
   const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-  const sessionStart = vi.fn();
+  let sessionStatus: 'idle' | 'running' | 'paused' = 'idle';
+  const sessionStart = vi.fn(() => { sessionStatus = 'running'; });
+  const sessionPause = vi.fn(() => {
+    if (sessionStatus === 'running') sessionStatus = 'paused';
+  });
+  const sessionResume = vi.fn(() => {
+    if (sessionStatus === 'paused') sessionStatus = 'running';
+  });
   const sessionTick = vi.fn();
   const crash = vi.fn();
   const triggerCrash = vi.fn();
+  const setAudioPaused = vi.fn();
+  const setUiPaused = vi.fn();
   const anchors = {
     seatedPosition: [0, 13.67, -0.85],
     standingPosition: [0, 14.22, -0.85],
@@ -209,15 +218,32 @@ function introHarness(elapsed = 0) {
       triggerScavengeIntroCrash: triggerCrash,
     },
     player: { setScriptedPose: vi.fn(), placeCamera: vi.fn() },
-    audio: { crash, setPaused: vi.fn() },
-    ui: { setPresentation: vi.fn(), setPaused: vi.fn() },
+    audio: { crash, setPaused: setAudioPaused },
+    ui: {
+      setPresentation: vi.fn(),
+      setPaused: setUiPaused,
+      clearPointerLockError: vi.fn(),
+    },
     session: {
       start: sessionStart,
+      pause: sessionPause,
+      resume: sessionResume,
       tick: sessionTick,
-      snapshot: () => ({ status: 'idle' }),
+      snapshot: () => ({ status: sessionStatus }),
     },
   });
-  return { phase, sessionStart, sessionTick, crash, triggerCrash };
+  return {
+    phase,
+    sessionStart,
+    sessionPause,
+    sessionResume,
+    sessionTick,
+    sessionSnapshot: () => sessionStatus,
+    crash,
+    triggerCrash,
+    setAudioPaused,
+    setUiPaused,
+  };
 }
 
 describe('ScavengePhase lifecycle integration', () => {
@@ -373,6 +399,38 @@ describe('ScavengePhase lifecycle integration', () => {
     handle.call(phase, true);
     expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(false);
     expect((phase as unknown as { introElapsed: number }).introElapsed).toBe(4);
+  });
+
+  it('resumes scavenging after skipping a paused intro', () => {
+    const {
+      phase,
+      sessionStart,
+      sessionPause,
+      sessionResume,
+      sessionSnapshot,
+      setAudioPaused,
+      setUiPaused,
+    } = introHarness(4);
+    const handlePointerLockChange = (phase as unknown as {
+      handlePointerLockChange(locked: boolean): void;
+    }).handlePointerLockChange;
+
+    handlePointerLockChange.call(phase, false);
+    (phase as unknown as { handleKeyDown(event: KeyboardEvent): void }).handleKeyDown(
+      new KeyboardEvent('keydown', { code: 'Space', cancelable: true }),
+    );
+
+    expect(sessionStart).toHaveBeenCalledOnce();
+    expect(sessionPause).toHaveBeenCalledOnce();
+    expect(sessionSnapshot()).toBe('paused');
+    expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(false);
+
+    handlePointerLockChange.call(phase, true);
+
+    expect(sessionResume).toHaveBeenCalledOnce();
+    expect(sessionSnapshot()).toBe('running');
+    expect(setUiPaused).toHaveBeenLastCalledWith(false);
+    expect(setAudioPaused).toHaveBeenLastCalledWith(false);
   });
 
   it('pauses when the page becomes hidden', () => {
