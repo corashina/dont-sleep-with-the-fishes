@@ -64,6 +64,30 @@ describe('scavenge intro choreography', () => {
     expect(frame).toMatchObject({ impactY: 0, impactPitch: 0, impactRoll: 0 });
   });
 
+  it('keeps the camera facing away from the mast during the ladder descent', () => {
+    const frame = createScavengeIntroFrame();
+    [7.5, 8.5, 9.5].forEach((elapsed) => {
+      sampleScavengeIntroFrameInto(frame, elapsed, anchors);
+      const forwardZ = -Math.cos(frame.cameraYaw);
+      expect(forwardZ).toBeLessThan(-0.9);
+    });
+  });
+
+  it('keeps the mast outside the camera sight line after the crash', () => {
+    const frame = createScavengeIntroFrame();
+    for (let elapsed = 6; elapsed <= 9.5; elapsed += 0.05) {
+      sampleScavengeIntroFrameInto(frame, elapsed, anchors);
+      const forwardX = -Math.sin(frame.cameraYaw);
+      const forwardZ = -Math.cos(frame.cameraYaw);
+      const distanceAlongRay = -(frame.cameraPosition[0] * forwardX
+        + frame.cameraPosition[2] * forwardZ);
+      if (distanceAlongRay <= 0) continue;
+      const closestX = frame.cameraPosition[0] + forwardX * distanceAlongRay;
+      const closestZ = frame.cameraPosition[2] + forwardZ * distanceAlongRay;
+      expect(Math.hypot(closestX, closestZ)).toBeGreaterThan(0.36);
+    }
+  });
+
   it('clamps bad deltas and detects a crossed event once', () => {
     expect(advanceScavengeIntroElapsed(5.9, Number.NaN)).toBe(5.9);
     expect(advanceScavengeIntroElapsed(5.9, -1)).toBe(5.9);

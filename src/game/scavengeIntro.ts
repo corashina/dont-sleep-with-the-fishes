@@ -26,9 +26,12 @@ const VIEW_KEYS = [
   [1, Math.PI, 0],
   [3.5, Math.PI + 0.65, 0],
   [6, Math.PI - 0.65, 0],
-  [7.2, 0, -1.05],
-  [7.5, Math.PI, -0.35],
-  [9.5, Math.PI, -0.15],
+  [6.5, Math.PI, -0.45],
+  [7, Math.PI, -0.65],
+  [7.2, Math.PI * 2, -1.05],
+  [7.5, Math.PI * 2, -0.35],
+  [9.5, Math.PI * 2, -0.15],
+  [9.7, Math.PI * 2, -0.1],
   [10, Math.PI, 0],
 ] as const;
 
@@ -126,11 +129,13 @@ export function sampleScavengeIntroFrameInto(
     );
   } else if (elapsed <= 6.5) {
     copyPosition(output.cameraPosition, anchors.standingPosition);
-  } else if (elapsed <= 7.2) {
+  } else if (elapsed <= 7) {
     interpolatePosition(
       output.cameraPosition, anchors.standingPosition,
-      anchors.ladderApproachPosition, (elapsed - 6.5) / 0.7,
+      anchors.ladderApproachPosition, (elapsed - 6.5) / 0.5,
     );
+  } else if (elapsed <= 7.2) {
+    copyPosition(output.cameraPosition, anchors.ladderApproachPosition);
   } else if (elapsed <= 7.5) {
     interpolatePosition(
       output.cameraPosition, anchors.ladderApproachPosition,
