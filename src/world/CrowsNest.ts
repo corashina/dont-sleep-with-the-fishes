@@ -8,7 +8,11 @@ import {
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import type { CollisionBox } from '../player/collisions';
 import type { LadderClimbZone } from '../player/LadderTraversal';
-import type { ShipCrowsNestSpec, ShipMastSpec } from './ShipLayout';
+import {
+  PLAYER_LAYOUT_RADIUS,
+  type ShipCrowsNestSpec,
+  type ShipMastSpec,
+} from './ShipLayout';
 import type { ShipMaterials } from './ShipMaterials';
 
 export interface CrowsNestBuild {
@@ -24,6 +28,9 @@ export interface CrowsNestBuild {
   }>;
   disposeGeometry(): void;
 }
+
+const LADDER_RUNG_DEPTH = 0.11;
+const LADDER_CLIMB_MARGIN = 0.03;
 
 function boxCollider(
   position: readonly [number, number, number],
@@ -68,13 +75,16 @@ export function createCrowsNest(
   const halfWidth = spec.outerWidth / 2;
   const floorThickness = 0.14;
   const floorSurfaceY = floorY + floorThickness / 2;
-  const climbZ = mast.position[2] - mast.baseDiameter / 2 - spec.ladder.mastOffset;
+  const ladderZ = mast.position[2] - mast.baseDiameter / 2 - spec.ladder.mastOffset;
+  const climbZ = ladderZ + spec.ladder.outwardZ * (
+    PLAYER_LAYOUT_RADIUS + LADDER_RUNG_DEPTH / 2 + LADDER_CLIMB_MARGIN
+  );
   const openingHalfSize = spec.openingSize / 2;
   const openingBounds = {
     minX: mast.position[0] - openingHalfSize,
     maxX: mast.position[0] + openingHalfSize,
-    minZ: climbZ - openingHalfSize,
-    maxZ: climbZ + openingHalfSize,
+    minZ: ladderZ - openingHalfSize,
+    maxZ: ladderZ + openingHalfSize,
   };
 
   for (let index = 0; index < 8; index += 1) {
@@ -193,15 +203,17 @@ export function createCrowsNest(
     addBox(`${spec.ladder.id}:rail:${index}`, [0.09, ladderHeight, 0.09], [
       mast.position[0] + x,
       ladderBaseY + ladderHeight / 2,
-      climbZ,
+      ladderZ,
     ], materials.darkMetal);
   });
   const rungCount = Math.ceil((floorY - mast.position[1]) / spec.ladder.rungSpacing) + 1;
   for (let index = 0; index < rungCount; index += 1) {
-    addBox(`${spec.ladder.id}:rung:${index}`, [spec.ladder.width, 0.07, 0.11], [
+    addBox(`${spec.ladder.id}:rung:${index}`, [
+      spec.ladder.width, 0.07, LADDER_RUNG_DEPTH,
+    ], [
       mast.position[0],
       mast.position[1] + index * spec.ladder.rungSpacing,
-      climbZ,
+      ladderZ,
     ], materials.exposedMetal);
   }
 
@@ -212,7 +224,7 @@ export function createCrowsNest(
     climbX: mast.position[0],
     climbZ,
     outwardX: 0,
-    outwardZ: -1,
+    outwardZ: spec.ladder.outwardZ,
     bottomEyeY,
     topEyeY,
     topFloor: { minX: -1.05, maxX: 1.05, minZ: -1.05, maxZ: 1.05 },

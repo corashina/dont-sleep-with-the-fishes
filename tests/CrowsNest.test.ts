@@ -55,14 +55,23 @@ describe('mainmast crow\'s nest', () => {
         0.73, FREIGHTER_DIMENSIONS.deckY + 12.07, 0.14,
       ]);
       expect(build.introAnchors.ladderApproachPosition).toEqual([
-        0.73, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.54,
+        0.73, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.975,
       ]);
       expect(build.introAnchors.ladderTopPosition).toEqual([
-        0, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.54,
+        0, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.975,
+      ]);
+      expect(build.introAnchors.ladderBottomPosition).toEqual([
+        0, FREIGHTER_DIMENSIONS.deckY + 1.5, -0.975,
       ]);
       expect(build.introAnchors.exitPosition).toEqual([0, FREIGHTER_DIMENSIONS.deckY + 1.5, -1.3]);
       expect(build.root.getObjectByName('crows-nest-seat')).toBeDefined();
-      expect(build.root.getObjectByName('mainmast-ladder:rung:0')).toBeDefined();
+      const firstRung = build.root.getObjectByName(
+        'mainmast-ladder:rung:0',
+      ) as Mesh<BoxGeometry>;
+      expect(firstRung).toBeDefined();
+      expect(firstRung.position.z - build.climbZone.climbZ).toBeCloseTo(
+        PLAYER_LAYOUT_RADIUS + firstRung.geometry.parameters.depth / 2 + 0.03,
+      );
 
       const aftSlat = (index: number, side: 'port' | 'starboard'): Mesh<BoxGeometry> =>
         build.root.getObjectByName(`crows-nest:floor-slat:${index}:${side}`) as Mesh<BoxGeometry>;
