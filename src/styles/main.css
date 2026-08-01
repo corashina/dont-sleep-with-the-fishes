@@ -1590,7 +1590,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   display: grid;
   gap: 3px;
   padding: 0;
-  color: #bde6e5;
+  color: var(--ink-bone);
   font-size: .78rem;
   letter-spacing: .08em;
   list-style: none;
