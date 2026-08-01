@@ -6,8 +6,8 @@ import {
 
 describe('audio manifest', () => {
   it('contains every approved sound exactly once', () => {
-    expect(SOUND_IDS).toHaveLength(47);
-    expect(new Set(SOUND_IDS).size).toBe(47);
+    expect(SOUND_IDS).toHaveLength(48);
+    expect(new Set(SOUND_IDS).size).toBe(48);
     expect(Object.keys(AUDIO_MANIFEST).sort()).toEqual([...SOUND_IDS].sort());
   });
 
