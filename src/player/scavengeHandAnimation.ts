@@ -30,8 +30,8 @@ export const HAND_GESTURE_DURATIONS = Object.freeze({
   'boat-deposit': 0.62,
 });
 
-const LEFT_BASE = [-0.36, -0.51, -0.5, 0.34, -0.18, -0.14, 0.12] as const;
-const RIGHT_BASE = [0.36, -0.52, -0.5, 0.34, 0.18, 0.14, 0.1] as const;
+const LEFT_BASE = [-0.36, -0.42, -0.5, 0.34, -0.18, -0.14, 0.12] as const;
+const RIGHT_BASE = [0.36, -0.43, -0.5, 0.34, 0.18, 0.14, 0.1] as const;
 
 const IDLE_ACTIVE_SECONDS = 2.4;
 const IDLE_CYCLE_SECONDS = 6;
@@ -142,10 +142,10 @@ export function sampleScavengeHandPoseInto(
     const cycleSeconds = frame.idleSeconds % IDLE_CYCLE_SECONDS;
     if (cycleSeconds >= 0 && cycleSeconds < IDLE_ACTIVE_SECONDS) {
       const idle = Math.sin(cycleSeconds / IDLE_ACTIVE_SECONDS * Math.PI);
-      output.left.y += 0.006 * idle;
-      output.right.y += 0.006 * idle;
-      output.left.z -= 0.012 * idle;
-      output.right.z -= 0.012 * idle;
+      output.left.y += 0.018 * idle;
+      output.right.y += 0.018 * idle;
+      output.left.z -= 0.025 * idle;
+      output.right.z -= 0.025 * idle;
     }
   }
 
