@@ -471,6 +471,13 @@ describe('scavenging ship layout', () => {
     expect(metric.distance([0, 0], [99, 99])).toBeNull();
   });
 
+  it('returns null for non-finite route coordinates', () => {
+    const metric = createShipRouteMetric(SHIP_LAYOUT);
+    expect(metric.distance([Number.NaN, 0], [0, 0])).toBeNull();
+    expect(metric.distance([0, Number.POSITIVE_INFINITY], [0, 0])).toBeNull();
+    expect(metric.distance([0, 0], [Number.NEGATIVE_INFINITY, 0])).toBeNull();
+  });
+
   it('reuses one exact symmetric route distance', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
     const forward = metric.distance([0, 11], [7.025, 0]);

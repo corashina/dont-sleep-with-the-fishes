@@ -1376,6 +1376,7 @@ function buildShipNavigationGrid(layout: ShipLayoutSpec): ShipNavigationGrid {
     rows,
     blocked,
     toCell(point): number | undefined {
+      if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return undefined;
       const xIndex = Math.round((point[0] - minX) / GRID_STEP);
       const zIndex = Math.round((point[1] - minZ) / GRID_STEP);
       if (xIndex < 0 || xIndex >= columns || zIndex < 0 || zIndex >= rows) {
