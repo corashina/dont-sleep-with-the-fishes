@@ -18,13 +18,14 @@ describe('scavenge hand animation', () => {
   });
 
   it('swings walk hands in opposite directions', () => {
+    const idle = createScavengeHandPose();
     const pose = createScavengeHandPose();
     sampleScavengeHandPoseInto(pose, {
       locomotion: 'walk', idleSeconds: 0, locomotionPhase: 0.25,
       gesture: null, gestureSeconds: 0,
     });
-    expect(pose.left.z).toBeLessThan(-0.64);
-    expect(pose.right.z).toBeGreaterThan(-0.64);
+    expect(pose.left.z).toBeLessThan(idle.left.z);
+    expect(pose.right.z).toBeGreaterThan(idle.right.z);
   });
 
   it('moves sprint hands farther than walk hands', () => {
@@ -42,6 +43,7 @@ describe('scavenge hand animation', () => {
   });
 
   it('closes both hands at pickup contact', () => {
+    const idle = createScavengeHandPose();
     const pose = createScavengeHandPose();
     sampleScavengeHandPoseInto(pose, {
       locomotion: 'idle', idleSeconds: 0, locomotionPhase: 0,
@@ -50,7 +52,7 @@ describe('scavenge hand animation', () => {
     });
     expect(pose.left.curl).toBeGreaterThan(0.75);
     expect(pose.right.curl).toBeGreaterThan(0.75);
-    expect(pose.left.z).toBeLessThan(-0.85);
+    expect(pose.left.z).toBeLessThan(idle.left.z - 0.25);
   });
 
   it('opens both hands at ground-drop release', () => {
