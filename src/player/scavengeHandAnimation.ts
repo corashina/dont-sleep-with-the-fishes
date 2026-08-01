@@ -30,8 +30,8 @@ export const HAND_GESTURE_DURATIONS = Object.freeze({
   'boat-deposit': 0.62,
 });
 
-const LEFT_BASE = [-0.24, -0.56, -0.68, 0.34, -0.18, -0.14, 0.12] as const;
-const RIGHT_BASE = [0.23, -0.57, -0.68, 0.34, 0.18, 0.14, 0.1] as const;
+const LEFT_BASE = [-0.24, -0.51, -0.68, 0.34, -0.18, -0.14, 0.12] as const;
+const RIGHT_BASE = [0.23, -0.52, -0.68, 0.34, 0.18, 0.14, 0.1] as const;
 
 const IDLE_ACTIVE_SECONDS = 2.4;
 const IDLE_CYCLE_SECONDS = 6;
