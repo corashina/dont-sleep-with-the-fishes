@@ -14,4 +14,16 @@ describe('ScavengeIntroPresentation', () => {
     effect.dispose();
     expect(() => effect.dispose()).not.toThrow();
   });
+
+  it('keeps active debris at the same age for a zero-delta update', () => {
+    const effect = new ScavengeIntroPresentation();
+    effect.trigger();
+    effect.update(0.25);
+    const before = effect.snapshotForTest();
+
+    effect.update(0);
+
+    expect(effect.snapshotForTest()).toEqual(before);
+    effect.dispose();
+  });
 });

@@ -180,6 +180,34 @@ describe('world builders', () => {
     }
   });
 
+  it('synchronizes paused intro transforms without aging crash effects or ship smoothing', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const sinking = getSinkingState(0, 120);
+    const introEffect = (world as unknown as {
+      scavengeIntroPresentation: {
+        snapshotForTest(): { active: boolean; age: number; debrisCount: number };
+      };
+    }).scavengeIntroPresentation;
+    try {
+      world.triggerScavengeIntroCrash();
+      world.update(2, 0.25, sinking, new Vector3(), false);
+      const effectBeforePause = introEffect.snapshotForTest();
+      const positionBeforePause = world.ship.position.clone();
+      const rotationBeforePause = world.ship.rotation.clone();
+
+      world.update(20, 0, sinking, new Vector3(), false);
+
+      expect(introEffect.snapshotForTest()).toEqual(effectBeforePause);
+      expect(world.ship.position).toEqual(positionBeforePause);
+      expect(world.ship.rotation.toArray()).toEqual(rotationBeforePause.toArray());
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
