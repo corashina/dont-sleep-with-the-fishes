@@ -80,6 +80,7 @@ import {
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
+import { DivePresentation } from './DivePresentation';
 import type {
   DangerousWatersBoatReaction,
   DangerousWatersItemPose,
@@ -167,6 +168,8 @@ const EMPTY_EVENT_PHYSICAL_RESPONSE: EventPhysicalResponsePresentation = Object.
 });
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
+const DIVE_STARBOARD_POSITION = new Vector3(0.78, 0.76, 0.55);
+const DIVE_FORWARD_TARGET = new Vector3(0.72, 0.62, -3.8);
 const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
 export const FISHING_PLAYER_SEAT = Object.freeze({
   x: 0,
@@ -528,6 +531,16 @@ export class BoatWorld {
   private readonly fishingCameraAngleOrigin = new Vector3(0, 1.38, -1.42);
   private readonly fishingCameraLookTarget = new Vector3(0, -0.42, -7.4);
   private readonly fishingCameraQuaternion = new Quaternion();
+  private readonly diveStarboardQuaternion = new Quaternion();
+  private readonly divePresentation: DivePresentation;
+  private readonly diveWaveSample: WaveSample = {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normal: { x: 0, y: 1, z: 0 },
+  };
+  private activeDiveItemId: ItemInstanceId | null = null;
+  private diveElapsed = 0;
   private readonly fishingCameraStartPosition = new Vector3();
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
@@ -888,6 +901,17 @@ export class BoatWorld {
     this.baseCameraPosition.copy(camera.position);
     this.baseCameraQuaternion = camera.quaternion.clone();
     this.fishingMatrixScratch.lookAt(
+      DIVE_STARBOARD_POSITION,
+      DIVE_FORWARD_TARGET,
+      camera.up,
+    );
+    this.diveStarboardQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
+    this.divePresentation = new DivePresentation({
+      camera,
+      starboardPosition: DIVE_STARBOARD_POSITION,
+      starboardQuaternion: this.diveStarboardQuaternion,
+    });
+    this.fishingMatrixScratch.lookAt(
       this.fishingCameraAngleOrigin,
       this.fishingCameraLookTarget,
       camera.up,
@@ -982,6 +1006,23 @@ export class BoatWorld {
     this.supplyDisplay.sync(snapshot);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
+  }
+
+  playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.activeDiveItemId = instanceId;
+    this.diveElapsed = 0;
+    this.supplyDisplay.setPresentationItemHidden(instanceId, true);
+    return this.divePresentation.start(onWaterImpact);
+  }
+
+  clearDivePresentation(): void {
+    this.divePresentation.clear();
+    if (this.activeDiveItemId !== null) {
+      this.supplyDisplay.setPresentationItemHidden(this.activeDiveItemId, false);
+      this.activeDiveItemId = null;
+    }
+    this.diveElapsed = 0;
   }
 
   setHighlightedItem(instanceId: string | null): void {
@@ -1275,6 +1316,7 @@ export class BoatWorld {
     if (this.disposed || !hidden) return;
     this.weatherEventOperation += 1;
     this.skipSequence();
+    this.clearDivePresentation();
     this.eventPresentation.settleForVisibilityChange();
     this.featuredEvents.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
@@ -1751,6 +1793,21 @@ export class BoatWorld {
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     this.applyBasePresentation();
+    if (this.activeDiveItemId !== null) {
+      if (advancePresentation) this.diveElapsed += Math.max(0, delta);
+      this.sampleWorldWaveInto(
+        this.diveWaveSample,
+        time,
+        DIVE_FORWARD_TARGET.x,
+        DIVE_FORWARD_TARGET.z,
+        amplitudeScale,
+      );
+      this.divePresentation.update(
+        this.diveElapsed,
+        delta,
+        this.diveWaveSample.height,
+      );
+    }
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(
       delta,
@@ -1836,6 +1893,8 @@ export class BoatWorld {
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
       () => this.weatherEventAnimator.dispose(),
       () => this.supernaturalEventAnimator.dispose(),
+      () => this.clearDivePresentation(),
+      () => this.divePresentation.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
