@@ -113,7 +113,9 @@ export class ScavengeHands {
     this.leftWrist.name = 'scavenge-hand:left';
     this.rightWrist.name = 'scavenge-hand:right';
     this.leftVisual.scale.set(-0.22, 0.22, 0.22);
+    this.leftVisual.rotation.z = Math.PI / 2;
     this.rightVisual.scale.setScalar(0.22);
+    this.rightVisual.rotation.z = -Math.PI / 2;
     this.leftWrist.add(this.leftVisual);
     this.rightWrist.add(this.rightVisual);
     this.root.add(this.leftWrist, this.rightWrist);
