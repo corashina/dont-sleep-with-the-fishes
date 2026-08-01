@@ -6,6 +6,7 @@ const STEP_DISTANCE = 1.35;
 export class ScavengeAudio {
   private stepDistance = 0;
   private sinkingPlayed = false;
+  private crashPlayed = false;
   private disposed = false;
 
   constructor(private readonly scope: AudioScope) {}
@@ -49,6 +50,12 @@ export class ScavengeAudio {
     if (this.disposed || this.sinkingPlayed) return;
     this.sinkingPlayed = true;
     this.scope.play('sinkingEnding');
+  }
+
+  crash(): void {
+    if (this.disposed || this.crashPlayed) return;
+    this.crashPlayed = true;
+    this.scope.play('shipCrash');
   }
 
   dispose(): void {

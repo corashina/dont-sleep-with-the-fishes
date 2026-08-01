@@ -83,6 +83,15 @@ describe('InputController', () => {
     expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
   });
 
+  it('clears accumulated look without returning an object', () => {
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
+    dispatch('mousemove', { movementX: 7, movementY: -3 });
+
+    expect(input.clearLook()).toBeUndefined();
+    expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
+  });
+
   it('reports successful pointer-lock acquisition', async () => {
     const { input, requestPointerLock } = createInput(() => Promise.resolve());
 
@@ -140,6 +149,18 @@ describe('InputController', () => {
     expect(input.consumeJump()).toBe(false);
 
     dispatch('keydown', { code: 'Space', repeat: true });
+    expect(input.consumeJump()).toBe(false);
+  });
+
+  it('does not queue a jump from a prevented Space key', () => {
+    const { input } = createInput();
+    const event = new Event('keydown', { cancelable: true });
+    Object.defineProperties(event, {
+      code: { configurable: true, value: 'Space' },
+      repeat: { configurable: true, value: false },
+    });
+    event.preventDefault();
+    browserWindow.dispatchEvent(event);
     expect(input.consumeJump()).toBe(false);
   });
 

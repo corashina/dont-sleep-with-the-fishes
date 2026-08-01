@@ -8,6 +8,13 @@ import {
   sampleScavengeCinematicFrameInto,
   SINKING_CINEMATIC_SECONDS,
 } from '../game/scavengeEnding';
+import {
+  advanceScavengeIntroElapsed,
+  createScavengeIntroFrame,
+  crossedScavengeIntroTime,
+  sampleScavengeIntroFrameInto,
+  SCAVENGE_INTRO_CRASH_SECONDS,
+} from '../game/scavengeIntro';
 import { containsPointXZ, SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
 import {
   ScavengeSession,
@@ -62,6 +69,17 @@ export class ScavengePhase implements GamePhase {
   private completionReported = false;
   private elapsed = 0;
   private presentation: ScavengePresentation = 'title';
+  private introElapsed = 0;
+  private introPaused = false;
+  private pausedIntroExitCarry = false;
+  private introCrashHandled = false;
+  private readonly introFrame = createScavengeIntroFrame();
+  private readonly introPose = {
+    position: this.introFrame.cameraPosition,
+    yaw: Math.PI,
+    pitch: 0,
+    floorEyeY: 0,
+  };
   private worldTime = 0;
   private readonly visualState: ScavengeVisualState = {
     kind: 'scavenge',
@@ -162,8 +180,17 @@ export class ScavengePhase implements GamePhase {
       && !document.hidden;
     const directControlActive = sessionActive && this.input.pointerLocked;
     const overlaySimulationActive = sessionActive && this.overlayActive === true;
+    const introFrameStarted = this.presentation === 'intro';
+    const introActive = introFrameStarted
+      && !this.introPaused
+      && this.input.pointerLocked
+      && !document.hidden;
+    const worldDeltaSeconds = (
+      (introFrameStarted && !introActive) || this.pausedIntroExitCarry
+    ) ? 0 : deltaSeconds;
     if (
       this.presentation === 'title'
+      || introActive
       || directControlActive
       || overlaySimulationActive
       || this.ending.stage === 'sinking'
@@ -173,7 +200,11 @@ export class ScavengePhase implements GamePhase {
     let sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
     let motion: PlayerMotionSample | null = null;
 
-    if (directControlActive) {
+    if (introActive) {
+      this.updateIntro(deltaSeconds);
+      current = this.session.snapshot();
+      this.input.clearLook();
+    } else if (directControlActive) {
       this.session.tick(deltaSeconds, containsPointXZ(
         this.world.evacuationBounds,
         this.player.localPosition,
@@ -208,9 +239,9 @@ export class ScavengePhase implements GamePhase {
         this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
         current = this.session.snapshot();
       }
-      this.input.consumeLook();
+      this.input.clearLook();
     } else if (this.ending.stage === 'playing') {
-      this.input.consumeLook();
+      this.input.clearLook();
     }
 
     sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
@@ -258,12 +289,14 @@ export class ScavengePhase implements GamePhase {
       && next.status === 'running';
     this.world.update(
       this.worldTime,
-      deltaSeconds,
+      worldDeltaSeconds,
       sinking,
       this.context.camera.position,
       simulatePhysics,
     );
-    if (simulatePhysics) this.player.placeCamera();
+    if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
+      this.player.placeCamera();
+    }
     this.ui.render(next);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'
@@ -462,21 +495,96 @@ export class ScavengePhase implements GamePhase {
     );
   }
 
+  private beginIntro(): void {
+    this.input.consumeJump();
+    this.presentation = 'intro';
+    this.ui.setPresentation('intro');
+    this.ui.clearPointerLockError();
+    this.ui.hideStart();
+    this.audio.setPaused(false);
+    this.introPaused = false;
+    sampleScavengeIntroFrameInto(
+      this.introFrame,
+      this.introElapsed,
+      this.world.scavengeIntroAnchors,
+    );
+    this.applyIntroFrame();
+    this.player.placeCamera();
+  }
+
+  private updateIntro(deltaSeconds: number): void {
+    const previousElapsed = this.introElapsed;
+    this.introElapsed = advanceScavengeIntroElapsed(this.introElapsed, deltaSeconds);
+    sampleScavengeIntroFrameInto(
+      this.introFrame,
+      this.introElapsed,
+      this.world.scavengeIntroAnchors,
+    );
+    this.applyIntroFrame();
+    if (!this.introCrashHandled && crossedScavengeIntroTime(
+      previousElapsed,
+      this.introElapsed,
+      SCAVENGE_INTRO_CRASH_SECONDS,
+    )) {
+      this.introCrashHandled = true;
+      this.audio.crash();
+      this.world.triggerScavengeIntroCrash();
+    }
+    if (this.introFrame.complete) this.completeIntro();
+  }
+
+  private applyIntroFrame(): void {
+    this.introPose.yaw = this.introFrame.cameraYaw;
+    this.introPose.pitch = this.introFrame.cameraPitch;
+    this.introPose.floorEyeY = this.introFrame.cameraPosition[1];
+    this.player.setScriptedPose(this.introPose);
+    this.world.setScavengeIntroImpact(
+      this.introFrame.impactY,
+      this.introFrame.impactPitch,
+      this.introFrame.impactRoll,
+    );
+  }
+
+  private completeIntro(): void {
+    if (this.presentation !== 'intro') return;
+    const resumeRequired = this.introPaused;
+    this.input.consumeJump();
+    const exit = this.world.scavengeIntroAnchors.exitPosition;
+    this.world.setScavengeIntroImpact(0, 0, 0);
+    this.player.setScriptedPose({
+      position: exit,
+      yaw: Math.PI,
+      pitch: 0,
+      floorEyeY: exit[1],
+    });
+    this.player.placeCamera();
+    this.introPaused = false;
+    this.presentation = 'playing';
+    this.ui.setPresentation('playing');
+    this.session.start();
+    if (resumeRequired) {
+      this.pausedIntroExitCarry = true;
+      this.session.pause();
+    }
+  }
+
   private handlePointerLockChange(locked: boolean): void {
+    if (this.presentation === 'intro') {
+      this.introPaused = !locked;
+      this.escapeResumeArmed = false;
+      this.ui.setPaused(!locked);
+      this.audio.setPaused(!locked);
+      return;
+    }
     if (this.overlayActive && !locked) return;
     const status = this.session.snapshot().status;
     const transition = pointerLockTransition(status, locked);
     if (transition === 'start') {
-      this.player.placeCamera();
-      this.presentation = 'playing';
-      this.ui.setPresentation('playing');
-      this.ui.clearPointerLockError();
-      this.ui.hideStart();
-      this.session.start();
-      this.audio.setPaused(false);
+      this.beginIntro();
     } else if (transition === 'resume') {
       this.escapeResumeArmed = false;
       this.session.resume();
+      this.pausedIntroExitCarry = false;
       this.ui.clearPointerLockError();
       this.ui.setPaused(false);
       this.audio.setPaused(false);
@@ -498,16 +606,29 @@ export class ScavengePhase implements GamePhase {
     this.handlePointerLockChange(this.input.pointerLocked);
   };
 
-  private readonly onVisibilityChange = (): void => {
-    if (document.hidden && this.session.snapshot().status === 'running') {
+  private handleVisibilityChange(): void {
+    if (!document.hidden) return;
+    if (this.presentation === 'intro') {
+      this.introPaused = true;
+      this.ui.setPaused(true);
+      this.audio.setPaused(true);
+      if (document.pointerLockElement) document.exitPointerLock();
+    } else if (this.session.snapshot().status === 'running') {
       this.session.pause();
       this.ui.setPaused(true);
       this.audio.setPaused(true);
       if (document.pointerLockElement) document.exitPointerLock();
     }
-  };
+  }
+
+  private readonly onVisibilityChange = (): void => this.handleVisibilityChange();
 
   private handleKeyDown(event: KeyboardEvent): void {
+    if (this.presentation === 'intro' && event.code === 'Space' && !event.repeat) {
+      event.preventDefault();
+      this.completeIntro();
+      return;
+    }
     if (
       event.key !== 'Escape'
       || event.repeat

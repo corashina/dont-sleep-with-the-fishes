@@ -8,6 +8,9 @@ import {
   Vector3,
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
+import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
+import type { LadderClimbZone } from '../player/LadderTraversal';
+import { createCrowsNest } from './CrowsNest';
 import {
   SHIP_SAIL_CLOTH_MIN_Y,
   type ShipMastSpec,
@@ -20,6 +23,8 @@ import type { ShipMaterials } from './ShipMaterials';
 export interface ShipRiggingBuild {
   readonly root: Group;
   readonly colliders: CollisionBox[];
+  readonly climbZones: readonly LadderClimbZone[];
+  readonly scavengeIntroAnchors: ScavengeIntroAnchors;
   update(delta: number): void;
   disposeGeometry(): void;
 }
@@ -319,6 +324,7 @@ export function createShipRigging(
   const attachmentBox = new BoxGeometry(1, 1, 1);
   const ownedGeometries = new Set<BufferGeometry>([cylinder, attachmentBox]);
   const colliders: CollisionBox[] = [];
+  const climbZones: LadderClimbZone[] = [];
   const sails: Mesh[] = [];
   const neutralRotations: number[] = [];
   const phases: number[] = [];
@@ -414,12 +420,22 @@ export function createShipRigging(
     colliders.push(toCollider(mastSpec));
     root.add(mast);
   });
+  const crowsNestMast = spec.masts.find(({ id }) => id === spec.crowsNest.mastId);
+  if (!crowsNestMast) {
+    throw new Error(`Rigging cannot build crow's nest without mast ${spec.crowsNest.mastId}`);
+  }
+  const crowsNest = createCrowsNest(materials, crowsNestMast, spec.crowsNest);
+  root.add(crowsNest.root);
+  colliders.push(...crowsNest.colliders);
+  climbZones.push(crowsNest.climbZone);
 
   let elapsed = 0;
   let disposed = false;
   return {
     root,
     colliders,
+    climbZones: Object.freeze(climbZones),
+    scavengeIntroAnchors: crowsNest.introAnchors,
     update: (delta) => {
       elapsed += Math.max(0, Math.min(delta, 0.1));
       for (let index = 0; index < sails.length; index += 1) {
@@ -432,6 +448,7 @@ export function createShipRigging(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
+      crowsNest.disposeGeometry();
       ownedGeometries.forEach((geometry) => geometry.dispose());
     },
   };

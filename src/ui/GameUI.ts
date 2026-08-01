@@ -10,7 +10,7 @@ import { uiArtwork } from './uiArtwork';
 
 const requireElement = createElementRequirement('UI');
 
-export type ScavengePresentation = 'title' | 'playing';
+export type ScavengePresentation = 'title' | 'intro' | 'playing';
 
 export interface ScavengeItemTooltip {
   readonly text: string;
@@ -25,6 +25,7 @@ export class GameUI {
   onReplay: () => void = () => undefined;
   private readonly root: HTMLDivElement;
   private readonly hud: HTMLElement;
+  private readonly introSkip: HTMLElement;
   private readonly startLayer: HTMLElement;
   private readonly pauseLayer: HTMLElement;
   private readonly endingLayer: HTMLElement;
@@ -67,6 +68,9 @@ export class GameUI {
           ${uiArtwork('watch', 'pocket-watch__art')}
           <strong class="ui-role-numeral" data-timer>${formatDuration(SCAVENGE_DURATION_SECONDS)}</strong>
         </div>
+      </div>
+      <div class="intro-skip brush-label ui-role-context" data-intro-skip hidden>
+        <kbd>SPACE</kbd><span aria-hidden="true"> - </span>SKIP INTRO
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
         <div class="screen__content">
@@ -129,6 +133,7 @@ export class GameUI {
     `;
     mount.append(this.root);
     this.hud = requireElement(this.root, '.hud');
+    this.introSkip = requireElement(this.root, '[data-intro-skip]');
     this.startLayer = requireElement(this.root, '[data-start]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
@@ -155,7 +160,8 @@ export class GameUI {
 
   setPresentation(presentation: ScavengePresentation): void {
     this.root.dataset.presentation = presentation;
-    this.hud.hidden = presentation === 'title';
+    this.hud.hidden = presentation !== 'playing';
+    this.introSkip.hidden = presentation !== 'intro';
   }
 
   setPaused(paused: boolean): void {
@@ -214,7 +220,7 @@ export class GameUI {
     const visible = stage === 'endingHold' || stage === 'menuReady';
     const revealAction = stage === 'menuReady';
     this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
-    this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation === 'title';
+    this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation !== 'playing';
     if (stage !== 'playing') this.setPaused(false);
     this.endingLayer.classList.toggle('is-visible', visible);
     this.endingLayer.setAttribute('aria-hidden', String(!visible));
