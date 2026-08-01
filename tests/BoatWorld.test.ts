@@ -2860,7 +2860,7 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     await pending;
     expect(disposeDive).toHaveBeenCalledOnce();
-
+    disposeDive.mockRestore();
     propModels.dispose();
   });
 
