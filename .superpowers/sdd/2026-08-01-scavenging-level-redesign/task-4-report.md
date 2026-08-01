@@ -91,3 +91,27 @@ Central stern props use inward interaction points around the machinery closure.
 Check these sightlines against the aft workroom bulkhead during visual review.
 
 The layout keeps dark, authored prop groups. It avoids random deck scatter.
+
+## Review fix
+
+Fix commit: this commit.
+
+The RED ShipLayout run had 5 failed tests and 39 passed tests.
+
+The tests now count unique physical slots. The wheelhouse has eight unique slots.
+
+Each room now has a connected cycle. Collision tests traverse both routes around each room island.
+
+Layout checks now protect all loop lanes. They include visual detail footprints without colliders.
+
+The two stern center spots now stand aft of the storage wall. Each item surface needs one clear access path.
+
+Both door-side cargo boxes moved outside door approaches. Bench fore and aft names now match their positions.
+
+The focused run passed 4 files and 99 tests.
+
+The full run passed 58 files and 1,059 tests.
+
+The TypeScript check passed. `git diff --check` passed.
+
+The surface table above now counts unique physical slots. No wheelhouse fallback alias remains.
