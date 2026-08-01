@@ -1,5 +1,4 @@
 import {
-  Bone,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -11,7 +10,6 @@ import {
   Object3D,
   Quaternion,
   Skeleton,
-  SkinnedMesh,
   SphereGeometry,
   TorusGeometry,
   Vector3,
@@ -27,6 +25,11 @@ import {
   disposeSkeletons,
   hasRenderableBounds,
 } from '../rendering/modelPresentation';
+import {
+  applyHandJointCurl,
+  findImportedHandRig,
+  type HandJoint,
+} from '../rendering/RiggedHandRig';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -58,12 +61,6 @@ type HandymanAnimationKind =
   | 'result-sleep';
 
 type ActiveAnimation = TimedAnimation<HandymanAnimationKind>;
-
-interface FingerJoint {
-  readonly object: Object3D;
-  readonly baseQuaternion: Quaternion;
-  readonly bend: number;
-}
 
 const REVEAL_DURATION = 1.45;
 const PAYMENT_DURATION = 1.08;
@@ -103,14 +100,6 @@ const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
     chest: 'anchor',
   });
 
-const IMPORTED_FINGER_NAMES = [
-  ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
-  ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
-  ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
-  ['RingF_lower', 'RingF_middle', 'RingF_tip'],
-  ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
-] as const;
-
 function keyedTravel(progress: number): number {
   if (progress < 0.14) return -0.035 * smoothstep(progress / 0.14);
   if (progress < 0.82) {
@@ -136,51 +125,6 @@ function disposeRejectedModel(root: Group): void {
   disposeModel(root, true);
 }
 
-function isDescendantOf(node: Object3D, ancestor: Object3D): boolean {
-  let parent = node.parent;
-  while (parent !== null) {
-    if (parent === ancestor) return true;
-    parent = parent.parent;
-  }
-  return false;
-}
-
-interface ImportedHandRig {
-  readonly nodes: readonly Bone[];
-  readonly skeletons: ReadonlySet<Skeleton>;
-}
-
-function importedHandRig(root: Group): ImportedHandRig | null {
-  const nodes: Bone[] = [];
-  for (const chain of IMPORTED_FINGER_NAMES) {
-    let previous: Bone | null = null;
-    for (const name of chain) {
-      const node = root.getObjectByName(name);
-      if (!(node instanceof Bone)) return null;
-      if (previous !== null && !isDescendantOf(node, previous)) return null;
-      nodes.push(node);
-      previous = node;
-    }
-  }
-  if (new Set(nodes).size !== nodes.length) return null;
-
-  const skeletons = new Set<Skeleton>();
-  let hasDrivenRenderableMesh = false;
-  root.traverse((object) => {
-    if (!(object instanceof SkinnedMesh)) return;
-    const skeleton = object.skeleton;
-    skeletons.add(skeleton);
-    if (
-      !hasDrivenRenderableMesh
-      && nodes.every((node) => skeleton.bones.includes(node))
-      && hasRenderableBounds(object)
-    ) {
-      hasDrivenRenderableMesh = true;
-    }
-  });
-  return hasDrivenRenderableMesh ? { nodes, skeletons } : null;
-}
-
 export class HandymanPresentation implements FocusedEventPresentation {
   readonly root = new Group();
   private readonly wrist = new Group();
@@ -195,7 +139,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private readonly staticSkeletons = new Set<Skeleton>();
   private readonly exchangeGeometries = new Set<BufferGeometry>();
   private readonly exchangeMaterials = new Set<Material>();
-  private readonly fingerJoints: FingerJoint[] = [];
+  private readonly fingerJoints: HandJoint[] = [];
   private readonly wristMotionBase = WRIST_BASE.clone();
   private readonly waveQuaternion = new Quaternion();
   private readonly boatQuaternion = new Quaternion();
@@ -736,10 +680,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
 
   private setFingerBend(amount: number): void {
     this.fingerBend = clamp01(amount);
-    for (const joint of this.fingerJoints) {
-      joint.object.quaternion.copy(joint.baseQuaternion);
-      joint.object.rotateX(this.fingerBend * joint.bend);
-    }
+    applyHandJointCurl(this.fingerJoints, this.fingerBend);
     this.handVisual.userData.fingerBend = this.fingerBend;
     this.handVisual.userData.fingerCurl = this.fingerBend;
     this.root.userData.fingerCurl = this.fingerBend;
@@ -1061,7 +1002,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     }
     const importedRig = selected === null
       ? null
-      : importedHandRig(selected);
+      : findImportedHandRig(selected);
     if (
       selected !== null
       && importedRig !== null
@@ -1090,14 +1031,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
       for (const skeleton of importedRig.skeletons) {
         this.staticSkeletons.add(skeleton);
       }
-      for (let index = 0; index < importedRig.nodes.length; index += 1) {
-        const joint = importedRig.nodes[index]!;
-        this.fingerJoints.push({
-          object: joint,
-          baseQuaternion: joint.quaternion.clone(),
-          bend: index % 3 === 0 ? 0.78 : index % 3 === 1 ? 0.92 : 0.7,
-        });
-      }
+      this.fingerJoints.push(...importedRig.joints);
       this.handVisual.userData.modelKind = 'imported';
       return;
     }
