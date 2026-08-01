@@ -192,6 +192,8 @@ function introHarness(elapsed = 0) {
   const triggerCrash = vi.fn();
   const setAudioPaused = vi.fn();
   const setUiPaused = vi.fn();
+  const consumeJump = vi.fn();
+  const updateWorld = vi.fn();
   const anchors = {
     seatedPosition: [0, 13.67, -0.85],
     standingPosition: [0, 14.22, -0.85],
@@ -201,6 +203,8 @@ function introHarness(elapsed = 0) {
   const introFrame = createScavengeIntroFrame();
   Object.assign(phase, {
     disposed: false,
+    elapsed: 0,
+    worldTime: 1,
     presentation: 'intro',
     introElapsed: elapsed,
     introPaused: false,
@@ -216,13 +220,22 @@ function introHarness(elapsed = 0) {
       scavengeIntroAnchors: anchors,
       setScavengeIntroImpact: vi.fn(),
       triggerScavengeIntroCrash: triggerCrash,
+      update: updateWorld,
     },
-    player: { setScriptedPose: vi.fn(), placeCamera: vi.fn() },
-    audio: { crash, setPaused: setAudioPaused },
+    input: { pointerLocked: true, consumeLook: vi.fn(), consumeJump },
+    player: {
+      setScriptedPose: vi.fn(),
+      placeCamera: vi.fn(),
+      localPosition: new Vector3(),
+    },
+    audio: { crash, setPaused: setAudioPaused, update: vi.fn() },
     ui: {
       setPresentation: vi.fn(),
       setPaused: setUiPaused,
       clearPointerLockError: vi.fn(),
+      render: vi.fn(),
+      renderEnding: vi.fn(),
+      setPrompt: vi.fn(),
     },
     session: {
       start: sessionStart,
@@ -231,6 +244,19 @@ function introHarness(elapsed = 0) {
       tick: sessionTick,
       snapshot: () => ({ status: sessionStatus }),
     },
+    visualState: {
+      kind: 'scavenge',
+      elapsedSeconds: 0,
+      sinkingProgress: 0,
+    },
+    context: { camera: new PerspectiveCamera() },
+    contextAction: { type: 'none', prompt: '' },
+    ending: createScavengeEndingState(),
+    endingStarted: false,
+    cinematicFrame: createScavengeCinematicFrame(),
+    cinematicCameraTarget: new Vector3(),
+    completionReported: false,
+    onComplete: vi.fn(),
   });
   return {
     phase,
@@ -243,6 +269,8 @@ function introHarness(elapsed = 0) {
     triggerCrash,
     setAudioPaused,
     setUiPaused,
+    consumeJump,
+    updateWorld,
   };
 }
 
@@ -316,6 +344,7 @@ describe('ScavengePhase lifecycle integration', () => {
         floorEyeY: 0,
       },
       audio: { setPaused: () => order.push('audio:resume') },
+      input: { consumeJump: () => order.push('jump') },
       world: {
         scavengeIntroAnchors: {
           seatedPosition: [0, 13.67, -0.85],
@@ -344,6 +373,7 @@ describe('ScavengePhase lifecycle integration', () => {
       .handlePointerLockChange(true);
 
     expect(order).toEqual([
+      'jump',
       'ui:intro',
       'clear-error',
       'hide-title',
@@ -370,16 +400,17 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(triggerCrash).toHaveBeenCalledOnce();
   });
 
-  it('completes naturally and starts once', () => {
-    const { phase, sessionStart } = introHarness(9.9);
+  it('completes naturally, clears queued jump, and starts once', () => {
+    const { phase, sessionStart, consumeJump } = introHarness(9.9);
     const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
     updateIntro.call(phase, 0.2);
     updateIntro.call(phase, 0.2);
     expect(sessionStart).toHaveBeenCalledOnce();
+    expect(consumeJump).toHaveBeenCalledOnce();
   });
 
-  it('skips with Space without playing the missed crash', () => {
-    const { phase, sessionStart, crash } = introHarness(2);
+  it('skips with Space, clears queued jump, and does not play the missed crash', () => {
+    const { phase, sessionStart, crash, consumeJump } = introHarness(2);
     const event = new KeyboardEvent('keydown', {
       code: 'Space', key: ' ', cancelable: true,
     });
@@ -387,6 +418,67 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(sessionStart).toHaveBeenCalledOnce();
     expect(crash).not.toHaveBeenCalled();
+    expect(consumeJump).toHaveBeenCalledOnce();
+  });
+
+  it('freezes paused intro effects and places the camera after the world update', () => {
+    const { phase, updateWorld } = introHarness(6.2);
+    const internals = phase as unknown as {
+      introElapsed: number;
+      introPaused: boolean;
+      worldTime: number;
+      input: { pointerLocked: boolean };
+      player: { placeCamera: ReturnType<typeof vi.fn> };
+    };
+    const order: string[] = [];
+    internals.introPaused = true;
+    internals.input.pointerLocked = false;
+    updateWorld.mockImplementation(() => order.push('world'));
+    internals.player.placeCamera.mockImplementation(() => order.push('camera'));
+
+    phase.update(20, 20);
+
+    expect(internals.introElapsed).toBe(6.2);
+    expect(internals.worldTime).toBe(1);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1,
+      0,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+    expect(order).toEqual(['world', 'camera']);
+
+    internals.input.pointerLocked = true;
+    (phase as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(true);
+    phase.update(20.25, 0.25);
+
+    expect(internals.introElapsed).toBeCloseTo(6.45);
+    expect(internals.worldTime).toBeCloseTo(1.25);
+    expect(updateWorld).toHaveBeenLastCalledWith(
+      1.25,
+      0.25,
+      expect.anything(),
+      expect.any(Vector3),
+      false,
+    );
+  });
+
+  it('places the intro camera after the world update on natural completion', () => {
+    const { phase, updateWorld, sessionStart } = introHarness(9.9);
+    const player = (phase as unknown as {
+      player: { placeCamera: ReturnType<typeof vi.fn> };
+    }).player;
+    const order: string[] = [];
+    updateWorld.mockImplementation(() => order.push('world'));
+    player.placeCamera.mockImplementation(() => order.push('camera'));
+
+    phase.update(10.1, 0.2);
+
+    expect(sessionStart).toHaveBeenCalledOnce();
+    expect(order.at(-2)).toBe('world');
+    expect(order.at(-1)).toBe('camera');
   });
 
   it('pauses and resumes across pointer-lock loss', () => {

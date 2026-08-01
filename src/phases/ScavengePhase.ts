@@ -179,10 +179,12 @@ export class ScavengePhase implements GamePhase {
       && !document.hidden;
     const directControlActive = sessionActive && this.input.pointerLocked;
     const overlaySimulationActive = sessionActive && this.overlayActive === true;
-    const introActive = this.presentation === 'intro'
+    const introFrameStarted = this.presentation === 'intro';
+    const introActive = introFrameStarted
       && !this.introPaused
       && this.input.pointerLocked
       && !document.hidden;
+    const worldDeltaSeconds = introFrameStarted && !introActive ? 0 : deltaSeconds;
     if (
       this.presentation === 'title'
       || introActive
@@ -284,12 +286,12 @@ export class ScavengePhase implements GamePhase {
       && next.status === 'running';
     this.world.update(
       this.worldTime,
-      deltaSeconds,
+      worldDeltaSeconds,
       sinking,
       this.context.camera.position,
       simulatePhysics,
     );
-    if (simulatePhysics || introActive) this.player.placeCamera();
+    if (simulatePhysics || introFrameStarted) this.player.placeCamera();
     this.ui.render(next);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'
@@ -489,6 +491,7 @@ export class ScavengePhase implements GamePhase {
   }
 
   private beginIntro(): void {
+    this.input.consumeJump();
     this.presentation = 'intro';
     this.ui.setPresentation('intro');
     this.ui.clearPointerLockError();
@@ -540,6 +543,7 @@ export class ScavengePhase implements GamePhase {
   private completeIntro(): void {
     if (this.presentation !== 'intro') return;
     const resumeRequired = this.introPaused;
+    this.input.consumeJump();
     const exit = this.world.scavengeIntroAnchors.exitPosition;
     this.world.setScavengeIntroImpact(0, 0, 0);
     this.player.setScriptedPose({
