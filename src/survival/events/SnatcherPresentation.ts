@@ -1,4 +1,5 @@
 import {
+  AnimationMixer,
   Box3,
   BoxGeometry,
   Group,
@@ -7,6 +8,7 @@ import {
   OctahedronGeometry,
   Vector3,
 } from 'three';
+import type { AnimationAction } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import { disposeResourceSets, runCleanupSteps } from '../../world/SceneResources';
 import type {
@@ -33,7 +35,7 @@ import {
   type SnatcherSample,
 } from './snatcherChoreography';
 
-const TENTACLE_X = 1.52;
+const TENTACLE_X = 2.05;
 const TENTACLE_Y = -0.62;
 const TENTACLE_Z = -0.66;
 const TENTACLE_SCALE = 0.94;
@@ -208,6 +210,8 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   readonly targetOutline = new SnatcherTargetOutline();
 
   private readonly modelInstance;
+  private readonly mixer: AnimationMixer | null;
+  private readonly idleAction: AnimationAction | null;
   private readonly tentacle = new Group();
   private readonly sample: SnatcherSample = identitySnatcherSample();
   private readonly itemPose: MutableSupplyPose = {
@@ -237,6 +241,15 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.modelInstance = environment.eventModels.create('snatcher');
     this.modelInstance.root.name = 'tentacle-attack-model';
     setTentacleMaterial(this.modelInstance.root);
+    const idleClip = this.modelInstance.root.animations.find(
+      ({ name }) => name.toLowerCase().includes('idle'),
+    ) ?? this.modelInstance.root.animations[0];
+    this.mixer = idleClip === undefined
+      ? null
+      : new AnimationMixer(this.modelInstance.root);
+    this.idleAction = idleClip === undefined
+      ? null
+      : this.mixer!.clipAction(idleClip);
     this.tentacle.add(this.modelInstance.root);
     this.boatRoot.add(this.tentacle);
     this.hideScene();
@@ -249,6 +262,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.targetInstanceId = context.targetInstanceId;
     this.boatRoot.visible = true;
     this.tentacle.visible = false;
+    this.idleAction?.reset().play();
     if (this.targetInstanceId !== null && this.borrowActor(this.targetInstanceId)) {
       this.targetOutline.setTarget(this.targetInstanceId, this.borrowedActor!.root);
       this.targetOutline.applyStrength(1);
@@ -322,9 +336,11 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   update(_time: number, delta: number): void {
-    if (this.disposed || !this.staged || this.active === null) return;
-    const active = this.active;
+    if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
+    this.mixer?.update(safeDelta);
+    const active = this.active;
+    if (active === null) return;
     active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
     const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
     if (active.kind === 'reveal') {
@@ -363,6 +379,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.releaseActor();
     this.targetInstanceId = null;
     this.staged = false;
+    this.idleAction?.stop();
     this.hideScene();
   }
 
@@ -374,6 +391,8 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.active = null;
     this.borrowedActor = null;
     resolveCancelledEventAnimation(active);
+    this.mixer?.stopAllAction();
+    this.mixer?.uncacheRoot(this.modelInstance.root);
 
     runCleanupSteps([
       () => this.targetOutline.dispose(),

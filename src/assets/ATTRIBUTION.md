@@ -259,6 +259,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | driftingCargo | `driftingCargo.mp3` | [Dragging a Crate / hz37](https://freesound.org/people/hz37/sounds/792375/) |

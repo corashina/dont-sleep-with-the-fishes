@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AnimationClip,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -10,6 +11,7 @@ import {
   MeshStandardMaterial,
   Texture,
   Vector3,
+  VectorKeyframeTrack,
 } from 'three';
 import {
   EventModelLibrary,
@@ -93,6 +95,21 @@ describe('EventModelLibrary', () => {
     expect(firstMesh.material).not.toBe(secondMesh.material);
     first.dispose();
     second.dispose();
+    library.dispose();
+  });
+
+  it('preserves model animation clips on owned clones', async () => {
+    const roots = completeRoots();
+    const idle = new AnimationClip('Tentacle_Idle', 1, [
+      new VectorKeyframeTrack('joint.position', [0, 1], [0, 0, 0, 1, 0, 0]),
+    ]);
+    roots.snatcher.animations = [idle];
+    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const instance = library.create('snatcher');
+
+    expect(instance.root.animations).toEqual([idle]);
+
+    instance.dispose();
     library.dispose();
   });
 

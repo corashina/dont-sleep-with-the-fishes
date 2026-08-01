@@ -1,6 +1,7 @@
 // Importance: 4/5. Protects survival world integration and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AnimationClip,
   Box3,
   BufferAttribute,
   BufferGeometry,
@@ -23,6 +24,7 @@ import {
   Texture,
   Vector3,
   Vector4,
+  VectorKeyframeTrack,
 } from 'three';
 import {
   ITEM_DEFINITIONS,
@@ -62,6 +64,7 @@ import {
   boatStorageTransform,
   boatSupplyTransform,
 } from '../src/world/BoatStorage';
+import { lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
@@ -2499,6 +2502,54 @@ describe('BoatWorld helpers', () => {
     expect(coordinatorBoat.parent).toBe(
       boatEffects.getObjectByName('lifeboat'),
     );
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the tentacle outside the hull and animates its idle clip', () => {
+    const propModels = createTestPropModels();
+    const eventModels = {
+      create: vi.fn((id: string): Group | EventModelInstance => {
+        if (['fogMan', 'ghost', 'siren', 'sirenRock'].includes(id)) return new Group();
+        const root = new Group();
+        if (id === 'snatcher') {
+          const joint = new Group();
+          joint.name = 'tentacle-idle-joint';
+          root.add(joint);
+          root.animations = [new AnimationClip('Tentacle_Idle', 1, [
+            new VectorKeyframeTrack(
+              'tentacle-idle-joint.position',
+              [0, 1],
+              [0, 0, 0, 1, 0, 0],
+            ),
+          ])];
+        }
+        return { root, dispose: vi.fn() };
+      }),
+      animations: vi.fn(() => []),
+      dispose: vi.fn(),
+    } as unknown as EventModelLibrary;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    world.stageEvent({ eventId: 'snatcher', targetInstanceId: null, variantSeed: 1 });
+    const tentacle = world.scene.getObjectByName('tentacle-attack-tentacle')!;
+    const joint = world.scene.getObjectByName('tentacle-idle-joint')!;
+    const hullEdge = lifeboatHullHalfWidthAt(tentacle.position.z)!;
+
+    expect(tentacle.position.x).toBeGreaterThan(hullEdge + 0.3);
+    world.update(0.5, 0.5);
+    expect(joint.position.x).toBeCloseTo(0.5);
+    world.update(0.75, 0.25);
+    expect(joint.position.x).toBeCloseTo(0.75);
 
     world.dispose();
     propModels.dispose();
