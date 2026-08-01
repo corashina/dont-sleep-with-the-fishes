@@ -185,7 +185,12 @@ export class SurvivalAudio {
 
   beginEvent(eventId: string): void {
     this.clearEvent();
-    if (this.disposed || eventId !== 'eerie-melody') return;
+    if (this.disposed) return;
+    if (eventId === 'snatcher') {
+      this.scope.startLoop('tentacleMovement');
+      return;
+    }
+    if (eventId !== 'eerie-melody') return;
     this.eventMelodyActive = true;
     this.scope.startLoop('eerieMelody');
   }
@@ -207,6 +212,7 @@ export class SurvivalAudio {
   }
 
   clearEvent(): void {
+    this.scope.stopLoop('tentacleMovement', 0.08);
     this.stopEventMelody(0.08);
   }
 

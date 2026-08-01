@@ -62,7 +62,9 @@ class GltfEventModelLoader implements EventModelLoader {
   private readonly loader = new GLTFLoader();
 
   async load(url: string): Promise<Group> {
-    return (await this.loader.loadAsync(url)).scene;
+    const asset = await this.loader.loadAsync(url);
+    asset.scene.animations = asset.animations.slice();
+    return asset.scene;
   }
 }
 
@@ -297,6 +299,7 @@ export class EventModelLibrary {
         const template = new Group();
         template.name = `event-model:${id}`;
         template.userData.eventModelId = id;
+        template.animations = root.animations.slice();
         template.add(root);
         return { root: template, triangles };
       },

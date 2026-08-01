@@ -4,6 +4,7 @@ import type {
   AudioVoice,
 } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
+import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import type { AudioBusId, SoundId } from '../src/audio/audioManifest';
 
 class FakeVoice implements AudioVoice {
@@ -67,6 +68,18 @@ describe('AudioSystem', () => {
     expect(() => scope.startLoop('confirm')).toThrow(
       'Sound is not configured as a loop: confirm',
     );
+  });
+
+  it('loops tentacle movement only during Tentacle Attack', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginEvent('snatcher');
+    const movement = backend.voices.at(-1)!;
+    expect(movement.id).toBe('tentacleMovement');
+
+    audio.beginEvent('school-of-fish');
+    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
   it('applies master volume and mute without losing volume', () => {
