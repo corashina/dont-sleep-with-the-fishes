@@ -135,6 +135,65 @@ describe('scavenging ship layout', () => {
     ).toBe(true);
   });
 
+  it('authors the mainmast lookout and ladder', () => {
+    expect(SHIP_LAYOUT.rigging.crowsNest).toEqual({
+      id: 'mainmast-lookout',
+      mastId: 'mainmast',
+      floorOffsetY: 10.5,
+      outerWidth: 2.4,
+      openingSize: 0.9,
+      guardHeight: 1.05,
+      ladder: {
+        id: 'mainmast-ladder',
+        width: 0.8,
+        mastOffset: 0.18,
+        rungSpacing: 0.32,
+        outwardZ: -1,
+      },
+    });
+  });
+
+  it('rejects invalid mainmast lookout assignments', () => {
+    const missingMast = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        ...SHIP_LAYOUT.rigging,
+        crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, mastId: 'missing-mast' as never },
+      },
+    };
+    expect(() => validateShipLayout(missingMast)).toThrow(/missing mast/i);
+
+    const invalidDimension = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        ...SHIP_LAYOUT.rigging,
+        crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, ladder: {
+          ...SHIP_LAYOUT.rigging.crowsNest.ladder,
+          rungSpacing: 0,
+        } },
+      },
+    };
+    expect(() => validateShipLayout(invalidDimension)).toThrow(/crow's nest.*positive/i);
+
+    const narrowOpening = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        ...SHIP_LAYOUT.rigging,
+        crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, openingSize: 0.89 },
+      },
+    };
+    expect(() => validateShipLayout(narrowOpening)).toThrow(/opening/i);
+
+    const highFloor = {
+      ...SHIP_LAYOUT,
+      rigging: {
+        ...SHIP_LAYOUT.rigging,
+        crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, floorOffsetY: 14.6 },
+      },
+    };
+    expect(() => validateShipLayout(highFloor)).toThrow(/floor.*mast height/i);
+  });
+
   it('authors one mast-facing centered ladder for each inner roof balcony', () => {
     expect(SHIP_LAYOUT.balconies).toEqual([
       expect.objectContaining({
@@ -249,6 +308,7 @@ describe('scavenging ship layout', () => {
     const missingStay = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
           ...mast,
           stays: mast.stays.slice(1),
@@ -261,6 +321,7 @@ describe('scavenging ship layout', () => {
     const railingOverlap = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
           ...mast,
           stays: mast.stays.map((stay) => stay.id === 'fore-port'
@@ -293,6 +354,7 @@ describe('scavenging ship layout', () => {
     const mismatchedSail = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
           ...mast,
           sails: mast.sails.map((sail) => sail.id === id ? { ...sail, kind } : sail),
@@ -309,6 +371,7 @@ describe('scavenging ship layout', () => {
     const overHeightSail = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
           ...mast,
           sails: mast.sails.map((sail) => sail.id === 'mainsail'
@@ -481,6 +544,7 @@ describe('scavenging ship layout', () => {
     const zeroHeightMast = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
           ? { ...mast, height: 0 }
           : mast),
@@ -491,6 +555,7 @@ describe('scavenging ship layout', () => {
     const evacuationMast = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
           ? { ...mast, position: [8.9, 2.22, 0] as const }
           : mast),
@@ -506,6 +571,7 @@ describe('scavenging ship layout', () => {
     const invalidMast = {
       ...SHIP_LAYOUT,
       rigging: {
+        ...SHIP_LAYOUT.rigging,
         masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
           ? {
             ...mast,

@@ -528,6 +528,73 @@ describe('PlayerController', () => {
     expectVector(controller.localPosition, start);
   });
 
+  it('applies one complete scripted local pose', () => {
+    const ship = new Object3D();
+    ship.position.set(4, 1, -3);
+    ship.rotation.y = Math.PI / 6;
+    ship.updateMatrixWorld(true);
+    const camera = new PerspectiveCamera();
+    const controller = new PlayerController(
+      camera, ship, new Vector3(0, 3.72, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+
+    controller.setScriptedPose({
+      position: [0, 14.22, -0.85],
+      yaw: Math.PI + 0.4,
+      pitch: -0.25,
+      floorEyeY: 14.22,
+    });
+    controller.placeCamera();
+
+    expect(controller.localPosition.toArray()).toEqual([0, 14.22, -0.85]);
+    expectVector(camera.position, ship.localToWorld(new Vector3(0, 14.22, -0.85)));
+  });
+
+  it('clears prior ladder and jump state before a passive update', () => {
+    const input = new TestInput();
+    const zone = testLadderZone();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, zone.bottomEntry.minZ),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      [],
+      [zone],
+    );
+    input.movement = { x: 0, z: -1 };
+    controller.update(0.1, input.asControllerInput());
+
+    const pose = {
+      position: [2, zone.bottomEyeY, -1] as const,
+      yaw: 0,
+      pitch: 0,
+      floorEyeY: zone.bottomEyeY,
+    };
+    controller.setScriptedPose(pose);
+    controller.updatePassive(0.1);
+
+    expectVector(controller.localPosition, new Vector3(...pose.position));
+    controller.update(0.1, new TestInput().asControllerInput());
+    expectVector(controller.localPosition, new Vector3(...pose.position));
+
+    const jumper = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, zone.bottomEyeY, 0),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+    );
+    input.queueJump();
+    jumper.update(0.1, input.asControllerInput());
+    jumper.setScriptedPose(pose);
+    jumper.updatePassive(0.1);
+
+    expectVector(jumper.localPosition, new Vector3(...pose.position));
+  });
+
   it('keeps the player attached to the moving ship during a passive update', () => {
     const ship = new Object3D();
     const camera = new PerspectiveCamera();

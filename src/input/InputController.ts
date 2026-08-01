@@ -44,6 +44,11 @@ export class InputController {
     return look;
   }
 
+  clearLook(): void {
+    this.lookX = 0;
+    this.lookY = 0;
+  }
+
   consumeInteract(): boolean {
     const queued = this.interactQueued;
     this.interactQueued = false;
@@ -70,8 +75,9 @@ export class InputController {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.pressed.add(event.code);
     if (event.code === 'Space') {
+      const prevented = event.defaultPrevented;
       if (this.pointerLocked) event.preventDefault();
-      if (!event.repeat) this.jumpQueued = true;
+      if (!event.repeat && !prevented) this.jumpQueued = true;
     }
   };
 

@@ -47,6 +47,7 @@ export const SOUND_IDS = [
   'rescueEnding',
   'deathEnding',
   'sinkingEnding',
+  'shipCrash',
 ] as const;
 
 export type SoundId = typeof SOUND_IDS[number];
@@ -139,4 +140,8 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     rescueEnding: asset('rescueEnding', 'effects', 0.55, false, 1),
     deathEnding: asset('deathEnding', 'music', 0.48, false, 1),
     sinkingEnding: asset('sinkingEnding', 'effects', 0.64, false, 1),
+    shipCrash: Object.freeze({
+      ...asset('sinkingEnding', 'effects', 0.68, false, 1),
+      gain: 0.68,
+    }),
   });

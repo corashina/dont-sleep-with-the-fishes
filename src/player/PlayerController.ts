@@ -29,6 +29,13 @@ export interface PlayerMotionSample {
   readonly jumped: boolean;
 }
 
+export interface ScriptedPlayerPose {
+  readonly position: readonly [number, number, number];
+  readonly yaw: number;
+  readonly pitch: number;
+  readonly floorEyeY: number;
+}
+
 function containsLocalPosition(
   bounds: PlayerNavigationBounds['safe'],
   position: Vector3,
@@ -234,13 +241,22 @@ export class PlayerController {
     this.camera.updateMatrixWorld(true);
   }
 
-  reset(start: Vector3): void {
-    this.localPosition.copy(start);
-    this.safePosition.copy(start);
-    this.floorEyeHeight = start.y;
+  setScriptedPose(pose: Readonly<ScriptedPlayerPose>): void {
+    this.localPosition.set(...pose.position);
+    this.safePosition.set(pose.position[0], pose.floorEyeY, pose.position[2]);
+    this.floorEyeHeight = pose.floorEyeY;
     this.activeLadderId = null;
     this.verticalVelocity = 0;
-    this.yaw = DEFAULT_YAW;
-    this.pitch = 0;
+    this.yaw = pose.yaw;
+    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pose.pitch));
+  }
+
+  reset(start: Vector3): void {
+    this.setScriptedPose({
+      position: [start.x, start.y, start.z],
+      yaw: DEFAULT_YAW,
+      pitch: 0,
+      floorEyeY: start.y,
+    });
   }
 }

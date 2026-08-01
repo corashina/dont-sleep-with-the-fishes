@@ -1,0 +1,257 @@
+import {
+  BoxGeometry,
+  BufferGeometry,
+  Group,
+  Material,
+  Mesh,
+} from 'three';
+import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
+import type { CollisionBox } from '../player/collisions';
+import type { LadderClimbZone } from '../player/LadderTraversal';
+import {
+  PLAYER_LAYOUT_RADIUS,
+  type ShipCrowsNestSpec,
+  type ShipMastSpec,
+} from './ShipLayout';
+import type { ShipMaterials } from './ShipMaterials';
+
+export interface CrowsNestBuild {
+  readonly root: Group;
+  readonly colliders: readonly CollisionBox[];
+  readonly climbZone: LadderClimbZone;
+  readonly introAnchors: ScavengeIntroAnchors;
+  readonly openingBounds: Readonly<{
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  }>;
+  disposeGeometry(): void;
+}
+
+const LADDER_RUNG_DEPTH = 0.11;
+const LADDER_CLIMB_MARGIN = 0.03;
+
+function boxCollider(
+  position: readonly [number, number, number],
+  size: readonly [number, number, number],
+): CollisionBox {
+  return {
+    minX: position[0] - size[0] / 2,
+    maxX: position[0] + size[0] / 2,
+    minY: position[1] - size[1] / 2,
+    maxY: position[1] + size[1] / 2,
+    minZ: position[2] - size[2] / 2,
+    maxZ: position[2] + size[2] / 2,
+  };
+}
+
+export function createCrowsNest(
+  materials: ShipMaterials,
+  mast: ShipMastSpec,
+  spec: ShipCrowsNestSpec,
+): CrowsNestBuild {
+  const root = new Group();
+  root.name = `crows-nest:${spec.id}`;
+  const geometries = new Set<BufferGeometry>();
+  const colliders: CollisionBox[] = [];
+  const addBox = (
+    name: string,
+    size: readonly [number, number, number],
+    position: readonly [number, number, number],
+    material: Material,
+  ): Mesh => {
+    const geometry = new BoxGeometry(...size);
+    const mesh = new Mesh(geometry, material);
+    mesh.name = name;
+    mesh.position.set(...position);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    root.add(mesh);
+    geometries.add(geometry);
+    return mesh;
+  };
+  const floorY = mast.position[1] + spec.floorOffsetY;
+  const halfWidth = spec.outerWidth / 2;
+  const floorThickness = 0.14;
+  const floorSurfaceY = floorY + floorThickness / 2;
+  const ladderZ = mast.position[2] - mast.baseDiameter / 2 - spec.ladder.mastOffset;
+  const climbZ = ladderZ + spec.ladder.outwardZ * (
+    PLAYER_LAYOUT_RADIUS + LADDER_RUNG_DEPTH / 2 + LADDER_CLIMB_MARGIN
+  );
+  const openingHalfSize = spec.openingSize / 2;
+  const openingBounds = {
+    minX: mast.position[0] - openingHalfSize,
+    maxX: mast.position[0] + openingHalfSize,
+    minZ: ladderZ - openingHalfSize,
+    maxZ: ladderZ + openingHalfSize,
+  };
+
+  for (let index = 0; index < 8; index += 1) {
+    const z = -0.875 + index * 0.25;
+    const octagonInset = index === 0 || index === 7 ? 0.42 : index === 1 || index === 6 ? 0.14 : 0;
+    const width = spec.outerWidth - octagonInset - 0.02 * (index % 3);
+    const slatMinZ = mast.position[2] + z - 0.11;
+    const slatMaxZ = mast.position[2] + z + 0.11;
+    const openingOverlapMinZ = Math.max(slatMinZ, openingBounds.minZ);
+    const openingOverlapMaxZ = Math.min(slatMaxZ, openingBounds.maxZ);
+    if (openingOverlapMinZ < openingOverlapMaxZ) {
+      const outerEdge = width / 2;
+      const openingEdge = openingHalfSize;
+      const sideWidth = outerEdge - openingEdge;
+      ([
+        [-(outerEdge + openingEdge) / 2, 'port'],
+        [(outerEdge + openingEdge) / 2, 'starboard'],
+      ] as const).forEach(([x, side]) => {
+        const size: readonly [number, number, number] = [
+          sideWidth,
+          floorThickness,
+          openingOverlapMaxZ - openingOverlapMinZ,
+        ];
+        const position: readonly [number, number, number] = [
+          mast.position[0] + x,
+          floorY,
+          (openingOverlapMinZ + openingOverlapMaxZ) / 2,
+        ];
+        addBox(`crows-nest:floor-slat:${index}:${side}`, size, position, materials.timberFloor);
+        colliders.push(boxCollider(position, size));
+      });
+      if (slatMinZ < openingBounds.minZ) {
+        const depth = openingBounds.minZ - slatMinZ;
+        const size: readonly [number, number, number] = [width, floorThickness, depth];
+        const position: readonly [number, number, number] = [
+          mast.position[0], floorY, slatMinZ + depth / 2,
+        ];
+        addBox(`crows-nest:floor-slat:${index}:aft`, size, position, materials.timberFloor);
+        colliders.push(boxCollider(position, size));
+      }
+      if (slatMaxZ > openingBounds.maxZ) {
+        const depth = slatMaxZ - openingBounds.maxZ;
+        const size: readonly [number, number, number] = [width, floorThickness, depth];
+        const position: readonly [number, number, number] = [
+          mast.position[0], floorY, openingBounds.maxZ + depth / 2,
+        ];
+        addBox(`crows-nest:floor-slat:${index}:forward`, size, position, materials.timberFloor);
+        colliders.push(boxCollider(position, size));
+      }
+      continue;
+    }
+    const size: readonly [number, number, number] = [width, floorThickness, 0.22];
+    const position: readonly [number, number, number] = [mast.position[0], floorY, mast.position[2] + z];
+    addBox(`crows-nest:floor-slat:${index}`, size, position, materials.timberFloor);
+    colliders.push(boxCollider(position, size));
+  }
+
+  const guardY = floorSurfaceY + spec.guardHeight / 2;
+  const addGuard = (
+    name: string,
+    size: readonly [number, number, number],
+    position: readonly [number, number, number],
+  ): void => {
+    addBox(`crows-nest:guard:${name}`, size, position, materials.timber);
+    colliders.push(boxCollider(position, size));
+  };
+  const sideGuardThickness = 0.1;
+  addGuard('port', [sideGuardThickness, spec.guardHeight, 1.64], [
+    mast.position[0] - halfWidth + sideGuardThickness / 2, guardY, mast.position[2],
+  ]);
+  addGuard('starboard', [sideGuardThickness, spec.guardHeight, 1.64], [
+    mast.position[0] + halfWidth - sideGuardThickness / 2, guardY, mast.position[2],
+  ]);
+  addGuard('forward', [1.58, spec.guardHeight, 0.14], [
+    mast.position[0], guardY, mast.position[2] + 0.94,
+  ]);
+  const aftGuardWidth = halfWidth - spec.openingSize / 2;
+  const aftGuardOffsetX = spec.openingSize / 2 + aftGuardWidth / 2;
+  addGuard('aft-port', [aftGuardWidth, spec.guardHeight, 0.14], [
+    mast.position[0] - aftGuardOffsetX, guardY, mast.position[2] - 0.94,
+  ]);
+  addGuard('aft-starboard', [aftGuardWidth, spec.guardHeight, 0.14], [
+    mast.position[0] + aftGuardOffsetX, guardY, mast.position[2] - 0.94,
+  ]);
+
+  ([
+    [-0.96, -0.66], [0.96, -0.66], [-0.96, 0.66], [0.96, 0.66],
+  ] as const).forEach(([x, z], index) => {
+    addBox(`crows-nest:bracket:${index + 1}`, [0.22, 0.16, 0.22], [
+      mast.position[0] + x,
+      floorY - 0.2,
+      mast.position[2] + z,
+    ], materials.darkMetal);
+  });
+  ([floorY - 0.16, floorY + 0.12] as const).forEach((y, index) => {
+    addBox(`crows-nest:rope-collar:${index + 1}`, [0.88, 0.06, 0.88], [
+      mast.position[0], y, mast.position[2],
+    ], materials.rope);
+  });
+
+  const seat = addBox('crows-nest-seat', [0.46, 0.12, 0.38], [
+    mast.position[0] + 0.58,
+    floorY + 0.31,
+    mast.position[2] + 0.38,
+  ], materials.timber);
+  seat.rotation.y = -0.08;
+  addBox('crows-nest-seat-back', [0.46, 0.36, 0.08], [
+    mast.position[0] + 0.58,
+    floorY + 0.51,
+    mast.position[2] + 0.55,
+  ], materials.timber);
+
+  const ladderBaseY = mast.position[1] + 0.2;
+  const ladderHeight = floorY - ladderBaseY + 0.1;
+  ([-spec.ladder.width / 2, spec.ladder.width / 2] as const).forEach((x, index) => {
+    addBox(`${spec.ladder.id}:rail:${index}`, [0.09, ladderHeight, 0.09], [
+      mast.position[0] + x,
+      ladderBaseY + ladderHeight / 2,
+      ladderZ,
+    ], materials.darkMetal);
+  });
+  const rungCount = Math.ceil((floorY - mast.position[1]) / spec.ladder.rungSpacing) + 1;
+  for (let index = 0; index < rungCount; index += 1) {
+    addBox(`${spec.ladder.id}:rung:${index}`, [
+      spec.ladder.width, 0.07, LADDER_RUNG_DEPTH,
+    ], [
+      mast.position[0],
+      mast.position[1] + index * spec.ladder.rungSpacing,
+      ladderZ,
+    ], materials.exposedMetal);
+  }
+
+  const bottomEyeY = mast.position[1] + 1.5;
+  const topEyeY = floorSurfaceY + 1.5;
+  const climbZone: LadderClimbZone = {
+    id: spec.ladder.id,
+    climbX: mast.position[0],
+    climbZ,
+    outwardX: 0,
+    outwardZ: spec.ladder.outwardZ,
+    bottomEyeY,
+    topEyeY,
+    topFloor: { minX: -1.05, maxX: 1.05, minZ: -1.05, maxZ: 1.05 },
+    bottomEntry: { minX: -0.4, maxX: 0.4, minZ: -1.35, maxZ: climbZ - 0.05 },
+    topEntry: { minX: 0.63, maxX: 0.83, minZ: -0.12, maxZ: 0.08 },
+    bottomDismount: [0, -1.3],
+    topDismount: [0.73, -0.02],
+  };
+  const introAnchors: ScavengeIntroAnchors = {
+    seatedPosition: [mast.position[0] + 0.69, floorSurfaceY + 0.95, mast.position[2] + 0.48],
+    standingPosition: [mast.position[0] + 0.73, topEyeY, mast.position[2] + 0.14],
+    ladderApproachPosition: [mast.position[0] + 0.73, topEyeY, climbZ],
+    ladderTopPosition: [mast.position[0], topEyeY, climbZ],
+    ladderBottomPosition: [mast.position[0], bottomEyeY, climbZ],
+    exitPosition: [mast.position[0], bottomEyeY, mast.position[2] - 1.3],
+  };
+  let disposed = false;
+  return {
+    root,
+    colliders,
+    climbZone,
+    introAnchors,
+    openingBounds,
+    disposeGeometry: () => {
+      if (disposed) return;
+      disposed = true;
+      geometries.forEach((geometry) => geometry.dispose());
+    },
+  };
+}

@@ -266,3 +266,4 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
 | deathEnding | `deathEnding.mp3` | [Ominous Drone / SilverIllusionist](https://freesound.org/people/SilverIllusionist/sounds/693405/) |
 | sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |
+| shipCrash | `sinkingEnding.mp3` | Reuses [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/). |
