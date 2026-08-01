@@ -1,4 +1,5 @@
 import {
+  InstancedMesh,
   PerspectiveCamera,
   Quaternion,
   Vector3,
@@ -41,13 +42,59 @@ describe('DivePresentation', () => {
 
   it('reuses one fixed bubble pool without adding children during updates', () => {
     const { presentation } = createFixture();
-    const count = presentation.root.getObjectByName('dive-bubbles')!.children.length;
+    const bubbles = presentation.root.getObjectByName('dive-bubbles')!;
+    const count = bubbles.children.length;
+    expect(bubbles).toBeInstanceOf(InstancedMesh);
+    expect((bubbles as InstancedMesh).count).toBe(56);
     void presentation.start(() => undefined);
     for (let frame = 0; frame < 120; frame += 1) {
       presentation.update(frame / 60, 1 / 60, 0.2);
     }
-    expect(presentation.root.getObjectByName('dive-bubbles')!.children).toHaveLength(count);
+    expect(bubbles.children).toHaveLength(count);
   });
+
+  it('restores the original pose after a restart from natural completion', async () => {
+    const { camera, initialPosition, initialQuaternion, presentation } = createFixture();
+    const first = presentation.start(() => undefined);
+    presentation.update(5.8, 5.8, 0.2);
+    await first;
+
+    const second = presentation.start(() => undefined);
+    presentation.clear();
+    await second;
+
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(initialQuaternion.toArray());
+  });
+
+  it.each(['clear', 'dispose', 'start'] as const)(
+    'does not continue an update after impact calls %s',
+    async (action) => {
+      const { camera, initialPosition, initialQuaternion, presentation } = createFixture();
+      let replacement: Promise<void> | undefined;
+      let replacementSettled = false;
+      const first = presentation.start(() => {
+        if (action === 'start') {
+          replacement = presentation.start(() => undefined);
+          void replacement.then(() => {
+            replacementSettled = true;
+          });
+          return;
+        }
+        presentation[action]();
+      });
+      presentation.update(5.8, 5.8, 0.2);
+      await first;
+      if (action === 'start') {
+        expect(replacementSettled).toBe(false);
+        presentation.clear();
+        await replacement;
+      }
+
+      expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+      expect(camera.quaternion.toArray()).toEqual(initialQuaternion.toArray());
+    },
+  );
 
   it.each(['clear', 'settleForVisibilityChange', 'dispose'] as const)(
     '%s restores the exact camera pose and settles the active handle',

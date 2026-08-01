@@ -97,7 +97,7 @@ export class DivePresentation {
 
   start(onWaterImpact: () => void): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.active !== null) this.clear();
+    if (this.cameraCaptured) this.clear();
     this.savedPosition.copy(this.options.camera.position);
     this.savedQuaternion.copy(this.options.camera.quaternion);
     this.cameraCaptured = true;
@@ -115,18 +115,20 @@ export class DivePresentation {
   }
 
   update(timeSeconds: number, _deltaSeconds: number, waterHeight: number): void {
-    if (this.disposed || this.active === null) return;
+    const active = this.active;
+    if (this.disposed || active === null) return;
     sampleDivePose(timeSeconds, this.pose);
     this.applyPose(waterHeight);
 
-    if (this.pose.submerged && !this.wasSubmerged && !this.impactEmitted) {
-      this.impactEmitted = true;
-      this.active.onWaterImpact();
-    }
+    const enteredWater = this.pose.submerged && !this.wasSubmerged;
     this.wasSubmerged = this.pose.submerged;
+    if (enteredWater && !this.impactEmitted) {
+      this.impactEmitted = true;
+      active.onWaterImpact();
+      if (this.disposed || this.active !== active) return;
+    }
 
     if (this.pose.elapsed >= DIVE_ENTRY_DURATION_SECONDS) {
-      const active = this.active;
       this.active = null;
       active.resolve();
     }
