@@ -16,6 +16,12 @@ export interface CrowsNestBuild {
   readonly colliders: readonly CollisionBox[];
   readonly climbZone: LadderClimbZone;
   readonly introAnchors: ScavengeIntroAnchors;
+  readonly openingBounds: Readonly<{
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  }>;
   disposeGeometry(): void;
 }
 
@@ -62,28 +68,62 @@ export function createCrowsNest(
   const halfWidth = spec.outerWidth / 2;
   const floorThickness = 0.14;
   const floorSurfaceY = floorY + floorThickness / 2;
+  const climbZ = mast.position[2] - mast.baseDiameter / 2 - spec.ladder.mastOffset;
+  const openingHalfSize = spec.openingSize / 2;
+  const openingBounds = {
+    minX: mast.position[0] - openingHalfSize,
+    maxX: mast.position[0] + openingHalfSize,
+    minZ: climbZ - openingHalfSize,
+    maxZ: climbZ + openingHalfSize,
+  };
 
   for (let index = 0; index < 8; index += 1) {
     const z = -0.875 + index * 0.25;
     const octagonInset = index === 0 || index === 7 ? 0.42 : index === 1 || index === 6 ? 0.14 : 0;
     const width = spec.outerWidth - octagonInset - 0.02 * (index % 3);
-    if (z < -0.35) {
+    const slatMinZ = mast.position[2] + z - 0.11;
+    const slatMaxZ = mast.position[2] + z + 0.11;
+    const openingOverlapMinZ = Math.max(slatMinZ, openingBounds.minZ);
+    const openingOverlapMaxZ = Math.min(slatMaxZ, openingBounds.maxZ);
+    if (openingOverlapMinZ < openingOverlapMaxZ) {
       const outerEdge = width / 2;
-      const openingEdge = spec.openingSize / 2;
+      const openingEdge = openingHalfSize;
       const sideWidth = outerEdge - openingEdge;
       ([
         [-(outerEdge + openingEdge) / 2, 'port'],
         [(outerEdge + openingEdge) / 2, 'starboard'],
       ] as const).forEach(([x, side]) => {
-        const size: readonly [number, number, number] = [sideWidth, floorThickness, 0.22];
+        const size: readonly [number, number, number] = [
+          sideWidth,
+          floorThickness,
+          openingOverlapMaxZ - openingOverlapMinZ,
+        ];
         const position: readonly [number, number, number] = [
           mast.position[0] + x,
           floorY,
-          mast.position[2] + z,
+          (openingOverlapMinZ + openingOverlapMaxZ) / 2,
         ];
         addBox(`crows-nest:floor-slat:${index}:${side}`, size, position, materials.timberFloor);
         colliders.push(boxCollider(position, size));
       });
+      if (slatMinZ < openingBounds.minZ) {
+        const depth = openingBounds.minZ - slatMinZ;
+        const size: readonly [number, number, number] = [width, floorThickness, depth];
+        const position: readonly [number, number, number] = [
+          mast.position[0], floorY, slatMinZ + depth / 2,
+        ];
+        addBox(`crows-nest:floor-slat:${index}:aft`, size, position, materials.timberFloor);
+        colliders.push(boxCollider(position, size));
+      }
+      if (slatMaxZ > openingBounds.maxZ) {
+        const depth = slatMaxZ - openingBounds.maxZ;
+        const size: readonly [number, number, number] = [width, floorThickness, depth];
+        const position: readonly [number, number, number] = [
+          mast.position[0], floorY, openingBounds.maxZ + depth / 2,
+        ];
+        addBox(`crows-nest:floor-slat:${index}:forward`, size, position, materials.timberFloor);
+        colliders.push(boxCollider(position, size));
+      }
       continue;
     }
     const size: readonly [number, number, number] = [width, floorThickness, 0.22];
@@ -147,7 +187,6 @@ export function createCrowsNest(
     mast.position[2] + 0.55,
   ], materials.timber);
 
-  const climbZ = mast.position[2] - mast.baseDiameter / 2 - spec.ladder.mastOffset;
   const ladderBaseY = mast.position[1] + 0.2;
   const ladderHeight = floorY - ladderBaseY + 0.1;
   ([-spec.ladder.width / 2, spec.ladder.width / 2] as const).forEach((x, index) => {
@@ -183,10 +222,12 @@ export function createCrowsNest(
     topDismount: [0.73, -0.02],
   };
   const introAnchors: ScavengeIntroAnchors = {
-    seatedPosition: [0, floorSurfaceY + 0.95, -0.85],
-    standingPosition: [0, topEyeY, -0.85],
-    ladderBottomPosition: [0, bottomEyeY, climbZ],
-    exitPosition: [0, bottomEyeY, -1.3],
+    seatedPosition: [mast.position[0] + 0.69, floorSurfaceY + 0.95, mast.position[2] + 0.48],
+    standingPosition: [mast.position[0] + 0.73, topEyeY, mast.position[2] + 0.14],
+    ladderApproachPosition: [mast.position[0] + 0.73, topEyeY, climbZ],
+    ladderTopPosition: [mast.position[0], topEyeY, climbZ],
+    ladderBottomPosition: [mast.position[0], bottomEyeY, climbZ],
+    exitPosition: [mast.position[0], bottomEyeY, mast.position[2] - 1.3],
   };
   let disposed = false;
   return {
@@ -194,6 +235,7 @@ export function createCrowsNest(
     colliders,
     climbZone,
     introAnchors,
+    openingBounds,
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;

@@ -195,8 +195,10 @@ function introHarness(elapsed = 0) {
   const consumeJump = vi.fn();
   const updateWorld = vi.fn();
   const anchors = {
-    seatedPosition: [0, 13.67, -0.85],
-    standingPosition: [0, 14.22, -0.85],
+    seatedPosition: [0.69, 13.74, 0.48],
+    standingPosition: [0.73, 14.29, 0.14],
+    ladderApproachPosition: [0.73, 14.29, -0.54],
+    ladderTopPosition: [0, 14.29, -0.54],
     ladderBottomPosition: [0, 3.72, -0.54],
     exitPosition: [0, 3.72, -1.3],
   } as const;
@@ -347,8 +349,10 @@ describe('ScavengePhase lifecycle integration', () => {
       input: { consumeJump: () => order.push('jump') },
       world: {
         scavengeIntroAnchors: {
-          seatedPosition: [0, 13.67, -0.85],
-          standingPosition: [0, 14.22, -0.85],
+          seatedPosition: [0.69, 13.74, 0.48],
+          standingPosition: [0.73, 14.29, 0.14],
+          ladderApproachPosition: [0.73, 14.29, -0.54],
+          ladderTopPosition: [0, 14.29, -0.54],
           ladderBottomPosition: [0, 3.72, -0.54],
           exitPosition: [0, 3.72, -1.3],
         },

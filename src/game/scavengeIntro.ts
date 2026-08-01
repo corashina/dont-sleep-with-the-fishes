@@ -4,6 +4,8 @@ export const SCAVENGE_INTRO_CRASH_SECONDS = 6;
 export interface ScavengeIntroAnchors {
   readonly seatedPosition: readonly [number, number, number];
   readonly standingPosition: readonly [number, number, number];
+  readonly ladderApproachPosition: readonly [number, number, number];
+  readonly ladderTopPosition: readonly [number, number, number];
   readonly ladderBottomPosition: readonly [number, number, number];
   readonly exitPosition: readonly [number, number, number];
 }
@@ -122,11 +124,21 @@ export function sampleScavengeIntroFrameInto(
       anchors.standingPosition,
       elapsed,
     );
-  } else if (elapsed <= 7.5) {
+  } else if (elapsed <= 6.5) {
     copyPosition(output.cameraPosition, anchors.standingPosition);
-  } else if (elapsed <= 9.5) {
+  } else if (elapsed <= 7.2) {
     interpolatePosition(
       output.cameraPosition, anchors.standingPosition,
+      anchors.ladderApproachPosition, (elapsed - 6.5) / 0.7,
+    );
+  } else if (elapsed <= 7.5) {
+    interpolatePosition(
+      output.cameraPosition, anchors.ladderApproachPosition,
+      anchors.ladderTopPosition, (elapsed - 7.2) / 0.3,
+    );
+  } else if (elapsed <= 9.5) {
+    interpolatePosition(
+      output.cameraPosition, anchors.ladderTopPosition,
       anchors.ladderBottomPosition, (elapsed - 7.5) / 2,
     );
   } else {
