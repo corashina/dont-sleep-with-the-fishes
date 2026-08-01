@@ -86,12 +86,16 @@ describe('ScavengeHands', () => {
 
     hands.update(0, 0, true, false, true);
     expect(hands.root.visible).toBe(true);
-    expect(leftWrist.position.y).toBe(-0.51);
-    expect(rightWrist.position.y).toBe(-0.52);
+    expect(leftWrist.position.y).toBe(-0.42);
+    expect(rightWrist.position.y).toBe(-0.43);
     expect(leftWrist.position.x).toBe(-0.36);
     expect(rightWrist.position.x).toBe(0.36);
     expect(leftWrist.position.z).toBe(-0.5);
     expect(rightWrist.position.z).toBe(-0.5);
+    hands.update(1.2, 0, true, false, true);
+    expect(hands.root.visible).toBe(true);
+    expect(leftWrist.position.y).toBeGreaterThan(-0.42);
+    expect(rightWrist.position.y).toBeGreaterThan(-0.43);
     hands.playGesture('pickup');
     hands.update(0.32, 0, true, false, true);
     expect(hands.root.userData.gesture).toBe('pickup');

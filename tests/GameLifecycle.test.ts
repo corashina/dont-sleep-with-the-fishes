@@ -499,6 +499,20 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(hands.update).toHaveBeenCalledWith(0.016, 0.08, true, true, true);
   });
 
+  it('keeps idle hands visible while the grounded player stands still', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, hands } = createUpdateHarness(session);
+    const player = (phase as unknown as {
+      player: { update: ReturnType<typeof vi.fn> };
+    }).player;
+    player.update.mockReturnValue({ movedDistance: 0, grounded: true, jumped: false });
+
+    phase.update(0.016, 0.016);
+
+    expect(hands.update).toHaveBeenCalledWith(0.016, 0, true, false, true);
+  });
+
   it('hides hands when title, paused, overlay, hidden, or sinking states prevent control', () => {
     const title = createUpdateHarness(new ScavengeSession());
     title.phase.update(0.016, 0.016);
