@@ -204,6 +204,8 @@ function transformedSurfaces(
       furnitureId: owner.id,
       furnitureModelId: owner.modelId,
       categories: surface.categories,
+      regionId: surface.regionId,
+      branch: surface.branch,
       position: new Vector3(...surface.localPosition).applyMatrix4(ownerRoot.matrixWorld),
       rotation,
       footprint: {

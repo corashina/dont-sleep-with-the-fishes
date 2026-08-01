@@ -7,7 +7,11 @@ import {
 } from '../game/itemCatalog';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { CollisionBox } from '../player/collisions';
-import type { ShipFurnitureKind } from './ShipLayout';
+import {
+  SCAVENGE_REGION_IDS,
+  type ScavengeRegionId,
+  type ShipFurnitureKind,
+} from './ShipLayout';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export type ShipItemCategory = ShipPlacementCategory;
@@ -18,6 +22,8 @@ export interface ShipItemSurface {
   readonly furnitureId: string;
   readonly furnitureModelId: ShipFurnitureKind;
   readonly categories: readonly ShipItemCategory[];
+  readonly regionId: ScavengeRegionId;
+  readonly branch: boolean;
   readonly position: Vector3;
   readonly rotation: Euler;
   readonly footprint: { readonly width: number; readonly depth: number };
@@ -179,6 +185,13 @@ export function validateShipItemSurfaces(
     }
     if (!surface.physicalSlotId.trim()) {
       throw new Error(`Ship item surface ${surface.id} has no physical slot id`);
+    }
+    if (!SCAVENGE_REGION_IDS.has(surface.regionId)) {
+      throw new Error(`Ship item surface ${surface.id} has an unknown scavenge region`);
+    }
+    if ((surface.regionId === 'bow' || surface.regionId === 'stern')
+      && !furnitureColliderById?.has(surface.furnitureId)) {
+      throw new Error(`Ship item surface ${surface.id} at ${surface.regionId} has no furniture owner`);
     }
     if (!finiteVector(surface.position)
       || !surface.rotation.toArray().slice(0, 3).every(Number.isFinite)

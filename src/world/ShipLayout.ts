@@ -16,6 +16,22 @@ export type ShipBalconyZoneId = 'crewCabin' | 'storageWorkroom';
 export type ShipTransverseEdge = 'aft' | 'forward';
 export type ClearanceClass = 'primary' | 'secondary';
 export type ShipFurnitureKind = ShipFurnitureAssetId | 'cargoRack';
+export type ScavengeRegionId =
+  | 'crewCabin'
+  | 'wheelhouse'
+  | 'centralCargo'
+  | 'storageWorkroom'
+  | 'bow'
+  | 'stern';
+
+export const SCAVENGE_REGION_IDS: ReadonlySet<ScavengeRegionId> = new Set([
+  'crewCabin',
+  'wheelhouse',
+  'centralCargo',
+  'storageWorkroom',
+  'bow',
+  'stern',
+]);
 
 export interface Rect2 {
   readonly minX: number; readonly maxX: number;
@@ -26,6 +42,8 @@ export interface ShipItemSurfaceSpec {
   readonly id: string;
   readonly physicalSlotId: string;
   readonly categories: readonly ShipItemCategory[];
+  readonly regionId: ScavengeRegionId;
+  readonly branch: boolean;
   readonly localPosition: readonly [number, number, number];
   readonly localRotation: readonly [number, number, number];
   readonly footprint: { readonly width: number; readonly depth: number };
@@ -235,6 +253,13 @@ export interface ShipNavigationAnalysis {
   readonly minimumSecondaryClearance: number;
   readonly secondaryAccessLaneCount: number;
   readonly secondaryAccessRectangles: readonly ShipSecondaryAccessRectangle[];
+}
+
+export interface ShipRouteMetric {
+  distance(
+    from: readonly [number, number],
+    to: readonly [number, number],
+  ): number | null;
 }
 
 export interface ShipSecondaryAccessRectangle {
@@ -455,6 +480,7 @@ function itemSurface(
   furnitureId: string,
   suffix: string,
   categories: readonly ShipItemCategory[],
+  regionId: ScavengeRegionId,
   localPosition: readonly [number, number, number],
   footprint: { readonly width: number; readonly depth: number },
   clearanceHeight: number,
@@ -463,12 +489,15 @@ function itemSurface(
     readonly localRotation?: readonly [number, number, number];
     readonly fallback?: boolean;
     readonly physicalSlotSuffix?: string;
+    readonly branch?: boolean;
   } = {},
 ): ShipItemSurfaceSpec {
   return {
     id: `${furnitureId}:${suffix}`,
     physicalSlotId: `${furnitureId}:${options.physicalSlotSuffix ?? suffix}`,
     categories,
+    regionId,
+    branch: options.branch ?? false,
     localPosition,
     localRotation: options.localRotation ?? [0, 0, 0],
     footprint,
@@ -481,6 +510,7 @@ function itemSurface(
 function deskSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
+  regionId: ScavengeRegionId,
 ): readonly ShipItemSurfaceSpec[] {
   return ([-0.43, 0.43] as const).map((x, index) => {
     const side = index === 0 ? 'left' : 'right';
@@ -488,6 +518,7 @@ function deskSurfaces(
       furnitureId,
       `top-${side}`,
       categories,
+      regionId,
       [x, 0.89, 0],
       { width: 0.75, depth: 0.6 },
       0.82,
@@ -499,6 +530,7 @@ function deskSurfaces(
 function tableSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
+  regionId: ScavengeRegionId,
   slotCount: 2 | 3 = 2,
 ): readonly ShipItemSurfaceSpec[] {
   const slots = slotCount === 3
@@ -515,6 +547,7 @@ function tableSurfaces(
     furnitureId,
     `top-${label}`,
     categories,
+    regionId,
     [x, 0.82, 0],
     { width, depth: 0.72 },
     0.82,
@@ -526,12 +559,14 @@ function tableSurfaces(
 function bookcaseSurfaces(
   furnitureId: string,
   categories: readonly ShipItemCategory[],
+  regionId: ScavengeRegionId,
 ): readonly ShipItemSurfaceSpec[] {
   const wallMidpointHeight = SHIP_ROOM_WALL_HEIGHT / 2;
   return ([-0.21, 0.21] as const).map((x, slotIndex) => itemSurface(
     furnitureId,
     `shelf-${slotIndex === 0 ? 'left' : 'right'}`,
     categories,
+    regionId,
     [x, wallMidpointHeight, -0.08],
     { width: 0.34, depth: 0.35 },
     0.82,
@@ -550,6 +585,7 @@ function compactTopSurface(
     furnitureId,
     'top',
     categories,
+    'crewCabin',
     [0, height, 0],
     footprint,
     height,
@@ -562,6 +598,7 @@ function crewDeskSurfaces(furnitureId: string): readonly ShipItemSurfaceSpec[] {
     furnitureId,
     `top-${index === 0 ? 'left' : 'right'}`,
     CABIN_ITEM_CATEGORIES,
+    'crewCabin',
     [x, 0.554137, 0],
     { width: 0.55, depth: 0.48 },
     0.7,
@@ -574,6 +611,7 @@ function crewTableSurfaces(furnitureId: string): readonly ShipItemSurfaceSpec[] 
     furnitureId,
     `top-${index === 0 ? 'left' : 'right'}`,
     CABIN_ITEM_CATEGORIES,
+    'crewCabin',
     [x, 0.72, 0],
     { width: 0.65, depth: 0.65 },
     0.8,
@@ -586,6 +624,7 @@ function workroomShelfSurfaces(furnitureId: string): readonly ShipItemSurfaceSpe
     furnitureId,
     `shelf-${index === 0 ? 'left' : 'right'}`,
     WORKROOM_ITEM_CATEGORIES,
+    'storageWorkroom',
     [x, index === 0 ? 0.92 : 1.46, 0],
     { width: 0.5, depth: 0.32 },
     0.55,
@@ -601,6 +640,7 @@ function cargoRackSurfaces(
     furnitureId,
     `top-${index === 0 ? 'left' : 'right'}`,
     categories,
+    'centralCargo',
     [x, 0.55, 0],
     { width: 0.85, depth: 0.62 },
     0.82,
@@ -633,8 +673,8 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     [],
   ),
   placement('cabin-bunk-starboard', 'bedBunk', 'crewCabin', [crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.147 / 2, 2.22, 10.5], 0, [1.147, 1.708, 2.2]),
-  placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.908 / 2], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES)),
-  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 13.08], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES)),
+  placement('cabin-desk-aft', 'desk', 'crewCabin', [-2.8, 2.22, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.908 / 2], 0, [1.7, 0.89, 0.908], deskSurfaces('cabin-desk-aft', CABIN_ITEM_CATEGORIES, 'crewCabin')),
+  placement('cabin-bookcase-forward', 'bookcaseOpen', 'crewCabin', [0, 2.22, 13.08], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('cabin-bookcase-forward', CABIN_ITEM_CATEGORIES, 'crewCabin')),
   placement('cabin-night-stand-forward-starboard', 'crewNightStand', 'crewCabin', [4.25, 2.22, 12.75], 0, [0.624577, 0.62, 0.624577], compactTopSurface(
     'cabin-night-stand-forward-starboard',
     CABIN_ITEM_CATEGORIES,
@@ -651,17 +691,18 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     'cabin-cabinet-port-forward',
     'top',
     ['comfort'],
+    'crewCabin',
     [0, 1.35, 0.05],
     { width: 1.05, depth: 0.70 },
     1.35,
     [[0, 0, 1.15]],
   )]),
   placement('cabin-table-starboard-center', 'crewTable', 'crewCabin', [0, 2.22, 9], 0, [1.836937, 0.72, 1.836937], crewTableSurfaces('cabin-table-starboard-center')),
-  placement('chart-table-port', 'table', 'wheelhouse', [-3.3, 2.22, 18], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 3)),
-  placement('chart-table-forward', 'table', 'wheelhouse', [-3.3, 2.22, 20.6], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-forward', WHEELHOUSE_ITEM_CATEGORIES, 3)),
-  placement('workbench-port', 'table', 'storageWorkroom', [-3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', WORKROOM_ITEM_CATEGORIES)),
-  placement('workbench-starboard', 'table', 'storageWorkroom', [3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', WORKROOM_ITEM_CATEGORIES)),
-  placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11.075], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', WORKROOM_ITEM_CATEGORIES)),
+  placement('chart-table-port', 'table', 'wheelhouse', [-3.3, 2.22, 18], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', WHEELHOUSE_ITEM_CATEGORIES, 'wheelhouse', 3)),
+  placement('chart-table-forward', 'table', 'wheelhouse', [-3.3, 2.22, 20.6], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-forward', WHEELHOUSE_ITEM_CATEGORIES, 'wheelhouse', 3)),
+  placement('workbench-port', 'table', 'storageWorkroom', [-3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', WORKROOM_ITEM_CATEGORIES, 'storageWorkroom')),
+  placement('workbench-starboard', 'table', 'storageWorkroom', [3.7, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', WORKROOM_ITEM_CATEGORIES, 'storageWorkroom')),
+  placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11.075], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', WORKROOM_ITEM_CATEGORIES, 'storageWorkroom')),
   placement('workroom-storage-shelf-port-forward', 'workroomStorageShelf', 'storageWorkroom', [-4.7, 2.22, -11.15], 0, [1.317857, 1.8, 0.514286], workroomShelfSurfaces('workroom-storage-shelf-port-forward')),
   placement('workroom-pallet-starboard-forward', 'workroomPallet', 'storageWorkroom', [4.55, 2.22, -11.35], 0, [0.568017, 0.18, 0.568017], [], [2.2, 1, 2.2]),
   ...([
@@ -691,6 +732,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
       id,
       'top',
       CARGO_ITEM_CATEGORIES,
+      'centralCargo',
       [0, 1.05, 0],
       { width: 1.05, depth: 0.85 },
       0.95,
@@ -702,7 +744,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   placement('cargo-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-port', CARGO_ITEM_CATEGORIES)),
   placement('cargo-rack-starboard', 'cargoRack', 'cargoDeck', [4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-starboard', CARGO_ITEM_CATEGORIES)),
   placement('cargo-rod-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, -4.2], 0, [2.1, 0.55, 0.75], [itemSurface(
-    'cargo-rod-rack-port', 'rod', CARGO_ITEM_CATEGORIES, [0, 0.55, 0],
+    'cargo-rod-rack-port', 'rod', CARGO_ITEM_CATEGORIES, 'centralCargo', [0, 0.55, 0],
     { width: 1.9, depth: 0.5 }, 0.82, [[-1.45, 0, 0], [1.45, 0, 0]],
     { localRotation: [0, PI_OVER_TWO, 0] },
   )]),
@@ -1297,70 +1339,197 @@ function activeObstacles(layout: ShipLayoutSpec): Rect2[] {
   ].filter(validRect);
 }
 
-export function analyzeShipNavigation(layout: ShipLayoutSpec): ShipNavigationAnalysis {
-  const grid = layout.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
-  const GRID_MIN_X = grid.minX;
-  const GRID_MAX_X = grid.maxX;
-  const GRID_MIN_Z = grid.minZ;
-  const GRID_MAX_Z = grid.maxZ;
-  const columns = Math.round((GRID_MAX_X - GRID_MIN_X) / GRID_STEP) + 1;
-  const rows = Math.round((GRID_MAX_Z - GRID_MIN_Z) / GRID_STEP) + 1;
-  const obstacles = activeObstacles(layout).map((bounds) => inflate(bounds, PLAYER_LAYOUT_RADIUS));
+interface ShipNavigationGrid {
+  readonly minX: number;
+  readonly minZ: number;
+  readonly columns: number;
+  readonly rows: number;
+  readonly blocked: Uint8Array;
+  toCell(point: readonly [number, number]): number | undefined;
+  cellPoint(index: number): readonly [number, number];
+}
+
+function buildShipNavigationGrid(layout: ShipLayoutSpec): ShipNavigationGrid {
+  const bounds = layout.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
+  const minX = bounds.minX;
+  const minZ = bounds.minZ;
+  const columns = Math.round((bounds.maxX - minX) / GRID_STEP) + 1;
+  const rows = Math.round((bounds.maxZ - minZ) / GRID_STEP) + 1;
+  const obstacles = activeObstacles(layout).map((obstacle) =>
+    inflate(obstacle, PLAYER_LAYOUT_RADIUS));
+  const hull = layout.zones.find(({ id }) => id === 'cargoDeck');
   const cellPoint = (index: number): readonly [number, number] => {
     const xIndex = index % columns;
     const zIndex = Math.floor(index / columns);
-    return [GRID_MIN_X + xIndex * GRID_STEP, GRID_MIN_Z + zIndex * GRID_STEP];
+    return [minX + xIndex * GRID_STEP, minZ + zIndex * GRID_STEP];
   };
   const blocked = new Uint8Array(columns * rows);
-  const hull = layout.zones.find(({ id }) => id === 'cargoDeck');
   for (let index = 0; index < blocked.length; index += 1) {
     const point = cellPoint(index);
     if (!hull || !pointInPolygon(point, hull.polygon)
-      || obstacles.some((bounds) => contains(bounds, point))) blocked[index] = 1;
+      || obstacles.some((obstacle) => contains(obstacle, point))) blocked[index] = 1;
   }
-  const toCell = (point: readonly [number, number]): number | undefined => {
-    const xIndex = Math.round((point[0] - GRID_MIN_X) / GRID_STEP);
-    const zIndex = Math.round((point[1] - GRID_MIN_Z) / GRID_STEP);
-    if (xIndex < 0 || xIndex >= columns || zIndex < 0 || zIndex >= rows) return undefined;
-    return zIndex * columns + xIndex;
+  return {
+    minX,
+    minZ,
+    columns,
+    rows,
+    blocked,
+    toCell(point): number | undefined {
+      const xIndex = Math.round((point[0] - minX) / GRID_STEP);
+      const zIndex = Math.round((point[1] - minZ) / GRID_STEP);
+      if (xIndex < 0 || xIndex >= columns || zIndex < 0 || zIndex >= rows) {
+        return undefined;
+      }
+      return zIndex * columns + xIndex;
+    },
+    cellPoint,
   };
+}
+
+function forEachNavigableNeighbor(
+  grid: ShipNavigationGrid,
+  index: number,
+  visit: (neighbor: number, cost: number) => void,
+): void {
+  const x = index % grid.columns;
+  const z = Math.floor(index / grid.columns);
+  for (let dz = -1; dz <= 1; dz += 1) for (let dx = -1; dx <= 1; dx += 1) {
+    if (dx === 0 && dz === 0) continue;
+    const nextX = x + dx;
+    const nextZ = z + dz;
+    if (nextX < 0 || nextX >= grid.columns || nextZ < 0 || nextZ >= grid.rows) continue;
+    const next = nextZ * grid.columns + nextX;
+    if (grid.blocked[next]) continue;
+    if (dx !== 0 && dz !== 0) {
+      const horizontal = z * grid.columns + nextX;
+      const vertical = nextZ * grid.columns + x;
+      if (grid.blocked[horizontal] || grid.blocked[vertical]) continue;
+    }
+    visit(next, dx !== 0 && dz !== 0 ? GRID_STEP * Math.SQRT2 : GRID_STEP);
+  }
+}
+
+function routeDistance(
+  grid: ShipNavigationGrid,
+  start: number,
+  goal: number,
+): number | null {
+  if (start === goal) return 0;
+  const distances = new Float64Array(grid.blocked.length);
+  distances.fill(Number.POSITIVE_INFINITY);
+  distances[start] = 0;
+  const closed = new Uint8Array(grid.blocked.length);
+  const heapCells: number[] = [];
+  const heapScores: number[] = [];
+  const goalX = goal % grid.columns;
+  const goalZ = Math.floor(goal / grid.columns);
+  const heuristic = (cell: number): number => {
+    const dx = Math.abs(cell % grid.columns - goalX);
+    const dz = Math.abs(Math.floor(cell / grid.columns) - goalZ);
+    const diagonal = Math.min(dx, dz);
+    return GRID_STEP * (Math.max(dx, dz) + (Math.SQRT2 - 1) * diagonal);
+  };
+  const push = (cell: number, score: number): void => {
+    let child = heapCells.length;
+    heapCells.push(cell);
+    heapScores.push(score);
+    while (child > 0) {
+      const parent = Math.floor((child - 1) / 2);
+      if (heapScores[parent]! <= score) break;
+      heapCells[child] = heapCells[parent]!;
+      heapScores[child] = heapScores[parent]!;
+      child = parent;
+    }
+    heapCells[child] = cell;
+    heapScores[child] = score;
+  };
+  const pop = (): number => {
+    const result = heapCells[0]!;
+    const lastCell = heapCells.pop()!;
+    const lastScore = heapScores.pop()!;
+    if (heapCells.length === 0) return result;
+    let parent = 0;
+    while (true) {
+      const left = parent * 2 + 1;
+      if (left >= heapCells.length) break;
+      const right = left + 1;
+      const child = right < heapCells.length && heapScores[right]! < heapScores[left]!
+        ? right : left;
+      if (heapScores[child]! >= lastScore) break;
+      heapCells[parent] = heapCells[child]!;
+      heapScores[parent] = heapScores[child]!;
+      parent = child;
+    }
+    heapCells[parent] = lastCell;
+    heapScores[parent] = lastScore;
+    return result;
+  };
+  push(start, heuristic(start));
+  while (heapCells.length > 0) {
+    const current = pop();
+    if (closed[current]) continue;
+    if (current === goal) return distances[current]!;
+    closed[current] = 1;
+    forEachNavigableNeighbor(grid, current, (neighbor, cost) => {
+      if (closed[neighbor]) return;
+      const distance = distances[current]! + cost;
+      if (distance >= distances[neighbor]!) return;
+      distances[neighbor] = distance;
+      push(neighbor, distance + heuristic(neighbor));
+    });
+  }
+  return null;
+}
+
+export function createShipRouteMetric(
+  layout: ShipLayoutSpec = SHIP_LAYOUT,
+): ShipRouteMetric {
+  const grid = buildShipNavigationGrid(layout);
+  const cache = new Map<string, number | null>();
+  return {
+    distance(from, to): number | null {
+      const fromCell = grid.toCell(from);
+      const toCell = grid.toCell(to);
+      if (fromCell === undefined || toCell === undefined) return null;
+      const first = Math.min(fromCell, toCell);
+      const second = Math.max(fromCell, toCell);
+      const key = `${first}:${second}`;
+      if (cache.has(key)) return cache.get(key)!;
+      const distance = grid.blocked[fromCell] || grid.blocked[toCell]
+        ? null : routeDistance(grid, fromCell, toCell);
+      cache.set(key, distance);
+      return distance;
+    },
+  };
+}
+
+export function analyzeShipNavigation(layout: ShipLayoutSpec): ShipNavigationAnalysis {
+  const grid = buildShipNavigationGrid(layout);
   const targets = effectiveNavigationTargets(layout);
   const accessRectangles = secondaryAccessRectangles(layout.furniture);
   const start = targets.find(({ kind }) => kind === 'start');
-  const startCell = start ? toCell(start.position) : undefined;
-  const visited = new Uint8Array(columns * rows);
-  if (startCell !== undefined && blocked[startCell] === 0) {
-    const queue = new Int32Array(columns * rows);
+  const startCell = start ? grid.toCell(start.position) : undefined;
+  const visited = new Uint8Array(grid.columns * grid.rows);
+  if (startCell !== undefined && grid.blocked[startCell] === 0) {
+    const queue = new Int32Array(grid.columns * grid.rows);
     let head = 0;
     let tail = 0;
     queue[tail++] = startCell;
     visited[startCell] = 1;
-    const directions = [-1, 0, 1] as const;
     while (head < tail) {
       const current = queue[head++]!;
-      const x = current % columns;
-      const z = Math.floor(current / columns);
-      for (const dz of directions) for (const dx of directions) {
-        if (dx === 0 && dz === 0) continue;
-        const nextX = x + dx;
-        const nextZ = z + dz;
-        if (nextX < 0 || nextX >= columns || nextZ < 0 || nextZ >= rows) continue;
-        const next = nextZ * columns + nextX;
-        if (blocked[next] || visited[next]) continue;
-        if (dx !== 0 && dz !== 0) {
-          const horizontal = z * columns + nextX;
-          const vertical = nextZ * columns + x;
-          if (blocked[horizontal] || blocked[vertical]) continue;
-        }
+      forEachNavigableNeighbor(grid, current, (next) => {
+        if (visited[next]) return;
         visited[next] = 1;
         queue[tail++] = next;
-      }
+      });
     }
   }
   const unreachableTargetIds = targets
     .filter((target) => {
-      const cell = toCell(target.position);
-      return cell === undefined || blocked[cell] === 1 || visited[cell] === 0;
+      const cell = grid.toCell(target.position);
+      return cell === undefined || grid.blocked[cell] === 1 || visited[cell] === 0;
     })
     .map(({ id }) => id);
   const reachableSurfaceStandingPointIds: string[] = [];
@@ -1370,8 +1539,8 @@ export function analyzeShipNavigation(layout: ShipLayoutSpec): ShipNavigationAna
       position: transformLocalPoint(owner, point),
     }));
     const reachable = candidates.filter((candidate) => {
-      const cell = toCell(candidate.position);
-      return cell !== undefined && blocked[cell] === 0 && visited[cell] === 1;
+      const cell = grid.toCell(candidate.position);
+      return cell !== undefined && grid.blocked[cell] === 0 && visited[cell] === 1;
     });
     reachableSurfaceStandingPointIds.push(...reachable.map(({ id }) => id));
   }));
@@ -1717,6 +1886,9 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
     }
     spec.surfaces.forEach((surface) => {
+      if (!SCAVENGE_REGION_IDS.has(surface.regionId)) {
+        throw new Error(`Surface ${surface.id} has an unknown scavenge region`);
+      }
       if (surface.categories.length === 0 || !positive(surface.footprint.width)
         || !positive(surface.footprint.depth) || !positive(surface.clearanceHeight)
         || surface.standingPoints.length === 0 || !finiteTuple(surface.localPosition)

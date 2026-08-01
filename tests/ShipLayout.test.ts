@@ -8,6 +8,7 @@ import {
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   analyzeShipNavigation,
+  createShipRouteMetric,
   detailVisualRect,
   furnitureRect,
   validateShipLayout,
@@ -457,6 +458,26 @@ describe('scavenging ship layout', () => {
     expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
   });
 
+  it('measures the shortest navigable route around furniture', () => {
+    const metric = createShipRouteMetric(SHIP_LAYOUT);
+    const direct = Math.hypot(7.025, 11);
+    const routed = metric.distance([0, 11], [7.025, 0]);
+    expect(routed).not.toBeNull();
+    expect(routed!).toBeGreaterThan(direct);
+  });
+
+  it('returns null when either point has no reachable grid cell', () => {
+    const metric = createShipRouteMetric(SHIP_LAYOUT);
+    expect(metric.distance([0, 0], [99, 99])).toBeNull();
+  });
+
+  it('reuses one exact symmetric route distance', () => {
+    const metric = createShipRouteMetric(SHIP_LAYOUT);
+    const forward = metric.distance([0, 11], [7.025, 0]);
+    expect(metric.distance([7.025, 0], [0, 11])).toBe(forward);
+    expect(metric.distance([0, 11], [7.025, 0])).toBe(forward);
+  });
+
   it('aligns crates and boxes exactly against exterior wall faces', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
@@ -757,6 +778,8 @@ describe('scavenging ship layout', () => {
           id: surfaceId,
           physicalSlotId: surfaceId,
           categories: ['provisions' as const],
+          regionId: 'storageWorkroom' as const,
+          branch: false,
           localPosition: [0, 1, 0] as const,
           localRotation: [0, 0, 0] as const,
           footprint: { width: 0.5, depth: 0.5 },
