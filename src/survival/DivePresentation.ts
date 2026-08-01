@@ -17,6 +17,7 @@ import {
 } from 'three';
 import {
   DIVE_ENTRY_DURATION_SECONDS,
+  DIVE_IMPACT_SECONDS,
   createDivePose,
   sampleDivePose,
   type DivePose,
@@ -24,6 +25,9 @@ import {
 
 const BUBBLE_COUNT = 56;
 const SEAT_CAMERA_X = 0.78;
+const VEIL_RENDER_ORDER = 20;
+const BUBBLE_RENDER_ORDER = 21;
+const GOGGLE_RENDER_ORDER = 22;
 
 export interface DivePresentationOptions {
   readonly camera: PerspectiveCamera;
@@ -49,6 +53,11 @@ export class DivePresentation {
   private readonly scratchPosition = new Vector3();
   private readonly scratchQuaternion = new Quaternion();
   private readonly pose: DivePose = createDivePose();
+  private readonly entryPose: DivePose = createDivePose();
+  private readonly waterEntryLocalPosition = new Vector3();
+  private readonly waterEntryWorldPosition = new Vector3();
+  private readonly waterSurfaceWorldPosition = new Vector3();
+  private readonly waterSurfaceLocalPosition = new Vector3();
   private active: ActiveDive | null = null;
   private wasSubmerged = false;
   private impactEmitted = false;
@@ -62,24 +71,25 @@ export class DivePresentation {
     this.goggles.name = 'dive-goggles';
     this.buildGoggles();
 
-    const veilGeometry = new PlaneGeometry(2.2, 1.45);
+    const veilGeometry = new PlaneGeometry(5, 3);
     const veilMaterial = new MeshBasicMaterial({
       color: new Color(0x4aafbd),
       transparent: true,
-      opacity: 0.54,
+      opacity: 1,
       depthTest: false,
       depthWrite: false,
     });
     this.waterVeil = new Mesh(veilGeometry, veilMaterial);
     this.waterVeil.name = 'dive-water-veil';
     this.waterVeil.position.set(0, 0, -0.92);
-    this.waterVeil.renderOrder = 20;
+    this.waterVeil.renderOrder = VEIL_RENDER_ORDER;
 
     const bubbleGeometry = new SphereGeometry(0.018, 6, 5);
     const bubbleMaterial = new MeshBasicMaterial({
       color: 0xb7e5e6,
       transparent: true,
       opacity: 0.72,
+      depthTest: false,
       depthWrite: false,
     });
     this.bubbleMesh = new InstancedMesh(
@@ -88,11 +98,47 @@ export class DivePresentation {
       BUBBLE_COUNT,
     );
     this.bubbleMesh.name = 'dive-bubbles';
-    this.bubbleMesh.renderOrder = 21;
+    this.bubbleMesh.renderOrder = BUBBLE_RENDER_ORDER;
 
     this.root.add(this.goggles, this.waterVeil, this.bubbleMesh);
     options.camera.add(this.root);
+    sampleDivePose(DIVE_IMPACT_SECONDS, this.entryPose);
+    this.waterEntryLocalPosition.set(
+      options.starboardPosition.x,
+      options.starboardPosition.y + this.entryPose.cameraY,
+      options.starboardPosition.z + this.entryPose.cameraZ,
+    );
     this.resetLayers();
+  }
+
+  copyWaterEntryWorldPosition(output: Vector3): Vector3 {
+    output.copy(this.waterEntryLocalPosition);
+    const parent = this.options.camera.parent;
+    if (parent === null) return output;
+    parent.updateWorldMatrix(true, false);
+    return parent.localToWorld(output);
+  }
+
+  copyWorldWaterSurfaceToLocal(worldHeight: number, output: Vector3): Vector3 {
+    if (!Number.isFinite(worldHeight)) {
+      return output.copy(this.waterEntryLocalPosition);
+    }
+    const parent = this.options.camera.parent;
+    if (parent === null) {
+      return output.set(
+        this.waterEntryLocalPosition.x,
+        worldHeight,
+        this.waterEntryLocalPosition.z,
+      );
+    }
+    this.copyWaterEntryWorldPosition(this.waterEntryWorldPosition);
+    this.waterSurfaceWorldPosition.set(
+      this.waterEntryWorldPosition.x,
+      worldHeight,
+      this.waterEntryWorldPosition.z,
+    );
+    output.copy(this.waterSurfaceWorldPosition);
+    return parent.worldToLocal(output);
   }
 
   start(onWaterImpact: () => void): Promise<void> {
@@ -165,6 +211,7 @@ export class DivePresentation {
     });
     this.waterVeil.geometry.dispose();
     this.waterVeil.material.dispose();
+    this.bubbleMesh.dispose();
     this.bubbleMesh.geometry.dispose();
     this.bubbleMesh.material.dispose();
     this.root.clear();
@@ -176,11 +223,15 @@ export class DivePresentation {
       roughness: 0.88,
       metalness: 0.03,
       flatShading: true,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
     });
     const glassMaterial = new MeshBasicMaterial({
       color: 0x83bdba,
       transparent: true,
       opacity: 0.48,
+      depthTest: false,
       depthWrite: false,
     });
     const bridgeMaterial = new MeshStandardMaterial({
@@ -188,6 +239,9 @@ export class DivePresentation {
       roughness: 0.7,
       metalness: 0.12,
       flatShading: true,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
     });
     const leftRing = new Mesh(new TorusGeometry(0.28, 0.054, 5, 9), rubberMaterial);
     leftRing.name = 'dive-goggle-ring-left';
@@ -208,19 +262,34 @@ export class DivePresentation {
     bridge.position.set(0, -0.15, -0.924);
     bridge.rotation.z = Math.PI;
     this.goggles.add(leftRing, rightRing, leftGlass, rightGlass, bridge);
+    this.goggles.traverse((object) => {
+      if (object instanceof Mesh) object.renderOrder = GOGGLE_RENDER_ORDER;
+    });
   }
 
-  private applyPose(waterHeight: number): void {
+  private applyPose(worldWaterHeight: number): void {
     const seatProgress = Math.min(1, Math.max(0, this.pose.cameraX / SEAT_CAMERA_X));
+    this.copyWorldWaterSurfaceToLocal(
+      worldWaterHeight,
+      this.waterSurfaceLocalPosition,
+    );
     this.scratchPosition.lerpVectors(
       this.savedPosition,
       this.options.starboardPosition,
       seatProgress,
     );
     this.options.camera.position.copy(this.scratchPosition);
-    this.options.camera.position.y += this.pose.cameraY
-      + (Number.isFinite(waterHeight) ? waterHeight : 0);
+    this.options.camera.position.y += this.pose.cameraY;
     this.options.camera.position.z += this.pose.cameraZ;
+    this.options.camera.position.x += (
+      this.waterSurfaceLocalPosition.x - this.waterEntryLocalPosition.x
+    ) * this.pose.entryProgress;
+    this.options.camera.position.y += (
+      this.waterSurfaceLocalPosition.y - this.waterEntryLocalPosition.y
+    ) * this.pose.entryProgress;
+    this.options.camera.position.z += (
+      this.waterSurfaceLocalPosition.z - this.waterEntryLocalPosition.z
+    ) * this.pose.entryProgress;
 
     this.scratchQuaternion.slerpQuaternions(
       this.savedQuaternion,
@@ -235,7 +304,7 @@ export class DivePresentation {
     this.goggles.position.y = 0.5 - this.pose.goggleLift * 0.68;
     this.goggles.rotation.z = -0.035 * (1 - this.pose.goggleSettle);
     this.waterVeil.visible = this.pose.waterCoverage > 0.008;
-    this.waterVeil.material.opacity = 0.12 + this.pose.waterCoverage * 0.42;
+    this.waterVeil.material.opacity = this.pose.waterCoverage;
     this.bubbleMesh.visible = this.pose.bubbleStrength > 0.008;
     this.applyBubbles(this.pose.elapsed, this.pose.bubbleStrength);
   }

@@ -539,6 +539,7 @@ export class BoatWorld {
     displacementZ: 0,
     normal: { x: 0, y: 1, z: 0 },
   };
+  private readonly diveWaterEntryWorldPosition = new Vector3();
   private activeDiveItemId: ItemInstanceId | null = null;
   private diveElapsed = 0;
   private readonly fishingCameraStartPosition = new Vector3();
@@ -1010,6 +1011,7 @@ export class BoatWorld {
 
   playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.clearDivePresentation();
     this.activeDiveItemId = instanceId;
     this.diveElapsed = 0;
     this.supplyDisplay.setPresentationItemHidden(instanceId, true);
@@ -1795,11 +1797,14 @@ export class BoatWorld {
     this.applyBasePresentation();
     if (this.activeDiveItemId !== null) {
       if (advancePresentation) this.diveElapsed += Math.max(0, delta);
+      this.divePresentation.copyWaterEntryWorldPosition(
+        this.diveWaterEntryWorldPosition,
+      );
       this.sampleWorldWaveInto(
         this.diveWaveSample,
         time,
-        DIVE_FORWARD_TARGET.x,
-        DIVE_FORWARD_TARGET.z,
+        this.diveWaterEntryWorldPosition.x,
+        this.diveWaterEntryWorldPosition.z,
         amplitudeScale,
       );
       this.divePresentation.update(

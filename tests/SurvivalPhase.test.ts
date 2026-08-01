@@ -145,6 +145,15 @@ describe('formatDiveResult', () => {
       lines,
     });
   });
+
+  it('shows the truthful applied loss for a low-health fatal injury', () => {
+    expect(formatDiveResult(accepted({
+      deltas: { energy: -3, health: -4 },
+    }))).toEqual({
+      title: 'DIVE RESULT',
+      lines: ['NOTHING FOUND', 'HEALTH -4'],
+    });
+  });
 });
 
 describe('SurvivalPhase test context', () => {
@@ -559,6 +568,7 @@ function createDiveRig(options: {
   const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
   vi.spyOn(phaseAudio, 'beginDive').mockImplementation(() => calls.push('impactAudio'));
   vi.spyOn(phaseAudio, 'finishDive').mockImplementation(() => calls.push('finishAudio'));
+  const cancelDive = vi.spyOn(phaseAudio, 'cancelDive');
   const deny = vi.spyOn(phaseAudio, 'deny');
   return {
     phase,
@@ -568,6 +578,7 @@ function createDiveRig(options: {
     world,
     ui,
     deny,
+    cancelDive,
     impact: () => impact(),
     steps: { sequence, fadeOut, coveredScene, coveredHold, fadeIn, resultHold },
   };
@@ -590,7 +601,12 @@ describe('SurvivalPhase orchestration', () => {
 
     rig.steps.fadeOut.resolve();
     await flushPromises();
-    expect(rig.calls.slice(-3)).toEqual(['clearDive', 'finishAudio', 'renderCovered']);
+    expect(rig.calls.slice(-4)).toEqual([
+      'clearDive',
+      'finishAudio',
+      'renderCovered',
+      'holdCovered',
+    ]);
 
     rig.steps.coveredScene.resolve();
     await flushPromises();
@@ -705,6 +721,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.ui.showDiveResult).not.toHaveBeenCalled();
     expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
     expect(rig.ui.showEnding).not.toHaveBeenCalled();
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
   });
 
   it('waits for visibility before continuing a settled dive sequence', async () => {
@@ -723,6 +740,7 @@ describe('SurvivalPhase orchestration', () => {
 
     fakeDocument.hidden = true;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
     rig.steps.sequence.resolve();
     await flushPromises();
     expect(rig.ui.setSleepCoverProfile).not.toHaveBeenCalledWith('dive');
@@ -731,6 +749,17 @@ describe('SurvivalPhase orchestration', () => {
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(rig.ui.setSleepCoverProfile).toHaveBeenCalledWith('dive');
+    rig.phase.dispose();
+  });
+
+  it('cancels dive audio when restart cancels the lifecycle', () => {
+    const rig = createDiveRig();
+    rig.phase.handleAction('dive');
+    rig.impact();
+
+    rig.phase.requestRestart();
+
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
     rig.phase.dispose();
   });
 

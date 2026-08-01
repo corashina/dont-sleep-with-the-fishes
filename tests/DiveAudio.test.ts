@@ -38,4 +38,17 @@ describe('DiveAudio', () => {
     expect(scope.stopLoop).toHaveBeenCalledWith('underwaterMovement', 0.2);
     expect(scope.play).toHaveBeenCalledWith('diveSurface');
   });
+
+  it('cancels underwater sound without playing the surface cue', () => {
+    const scope = createScope();
+    const audio = new SurvivalAudio(scope);
+
+    audio.beginDive();
+    audio.cancelDive();
+    audio.cancelDive();
+
+    expect(scope.stopLoop).toHaveBeenCalledOnce();
+    expect(scope.stopLoop).toHaveBeenCalledWith('underwaterMovement', 0.2);
+    expect(scope.play).not.toHaveBeenCalledWith('diveSurface');
+  });
 });

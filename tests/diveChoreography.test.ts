@@ -14,6 +14,8 @@ describe('dive choreography', () => {
 
   it('moves right before it raises and settles the goggles', () => {
     const pose = createDivePose();
+    sampleDivePose(0.275, pose);
+    expect(pose.cameraX).toBeCloseTo(0.78 * 0.103515625);
     sampleDivePose(1.1, pose);
     expect(pose.cameraX).toBeGreaterThan(0.6);
     expect(pose.goggleLift).toBe(0);
@@ -30,6 +32,23 @@ describe('dive choreography', () => {
     sampleDivePose(DIVE_IMPACT_SECONDS, pose);
     expect(pose.submerged).toBe(true);
     expect(pose.cameraPitch).toBeLessThan(-2.4);
+  });
+
+  it('keys a roll anticipation before travel and a restrained impact jolt', () => {
+    const pose = createDivePose();
+    sampleDivePose(2.1, pose);
+    expect(pose.cameraPitch).toBeCloseTo(0);
+    expect(pose.cameraRoll).toBeLessThan(-0.01);
+
+    sampleDivePose(DIVE_IMPACT_SECONDS, pose);
+    const impactRoll = pose.cameraRoll;
+    expect(impactRoll).toBeGreaterThan(0.08);
+    expect(impactRoll).toBeLessThan(0.1);
+    sampleDivePose(4, pose);
+    expect(pose.cameraRoll).toBeLessThan(impactRoll);
+    const settledRoll = pose.cameraRoll;
+    sampleDivePose(DIVE_ENTRY_DURATION_SECONDS, pose);
+    expect(pose.cameraRoll).toBeCloseTo(settledRoll);
   });
 
   it('holds a full underwater view with strong bubbles', () => {

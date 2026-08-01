@@ -139,9 +139,14 @@ export class SurvivalAudio {
 
   finishDive(): void {
     if (this.disposed || !this.diveActive) return;
+    this.cancelDive();
+    this.scope.play('diveSurface');
+  }
+
+  cancelDive(): void {
+    if (this.disposed || !this.diveActive) return;
     this.diveActive = false;
     this.scope.stopLoop('underwaterMovement', 0.2);
-    this.scope.play('diveSurface');
   }
 
   fishingCast(): void {
@@ -266,6 +271,7 @@ export class SurvivalAudio {
   dispose(): void {
     if (this.disposed) return;
     this.clearEvent();
+    this.cancelDive();
     this.disposed = true;
     this.scope.dispose();
   }
