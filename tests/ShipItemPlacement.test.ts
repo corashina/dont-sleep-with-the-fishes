@@ -27,6 +27,8 @@ function surface(
     furnitureId: `fixture-${id}`,
     furnitureModelId: 'table',
     categories,
+    regionId: 'centralCargo',
+    branch: false,
     position: new Vector3(x, 3, 0),
     rotation: new Euler(),
     footprint: { width: 2.1, depth: 2.1 },
@@ -155,6 +157,12 @@ describe('ship item placement', () => {
     })])).toThrow(/ownerless.*owner/i);
     expect(() => assignShipItems([], [surface('unsupported', ['alien' as never], 0)]))
       .toThrow(/unsupported.*categor/i);
+    expect(() => assignShipItems([], [surface('unknown-region', ['workshop'], 0, {
+      regionId: 'belowDeck' as never,
+    })])).toThrow(/unknown-region.*unknown.*region/i);
+    expect(() => validateShipItemSurfaces([surface('deck-level-end', ['workshop'], 0, {
+      regionId: 'bow',
+    })])).toThrow(/deck-level-end.*bow.*furniture owner/i);
     expect(() => assignShipItems([], [surface('zero-width', ['workshop'], 0, {
       footprint: { width: 0, depth: 1 },
     })])).toThrow(/zero-width.*positive/i);
