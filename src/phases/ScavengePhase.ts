@@ -1,4 +1,10 @@
-import { Box3, Scene, Vector3 } from 'three';
+import {
+  Box3,
+  Scene,
+  Vector3,
+  type BufferGeometry,
+  type Material,
+} from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
 import { pointerLockTransition } from '../game/GameLoop';
 import {
@@ -29,6 +35,10 @@ import {
   type ContextAction,
 } from '../interaction/InteractionSystem';
 import { PlayerController } from '../player/PlayerController';
+import {
+  ScavengeHands,
+  type ScavengeHandModelFactory,
+} from '../player/ScavengeHands';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
 import { projectScreenBounds } from '../rendering/projectScreenBounds';
 import {
@@ -39,6 +49,10 @@ import {
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { World } from '../world/World';
+import {
+  collectMeshResources,
+  disposeMeshResources,
+} from '../world/SceneResources';
 import { commitBoatDeposit } from './scavengeDeposit';
 import { ScavengeAudio } from '../audio/ScavengeAudio';
 import type { PlayerMotionSample } from '../player/PlayerController';
@@ -47,12 +61,37 @@ export const TITLE_CAMERA_POSITION = [33, 11.5, -4] as const;
 export const TITLE_CAMERA_TARGET = [0, 5.5, 2] as const;
 const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
 
+function createScavengeHandModelFactory(
+  propModels: PhaseContext['propModels'],
+): ScavengeHandModelFactory {
+  return {
+    create(id) {
+      const presentation = propModels.createEventModel(id);
+      if (presentation === null) throw new Error(`Missing event model: ${id}`);
+      const geometries = new Set<BufferGeometry>();
+      const materials = new Set<Material>();
+      collectMeshResources(presentation.root, geometries, materials);
+      let disposed = false;
+      return {
+        root: presentation.root,
+        dispose(): void {
+          if (disposed) return;
+          disposed = true;
+          presentation.root.removeFromParent();
+          disposeMeshResources(geometries, materials);
+        },
+      };
+    },
+  };
+}
+
 export class ScavengePhase implements GamePhase {
   private readonly scene = new Scene();
   private readonly session: ScavengeSession;
   private readonly world: World;
   private readonly input: InputController;
   private readonly player: PlayerController;
+  private readonly hands: ScavengeHands;
   private readonly interaction: InteractionSystem;
   private readonly carry: CarryController;
   private readonly ui: GameUI;
@@ -119,6 +158,10 @@ export class ScavengePhase implements GamePhase {
       () => this.session.penalize(5),
       this.world.arcColliders,
       this.world.climbZones,
+    );
+    this.hands = new ScavengeHands(
+      context.camera,
+      createScavengeHandModelFactory(context.propModels),
     );
     this.interaction = new InteractionSystem(context.camera, {
       root: this.world.ship,
@@ -223,6 +266,7 @@ export class ScavengePhase implements GamePhase {
     );
     if (failureStarted) {
       this.endingStarted = true;
+      this.hands.hideAndReset();
       this.audio.sink();
       this.world.attachPhysicsBarrelsToShip();
       if (this.input.pointerLocked) document.exitPointerLock();
@@ -264,6 +308,18 @@ export class ScavengePhase implements GamePhase {
       simulatePhysics,
     );
     if (simulatePhysics) this.player.placeCamera();
+    const handsVisible = this.ending.stage === 'playing'
+      && next.status === 'running'
+      && this.input.pointerLocked
+      && !this.overlayActive
+      && !document.hidden;
+    this.hands.update(
+      deltaSeconds,
+      motion?.movedDistance ?? 0,
+      motion?.grounded ?? false,
+      this.input.sprinting,
+      handsVisible,
+    );
     this.ui.render(next);
     const stillActive = this.ending.stage === 'playing'
       && next.status === 'running'
@@ -295,6 +351,7 @@ export class ScavengePhase implements GamePhase {
   setOverlayActive(active: boolean): void {
     if (this.disposed || this.overlayActive === active) return;
     this.overlayActive = active;
+    if (active) this.hands.hideAndReset();
     this.audio.setPaused(active);
     if (
       !active
@@ -347,6 +404,7 @@ export class ScavengePhase implements GamePhase {
     this.audio.dispose();
     this.input.dispose();
     this.interaction.dispose();
+    this.hands.dispose();
     this.world.dispose();
     this.ui.dispose();
   }
@@ -417,16 +475,19 @@ export class ScavengePhase implements GamePhase {
       if (object && this.session.pickUp(action.item.instanceId)) {
         this.world.showItemPickupSmoke(action.item.instanceId);
         this.carry.pickUp(action.item, object);
+        this.hands.playGesture('pickup');
         this.audio.itemHandled();
       }
     } else if (action.type === 'depositBundle') {
       if (commitBoatDeposit(this.session, this.carry, this.world)) {
+        this.hands.playGesture('boat-deposit');
         this.audio.itemHandled();
       }
     } else if (action.type === 'drop') {
       const released = this.carry.releaseActive();
       if (!released || !this.session.dropCarried()) return;
       this.world.dropItem(released.instanceId, action.point);
+      this.hands.playGesture('ground-drop');
       this.audio.itemHandled();
     } else if (action.type === 'evacuate') {
       this.session.evacuate();
@@ -484,6 +545,7 @@ export class ScavengePhase implements GamePhase {
       this.escapeResumeArmed = false;
       this.session.pause();
       this.ui.setPaused(true);
+      this.hands.hideAndReset();
       this.audio.setPaused(true);
     }
   }
@@ -498,13 +560,18 @@ export class ScavengePhase implements GamePhase {
     this.handlePointerLockChange(this.input.pointerLocked);
   };
 
-  private readonly onVisibilityChange = (): void => {
+  private handleVisibilityChange(): void {
     if (document.hidden && this.session.snapshot().status === 'running') {
       this.session.pause();
       this.ui.setPaused(true);
+      this.hands.hideAndReset();
       this.audio.setPaused(true);
       if (document.pointerLockElement) document.exitPointerLock();
     }
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    this.handleVisibilityChange();
   };
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -546,6 +613,7 @@ export class ScavengePhase implements GamePhase {
     ) {
       this.session.pause();
       this.ui.setPaused(true);
+      this.hands.hideAndReset();
       this.audio.setPaused(true);
     }
   }

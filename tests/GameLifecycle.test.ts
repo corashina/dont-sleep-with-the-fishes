@@ -26,6 +26,7 @@ import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
+import type { ContextAction } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import {
   ScavengePhase,
@@ -101,6 +102,15 @@ function scavengeAudioStub(): ScavengeAudio {
   } as unknown as ScavengeAudio;
 }
 
+function scavengeHandsStub() {
+  return {
+    update: vi.fn(),
+    playGesture: vi.fn(),
+    hideAndReset: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
 function postProcessingSceneRenderer(): SceneRenderer {
   const postProcessingControls: PostProcessingControls = {
     getState: vi.fn(() => ({
@@ -122,15 +132,21 @@ function postProcessingSceneRenderer(): SceneRenderer {
 
 function createUpdateHarness(
   session: ScavengeSession,
-  input = { pointerLocked: true, consumeLook: vi.fn() },
+  input = { pointerLocked: true, consumeLook: vi.fn(), sprinting: false },
 ): {
   phase: ScavengePhase;
-  input: { pointerLocked: boolean; consumeLook: ReturnType<typeof vi.fn> };
+  input: {
+    pointerLocked: boolean;
+    consumeLook: ReturnType<typeof vi.fn>;
+    sprinting: boolean;
+  };
+  hands: ReturnType<typeof scavengeHandsStub>;
   updateWorld: ReturnType<typeof vi.fn>;
   attachPhysicsBarrelsToShip: ReturnType<typeof vi.fn>;
 } {
   const updateWorld = vi.fn();
   const attachPhysicsBarrelsToShip = vi.fn();
+  const hands = scavengeHandsStub();
   const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
   Object.assign(phase, {
     disposed: false,
@@ -140,6 +156,7 @@ function createUpdateHarness(
     audio: scavengeAudioStub(),
     session,
     input,
+    hands,
     world: {
       update: updateWorld,
       attachPhysicsBarrelsToShip,
@@ -173,7 +190,7 @@ function createUpdateHarness(
     updateInteraction: vi.fn(),
     updateFlight: vi.fn(),
   });
-  return { phase, input, updateWorld, attachPhysicsBarrelsToShip };
+  return { phase, input, hands, updateWorld, attachPhysicsBarrelsToShip };
 }
 
 describe('ScavengePhase lifecycle integration', () => {
@@ -282,10 +299,11 @@ describe('ScavengePhase lifecycle integration', () => {
   it('continues simulation without player controls while the AO overlay is open', () => {
     const updateWorld = vi.fn();
     const updatePlayer = vi.fn();
-    const input = { pointerLocked: true, consumeLook: vi.fn() };
+    const input = { pointerLocked: true, consumeLook: vi.fn(), sprinting: false };
     const tick = vi.fn();
     const updatePassivePlayer = vi.fn();
     const updateFlight = vi.fn();
+    const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
@@ -298,6 +316,7 @@ describe('ScavengePhase lifecycle integration', () => {
         tick,
       },
       input,
+      hands,
       world: {
         update: updateWorld,
         evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
@@ -372,7 +391,7 @@ describe('ScavengePhase lifecycle integration', () => {
     session.pause();
     const { phase, updateWorld } = createUpdateHarness(
       session,
-      { pointerLocked: false, consumeLook: vi.fn() },
+      { pointerLocked: false, consumeLook: vi.fn(), sprinting: false },
     );
 
     phase.update(2, 0.25);
@@ -463,6 +482,119 @@ describe('ScavengePhase lifecycle integration', () => {
     phase.update(0.25, 0.25);
 
     expect(order).toEqual(['player', 'world', 'camera']);
+  });
+
+  it('updates visible hands from the player motion after placing the camera', () => {
+    const session = new ScavengeSession();
+    session.start();
+    const { phase, hands, input } = createUpdateHarness(session);
+    input.sprinting = true;
+    const player = (phase as unknown as {
+      player: { update: ReturnType<typeof vi.fn> };
+    }).player;
+    player.update.mockReturnValue({ movedDistance: 0.08, grounded: true, jumped: false });
+
+    phase.update(0.016, 0.016);
+
+    expect(hands.update).toHaveBeenCalledWith(0.016, 0.08, true, true, true);
+  });
+
+  it('hides hands when title, paused, overlay, hidden, or sinking states prevent control', () => {
+    const title = createUpdateHarness(new ScavengeSession());
+    title.phase.update(0.016, 0.016);
+    expect(title.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
+
+    const pausedSession = new ScavengeSession();
+    pausedSession.start();
+    pausedSession.pause();
+    const paused = createUpdateHarness(pausedSession);
+    paused.phase.update(0.016, 0.016);
+    expect(paused.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
+
+    const overlaySession = new ScavengeSession();
+    overlaySession.start();
+    const overlay = createUpdateHarness(overlaySession);
+    overlay.phase.setOverlayActive(true);
+    overlay.phase.update(0.016, 0.016);
+    expect(overlay.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
+
+    const hiddenSession = new ScavengeSession();
+    hiddenSession.start();
+    const hidden = createUpdateHarness(hiddenSession);
+    const documentHidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      hidden.phase.update(0.016, 0.016);
+      expect(hidden.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
+    } finally {
+      documentHidden.mockRestore();
+    }
+
+    const sinkingSession = new ScavengeSession();
+    sinkingSession.start();
+    const sinking = createUpdateHarness(sinkingSession);
+    const player = (sinking.phase as unknown as { player: { localPosition: Vector3 } }).player;
+    player.localPosition.set(0, 0, 0);
+    const exitPointerLock = vi.fn();
+    Object.defineProperty(document, 'exitPointerLock', {
+      configurable: true,
+      value: exitPointerLock,
+    });
+    try {
+      sinking.phase.update(0, SCAVENGE_DURATION_SECONDS);
+      expect(sinking.hands.update).toHaveBeenLastCalledWith(
+        SCAVENGE_DURATION_SECONDS,
+        0,
+        false,
+        false,
+        false,
+      );
+    } finally {
+      delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+    }
+  });
+
+  it('resets hands immediately when control pauses', () => {
+    const overlayHands = scavengeHandsStub();
+    const overlay = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(overlay, {
+      disposed: false,
+      overlayActive: false,
+      hands: overlayHands,
+      audio: scavengeAudioStub(),
+      session: { snapshot: () => ({ status: 'running' }) },
+      input: { pointerLocked: true },
+    });
+    overlay.setOverlayActive(true);
+    expect(overlayHands.hideAndReset).toHaveBeenCalledOnce();
+
+    const hiddenHands = scavengeHandsStub();
+    const hidden = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(hidden, {
+      hands: hiddenHands,
+      audio: scavengeAudioStub(),
+      session: { snapshot: () => ({ status: 'running' }), pause: vi.fn() },
+      ui: { setPaused: vi.fn() },
+    });
+    const documentHidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      (hidden as unknown as { handleVisibilityChange: () => void }).handleVisibilityChange();
+    } finally {
+      documentHidden.mockRestore();
+    }
+    expect(hiddenHands.hideAndReset).toHaveBeenCalledOnce();
+
+    const pausedHands = scavengeHandsStub();
+    const paused = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(paused, {
+      overlayActive: false,
+      hands: pausedHands,
+      audio: scavengeAudioStub(),
+      session: { snapshot: () => ({ status: 'running' }), pause: vi.fn() },
+      ui: { setPaused: vi.fn() },
+    });
+    (paused as unknown as { handlePointerLockChange(locked: boolean): void })
+      .handlePointerLockChange(false);
+    expect(pausedHands.hideAndReset).toHaveBeenCalledOnce();
   });
 
   it('disables physics while the document is hidden', () => {
@@ -1533,10 +1665,12 @@ describe('ScavengePhase lifecycle integration', () => {
     const disposeInteraction = vi.fn();
     const disposeWorld = vi.fn();
     const disposeUI = vi.fn();
+    const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
       audio: scavengeAudioStub(),
+      hands,
       input: { pointerLocked: true, dispose: disposeInput },
       carry: { reset: resetCarry },
       interaction: { dispose: disposeInteraction },
@@ -1555,6 +1689,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(resetCarry).toHaveBeenCalledOnce();
     expect(disposeInput).toHaveBeenCalledOnce();
     expect(disposeInteraction).toHaveBeenCalledOnce();
+    expect(hands.dispose).toHaveBeenCalledOnce();
     expect(disposeWorld).toHaveBeenCalledOnce();
     expect(disposeUI).toHaveBeenCalledOnce();
     expect(removeEventListener).toHaveBeenCalledTimes(4);
@@ -1701,12 +1836,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const releaseActive = vi.fn().mockReturnValue(instance);
     const dropCarried = vi.fn().mockReturnValue(instance);
     const dropItem = vi.fn();
+    const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session: { dropCarried },
       audio: scavengeAudioStub(),
       carry: { releaseActive },
       world: { dropItem },
+      hands,
     });
 
     (phase as unknown as {
@@ -1726,6 +1863,13 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(releaseActive).toHaveBeenCalledOnce();
     expect(dropCarried).toHaveBeenCalledOnce();
     expect(dropItem).toHaveBeenCalledWith(instance.instanceId, point);
+    expect(hands.playGesture).toHaveBeenCalledWith('ground-drop');
+    expect(dropCarried.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+    expect(dropItem.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('handles capacity rejection without mutating gameplay or world state', () => {
@@ -1738,12 +1882,14 @@ describe('ScavengePhase lifecycle integration', () => {
       landItem: vi.fn(),
       loseItem: vi.fn(),
     };
+    const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session,
       carry,
       world,
       audio: scavengeAudioStub(),
+      hands,
     });
 
     (phase as unknown as {
@@ -1765,6 +1911,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(world.saveItems).not.toHaveBeenCalled();
     expect(world.landItem).not.toHaveBeenCalled();
     expect(world.loseItem).not.toHaveBeenCalled();
+    expect(hands.playGesture).not.toHaveBeenCalled();
   });
 
   it('shows item smoke when pickup succeeds', () => {
@@ -1779,12 +1926,14 @@ describe('ScavengePhase lifecycle integration', () => {
       itemObjects: new Map([[instance.instanceId, object]]),
       showItemPickupSmoke: vi.fn(),
     };
+    const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session,
       carry,
       world,
       audio: scavengeAudioStub(),
+      hands,
     });
 
     (phase as unknown as {
@@ -1801,6 +1950,68 @@ describe('ScavengePhase lifecycle integration', () => {
 
     expect(world.showItemPickupSmoke).toHaveBeenCalledWith(instance.instanceId);
     expect(carry.pickUp).toHaveBeenCalledWith(instance, object);
+    expect(hands.playGesture).toHaveBeenCalledWith('pickup');
+    expect(session.pickUp.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+    expect(world.showItemPickupSmoke.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+    expect(carry.pickUp.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('signals boat deposit only after the deposit succeeds', () => {
+    const hands = scavengeHandsStub();
+    const session = { saveCarriedBundle: vi.fn().mockReturnValue([{ instanceId: 'flareGun-1', type: 'flareGun' }]) };
+    const carry = { releaseAll: vi.fn() };
+    const world = { saveItems: vi.fn() };
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      session,
+      carry,
+      world,
+      hands,
+      audio: scavengeAudioStub(),
+    });
+
+    (phase as unknown as {
+      performAction: (action: { type: 'depositBundle'; prompt: string }) => void;
+    }).performAction({ type: 'depositBundle', prompt: 'STORE' });
+
+    expect(hands.playGesture).toHaveBeenCalledWith('boat-deposit');
+    expect(session.saveCarriedBundle.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+    expect(world.saveItems.mock.invocationCallOrder[0]).toBeLessThan(
+      hands.playGesture.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('does not signal gestures when pickup or deposit fails', () => {
+    const instance = { instanceId: 'flashlight-1', type: 'flashlight' } as const;
+    const hands = scavengeHandsStub();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      session: {
+        pickUp: vi.fn().mockReturnValue(false),
+        saveCarriedBundle: vi.fn().mockReturnValue(null),
+      },
+      carry: { releaseAll: vi.fn() },
+      world: { itemObjects: new Map([[instance.instanceId, new Group()]]), saveItems: vi.fn() },
+      hands,
+      audio: scavengeAudioStub(),
+    });
+
+    (phase as unknown as {
+      performAction: (action: ContextAction) => void;
+    }).performAction({ type: 'pickUp', item: instance, prompt: 'PICK UP' });
+    (phase as unknown as {
+      performAction: (action: ContextAction) => void;
+    }).performAction({ type: 'depositBundle', prompt: 'STORE' });
+
+    expect(hands.playGesture).not.toHaveBeenCalled();
   });
 
   it('reports pointer-lock rejection through the UI', async () => {
