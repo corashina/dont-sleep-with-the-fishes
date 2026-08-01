@@ -164,6 +164,47 @@ describe('PlayerController', () => {
     expect(sprinting.localPosition.z).toBeCloseTo(6.2);
   });
 
+  it.each([
+    [1, 3.8],
+    [0.92, 3.8 * 0.92],
+    [0.84, 3.8 * 0.84],
+  ])('applies planar speed multiplier %s', (multiplier, expectedDistance) => {
+    const input = new TestInput();
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.72, 0),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+    );
+    input.movement = { x: 0, z: -1 };
+
+    const sample = controller.update(1, input.asControllerInput(), multiplier);
+
+    expect(sample.movedDistance).toBeCloseTo(expectedDistance);
+  });
+
+  it('keeps jump height equal across speed multipliers', () => {
+    const fullSpeedInput = new TestInput();
+    const carriedInput = new TestInput();
+    const fullSpeed = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.72, 0), [],
+      TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    const carried = new PlayerController(
+      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.72, 0), [],
+      TEST_NAVIGATION_BOUNDS, vi.fn(),
+    );
+    fullSpeedInput.queueJump();
+    carriedInput.queueJump();
+
+    fullSpeed.update(0.1, fullSpeedInput.asControllerInput(), 1);
+    carried.update(0.1, carriedInput.asControllerInput(), 0.84);
+
+    expect(carried.localPosition.y).toBeCloseTo(fullSpeed.localPosition.y);
+  });
+
   it('automatically climbs and keeps the balcony as its active floor', () => {
     const input = new TestInput();
     const zone = testLadderZone();
