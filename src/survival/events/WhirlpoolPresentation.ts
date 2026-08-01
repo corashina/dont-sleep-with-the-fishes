@@ -8,14 +8,17 @@ import {
   MeshStandardMaterial,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import type { WaveSample } from '../../ocean/WaveField';
+import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
-import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
+import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
+import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
+import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
+  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -32,43 +35,10 @@ import {
   type WhirlpoolSample,
 } from './whirlpoolChoreography';
 
-type ActiveWhirlpoolAnimation =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | {
-      readonly kind: 'item';
-      readonly choiceId: string;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    }
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
-
 interface SpiralStreamActor {
   readonly mesh: Mesh;
   readonly phase: number;
   readonly speed: number;
-}
-
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
 }
 
 const STREAM_COUNT = 6;
@@ -90,15 +60,6 @@ const IDENTITY_ITEM_POSE: MutableSupplyPose = {
   scaleY: 1,
   scaleZ: 1,
 };
-
-function waveSample(): WaveSample {
-  return {
-    height: 0,
-    displacementX: 0,
-    displacementZ: 0,
-    normal: { x: 0, y: 1, z: 0 },
-  };
-}
 
 function createSpiralStreamGeometry(): BufferGeometry {
   const segmentCount = 48;
@@ -174,7 +135,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     { ...IDENTITY_ITEM_POSE },
   ];
   private readonly lostActors: Array<BorrowedSupplyActor | null> = [null, null];
-  private active: ActiveWhirlpoolAnimation | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private itemActor: BorrowedSupplyActor | null = null;
   private lastChoiceId = '';
   private staged = false;
@@ -350,7 +311,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     const itemActor = this.itemActor;
     this.active = null;
     this.itemActor = null;
-    this.resolveCancelled(active);
+    resolveCancelledEventAnimation(active);
     runCleanupSteps([
       () => itemActor?.release(),
       () => this.releaseLostActors(false),
@@ -364,18 +325,14 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   }
 
   private borrowItemActor(instanceId: ItemInstanceId): boolean {
-    if (this.itemActor?.instanceId === instanceId) return true;
-    this.releaseItemActor();
-    const actor = this.environment.supplies.borrowEventActor(instanceId);
-    if (actor === null) return false;
-    this.itemActor = actor;
-    return true;
+    this.itemActor = borrowSupplyActor(
+      this.itemActor, this.environment.supplies, instanceId,
+    );
+    return this.itemActor !== null;
   }
 
   private releaseItemActor(): void {
-    const actor = this.itemActor;
-    this.itemActor = null;
-    actor?.release();
+    this.itemActor = releaseSupplyActor(this.itemActor);
   }
 
   private releaseLostActors(onNextSync: boolean): void {
@@ -405,12 +362,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    this.resolveCancelled(active);
-  }
-
-  private resolveCancelled(active: ActiveWhirlpoolAnimation | null): void {
-    if (active?.kind === 'item') active.resolve(false);
-    else active?.resolve();
+    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {

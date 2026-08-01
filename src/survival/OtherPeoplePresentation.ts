@@ -1,5 +1,4 @@
 import {
-  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -17,10 +16,21 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
+import { addTransformedMesh as addMesh } from '../rendering/addTransformedMesh';
+import {
+  disposeRejectedModel,
+  hasRenderableBounds,
+} from '../rendering/modelPresentation';
 import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import {
+  clamp01Unchecked as clamp01,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,
@@ -40,26 +50,7 @@ type OtherPeopleAnimationKind =
   | 'result-missed'
   | 'result-pass';
 
-interface ActiveAnimation {
-  readonly kind: OtherPeopleAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
-
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-}
-
-type VectorTuple = readonly [number, number, number];
+type ActiveAnimation = TimedAnimation<OtherPeopleAnimationKind>;
 
 const REVEAL_DURATION = 3.4;
 const FLARE_DURATION = 1.25;
@@ -85,15 +76,6 @@ const RED_WASH_TARGETS = Object.freeze([
   'lifeboat',
   'container-ship',
 ]);
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
 
 function keyedTravel(progress: number): number {
   const clamped = clamp01(progress);
@@ -129,49 +111,6 @@ function createMaterial(
     depthWrite: options.depthWrite ?? true,
     flatShading: true,
   });
-}
-
-function addMesh(
-  parent: Group,
-  name: string,
-  geometry: BufferGeometry,
-  material: Material,
-  position: VectorTuple = [0, 0, 0],
-  rotation: VectorTuple = [0, 0, 0],
-  scale: VectorTuple = [1, 1, 1],
-): Mesh {
-  const mesh = new Mesh(geometry, material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.scale.set(...scale);
-  parent.add(mesh);
-  return mesh;
-}
-
-function hasRenderableBounds(root: Object3D): boolean {
-  try {
-    let hasMesh = false;
-    root.traverse((object) => {
-      if (object instanceof Mesh) hasMesh = true;
-    });
-    if (!hasMesh) return false;
-    const bounds = new Box3().setFromObject(root);
-    const size = bounds.getSize(new Vector3());
-    return !bounds.isEmpty()
-      && [size.x, size.y, size.z].every(Number.isFinite)
-      && Math.max(size.x, size.y, size.z) > 0;
-  } catch {
-    return false;
-  }
-}
-
-function disposeRejectedModel(root: Group): void {
-  const geometries = new Set<BufferGeometry>();
-  const materials = new Set<Material>();
-  collectMeshResources(root, geometries, materials);
-  disposeResourceSets(geometries, materials);
-  root.clear();
 }
 
 export class OtherPeoplePresentation implements FocusedEventPresentation {

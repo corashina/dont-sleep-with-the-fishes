@@ -1,3 +1,5 @@
+import { browserStorage } from '../browser/storage';
+
 export type PhysicsMode = 'enabled' | 'debug' | 'off';
 
 export const SCAVENGE_PHYSICS_ENABLED = true;
@@ -9,15 +11,6 @@ export const SCAVENGE_PHYSICS_DEBUG_STORAGE_KEY =
 
 type PhysicsPreferenceReader = Pick<Storage, 'getItem'>;
 type PhysicsPreferenceWriter = Pick<Storage, 'setItem'>;
-
-function browserStorage(): Storage | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
 
 export function scavengePhysicsEnabled(
   storage: PhysicsPreferenceReader | null = browserStorage(),

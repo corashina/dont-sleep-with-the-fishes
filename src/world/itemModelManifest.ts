@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
-import { Box3, Euler, Matrix4, Vector3 } from 'three';
 import generatedMetadataJson from '../assets/models/items/item-model-metadata.json';
 import { ITEM_IDS, type ItemId } from '../game/ItemState';
+import { normalizeGeneratedBounds } from './modelNormalization';
 
 export interface GeneratedRuntimeModelMetadata {
   readonly triangles: number;
@@ -73,36 +73,15 @@ const generatedMetadata = generatedMetadataJson as unknown as Readonly<
 const modelTriangleLimits: Readonly<Partial<Record<ItemId, number>>> = Object.freeze({
   fishingNet: 9_000,
 });
-const BOUNDS_EPSILON = 1e-9;
-
 function generatedNormalization(id: string, authored: RuntimeModelPresentation) {
   const metadata = generatedMetadata[id];
   if (metadata === undefined) throw new Error(`Missing generated model metadata: ${id}`);
-  const raw = new Box3(
-    new Vector3(...metadata.rawBounds.min),
-    new Vector3(...metadata.rawBounds.max),
+  return normalizeGeneratedBounds(
+    metadata.rawBounds,
+    authored.rotation,
+    authored.targetLongestDimension,
+    authored.offset,
   );
-  const corners = [
-    new Vector3(raw.min.x, raw.min.y, raw.min.z), new Vector3(raw.min.x, raw.min.y, raw.max.z),
-    new Vector3(raw.min.x, raw.max.y, raw.min.z), new Vector3(raw.min.x, raw.max.y, raw.max.z),
-    new Vector3(raw.max.x, raw.min.y, raw.min.z), new Vector3(raw.max.x, raw.min.y, raw.max.z),
-    new Vector3(raw.max.x, raw.max.y, raw.min.z), new Vector3(raw.max.x, raw.max.y, raw.max.z),
-  ];
-  const rotation = new Matrix4().makeRotationFromEuler(new Euler(...authored.rotation));
-  const rotated = new Box3().setFromPoints(corners.map((point) => point.applyMatrix4(rotation)));
-  const size = rotated.getSize(new Vector3());
-  const scale = authored.targetLongestDimension / Math.max(size.x, size.y, size.z);
-  const normalizedSize = size.multiplyScalar(scale);
-  const halfSize = normalizedSize.multiplyScalar(0.5);
-  return {
-    normalizedSize: halfSize.clone().multiplyScalar(2).toArray() as [number, number, number],
-    normalizedBounds: {
-      min: halfSize.clone().multiplyScalar(-1).add(new Vector3(...authored.offset))
-        .addScalar(-BOUNDS_EPSILON).toArray() as [number, number, number],
-      max: halfSize.clone().add(new Vector3(...authored.offset))
-        .addScalar(BOUNDS_EPSILON).toArray() as [number, number, number],
-    },
-  } as const;
 }
 
 export function createRuntimeModelSpec(

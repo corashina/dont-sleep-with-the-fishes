@@ -22,9 +22,21 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import {
+  collectOwnedSkeletons,
+  disposeRejectedModel as disposeModel,
+  disposeSkeletons,
+  hasRenderableBounds,
+} from '../rendering/modelPresentation';
+import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import {
+  clamp01Unchecked as clamp01,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type {
   EventChoicePresentation,
   FocusedEventInteractionTarget,
@@ -45,29 +57,12 @@ type HandymanAnimationKind =
   | 'result-touch'
   | 'result-sleep';
 
-interface ActiveAnimation {
-  readonly kind: HandymanAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+type ActiveAnimation = TimedAnimation<HandymanAnimationKind>;
 
 interface FingerJoint {
   readonly object: Object3D;
   readonly baseQuaternion: Quaternion;
   readonly bend: number;
-}
-
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
 }
 
 const REVEAL_DURATION = 1.45;
@@ -116,15 +111,6 @@ const IMPORTED_FINGER_NAMES = [
   ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
 ] as const;
 
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
-
 function keyedTravel(progress: number): number {
   if (progress < 0.14) return -0.035 * smoothstep(progress / 0.14);
   if (progress < 0.82) {
@@ -146,46 +132,8 @@ function createMaterial(
   });
 }
 
-function hasRenderableBounds(root: Object3D): boolean {
-  try {
-    let hasMesh = false;
-    root.traverse((object) => {
-      if (object instanceof Mesh) hasMesh = true;
-    });
-    if (!hasMesh) return false;
-    const box = new Box3().setFromObject(root);
-    const size = box.getSize(new Vector3());
-    return !box.isEmpty()
-      && [size.x, size.y, size.z].every(Number.isFinite)
-      && Math.max(size.x, size.y, size.z) > 0;
-  } catch {
-    return false;
-  }
-}
-
-function collectOwnedSkeletons(
-  root: Object3D,
-  skeletons: Set<Skeleton>,
-): void {
-  root.traverse((object) => {
-    if (object instanceof SkinnedMesh) skeletons.add(object.skeleton);
-  });
-}
-
-function disposeSkeletons(skeletons: Set<Skeleton>): void {
-  for (const skeleton of skeletons) skeleton.dispose();
-  skeletons.clear();
-}
-
 function disposeRejectedModel(root: Group): void {
-  const geometries = new Set<BufferGeometry>();
-  const materials = new Set<Material>();
-  const skeletons = new Set<Skeleton>();
-  collectMeshResources(root, geometries, materials);
-  collectOwnedSkeletons(root, skeletons);
-  disposeSkeletons(skeletons);
-  disposeResourceSets(geometries, materials);
-  root.clear();
+  disposeModel(root, true);
 }
 
 function isDescendantOf(node: Object3D, ancestor: Object3D): boolean {

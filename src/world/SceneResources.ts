@@ -69,3 +69,11 @@ export function runCleanupSteps(steps: Iterable<() => void>): void {
   }
   if (failed) throw firstError;
 }
+
+export function ignoreCleanupError(action: () => void): void {
+  try {
+    action();
+  } catch {
+    // Rollback preserves the primary error.
+  }
+}

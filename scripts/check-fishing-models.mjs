@@ -8,6 +8,7 @@ import {
   POLY_PIZZA_FISHING_MODEL_IDS,
   POLY_PIZZA_FISHING_MODEL_SOURCES,
 } from './poly-pizza-fishing-models.mjs';
+import { parseModelCheckArguments } from './model-check-arguments.mjs';
 
 const MODEL_LIMIT = 2_000;
 const LIBRARY_LIMIT = 10_000;
@@ -74,29 +75,11 @@ function verifyLedgerRow(ledger, modelId, measurement) {
   }
 }
 
-function parseArguments(args) {
-  let assetsOnly = false;
-  let modelsDir = resolve('src', 'assets', 'models', 'fishing');
-  let ledgerPath = resolve('src', 'assets', 'ATTRIBUTION.md');
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--assets-only') {
-      assetsOnly = true;
-    } else if (argument === '--models-dir' || argument === '--ledger-path') {
-      const value = args[index + 1];
-      if (!value || value.startsWith('--')) throw new Error(`${argument} requires a path`);
-      if (argument === '--models-dir') modelsDir = resolve(value);
-      else ledgerPath = resolve(value);
-      index += 1;
-    } else {
-      throw new Error(`unknown argument: ${argument}`);
-    }
-  }
-  return { assetsOnly, ledgerPath, modelsDir };
-}
-
 async function main() {
-  const { assetsOnly, ledgerPath, modelsDir } = parseArguments(process.argv.slice(2));
+  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
+    process.argv.slice(2),
+    ['src', 'assets', 'models', 'fishing'],
+  );
   const errors = [];
   const measurements = {};
   let total = 0;

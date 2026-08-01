@@ -34,7 +34,10 @@ import {
 import {
   collectMeshResources,
   disposeResourceSets,
+  ignoreCleanupError as attemptCleanup,
 } from './SceneResources';
+import { normalizeLongestDimensionTemplate } from './modelValidation';
+export { geometryTriangles } from './modelValidation';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import {
   CAPTAIN_WHISKERS_IDLE_CLIP,
@@ -95,11 +98,6 @@ class GltfItemModelLoader implements ItemModelLoader {
   }
 }
 
-export function geometryTriangles(geometry: BufferGeometry): number {
-  const count = geometry.index?.count ?? geometry.getAttribute('position')?.count ?? 0;
-  return count / 3;
-}
-
 function disposeRoots(roots: Iterable<Group>): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
@@ -115,14 +113,6 @@ function disposeRoots(roots: Iterable<Group>): void {
   });
 
   disposeResourceSets(geometries, textures, materials);
-}
-
-function attemptCleanup(action: () => void): void {
-  try {
-    action();
-  } catch {
-    // Load rollback preserves the primary load or validation error.
-  }
 }
 
 function validateSpec(id: ModelId, spec: RuntimeModelSpec | undefined): RuntimeModelSpec {
@@ -146,88 +136,12 @@ function validateSpec(id: ModelId, spec: RuntimeModelSpec | undefined): RuntimeM
   return spec;
 }
 
-function validateGeometry(id: ModelId, geometry: BufferGeometry): number {
-  const position = geometry.getAttribute('position');
-  if (!position || position.count === 0) {
-    throw modelValidationError(id, 'mesh has missing or empty position data');
-  }
-
-  for (let index = 0; index < position.count; index += 1) {
-    if (![position.getX(index), position.getY(index), position.getZ(index)].every(Number.isFinite)) {
-      throw modelValidationError(id, 'mesh contains non-finite position data');
-    }
-  }
-
-  const elementCount = geometry.index?.count ?? position.count;
-  if (elementCount % 3 !== 0) {
-    throw modelValidationError(id, 'mesh element count does not describe complete triangles');
-  }
-
-  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
-
-  return geometryTriangles(geometry);
-}
-
-function finiteBox(box: Box3): boolean {
-  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
-}
-
 function normalizeTemplate(id: ModelId, root: Group, spec: RuntimeModelSpec): number {
-  root.rotation.set(...spec.rotation);
-  root.updateMatrixWorld(true);
-
-  let meshCount = 0;
-  let triangles = 0;
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    meshCount += 1;
-    triangles += validateGeometry(id, object.geometry);
-    object.castShadow = true;
-    object.receiveShadow = true;
-  });
-
-  if (meshCount === 0) throw modelValidationError(id, 'scene contains no meshes');
-  if (triangles > spec.maxTriangles) {
-    throw modelValidationError(
-      id,
-      `triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`,
-    );
-  }
-
-  const box = new Box3().setFromObject(root);
-  if (box.isEmpty() || !finiteBox(box)) {
-    throw modelValidationError(id, 'scene has empty or non-finite bounds');
-  }
-  const size = box.getSize(new Vector3());
-  const longestSide = Math.max(size.x, size.y, size.z);
-  if (!Number.isFinite(longestSide) || longestSide <= 0) {
-    throw modelValidationError(id, 'scene has zero-length bounds');
-  }
-
-  root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
-  root.updateMatrixWorld(true);
-
-  const scaledBox = new Box3().setFromObject(root);
-  if (scaledBox.isEmpty() || !finiteBox(scaledBox)) {
-    throw modelValidationError(id, 'normalized scene has empty or non-finite bounds');
-  }
-  const center = scaledBox.getCenter(new Vector3());
-  root.position.add(new Vector3(...spec.offset).sub(center));
-  root.updateMatrixWorld(true);
-
-  const finalBox = new Box3().setFromObject(root);
-  const finalSize = finalBox.getSize(new Vector3());
-  const finalLongestSide = Math.max(finalSize.x, finalSize.y, finalSize.z);
-  if (
-    finalBox.isEmpty()
-    || !finiteBox(finalBox)
-    || !Number.isFinite(finalLongestSide)
-    || finalLongestSide <= 0
-  ) {
-    throw modelValidationError(id, 'normalized scene has invalid bounds');
-  }
-
-  return triangles;
+  return normalizeLongestDimensionTemplate(
+    root,
+    spec,
+    (message) => modelValidationError(id, message),
+  );
 }
 
 function cloneOwnedTemplate(template: Group): Group {

@@ -18,7 +18,12 @@ import {
   type EventModelId,
   type EventModelSpec,
 } from './eventModelManifest';
-import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  ignoreCleanupError as attemptCleanup,
+} from '../world/SceneResources';
+import { normalizeLongestDimensionTemplate } from '../world/modelValidation';
 
 export interface EventModelLoader {
   load(url: string): Promise<Group>;
@@ -117,18 +122,6 @@ function disposeOwnedEventRoot(root: Group, textures: Set<Texture>): void {
   disposeResourceSets(geometries, textures, materials, collectSkeletons(root));
 }
 
-function attemptCleanup(action: () => void): void {
-  try {
-    action();
-  } catch {
-    // Rollback preserves the primary load or validation error.
-  }
-}
-
-function finiteBox(box: Box3): boolean {
-  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
-}
-
 function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): EventModelSpec {
   if (!spec) throw new EventModelLoadError(id, 'manifest entry is missing');
   const metadata = spec.generatedMetadata;
@@ -157,76 +150,13 @@ function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): Event
   return spec;
 }
 
-function geometryTriangles(id: EventModelId, geometry: BufferGeometry): number {
-  const position = geometry.getAttribute('position');
-  if (!position || position.count === 0) {
-    throw new EventModelLoadError(id, 'mesh has missing or empty position data');
-  }
-  for (let index = 0; index < position.count; index += 1) {
-    if (![position.getX(index), position.getY(index), position.getZ(index)].every(Number.isFinite)) {
-      throw new EventModelLoadError(id, 'mesh contains non-finite position data');
-    }
-  }
-  const elementCount = geometry.index?.count ?? position.count;
-  if (elementCount % 3 !== 0) {
-    throw new EventModelLoadError(id, 'mesh element count does not describe complete triangles');
-  }
-  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
-  return elementCount / 3;
-}
-
 function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec): number {
-  root.rotation.set(...spec.rotation);
-  root.updateMatrixWorld(true);
-  let meshCount = 0;
-  let triangles = 0;
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    meshCount += 1;
-    triangles += geometryTriangles(id, object.geometry);
-    object.castShadow = true;
-    object.receiveShadow = true;
-  });
-  if (meshCount === 0) throw new EventModelLoadError(id, 'scene contains no meshes');
-  if (triangles > spec.maxTriangles) {
-    throw new EventModelLoadError(
-      id,
-      `triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`,
-    );
-  }
-
-  const sourceBounds = new Box3().setFromObject(root);
-  if (sourceBounds.isEmpty() || !finiteBox(sourceBounds)) {
-    throw new EventModelLoadError(id, 'scene has empty or non-finite bounds');
-  }
-  const sourceSize = sourceBounds.getSize(new Vector3());
-  const longestSide = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
-  if (!Number.isFinite(longestSide) || longestSide <= 0) {
-    throw new EventModelLoadError(id, 'scene has zero-length bounds');
-  }
-
-  root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
-  root.updateMatrixWorld(true);
-  const scaledBounds = new Box3().setFromObject(root);
-  if (scaledBounds.isEmpty() || !finiteBox(scaledBounds)) {
-    throw new EventModelLoadError(id, 'normalized scene has empty or non-finite bounds');
-  }
-  const center = scaledBounds.getCenter(new Vector3());
-  root.position.add(new Vector3(...spec.offset).sub(center));
-  root.updateMatrixWorld(true);
-
-  const finalBounds = new Box3().setFromObject(root);
-  const finalSize = finalBounds.getSize(new Vector3());
-  const finalLongestSide = Math.max(finalSize.x, finalSize.y, finalSize.z);
-  if (
-    finalBounds.isEmpty()
-    || !finiteBox(finalBounds)
-    || !Number.isFinite(finalLongestSide)
-    || Math.abs(finalLongestSide - spec.targetLongestDimension) > 1e-6
-  ) {
-    throw new EventModelLoadError(id, 'normalized scene has invalid bounds');
-  }
-  return triangles;
+  return normalizeLongestDimensionTemplate(
+    root,
+    spec,
+    (message) => new EventModelLoadError(id, message),
+    1e-6,
+  );
 }
 
 interface TextureCloneResult {

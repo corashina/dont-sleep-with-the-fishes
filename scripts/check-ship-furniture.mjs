@@ -10,6 +10,7 @@ import {
 import {
   POLY_PIZZA_SHIP_FURNITURE_SOURCES,
 } from './poly-pizza-ship-furniture.mjs';
+import { parseModelCheckArguments } from './model-check-arguments.mjs';
 
 export const MODEL_LIMIT = 1_000;
 export const LIBRARY_LIMIT = 8_000;
@@ -92,29 +93,14 @@ function verifyLedgerRow(ledger, modelId) {
   }
 }
 
-function parseArguments(args) {
-  let assetsOnly = false;
-  let modelsDir = resolve('src', 'assets', 'models', 'ship');
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--assets-only') {
-      assetsOnly = true;
-    } else if (argument === '--models-dir') {
-      const value = args[index + 1];
-      if (!value || value.startsWith('--')) throw new Error('--models-dir requires a path');
-      modelsDir = resolve(value);
-      index += 1;
-    } else {
-      throw new Error(`unknown argument: ${argument}`);
-    }
-  }
-  return { assetsOnly, modelsDir };
-}
-
 async function main() {
   let options;
   try {
-    options = parseArguments(process.argv.slice(2));
+    options = parseModelCheckArguments(
+      process.argv.slice(2),
+      ['src', 'assets', 'models', 'ship'],
+      false,
+    );
   } catch (error) {
     console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

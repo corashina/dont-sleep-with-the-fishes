@@ -18,7 +18,7 @@ import { MeshoptSimplifier } from 'meshoptimizer';
 const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
 const CC_BY_3 = 'https://creativecommons.org/licenses/by/3.0/';
 
-function source({
+export function createPolyPizzaSource({
   id,
   publicId,
   resourceId,
@@ -60,6 +60,8 @@ function source({
     ...(simplifyRatio === undefined ? {} : { simplifyRatio, simplifyError }),
   });
 }
+
+const source = createPolyPizzaSource;
 
 function compositeSource(primary, components) {
   return Object.freeze({

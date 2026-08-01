@@ -1,4 +1,5 @@
 import type { SessionStatus } from './ScavengeSession';
+import { clamp01, smootherStep } from './easing';
 import type { SinkingState } from './sinking';
 
 export const SINKING_CINEMATIC_SECONDS = 8;
@@ -102,14 +103,6 @@ export function sampleScavengeCinematicFrameInto(
   output.cameraTarget[2] = 0;
   output.blackout = smootherStep(clamp01((progress - 0.88) / 0.12));
   return output;
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smootherStep(value: number): number {
-  return value * value * value * (value * (value * 6 - 15) + 10);
 }
 
 function lerp(start: number, end: number, progress: number): number {

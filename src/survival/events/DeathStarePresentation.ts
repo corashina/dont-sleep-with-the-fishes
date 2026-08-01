@@ -12,17 +12,22 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import type { WaveSample } from '../../ocean/WaveField';
+import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
+import { setFlatShading } from '../../rendering/modelPresentation';
 import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type {
   BorrowedSupplyActor,
+  MutableSupplyPose,
   SupplyAdditivePose,
 } from '../BoatSupplyDisplay';
+import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
+import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
+  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -38,45 +43,12 @@ import {
   type DeathStareSample,
 } from './deathStareChoreography';
 
-type ActiveDeathStareAnimation =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | {
-      readonly kind: 'item';
-      readonly choiceId: string;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    }
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
-
 interface WaterStrand {
   readonly mesh: Mesh;
   readonly wave: WaveSample;
   readonly x: number;
   readonly z: number;
   readonly sourceOffset: number;
-}
-
-interface MutableSupplyPose extends SupplyAdditivePose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
 }
 
 const FACE_X = 0;
@@ -99,29 +71,6 @@ const IDENTITY_ITEM_POSE: Readonly<SupplyAdditivePose> = {
   scaleY: 1,
   scaleZ: 1,
 };
-
-function waveSample(): WaveSample {
-  return {
-    height: 0,
-    displacementX: 0,
-    displacementZ: 0,
-    normal: { x: 0, y: 1, z: 0 },
-  };
-}
-
-function setFlatShading(root: Group): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-    for (const material of materials) {
-      if (!(material instanceof MeshStandardMaterial)) continue;
-      material.flatShading = true;
-      material.needsUpdate = true;
-    }
-  });
-}
 
 function isSupportedChoice(choiceId: string): boolean {
   return choiceId === 'flashlight'
@@ -222,7 +171,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly mouthWorldPosition = new Vector3();
   private readonly mouthParentPosition = new Vector3();
   private readonly actorParentWorldInverse = new Matrix4();
-  private active: ActiveDeathStareAnimation | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -505,7 +454,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    this.resolveCancelled(active);
+    resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
       () => this.resetCameraEffect(),
@@ -521,19 +470,17 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   }
 
   private borrowActor(instanceId: ItemInstanceId): boolean {
-    if (this.borrowedActor?.instanceId === instanceId) return true;
-    this.releaseActor();
-    const actor = this.environment.supplies.borrowEventActor(instanceId);
-    if (actor === null) return false;
-    this.borrowedActor = actor;
-    this.borrowedBasePosition.copy(actor.root.position);
-    return true;
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor,
+      this.environment.supplies,
+      instanceId,
+      (actor) => this.borrowedBasePosition.copy(actor.root.position),
+    );
+    return this.borrowedActor !== null;
   }
 
   private releaseActor(): void {
-    const actor = this.borrowedActor;
-    this.borrowedActor = null;
-    actor?.release();
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 
   private resetBorrowedPose(): void {
@@ -577,12 +524,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    this.resolveCancelled(active);
-  }
-
-  private resolveCancelled(active: ActiveDeathStareAnimation | null): void {
-    if (active?.kind === 'item') active.resolve(false);
-    else active?.resolve();
+    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {

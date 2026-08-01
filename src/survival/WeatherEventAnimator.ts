@@ -15,6 +15,7 @@ import {
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import { clamp01, pulse, smoothstep } from './animationMath';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
@@ -68,23 +69,6 @@ interface WeatherReactionActor {
 const DISTANT_FIGURE_Z = -9.2;
 const REVEAL_FIGURE_X = -2.1;
 const REVEAL_FIGURE_Y = 0;
-
-function clamp01(value: number): number {
-  if (value <= 0 || !Number.isFinite(value)) return 0;
-  return value >= 1 ? 1 : value;
-}
-
-function smoothstep(value: number): number {
-  const t = clamp01(value);
-  return t * t * (3 - 2 * t);
-}
-
-function pulse(progress: number, start: number, peak: number, end: number): number {
-  if (progress <= start || progress >= end) return 0;
-  return progress < peak
-    ? smoothstep((progress - start) / (peak - start))
-    : 1 - smoothstep((progress - peak) / (end - peak));
-}
 
 function resetItemSample(sample: WeatherItemSample): void {
   sample.x = 0;

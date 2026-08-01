@@ -14,16 +14,16 @@ import {
   projectBoatObjectBounds,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
+import {
+  keyedRevealProgress,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type { DriftingLootVariant } from './survivalTypes';
 
 type DriftingLootAnimationKind = 'reveal' | 'retrieve' | 'recede';
 
-interface ActiveDriftingLootAnimation {
-  readonly kind: DriftingLootAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+type ActiveDriftingLootAnimation = TimedAnimation<DriftingLootAnimationKind>;
 
 export interface DriftingLootModels {
   readonly barrel: Group;
@@ -43,16 +43,6 @@ const RETRIEVE_DURATION = 1.1;
 const RECEDE_DURATION = 0.8;
 
 type DriftingLootState = 'idle' | 'floating' | 'revealing' | 'retrieving' | 'held' | 'receding';
-
-function smoothstep(value: number): number {
-  return value * value * (3 - 2 * value);
-}
-
-function keyedRevealProgress(progress: number): number {
-  if (progress < 0.16) return -0.06 * Math.sin(progress / 0.16 * Math.PI);
-  if (progress < 0.82) return smoothstep((progress - 0.16) / 0.66) * 1.06;
-  return 1.06 + (1 - 1.06) * smoothstep((progress - 0.82) / 0.18);
-}
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);

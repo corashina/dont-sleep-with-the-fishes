@@ -13,7 +13,13 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import type { MutableSupplyPose } from './BoatSupplyDisplay';
 import type { ChestEventPose } from './ChestDisplay';
+import {
+  clamp01Unchecked as clamp01,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,
@@ -31,12 +37,7 @@ type ChestAttackAnimationKind =
   | 'result-bound'
   | 'result-hide';
 
-interface ActiveAnimation {
-  readonly kind: ChestAttackAnimationKind;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+type ActiveAnimation = TimedAnimation<ChestAttackAnimationKind>;
 
 interface MutableChestEventPose {
   rattle: number;
@@ -47,31 +48,10 @@ interface MutableChestEventPose {
   overboard: number;
 }
 
-interface MutableSupplyPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-}
-
 const REVEAL_DURATION = 1.35;
 const CHOICE_DURATION = 0.85;
 const RESULT_DURATION = 0.9;
 const X_AXIS = new Vector3(1, 0, 0);
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
 
 function createMaterial(color: number, roughness: number, metalness = 0): MeshStandardMaterial {
   return new MeshStandardMaterial({

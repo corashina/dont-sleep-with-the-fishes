@@ -14,6 +14,15 @@ export interface WaveSample {
   normal: { x: number; y: number; z: number };
 }
 
+export function createWaveSample(): WaveSample {
+  return {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normal: { x: 0, y: 1, z: 0 },
+  };
+}
+
 export interface VortexWaveState {
   centerX: number;
   centerZ: number;

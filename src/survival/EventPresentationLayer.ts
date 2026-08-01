@@ -19,6 +19,15 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import {
+  addTransformedMesh as addMesh,
+  type VectorTuple,
+} from '../rendering/addTransformedMesh';
+import {
+  keyedRevealProgress,
+  smoothstepUnchecked as smoothstep,
+  type TimedAnimation,
+} from './animationMath';
+import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
@@ -50,13 +59,9 @@ import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';
 import { OtherPeoplePresentation } from './OtherPeoplePresentation';
 
-interface ActiveEventAnimation {
-  readonly kind: 'reveal' | 'react';
+type ActiveEventAnimation = TimedAnimation<'reveal' | 'react', {
   readonly eventId: string;
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
+}>;
 
 interface EventTableau {
   readonly eventId: string;
@@ -84,8 +89,6 @@ interface MaritimeMaterials {
 interface RescueCuePresentation extends FocusedEventPresentation {
   setRescueCue(progress: number | null): void;
 }
-
-type VectorTuple = readonly [number, number, number];
 
 const TABLEAU_EVENT_IDS = [
   'drifting-bottle',
@@ -143,24 +146,6 @@ function createMaterials(): MaritimeMaterials {
     earth: createMaterial(0x403a31, 1),
     foliage: createMaterial(0x344f42, 0.96),
   };
-}
-
-function addMesh(
-  parent: Group,
-  name: string,
-  geometry: BufferGeometry,
-  material: Material,
-  position: VectorTuple = [0, 0, 0],
-  rotation: VectorTuple = [0, 0, 0],
-  scale: VectorTuple = [1, 1, 1],
-): Mesh {
-  const mesh = new Mesh(geometry, material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.scale.set(...scale);
-  parent.add(mesh);
-  return mesh;
 }
 
 function bottleTableau(materials: MaritimeMaterials): Group {
@@ -306,16 +291,6 @@ function createTableau(
     revealOffset: new Vector3(...revealOffset),
     heldReactionTilt: 0,
   };
-}
-
-function smoothstep(value: number): number {
-  return value * value * (3 - 2 * value);
-}
-
-function keyedRevealProgress(progress: number): number {
-  if (progress < 0.16) return -0.06 * Math.sin((progress / 0.16) * Math.PI);
-  if (progress < 0.82) return smoothstep((progress - 0.16) / 0.66) * 1.06;
-  return 1.06 + (1 - 1.06) * smoothstep((progress - 0.82) / 0.18);
 }
 
 export class EventPresentationLayer {

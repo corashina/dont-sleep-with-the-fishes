@@ -21,6 +21,10 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import {
+  collectMaterialTextures,
+  modelTriangleCount,
+} from '../rendering/modelPresentation';
+import {
   FISHING_CATCHES,
   type FishingAppearance,
   type FishingCatchDefinition,
@@ -422,32 +426,11 @@ interface ActiveCatch {
   readonly textures: Set<Texture>;
 }
 
-function collectTextures(materials: Iterable<Material>): Set<Texture> {
-  const textures = new Set<Texture>();
-  for (const material of materials) {
-    for (const value of Object.values(material)) {
-      if (value instanceof Texture) textures.add(value);
-    }
-  }
-  return textures;
-}
-
 function collectActiveCatch(root: Group): ActiveCatch {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   collectMeshResources(root, geometries, materials);
-  return { root, geometries, materials, textures: collectTextures(materials) };
-}
-
-function triangleCount(root: Object3D): number {
-  let triangles = 0;
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const position = object.geometry.getAttribute('position');
-    if (!position) throw new Error('Fishing model has no position data.');
-    triangles += (object.geometry.index?.count ?? position.count) / 3;
-  });
-  return triangles;
+  return { root, geometries, materials, textures: collectMaterialTextures(materials) };
 }
 
 function prepareLoadedCatch(
@@ -463,7 +446,7 @@ function prepareLoadedCatch(
   root.add(sourceRoot);
 
   const active = collectActiveCatch(root);
-  const triangles = triangleCount(root);
+  const triangles = modelTriangleCount(root, 'Fishing model has no position data.');
   if (active.geometries.size === 0 || triangles <= 0 || triangles > spec.maxTriangles) {
     disposeActiveCatch(active);
     throw new Error(`Fishing model ${catchId} failed its geometry budget.`);

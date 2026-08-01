@@ -3,15 +3,12 @@ import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { ScavengeEndingStage } from '../game/scavengeEnding';
 import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
 import type { SinkingState } from '../game/sinking';
+import { createElementRequirement } from './dom';
 import { formatDuration } from './formatDuration';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { uiArtwork } from './uiArtwork';
 
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Missing UI element: ${selector}`);
-  return element;
-}
+const requireElement = createElementRequirement('UI');
 
 export type ScavengePresentation = 'title' | 'playing';
 
