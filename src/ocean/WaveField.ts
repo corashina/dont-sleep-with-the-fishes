@@ -14,6 +14,16 @@ export interface WaveSample {
   normal: { x: number; y: number; z: number };
 }
 
+export interface VortexWaveState {
+  centerX: number;
+  centerZ: number;
+  radius: number;
+  depression: number;
+  tangentStrength: number;
+  phase: number;
+  strength: number;
+}
+
 export interface WaveUniformPayload {
   directions: Array<[number, number]>;
   parameters: Array<[number, number, number, number]>;
@@ -27,6 +37,18 @@ export const DEFAULT_WAVES: readonly WaveComponent[] = [
   { direction: [-0.81, -0.59], amplitude: 0.08, wavelength: 2.6, speed: 1.88, steepness: 0.18, phase: 4.6 },
 ] as const;
 
+export function createInactiveVortexWaveState(): VortexWaveState {
+  return {
+    centerX: 0,
+    centerZ: 0,
+    radius: 0,
+    depression: 0,
+    tangentStrength: 0,
+    phase: 0,
+    strength: 0,
+  };
+}
+
 export function sampleWaveFieldInto(
   output: WaveSample,
   waves: readonly WaveComponent[],
@@ -34,6 +56,7 @@ export function sampleWaveFieldInto(
   x: number,
   z: number,
   amplitudeScale = 1,
+  vortex?: Readonly<VortexWaveState>,
 ): void {
   let height = 0;
   let displacementX = 0;
@@ -58,6 +81,28 @@ export function sampleWaveFieldInto(
     derivativeZ += amplitude * waveNumber * dz * cosine;
   }
 
+  if (vortex !== undefined && vortex.strength !== 0) {
+    const vortexDx = x - vortex.centerX;
+    const vortexDz = z - vortex.centerZ;
+    const distance = Math.hypot(vortexDx, vortexDz);
+    const radius = Math.max(0.001, vortex.radius);
+    const envelopeT = Math.min(1, Math.max(0, 1 - distance / radius));
+    const envelope = envelopeT * envelopeT * (3 - 2 * envelopeT) * vortex.strength;
+    const inverseDistance = distance > 0.0001 ? 1 / distance : 0;
+    const radialX = vortexDx * inverseDistance;
+    const radialZ = vortexDz * inverseDistance;
+    const swirl = 0.78 + 0.22 * Math.sin(vortex.phase + distance * 0.65);
+    const envelopeDerivative = distance > 0.0001 && distance < radius
+      ? -6 * envelopeT * (1 - envelopeT) * vortex.strength / radius
+      : 0;
+
+    height -= vortex.depression * envelope;
+    displacementX += -radialZ * vortex.tangentStrength * envelope * swirl;
+    displacementZ += radialX * vortex.tangentStrength * envelope * swirl;
+    derivativeX -= vortex.depression * envelopeDerivative * radialX;
+    derivativeZ -= vortex.depression * envelopeDerivative * radialZ;
+  }
+
   const nx = -derivativeX;
   const ny = 1;
   const nz = -derivativeZ;
@@ -77,6 +122,7 @@ export function sampleWaveField(
   x: number,
   z: number,
   amplitudeScale = 1,
+  vortex?: Readonly<VortexWaveState>,
 ): WaveSample {
   const output: WaveSample = {
     height: 0,
@@ -84,7 +130,7 @@ export function sampleWaveField(
     displacementZ: 0,
     normal: { x: 0, y: 1, z: 0 },
   };
-  sampleWaveFieldInto(output, waves, timeSeconds, x, z, amplitudeScale);
+  sampleWaveFieldInto(output, waves, timeSeconds, x, z, amplitudeScale, vortex);
   return output;
 }
 

@@ -6,6 +6,7 @@ import {
   SURVIVAL_EVENTS,
   drawWeightedEvent,
   eligibleEvents,
+  survivalEventById,
   validateSurvivalEventCatalog,
 } from '../src/survival/events';
 import { sequenceRandom } from './helpers/random';
@@ -71,7 +72,7 @@ const EXPECTED_METADATA = {
   'dangerous-waters': ['Dangerous Waters', 'impact', 15, 2, 30, 0],
   leak: ['Leak', 'impact', 10, 4, undefined, 0],
   'school-of-fish': ['School of Fish', 'fish', 66, 8, undefined, 39],
-  snatcher: ['Snatcher', 'impact', 28, 8, undefined, 45],
+  snatcher: ['Tentacle Attack', 'impact', 28, 8, undefined, 45],
   'death-stare': ['Death Stare', 'impact', 160, 9, undefined, 32],
   'swarm-of-anglerfish': ['Swarm of Anglerfish', 'fish', 12, 10, undefined, 38],
   whirlpool: ['Whirlpool', 'impact', 5, 12, undefined, 30],
@@ -90,7 +91,7 @@ const EXPECTED_REVEAL_TEXT = {
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
   leak: 'Water pushes through a split in the hull.',
   'school-of-fish': 'A dense school churns the water beside the boat.',
-  snatcher: 'Something reaches over the gunwale and grabs one of your supplies.',
+  snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
   whirlpool: 'The sea begins circling faster around the boat.',
@@ -235,6 +236,20 @@ describe('survival events', () => {
     ).toBe(true);
   });
 
+
+  it('sets the six night-event rule constraints', () => {
+    const leak = survivalEventById('leak')!;
+    const school = survivalEventById('school-of-fish')!;
+    const death = survivalEventById('death-stare')!;
+    const swarm = survivalEventById('swarm-of-anglerfish')!;
+    const whirlpool = survivalEventById('whirlpool')!;
+
+    expect(leak.maximumAppearances).toBe(1);
+    expect(school.minimumPressure).toBe(1);
+    expect(death.minimumPressure).toBe(1);
+    expect(swarm.minimumPressure).toBe(1);
+    expect(whirlpool.minimumPressure).toBe(1);
+  });
 
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
@@ -423,7 +438,7 @@ describe('survival events', () => {
     }).map(({ id }) => id)).not.toContain('dangerous-waters');
   });
 
-  it('excludes Snatcher from the draw pool without a canonical target', () => {
+  it('excludes Tentacle Attack from the draw pool without a canonical target', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,

@@ -1,10 +1,11 @@
 import {
-  AnimationClip,
   Box3,
   BufferGeometry,
   Group,
   Material,
   Mesh,
+  Skeleton,
+  SkinnedMesh,
   Texture,
   Vector3,
 } from 'three';
@@ -12,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
   EVENT_MODEL_IDS,
+  EVENT_MODEL_MAX_TOTAL_TRIANGLES,
   EVENT_MODEL_SPECS,
   type EventModelId,
   type EventModelSpec,
@@ -19,55 +21,112 @@ import {
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 
 export interface EventModelLoader {
-  load(url: string): Promise<{
-    readonly scene: Group;
-    readonly animations: readonly AnimationClip[];
-  }>;
+  load(url: string): Promise<Group>;
 }
 
-export class EventModelLoadError extends Error {
-  readonly eventModelId: EventModelId;
+export interface EventModelInstance {
+  readonly root: Group;
+  dispose(): void;
+}
 
-  constructor(eventModelId: EventModelId, message: string, options?: ErrorOptions) {
+type SupernaturalEventModelId = Extract<
+  EventModelId,
+  'fogMan' | 'ghost' | 'siren' | 'sirenRock'
+>;
+type DedicatedEventModelId = Exclude<EventModelId, SupernaturalEventModelId>;
+
+const SUPERNATURAL_EVENT_MODEL_IDS = new Set<EventModelId>([
+  'fogMan',
+  'ghost',
+  'siren',
+  'sirenRock',
+]);
+
+export class EventModelLoadError extends Error {
+  constructor(
+    readonly eventModelId: EventModelId,
+    message: string,
+    options?: ErrorOptions,
+  ) {
     super(`Event model ${eventModelId}: ${message}`, options);
     this.name = 'EventModelLoadError';
-    this.eventModelId = eventModelId;
   }
 }
 
 class GltfEventModelLoader implements EventModelLoader {
   private readonly loader = new GLTFLoader();
 
-  async load(url: string) {
-    const gltf = await this.loader.loadAsync(url);
-    return { scene: gltf.scene, animations: gltf.animations };
+  async load(url: string): Promise<Group> {
+    return (await this.loader.loadAsync(url)).scene;
   }
 }
 
-interface EventModelTemplate {
-  readonly root: Group;
-  readonly animations: readonly AnimationClip[];
+function collectTextureValue(
+  value: unknown,
+  textures: Set<Texture>,
+  visited: Set<object>,
+): void {
+  if (value instanceof Texture) {
+    textures.add(value);
+    return;
+  }
+  if (typeof value !== 'object' || value === null || visited.has(value)) return;
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return;
+  visited.add(value);
+  Object.values(value).forEach((child) => collectTextureValue(child, textures, visited));
 }
 
-function disposeRoots(roots: Iterable<Group>): void {
+function materialTextures(material: Material): Set<Texture> {
+  const textures = new Set<Texture>();
+  const visited = new Set<object>();
+  Object.entries(material).forEach(([key, value]) => {
+    if (value instanceof Texture || key === 'uniforms') {
+      collectTextureValue(value, textures, visited);
+    }
+  });
+  return textures;
+}
+
+function collectSkeletons(root: Group): Set<Skeleton> {
+  const skeletons = new Set<Skeleton>();
+  root.traverse((object) => {
+    if (object instanceof SkinnedMesh) skeletons.add(object.skeleton);
+  });
+  return skeletons;
+}
+
+function disposeTemplateRoots(roots: Iterable<Group>): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   const textures = new Set<Texture>();
-  for (const root of roots) collectMeshResources(root, geometries, materials);
-  for (const material of materials) {
-    for (const value of Object.values(material)) {
-      if (value instanceof Texture) textures.add(value);
-    }
+  const skeletons = new Set<Skeleton>();
+  for (const root of roots) {
+    collectMeshResources(root, geometries, materials);
+    collectSkeletons(root).forEach((skeleton) => skeletons.add(skeleton));
   }
-  disposeResourceSets(geometries, textures, materials);
+  materials.forEach((material) => {
+    materialTextures(material).forEach((texture) => textures.add(texture));
+  });
+  disposeResourceSets(geometries, textures, materials, skeletons);
+}
+
+function disposeOwnedEventRoot(root: Group, textures: Set<Texture>): void {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  collectMeshResources(root, geometries, materials);
+  disposeResourceSets(geometries, textures, materials, collectSkeletons(root));
 }
 
 function attemptCleanup(action: () => void): void {
   try {
     action();
   } catch {
-    // Rollback keeps the primary load or validation error.
+    // Rollback preserves the primary load or validation error.
   }
+}
+
+function finiteBox(box: Box3): boolean {
+  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
 }
 
 function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): EventModelSpec {
@@ -88,10 +147,17 @@ function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): Event
   ) {
     throw new EventModelLoadError(id, 'generated bounds metadata is invalid');
   }
+  if (
+    !Number.isFinite(spec.targetLongestDimension)
+    || spec.targetLongestDimension <= 0
+    || ![...spec.rotation, ...spec.offset].every(Number.isFinite)
+  ) {
+    throw new EventModelLoadError(id, 'presentation metadata is invalid');
+  }
   return spec;
 }
 
-function validateGeometry(id: EventModelId, geometry: BufferGeometry): number {
+function geometryTriangles(id: EventModelId, geometry: BufferGeometry): number {
   const position = geometry.getAttribute('position');
   if (!position || position.count === 0) {
     throw new EventModelLoadError(id, 'mesh has missing or empty position data');
@@ -101,16 +167,7 @@ function validateGeometry(id: EventModelId, geometry: BufferGeometry): number {
       throw new EventModelLoadError(id, 'mesh contains non-finite position data');
     }
   }
-  const indices = geometry.index;
-  if (indices) {
-    for (let index = 0; index < indices.count; index += 1) {
-      const vertexIndex = indices.getX(index);
-      if (!Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= position.count) {
-        throw new EventModelLoadError(id, `mesh contains invalid vertex index ${vertexIndex}`);
-      }
-    }
-  }
-  const elementCount = indices?.count ?? position.count;
+  const elementCount = geometry.index?.count ?? position.count;
   if (elementCount % 3 !== 0) {
     throw new EventModelLoadError(id, 'mesh element count does not describe complete triangles');
   }
@@ -118,35 +175,15 @@ function validateGeometry(id: EventModelId, geometry: BufferGeometry): number {
   return elementCount / 3;
 }
 
-function finiteBox(box: Box3): boolean {
-  return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
-}
-
-function validateAnimations(
-  id: EventModelId,
-  animations: readonly AnimationClip[],
-): readonly AnimationClip[] {
-  for (const clip of animations) {
-    if (
-      !clip.name
-      || !Number.isFinite(clip.duration)
-      || clip.duration <= 0
-      || clip.tracks.length === 0
-      || clip.tracks.some((track) => !track.validate())
-    ) {
-      throw new EventModelLoadError(id, `animation clip ${clip.name || '<unnamed>'} is invalid`);
-    }
-  }
-  return animations;
-}
-
-function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec): void {
+function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec): number {
+  root.rotation.set(...spec.rotation);
+  root.updateMatrixWorld(true);
   let meshCount = 0;
   let triangles = 0;
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     meshCount += 1;
-    triangles += validateGeometry(id, object.geometry);
+    triangles += geometryTriangles(id, object.geometry);
     object.castShadow = true;
     object.receiveShadow = true;
   });
@@ -158,74 +195,162 @@ function normalizeTemplate(id: EventModelId, root: Group, spec: EventModelSpec):
     );
   }
 
-  const rawBox = new Box3().setFromObject(root);
-  if (rawBox.isEmpty() || !finiteBox(rawBox)) {
+  const sourceBounds = new Box3().setFromObject(root);
+  if (sourceBounds.isEmpty() || !finiteBox(sourceBounds)) {
     throw new EventModelLoadError(id, 'scene has empty or non-finite bounds');
   }
-
-  root.rotation.set(...spec.rotation);
-  root.updateMatrixWorld(true);
-  const rotatedBox = new Box3().setFromObject(root);
-  if (rotatedBox.isEmpty() || !finiteBox(rotatedBox)) {
-    throw new EventModelLoadError(id, 'rotated scene has empty or non-finite bounds');
-  }
-  const size = rotatedBox.getSize(new Vector3());
-  const longestSide = Math.max(size.x, size.y, size.z);
+  const sourceSize = sourceBounds.getSize(new Vector3());
+  const longestSide = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
   if (!Number.isFinite(longestSide) || longestSide <= 0) {
     throw new EventModelLoadError(id, 'scene has zero-length bounds');
   }
 
   root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
   root.updateMatrixWorld(true);
-  const scaledBox = new Box3().setFromObject(root);
-  if (scaledBox.isEmpty() || !finiteBox(scaledBox)) {
+  const scaledBounds = new Box3().setFromObject(root);
+  if (scaledBounds.isEmpty() || !finiteBox(scaledBounds)) {
     throw new EventModelLoadError(id, 'normalized scene has empty or non-finite bounds');
   }
-  const center = scaledBox.getCenter(new Vector3());
+  const center = scaledBounds.getCenter(new Vector3());
   root.position.add(new Vector3(...spec.offset).sub(center));
   root.updateMatrixWorld(true);
-  const finalBox = new Box3().setFromObject(root);
-  if (finalBox.isEmpty() || !finiteBox(finalBox)) {
+
+  const finalBounds = new Box3().setFromObject(root);
+  const finalSize = finalBounds.getSize(new Vector3());
+  const finalLongestSide = Math.max(finalSize.x, finalSize.y, finalSize.z);
+  if (
+    finalBounds.isEmpty()
+    || !finiteBox(finalBounds)
+    || !Number.isFinite(finalLongestSide)
+    || Math.abs(finalLongestSide - spec.targetLongestDimension) > 1e-6
+  ) {
     throw new EventModelLoadError(id, 'normalized scene has invalid bounds');
   }
+  return triangles;
+}
+
+interface TextureCloneResult {
+  readonly value: unknown;
+  readonly changed: boolean;
+}
+
+function cloneTextureValue(
+  source: unknown,
+  cloned: unknown,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): TextureCloneResult {
+  if (source instanceof Texture) {
+    const existing = textureClones.get(source);
+    if (existing) {
+      if (cloned instanceof Texture && cloned !== source && cloned !== existing) {
+        discardedTextures.add(cloned);
+      }
+      return { value: existing, changed: cloned !== existing };
+    }
+    const owned = cloned instanceof Texture && cloned !== source ? cloned : source.clone();
+    textureClones.set(source, owned);
+    return { value: owned, changed: cloned !== owned };
+  }
+  if (Array.isArray(source)) {
+    const target = Array.isArray(cloned) ? [...cloned] : [...source];
+    let changed = false;
+    source.forEach((value, index) => {
+      const result = cloneTextureValue(
+        value,
+        target[index],
+        textureClones,
+        discardedTextures,
+      );
+      if (!result.changed) return;
+      target[index] = result.value;
+      changed = true;
+    });
+    return { value: changed ? target : cloned, changed };
+  }
+  if (
+    typeof source === 'object'
+    && source !== null
+    && Object.getPrototypeOf(source) === Object.prototype
+  ) {
+    const sourceRecord = source as Record<string, unknown>;
+    const clonedRecord = (
+      typeof cloned === 'object'
+      && cloned !== null
+      && Object.getPrototypeOf(cloned) === Object.prototype
+    ) ? cloned as Record<string, unknown> : { ...sourceRecord };
+    const target = { ...clonedRecord };
+    let changed = false;
+    Object.entries(sourceRecord).forEach(([key, value]) => {
+      const result = cloneTextureValue(
+        value,
+        clonedRecord[key],
+        textureClones,
+        discardedTextures,
+      );
+      if (!result.changed) return;
+      target[key] = result.value;
+      changed = true;
+    });
+    return { value: changed ? target : cloned, changed };
+  }
+  return { value: cloned, changed: false };
 }
 
 function cloneOwnedMaterial(
   material: Material,
-  textures: Map<Texture, Texture>,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
 ): Material {
-  const cloned = material.clone();
-  const properties = cloned as unknown as Record<string, unknown>;
-  for (const [key, value] of Object.entries(material)) {
-    if (!(value instanceof Texture)) continue;
-    let texture = textures.get(value);
-    if (!texture) {
-      texture = value.clone();
-      textures.set(value, texture);
-    }
-    properties[key] = texture;
-  }
-  return cloned;
+  const clone = material.clone();
+  const cloneProperties = clone as unknown as Record<string, unknown>;
+  Object.entries(material).forEach(([key, value]) => {
+    if (!(value instanceof Texture) && key !== 'uniforms') return;
+    const result = cloneTextureValue(
+      value,
+      cloneProperties[key],
+      textureClones,
+      discardedTextures,
+    );
+    if (result.changed) cloneProperties[key] = result.value;
+  });
+  return clone;
 }
 
-function cloneOwnedTemplate(template: Group): Group {
+interface OwnedEventTemplateClone {
+  readonly root: Group;
+  readonly textures: Set<Texture>;
+}
+
+function cloneOwnedEventTemplate(template: Group): OwnedEventTemplateClone {
   const clone = cloneSkeleton(template) as Group;
-  const textures = new Map<Texture, Texture>();
+  const textureClones = new Map<Texture, Texture>();
+  const discardedTextures = new Set<Texture>();
   clone.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.geometry = object.geometry.clone();
     object.material = Array.isArray(object.material)
-      ? object.material.map((material) => cloneOwnedMaterial(material, textures))
-      : cloneOwnedMaterial(object.material, textures);
+      ? object.material.map((material) => (
+        cloneOwnedMaterial(material, textureClones, discardedTextures)
+      ))
+      : cloneOwnedMaterial(object.material, textureClones, discardedTextures);
+    object.castShadow = true;
+    object.receiveShadow = true;
   });
-  return clone;
+  disposeResourceSets(discardedTextures);
+  return { root: clone, textures: new Set(textureClones.values()) };
+}
+
+interface LoadedTemplate {
+  readonly root: Group;
+  readonly triangles: number;
 }
 
 export class EventModelLibrary {
   private disposed = false;
 
   private constructor(
-    private readonly templates: ReadonlyMap<EventModelId, EventModelTemplate>,
+    private readonly templates: ReadonlyMap<EventModelId, Group>,
   ) {}
 
   static async load(
@@ -233,62 +358,81 @@ export class EventModelLibrary {
   ): Promise<EventModelLibrary> {
     for (const id of EVENT_MODEL_IDS) validateSpec(id, EVENT_MODEL_SPECS[id]);
 
-    const results = await Promise.allSettled(EVENT_MODEL_IDS.map(async (id) => {
-      const spec = EVENT_MODEL_SPECS[id];
-      let root: Group | undefined;
-      try {
-        const loaded = await loader.load(spec.url);
-        root = loaded.scene;
-        normalizeTemplate(id, root, spec);
-        const animations = validateAnimations(id, loaded.animations);
-        return { id, root, animations };
-      } catch (error) {
-        if (root) attemptCleanup(() => disposeRoots([root!]));
-        if (error instanceof EventModelLoadError && error.eventModelId === id) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        throw new EventModelLoadError(id, message, { cause: error });
-      }
-    }));
-
-    const fulfilledRoots = results.flatMap((result) => (
-      result.status === 'fulfilled' ? [result.value.root] : []
+    const loadedRoots: Array<Group | undefined> = new Array(EVENT_MODEL_IDS.length);
+    const results = await Promise.allSettled(EVENT_MODEL_IDS.map(
+      async (id, index): Promise<LoadedTemplate> => {
+        const root = await loader.load(EVENT_MODEL_SPECS[id].url);
+        loadedRoots[index] = root;
+        const triangles = normalizeTemplate(id, root, EVENT_MODEL_SPECS[id]);
+        const template = new Group();
+        template.name = `event-model:${id}`;
+        template.userData.eventModelId = id;
+        template.add(root);
+        return { root: template, triangles };
+      },
     ));
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure) {
-      attemptCleanup(() => disposeRoots(fulfilledRoots));
-      throw failure.reason;
+
+    const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
+    if (firstFailureIndex >= 0) {
+      const id = EVENT_MODEL_IDS[firstFailureIndex]!;
+      const cause = (results[firstFailureIndex] as PromiseRejectedResult).reason;
+      attemptCleanup(() => {
+        disposeTemplateRoots(loadedRoots.filter((root): root is Group => root !== undefined));
+      });
+      if (cause instanceof EventModelLoadError && cause.eventModelId === id) throw cause;
+      const message = cause instanceof Error ? cause.message : String(cause);
+      throw new EventModelLoadError(id, message, { cause });
     }
 
-    return new EventModelLibrary(new Map(results.map((result) => {
-      const loaded = (result as PromiseFulfilledResult<{
-        id: EventModelId;
-        root: Group;
-        animations: readonly AnimationClip[];
-      }>).value;
-      return [loaded.id, { root: loaded.root, animations: loaded.animations }];
-    })));
+    const loaded = results.map(
+      (result) => (result as PromiseFulfilledResult<LoadedTemplate>).value,
+    );
+    let aggregateTriangles = 0;
+    for (let index = 0; index < loaded.length; index += 1) {
+      aggregateTriangles += loaded[index]!.triangles;
+      if (aggregateTriangles > EVENT_MODEL_MAX_TOTAL_TRIANGLES) {
+        const error = new EventModelLoadError(
+          EVENT_MODEL_IDS[index]!,
+          `aggregate triangle count ${aggregateTriangles} exceeds the ${EVENT_MODEL_MAX_TOTAL_TRIANGLES} limit`,
+        );
+        attemptCleanup(() => disposeTemplateRoots(loaded.map(({ root }) => root)));
+        throw error;
+      }
+    }
+
+    return new EventModelLibrary(new Map(
+      EVENT_MODEL_IDS.map((id, index) => [id, loaded[index]!.root]),
+    ));
   }
 
-  create(id: EventModelId): Group {
+  create(id: SupernaturalEventModelId): Group;
+  create(id: DedicatedEventModelId): EventModelInstance;
+  create(id: EventModelId): Group | EventModelInstance;
+  create(id: EventModelId): Group | EventModelInstance {
     if (this.disposed) throw new Error('Event model library is disposed');
     const template = this.templates.get(id);
     if (!template) throw new Error(`Missing event model template: ${id}`);
-    const clone = cloneOwnedTemplate(template.root);
-    clone.name = `event-model:${id}`;
-    clone.userData.eventModelId = id;
-    return clone;
+    const { root, textures } = cloneOwnedEventTemplate(template);
+    if (SUPERNATURAL_EVENT_MODEL_IDS.has(id)) return root;
+    let disposed = false;
+    return {
+      root,
+      dispose(): void {
+        if (disposed) return;
+        disposed = true;
+        disposeOwnedEventRoot(root, textures);
+      },
+    };
   }
 
-  animations(id: EventModelId): readonly AnimationClip[] {
+  animations(_id: SupernaturalEventModelId): readonly [] {
     if (this.disposed) throw new Error('Event model library is disposed');
-    const template = this.templates.get(id);
-    if (!template) throw new Error(`Missing event model template: ${id}`);
-    return template.animations;
+    return [];
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    disposeRoots([...this.templates.values()].map(({ root }) => root));
+    disposeTemplateRoots(this.templates.values());
   }
 }

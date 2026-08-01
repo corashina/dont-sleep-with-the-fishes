@@ -174,6 +174,20 @@ Runtime setup normalizes their scale and applies the game palette.
 | mysteryChest | `mysteryChest.glb` | Chest / Quaternius | https://poly.pizza/m/O72u4Drp8k | `poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1676 | 1676 | Source GLB SHA-256 `07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B`; committed without geometry changes. | 2026-07-30 |
 | flowers | `flowers.glb` | Lily Pad / Poly by Google | https://poly.pizza/m/0-_GjMekeob | `poly-pizza:856b7c36-4bd0-48f1-a308-529366b6a7fd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 728 | 728 | Source GLB SHA-256 `CC4BA073B2CC94B4CADA9BB25C15C3832052E2F3A018B3E2EB7F9429E6D2384B`; committed without geometry changes. | 2026-07-30 |
 
+## Runtime night-event model ledger
+
+These five models support authored night-event presentations.
+Static models use safe vertex welding.
+The Tentacle Attack model keeps its source rig and four animation clips.
+
+| Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source SHA-256 | Source triangles | Committed triangles | Modifications | Downloaded |
+|---|---|---|---|---|---|---|---:|---:|---|---|
+| leakPlanks | `leakPlanks.glb` | Wood Planks / Quaternius | https://poly.pizza/m/hwQ1Fx5P8U | `poly-pizza:27afd21d-e642-4ec8-8688-d99f693388d1` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `6E3DAA7AEDFBD2FD0B999555B165895552D80D0A6B413C181FFFE4CF4A8E9987` | 150 | 150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| snatcher | `snatcher.glb` | Tentacle / Quaternius | https://poly.pizza/m/BR1vpIvvvv | `poly-pizza:b39d86e5-e51f-4bd8-bc63-c7fc0cdea864` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931` | 3874 | 3874 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-31 |
+| anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| whirlpoolCore | `whirlpoolCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+
 ## Runtime audio ledger
 
 All audio in this ledger uses

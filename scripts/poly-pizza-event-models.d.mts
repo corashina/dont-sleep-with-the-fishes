@@ -10,6 +10,7 @@ export interface PolyPizzaEventModelSource {
   readonly license: 'CC0 1.0' | 'CC-BY 3.0';
   readonly licenseUrl: string;
   readonly sha256: string;
+  readonly committedSha256: string;
   readonly sourceTriangles: number;
   readonly rawBounds: {
     readonly min: readonly [number, number, number];

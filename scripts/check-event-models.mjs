@@ -138,7 +138,11 @@ function exactKeys(value, expectedKeys, label) {
 }
 
 export function validateEventModelMetadata(metadata) {
-  exactKeys(metadata, EVENT_MODEL_IDS, 'event model metadata');
+  for (const modelId of EVENT_MODEL_IDS) {
+    if (!(modelId in metadata)) {
+      throw new Error(`event model metadata is missing ${modelId}`);
+    }
+  }
   for (const modelId of EVENT_MODEL_IDS) {
     const model = metadata[modelId];
     exactKeys(model, ['triangles', 'rawBounds', 'animations'], `${modelId} metadata`);

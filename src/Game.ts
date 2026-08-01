@@ -1,5 +1,6 @@
 import {
   Clock,
+  Group,
   PCFSoftShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
@@ -99,6 +100,7 @@ export interface GameTestOptions {
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
   shipAssets?: ShipAssets;
+  eventModels?: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode?: PhysicsMode;
   clock?: GameClock;
@@ -109,7 +111,7 @@ export interface GameTestOptions {
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
-  eventModels?: SurvivalEventModels;
+  featuredEventModels?: SurvivalEventModels;
 }
 
 function createRandomSeed(): number {
@@ -133,8 +135,9 @@ export class Game {
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
+  private eventModels!: EventModelLibrary;
   private audio!: AudioSystem;
-  private eventModels: SurvivalEventModelLibrary | null = null;
+  private ownedFeaturedEventModels: SurvivalEventModelLibrary | null = null;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -154,15 +157,15 @@ export class Game {
   constructor(
     mount: HTMLElement,
     propModels: PropModelLibrary,
-    supernaturalEventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
-    eventModels?: SurvivalEventModelLibrary,
+    featuredEventModels?: SurvivalEventModelLibrary,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -199,16 +202,16 @@ export class Game {
         camera,
         clock,
         propModels,
-        supernaturalEventModels,
         shipFurniture,
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        eventModels,
         physicsRuntime,
         physicsMode,
         audioSystem,
-        eventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
-        eventModels ?? null,
+        featuredEventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
+        featuredEventModels ?? null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
       );
@@ -267,7 +270,6 @@ export class Game {
       ),
       clock,
       options.propModels,
-      options.supernaturalEventModels ?? createEmptyEventModelLibraryForTest(),
       options.shipFurniture,
       options.skyAssets,
       options.lifeboatAssets ?? LifeboatAssets.fromTextures(
@@ -280,10 +282,15 @@ export class Game {
         new Texture(),
         new Texture(),
       ),
+      options.eventModels ?? options.supernaturalEventModels ?? {
+        create: () => new Group(),
+        animations: () => [],
+        dispose: () => undefined,
+      } as unknown as EventModelLibrary,
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
-      options.eventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
+      options.featuredEventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
       null,
       factories,
       options.createSeed ?? createRandomSeed,
@@ -320,13 +327,13 @@ export class Game {
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
-      () => this.supernaturalEventModels.dispose(),
       () => this.shipFurniture.dispose(),
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
       () => this.shipAssets.dispose(),
+      () => this.eventModels.dispose(),
       () => this.audio.dispose(),
-      () => this.eventModels?.dispose(),
+      () => this.ownedFeaturedEventModels?.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -342,16 +349,16 @@ export class Game {
     camera: PerspectiveCamera,
     clock: GameClock,
     propModels: PropModelLibrary,
-    supernaturalEventModels: EventModelLibrary,
     shipFurniture: ShipFurnitureLibrary,
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
+    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
-    eventModels: SurvivalEventModels,
-    ownedEventModels: SurvivalEventModelLibrary | null,
+    featuredEventModels: SurvivalEventModels,
+    ownedFeaturedEventModels: SurvivalEventModelLibrary | null,
     factories: GameFactories,
     createSeed: () => number,
   ): void {
@@ -360,13 +367,14 @@ export class Game {
     this.camera = camera;
     this.clock = clock;
     this.propModels = propModels;
-    this.supernaturalEventModels = supernaturalEventModels;
+    this.supernaturalEventModels = eventModels;
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
+    this.eventModels = eventModels;
     this.audio = audioSystem;
-    this.eventModels = ownedEventModels;
+    this.ownedFeaturedEventModels = ownedFeaturedEventModels;
     this.factories = factories;
     this.createSeed = createSeed;
     let maxTextureAnisotropy = 1;
@@ -386,16 +394,17 @@ export class Game {
         waterQuality,
         camera,
         propModels,
-        supernaturalEventModels,
+        supernaturalEventModels: eventModels,
         shipFurniture,
         maxTextureAnisotropy,
         skyAssets,
         lifeboatAssets,
         shipAssets,
+        eventModels,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
-        eventModels,
+        featuredEventModels,
       };
       this.activePhase = null;
       this.performanceStats = null;

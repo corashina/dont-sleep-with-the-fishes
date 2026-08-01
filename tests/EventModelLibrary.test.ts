@@ -1,61 +1,205 @@
-import { Group, Mesh, BoxGeometry, MeshBasicMaterial } from 'three';
+// Importance: 5/5. Protects event model validation and resource ownership.
+
 import { describe, expect, it, vi } from 'vitest';
+import {
+  Box3,
+  BoxGeometry,
+  BufferGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Texture,
+  Vector3,
+} from 'three';
 import {
   EventModelLibrary,
   EventModelLoadError,
   type EventModelLoader,
 } from '../src/survival/EventModelLibrary';
-import { EVENT_MODEL_IDS } from '../src/survival/eventModelManifest';
+import {
+  EVENT_MODEL_IDS,
+  EVENT_MODEL_SPECS,
+  type EventModelId,
+} from '../src/survival/eventModelManifest';
 
-const validRoot = (): Group => {
+function modelRoot(
+  geometry: BufferGeometry = new BoxGeometry(2, 1, 1),
+  material = new MeshStandardMaterial(),
+): Group {
   const root = new Group();
-  root.add(new Mesh(new BoxGeometry(1, 2, 1), new MeshBasicMaterial()));
+  root.add(new Mesh(geometry, material));
   return root;
-};
+}
+
+function loaderFrom(
+  roots: Readonly<Record<EventModelId, Group>>,
+): EventModelLoader {
+  let index = 0;
+  return {
+    load: vi.fn(async () => roots[EVENT_MODEL_IDS[index++]!]),
+  };
+}
+
+function completeRoots(): Record<EventModelId, Group> {
+  return Object.fromEntries(EVENT_MODEL_IDS.map((id) => [id, modelRoot()])) as
+    Record<EventModelId, Group>;
+}
 
 describe('EventModelLibrary', () => {
-  it('loads every event model and creates isolated clones', async () => {
-    const load = vi.fn(async () => ({ scene: validRoot(), animations: [] }));
-    const library = await EventModelLibrary.load({ load } satisfies EventModelLoader);
-    expect(load).toHaveBeenCalledTimes(EVENT_MODEL_IDS.length);
-    const first = library.create('ghost');
-    const second = library.create('ghost');
-    expect(first).not.toBe(second);
-    expect((first.children[0] as Mesh).geometry)
-      .not.toBe((second.children[0] as Mesh).geometry);
-    expect((first.children[0] as Mesh).material)
-      .not.toBe((second.children[0] as Mesh).material);
+  it('defines the approved event model IDs', () => {
+    expect(EVENT_MODEL_IDS).toEqual([
+      'fogMan',
+      'ghost',
+      'siren',
+      'sirenRock',
+      'leakPlanks',
+      'schoolFish',
+      'snatcher',
+      'anglerFish',
+      'whirlpoolCore',
+    ]);
+  });
+
+  it('normalizes templates and makes owned deep clones', async () => {
+    const roots = completeRoots();
+    const library = await EventModelLibrary.load(loaderFrom(roots));
+
+    for (const id of [
+      'leakPlanks',
+      'schoolFish',
+      'snatcher',
+      'anglerFish',
+      'whirlpoolCore',
+    ] as const) {
+      const instance = library.create(id);
+      const bounds = new Box3().setFromObject(instance.root);
+      const size = bounds.getSize(new Vector3());
+      expect(Math.max(size.x, size.y, size.z)).toBeCloseTo(
+        EVENT_MODEL_SPECS[id].targetLongestDimension,
+      );
+      bounds.getCenter(new Vector3()).toArray().forEach((value, axis) => {
+        expect(value).toBeCloseTo(EVENT_MODEL_SPECS[id].offset[axis]!);
+      });
+      instance.dispose();
+    }
+
+    const first = library.create('anglerFish');
+    const second = library.create('anglerFish');
+    const firstMesh = first.root.children[0]!.children[0] as Mesh;
+    const secondMesh = second.root.children[0]!.children[0] as Mesh;
+    expect(first.root).not.toBe(second.root);
+    expect(first.root.children[0]).not.toBe(second.root.children[0]);
+    expect(firstMesh.geometry).not.toBe(secondMesh.geometry);
+    expect(firstMesh.material).not.toBe(secondMesh.material);
+    first.dispose();
+    second.dispose();
     library.dispose();
   });
 
-  it('reports the failing event model id', async () => {
-    const loader: EventModelLoader = {
-      load: async (url) => {
-        if (url.includes('ghost')) throw new Error('missing');
-        return { scene: validRoot(), animations: [] };
-      },
-    };
-    await expect(EventModelLibrary.load(loader))
-      .rejects.toBeInstanceOf(EventModelLoadError);
+  it('rejects invalid geometry with its event ID', async () => {
+    const roots = completeRoots();
+    roots.snatcher = modelRoot(new BufferGeometry());
+
+    await expect(EventModelLibrary.load(loaderFrom(roots))).rejects.toMatchObject({
+      name: 'EventModelLoadError',
+      eventModelId: 'snatcher',
+    });
   });
 
-  it('disposes each source template exactly once', async () => {
-    const roots = EVENT_MODEL_IDS.map(() => validRoot());
-    const disposeSpies = roots.flatMap((root) => {
-      const mesh = root.children[0] as Mesh;
+  it('wraps loader failures and rolls back all loaded templates once', async () => {
+    const roots = completeRoots();
+    const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'anglerFish').flatMap((id) => {
+      const mesh = roots[id].children[0] as Mesh;
       return [
         vi.spyOn(mesh.geometry, 'dispose'),
-        vi.spyOn(mesh.material as MeshBasicMaterial, 'dispose'),
+        vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose'),
       ];
     });
-    let nextRoot = 0;
-    const library = await EventModelLibrary.load({
-      load: async () => ({ scene: roots[nextRoot++]!, animations: [] }),
+    let index = 0;
+    const loader: EventModelLoader = {
+      load: vi.fn(async () => {
+        const id = EVENT_MODEL_IDS[index++]!;
+        if (id === 'anglerFish') throw new Error('network failed');
+        return roots[id];
+      }),
+    };
+
+    await expect(EventModelLibrary.load(loader)).rejects.toEqual(
+      expect.objectContaining<EventModelLoadError>({
+        name: 'EventModelLoadError',
+        eventModelId: 'anglerFish',
+        message: expect.stringContaining('network failed'),
+      }),
+    );
+    expect(disposeSpies.every((spy) => spy.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('disposes each instance and source resource once', async () => {
+    const roots = completeRoots();
+    const sourceSpies = EVENT_MODEL_IDS.flatMap((id) => {
+      const mesh = roots[id].children[0] as Mesh;
+      return [
+        vi.spyOn(mesh.geometry, 'dispose'),
+        vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose'),
+      ];
     });
+    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const first = library.create('anglerFish');
+    const second = library.create('anglerFish');
+    const ownedMeshes = [first, second].map(
+      (instance) => instance.root.children[0]!.children[0] as Mesh,
+    );
+    const ownedSpies = ownedMeshes.flatMap((mesh) => [
+      vi.spyOn(mesh.geometry, 'dispose'),
+      vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose'),
+    ]);
 
+    first.dispose();
+    first.dispose();
+    second.dispose();
     library.dispose();
     library.dispose();
 
-    disposeSpies.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect([...sourceSpies, ...ownedSpies].every(
+      (spy) => spy.mock.calls.length === 1,
+    )).toBe(true);
+  });
+
+  it('deep-clones and disposes instance textures once', async () => {
+    const sourceTexture = new Texture();
+    const roots = completeRoots();
+    roots.anglerFish = modelRoot(
+      new BoxGeometry(2, 1, 1),
+      new MeshStandardMaterial({ map: sourceTexture }),
+    );
+    const sourceDispose = vi.spyOn(sourceTexture, 'dispose');
+    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const first = library.create('anglerFish');
+    const second = library.create('anglerFish');
+    const firstTexture = (
+      (first.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
+    ).map!;
+    const secondTexture = (
+      (second.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
+    ).map!;
+    const firstDispose = vi.spyOn(firstTexture, 'dispose');
+    const secondDispose = vi.spyOn(secondTexture, 'dispose');
+
+    expect(firstTexture).not.toBe(sourceTexture);
+    expect(secondTexture).not.toBe(sourceTexture);
+    expect(firstTexture).not.toBe(secondTexture);
+
+    first.dispose();
+    first.dispose();
+    library.dispose();
+    expect(firstDispose).toHaveBeenCalledOnce();
+    expect(secondDispose).not.toHaveBeenCalled();
+    expect(sourceDispose).toHaveBeenCalledOnce();
+
+    second.dispose();
+    second.dispose();
+    library.dispose();
+    expect(secondDispose).toHaveBeenCalledOnce();
+    expect(sourceDispose).toHaveBeenCalledOnce();
   });
 });

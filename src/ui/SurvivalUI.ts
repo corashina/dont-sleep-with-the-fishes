@@ -263,11 +263,14 @@ export interface EventContextChoice {
   readonly energyCost?: number;
 }
 
-export interface EventResultView {
+export type EventResultView = {
   readonly caption: string;
   readonly detail: string;
   readonly target: ProjectedBoatBounds | null;
-}
+} | {
+  readonly message: string;
+  readonly lines: readonly string[];
+};
 
 type AnchorInteractionState =
   | 'ordinary'
@@ -335,11 +338,14 @@ export class SurvivalUI {
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
-  private readonly eventResultPanel: HTMLElement;
-  private readonly eventResultCaption: HTMLElement;
-  private readonly eventResultDetail: HTMLElement;
+  private readonly anchoredEventResultPanel: HTMLElement;
+  private readonly anchoredEventResultCaption: HTMLElement;
+  private readonly anchoredEventResultDetail: HTMLElement;
   private readonly eventDetail: HTMLElement;
   private readonly eventOutcomeResult: HTMLElement;
+  private readonly eventResult: HTMLElement;
+  private readonly eventResultMessage: HTMLElement;
+  private readonly eventResultLines: HTMLElement;
   private readonly eventChoices: HTMLElement;
   private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
@@ -500,9 +506,13 @@ export class SurvivalUI {
         <h2 class="ui-role-display" data-event-title></h2>
         <p class="event-caption__detail ui-role-narrative" data-event-detail></p>
         <p class="event-caption__result ui-role-context" data-event-result hidden></p>
+        <section class="event-result event-result--inline" data-dedicated-event-result role="status" hidden>
+          <p class="event-result__message ui-role-narrative" data-event-result-message></p>
+          <ul class="event-result__lines ui-role-numeral" data-event-result-lines></ul>
+        </section>
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
-      <section class="event-result" data-event-result-panel aria-hidden="true" aria-live="polite">
+      <section class="event-result event-result--anchored" data-event-result-panel aria-hidden="true" aria-live="polite">
         <strong class="ui-role-display" data-event-result-caption></strong>
         <span class="ui-role-narrative" data-event-result-detail></span>
       </section>
@@ -567,11 +577,14 @@ export class SurvivalUI {
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.eventResultPanel = requireElement(this.root, '[data-event-result-panel]');
-    this.eventResultCaption = requireElement(this.root, '[data-event-result-caption]');
-    this.eventResultDetail = requireElement(this.root, '[data-event-result-detail]');
+    this.anchoredEventResultPanel = requireElement(this.root, '[data-event-result-panel]');
+    this.anchoredEventResultCaption = requireElement(this.root, '[data-event-result-caption]');
+    this.anchoredEventResultDetail = requireElement(this.root, '[data-event-result-detail]');
     this.eventDetail = requireElement(this.root, '[data-event-detail]');
     this.eventOutcomeResult = requireElement(this.root, '[data-event-result]');
+    this.eventResult = requireElement(this.root, '[data-dedicated-event-result]');
+    this.eventResultMessage = requireElement(this.root, '[data-event-result-message]');
+    this.eventResultLines = requireElement(this.root, '[data-event-result-lines]');
     this.eventChoices = requireElement(this.root, '[data-event-choices]');
     this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
@@ -752,27 +765,48 @@ export class SurvivalUI {
     this.eventPresentationActive = true;
     this.eventCaption.classList.add('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.clearEventResult();
     this.syncCommandState();
     return Promise.resolve();
   }
 
   showEventResult(view: EventResultView): void {
     if (this.disposed) return;
-    this.eventResultCaption.textContent = view.caption;
-    this.eventResultDetail.textContent = view.detail;
+    if ('message' in view) {
+      this.eventResultMessage.textContent = view.message;
+      this.eventResultLines.replaceChildren(...view.lines.map((line) => {
+        const item = document.createElement('li');
+        item.textContent = line;
+        item.dataset.state = line.endsWith(' BROKEN')
+          ? 'broken'
+          : line.endsWith(' LOST')
+            ? 'lost'
+            : line.endsWith(' CONSUMED')
+              ? 'consumed'
+              : / -\d+$/.test(line)
+                ? 'resource-negative'
+                : 'resource';
+        return item;
+      }));
+      this.eventResultLines.hidden = view.lines.length === 0;
+      this.eventResult.hidden = false;
+      return;
+    }
+    this.anchoredEventResultCaption.textContent = view.caption;
+    this.anchoredEventResultDetail.textContent = view.detail;
     const target = view.target?.visible === true ? view.target : null;
     const x = target?.x ?? Math.max(24, this.mount.clientWidth * 0.5);
     const y = target?.y ?? Math.max(120, this.mount.clientHeight * 0.68);
-    this.eventResultPanel.style.setProperty('--event-result-x', `${x}px`);
-    this.eventResultPanel.style.setProperty('--event-result-y', `${y}px`);
-    this.eventResultPanel.classList.add('is-visible');
-    this.eventResultPanel.setAttribute('aria-hidden', 'false');
+    this.anchoredEventResultPanel.style.setProperty('--event-result-x', `${x}px`);
+    this.anchoredEventResultPanel.style.setProperty('--event-result-y', `${y}px`);
+    this.anchoredEventResultPanel.classList.add('is-visible');
+    this.anchoredEventResultPanel.setAttribute('aria-hidden', 'false');
   }
 
   hideEventResult(): void {
     if (this.disposed) return;
-    this.eventResultPanel.classList.remove('is-visible');
-    this.eventResultPanel.setAttribute('aria-hidden', 'true');
+    this.anchoredEventResultPanel.classList.remove('is-visible');
+    this.anchoredEventResultPanel.setAttribute('aria-hidden', 'true');
   }
 
   showEventOutcome(
@@ -882,6 +916,7 @@ export class SurvivalUI {
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     void this.setSleepCoverProfile('solid');
+    this.clearEventResult();
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
@@ -918,6 +953,13 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.sleepCover.dataset.profile = profile;
     return Promise.resolve();
+  }
+
+  private clearEventResult(): void {
+    this.eventResult.hidden = true;
+    this.eventResultMessage.textContent = '';
+    this.eventResultLines.replaceChildren();
+    this.eventResultLines.hidden = true;
   }
 
   setSleepCovered(covered: boolean): Promise<void> {
@@ -2223,6 +2265,31 @@ export class SurvivalUI {
         event.preventDefault();
         this.activateEventChoice(choice);
         return;
+      }
+      const itemAnchor = target.closest<HTMLButtonElement>(
+        'button[data-target-kind="item"]',
+      );
+      const instanceId = itemAnchor?.dataset.backingInstanceId as ItemInstanceId | undefined
+        ?? (
+          itemAnchor?.dataset.anchorId?.startsWith('supply:')
+            ? undefined
+            : itemAnchor?.dataset.anchorId as ItemInstanceId | undefined
+        );
+      const choiceId = instanceId === undefined
+        ? undefined
+        : this.eventEligibility?.get(instanceId);
+      if (
+        itemAnchor !== null
+        && this.anchorLayer.contains(itemAnchor)
+        && !itemAnchor.disabled
+        && itemAnchor.getAttribute('aria-disabled') !== 'true'
+        && instanceId !== undefined
+        && choiceId !== undefined
+        && !this.busy
+        && this.eventSelectedInstanceId === null
+      ) {
+        event.preventDefault();
+        this.onEventItem(choiceId, instanceId);
       }
     }
   };

@@ -20,7 +20,8 @@ describe('event model assets', () => {
     for (const id of POLY_PIZZA_EVENT_MODEL_IDS) {
       const source = POLY_PIZZA_EVENT_MODEL_SOURCES[id]!;
       const file = await readFile(resolve(modelsRoot, `${id}.glb`));
-      expect(createHash('sha256').update(file).digest('hex').toUpperCase()).toBe(source.sha256);
+      expect(createHash('sha256').update(file).digest('hex').toUpperCase())
+        .toBe(source.committedSha256);
 
       const document = await io.readBinary(file);
       let triangles = 0;

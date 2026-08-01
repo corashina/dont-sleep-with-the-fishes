@@ -63,11 +63,11 @@ describe('Game construction rollback', () => {
       new Game(
         document.createElement('main'),
         {} as PropModelLibrary,
-        {} as EventModelLibrary,
         {} as ShipFurnitureLibrary,
         {} as SkyAssets,
         {} as LifeboatAssets,
         {} as ShipAssets,
+        {} as EventModelLibrary,
         physicsRuntime,
       );
     } catch (error) {

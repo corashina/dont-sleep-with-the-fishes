@@ -4,6 +4,7 @@ import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
   ITEM_DEFINITIONS,
+  ITEM_IDS,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -38,6 +39,15 @@ import {
 } from './BoatWorld';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
 import { survivalEventById } from './events';
+import {
+  deriveEventOutcomePresentation,
+  deriveEventVariantSeed,
+} from './eventPresentationOutcome';
+import {
+  DEDICATED_EVENT_IDS,
+  type DedicatedEventId,
+  type EventOutcomePresentation,
+} from './eventPresentationTypes';
 import { fishingCatchFood } from './fishingCatalog';
 import {
   deriveEventPhysicalResponse,
@@ -65,7 +75,9 @@ import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
-  world: Partial<BoatWorld>;
+  world: Partial<Omit<BoatWorld, 'stageEvent'>> & {
+    stageEvent?: (...args: any[]) => void;
+  };
   ui: Partial<SurvivalUI>;
   audio?: AudioSystem;
   onRestart?: () => void;
@@ -121,6 +133,53 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
   return value === 'barrel' || value === 'crate';
+}
+
+function isDedicatedEventId(eventId: string): eventId is DedicatedEventId {
+  return (DEDICATED_EVENT_IDS as readonly string[]).includes(eventId);
+}
+
+const EVENT_RESULT_RESOURCES = [
+  ['pressure', 'PRESSURE'],
+  ['health', 'HEALTH'],
+  ['hunger', 'HUNGER'],
+  ['energy', 'ENERGY'],
+  ['hull', 'HULL'],
+  ['food', 'FOOD'],
+  ['bait', 'BAIT'],
+  ['repairMaterial', 'REPAIR MATERIAL'],
+  ['rescueProgress', 'RESCUE PROGRESS'],
+] as const;
+
+function eventResultItemLabel(instanceId: ItemInstanceId): string {
+  const itemId = ITEM_IDS.find((id) => instanceId.startsWith(`${id}-`));
+  return itemId === undefined
+    ? instanceId.toLocaleUpperCase('en-US')
+    : ITEM_DEFINITIONS[itemId].label.toLocaleUpperCase('en-US');
+}
+
+export function formatEventResult(
+  result: EventOutcomePresentation,
+): Extract<EventResultView, { readonly message: string }> {
+  const lines: string[] = [];
+  for (const [resource, label] of EVENT_RESULT_RESOURCES) {
+    const delta = result.resourceDeltas[resource];
+    if (delta === undefined || delta === 0) continue;
+    lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
+  }
+  for (const instanceId of result.brokenInstanceIds) {
+    lines.push(`${eventResultItemLabel(instanceId)} BROKEN`);
+  }
+  for (const instanceId of result.lostInstanceIds) {
+    lines.push(`${eventResultItemLabel(instanceId)} LOST`);
+  }
+  for (const instanceId of result.consumedInstanceIds) {
+    lines.push(`${eventResultItemLabel(instanceId)} CONSUMED`);
+  }
+  return {
+    message: result.outcome.message,
+    lines,
+  };
 }
 
 export function formatFishingResult(
@@ -227,17 +286,18 @@ function testContext(
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
     shipAssets: {} as ShipAssets,
+    eventModels: createEmptyEventModelLibraryForTest(),
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
     audio,
-    eventModels: EMPTY_SURVIVAL_EVENT_MODELS,
+    featuredEventModels: EMPTY_SURVIVAL_EVENT_MODELS,
   };
 }
 
 export class SurvivalPhase implements GamePhase {
   private context!: PhaseContext;
   private session!: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
-  private world!: Partial<BoatWorld>;
+  private world!: SurvivalPhaseTestDependencies['world'];
   private ui!: Partial<SurvivalUI>;
   private onRestart!: () => void;
   private scavengeElapsedSeconds = 0;
@@ -306,8 +366,8 @@ export class SurvivalPhase implements GamePhase {
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
+          context.featuredEventModels,
           context.eventModels,
-          context.supernaturalEventModels,
         ),
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
@@ -361,8 +421,10 @@ export class SurvivalPhase implements GamePhase {
       this.visibilityDocument = document;
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
       if (document.hidden) {
-        this.visibilityPauseActive = true;
-        this.setPaused(true);
+        if (!this.paused) {
+          this.visibilityPauseActive = true;
+          this.setPaused(true);
+        }
         this.world.setDocumentHidden?.(true);
       }
     }
@@ -525,7 +587,7 @@ export class SurvivalPhase implements GamePhase {
   private initialize(
     context: PhaseContext,
     session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>,
-    world: Partial<BoatWorld>,
+    world: SurvivalPhaseTestDependencies['world'],
     ui: Partial<SurvivalUI>,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
@@ -950,7 +1012,8 @@ export class SurvivalPhase implements GamePhase {
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     const itemType = pending.inventory[instanceId]?.type;
-    if (itemType !== undefined) this.audio.tool(itemType);
+    if (isDedicatedEventId(eventId)) this.audio.eventAction(eventId, choiceId);
+    else if (itemType !== undefined) this.audio.tool(itemType);
     const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
@@ -978,10 +1041,18 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     const resolved = this.session.snapshot();
-    const response = deriveEventPhysicalResponse(
-      choiceId,
-      pending.inventory,
-      resolved.inventory,
+    const response = isDedicatedEventId(eventId)
+      ? { choiceId, instanceId, condition: resolved.inventory[instanceId]?.condition ?? 'lost' }
+      : deriveEventPhysicalResponse(
+          choiceId,
+          pending.inventory,
+          resolved.inventory,
+          instanceId,
+        );
+    const presentation = deriveEventOutcomePresentation(
+      pending,
+      resolved,
+      outcome,
       instanceId,
     );
     await this.runEventResolution(
@@ -990,6 +1061,7 @@ export class SurvivalPhase implements GamePhase {
       eventState,
       generation,
       response,
+      presentation,
     );
   }
 
@@ -1028,6 +1100,12 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     const resolved = this.session.snapshot();
+    const presentation = deriveEventOutcomePresentation(
+      pending,
+      resolved,
+      outcome,
+      null,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
@@ -1039,6 +1117,7 @@ export class SurvivalPhase implements GamePhase {
         resolved.inventory,
         null,
       ),
+      presentation,
     );
   }
 
@@ -1131,6 +1210,12 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     const resolved = this.session.snapshot();
+    const presentation = deriveEventOutcomePresentation(
+      pending,
+      resolved,
+      outcome,
+      null,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
@@ -1142,6 +1227,7 @@ export class SurvivalPhase implements GamePhase {
         resolved.inventory,
         null,
       ),
+      presentation,
     );
   }
 
@@ -1150,13 +1236,38 @@ export class SurvivalPhase implements GamePhase {
     outcome: ActionOutcome,
     eventState: Extract<SurvivalState, 'dayEvent' | 'nightEvent'> | SurvivalState,
     generation: number,
-    physicalResponse: EventPhysicalResponsePresentation,
+    physicalResponse: EventPhysicalResponsePresentation | {
+      readonly choiceId: string;
+      readonly instanceId: ItemInstanceId;
+      readonly condition: string;
+    },
+    presentation: EventOutcomePresentation,
   ): Promise<void> {
     this.setBusy(true);
     this.audio.beginEventReaction(eventId, outcome);
+    if (
+      isDedicatedEventId(eventId)
+      && (
+        (presentation.resourceDeltas.hull ?? 0) < 0
+        || (presentation.resourceDeltas.health ?? 0) < 0
+      )
+    ) {
+      this.audio.eventAction(eventId, 'damage');
+    }
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(eventId, outcome, physicalResponse)
+      (isDedicatedEventId(eventId)
+        ? this.world.reactToEventOutcome?.(
+            eventId,
+            outcome,
+            physicalResponse,
+            presentation,
+          )
+        : this.world.reactToEventOutcome?.(
+            eventId,
+            outcome,
+            physicalResponse,
+          ))
         ?? Promise.resolve(),
     ]);
     this.audio.finishEventReaction(eventId);
@@ -1166,11 +1277,14 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
     const resultCaption = outcome.eventPresentationKey === undefined
       ? undefined
       : EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey];
-    if (eventId !== 'drifting-loot' && resultCaption !== undefined) {
+    if (
+      !isDedicatedEventId(eventId)
+      && eventId !== 'drifting-loot'
+      && resultCaption !== undefined
+    ) {
       const resultView: EventResultView = {
         caption: resultCaption,
         detail: outcome.message,
@@ -1184,10 +1298,19 @@ export class SurvivalPhase implements GamePhase {
     }
     if (eventId === 'dangerous-waters') {
       this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
+    } else if (isDedicatedEventId(eventId)) {
+      this.ui.showEventResult?.(formatEventResult(presentation));
     } else if (eventState === 'nightEvent' && resultCaption === undefined) {
       this.ui.showEventOutcome?.(outcome);
+    } else if (eventState !== 'nightEvent') {
+      this.ui.showFeedback?.(outcome);
     }
+    const isDedicatedEvent = isDedicatedEventId(eventId);
     if (isTerminal(terminal.state)) {
+      if (isDedicatedEvent) {
+        await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
+        if (!this.isContinuationActive(generation)) return;
+      }
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
       else this.clearEventPresentation();
@@ -1325,8 +1448,20 @@ export class SurvivalPhase implements GamePhase {
       driftingLootVariant = current.pendingDriftingLootVariant;
     }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
-    this.world.stageEvent?.(event.id, driftingLootVariant);
+    if (isDedicatedEventId(event.id)) {
+      this.world.stageEvent?.({
+        eventId: event.id,
+        targetInstanceId: current.pendingEventTargetId,
+        variantSeed: deriveEventVariantSeed(current.seed, current.day, event.id),
+      });
+    } else {
+      this.world.stageEvent?.(event.id, driftingLootVariant);
+    }
     this.eventPresentation = 'revealing';
+    if (isDedicatedEventId(event.id)) {
+      await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     if (event.id === 'bad-sleep') {
       await (this.ui.setSleepCoverProfile?.('bad-sleep') ?? Promise.resolve());
@@ -1336,8 +1471,10 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
+    if (!isDedicatedEventId(event.id)) {
+      await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForEventResume(generation)
@@ -1535,8 +1672,12 @@ export class SurvivalPhase implements GamePhase {
   private readonly handleVisibilityChange = (): void => {
     const hidden = this.visibilityDocument?.hidden === true;
     if (hidden) {
-      this.visibilityPauseActive = true;
-      this.setPaused(true);
+      if (!this.paused) {
+        this.visibilityPauseActive = true;
+        this.setPaused(true);
+      }
+    } else if (this.visibilityPauseActive) {
+      this.setPaused(false);
     }
     this.world.setDocumentHidden?.(hidden);
   };
