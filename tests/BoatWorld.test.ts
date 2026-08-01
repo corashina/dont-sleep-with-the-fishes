@@ -2847,21 +2847,32 @@ describe('BoatWorld helpers', () => {
     const scuba = savedItem('scubaSet');
     const propModels = createTestPropModels();
     const disposeDive = vi.spyOn(DivePresentation.prototype, 'dispose');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [scuba],
-    );
-    world.syncInventory(snapshot([scuba]));
-    const pending = world.playDive(scuba.instanceId, () => undefined);
+    let world: BoatWorld | undefined;
+    try {
+      world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [scuba],
+      );
+      world.syncInventory(snapshot([scuba]));
+      const pending = world.playDive(scuba.instanceId, () => undefined);
 
-    world.dispose();
-    world.dispose();
-    await pending;
-    expect(disposeDive).toHaveBeenCalledOnce();
-    disposeDive.mockRestore();
-    propModels.dispose();
+      world.dispose();
+      world.dispose();
+      await pending;
+      expect(disposeDive).toHaveBeenCalledOnce();
+    } finally {
+      try {
+        world?.dispose();
+      } finally {
+        try {
+          disposeDive.mockRestore();
+        } finally {
+          propModels.dispose();
+        }
+      }
+    }
   });
 
   it('drives two exact same-group actors until each owner releases it', () => {
