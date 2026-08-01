@@ -150,7 +150,7 @@ describe('baseline scavenge route planner', () => {
     const plan = planBaselineScavengeRoute({
       assignments: [
         assignment('near', 1, [1, 0]),
-        assignment('far', 1, [50, 0]),
+        assignment('deadline-blocked', 1, [7, 0]),
       ],
       start: [0, 0],
       deposit: [0, 0],
@@ -163,8 +163,23 @@ describe('baseline scavenge route planner', () => {
     expect(plan.savedCount).toBe(1);
     expect(plan.actions.at(-1)?.type).toBe('evacuate');
     expect(plan.actions.some(
-      (action) => action.type === 'pickup' && action.instanceId === 'far',
+      (action) => action.type === 'pickup' && action.instanceId === 'deadline-blocked',
     )).toBe(false);
+  });
+
+  it('accepts a branch with a four-metre round-trip detour', () => {
+    const plan = planBaselineScavengeRoute({
+      assignments: [assignment('branch', 1, [2, 0], true)],
+      start: [0, 0],
+      deposit: [0, 0],
+      evacuation: [0, 0],
+      metric,
+    });
+
+    expect(plan.savedCount).toBe(1);
+    expect(plan.actions.some(
+      (action) => action.type === 'pickup' && action.instanceId === 'branch',
+    )).toBe(true);
   });
 
   it('skips a branch when its round-trip detour exceeds four metres', () => {
