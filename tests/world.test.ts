@@ -157,6 +157,29 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('composes the scavenging intro impact with shared-wave vessel motion', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const sinking = getSinkingState(0, 120);
+    try {
+      world.setScavengeIntroImpact(0, 0, 0);
+      world.update(2, 1 / 60, sinking, new Vector3(), false);
+      const baseY = world.ship.position.y;
+      const baseX = world.ship.rotation.x;
+      const baseZ = world.ship.rotation.z;
+
+      world.setScavengeIntroImpact(-0.08, 0.045, -0.07);
+      world.update(2, 0, sinking, new Vector3(), false);
+      expect(world.ship.position.y).toBeCloseTo(baseY - 0.08);
+      expect(world.ship.rotation.x).toBeCloseTo(baseX + 0.045);
+      expect(world.ship.rotation.z).toBeCloseTo(baseZ - 0.07);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();

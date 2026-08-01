@@ -19,6 +19,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SinkingState } from '../game/sinking';
+import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import {
   BoatBuoyancy,
   smoothBoatPoseInto,
@@ -60,6 +61,7 @@ import type {
 } from './PropModelLibrary';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
+import { ScavengeIntroPresentation } from './ScavengeIntroPresentation';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -163,6 +165,7 @@ export class World {
   readonly evacuationBounds: Rect2;
   readonly playerNavigationBounds: PlayerNavigationBounds;
   readonly deckY = FREIGHTER_DIMENSIONS.deckY;
+  readonly scavengeIntroAnchors: ScavengeIntroAnchors;
   readonly lifeboatAcceptance: Box3;
   private readonly ocean: OceanRenderer;
   private readonly environment: Environment;
@@ -170,6 +173,7 @@ export class World {
   private readonly boatDepositSmoke!: BoatDepositSmoke;
   private readonly groundDropSmoke!: BoatDepositSmoke;
   private readonly itemPickupSmoke!: BoatDepositSmoke;
+  private readonly scavengeIntroPresentation!: ScavengeIntroPresentation;
   private readonly buoyancy: BoatBuoyancy;
   private scavengePhysics: ScavengePhysics | null = null;
   private physicsDebugView: ScavengePhysicsDebugView | null = null;
@@ -221,6 +225,9 @@ export class World {
     driftX: 0,
     driftZ: 0,
   };
+  private scavengeIntroImpactY = 0;
+  private scavengeIntroImpactPitch = 0;
+  private scavengeIntroImpactRoll = 0;
   private readonly flightWaveSample: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -248,6 +255,7 @@ export class World {
     this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
+    this.scavengeIntroAnchors = this.shipBuild.scavengeIntroAnchors;
     this.ship.position.y = -FREIGHTER_DRAFT;
     const barrelSpecs = SHIP_LAYOUT.details.filter(({ kind }) => kind === 'barrel');
     const dynamicBarrelColliders = new Set(
@@ -280,6 +288,10 @@ export class World {
     try {
       scene.add(this.ship);
       rollback.push(() => scene.remove(this.ship));
+      this.scavengeIntroPresentation = new ScavengeIntroPresentation();
+      this.scavengeIntroPresentation.root.position.set(0, this.deckY + 0.3, -7);
+      this.ship.add(this.scavengeIntroPresentation.root);
+      rollback.push(() => this.scavengeIntroPresentation.dispose());
       this.ship.updateMatrixWorld(true);
       this.physicsBarrels = barrelSpecs.map(({ id }) => {
         const barrel = this.ship.getObjectByName(`detail:${id}`);
@@ -517,15 +529,12 @@ export class World {
       delta,
       FREIGHTER_BUOYANCY_DAMPING,
     );
-    this.ship.position.set(
-      0,
-      sinking.sinkOffset + this.freighterPose.y - FREIGHTER_DRAFT,
-      0,
-    );
+    this.ship.position.set(0, sinking.sinkOffset + this.freighterPose.y
+      - FREIGHTER_DRAFT + this.scavengeIntroImpactY, 0);
     this.ship.rotation.set(
-      sinking.pitchRadians + this.freighterPose.pitch,
+      sinking.pitchRadians + this.freighterPose.pitch + this.scavengeIntroImpactPitch,
       0,
-      sinking.rollRadians - this.freighterPose.roll,
+      sinking.rollRadians - this.freighterPose.roll + this.scavengeIntroImpactRoll,
     );
     this.ship.updateMatrixWorld(true);
     this.ship.getWorldPosition(this.shipPhysicsTranslation);
@@ -538,6 +547,7 @@ export class World {
     this.scavengePhysics?.update(this.shipPhysicsPose, delta, simulatePhysics);
     if (!this.physicsBarrelsAttachedToShip) this.syncPhysicsObjects();
     this.shipBuild.updateEffects(delta, sinking.progress);
+    this.scavengeIntroPresentation.update(delta);
     for (const presentation of this.animatedItemPresentations.values()) {
       presentation.update(delta);
     }
@@ -599,6 +609,17 @@ export class World {
   setPresentationWeather(id: PresentationWeatherId): void {
     if (this.disposed) return;
     this.environment.setWeather(id);
+  }
+
+  setScavengeIntroImpact(y: number, pitch: number, roll: number): void {
+    this.scavengeIntroImpactY = Number.isFinite(y) ? y : 0;
+    this.scavengeIntroImpactPitch = Number.isFinite(pitch) ? pitch : 0;
+    this.scavengeIntroImpactRoll = Number.isFinite(roll) ? roll : 0;
+  }
+
+  triggerScavengeIntroCrash(): void {
+    if (this.disposed) return;
+    this.scavengeIntroPresentation.trigger();
   }
 
   attachPhysicsBarrelsToShip(): void {
@@ -744,6 +765,7 @@ export class World {
       () => this.boatDepositSmoke.dispose(),
       () => this.groundDropSmoke.dispose(),
       () => this.itemPickupSmoke.dispose(),
+      () => this.scavengeIntroPresentation.dispose(),
       () => this.physicsDebugView?.dispose(),
       () => this.scavengePhysics?.dispose(),
       () => {
