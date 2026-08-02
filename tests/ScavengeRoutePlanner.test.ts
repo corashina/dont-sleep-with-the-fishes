@@ -155,6 +155,25 @@ describe('expert scavenge route planner', () => {
       metric,
     })).toBeNull();
   });
+
+  it('does not cache a metric unless it declares stable distances', () => {
+    let scale = 1;
+    const mutableMetric = {
+      distance: (left: readonly [number, number], right: readonly [number, number]) =>
+        Math.abs(left[0] - right[0]) * scale,
+    };
+    const input = {
+      assignments: [assignment('moving', 1, [1, 0])],
+      start: [0, 0] as const,
+      deposit: [0, 0] as const,
+      evacuation: [0, 0] as const,
+      metric: mutableMetric,
+    };
+    const first = planExpertScavengeRoute(input)!;
+    scale = 2;
+    const second = planExpertScavengeRoute(input)!;
+    expect(second.seconds).toBeGreaterThan(first.seconds);
+  });
 });
 
 describe('baseline scavenge route planner', () => {
@@ -213,6 +232,19 @@ describe('baseline scavenge route planner', () => {
     expect(plan.actions.some(
       (action) => action.type === 'pickup' && action.instanceId === 'branch',
     )).toBe(true);
+  });
+
+  it('does not start an empty trip toward a remote branch', () => {
+    const plan = planBaselineScavengeRoute({
+      assignments: [assignment('remote-branch', 1, [9, 0], true)],
+      start: [0, 0],
+      deposit: [20, 0],
+      evacuation: [0, 0],
+      metric,
+    });
+
+    expect(plan.savedCount).toBe(0);
+    expect(plan.actions.some((action) => action.type === 'pickup')).toBe(false);
   });
 
   it('skips a branch when its round-trip detour exceeds four metres', () => {

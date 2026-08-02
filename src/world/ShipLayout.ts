@@ -253,6 +253,7 @@ export interface ShipNavigationAnalysis {
 }
 
 export interface ShipRouteMetric {
+  readonly stable?: true;
   distance(
     from: readonly [number, number],
     to: readonly [number, number],
@@ -1681,8 +1682,12 @@ export function createShipRouteMetric(
 ): ShipRouteMetric {
   const grid = buildShipNavigationGrid(layout);
   const cache = new Map<string, number | null>();
-  return {
-    distance(from, to): number | null {
+  return Object.freeze({
+    stable: true as const,
+    distance(
+      from: readonly [number, number],
+      to: readonly [number, number],
+    ): number | null {
       const fromCell = grid.toCell(from);
       const toCell = grid.toCell(to);
       if (fromCell === undefined || toCell === undefined) return null;
@@ -1695,7 +1700,7 @@ export function createShipRouteMetric(
       cache.set(key, distance);
       return distance;
     },
-  };
+  });
 }
 
 export function analyzeShipNavigation(layout: ShipLayoutSpec): ShipNavigationAnalysis {

@@ -74,7 +74,6 @@ const STANDING_EYE_HEIGHT = 1.5;
 const STRUCTURE_CLEARANCE = 0.1;
 const MIN_ITEM_SEPARATION = 1.25;
 const MAX_BACKTRACK_NODES_PER_ATTEMPT = 256;
-const MAX_GENERATED_SPATIAL_TEMPLATES = 32;
 const EPSILON = 1e-6;
 
 export const SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS = 64;
@@ -117,8 +116,165 @@ export const SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE = Object.freeze({
   'captainWhiskers-1': 'cargo-rack-port:top-left',
 } satisfies Record<ScavengeItemInstanceId, string>);
 
+const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
+  'cannedFood-1': 'cargo-crate-aft-port:top',
+  'cannedFood-2': 'workbench-port:top-left',
+  'cannedFood-3': 'stern-crate-port:top',
+  'baitTin-1': 'storage-shelf-forward:shelf-left',
+  'baitTin-2': 'bow-barrel-port-center:top',
+  'ductTape-1': 'stern-barrel-port-center:top',
+  'compass-1': 'cargo-crate-forward-port:top',
+  'map-1': 'cabin-desk-aft:top-right',
+  'medicalKit-1': 'workroom-crate-center-port:top',
+  'spyglass-1': 'chart-table-port:top-far-right',
+  'fishingNet-1': 'cargo-rack-starboard:top-left',
+  'bucket-1': 'cabin-cabinet-port-forward:top',
+  'flareGun-1': 'bow-crate-starboard:top',
+  'scubaSet-1': 'cargo-crate-forward-starboard:top',
+  'anchor-1': 'cabin-bunk-port:rest',
+  'bottledPaper-1': 'chart-table-port:top-left',
+  'umbrella-1': 'workbench-starboard:top-right',
+  'swimRing-1': 'cabin-desk-starboard-aft:top-left',
+  'flashlight-1': 'bow-box-starboard-center:top',
+  'harpoonGun-1': 'cargo-rod-rack-port:rod',
+  'captainWhiskers-1': 'cargo-rack-port:top-right',
+} satisfies Record<ScavengeItemInstanceId, string>);
+
+const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'anchor-1': 'cargo-rack-port:top-right',
+    'captainWhiskers-1': 'cabin-bunk-port:rest',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'bucket-1': 'cargo-rack-port:top-right',
+    'scubaSet-1': 'cabin-table-starboard-center:top-right',
+    'bottledPaper-1': 'chart-table-forward:top-left',
+    'swimRing-1': 'cargo-crate-forward-starboard:top',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cabin-cabinet-port-forward:top',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'spyglass-1': 'chart-table-forward:top-left',
+    'fishingNet-1': 'workbench-starboard:top-right',
+    'umbrella-1': 'cargo-rack-starboard:top-right',
+    'flashlight-1': 'bow-crate-port:top',
+    'captainWhiskers-1': 'cargo-rack-port:top-left',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'spyglass-1': 'chart-table-forward:top-left',
+    'fishingNet-1': 'cargo-rack-starboard:top-right',
+    'flareGun-1': 'bow-box-starboard-center:top',
+    'scubaSet-1': 'cabin-table-starboard-center:top-right',
+    'swimRing-1': 'cargo-crate-forward-starboard:top',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cargo-rack-port:top-left',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'compass-1': 'cabin-desk-aft:top-right',
+    'map-1': 'cargo-crate-forward-port:top',
+    'bucket-1': 'cargo-rack-port:top-right',
+    'swimRing-1': 'cabin-table-starboard-center:top-left',
+    'captainWhiskers-1': 'cabin-cabinet-port-forward:top',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'baitTin-1': 'storage-shelf-forward:shelf-right',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'flareGun-1': 'bow-box-starboard-center:top',
+    'scubaSet-1': 'cabin-table-starboard-center:top-right',
+    'bottledPaper-1': 'chart-table-forward:top-left',
+    'swimRing-1': 'cargo-crate-forward-starboard:top',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cargo-rack-port:top-left',
+  },
+  {
+    'ductTape-1': 'stern-crate-starboard:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'flareGun-1': 'bow-box-starboard-center:top',
+    'anchor-1': 'cargo-rack-port:top-right',
+    'bottledPaper-1': 'chart-table-forward:top-left',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cabin-bunk-port:rest',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'baitTin-1': 'storage-shelf-forward:shelf-right',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'compass-1': 'cabin-desk-aft:top-right',
+    'map-1': 'cargo-crate-forward-port:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'spyglass-1': 'chart-table-forward:top-left',
+    'bucket-1': 'cargo-rack-port:top-right',
+    'scubaSet-1': 'cabin-table-starboard-center:top-right',
+    'swimRing-1': 'cargo-crate-forward-starboard:top',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cabin-cabinet-port-forward:top',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'baitTin-1': 'storage-shelf-forward:shelf-right',
+    'compass-1': 'cabin-desk-aft:top-left',
+    'map-1': 'cargo-crate-forward-port:top',
+    'medicalKit-1': 'cargo-crate-aft-starboard:top',
+    'bucket-1': 'cargo-rack-port:top-right',
+    'scubaSet-1': 'cabin-table-starboard-center:top-right',
+    'bottledPaper-1': 'chart-table-forward:top-left',
+    'swimRing-1': 'cargo-crate-forward-starboard:top',
+    'flashlight-1': 'bow-crate-port:top',
+    'harpoonGun-1': 'workroom-crate-center-port:top',
+    'captainWhiskers-1': 'cabin-cabinet-port-forward:top',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'ductTape-1': 'stern-crate-starboard:top',
+    'compass-1': 'cabin-desk-aft:top-right',
+    'map-1': 'cargo-crate-forward-port:top',
+    'spyglass-1': 'chart-table-forward:top-left',
+    'fishingNet-1': 'workbench-starboard:top-right',
+    'flareGun-1': 'bow-box-starboard-center:top',
+    'umbrella-1': 'cargo-rack-starboard:top-right',
+    'flashlight-1': 'bow-crate-port:top',
+  },
+  {
+    'cannedFood-2': 'workroom-crate-center-starboard:top',
+    'spyglass-1': 'chart-table-forward:top-left',
+    'fishingNet-1': 'workbench-starboard:top-right',
+    'umbrella-1': 'cargo-rack-starboard:top-right',
+    'flashlight-1': 'bow-crate-port:top',
+    'captainWhiskers-1': 'cargo-rack-port:top-left',
+  },
+] satisfies readonly Partial<Record<ScavengeItemInstanceId, string>>[]);
+
+const SCAVENGE_GENERATED_SURFACE_MAPS: readonly Readonly<
+  Record<ScavengeItemInstanceId, string>
+>[] = Object.freeze([
+  SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE,
+  ...SCAVENGE_GENERATED_LAYOUT_OVERRIDES.map((overrides) => Object.freeze({
+    ...SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE,
+    ...overrides,
+  })),
+]);
+
 const PRODUCTION_INSTANCE_IDS = Object.freeze(
-  Object.keys(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE).sort(),
+  Object.keys(SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE).sort(),
 );
 
 const validatedSurfaceInputs = new WeakMap<
@@ -487,30 +643,6 @@ function separatedFromAssignments(
   return true;
 }
 
-function separatedFromOtherAssignments(
-  instanceId: ItemInstanceId,
-  candidate: PlacementCandidate,
-  assignments: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-): boolean {
-  for (const [assignedId, transform] of assignments) {
-    if (assignedId === instanceId) continue;
-    const dx = candidate.fit.position.x - transform.position.x;
-    const dz = candidate.fit.position.z - transform.position.z;
-    if (Math.hypot(dx, dz) < MIN_ITEM_SEPARATION - EPSILON) return false;
-  }
-  return true;
-}
-
-function assignmentsAreSeparated(
-  assignments: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-): boolean {
-  const values = [...assignments.values()];
-  return values.every((left, leftIndex) => values.slice(leftIndex + 1).every((right) => (
-    Math.hypot(left.position.x - right.position.x, left.position.z - right.position.z)
-      >= MIN_ITEM_SEPARATION - EPSILON
-  )));
-}
-
 function cloneGeneratedTemplate(
   template: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
 ): Map<ItemInstanceId, ShipItemTransform> {
@@ -532,99 +664,34 @@ function generatedSpatialTemplates(
   const cached = generatedTemplateCache.get(context);
   if (cached?.surfaces === surfaces && cached.blockers === blockers) return cached.templates;
 
-  const fallback = fallbackAssignment(instances, surfaces, blockers, context);
-  if (!fallback) return [];
-  const usedSurfaceIds = new Set(
-    [...fallback.values()].map(({ surfaceId }) => surfaceId),
-  );
-  const coveredTypes = new Set<ItemId>();
+  const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));
   const templates: ReadonlyMap<ItemInstanceId, ShipItemTransform>[] = [];
-
-  for (const instance of instances) {
-    if (coveredTypes.has(instance.type)) continue;
-    const original = fallback.get(instance.instanceId)!;
-    const orderedSurfaces = [...surfaces].sort((left, right) => (
-      Math.hypot(left.position.x - original.position.x, left.position.z - original.position.z)
-      - Math.hypot(right.position.x - original.position.x, right.position.z - original.position.z)
-      || left.id.localeCompare(right.id)
-    ));
-    for (const surface of orderedSurfaces) {
-      if (surface.id === original.surfaceId
-        || usedSurfaceIds.has(surface.id)
-        || surface.regionId !== original.regionId) continue;
-      const candidate = candidateFor(instance, surface, blockers, context);
-      if (!candidate || !separatedFromOtherAssignments(
-        instance.instanceId,
-        candidate,
-        fallback,
-      )) continue;
-      const variant = cloneGeneratedTemplate(fallback);
-      variant.set(instance.instanceId, transformFor(candidate, 'generated'));
-      if (!productionCountsPass(variant)
-        || !routeChecksPass(instances, variant, context)) continue;
-      templates.push(variant);
-      coveredTypes.add(instance.type);
-      break;
-    }
-    if (templates.length >= MAX_GENERATED_SPATIAL_TEMPLATES) break;
-  }
-
-  for (const instance of instances) {
-    if (coveredTypes.has(instance.type)
-      || templates.length >= MAX_GENERATED_SPATIAL_TEMPLATES) continue;
-    const original = fallback.get(instance.instanceId)!;
-    const targetSurfaces = surfaces.filter((surface) => (
-      !usedSurfaceIds.has(surface.id) && surface.regionId !== original.regionId
-    )).sort((left, right) => (
-      Math.hypot(left.position.x - original.position.x, left.position.z - original.position.z)
-      - Math.hypot(right.position.x - original.position.x, right.position.z - original.position.z)
-      || left.id.localeCompare(right.id)
-    ));
-    let found = false;
-    for (const targetSurface of targetSurfaces) {
-      const targetCandidate = candidateFor(instance, targetSurface, blockers, context);
-      if (!targetCandidate) continue;
-      const partners = instances.filter((partner) => (
-        partner.instanceId !== instance.instanceId
-        && fallback.get(partner.instanceId)!.regionId === targetSurface.regionId
-      ));
-      for (const partner of partners) {
-        const partnerOriginal = fallback.get(partner.instanceId)!;
-        const partnerSurfaces = surfaces.filter((surface) => (
-          surface.regionId === original.regionId
-          && surface.id !== targetSurface.id
-          && (!usedSurfaceIds.has(surface.id) || surface.id === original.surfaceId)
-        )).sort((left, right) => (
-          Math.hypot(
-            left.position.x - partnerOriginal.position.x,
-            left.position.z - partnerOriginal.position.z,
-          )
-          - Math.hypot(
-            right.position.x - partnerOriginal.position.x,
-            right.position.z - partnerOriginal.position.z,
-          )
-          || left.id.localeCompare(right.id)
-        ));
-        for (const partnerSurface of partnerSurfaces) {
-          const partnerCandidate = candidateFor(partner, partnerSurface, blockers, context);
-          if (!partnerCandidate) continue;
-          const variant = cloneGeneratedTemplate(fallback);
-          variant.set(instance.instanceId, transformFor(targetCandidate, 'generated'));
-          variant.set(partner.instanceId, transformFor(partnerCandidate, 'generated'));
-          if (!assignmentsAreSeparated(variant)
-            || !productionCountsPass(variant)
-            || !routeChecksPass(instances, variant, context)) continue;
-          templates.push(variant);
-          coveredTypes.add(instance.type);
-          found = true;
-          break;
-        }
-        if (found) break;
+  for (const surfaceMap of SCAVENGE_GENERATED_SURFACE_MAPS) {
+    const assignment = new Map<ItemInstanceId, ShipItemTransform>();
+    const usedSlots = new Set<string>();
+    let valid = true;
+    for (const instance of instances) {
+      const surfaceId = surfaceMap[instance.instanceId as ScavengeItemInstanceId];
+      const surface = surfaceId ? surfaceById.get(surfaceId) : undefined;
+      const candidate = surface
+        ? candidateFor(instance, surface, blockers, context)
+        : undefined;
+      if (!candidate
+        || usedSlots.has(candidate.surface.physicalSlotId)
+        || !separatedFromAssignments(candidate, assignment)) {
+        valid = false;
+        break;
       }
-      if (found) break;
+      usedSlots.add(candidate.surface.physicalSlotId);
+      assignment.set(instance.instanceId, transformFor(candidate, 'generated'));
+    }
+    if (valid
+      && assignment.size === instances.length
+      && productionCountsPass(assignment)
+      && routeChecksPass(instances, assignment, context)) {
+      templates.push(assignment);
     }
   }
-
   generatedTemplateCache.set(context, { surfaces, blockers, templates });
   return templates;
 }

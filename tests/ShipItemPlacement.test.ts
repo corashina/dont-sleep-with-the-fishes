@@ -249,6 +249,31 @@ describe('ship item placement', () => {
     expect(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS).toBe(64);
   });
 
+  it('generates without a surface required only by the fallback', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const context = placementContext(ship, 1);
+    const surfaces = ship.itemSurfaces.filter(
+      ({ id }) => id !== SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE['ductTape-1'],
+    );
+    try {
+      const assignments = assignShipItems(
+        createScavengeItemInstances(),
+        surfaces,
+        () => 0,
+        ship.colliders,
+        context,
+      );
+      expect(assignments.size).toBe(21);
+      expect([...assignments.values()].every(
+        ({ placementSource }) => placementSource === 'generated',
+      )).toBe(true);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
+
   it('places production items without blocker overlap', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
@@ -302,6 +327,8 @@ describe('ship item placement', () => {
       let generatedCount = 0;
       const surfacesByType = new Map<string, Set<string>>();
       const surfacesByRegion = new Map<string, Set<string>>();
+      const signatures = new Set<string>();
+      const signaturesBySeed: string[] = [];
       for (let seed = 0; seed < 1_000; seed += 1) {
         const assignments = assignShipItems(
           instances,
@@ -316,6 +343,18 @@ describe('ship item placement', () => {
         )) {
           generatedCount += 1;
         }
+        const signature = instances.map(({ instanceId }) => (
+          `${instanceId}:${assignments.get(instanceId)!.surfaceId}`
+        )).sort().join('|');
+        signatures.add(signature);
+        signaturesBySeed.push(signature);
+        const changedFromFallback = instances.filter(({ instanceId }) => (
+          assignments.get(instanceId)!.surfaceId
+          !== SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE[
+            instanceId as keyof typeof SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE
+          ]
+        )).length;
+        expect(changedFromFallback).toBeGreaterThanOrEqual(5);
         for (const instance of instances) {
           const value = assignments.get(instance.instanceId)!;
           const typeSurfaces = surfacesByType.get(instance.type) ?? new Set<string>();
@@ -350,8 +389,22 @@ describe('ship item placement', () => {
         expect(baseline.savedCount).toBeLessThanOrEqual(17);
       }
       expect(generatedCount).toBe(1_000);
+      expect(signatures.size).toBe(12);
+      for (let seed = 0; seed < 64; seed += 1) {
+        const assignments = assignShipItems(
+          instances,
+          ship.itemSurfaces,
+          mulberry32(seed),
+          ship.colliders,
+          context,
+        );
+        const signature = instances.map(({ instanceId }) => (
+          `${instanceId}:${assignments.get(instanceId)!.surfaceId}`
+        )).sort().join('|');
+        expect(signature).toBe(signaturesBySeed[seed]);
+      }
       expect(new Set([...surfacesByType.values()].flatMap((values) => [...values])).size)
-        .toBeGreaterThanOrEqual(30);
+        .toBeGreaterThanOrEqual(32);
       for (const [itemType, surfaceIds] of surfacesByType) {
         expect(surfaceIds.size, itemType).toBeGreaterThanOrEqual(2);
       }
