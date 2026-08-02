@@ -53,6 +53,41 @@ Result: passed.
 
 `git diff --check` passed.
 
+## Final review fixes
+
+- The compass fallback spot now appears only in fallback data.
+- The independence test asserts the exact fallback-only spot.
+- The test exercises all twelve generated template selectors with the spot present and absent.
+- All twelve selectors return the same generated signatures after the spot is removed.
+- Generated template caching now requires `routeMetric.stable === true`.
+- Unmarked or mutable route metrics revalidate templates on every call.
+- A mutable-metric regression changes route reachability between two calls.
+- The second call rejects the stale template and proves that the cache is bypassed.
+
+Focused command:
+
+`npm.cmd test -- --run tests/ShipItemPlacement.test.ts tests/ScavengeRoutePlanner.test.ts tests/ShipLayout.test.ts`
+
+Result: 3 files passed. All 71 tests passed.
+
+The focused 1,000-seed test took 3.270 seconds.
+
+Full command:
+
+`npm.cmd test`
+
+Result: 58 files passed. All 1,061 tests passed.
+
+The full run took 13.95 seconds.
+
+Type command:
+
+`npm.cmd run typecheck`
+
+Result: passed.
+
+`git diff --check` passed.
+
 ## Placement evidence
 
 All 1,000 seeds returned generated layouts. No seed used fallback.
@@ -70,7 +105,7 @@ The seeds used 32 unique surface IDs across all six regions.
 
 Every scavenging item type used at least two valid surfaces.
 
-Expert route times ranged from 55.907691 to 57.525739 seconds.
+Expert route times stayed within the required 54 to 58 seconds.
 
 Baseline saved 17 items on each validated template.
 
@@ -82,7 +117,7 @@ The fallback passes physical, region, branch, separation, weight, and route chec
 
 Surface validation is cached for stable surface and blocker arrays.
 
-Spatial templates are cached for each immutable placement context.
+Spatial templates are cached only when the route metric declares stable distances.
 
 Expert plans use a bounded cache only for metrics that declare stable distances.
 

@@ -253,21 +253,87 @@ describe('ship item placement', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     const context = placementContext(ship, 1);
+    const fallbackOnlySurface = SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE['compass-1'];
+    expect(fallbackOnlySurface).toBe('cabin-desk-aft:top-left');
     const surfaces = ship.itemSurfaces.filter(
-      ({ id }) => id !== SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE['ductTape-1'],
+      ({ id }) => id !== fallbackOnlySurface,
     );
     try {
-      const assignments = assignShipItems(
+      const instances = createScavengeItemInstances();
+      const fullSignatures = new Set<string>();
+      const filteredSignatures = new Set<string>();
+      for (let index = 0; index < 12; index += 1) {
+        const random = () => (index + 0.5) / 12;
+        const full = assignShipItems(
+          instances,
+          ship.itemSurfaces,
+          random,
+          ship.colliders,
+          context,
+        );
+        expect([...full.values()].some(
+          ({ surfaceId }) => surfaceId === fallbackOnlySurface,
+        )).toBe(false);
+        fullSignatures.add(instances.map(({ instanceId }) => (
+          `${instanceId}:${full.get(instanceId)!.surfaceId}`
+        )).sort().join('|'));
+
+        const filtered = assignShipItems(
+          instances,
+          surfaces,
+          random,
+          ship.colliders,
+          context,
+        );
+        expect(filtered.size).toBe(21);
+        expect([...filtered.values()].every(
+          ({ placementSource }) => placementSource === 'generated',
+        )).toBe(true);
+        filteredSignatures.add(instances.map(({ instanceId }) => (
+          `${instanceId}:${filtered.get(instanceId)!.surfaceId}`
+        )).sort().join('|'));
+      }
+      expect(fullSignatures.size).toBe(12);
+      expect(filteredSignatures).toEqual(fullSignatures);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
+
+  it('revalidates generated templates for an unmarked mutable route metric', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const base = placementContext(ship, 1);
+    const metricState = { blocked: false };
+    const context: ShipPlacementContext = {
+      ...base,
+      routeMetric: {
+        distance(from, to) {
+          return metricState.blocked ? null : base.routeMetric.distance(from, to);
+        },
+      },
+    };
+    try {
+      const first = assignShipItems(
         createScavengeItemInstances(),
-        surfaces,
+        ship.itemSurfaces,
         () => 0,
         ship.colliders,
         context,
       );
-      expect(assignments.size).toBe(21);
-      expect([...assignments.values()].every(
+      expect([...first.values()].every(
         ({ placementSource }) => placementSource === 'generated',
       )).toBe(true);
+
+      metricState.blocked = true;
+      expect(() => assignShipItems(
+        createScavengeItemInstances(),
+        ship.itemSurfaces,
+        () => 0,
+        ship.colliders,
+        context,
+      )).toThrow(/fallback standing route fails/i);
     } finally {
       ship.dispose();
       library.dispose();
