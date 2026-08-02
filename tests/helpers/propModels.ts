@@ -23,6 +23,17 @@ export function createTestPropModels(): PropModelLibrary {
         color: new Color().setHSL(index / ITEM_IDS.length, 0.55, 0.5),
       }),
     ));
+    if (id === 'scubaSet') {
+      const goggles = new Group();
+      goggles.name = 'scubaSet:scubaGoggles';
+      const glasses = new Mesh(
+        new BoxGeometry(0.3, 0.15, 0.08),
+        new MeshStandardMaterial({ color: 0x263c3d }),
+      );
+      glasses.name = 'glasses25.001';
+      goggles.add(glasses);
+      model.add(goggles);
+    }
     root.add(model);
     return root;
   };

@@ -15,13 +15,20 @@ describe('dive choreography', () => {
   it('moves right before it raises and settles the goggles', () => {
     const pose = createDivePose();
     sampleDivePose(0.275, pose);
-    expect(pose.cameraX).toBeCloseTo(0.78 * 0.103515625);
+    expect(pose.cameraX).toBeCloseTo(1.66 * 0.103515625);
     sampleDivePose(1.1, pose);
-    expect(pose.cameraX).toBeGreaterThan(0.6);
+    expect(pose.cameraX).toBeGreaterThan(1.6);
+    expect(pose.cameraOutward).toBe(0);
     expect(pose.goggleLift).toBe(0);
+    sampleDivePose(1.65, pose);
+    expect(pose.goggleLift).toBeGreaterThan(0);
+    expect(pose.goggleLift).toBeLessThan(1);
     sampleDivePose(2.2, pose);
     expect(pose.goggleLift).toBe(1);
     expect(pose.goggleSettle).toBeCloseTo(1);
+    expect(pose.cameraOutward).toBe(0);
+    sampleDivePose(DIVE_IMPACT_SECONDS, pose);
+    expect(pose.cameraOutward).toBeGreaterThan(0.95);
   });
 
   it('crosses the water once the backward pitch reaches impact', () => {

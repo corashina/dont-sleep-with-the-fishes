@@ -168,8 +168,11 @@ const EMPTY_EVENT_PHYSICAL_RESPONSE: EventPhysicalResponsePresentation = Object.
 });
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
-const DIVE_STARBOARD_POSITION = new Vector3(0.78, 0.76, 0.55);
-const DIVE_FORWARD_TARGET = new Vector3(0.72, 0.62, -3.8);
+const DIVE_STARBOARD_POSITION = new Vector3(1.66, 0.76, -1.2);
+const DIVE_LEFT_TURN = new Quaternion().setFromAxisAngle(
+  new Vector3(0, 1, 0),
+  Math.PI / 2,
+);
 const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
 export const FISHING_PLAYER_SEAT = Object.freeze({
   x: 0,
@@ -901,16 +904,16 @@ export class BoatWorld {
     camera.lookAt(this.baseCameraLookTarget);
     this.baseCameraPosition.copy(camera.position);
     this.baseCameraQuaternion = camera.quaternion.clone();
-    this.fishingMatrixScratch.lookAt(
-      DIVE_STARBOARD_POSITION,
-      DIVE_FORWARD_TARGET,
-      camera.up,
-    );
-    this.diveStarboardQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
+    this.diveStarboardQuaternion.copy(this.baseCameraQuaternion)
+      .multiply(DIVE_LEFT_TURN);
     this.divePresentation = new DivePresentation({
       camera,
       starboardPosition: DIVE_STARBOARD_POSITION,
       starboardQuaternion: this.diveStarboardQuaternion,
+      goggleModel: propModels.create({
+        instanceId: 'dive-goggles-model' as ItemInstanceId,
+        type: 'scubaSet',
+      }),
     });
     this.fishingMatrixScratch.lookAt(
       this.fishingCameraAngleOrigin,

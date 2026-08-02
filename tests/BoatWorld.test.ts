@@ -2801,9 +2801,16 @@ describe('BoatWorld helpers', () => {
 
     const pending = world.playDive(scuba.instanceId, impact);
     expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
 
     world.update(81.1, 1.1);
     expect(updateDive).toHaveBeenCalledWith(1.1, 1.1, expect.any(Number));
+    const seatedX = camera.position.x;
+    expect(seatedX).toBeGreaterThan(1.6);
+    expect(camera.position.z).toBeLessThan(-1.1);
+    const initialDirection = new Vector3(0, 0, -1).applyQuaternion(initialQuaternion);
+    const seatedDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(initialDirection.angleTo(seatedDirection)).toBeCloseTo(Math.PI / 2);
     const entryPosition = internals.divePresentation.copyWaterEntryWorldPosition(
       new Vector3(),
     );
@@ -2824,6 +2831,8 @@ describe('BoatWorld helpers', () => {
     expect(updateDive.mock.calls[0]![2]).toBeCloseTo(entryWaveHeight);
     expect(camera.position.toArray()).not.toEqual(initialPosition.toArray());
     world.update(83.6, 2.5);
+    expect(camera.position.x).toBeGreaterThan(seatedX + 0.85);
+    expect(camera.position.x).toBeGreaterThan(2.3);
     world.update(84, 0.4);
     expect(impact).toHaveBeenCalledOnce();
 

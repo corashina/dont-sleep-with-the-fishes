@@ -1554,46 +1554,153 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .dive-result {
   position: absolute;
-  left: 50%;
-  bottom: clamp(38px, 10dvh, 104px);
-  z-index: 10;
+  inset: 0;
+  z-index: 24;
   display: grid;
-  gap: 7px;
-  width: min(330px, calc(100vw - 48px));
-  padding: 13px 18px 14px;
-  border: 1px solid #4d9298;
-  background: #090c0df2;
-  box-shadow: inset 0 0 0 2px #020405, 4px 6px 0 #01020399;
-  clip-path: polygon(3% 4%, 97% 0, 100% 91%, 94% 100%, 2% 96%, 0 12%);
-  color: var(--ink-bone);
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 48%, #0a0d0f42, #020303b8 82%);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transform: translate(-50%, 10px);
-  transition: opacity 180ms ease-out, transform 180ms cubic-bezier(.22, .78, .28, 1);
+  transition: opacity 180ms ease-out, visibility 180ms ease-out;
 }
 .dive-result.is-visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  visibility: visible;
+  pointer-events: auto;
+}
+.dive-result__paper {
+  isolation: isolate;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: min(480px, calc(100vw - 48px));
+  min-height: 230px;
+  padding: 42px 48px 38px;
+  border: 8px solid #2b180f;
+  color: #33251b;
+  background:
+    radial-gradient(circle at 82% 18%, transparent 0 28px, #7c563322 29px 32px, transparent 33px),
+    repeating-linear-gradient(0deg, transparent 0 27px, #68462d1c 28px 29px),
+    linear-gradient(145deg, #ead8ad, #c9aa77 72%, #af8958);
+  box-shadow: 0 28px 70px #000c, inset 0 0 34px #71482155;
+  clip-path: polygon(2% 1%, 97% 0, 100% 6%, 98% 96%, 93% 100%, 3% 98%, 0 90%, 1% 7%);
+  transform: translateY(18px) rotate(-.35deg) scale(.96);
+  transition: transform 220ms cubic-bezier(.22, .78, .28, 1);
+}
+.dive-result.is-visible .dive-result__paper {
+  transform: translateY(0) rotate(-.35deg) scale(1);
+}
+.dive-result__paper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .3;
+  background:
+    repeating-radial-gradient(circle at 15% 28%, #3a29181f 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(7deg, transparent 0 4px, #fff3cf18 5px 6px);
+  mix-blend-mode: multiply;
+}
+.dive-result__paper::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  z-index: -1;
+  border: 1px solid #76513755;
+  box-shadow: inset 0 0 24px #5b351e44;
+  pointer-events: none;
 }
 .dive-result__title,
 .dive-result__lines {
   margin: 0;
 }
 .dive-result__title {
-  color: var(--ink-bone);
-  font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+  color: #342219;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
   font-weight: 400;
   letter-spacing: .08em;
-  text-shadow: 2px 2px 0 var(--ink-outline);
+  text-align: center;
+  text-shadow: none;
+}
+.dive-result__rewards {
+  display: flex;
+  min-height: 118px;
+  align-items: center;
+  justify-content: center;
+}
+.dive-result__rewards[hidden] {
+  display: none;
+}
+.dive-result__reward {
+  flex: 0 0 auto;
+  width: 112px;
+  height: 112px;
+  border-color: #33251b;
+  background: radial-gradient(circle at 42% 34%, #34495b, #101925 74%);
+  box-shadow:
+    inset 0 0 0 2px #8ca0ae55,
+    inset 5px -6px 0 #0205093d,
+    4px 6px 0 #4e321f66;
+}
+.dive-result__reward-entry {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.dive-result__reward-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+  color: #342219;
+  text-align: left;
+}
+.dive-result__reward-name {
+  font-size: clamp(1rem, 2.4vw, 1.3rem);
+  letter-spacing: .08em;
+}
+.dive-result__reward-quantity {
+  color: #75543b;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: .08em;
 }
 .dive-result__lines {
   display: grid;
-  gap: 3px;
+  gap: 7px;
   padding: 0;
-  color: var(--ink-bone);
-  font-size: .78rem;
-  letter-spacing: .08em;
+  color: #553829;
+  font-size: clamp(.95rem, 2vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: .1em;
   list-style: none;
+  text-align: center;
+}
+.dive-result__close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  z-index: 2;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0 0 4px;
+  place-items: center;
+  border: 2px solid #5d3d29;
+  color: #472b1d;
+  background: #d4b881;
+  box-shadow: 2px 3px 0 #57372066;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.dive-result__close:hover,
+.dive-result__close:focus-visible {
+  color: #26170f;
+  background: #ead4a5;
+  outline: 3px solid #8f3f29;
+  outline-offset: 2px;
 }
 @keyframes bad-sleep-top-eyelid {
   0% { transform: translateY(0); }
