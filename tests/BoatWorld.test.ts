@@ -43,6 +43,7 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   FOCUSED_EVENT_IDS,
   type FocusedEventPresentation,
@@ -2832,6 +2833,204 @@ describe('BoatWorld helpers', () => {
 
     display.dispose();
     propModels.dispose();
+  });
+
+  it('hides one presentation item without changing its inventory quantity', () => {
+    const scuba = savedItem('scubaSet');
+    const propModels = createTestPropModels();
+    const parent = new Group();
+    const display = new BoatSupplyDisplay(propModels, parent, [scuba]);
+    const currentSnapshot = snapshot([scuba]);
+    display.sync(currentSnapshot);
+
+    display.setPresentationItemHidden(scuba.instanceId, true);
+    expect(display.recordFor('scubaSet')).toMatchObject({
+      quantity: 1,
+      usableQuantity: 1,
+    });
+    expect(parent.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
+
+    display.setPresentationItemHidden(scuba.instanceId, false);
+    display.setPresentationItemHidden(scuba.instanceId, false);
+    expect(parent.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
+
+    display.setPresentationItemHidden(scuba.instanceId, true);
+    display.sync(currentSnapshot);
+    expect(parent.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
+    display.setPresentationItemHidden(scuba.instanceId, false);
+    expect(parent.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
+
+    display.dispose();
+    propModels.dispose();
+  });
+
+  it('plays and clears the dive presentation with shared wave updates', async () => {
+    const scuba = savedItem('scubaSet');
+    const camera = new PerspectiveCamera();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [scuba],
+    );
+    world.syncInventory(snapshot([scuba]));
+    world.update(80, 0.1);
+    const initialPosition = camera.position.clone();
+    const initialQuaternion = camera.quaternion.clone();
+    const internals = world as unknown as {
+      divePresentation: DivePresentation;
+      sampleWorldWaveInto: (
+        output: ReturnType<typeof sampleWaveField>,
+        time: number,
+        x: number,
+        z: number,
+        amplitudeScale: number,
+      ) => void;
+    };
+    const updateDive = vi.spyOn(internals.divePresentation, 'update');
+    const sampleDiveWave = vi.spyOn(internals, 'sampleWorldWaveInto');
+    const impact = vi.fn();
+
+    const pending = world.playDive(scuba.instanceId, impact);
+    expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
+
+    world.update(81.1, 1.1);
+    expect(updateDive).toHaveBeenCalledWith(1.1, 1.1, expect.any(Number));
+    const seatedX = camera.position.x;
+    expect(seatedX).toBeGreaterThan(1.6);
+    expect(camera.position.z).toBeLessThan(-1.1);
+    const initialDirection = new Vector3(0, 0, -1).applyQuaternion(initialQuaternion);
+    const seatedDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(initialDirection.angleTo(seatedDirection)).toBeCloseTo(Math.PI / 2);
+    const entryPosition = internals.divePresentation.copyWaterEntryWorldPosition(
+      new Vector3(),
+    );
+    expect(sampleDiveWave).toHaveBeenCalledWith(
+      expect.any(Object),
+      81.1,
+      entryPosition.x,
+      entryPosition.z,
+      presentationWeatherProfile('calm').waveScale,
+    );
+    const entryWaveHeight = sampleWaveField(
+      DEFAULT_WAVES,
+      81.1,
+      entryPosition.x,
+      entryPosition.z,
+      presentationWeatherProfile('calm').waveScale,
+    ).height;
+    expect(updateDive.mock.calls[0]![2]).toBeCloseTo(entryWaveHeight);
+    expect(camera.position.toArray()).not.toEqual(initialPosition.toArray());
+    world.update(83.6, 2.5);
+    expect(camera.position.x).toBeGreaterThan(seatedX + 0.85);
+    expect(camera.position.x).toBeGreaterThan(2.3);
+    world.update(84, 0.4);
+    expect(impact).toHaveBeenCalledOnce();
+
+    world.clearDivePresentation();
+    world.clearDivePresentation();
+    await pending;
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(initialQuaternion.toArray());
+    expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('restores the old gear before a second world dive hides a new instance', async () => {
+    const scuba = savedItem('scubaSet');
+    const secondScuba = savedItem('scubaSet', 2);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [scuba, secondScuba],
+    );
+    world.syncInventory(snapshot([scuba, secondScuba]));
+    const internals = world as unknown as {
+      supplyDisplay: BoatSupplyDisplay;
+    };
+    const setHidden = vi.spyOn(
+      internals.supplyDisplay,
+      'setPresentationItemHidden',
+    );
+    const secondId = secondScuba.instanceId;
+
+    const first = world.playDive(scuba.instanceId, () => undefined);
+    const second = world.playDive(secondId, () => undefined);
+    await first;
+
+    expect(setHidden.mock.calls.slice(0, 3)).toEqual([
+      [scuba.instanceId, true],
+      [scuba.instanceId, false],
+      [secondId, true],
+    ]);
+    world.clearDivePresentation();
+    await second;
+    expect(setHidden).toHaveBeenLastCalledWith(secondId, false);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles the dive presentation when the document becomes hidden', async () => {
+    const scuba = savedItem('scubaSet');
+    const camera = new PerspectiveCamera();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [scuba],
+    );
+    world.syncInventory(snapshot([scuba]));
+    const initialPosition = camera.position.clone();
+    const pending = world.playDive(scuba.instanceId, () => undefined);
+    world.update(1.1, 1.1);
+
+    world.setDocumentHidden(true);
+    await pending;
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+    expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('settles and disposes the dive presentation once with the world', async () => {
+    const scuba = savedItem('scubaSet');
+    const propModels = createTestPropModels();
+    const disposeDive = vi.spyOn(DivePresentation.prototype, 'dispose');
+    let world: BoatWorld | undefined;
+    try {
+      world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [scuba],
+      );
+      world.syncInventory(snapshot([scuba]));
+      const pending = world.playDive(scuba.instanceId, () => undefined);
+
+      world.dispose();
+      world.dispose();
+      await pending;
+      expect(disposeDive).toHaveBeenCalledOnce();
+    } finally {
+      try {
+        world?.dispose();
+      } finally {
+        try {
+          disposeDive.mockRestore();
+        } finally {
+          propModels.dispose();
+        }
+      }
+    }
   });
 
   it('drives two exact same-group actors until each owner releases it', () => {

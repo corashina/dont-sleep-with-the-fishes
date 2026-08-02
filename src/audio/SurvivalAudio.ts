@@ -125,18 +125,28 @@ export class SurvivalAudio {
       this.scope.play('tapeRepair');
     } else if (action === 'openChest') {
       this.scope.play('chest');
-    } else if (action === 'dive') {
-      this.startDive();
     } else if (action === 'sendMessage') {
       this.scope.play('confirm');
     }
   }
 
+  beginDive(): void {
+    if (this.disposed || this.diveActive) return;
+    this.diveActive = true;
+    this.scope.play('diveEntry');
+    this.scope.startLoop('underwaterMovement');
+  }
+
   finishDive(): void {
+    if (this.disposed || !this.diveActive) return;
+    this.cancelDive();
+    this.scope.play('diveSurface');
+  }
+
+  cancelDive(): void {
     if (this.disposed || !this.diveActive) return;
     this.diveActive = false;
     this.scope.stopLoop('underwaterMovement', 0.2);
-    this.scope.play('diveSurface');
   }
 
   fishingCast(): void {
@@ -271,15 +281,9 @@ export class SurvivalAudio {
   dispose(): void {
     if (this.disposed) return;
     this.clearEvent();
+    this.cancelDive();
     this.disposed = true;
     this.scope.dispose();
-  }
-
-  private startDive(): void {
-    if (this.diveActive) return;
-    this.diveActive = true;
-    this.scope.play('diveEntry');
-    this.scope.startLoop('underwaterMovement');
   }
 
   private stopEventMelody(fadeSeconds: number): void {

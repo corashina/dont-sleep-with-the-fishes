@@ -171,6 +171,8 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
 
 const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
+const DIVE_TRANSITION_MS = 750;
+const DIVE_COVERED_HOLD_MS = 250;
 const FISHING_FADE_MS = 180;
 const EVENT_CHOICE_BEAT_MS = 240;
 const EVENT_OUTCOME_HOLD_MS = 2_000;
@@ -223,6 +225,18 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
+export type SleepCoverProfile = 'solid' | 'bad-sleep' | 'dive';
+
+export interface DiveResultView {
+  readonly title: 'DIVE RESULT';
+  readonly reward: RewardSummary | null;
+  readonly lines: readonly string[];
+}
+
+function diveRewardName(reward: RewardSummary): string {
+  return ITEM_DEFINITIONS[driftingLootRewardItemId(reward)].label;
+}
+
 export interface FishingUiState {
   readonly mode: FishingUiMode;
   readonly message: string;
@@ -329,6 +343,12 @@ export class SurvivalUI {
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
+  private readonly dreamEyelids: readonly HTMLElement[];
+  private readonly diveResultLayer: HTMLElement;
+  private readonly diveResultTitle: HTMLElement;
+  private readonly diveResultRewards: HTMLElement;
+  private readonly diveResultLines: HTMLElement;
+  private readonly diveResultClose: HTMLButtonElement;
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly eventCaption: HTMLElement;
@@ -418,6 +438,8 @@ export class SurvivalUI {
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFade | null = null;
   private pendingSleepTransition: PendingFade | null = null;
+  private pendingDiveCoveredHold: PendingFade | null = null;
+  private pendingDiveResultConfirmation: PendingFade | null = null;
   private pendingEventChoiceBeat: PendingFade | null = null;
   private pendingEventOutcomeHold: PendingFade | null = null;
   private pendingCoveredSceneSettle: PendingFade | null = null;
@@ -438,7 +460,18 @@ export class SurvivalUI {
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover aria-hidden="true"></div>
+      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
+        <span data-dream-eyelid="top"></span>
+        <span data-dream-eyelid="bottom"></span>
+      </div>
+      <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
+        <div class="dive-result__paper">
+          <button type="button" class="dive-result__close ui-role-context" data-dive-result-close aria-label="Close dive result">&times;</button>
+          <h2 class="dive-result__title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
+          <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
+          <div class="dive-result__rewards" data-dive-result-rewards hidden></div>
+        </div>
+      </section>
       <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
         <i></i><i></i><i></i>
       </div>
@@ -565,6 +598,12 @@ export class SurvivalUI {
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
+    this.dreamEyelids = [...this.sleepCover.querySelectorAll<HTMLElement>('[data-dream-eyelid]')];
+    this.diveResultLayer = requireElement(this.root, '[data-dive-result]');
+    this.diveResultTitle = requireElement(this.root, '[data-dive-result-title]');
+    this.diveResultRewards = requireElement(this.root, '[data-dive-result-rewards]');
+    this.diveResultLines = requireElement(this.root, '[data-dive-result-lines]');
+    this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
@@ -618,6 +657,7 @@ export class SurvivalUI {
       this.journalLayer,
       this.repairOptionsLayer,
       this.endingLayer,
+      this.diveResultLayer,
       this.driftingLootResultLayer,
       this.fishingResultLayer,
       this.fishingLayer,
@@ -945,6 +985,13 @@ export class SurvivalUI {
     }, 2600);
   }
 
+  setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.sleepCover.dataset.profile = profile;
+    for (const eyelid of this.dreamEyelids) eyelid.hidden = profile === 'dive';
+    return Promise.resolve();
+  }
+
   private clearEventResult(): void {
     this.eventResult.hidden = true;
     this.eventResultMessage.textContent = '';
@@ -956,7 +1003,9 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.pendingSleepTransition?.finish();
     this.sleepCover.classList.toggle('is-covered', covered);
-    const delay = SLEEP_TRANSITION_MS;
+    const delay = this.sleepCover.dataset.profile === 'dive'
+      ? DIVE_TRANSITION_MS
+      : SLEEP_TRANSITION_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
@@ -974,6 +1023,123 @@ export class SurvivalUI {
       this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
       timer = window.setTimeout(finish, delay);
       this.pendingSleepTransition = { finish };
+    });
+  }
+
+  holdDiveCovered(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingDiveCoveredHold?.finish();
+    return this.createDiveHold(
+      DIVE_COVERED_HOLD_MS,
+      (pending) => { this.pendingDiveCoveredHold = pending; },
+      () => this.pendingDiveCoveredHold,
+      () => { this.pendingDiveCoveredHold = null; },
+    );
+  }
+
+  showDiveResult(view: DiveResultView): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.pendingDiveResultConfirmation?.finish();
+    this.diveResultTitle.textContent = view.title;
+    this.renderDiveReward(view.reward);
+    this.diveResultLines.hidden = view.lines.length === 0;
+    this.diveResultLines.replaceChildren(...view.lines.map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      return item;
+    }));
+    const confirmation = new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (this.pendingDiveResultConfirmation?.finish === finish) {
+          this.pendingDiveResultConfirmation = null;
+          this.clearDiveResultView();
+        }
+        resolve();
+      };
+      this.pendingDiveResultConfirmation = { finish };
+    });
+    this.showLayer(this.diveResultLayer);
+    this.diveResultClose.focus();
+    return confirmation;
+  }
+
+  hideDiveResult(): void {
+    if (this.disposed) return;
+    this.pendingDiveResultConfirmation?.finish();
+    this.clearDiveResultView();
+  }
+
+  private clearDiveResultView(): void {
+    this.hideLayer(this.diveResultLayer);
+    this.diveResultTitle.textContent = '';
+    this.diveResultRewards.hidden = true;
+    this.diveResultRewards.replaceChildren();
+    this.diveResultLines.hidden = true;
+    this.diveResultLines.replaceChildren();
+  }
+
+  private renderDiveReward(reward: RewardSummary | null): void {
+    this.diveResultRewards.replaceChildren();
+    this.diveResultRewards.hidden = reward === null;
+    if (reward === null) return;
+    const itemId = driftingLootRewardItemId(reward);
+    const entry = document.createElement('span');
+    entry.className = 'dive-result__reward-entry';
+    const circle = document.createElement('span');
+    circle.className = 'weight-circle is-filled dive-result__reward';
+    circle.dataset.itemType = itemId;
+    circle.setAttribute('aria-hidden', 'true');
+    const thumbnail = document.createElement('img');
+    thumbnail.className = 'weight-circle__thumbnail';
+    thumbnail.src = itemThumbnailUrl(itemId);
+    thumbnail.alt = '';
+    thumbnail.decoding = 'async';
+    thumbnail.draggable = false;
+    thumbnail.addEventListener('error', () => {
+      thumbnail.hidden = true;
+      circle.classList.add('has-image-error');
+    }, { once: true });
+    circle.append(thumbnail);
+    const copy = document.createElement('span');
+    copy.className = 'dive-result__reward-copy';
+    const name = document.createElement('strong');
+    name.className = 'dive-result__reward-name ui-role-context';
+    name.dataset.diveResultRewardName = '';
+    name.textContent = diveRewardName(reward);
+    const quantity = document.createElement('span');
+    quantity.className = 'dive-result__reward-quantity ui-role-numeral';
+    quantity.dataset.diveResultRewardQuantity = '';
+    quantity.textContent = `×${reward.quantity}`;
+    copy.append(name, quantity);
+    entry.append(circle, copy);
+    this.diveResultRewards.replaceChildren(entry);
+  }
+
+  private createDiveHold(
+    delay: number,
+    setPending: (pending: PendingFade) => void,
+    getPending: () => PendingFade | null,
+    clearPending: () => void,
+    onCurrentFinish?: () => void,
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (getPending()?.finish === finish) {
+          clearPending();
+          onCurrentFinish?.();
+        }
+        resolve();
+      };
+      timer = window.setTimeout(finish, delay);
+      setPending({ finish });
     });
   }
 
@@ -1272,6 +1438,8 @@ export class SurvivalUI {
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;
     this.pendingSleepTransition?.finish();
+    this.pendingDiveCoveredHold?.finish();
+    this.pendingDiveResultConfirmation?.finish();
     this.pendingFishingFade?.finish();
     this.pendingEventChoiceBeat?.finish();
     this.pendingEventOutcomeHold?.finish();
@@ -2175,6 +2343,11 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-journal-close')) {
       this.onJournalClose();
+      return;
+    }
+    if (button.hasAttribute('data-dive-result-close')) {
+      if (topmostModal !== this.diveResultLayer) return;
+      this.pendingDiveResultConfirmation?.finish();
       return;
     }
     if (button.hasAttribute('data-fishing-result-continue')) {

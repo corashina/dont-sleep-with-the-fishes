@@ -16,6 +16,7 @@ import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
 import {
   formatDangerousWatersOutcome,
+  formatDiveResult,
   formatDriftingLootResult,
   formatEventResult,
   formatFishingResult,
@@ -29,8 +30,10 @@ import type {
   SurvivalInventorySnapshot,
   SurvivalItemState,
   SurvivalSnapshot,
+  SurvivalState,
 } from '../src/survival/survivalTypes';
 import type {
+  DiveResultView,
   DriftingLootResultView,
   FishingResultView,
   FishingUiState,
@@ -124,6 +127,42 @@ describe('formatDangerousWatersOutcome', () => {
       detail: 'The rocks damage the boat.',
       result,
       state,
+    });
+  });
+});
+
+describe('formatDiveResult', () => {
+  it.each([
+    [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
+    [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
+    [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
+    [{ rescueProgress: 10, energy: -3 }, null, ['RESCUE PROGRESS +10']],
+    [{ energy: -3 }, null, ['NOTHING FOUND']],
+    [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
+  ] as const)('formats exact dive deltas', (deltas, reward, lines) => {
+    expect(formatDiveResult(accepted({ deltas }))).toEqual({
+      title: 'DIVE RESULT',
+      reward,
+      lines,
+    });
+  });
+
+  it('shows the truthful applied loss for a low-health fatal injury', () => {
+    expect(formatDiveResult(accepted({
+      deltas: { energy: -3, health: -4 },
+    }))).toEqual({
+      title: 'DIVE RESULT',
+      reward: null,
+      lines: ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES'],
+    });
+  });
+
+  it('passes an item reward to the result paper', () => {
+    const rewardSummary = { kind: 'item', id: 'energyBar', quantity: 1 } as const;
+    expect(formatDiveResult(accepted({ deltas: { energy: -3 }, rewardSummary }))).toEqual({
+      title: 'DIVE RESULT',
+      reward: rewardSummary,
+      lines: [],
     });
   });
 });
@@ -453,9 +492,290 @@ async function flushPromises(): Promise<void> {
   await Promise.resolve();
 }
 
+function createDiveRig(options: {
+  readonly terminalState?: Extract<SurvivalState, 'dead' | 'sunk' | 'rescued'>;
+  readonly withScuba?: boolean;
+} = {}) {
+  const calls: string[] = [];
+  const sequence = deferred();
+  const fadeOut = deferred();
+  const coveredScene = deferred();
+  const coveredHold = deferred();
+  const fadeIn = deferred();
+  const resultHold = deferred();
+  const diveInventory = options.withScuba === false
+    ? inventory()
+    : inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1',
+          type: 'scubaSet',
+          condition: 'usable',
+        },
+      });
+  let current = snapshot({ inventory: diveInventory });
+  const outcome = accepted({
+    code: 'dive-food',
+    message: 'You find food below.',
+    deltas: { energy: -3, food: 1 },
+    cue: 'fish',
+  });
+  const perform = vi.fn(() => {
+    calls.push('perform:dive');
+    current = snapshot({
+      inventory: diveInventory,
+      state: options.terminalState ?? 'day',
+      energy: 0,
+      food: 1,
+      health: options.terminalState === 'dead' ? 0 : 100,
+    });
+    return outcome;
+  });
+  let impact: () => void = () => undefined;
+  const playDive = vi.fn((instanceId: ItemInstanceId, onWaterImpact: () => void) => {
+    calls.push(`playDive:${instanceId}`);
+    impact = onWaterImpact;
+    return sequence.promise;
+  });
+  const world = {
+    playDive,
+    clearDivePresentation: vi.fn(() => calls.push('clearDive')),
+    syncInventory: vi.fn(),
+    projectInteractionAnchors: vi.fn(() => []),
+    setDocumentHidden: vi.fn(),
+    dispose: vi.fn(),
+  };
+  const ui: Partial<SurvivalUI> = {
+    setBusy: vi.fn((busy: boolean) => calls.push(busy ? 'lock' : 'unlock')),
+    setSleepCoverProfile: vi.fn((profile) => {
+      calls.push(`coverProfile:${profile}`);
+      return Promise.resolve();
+    }),
+    setSleepCovered: vi.fn((covered: boolean) => {
+      calls.push(`fade:${covered}`);
+      return covered ? fadeOut.promise : fadeIn.promise;
+    }),
+    render: vi.fn(() => calls.push('renderCovered')),
+    setJournalUnread: vi.fn(),
+    setAnchors: vi.fn(),
+    settleCoveredScene: vi.fn(() => coveredScene.promise),
+    holdDiveCovered: vi.fn(() => {
+      calls.push('holdCovered');
+      return coveredHold.promise;
+    }),
+    showDiveResult: vi.fn((_view: DiveResultView) => {
+      calls.push('showResult');
+      return resultHold.promise;
+    }),
+    restoreCommandFocus: vi.fn(() => calls.push('focus')),
+    showEnding: vi.fn(() => calls.push('ending')),
+    showFeedback: vi.fn(),
+    dispose: vi.fn(),
+  };
+  const phase = SurvivalPhase.forTest({
+    session: { snapshot: vi.fn(() => current), perform },
+    world,
+    ui,
+  });
+  const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+  vi.spyOn(phaseAudio, 'beginDive').mockImplementation(() => calls.push('impactAudio'));
+  vi.spyOn(phaseAudio, 'finishDive').mockImplementation(() => calls.push('finishAudio'));
+  const cancelDive = vi.spyOn(phaseAudio, 'cancelDive');
+  const deny = vi.spyOn(phaseAudio, 'deny');
+  return {
+    phase,
+    calls,
+    outcome,
+    perform,
+    world,
+    ui,
+    deny,
+    cancelDive,
+    impact: () => impact(),
+    steps: { sequence, fadeOut, coveredScene, coveredHold, fadeIn, resultHold },
+  };
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it('runs an accepted dive in exact presentation order', async () => {
+    const rig = createDiveRig();
+
+    rig.phase.handleAction('dive');
+    expect(rig.calls).toEqual(['perform:dive', 'lock', 'playDive:scubaSet-1']);
+
+    rig.impact();
+    expect(rig.calls.at(-1)).toBe('impactAudio');
+    rig.steps.sequence.resolve();
+    await flushPromises();
+    expect(rig.calls.slice(-2)).toEqual(['coverProfile:dive', 'fade:true']);
+
+    rig.steps.fadeOut.resolve();
+    await flushPromises();
+    expect(rig.calls.slice(-4)).toEqual([
+      'clearDive',
+      'finishAudio',
+      'renderCovered',
+      'holdCovered',
+    ]);
+
+    rig.steps.coveredScene.resolve();
+    await flushPromises();
+    expect(rig.calls.at(-1)).toBe('holdCovered');
+    rig.steps.coveredHold.resolve();
+    await flushPromises();
+    expect(rig.calls.at(-1)).toBe('fade:false');
+
+    rig.steps.fadeIn.resolve();
+    await flushPromises();
+    expect(rig.calls).toEqual([
+      'perform:dive',
+      'lock',
+      'playDive:scubaSet-1',
+      'impactAudio',
+      'coverProfile:dive',
+      'fade:true',
+      'clearDive',
+      'finishAudio',
+      'renderCovered',
+      'holdCovered',
+      'fade:false',
+      'coverProfile:solid',
+      'showResult',
+    ]);
+    expect(rig.ui.showDiveResult).toHaveBeenCalledWith({
+      title: 'DIVE RESULT',
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: [],
+    });
+    expect(rig.steps.resultHold.isSettled()).toBe(false);
+    rig.steps.resultHold.resolve();
+    await flushPromises();
+    expect(rig.calls.slice(-2)).toEqual(['unlock', 'focus']);
+    rig.phase.dispose();
+  });
+
+  it('shows a rejected dive without starting or locking its presentation', () => {
+    const rejected = { ...accepted(), accepted: false, code: 'blocked' };
+    const playDive = vi.fn();
+    const setBusy = vi.fn();
+    const showFeedback = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()), perform: vi.fn(() => rejected) },
+      world: { playDive, dispose: vi.fn() },
+      ui: { setBusy, showFeedback, dispose: vi.fn() },
+    });
+
+    phase.handleAction('dive');
+
+    expect(playDive).not.toHaveBeenCalled();
+    expect(setBusy).not.toHaveBeenCalled();
+    expect(showFeedback).toHaveBeenCalledWith(rejected);
+    phase.dispose();
+  });
+
+  it('denies a second command while the dive sequence runs', () => {
+    const rig = createDiveRig();
+
+    rig.phase.handleAction('dive');
+    rig.phase.handleAction('repair');
+
+    expect(rig.perform).toHaveBeenCalledOnce();
+    expect(rig.deny).toHaveBeenCalledOnce();
+    rig.phase.dispose();
+  });
+
+  it('uses the stable fallback when an accepted test dive has no scuba object', () => {
+    const rig = createDiveRig({ withScuba: false });
+
+    rig.phase.handleAction('dive');
+
+    expect(rig.world.playDive).toHaveBeenCalledWith('scubaSet-1', expect.any(Function));
+    rig.phase.dispose();
+  });
+
+  it('holds a fatal dive result before unlocking and showing death', async () => {
+    const rig = createDiveRig({ terminalState: 'dead' });
+    rig.phase.handleAction('dive');
+    rig.impact();
+    rig.steps.sequence.resolve();
+    await flushPromises();
+    rig.steps.fadeOut.resolve();
+    await flushPromises();
+    rig.steps.coveredScene.resolve();
+    await flushPromises();
+    rig.steps.coveredHold.resolve();
+    await flushPromises();
+    rig.steps.fadeIn.resolve();
+    await flushPromises();
+
+    expect(rig.calls.at(-1)).toBe('showResult');
+    expect(rig.calls).not.toContain('unlock');
+    expect(rig.calls).not.toContain('ending');
+
+    rig.steps.resultHold.resolve();
+    await flushPromises();
+    expect(rig.calls.slice(-2)).toEqual(['unlock', 'ending']);
+    expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
+    rig.phase.dispose();
+  });
+
+  it('stops all late dive continuation after disposal', async () => {
+    const rig = createDiveRig({ terminalState: 'dead' });
+    rig.phase.handleAction('dive');
+    rig.phase.dispose();
+
+    rig.impact();
+    Object.values(rig.steps).forEach((step) => step.resolve());
+    await flushPromises();
+
+    expect(rig.calls).toEqual(['perform:dive', 'lock', 'playDive:scubaSet-1']);
+    expect(rig.ui.setSleepCovered).not.toHaveBeenCalled();
+    expect(rig.ui.showDiveResult).not.toHaveBeenCalled();
+    expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
+    expect(rig.ui.showEnding).not.toHaveBeenCalled();
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
+  });
+
+  it('waits for visibility before continuing a settled dive sequence', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const rig = createDiveRig();
+    rig.phase.start();
+    rig.calls.length = 0;
+    rig.phase.handleAction('dive');
+    rig.impact();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
+    rig.steps.sequence.resolve();
+    await flushPromises();
+    expect(rig.ui.setSleepCoverProfile).not.toHaveBeenCalledWith('dive');
+
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(rig.ui.setSleepCoverProfile).toHaveBeenCalledWith('dive');
+    rig.phase.dispose();
+  });
+
+  it('cancels dive audio when restart cancels the lifecycle', () => {
+    const rig = createDiveRig();
+    rig.phase.handleAction('dive');
+    rig.impact();
+
+    rig.phase.requestRestart();
+
+    expect(rig.cancelDive).toHaveBeenCalledOnce();
+    rig.phase.dispose();
+  });
+
   it.each([
     { kind: 'resource', id: 'food', quantity: 2 },
     { kind: 'resource', id: 'bait', quantity: 2 },
@@ -1215,8 +1535,8 @@ describe('SurvivalPhase orchestration', () => {
       ui: { render, showFeedback, setBusy, restoreCommandFocus: vi.fn(), setJournalUnread: vi.fn(), dispose: vi.fn() },
     });
 
-    phase.handleAction('dive');
-    phase.handleAction('dive');
+    phase.handleAction('sendMessage');
+    phase.handleAction('sendMessage');
     expect(perform).toHaveBeenCalledOnce();
     expect(setBusy).toHaveBeenCalledWith(true);
 
@@ -1226,7 +1546,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFeedback).toHaveBeenCalledWith(expect.objectContaining({ message: 'Caught one.' }));
     expect(setBusy).toHaveBeenLastCalledWith(false);
 
-    phase.handleAction('dive');
+    phase.handleAction('sendMessage');
     expect(perform).toHaveBeenCalledTimes(2);
   });
 
@@ -1240,7 +1560,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play, dispose: vi.fn() },
       ui: { showFeedback, setBusy, dispose: vi.fn() },
     });
-    phase.handleAction('dive');
+    phase.handleAction('repair');
     expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(play).not.toHaveBeenCalled();
     expect(setBusy).not.toHaveBeenCalled();
@@ -1843,10 +2163,10 @@ describe('SurvivalPhase orchestration', () => {
       },
     });
 
-    phase.handleAction('dive');
+    phase.handleAction('repair');
     await flushPromises();
 
-    expect(perform).toHaveBeenCalledWith('dive', undefined);
+    expect(perform).toHaveBeenCalledWith('repair', undefined);
     expect(requestDayEvent).not.toHaveBeenCalled();
     expect(current).toMatchObject({ state: 'day', pendingEventId: null });
     expect(calls).toEqual(['fish']);
@@ -4659,7 +4979,7 @@ describe('SurvivalPhase orchestration', () => {
       ui: { showFeedback: vi.fn(), setBusy: vi.fn(), showEnding, render: vi.fn(), dispose: vi.fn() },
     });
 
-    phase.handleAction('dive');
+    phase.handleAction('repair');
     expect(showEnding).not.toHaveBeenCalled();
     cue.resolve();
     await flushPromises();
