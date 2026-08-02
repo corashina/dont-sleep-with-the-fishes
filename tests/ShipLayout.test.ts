@@ -571,6 +571,7 @@ describe('scavenging ship layout', () => {
 
   it('measures the shortest navigable route around furniture', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
+    expect(metric.stable).toBe(true);
     const direct = Math.hypot(7.025, 11);
     const routed = metric.distance([0, 11], [7.025, 0]);
     expect(routed).not.toBeNull();
@@ -942,7 +943,6 @@ describe('scavenging ship layout', () => {
         surfaces: [{
           id: surfaceId,
           physicalSlotId: surfaceId,
-          categories: ['provisions' as const],
           regionId: 'storageWorkroom' as const,
           branch: false,
           localPosition: [0, 1, 0] as const,
@@ -950,7 +950,6 @@ describe('scavenging ship layout', () => {
           footprint: { width: 0.5, depth: 0.5 },
           clearanceHeight: 1,
           standingPoints: [[1, 0, 0] as const],
-          fallback: false,
         }],
       }],
       lanes: SHIP_LAYOUT.lanes.filter(({ id }) => !id.includes('-loop-')),

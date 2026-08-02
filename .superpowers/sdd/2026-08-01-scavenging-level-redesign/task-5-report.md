@@ -84,11 +84,11 @@ Surface validation is cached for stable surface and blocker arrays.
 
 Spatial templates are cached for each immutable placement context.
 
-Expert plans use a bounded cache with 128 entries per route metric.
+Expert plans use a bounded cache only for metrics that declare stable distances.
 
 ## Risks
 
-The planner cache requires an immutable route metric.
+New route metrics must declare stability before they can use the planner cache.
 
 Baseline results sit at the upper accepted bound of 17 items.
 
@@ -97,3 +97,42 @@ The tested templates use 32 of 53 authored spots.
 Physical and route limits exclude the other spots from these templates.
 
 Automated tests do not replace visual review inside the game.
+
+## Review fixes
+
+- Generated templates no longer read, clone, build, or validate fallback data.
+- Fallback runs only after all generated attempts fail.
+- Twelve independent generated layouts replace the old one-item and two-item swaps.
+- Each generated layout changes at least five fallback positions.
+- A missing fallback-only surface still produces a complete generated layout.
+- One thousand seeds produce all twelve deterministic layout signatures.
+- The seeds use at least 32 surfaces. Each item type uses at least two surfaces.
+- The baseline rejects an empty remote branch trip, even with a small route detour.
+- Expert plan caching now requires a metric with `stable: true`.
+- The ship metric declares stability and freezes its public object.
+- Mutable test metrics no longer reuse stale expert plans.
+- The obsolete fixture category and fallback fields are gone.
+
+Focused command:
+
+`npm.cmd test -- --run tests/ShipItemPlacement.test.ts tests/ScavengeRoutePlanner.test.ts tests/ShipLayout.test.ts`
+
+Result: 3 files passed. All 70 tests passed.
+
+The focused 1,000-seed test took 3.425 seconds.
+
+Full command:
+
+`npm.cmd test`
+
+Result: 58 files passed. All 1,060 tests passed.
+
+The full run took 11.93 seconds.
+
+Type command:
+
+`npm.cmd run typecheck`
+
+Result: passed.
+
+`git diff --check` passed.

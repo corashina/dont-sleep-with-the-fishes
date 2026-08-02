@@ -265,13 +265,16 @@ export function planExpertScavengeRoute(
   input: ScavengeRouteInput,
 ): ScavengeRoutePlan | null {
   const deadline = deadlineFor(input);
-  let cache = expertPlanCache.get(input.metric);
-  if (!cache) {
-    cache = new Map();
-    expertPlanCache.set(input.metric, cache);
+  let cache: Map<string, ScavengeRoutePlan | null> | undefined;
+  if (input.metric.stable === true) {
+    cache = expertPlanCache.get(input.metric);
+    if (!cache) {
+      cache = new Map();
+      expertPlanCache.set(input.metric, cache);
+    }
   }
-  const cacheKey = expertCacheKey(input, deadline);
-  if (cache.has(cacheKey)) return cache.get(cacheKey)!;
+  const cacheKey = cache ? expertCacheKey(input, deadline) : undefined;
+  if (cacheKey !== undefined && cache?.has(cacheKey)) return cache.get(cacheKey)!;
   const fullMask = (1n << BigInt(input.assignments.length)) - 1n;
   let beam: readonly ExpertState[] = [{
     remainingMask: fullMask,
@@ -302,6 +305,7 @@ export function planExpertScavengeRoute(
     beam = keepCheapestStates(expanded);
   }
 
+  if (cache === undefined || cacheKey === undefined) return bestPlan;
   const cachedPlan = bestPlan ? immutablePlan(bestPlan) : null;
   if (cache.size >= EXPERT_CACHE_LIMIT) cache.clear();
   cache.set(cacheKey, cachedPlan);
