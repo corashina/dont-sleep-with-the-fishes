@@ -2,10 +2,13 @@ export const DIVE_SEAT_END_SECONDS = 1.1;
 export const DIVE_GOGGLES_END_SECONDS = 2.2;
 export const DIVE_IMPACT_SECONDS = 3.6;
 export const DIVE_ENTRY_DURATION_SECONDS = 5.8;
+export const DIVE_SEAT_CAMERA_X = 1.66;
+export const DIVE_OUTWARD_DISTANCE = 1.05;
 
 export interface DivePose {
   elapsed: number;
   cameraX: number;
+  cameraOutward: number;
   cameraY: number;
   cameraZ: number;
   cameraYaw: number;
@@ -23,6 +26,7 @@ export function createDivePose(): DivePose {
   return {
     elapsed: 0,
     cameraX: 0,
+    cameraOutward: 0,
     cameraY: 0,
     cameraZ: 0,
     cameraYaw: 0,
@@ -88,7 +92,8 @@ export function sampleDivePose(elapsedSeconds: number, output: DivePose): DivePo
   const submerged = elapsed >= DIVE_IMPACT_SECONDS;
 
   output.elapsed = elapsed;
-  output.cameraX = 0.78 * seatProgress;
+  output.cameraX = DIVE_SEAT_CAMERA_X * seatProgress;
+  output.cameraOutward = DIVE_OUTWARD_DISTANCE * impactProgress;
   output.cameraY = -0.16 * impactProgress - 0.72 * underwaterProgress;
   output.cameraZ = -0.18 * impactProgress - 0.44 * underwaterProgress;
   output.cameraYaw = 0.12 * impactProgress;

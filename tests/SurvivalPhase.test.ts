@@ -133,15 +133,16 @@ describe('formatDangerousWatersOutcome', () => {
 
 describe('formatDiveResult', () => {
   it.each([
-    [{ food: 1, energy: -3 }, ['FOOD +1']],
-    [{ bait: 1, energy: -3 }, ['BAIT +1']],
-    [{ repairMaterial: 1, energy: -3 }, ['REPAIR MATERIAL +1']],
-    [{ rescueProgress: 10, energy: -3 }, ['RESCUE PROGRESS +10']],
-    [{ energy: -3 }, ['NOTHING FOUND']],
-    [{ energy: -3, health: -10 }, ['NOTHING FOUND', 'HEALTH -10']],
-  ] as const)('formats exact dive deltas', (deltas, lines) => {
+    [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
+    [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
+    [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
+    [{ rescueProgress: 10, energy: -3 }, null, ['RESCUE PROGRESS +10']],
+    [{ energy: -3 }, null, ['NOTHING FOUND']],
+    [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
+  ] as const)('formats exact dive deltas', (deltas, reward, lines) => {
     expect(formatDiveResult(accepted({ deltas }))).toEqual({
       title: 'DIVE RESULT',
+      reward,
       lines,
     });
   });
@@ -151,7 +152,17 @@ describe('formatDiveResult', () => {
       deltas: { energy: -3, health: -4 },
     }))).toEqual({
       title: 'DIVE RESULT',
-      lines: ['NOTHING FOUND', 'HEALTH -4'],
+      reward: null,
+      lines: ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES'],
+    });
+  });
+
+  it('passes an item reward to the result paper', () => {
+    const rewardSummary = { kind: 'item', id: 'energyBar', quantity: 1 } as const;
+    expect(formatDiveResult(accepted({ deltas: { energy: -3 }, rewardSummary }))).toEqual({
+      title: 'DIVE RESULT',
+      reward: rewardSummary,
+      lines: [],
     });
   });
 });
@@ -631,14 +642,16 @@ describe('SurvivalPhase orchestration', () => {
       'fade:false',
       'coverProfile:solid',
       'showResult',
-      'unlock',
-      'focus',
     ]);
     expect(rig.ui.showDiveResult).toHaveBeenCalledWith({
       title: 'DIVE RESULT',
-      lines: ['FOOD +1'],
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: [],
     });
     expect(rig.steps.resultHold.isSettled()).toBe(false);
+    rig.steps.resultHold.resolve();
+    await flushPromises();
+    expect(rig.calls.slice(-2)).toEqual(['unlock', 'focus']);
     rig.phase.dispose();
   });
 

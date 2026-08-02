@@ -272,24 +272,36 @@ export function formatDriftingLootResult(
 
 export function formatDiveResult(outcome: ActionOutcome): DiveResultView {
   const lines: string[] = [];
-  const rewards = [
-    ['food', 'FOOD'],
-    ['bait', 'BAIT'],
-    ['repairMaterial', 'REPAIR MATERIAL'],
+  let reward = outcome.rewardSummary ?? null;
+  const itemRewards = [
+    ['food', 'food'],
+    ['bait', 'bait'],
+    ['repairMaterial', 'repairMaterial'],
+  ] as const;
+  if (reward === null) {
+    for (const [resource, id] of itemRewards) {
+      const delta = outcome.deltas[resource];
+      if (delta !== undefined && delta > 0) {
+        reward = { kind: 'resource', id, quantity: delta };
+        break;
+      }
+    }
+  }
+  const textRewards = [
     ['rescueProgress', 'RESCUE PROGRESS'],
   ] as const;
-  for (const [resource, label] of rewards) {
+  for (const [resource, label] of textRewards) {
     const delta = outcome.deltas[resource];
     if (delta !== undefined && delta !== 0) {
       lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
     }
   }
-  if (lines.length === 0) lines.push('NOTHING FOUND');
+  if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
-    lines.push(`HEALTH ${appliedHealthDelta}`);
+    lines.push('YOU SUFFERED SOME INJURIES');
   }
-  return { title: 'DIVE RESULT', lines };
+  return { title: 'DIVE RESULT', reward, lines };
 }
 
 function testContext(
@@ -1045,16 +1057,11 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.waitForVisibilityResume(generation)) return;
 
     const resultHold = this.ui.showDiveResult?.(formatDiveResult(outcome)) ?? Promise.resolve();
-    if (!isTerminal(snapshot.state)) {
-      this.setBusy(false);
-      this.ui.restoreCommandFocus?.();
-      return;
-    }
-
     await resultHold;
     if (!await this.waitForVisibilityResume(generation)) return;
     this.setBusy(false);
-    this.presentTerminalOnce(snapshot);
+    if (isTerminal(snapshot.state)) this.presentTerminalOnce(snapshot);
+    else this.ui.restoreCommandFocus?.();
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
