@@ -7,13 +7,13 @@ import type { ItemCondition } from './survivalTypes';
 export type FishingCatchId =
   | 'cod' | 'salmon' | 'tuna' | 'crab' | 'squid'
   | 'sardine' | 'bass' | 'redSnapper' | 'clownfish'
-  | 'seaweed' | 'boot' | 'plasticBottle'
+  | 'seaweed' | 'boot' | 'plasticBottle' | 'fishBones'
   | 'bait' | 'wetDuctTape' | 'brokenCompass' | 'tornFishingNet' | 'energyBar';
 
 export type FishingCatchKind = 'fish' | 'junk' | 'utility';
 export type FishingCatchSize = 'small' | 'large' | 'junk' | 'utility';
 export type FishingModelFamily =
-  | 'ordinaryFish' | 'crab' | 'squid' | 'seaweed' | 'boot' | 'bottle';
+  | 'ordinaryFish' | 'crab' | 'squid' | 'seaweed' | 'boot' | 'bottle' | 'fishBones';
 export type FishingItemCondition = Extract<ItemCondition, 'usable' | 'broken'>;
 
 export interface FishingAppearance {
@@ -80,6 +80,7 @@ const catalogRows: readonly FishingCatchDefinition[] = [
   { id: 'seaweed', label: 'Seaweed', kind: 'junk', baseWeight: 82, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('seaweed', { color: 0x456e4b, accentColor: 0x8daa5d, length: 0.62, height: 0.95, width: 0.22 }) },
   { id: 'boot', label: 'Boot', kind: 'junk', baseWeight: 72, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('boot', { color: 0x5b4637, accentColor: 0x2f2926, length: 0.72, height: 0.76, width: 0.36 }) },
   { id: 'plasticBottle', label: 'Plastic Bottle', kind: 'junk', baseWeight: 60, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('bottle', { color: 0x507b82, accentColor: 0xc7d7c7, length: 0.3, height: 0.86, width: 0.3 }) },
+  { id: 'fishBones', label: 'Fish Bones', kind: 'junk', baseWeight: 16, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('fishBones', { color: 0xd8d0b8, accentColor: 0x756b5f, length: 0.88, height: 0.42, width: 0.18 }) },
   { id: 'bait', label: 'Bait', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'bait', amount: 1 }, size: 'utility', presentation: { kind: 'item', itemId: 'baitTin', condition: 'usable' } },
   { id: 'wetDuctTape', label: 'Wet Duct Tape', kind: 'utility', baseWeight: 5, minimumDay: 3, reward: { kind: 'item', itemId: 'ductTape', condition: 'usable', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'ductTape', condition: 'usable' } },
   { id: 'brokenCompass', label: 'Broken Compass', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'item', itemId: 'compass', condition: 'broken', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'compass', condition: 'broken' } },

@@ -312,6 +312,7 @@ export class SurvivalPhase implements GamePhase {
   private onRestart!: () => void;
   private scavengeElapsedSeconds = 0;
   private elapsedSeconds = 0;
+  private simulationTimeInitialized = false;
   private readonly visualState: SurvivalVisualState = {
     kind: 'survival',
     elapsedSeconds: 0,
@@ -448,12 +449,12 @@ export class SurvivalPhase implements GamePhase {
 
   update(time: number, deltaSeconds: number): void {
     if (this.disposed || this.documentIsHidden()) return;
-    this.elapsedSeconds = time;
-    if (this.paused) {
-      this.world.updateAmbient?.(time, deltaSeconds);
-      return;
-    }
-    this.world.update?.(time, deltaSeconds);
+    if (this.paused) return;
+    this.elapsedSeconds = this.simulationTimeInitialized
+      ? this.elapsedSeconds + deltaSeconds
+      : time;
+    this.simulationTimeInitialized = true;
+    this.world.update?.(this.elapsedSeconds, deltaSeconds);
     this.cameraLook?.update(deltaSeconds);
     const snapshot = this.session.snapshot();
     this.audio.update(deltaSeconds);
@@ -1458,11 +1459,7 @@ export class SurvivalPhase implements GamePhase {
 
     await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    if (eventId === 'bad-sleep') {
-      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-    } else {
-      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    }
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
@@ -1681,11 +1678,7 @@ export class SurvivalPhase implements GamePhase {
       if (!this.isContinuationActive(generation)) return;
     }
     if (!await this.renderAndSettleCoveredScene(generation)) return;
-    if (event.id === 'bad-sleep') {
-      await (this.ui.setSleepCoverProfile?.('bad-sleep') ?? Promise.resolve());
-    } else {
-      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    }
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;

@@ -1,8 +1,15 @@
 import type { AudioBackend, AudioVoice } from './AudioBackend';
 import {
   AUDIO_MANIFEST,
+  type AudioBusId,
   type SoundId,
 } from './audioManifest';
+
+const GAME_AUDIO_BUSES: readonly AudioBusId[] = Object.freeze([
+  'music',
+  'ambience',
+  'effects',
+]);
 
 export interface AudioScope {
   play(id: SoundId): AudioVoice | null;
@@ -63,8 +70,9 @@ export class OwnedAudioScope implements AudioScope {
   setPaused(paused: boolean): void {
     if (this.disposed || this.paused === paused) return;
     this.paused = paused;
-    this.backend.setBusGain('music', paused ? 0.35 : 1, 0.15);
-    this.backend.setBusGain('ambience', paused ? 0.35 : 1, 0.15);
+    for (const bus of GAME_AUDIO_BUSES) {
+      this.backend.setBusGain(bus, paused ? 0 : 1, 0.05);
+    }
     this.play(paused ? 'pause' : 'resume');
   }
 

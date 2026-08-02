@@ -82,6 +82,15 @@ describe('AudioSystem', () => {
     expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
+  it('uses a yawn instead of the event sting for Bad Sleep', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventReveal('bad-sleep');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
+  });
+
   it('applies master volume and mute without losing volume', () => {
     const backend = new FakeAudioBackend();
     const system = AudioSystem.forTest(backend);
@@ -92,16 +101,18 @@ describe('AudioSystem', () => {
     expect(system.getPreference()).toEqual({ volume: 0.35, muted: false });
   });
 
-  it('ducks ambience and music while paused', () => {
+  it('silences game audio while paused and keeps interface feedback', () => {
     const backend = new FakeAudioBackend();
     const scope = AudioSystem.forTest(backend).createScope();
     scope.setPaused(true);
     scope.setPaused(false);
     expect(backend.busGains).toEqual([
-      ['music', 0.35, 0.15],
-      ['ambience', 0.35, 0.15],
-      ['music', 1, 0.15],
-      ['ambience', 1, 0.15],
+      ['music', 0, 0.05],
+      ['ambience', 0, 0.05],
+      ['effects', 0, 0.05],
+      ['music', 1, 0.05],
+      ['ambience', 1, 0.05],
+      ['effects', 1, 0.05],
     ]);
     expect(backend.voices.map(({ id }) => id)).toEqual(['pause', 'resume']);
   });

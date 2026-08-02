@@ -94,68 +94,62 @@ export class PostProcessingConsole {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
     this.weatherControlSource = weatherControls.source;
-    const physicsControl = physicsControls === undefined
+    const gameplayPhysicsControl = physicsControls === undefined
       ? ''
       : `
-        <section class="post-processing-console__section">
-          <strong>PHYSICS</strong>
+        <div class="post-processing-console__group">
+          <strong>SIMULATION</strong>
           <label class="post-processing-console__physics">
-            <span>
-              Barrel simulation
-              <small id="physics-toggle-note">Reloads the scene; fully unloads physics when off</small>
-            </span>
+            <span>Barrel simulation</span>
             <input
               type="checkbox"
               role="switch"
               data-physics-enabled
-              aria-describedby="physics-toggle-note"
               ${physicsControls.enabled ? 'checked' : ''}
             >
             <output data-physics-state>${physicsControls.enabled ? 'ON' : 'OFF'}</output>
           </label>
+        </div>
+      `;
+    const diagnosticPhysicsControl = physicsControls === undefined
+      ? ''
+      : `
+        <div class="post-processing-console__group">
+          <strong>PHYSICS VIEW</strong>
           <label class="post-processing-console__physics">
-            <span>
-              Collision meshes
-              <small id="physics-debug-note">Shows the physics shapes over the ship</small>
-            </span>
+            <span>Collision meshes</span>
             <input
               type="checkbox"
               role="switch"
               data-physics-debug
-              aria-describedby="physics-debug-note"
               ${physicsControls.debugMeshes ? 'checked' : ''}
               ${physicsControls.enabled ? '' : 'disabled'}
             >
             <output data-physics-debug-state>${physicsControls.debugMeshes ? 'ON' : 'OFF'}</output>
           </label>
-        </section>
+        </div>
       `;
     const performanceStatsControl = performanceStatsControls === undefined
       ? ''
       : `
-        <section class="post-processing-console__section">
-          <strong>DISPLAY</strong>
+        <div class="post-processing-console__group">
+          <strong>PERFORMANCE</strong>
           <label class="post-processing-console__toggle">
-            <span>
-              Frame rate
-              <small id="performance-stats-note">Shows current frames per second during play</small>
-            </span>
+            <span>Frame rate</span>
             <input
               type="checkbox"
               role="switch"
               data-performance-stats-enabled
-              aria-describedby="performance-stats-note"
               ${performanceStatsControls.visible ? 'checked' : ''}
             >
             <output data-performance-stats-state>${performanceStatsControls.visible ? 'ON' : 'OFF'}</output>
           </label>
-        </section>
+        </div>
       `;
     const audioControl = audioControls === undefined
       ? ''
       : `
-        <section class="post-processing-console__section">
-          <strong>AUDIO</strong>
+        <div class="post-processing-console__group">
           <label class="post-processing-console__slider">
             <span>Master volume</span>
             <output data-audio-volume-output>${Math.round(audioControls.volume * 100)}%</output>
@@ -179,7 +173,7 @@ export class PostProcessingConsole {
             >
             <output data-audio-muted-state>${audioControls.muted ? 'ON' : 'OFF'}</output>
           </label>
-        </section>
+        </div>
       `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
@@ -195,41 +189,67 @@ export class PostProcessingConsole {
           <strong>SYSTEM TUNING</strong>
           <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
         </header>
-        ${physicsControl}
-        ${performanceStatsControl}
-        ${audioControl}
-        <section class="post-processing-console__section" data-ao-quality-control></section>
-        <section class="post-processing-console__section" data-water-quality-control></section>
-        ${eventTestControls === undefined
-          ? ''
-          : '<section class="post-processing-console__section" data-event-test-control></section>'}
-        <section class="post-processing-console__section">
-          <strong>WEATHER</strong>
-          <label class="post-processing-console__select">
-            <span>
-              Presentation
-              <output data-weather-source>${weatherControls.source.toUpperCase()}</output>
-            </span>
-            <select data-presentation-weather>
-              ${PRESENTATION_WEATHER_IDS.map((id) => `
-                <option value="${id}">${presentationWeatherProfile(id).label}</option>
-              `).join('')}
-            </select>
-          </label>
-          <small>Forced weather persists until reload.</small>
-        </section>
-        <section class="post-processing-console__section post-processing-console__section--wide">
-          <strong>AMBIENT OCCLUSION</strong>
-          <label class="post-processing-console__select">
-            <span>Display</span>
-            <select data-post-processing-ao-mode>
-              <option value="composite">COMPOSITE</option>
-              <option value="debug">DEBUG BUFFER</option>
-              <option value="off">OFF</option>
-            </select>
-          </label>
-          <div class="post-processing-console__sliders" data-post-processing-sliders></div>
-        </section>
+        <div class="post-processing-console__columns">
+          <div class="post-processing-console__category-column">
+            ${(performanceStatsControls === undefined
+              && physicsControls === undefined
+              && eventTestControls === undefined)
+              ? ''
+              : `<section class="post-processing-console__category">
+                  <h2>TOOLS</h2>
+                  ${performanceStatsControl}
+                  ${diagnosticPhysicsControl}
+                  ${eventTestControls === undefined
+                    ? ''
+                    : '<div class="post-processing-console__group" data-event-test-control></div>'}
+                </section>`}
+            ${audioControls === undefined
+              ? ''
+              : `<section class="post-processing-console__category">
+                  <h2>SOUND</h2>
+                  ${audioControl}
+                </section>`}
+          </div>
+          <div class="post-processing-console__category-column">
+            <section class="post-processing-console__category post-processing-console__category--graphics">
+              <h2>GRAPHICS</h2>
+              <div class="post-processing-console__quality-row">
+                <div class="post-processing-console__group" data-ao-quality-control></div>
+                <div class="post-processing-console__group" data-water-quality-control></div>
+              </div>
+              <div class="post-processing-console__group post-processing-console__group--ao">
+                <strong>AMBIENT OCCLUSION</strong>
+                <label class="post-processing-console__select">
+                  <span>Display</span>
+                  <select data-post-processing-ao-mode>
+                    <option value="composite">COMPOSITE</option>
+                    <option value="debug">DEBUG BUFFER</option>
+                    <option value="off">OFF</option>
+                  </select>
+                </label>
+                <div class="post-processing-console__sliders" data-post-processing-sliders></div>
+              </div>
+            </section>
+            <section class="post-processing-console__category">
+              <h2>GAMEPLAY</h2>
+              ${gameplayPhysicsControl}
+              <div class="post-processing-console__group">
+                <strong>WEATHER</strong>
+                <label class="post-processing-console__select">
+                  <span>
+                    Presentation
+                    <output data-weather-source>${weatherControls.source.toUpperCase()}</output>
+                  </span>
+                  <select data-presentation-weather>
+                    ${PRESENTATION_WEATHER_IDS.map((id) => `
+                      <option value="${id}">${presentationWeatherProfile(id).label}</option>
+                    `).join('')}
+                  </select>
+                </label>
+              </div>
+            </section>
+          </div>
+        </div>
       </section>
     `;
     this.panel = this.requireElement('[data-post-processing-panel]');
@@ -338,9 +358,7 @@ export class PostProcessingConsole {
     enter.textContent = 'ENTER EVENT';
     control.append(select, enter);
 
-    const note = document.createElement('small');
-    note.textContent = 'Starts a fresh survival run with every item usable.';
-    host.append(heading, control, note);
+    host.append(heading, control);
   }
 
   private setOpen(open: boolean): void {

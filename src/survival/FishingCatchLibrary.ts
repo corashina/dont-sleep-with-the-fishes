@@ -273,6 +273,50 @@ function buildBottle(root: Group, context: TemplateBuildContext): void {
   cap.position.y = 0.67;
 }
 
+function buildFishBones(root: Group, context: TemplateBuildContext): void {
+  const spine = addMesh(
+    root,
+    context,
+    'fishing-catch:fishBones:spine',
+    new CylinderGeometry(0.035, 0.05, 0.96, 6),
+    context.body,
+  );
+  spine.rotation.z = Math.PI / 2;
+
+  const head = addMesh(
+    root,
+    context,
+    'fishing-catch:fishBones:head',
+    new SphereGeometry(0.18, 7, 5),
+    context.accent,
+  );
+  head.position.x = 0.52;
+  head.scale.set(0.78, 1, 0.42);
+
+  for (let index = 0; index < 5; index += 1) {
+    const rib = addMesh(
+      root,
+      context,
+      `fishing-catch:fishBones:rib-${index}`,
+      new CylinderGeometry(0.018, 0.025, 0.36 - index * 0.025, 5),
+      context.body,
+    );
+    rib.position.x = 0.25 - index * 0.13;
+    rib.rotation.x = index % 2 === 0 ? 0.2 : -0.2;
+  }
+
+  const tail = addMesh(
+    root,
+    context,
+    'fishing-catch:fishBones:tail',
+    new ConeGeometry(0.18, 0.3, 3),
+    context.body,
+  );
+  tail.position.x = -0.57;
+  tail.rotation.z = -Math.PI / 2;
+  tail.scale.z = 0.35;
+}
+
 function buildFamily(
   family: FishingModelFamily,
   geometries: Set<BufferGeometry>,
@@ -295,6 +339,7 @@ function buildFamily(
     case 'seaweed': buildSeaweed(root, context); break;
     case 'boot': buildBoot(root, context); break;
     case 'bottle': buildBottle(root, context); break;
+    case 'fishBones': buildFishBones(root, context); break;
   }
 
   root.updateMatrixWorld(true);

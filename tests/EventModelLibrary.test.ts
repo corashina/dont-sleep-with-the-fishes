@@ -58,6 +58,7 @@ describe('EventModelLibrary', () => {
       'schoolFish',
       'snatcher',
       'anglerFish',
+      'deathStareBlob',
       'whirlpoolCore',
     ]);
   });
@@ -71,6 +72,7 @@ describe('EventModelLibrary', () => {
       'schoolFish',
       'snatcher',
       'anglerFish',
+      'deathStareBlob',
       'whirlpoolCore',
     ] as const) {
       const instance = library.create(id);

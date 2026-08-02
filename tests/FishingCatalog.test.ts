@@ -54,11 +54,12 @@ describe('fishing utility catalog', () => {
   });
 
   it('keeps stable exact-weight boundaries', () => {
-    expect(selectFishingCatch(3, false, 380 / 406).id).toBe('bait');
-    expect(selectFishingCatch(3, false, 385 / 406).id).toBe('wetDuctTape');
-    expect(selectFishingCatch(3, false, 390 / 406).id).toBe('brokenCompass');
-    expect(selectFishingCatch(3, false, 395 / 406).id).toBe('tornFishingNet');
-    expect(selectFishingCatch(3, false, 398 / 406).id).toBe('energyBar');
+    expect(selectFishingCatch(3, false, 380 / 422).id).toBe('fishBones');
+    expect(selectFishingCatch(3, false, 396 / 422).id).toBe('bait');
+    expect(selectFishingCatch(3, false, 401 / 422).id).toBe('wetDuctTape');
+    expect(selectFishingCatch(3, false, 406 / 422).id).toBe('brokenCompass');
+    expect(selectFishingCatch(3, false, 411 / 422).id).toBe('tornFishingNet');
+    expect(selectFishingCatch(3, false, 414 / 422).id).toBe('energyBar');
   });
 
   it('rejects broken rewards for non-breakable items', () => {

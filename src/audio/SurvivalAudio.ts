@@ -179,6 +179,10 @@ export class SurvivalAudio {
 
   eventReveal(eventId: string): void {
     if (this.disposed) return;
+    if (eventId === 'bad-sleep') {
+      this.scope.play('yawn');
+      return;
+    }
     this.scope.play('eventReveal');
     if (eventId === 'drifting-loot') this.scope.play('driftingCargo');
   }

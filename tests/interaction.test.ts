@@ -243,6 +243,34 @@ describe('InteractionSystem', () => {
     expect(mesh.material).toBe(material);
   });
 
+  it('reaches the lifeboat beyond normal item range from the drop-off area', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.z = -5;
+    lifeboat.add(new Mesh(new BoxGeometry(2, 1, 1), new MeshStandardMaterial()));
+
+    const result = new InteractionSystem(camera).update(
+      [], lifeboat, new Group(), new Map(), true,
+    );
+
+    expect(result).toEqual({ target: 'deposit', targetItem: null });
+  });
+
+  it('does not reach the lifeboat outside the drop-off area', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const lifeboat = new Group();
+    lifeboat.name = 'lifeboat';
+    lifeboat.position.z = -2;
+    lifeboat.add(new Mesh(new BoxGeometry(2, 1, 1), new MeshStandardMaterial()));
+
+    const result = new InteractionSystem(camera).update(
+      [], lifeboat, new Group(), new Map(), false,
+    );
+
+    expect(result).toEqual({ target: 'none', targetItem: null });
+  });
+
   it('resolves the tagged station deck as a deposit target', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const lifeboat = new Group();

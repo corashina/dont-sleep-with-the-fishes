@@ -1,4 +1,4 @@
-import { clamp01, pulse, smoothstep } from './animationMath';
+import { clamp01, pulse, smoothstep, smootherstep } from './animationMath';
 
 export type WeatherAnimationEventId =
   | 'shower-night'
@@ -95,7 +95,7 @@ export function isCameraOnlyWeatherEvent(eventId: string): boolean {
 }
 
 const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Object.freeze({
-  'shower-night': 3.4,
+  'shower-night': 5.2,
   'windy-night': 3.6,
   thunderstorm: 4,
   'restless-waves': 3.8,
@@ -258,11 +258,30 @@ export function sampleWeatherReveal(
   const sweep = Math.sin(Math.PI * t);
 
   switch (eventId) {
-    case 'shower-night':
-      output.cameraY = 0.12 * sweep;
-      output.cameraYaw = 0.32 * Math.sin(Math.PI * (t - 0.08));
-      output.cameraPitch = -0.08 * pulse(t, 0.08, 0.34, 0.7);
-      break;
+    case 'shower-night': {
+      const yaw = 0.3;
+      const pitch = 0.52;
+      if (t < 0.298) {
+        output.cameraYaw = yaw * smootherstep((t - 0.135) / 0.163);
+        output.cameraPitch = pitch * smootherstep((t - 0.106) / 0.173);
+      } else if (t < 0.375) {
+        output.cameraYaw = yaw;
+        output.cameraPitch = pitch;
+      } else if (t < 0.683) {
+        const lookAcross = smootherstep((t - 0.375) / 0.308);
+        output.cameraYaw = yaw * (1 - lookAcross * 2);
+        output.cameraPitch = pitch + Math.sin(lookAcross * Math.PI) * 0.06;
+      } else if (t < 0.769) {
+        output.cameraYaw = -yaw;
+        output.cameraPitch = pitch;
+      } else {
+        output.cameraYaw = -yaw
+          * (1 - smootherstep((t - 0.769) / 0.193));
+        output.cameraPitch = pitch
+          * (1 - smootherstep((t - 0.798) / 0.202));
+      }
+      return true;
+    }
     case 'windy-night':
       output.cameraX = 0.18 * Math.sin(Math.PI * (t - 0.05));
       output.cameraYaw = 0.44 * Math.sin(Math.PI * (t - 0.12));
@@ -340,8 +359,6 @@ export function sampleWeatherItemUse(
     const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
     switch (eventId) {
       case 'shower-night':
-        output.cameraYaw = direction * 0.07 * hold;
-        output.cameraPush = 0.035 * impact;
         break;
       case 'windy-night':
         output.cameraYaw = direction * 0.14 * Math.sin(Math.PI * t) * hold;
@@ -496,9 +513,6 @@ export function sampleWeatherReaction(
     const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
     switch (eventId) {
       case 'shower-night':
-        output.cameraY = -0.035 * hullBeat;
-        output.cameraYaw = direction * 0.055 * actorBeat;
-        output.cameraPitch = -0.035 * actorBeat;
         break;
       case 'windy-night':
         output.cameraX = direction * 0.08 * hullBeat;

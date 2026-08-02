@@ -51,6 +51,21 @@ describe('resolveLadderTraversal', () => {
     expect(result.position).toEqual({ x: -0.1, y: 6.42, z: 3.7 });
   });
 
+  it('captures an airborne player at the height where they reach the ladder', () => {
+    const result = resolveLadderTraversal({
+      position: { x: 0.1, y: 4.8, z: 3.7 },
+      activeLadderId: null,
+      planarMovement: [0, 0.2],
+      verticalInput: 1,
+      deltaSeconds: 0.1,
+      floorEyeY: 3.72,
+    }, [crewZone]);
+
+    expect(result.activeLadderId).toBe('crew-ladder');
+    expect(result.consumed).toBe(true);
+    expect(result.position).toEqual({ x: 0.1, y: 4.8, z: 3.7 });
+  });
+
   it('does not capture an idle player in a ladder entry area', () => {
     const input = {
       position: { x: 0, y: 3.72, z: 3.7 },

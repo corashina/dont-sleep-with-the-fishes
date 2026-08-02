@@ -95,6 +95,7 @@ function eventModels(): EventModelLibrary {
 function scavengeAudioStub(): ScavengeAudio {
   return {
     start: vi.fn(),
+    beginRun: vi.fn(),
     update: vi.fn(),
     itemHandled: vi.fn(),
     deny: vi.fn(),
@@ -213,6 +214,7 @@ function introHarness(elapsed = 0) {
     if (sessionStatus === 'paused') sessionStatus = 'running';
   });
   const sessionTick = vi.fn();
+  const beginRun = vi.fn();
   const crash = vi.fn();
   const triggerCrash = vi.fn();
   const setAudioPaused = vi.fn();
@@ -222,6 +224,7 @@ function introHarness(elapsed = 0) {
   const clearLook = vi.fn();
   const updateWorld = vi.fn();
   const playerUpdate = vi.fn();
+  const setScriptedPose = vi.fn();
   const placeCamera = vi.fn();
   const hands = scavengeHandsStub();
   const updateInteraction = vi.fn();
@@ -267,12 +270,12 @@ function introHarness(elapsed = 0) {
     },
     hands,
     player: {
-      setScriptedPose: vi.fn(),
+      setScriptedPose,
       placeCamera,
       update: playerUpdate,
       localPosition: new Vector3(),
     },
-    audio: { crash, setPaused: setAudioPaused, update: vi.fn() },
+    audio: { beginRun, crash, setPaused: setAudioPaused, update: vi.fn() },
     ui: {
       setPresentation: vi.fn(),
       setPaused: setUiPaused,
@@ -314,6 +317,7 @@ function introHarness(elapsed = 0) {
     sessionResume,
     sessionTick,
     sessionSnapshot: () => sessionStatus,
+    beginRun,
     crash,
     triggerCrash,
     setAudioPaused,
@@ -323,6 +327,7 @@ function introHarness(elapsed = 0) {
     clearLook,
     updateWorld,
     playerUpdate,
+    setScriptedPose,
     placeCamera,
     updateInteraction,
     updateFlight,
@@ -458,22 +463,29 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it('completes naturally, clears queued jump, and starts once', () => {
-    const { phase, sessionStart, consumeJump } = introHarness(11.9);
+    const {
+      phase, sessionStart, beginRun, consumeJump, setScriptedPose,
+    } = introHarness(11.9);
     const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
     updateIntro.call(phase, 0.2);
     updateIntro.call(phase, 0.2);
     expect(sessionStart).toHaveBeenCalledOnce();
+    expect(beginRun).toHaveBeenCalledOnce();
     expect(consumeJump).toHaveBeenCalledOnce();
+    expect(setScriptedPose).toHaveBeenCalledWith(expect.objectContaining({ yaw: 0 }));
   });
 
   it('skips with Space, clears queued jump, and does not play the missed crash', () => {
-    const { phase, sessionStart, crash, consumeJump, updateWorld } = introHarness(2);
+    const {
+      phase, sessionStart, beginRun, crash, consumeJump, updateWorld,
+    } = introHarness(2);
     const event = new KeyboardEvent('keydown', {
       code: 'Space', key: ' ', cancelable: true,
     });
     (phase as unknown as { handleKeyDown(event: KeyboardEvent): void }).handleKeyDown(event);
     expect(event.defaultPrevented).toBe(true);
     expect(sessionStart).toHaveBeenCalledOnce();
+    expect(beginRun).toHaveBeenCalledOnce();
     expect(crash).not.toHaveBeenCalled();
     expect(consumeJump).toHaveBeenCalledOnce();
 

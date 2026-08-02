@@ -74,6 +74,24 @@
       "sourceAnimationCount": 0,
       "downloadedOn": "2026-07-31"
     },
+    "deathStareBlob": {
+      "id": "deathStareBlob",
+      "pageUrl": "https://poly.pizza/m/IoWG5F9WUc",
+      "publicId": "IoWG5F9WUc",
+      "resourceId": "cd25a048-719e-4ec4-bbf5-a266776fe129",
+      "downloadUrl": "https://static.poly.pizza/cd25a048-719e-4ec4-bbf5-a266776fe129.glb",
+      "sourceAssetId": "poly-pizza:cd25a048-719e-4ec4-bbf5-a266776fe129",
+      "modelName": "Green Spiky Blob",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": true,
+      "sha256": "AD5E8B1CDF8C0D328B4B44537D3DA8FA98119A9A99FB6163E2F325DBB8BBECC1",
+      "sourceTriangles": 4888,
+      "sourceHasSkins": true,
+      "sourceAnimationCount": 9,
+      "downloadedOn": "2026-08-01"
+    },
     "whirlpoolCore": {
       "id": "whirlpoolCore",
       "pageUrl": "https://poly.pizza/m/2TBzV_5N0ci",

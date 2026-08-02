@@ -1133,7 +1133,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const tuna = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.12]),
+      random: sequenceRandom([0, 44 / 422]),
       initial: { day: 3 },
     });
     const tunaAttempt = beginFishing(tuna);
@@ -1146,11 +1146,11 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it.each([
-    ['bait', 380 / 406, {}, { bait: 1 }, undefined],
-    ['wetDuctTape', 385 / 406, {}, {}, ['ductTape-1', 'usable']],
-    ['brokenCompass', 390 / 406, {}, {}, ['compass-1', 'broken']],
-    ['tornFishingNet', 395 / 406, {}, {}, ['fishingNet-1', 'broken']],
-    ['energyBar', 398 / 406, {}, {}, ['energyBar-1', 'usable']],
+    ['bait', 396 / 422, {}, { bait: 1 }, undefined],
+    ['wetDuctTape', 401 / 422, {}, {}, ['ductTape-1', 'usable']],
+    ['brokenCompass', 406 / 422, {}, {}, ['compass-1', 'broken']],
+    ['tornFishingNet', 411 / 422, {}, {}, ['fishingNet-1', 'broken']],
+    ['energyBar', 414 / 422, {}, {}, ['energyBar-1', 'usable']],
   ] as const)('applies the %s utility reward', (
     catchId, catchRoll, deltas, snapshotMatch, item,
   ) => {
@@ -1177,7 +1177,7 @@ describe('SurvivalSession daytime actions', () => {
       {
         seed: 1,
         initial: { day: 3 },
-        random: sequenceRandom([0, 558 / 563]),
+        random: sequenceRandom([0, 574 / 579]),
       },
     );
     const attempt = beginFishing(session);
@@ -1200,7 +1200,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       initial: { day: 3 },
       initialConditions,
-      random: sequenceRandom([0, 390 / 406]),
+      random: sequenceRandom([0, 401 / 417]),
     });
     const attempt = beginFishing(session);
     expect(reelCatch(attempt)).toMatchObject({ kind: 'catch', catch: { id: 'wetDuctTape' } });
@@ -1219,11 +1219,11 @@ describe('SurvivalSession daytime actions', () => {
   it('awards no food and consumes no bait for junk or a miss', () => {
     const junk = new SurvivalSession(saved('baitTin'), {
       seed: 1,
-      random: sequenceRandom([0, 0.7]),
+      random: sequenceRandom([0, 494 / 531]),
     });
     const junkAttempt = beginFishing(junk);
     const junkResult = reelCatch(junkAttempt);
-    expect(junkResult).toMatchObject({ kind: 'catch', catch: { id: 'seaweed', kind: 'junk' } });
+    expect(junkResult).toMatchObject({ kind: 'catch', catch: { id: 'fishBones', kind: 'junk' } });
     expect(junk.finishFishing(junkAttempt.snapshot().id, junkResult)).toMatchObject({
       accepted: true,
       code: 'junk-caught',

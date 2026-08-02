@@ -327,7 +327,7 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.updateMatrixWorld(true);
     }
     this.syncVisualState(sinking);
-    this.audio.update(motion, directControlActive);
+    this.audio.update(motion, directControlActive, this.elapsed);
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
@@ -459,11 +459,16 @@ export class ScavengePhase implements GamePhase {
       availableItems.push(object);
       instances.set(instance.instanceId, instance);
     }
+    const nearEvacuation = containsPointXZ(
+      this.world.evacuationBounds,
+      this.player.localPosition,
+    );
     const target = this.interaction.update(
       availableItems,
       this.world.lifeboat,
       this.world.boatDepositTarget,
       instances,
+      nearEvacuation,
     );
     this.contextAction = this.carry.flightActive
       ? { type: 'none', prompt: '' }
@@ -471,10 +476,7 @@ export class ScavengePhase implements GamePhase {
         ...target,
         carriedItem: this.carry.activeInstance,
         remainingCapacity: 3 - snapshot.carriedWeight,
-        nearEvacuation: containsPointXZ(
-          this.world.evacuationBounds,
-          this.player.localPosition,
-        ),
+        nearEvacuation,
       });
     if (target.target === 'item' && target.targetItem !== null) {
       const object = this.world.itemObjects.get(target.targetItem.instanceId);
@@ -623,6 +625,7 @@ export class ScavengePhase implements GamePhase {
     this.presentation = 'playing';
     this.ui.setPresentation('playing');
     this.session.start();
+    this.audio.beginRun();
     if (resumeRequired) {
       this.pausedIntroExitCarry = true;
       this.session.pause();

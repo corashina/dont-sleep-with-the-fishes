@@ -185,8 +185,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.angler.userData.fixedPlayerFacingPose = true;
     this.angler.scale.setScalar(FACE_PRESENTATION_SCALE);
 
-    this.modelInstance = environment.eventModels.create('anglerFish');
-    this.modelInstance.root.name = 'death-stare-angler-model';
+    this.modelInstance = environment.eventModels.create('deathStareBlob');
+    this.modelInstance.root.name = 'death-stare-blob-model';
     this.modelInstance.root.scale.setScalar(FACE_LONGEST_DIMENSION);
     setFlatShading(this.modelInstance.root);
     this.angler.add(this.modelInstance.root);

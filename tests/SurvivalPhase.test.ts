@@ -1595,7 +1595,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('shows the projected broken compass utility result after reeling', async () => {
-    const rig = createFishingRig({ day: 3, catchRoll: 390 / 406 });
+    const rig = createFishingRig({ day: 3, catchRoll: 406 / 422 });
     rig.phase.start();
     rig.phase.handleAction('fish');
     await settleFishingEntry(rig);
@@ -3184,13 +3184,11 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
-  it('keeps Bad Sleep gaps through the choice and closes them before dawn', async () => {
+  it('uses the standard sleep fade for Bad Sleep', async () => {
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'bad-sleep',
     });
-    const badSleepProfile = deferred();
-    const solidProfile = deferred();
     const calls: string[] = [];
     const outcome = accepted({
       code: 'event-resolved',
@@ -3213,10 +3211,6 @@ describe('SurvivalPhase orchestration', () => {
     const setSleepCovered = vi.fn((covered: boolean) => {
       calls.push(covered ? 'cover' : 'uncover');
       return Promise.resolve();
-    });
-    const setSleepCoverProfile = vi.fn((profile: 'solid' | 'bad-sleep') => {
-      calls.push(`profile:${profile}`);
-      return profile === 'bad-sleep' ? badSleepProfile.promise : solidProfile.promise;
     });
     const phase = SurvivalPhase.forTest({
       session: {
@@ -3248,7 +3242,6 @@ describe('SurvivalPhase orchestration', () => {
       ui: {
         beginEventPresentation: vi.fn(),
         setSleepCovered,
-        setSleepCoverProfile,
         settleCoveredScene: vi.fn(() => Promise.resolve()),
         showEventReveal: vi.fn(() => Promise.resolve()),
         setEventSelection,
@@ -3267,31 +3260,20 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
-    expect(calls).toContain('profile:bad-sleep');
-    expect(calls).not.toContain('uncover');
-    expect(setEventSelection).not.toHaveBeenCalled();
-
-    badSleepProfile.resolve();
-    await flushPromises();
-
-    expect(calls.indexOf('profile:bad-sleep')).toBeLessThan(calls.indexOf('reveal'));
+    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('uncover'));
+    expect(calls.indexOf('uncover')).toBeLessThan(calls.indexOf('reveal'));
     expect(setEventSelection).toHaveBeenCalledOnce();
-    expect(calls).not.toContain('uncover');
 
     phase.handleEndure();
+    await flushPromises();
     await flushPromises();
 
     expect(calls.indexOf('reaction')).toBeLessThan(calls.indexOf('outcome'));
     expect(calls.indexOf('outcome')).toBeLessThan(calls.indexOf('hold'));
-    expect(calls.at(-1)).toBe('profile:solid');
     expect(showFeedback).not.toHaveBeenCalled();
-    expect(beginDawn).not.toHaveBeenCalled();
-
-    solidProfile.resolve();
-    await flushPromises();
-
-    expect(calls.indexOf('profile:solid')).toBeLessThan(calls.indexOf('dawn'));
-    expect(calls.indexOf('dawn')).toBeLessThan(calls.indexOf('uncover'));
+    expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
+    expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('dawn'));
+    expect(calls.indexOf('dawn')).toBeLessThan(calls.lastIndexOf('uncover'));
     expect(calls.at(-1)).toBe('focus');
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
     phase.dispose();
@@ -4827,10 +4809,10 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(setPaused).not.toHaveBeenCalledWith(false);
     expect(update).not.toHaveBeenCalled();
-    expect(updateAmbient).toHaveBeenCalledOnce();
+    expect(updateAmbient).not.toHaveBeenCalled();
   });
 
-  it('keeps ambient boat motion active while gameplay is paused', () => {
+  it('freezes all boat motion while gameplay is paused', () => {
     const update = vi.fn();
     const updateAmbient = vi.fn();
     const phase = SurvivalPhase.forTest({
@@ -4846,8 +4828,34 @@ describe('SurvivalPhase orchestration', () => {
     phase.setPaused(true);
     phase.update(4, 0.016);
 
-    expect(updateAmbient).toHaveBeenCalledWith(4, 0.016);
+    expect(updateAmbient).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('freezes survival time while the Escape pause menu is open', () => {
+    const update = vi.fn();
+    const updateAmbient = vi.fn();
+    const ui: Record<string, unknown> = {
+      render: vi.fn(),
+      setPaused: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { update, updateAmbient, dispose: vi.fn() },
+      ui,
+    });
+
+    phase.update(10, 0.1);
+    (ui.onPauseChange as (paused: boolean) => void)(true);
+    phase.update(11, 0.5);
+    (ui.onPauseChange as (paused: boolean) => void)(false);
+    phase.update(12, 0.25);
+
+    expect(update).toHaveBeenNthCalledWith(1, 10, 0.1);
+    expect(update).toHaveBeenNthCalledWith(2, 10.25, 0.25);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(updateAmbient).not.toHaveBeenCalled();
   });
 
   it('settles a hidden event reveal and restores choices when visible', async () => {

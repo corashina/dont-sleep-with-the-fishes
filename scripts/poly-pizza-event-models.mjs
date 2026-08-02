@@ -18,6 +18,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
   snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
+  deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   whirlpoolCore: 'https://poly.pizza/m/2TBzV_5N0ci',
 });
 
@@ -26,6 +27,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   schoolFish: 2_000,
   snatcher: 4_000,
   anglerFish: 4_000,
+  deathStareBlob: 5_000,
   whirlpoolCore: 3_000,
 });
 
@@ -43,7 +45,9 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
           ? 'F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E'
           : id === 'anglerFish'
             ? '6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF'
-            : '1E15643EBAE9F3B0FE109A97D47793F195FFB6F19819C59359BD21EBE2872FD7',
+            : id === 'deathStareBlob'
+              ? 'CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F'
+              : '1E15643EBAE9F3B0FE109A97D47793F195FFB6F19819C59359BD21EBE2872FD7',
   })]),
 ));
 

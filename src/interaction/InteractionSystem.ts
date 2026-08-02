@@ -20,6 +20,9 @@ import {
 
 export type RayTarget = 'none' | 'item' | 'deposit';
 
+const STANDARD_INTERACTION_DISTANCE = 3.2;
+const LIFEBOAT_INTERACTION_DISTANCE = 6.5;
+
 export interface ContextInput {
   target: RayTarget;
   targetItem: ItemInstance | null;
@@ -123,7 +126,7 @@ export class InteractionSystem {
     private readonly camera: PerspectiveCamera,
     private readonly occlusion?: InteractionOcclusion,
   ) {
-    this.raycaster.far = 3.2;
+    this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
   }
 
   private itemIsOccluded(worldTarget: Vector3): boolean {
@@ -172,6 +175,7 @@ export class InteractionSystem {
     lifeboat: Object3D,
     depositTarget: Object3D,
     instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
+    canReachLifeboat = true,
   ): InteractionTarget {
     this.camera.updateWorldMatrix(true, false);
     items.forEach((item) => item.updateWorldMatrix(true, true));
@@ -179,7 +183,7 @@ export class InteractionSystem {
     depositTarget.updateWorldMatrix(true, true);
     this.raycaster.setFromCamera(this.center, this.camera);
     const dropPoint = this.aimedDropPoint();
-    const hits = this.raycaster.intersectObjects([...items, lifeboat, depositTarget], true);
+    const hits = this.raycaster.intersectObjects([...items, depositTarget], true);
     let selectedHit = hits[0];
     let tagged = findTaggedAncestor(selectedHit?.object ?? null);
     if (tagged?.userData.boatDepositTarget === true) {
@@ -202,6 +206,12 @@ export class InteractionSystem {
     if (targetItem !== null && selectedHit && this.itemIsOccluded(selectedHit.point)) {
       tagged = null;
       targetItem = null;
+    }
+    if (!tagged && canReachLifeboat) {
+      this.raycaster.far = LIFEBOAT_INTERACTION_DISTANCE;
+      selectedHit = this.raycaster.intersectObject(lifeboat, true)[0];
+      this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
+      tagged = findTaggedAncestor(selectedHit?.object ?? null);
     }
     this.hoverOutline.setTarget(targetItem === null ? null : tagged);
 

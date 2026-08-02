@@ -33,7 +33,9 @@ Keep source records after download.
 Each game phase owns one audio scope. Scope disposal stops its loops and effects.
 
 Scavenging uses ship room tone. Survival crossfades ocean, wind, rain, and boat
-creak layers. The game has no continuous background music.
+creak layers. Scavenging uses one 60-second music sequence.
+
+The Chase plays for 50 seconds. Time Running Out plays for the final 10 seconds.
 
 System Tuning stores master volume and mute in local storage.
 
@@ -53,6 +55,8 @@ System Tuning stores master volume and mute in local storage.
 | Slot | Use | Selected source |
 | --- | --- | --- |
 | Room tone | Enclosed ship spaces | [Ferry Room Tone](https://freesound.org/people/kyles/sounds/454012/) |
+| First 50 seconds | Fast orchestral scavenging chase | [The Chase](https://freesound.org/people/Victor_Natas/sounds/634513/) |
+| Final 10 seconds | Escalating acoustic countdown | [Time Running Out](https://freesound.org/people/qubodup/sounds/211102/) |
 
 ## Scavenging movement
 

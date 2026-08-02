@@ -8,6 +8,12 @@ export function smoothstep(value: number): number {
   return progress * progress * (3 - 2 * progress);
 }
 
+export function smootherstep(value: number): number {
+  const progress = clamp01(value);
+  return progress * progress * progress
+    * (progress * (progress * 6 - 15) + 10);
+}
+
 export function pulse(progress: number, start: number, peak: number, end: number): number {
   if (progress <= start || progress >= end) return 0;
   return progress < peak
