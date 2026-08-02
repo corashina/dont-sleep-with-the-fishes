@@ -1,6 +1,6 @@
 # Don't Sleep With The Fishes
 
-A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
+A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a one-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
 ## Visual identity
 
@@ -21,17 +21,17 @@ maritime scattering, a locally committed original gibbous-moon texture,
 weather-aware celestial light, fog, lighting, and synchronized ocean
 reflections without external sky art.
 
-The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
+The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each one-minute run two practical search directions.
 
-Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and bulky diving gear stays on large equipment racks. Dorothy contains exactly 17 collectible types and 20 physical pickups: Food appears three times, Bait twice, and every other scavenging collectible type once.
+Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 18 scavenging item types and 21 physical pickups: Food appears three times, Bait twice, and every other item type once.
 
 The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials: subdued non-slip decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
 
 ## Dorothy supplies
 
-The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, and Harpoon Gun. Scuba Gear and Anchor each weigh three points.
+The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Harpoon Gun, and Captain Whiskers. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable tools used by actions or adapted events. A repairable durable tool can become broken, and a durable tool can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, Flashlight, and Captain Whiskers are durable items used by actions, events, or companionship. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
@@ -115,7 +115,7 @@ Accepted daytime actions play through the lifeboat scene, update the condition d
 
 ## Game loop
 
-The ship sinks in two minutes. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
+The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
 
 In the lifeboat, each day gives three energy for daytime actions:
 
@@ -191,7 +191,7 @@ and cleanup.
 - `src/game` — scavenging timer, item state, score, and sinking progression.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
-- `src/world/ShipItemPlacement` — category-compatible item profiles, anchor validation, and randomized assignment to authored surfaces.
+- `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
 - `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.

@@ -75,8 +75,7 @@ function matchesAuthoredOpenShelfSurface(surface: ShipItemSurface): boolean {
     && nearlyEqual(surface.clearanceHeight, authored.clearanceHeight * owner.scale[1])
     && nearlyEqual(surface.rotation.x, authored.localRotation[0])
     && nearlyEqual(surface.rotation.y, authored.localRotation[1] + owner.rotationY)
-    && nearlyEqual(surface.rotation.z, authored.localRotation[2])
-    && surface.fallback === authored.fallback;
+    && nearlyEqual(surface.rotation.z, authored.localRotation[2]);
 }
 
 function ownerApertureAllowsRay(
