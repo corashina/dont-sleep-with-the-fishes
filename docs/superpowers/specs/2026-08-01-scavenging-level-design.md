@@ -158,9 +158,13 @@ Planar walking and sprinting speed depend on total filled carry circles:
 | 2 | 0.92 |
 | 3 | 0.84 |
 
-The base walk speed remains 3.8 metres per second. The base sprint speed
-remains 6.2 metres per second. Depositing or dropping weight updates speed on
-the next movement step.
+The base walk speed remains 3.8 metres per second. The scavenging sprint speed
+is 8.4 metres per second. Depositing or dropping weight updates speed on the
+next movement step.
+
+The sprint speed is calibrated against the complete ship route. It keeps the
+54-to-58-second expert window possible without reducing item spread, room
+coverage, carry weight, or the 60-second limit.
 
 The multiplier affects planar walking and sprinting only. It does not change
 jump, ladder, camera, sinking, or physics rules.
@@ -211,7 +215,11 @@ seconds. Its estimated completion time must be from 54 through 58 seconds.
 This constructive route proves that the layout is technically possible.
 
 A separate deterministic baseline policy follows visible main loops, uses
-nearby branches, deposits when full, and avoids long backtracking. It should
+nearby branches, deposits when full, and avoids long backtracking. An empty
+player always starts a new trip toward the nearest fitting non-branch item,
+even when it is more than 8 metres away. While carrying items, the player
+deposits when no fitting item remains within 8 metres. A branch item remains
+eligible only when its round-trip detour is 4 metres or less. The policy should
 save 15 to 17 items within 60 seconds. Manual playtests confirm that this range
 matches normal play.
 
