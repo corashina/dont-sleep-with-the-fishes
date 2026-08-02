@@ -1163,7 +1163,6 @@ describe('BoatWorld helpers', () => {
   );
 
   it.each([
-    ['shower-night', 'bucket', 'bucket-1'],
     ['windy-night', 'umbrella', 'umbrella-1'],
     ['thunderstorm', 'anchor', 'anchor-1'],
   ] as const)(
@@ -1314,16 +1313,20 @@ describe('BoatWorld helpers', () => {
     animator.dispose();
   });
 
-  it('owns and routes the full Shower Night reveal before restoring the base camera', async () => {
+  it('keeps the Shower Night camera position fixed while looking up-left and up-right', async () => {
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
     );
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
     const basePosition = cameraRig.position.toArray();
     const baseQuaternion = cameraRig.quaternion.toArray();
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
+    const baseViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 
     world.stageEvent('shower-night');
 
@@ -1331,20 +1334,38 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
     expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeUndefined();
     const reveal = world.revealEvent('shower-night');
-    world.update(3.39, 3.39);
+    world.update(1.55, 1.55);
     expect(await remainsPending(reveal)).toBe(true);
-    expect(cameraRig.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expect(cameraRig.position.toArray()).toEqual(basePosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    const leftViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(leftViewDirection.y).toBeGreaterThan(baseViewDirection.y + 0.25);
+    expect(leftViewDirection.x).toBeLessThan(baseViewDirection.x - 0.05);
 
-    world.update(3.4, 0.01);
+    world.update(3.55, 2);
+    expect(await remainsPending(reveal)).toBe(true);
+    expect(cameraRig.position.toArray()).toEqual(basePosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    const rightViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(rightViewDirection.y).toBeGreaterThan(baseViewDirection.y + 0.25);
+    expect(rightViewDirection.x).toBeGreaterThan(baseViewDirection.x + 0.05);
+
+    world.update(5.55, 2);
     await reveal;
     expect(cameraRig.position.toArray()).toEqual(basePosition);
     expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('uses camera-only Shower choreography and retains generic fallback', async () => {
+  it('keeps Shower Night item and reaction camera poses stationary', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1356,6 +1377,8 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([bucket]));
     const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const baseCameraPosition = cameraRig.position.toArray();
+    const baseCameraQuaternion = cameraRig.quaternion.toArray();
 
     const showerUse = world.playEventItemUse(
       'shower-night',
@@ -1365,12 +1388,29 @@ describe('BoatWorld helpers', () => {
     world.update(0.66, 0.66);
     expect(await remainsPending(showerUse)).toBe(true);
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
-    expect(
-      Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
-    ).toBeGreaterThan(0.01);
+    expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
     world.update(2, 2);
     await showerUse;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
+
+    const reaction = world.reactToEventOutcome(
+      'shower-night',
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The rain is managed.',
+        deltas: { hull: -10 },
+        cue: 'impact',
+      },
+      { choiceId: 'bucket', actors: [{ instanceId: bucket.instanceId, condition: 'usable' }] },
+    );
+    world.update(2.5, 0.5);
+    expect(await remainsPending(reaction)).toBe(true);
+    expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
+    expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
+    world.update(4, 2);
+    await reaction;
 
     const fallback = world.playEventItemUse(
       'strange-noise',
@@ -2484,6 +2524,8 @@ describe('BoatWorld helpers', () => {
       'anglerfish-swarm-boat',
       'whirlpool-boat',
     ]);
+    expect(coordinatorWorld.getObjectByName('death-stare-blob-model')).toBeDefined();
+    expect(eventModels.create).toHaveBeenCalledWith('deathStareBlob');
     const whirlpoolWorld = coordinatorWorld.getObjectByName('whirlpool-world')!;
     const whirlpoolBoat = coordinatorBoat.getObjectByName('whirlpool-boat')!;
     expect(whirlpoolWorld.children.map(({ name }) => name)).toEqual([

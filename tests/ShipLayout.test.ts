@@ -86,6 +86,8 @@ describe('scavenging ship layout', () => {
     expect(furnitureIds).toEqual(expect.arrayContaining([
       'cabin-bunk-port',
       'cabin-bunk-starboard',
+      'cabin-bunk-center-port',
+      'cabin-bunk-center-starboard',
       'cabin-desk-aft',
       'cabin-bookcase-forward',
       'chart-table-port',
@@ -96,9 +98,11 @@ describe('scavenging ship layout', () => {
       'cabin-night-stand-forward-starboard',
       'cabin-desk-starboard-aft',
       'cabin-cabinet-port-forward',
-      'cabin-table-starboard-center',
+      'wheelhouse-crew-table-starboard',
       'workroom-storage-shelf-port-forward',
       'workroom-pallet-starboard-forward',
+      'workroom-crate-center-a',
+      'workroom-crate-center-b',
     ]));
     expect(furnitureIds).not.toEqual(expect.arrayContaining([
       'cabin-food-cabinet',
@@ -118,7 +122,7 @@ describe('scavenging ship layout', () => {
       ]),
     );
     expect(SHIP_LAYOUT.decorations.filter(({ modelId }) =>
-      modelId === 'workroomCardboardBox')).toHaveLength(4);
+      modelId === 'workroomCardboardBox')).toHaveLength(6);
   });
 
   it('uses one central mast outside the clear forward-room passage', () => {
@@ -140,7 +144,7 @@ describe('scavenging ship layout', () => {
       id: 'mainmast-lookout',
       mastId: 'mainmast',
       floorOffsetY: 10.5,
-      outerWidth: 2.4,
+      outerWidth: 4,
       openingSize: 0.9,
       guardHeight: 1.05,
       ladder: {
@@ -491,7 +495,7 @@ describe('scavenging ship layout', () => {
       .forEach(({ rotationY }) => expect(rotationY).toBe(0));
   });
 
-  it('aligns beds and desks exactly against interior wall faces', () => {
+  it('aligns wall furniture and stages the new room-center clusters', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
     const fixtureRect = (id: string) => furnitureRect(
@@ -506,13 +510,28 @@ describe('scavenging ship layout', () => {
       .toBeCloseTo(crew.minZ + SHIP_ROOM_WALL_THICKNESS);
     expect(fixtureRect('cabin-cabinet-port-forward').minX)
       .toBeCloseTo(crew.minX + SHIP_ROOM_WALL_THICKNESS);
-    const cabinTable = SHIP_LAYOUT.furniture.find(
-      ({ id }) => id === 'cabin-table-starboard-center',
+    const centerBunks = SHIP_LAYOUT.furniture.filter(
+      ({ id }) => id.startsWith('cabin-bunk-center-'),
+    );
+    expect(centerBunks).toHaveLength(2);
+    expect(centerBunks.reduce((sum, bunk) => sum + bunk.position[0], 0)).toBeCloseTo(0);
+    expect(centerBunks.reduce((sum, bunk) => sum + bunk.position[2], 0) / 2)
+      .toBeCloseTo((crew.minZ + crew.maxZ) / 2);
+    const wheelhouseTable = SHIP_LAYOUT.furniture.find(
+      ({ id }) => id === 'wheelhouse-crew-table-starboard',
     )!;
-    expect(cabinTable.position[0]).toBeCloseTo((crew.minX + crew.maxX) / 2);
-    expect(cabinTable.position[2]).toBeCloseTo((crew.minZ + crew.maxZ) / 2);
+    expect(wheelhouseTable.zoneId).toBe('wheelhouse');
+    expect(wheelhouseTable.modelId).toBe('crewTable');
     expect(SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === 'wheelhouse'))
-      .toHaveLength(2);
+      .toHaveLength(3);
+    const centerCrates = SHIP_LAYOUT.furniture.filter(
+      ({ id }) => id.startsWith('workroom-crate-center-'),
+    );
+    expect(centerCrates).toHaveLength(2);
+    centerCrates.forEach((crate) => {
+      expect(crate.zoneId).toBe('storageWorkroom');
+      expect(Math.abs(crate.position[0])).toBeLessThan(1.2);
+    });
     const workroomCorkboard = SHIP_LAYOUT.decorations.find(
       ({ id }) => id === 'workroom-corkboard-aft',
     )!;

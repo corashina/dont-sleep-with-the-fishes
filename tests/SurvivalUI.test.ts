@@ -157,6 +157,10 @@ describe('SurvivalUI', () => {
       { id: 'leave', label: 'LEAVE IT', unavailableReason: null },
     ]);
     expect(labels('[data-event-choice]')).toEqual(['RETRIEVE', 'LEAVE IT']);
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.classList).toContain('is-visible');
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
+    expect(caption.querySelector('[data-event-detail]')?.textContent).toBe('');
   });
 
   it('activates a focused contextual choice with the keyboard', () => {
@@ -343,6 +347,9 @@ describe('SurvivalUI', () => {
     );
     expect(mainStyles).not.toMatch(
       /\.boat-anchor\[data-event-state="available"\]\s*\{[^}]*(?:outline|box-shadow):/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\[data-target-kind="item"\]\[data-event-state\]:focus-visible\s*\{[^}]*outline:\s*none;/s,
     );
     expect(mainStyles).not.toContain('#c98242');
   });
@@ -552,7 +559,7 @@ describe('SurvivalUI', () => {
     expect(action).toHaveBeenCalledWith('repairItem', { kind: 'itemRepair', target: 'bucket-2' });
   });
 
-  it('presents events through the scene and routes only eligible physical anchors', async () => {
+  it('presents events without reveal captions and routes only eligible physical anchors', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -578,12 +585,14 @@ describe('SurvivalUI', () => {
     await reveal;
     expect(mount.querySelector('[data-event]')).toBeNull();
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
-    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A shadow');
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector('[data-event-danger]')).toBeNull();
-    expect(caption.querySelector('[data-event-detail]')?.textContent)
-      .toBe('A shadow moves beneath the boat.');
+    expect(caption.querySelector('[data-event-detail]')?.textContent).toBe('');
     expect(caption.dataset.danger).toBe('dangerous');
-    expect(caption.getAttribute('aria-label')).toBe(
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.getAttribute('aria-label')).toBeNull();
+    await Promise.resolve();
+    expect(mount.querySelector('[data-survival-announcer]')?.textContent).toBe(
       'Dangerous event: A shadow. A shadow moves beneath the boat.',
     );
 
@@ -648,7 +657,7 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
-  it('replaces the reveal title with a held result caption and clears its state', async () => {
+  it('shows a held result caption after a captionless reveal and clears its state', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -656,7 +665,8 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     const title = caption.querySelector<HTMLElement>('[data-event-title]')!;
 
-    expect(title.textContent).toBe('A shadow');
+    expect(title.textContent).toBe('');
+    expect(caption.classList).not.toContain('is-visible');
     expect(caption.dataset.result).toBeUndefined();
 
     ui.showEventOutcome({
@@ -686,31 +696,24 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
   });
 
-  it('uses uneven Bad Sleep eyelids while keeping event controls visible', async () => {
+  it('does not render an eye mask for Bad Sleep', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     ui.beginEventPresentation();
     ui.setEventSelection(new Map());
     await ui.setSleepCovered(true);
-    await ui.setSleepCoverProfile('bad-sleep');
 
-    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
     const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
-    expect(cover.dataset.profile).toBe('bad-sleep');
-    expect(mount.querySelectorAll('[data-dream-eyelid]')).toHaveLength(2);
+    expect(mount.querySelectorAll('[data-dream-eyes]')).toHaveLength(0);
+    expect(mount.querySelectorAll('[data-dream-eyelid]')).toHaveLength(0);
     expect(endure.hidden).toBe(false);
     endure.focus();
     expect(document.activeElement).toBe(endure);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
-    expect(mainStyles).toMatch(/\.sleep-cover \[data-dream-eyelid\]\s*\{[^}]*display:\s*none/s);
-    expect(mainStyles).toMatch(/\.sleep-cover\[data-profile="bad-sleep"\]\s*\{[^}]*background:\s*transparent/s);
-    expect(mainStyles).toMatch(/\.sleep-cover\[data-profile="bad-sleep"\] \[data-dream-eyelid\]\s*\{[^}]*display:\s*block/s);
     expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
-    expect(mainStyles).toMatch(/@keyframes bad-sleep-top-eyelid/);
-    expect(mainStyles).toMatch(/@keyframes bad-sleep-bottom-eyelid/);
-    expect(mainStyles).not.toMatch(/\.sleep-cover\[data-profile="bad-sleep"\][^{]*\{[^}]*blur/s);
+    expect(mainStyles).not.toMatch(/bad-sleep-(left|right)-(upper|lower)/);
   });
 
   it('reuses the event caption for the exact held result', async () => {
@@ -730,10 +733,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-survival-announcer]')?.textContent)
       .toBe('The wind breaks two supplies.');
 
-    void ui.setSleepCoverProfile('bad-sleep');
     ui.clearEventPresentation();
     expect(caption.dataset.result).toBeUndefined();
-    expect(mount.querySelector<HTMLElement>('[data-sleep-cover]')?.dataset.profile).toBe('solid');
   });
 
   it('shows the pale sleep mask only for Ghosts and clears it with the event', () => {
@@ -896,7 +897,7 @@ describe('SurvivalUI', () => {
     ['safe', 'Safe event: A shadow. A shadow moves beneath the boat.'],
     ['uncertain', 'Uncertain event: A shadow. A shadow moves beneath the boat.'],
     ['dangerous', 'Dangerous event: A shadow. A shadow moves beneath the boat.'],
-  ] as const)('announces %s event risk without visible risk copy', async (danger, accessibleName) => {
+  ] as const)('announces %s event risk without a reveal caption', async (danger, accessibleName) => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -904,8 +905,11 @@ describe('SurvivalUI', () => {
 
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.dataset.danger).toBe(danger);
-    expect(caption.getAttribute('aria-label')).toBe(accessibleName);
-    expect(caption.textContent).toContain('A shadow moves beneath the boat.');
+    expect(caption.getAttribute('aria-label')).toBeNull();
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.textContent).not.toContain('A shadow moves beneath the boat.');
+    await Promise.resolve();
+    expect(mount.querySelector('[data-survival-announcer]')?.textContent).toBe(accessibleName);
   });
 
   it('shows an exact Dangerous Waters result in the scene caption', async () => {
@@ -1934,6 +1938,18 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
     mount.querySelector<HTMLButtonElement>('[data-resume]')!.click();
     expect(pause).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps the pause overlay free of scroll containers', () => {
+    expect(mainStyles).toMatch(
+      /\.pause-overlay \.cinematic-overlay__content\s*\{[^}]*overflow:\s*hidden;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.cinematic-overlay\.pause-overlay\s*\{[^}]*padding-block:\s*clamp\(8px, 4dvh, 24px\);/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.pause-overlay \.salvage-action\s*\{[^}]*min-height:\s*clamp\(44px, 12dvh, 58px\);/s,
+    );
   });
 
   it('restores the command origin when a command-driven pause closes', () => {

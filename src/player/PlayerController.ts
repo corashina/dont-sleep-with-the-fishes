@@ -12,6 +12,8 @@ import {
 } from './LadderTraversal';
 
 const JUMP_SPEED = 5.2;
+const LADDER_JUMP_OUTWARD_SPEED = 3.8;
+const LADDER_REGRAB_DELAY = 0.35;
 const GRAVITY = 14;
 const GROUND_EPSILON = 1e-6;
 const DEFAULT_YAW = Math.PI;
@@ -68,6 +70,9 @@ export class PlayerController {
   private readonly baseDeckEyeHeight: number;
   private floorEyeHeight: number;
   private activeLadderId: string | null = null;
+  private ladderRegrabDelay = 0;
+  private ladderJumpVelocityX = 0;
+  private ladderJumpVelocityZ = 0;
   private verticalVelocity = 0;
 
   constructor(
@@ -95,6 +100,8 @@ export class PlayerController {
       -PITCH_LIMIT,
       Math.min(PITCH_LIMIT, this.pitch - look.y * LOOK_SENSITIVITY),
     );
+    const jumpRequested = input.consumeJump();
+    this.ladderRegrabDelay = Math.max(0, this.ladderRegrabDelay - delta);
 
     const axes = input.movement;
     const speed = input.sprinting ? 6.2 : 3.8;
@@ -105,6 +112,21 @@ export class PlayerController {
       0,
       (-axes.x * sin + axes.z * cos) * speed * delta,
     );
+
+    if (jumpRequested && this.activeLadderId !== null) {
+      const ladder = this.climbZones.find(({ id }) => id === this.activeLadderId);
+      if (ladder) return this.jumpOffLadder(delta, ladder);
+      this.activeLadderId = null;
+    }
+
+    if (this.ladderRegrabDelay > 0) {
+      this.movement.set(
+        this.ladderJumpVelocityX * delta,
+        0,
+        this.ladderJumpVelocityZ * delta,
+      );
+      return this.integrate(delta, jumpRequested);
+    }
 
     const ladderTraversal = resolveLadderTraversal({
       position: this.localPosition,
@@ -123,7 +145,6 @@ export class PlayerController {
       this.activeLadderId = ladderTraversal.activeLadderId;
       this.floorEyeHeight = ladderTraversal.floorEyeY;
       this.verticalVelocity = 0;
-      input.consumeJump();
       this.safePosition.set(
         ladderTraversal.position.x,
         ladderTraversal.floorEyeY,
@@ -140,7 +161,7 @@ export class PlayerController {
       };
     }
 
-    return this.integrate(delta, input.consumeJump());
+    return this.integrate(delta, jumpRequested);
   }
 
   updatePassive(delta: number): PlayerMotionSample {
@@ -231,6 +252,23 @@ export class PlayerController {
     };
   }
 
+  private jumpOffLadder(delta: number, ladder: LadderClimbZone): PlayerMotionSample {
+    const outwardLength = Math.hypot(ladder.outwardX, ladder.outwardZ) || 1;
+    this.activeLadderId = null;
+    this.floorEyeHeight = this.baseDeckEyeHeight;
+    this.verticalVelocity = JUMP_SPEED;
+    this.ladderRegrabDelay = LADDER_REGRAB_DELAY;
+    this.ladderJumpVelocityX = ladder.outwardX / outwardLength * LADDER_JUMP_OUTWARD_SPEED;
+    this.ladderJumpVelocityZ = ladder.outwardZ / outwardLength * LADDER_JUMP_OUTWARD_SPEED;
+    this.movement.set(
+      this.ladderJumpVelocityX * delta,
+      0,
+      this.ladderJumpVelocityZ * delta,
+    );
+    const sample = this.integrate(delta, false);
+    return { ...sample, jumped: true };
+  }
+
   placeCamera(): void {
     this.worldPosition.copy(this.localPosition);
     this.ship.localToWorld(this.worldPosition);
@@ -246,6 +284,9 @@ export class PlayerController {
     this.safePosition.set(pose.position[0], pose.floorEyeY, pose.position[2]);
     this.floorEyeHeight = pose.floorEyeY;
     this.activeLadderId = null;
+    this.ladderRegrabDelay = 0;
+    this.ladderJumpVelocityX = 0;
+    this.ladderJumpVelocityZ = 0;
     this.verticalVelocity = 0;
     this.yaw = pose.yaw;
     this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pose.pitch));

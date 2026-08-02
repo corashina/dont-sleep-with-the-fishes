@@ -48,6 +48,7 @@ const freesoundSources = [
   ['flareGun', 'derplayer', '587173'],
   ['harpoonGun', 'Lunevix', '246015'],
   ['goingToSleep', 'Froey_', '644490'],
+  ['yawn', 'spookymodem', '202105'],
   ['nightfall', 'DeVern', '427533'],
   ['eventReveal', 'nomiqbomi', '578362'],
   ['tentacleMovement', 'iampagan', '177017'],
@@ -56,6 +57,8 @@ const freesoundSources = [
   ['rescueEnding', 'Lydmakeren', '510907'],
   ['deathEnding', 'SilverIllusionist', '693405'],
   ['sinkingEnding', 'Kodack', '257752'],
+  ['scavengeChase', 'Victor_Natas', '634513', 'attribution'],
+  ['scavengeCountdown', 'qubodup', '211102', 'attribution'],
 ];
 
 async function hasFile(path) {
@@ -81,18 +84,24 @@ async function fetchBuffer(url) {
   throw new Error(`Download attempts exhausted: ${url}`);
 }
 
-async function fetchFreesound([id, user, number]) {
+async function fetchFreesound([id, user, number, license = 'cc0']) {
   const destination = join(assetRoot, `${id}.mp3`);
   if (await hasFile(destination)) return;
   const pageUrl = `https://freesound.org/people/${user}/sounds/${number}/`;
   let page = '';
   for (let attempt = 0; attempt < 4; attempt += 1) {
     page = (await fetchBuffer(pageUrl)).toString('utf8');
-    if (page.includes('Creative Commons 0')) break;
+    const licenseFound = license === 'cc0'
+      ? page.includes('Creative Commons 0')
+      : page.includes('Attribution');
+    if (licenseFound) break;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000 * (attempt + 1)));
   }
-  if (!page.includes('Creative Commons 0')) {
-    throw new Error(`The page did not return its CC0 record: ${pageUrl}`);
+  const licenseFound = license === 'cc0'
+    ? page.includes('Creative Commons 0')
+    : page.includes('Attribution');
+  if (!licenseFound) {
+    throw new Error(`The page did not return its ${license} record: ${pageUrl}`);
   }
   const previewUrl = page.match(
     /https:\/\/cdn\.freesound\.org\/previews\/[^"']+-hq\.mp3/,
@@ -145,4 +154,4 @@ const results = await Promise.all([
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');
 const totalBytes = results.reduce((total, { size }) => total + size, 0);
-process.stdout.write(`Ready: 47 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);
+process.stdout.write(`Ready: 49 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);

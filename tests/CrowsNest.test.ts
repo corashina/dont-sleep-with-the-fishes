@@ -64,7 +64,9 @@ describe('mainmast crow\'s nest', () => {
         0, FREIGHTER_DIMENSIONS.deckY + 1.5, -0.975,
       ]);
       expect(build.introAnchors.exitPosition).toEqual([0, FREIGHTER_DIMENSIONS.deckY + 1.5, -1.3]);
-      expect(build.root.getObjectByName('crows-nest-seat')).toBeDefined();
+      expect(build.root.getObjectByName('crows-nest-seat')).toBeUndefined();
+      expect(build.root.getObjectByName('crows-nest-seat-support')).toBeUndefined();
+      expect(build.root.getObjectByName('crows-nest-seat-back')).toBeUndefined();
       const firstRung = build.root.getObjectByName(
         'mainmast-ladder:rung:0',
       ) as Mesh<BoxGeometry>;
@@ -73,23 +75,6 @@ describe('mainmast crow\'s nest', () => {
         PLAYER_LAYOUT_RADIUS + firstRung.geometry.parameters.depth / 2 + 0.03,
       );
 
-      const aftSlat = (index: number, side: 'port' | 'starboard'): Mesh<BoxGeometry> =>
-        build.root.getObjectByName(`crows-nest:floor-slat:${index}:${side}`) as Mesh<BoxGeometry>;
-      const outerPortEdges: number[] = [];
-      [0, 1, 2, 3].forEach((index) => {
-        const port = aftSlat(index, 'port');
-        const starboard = aftSlat(index, 'starboard');
-        const portInnerEdge = port.position.x + port.geometry.parameters.width / 2;
-        const starboardInnerEdge = starboard.position.x - starboard.geometry.parameters.width / 2;
-        outerPortEdges.push(port.position.x - port.geometry.parameters.width / 2);
-        expect(portInnerEdge).toBeCloseTo(-0.45);
-        expect(starboardInnerEdge).toBeCloseTo(0.45);
-        expect(starboardInnerEdge - portInnerEdge).toBeCloseTo(0.9);
-      });
-      [-0.99, -1.12, -1.18, -1.2].forEach((edge, index) => {
-        expect(outerPortEdges[index]).toBeCloseTo(edge);
-      });
-
       const opening = build.openingBounds;
       expect(opening.maxX - opening.minX).toBeCloseTo(0.9);
       expect(opening.maxZ - opening.minZ).toBeCloseTo(0.9);
@@ -97,46 +82,60 @@ describe('mainmast crow\'s nest', () => {
       expect(opening.maxX).toBeCloseTo(0.45);
       expect(opening.minZ).toBeCloseTo(-0.99);
       expect(opening.maxZ).toBeCloseTo(-0.09);
-      build.root.children
-        .filter(({ name }) => name.startsWith('crows-nest:floor-slat:'))
-        .forEach((object) => {
-          const floor = object as Mesh<BoxGeometry>;
-          const halfFloorWidth = floor.geometry.parameters.width / 2;
-          const halfFloorDepth = floor.geometry.parameters.depth / 2;
-          const overlapsX = floor.position.x - halfFloorWidth < opening.maxX - 1e-9
-            && floor.position.x + halfFloorWidth > opening.minX + 1e-9;
-          const overlapsZ = floor.position.z - halfFloorDepth < opening.maxZ - 1e-9
-            && floor.position.z + halfFloorDepth > opening.minZ + 1e-9;
-          expect(overlapsX && overlapsZ, floor.name).toBe(false);
-        });
+      const floor = (name: string): Mesh<BoxGeometry> =>
+        build.root.getObjectByName(`crows-nest:floor:${name}`) as Mesh<BoxGeometry>;
+      const floors = ['forward', 'aft', 'port', 'starboard'].map(floor);
+      expect(floors.every(Boolean)).toBe(true);
+      expect(floor('forward').geometry.parameters.width).toBe(4);
+      expect(floor('forward').position.z - floor('forward').geometry.parameters.depth / 2)
+        .toBeCloseTo(opening.maxZ);
+      expect(floor('aft').position.z + floor('aft').geometry.parameters.depth / 2)
+        .toBeCloseTo(opening.minZ);
+      expect(floor('port').position.x + floor('port').geometry.parameters.width / 2)
+        .toBeCloseTo(opening.minX);
+      expect(floor('starboard').position.x - floor('starboard').geometry.parameters.width / 2)
+        .toBeCloseTo(opening.maxX);
+      floors.forEach((mesh) => {
+        const halfFloorWidth = mesh.geometry.parameters.width / 2;
+        const halfFloorDepth = mesh.geometry.parameters.depth / 2;
+        const overlapsX = mesh.position.x - halfFloorWidth < opening.maxX - 1e-9
+          && mesh.position.x + halfFloorWidth > opening.minX + 1e-9;
+        const overlapsZ = mesh.position.z - halfFloorDepth < opening.maxZ - 1e-9
+          && mesh.position.z + halfFloorDepth > opening.minZ + 1e-9;
+        expect(overlapsX && overlapsZ, mesh.name).toBe(false);
+      });
 
       const guard = (name: string): Mesh<BoxGeometry> =>
         build.root.getObjectByName(`crows-nest:guard:${name}`) as Mesh<BoxGeometry>;
       const portGuard = guard('port');
       const starboardGuard = guard('starboard');
-      expect(portGuard.geometry.parameters.width).toBe(0.1);
-      expect(portGuard.position.x).toBe(-1.15);
-      expect(starboardGuard.geometry.parameters.width).toBe(0.1);
-      expect(starboardGuard.position.x).toBe(1.15);
+      expect(portGuard.geometry.parameters.width).toBe(0.12);
+      expect(portGuard.position.x).toBe(-1.94);
+      expect(portGuard.geometry.parameters.depth).toBe(4);
+      expect(starboardGuard.geometry.parameters.width).toBe(0.12);
+      expect(starboardGuard.position.x).toBe(1.94);
 
-      const aftPort = guard('aft-port');
-      const aftStarboard = guard('aft-starboard');
-      expect(aftPort.geometry.parameters.width).toBe(0.75);
-      expect(aftPort.position.x).toBe(-0.825);
-      expect(aftStarboard.geometry.parameters.width).toBe(0.75);
-      expect(aftStarboard.position.x).toBe(0.825);
-      const aftPortInnerEdge = aftPort.position.x + aftPort.geometry.parameters.width / 2;
-      const aftStarboardInnerEdge = aftStarboard.position.x
-        - aftStarboard.geometry.parameters.width / 2;
-      expect(aftPortInnerEdge).toBeCloseTo(-0.45);
-      expect(aftStarboardInnerEdge).toBeCloseTo(0.45);
-      expect(aftStarboardInnerEdge - aftPortInnerEdge).toBeCloseTo(0.9);
-      expect(opening.minX).toBeCloseTo(aftPortInnerEdge);
-      expect(opening.maxX).toBeCloseTo(aftStarboardInnerEdge);
+      const aftGuard = guard('aft');
+      expect(aftGuard.geometry.parameters.width).toBe(4);
+      expect(aftGuard.position.x).toBe(0);
+      expect(aftGuard.position.z).toBe(-1.94);
+      expect(build.root.getObjectByName('crows-nest:guard:aft-port')).toBeUndefined();
+      expect(build.root.getObjectByName('crows-nest:guard:aft-starboard')).toBeUndefined();
+      expect(build.climbZone.topFloor).toEqual({
+        minX: -1.88,
+        maxX: 1.88,
+        minZ: -1.88,
+        maxZ: 1.88,
+      });
 
       const floorSurfaceY = FREIGHTER_DIMENSIONS.deckY + 10.57;
       expect(portGuard.position.y - portGuard.geometry.parameters.height / 2)
         .toBe(floorSurfaceY);
+      expect(build.root.getObjectByName('crows-nest:bracket:1')).toBeUndefined();
+      expect(build.root.getObjectByName('crows-nest:rope-collar:1')).toBeUndefined();
+      const support = build.root.getObjectByName('crows-nest:support-beam') as Mesh<BoxGeometry>;
+      expect(support.position.y + support.geometry.parameters.height / 2)
+        .toBeCloseTo(floorSurfaceY - 0.14);
 
       const mastCollider = {
         minX: -mast.baseDiameter / 2,
@@ -159,20 +158,18 @@ describe('mainmast crow\'s nest', () => {
         .toBe(false);
       expect(landing.x - mastCollider.maxX - PLAYER_LAYOUT_RADIUS).toBeCloseTo(0.02);
       const sideGuardCollider = {
-        minX: 1.1,
-        maxX: 1.2,
+        minX: starboardGuard.position.x - starboardGuard.geometry.parameters.width / 2,
+        maxX: starboardGuard.position.x + starboardGuard.geometry.parameters.width / 2,
         minY: floorSurfaceY,
         maxY: floorSurfaceY + SHIP_LAYOUT.rigging.crowsNest.guardHeight,
-        minZ: -0.82,
-        maxZ: 0.82,
+        minZ: starboardGuard.position.z - starboardGuard.geometry.parameters.depth / 2,
+        maxZ: starboardGuard.position.z + starboardGuard.geometry.parameters.depth / 2,
       };
       expect(circleOverlapsCollisionFootprint(landing, PLAYER_LAYOUT_RADIUS, sideGuardCollider))
         .toBe(false);
-      expect(sideGuardCollider.minX - landing.x - PLAYER_LAYOUT_RADIUS).toBeCloseTo(0.02);
+      expect(sideGuardCollider.minX - landing.x - PLAYER_LAYOUT_RADIUS).toBeGreaterThan(0.2);
 
-      const landingSlat = build.root.getObjectByName(
-        'crows-nest:floor-slat:3:forward',
-      ) as Mesh<BoxGeometry>;
+      const landingSlat = floor('forward');
       expect(landing.x).toBeGreaterThanOrEqual(
         landingSlat.position.x - landingSlat.geometry.parameters.width / 2,
       );
@@ -185,15 +182,10 @@ describe('mainmast crow\'s nest', () => {
       expect(landing.z).toBeLessThanOrEqual(
         landingSlat.position.z + landingSlat.geometry.parameters.depth / 2,
       );
-      const seat = build.root.getObjectByName('crows-nest-seat')!;
-      expect(Math.hypot(
-        build.introAnchors.seatedPosition[0] - seat.position.x,
-        build.introAnchors.seatedPosition[2] - seat.position.z,
-      )).toBeLessThan(0.2);
       [build.introAnchors.seatedPosition, build.introAnchors.standingPosition]
         .forEach(([x, , z]) => {
           const supported = build.root.children
-            .filter(({ name }) => name.startsWith('crows-nest:floor-slat:'))
+            .filter(({ name }) => name.startsWith('crows-nest:floor:'))
             .some((object) => {
               const floor = object as Mesh<BoxGeometry>;
               return Math.abs(x - floor.position.x) <= floor.geometry.parameters.width / 2
@@ -253,6 +245,19 @@ describe('mainmast crow\'s nest', () => {
       controller.update(0.05, input.asControllerInput());
       expect(controller.localPosition.y).toBe(zone.topEyeY);
       expect(controller.localPosition.z).toBeGreaterThan(zone.topDismount[1] + 0.3);
+
+      input.movement = { x: -1, z: 0 };
+      for (let frame = 0; frame < 8; frame += 1) {
+        controller.update(0.05, input.asControllerInput());
+      }
+      expect(controller.localPosition.x).toBeGreaterThan(1.4);
+      expect(controller.localPosition.y).toBe(zone.topEyeY);
+
+      input.movement = { x: 1, z: 0 };
+      for (let frame = 0; frame < 8 && controller.localPosition.x > 0.8; frame += 1) {
+        controller.update(0.05, input.asControllerInput());
+      }
+      expect(controller.localPosition.y).toBe(zone.topEyeY);
 
       input.movement = { x: 0, z: 1 };
       for (let frame = 0; frame < 130 && controller.localPosition.y > zone.bottomEyeY; frame += 1) {

@@ -96,6 +96,13 @@ export const POLY_PIZZA_FISHING_MODEL_SOURCES = Object.freeze({
     sha256: '926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211',
     sourceTriangles: 480, downloadedOn: '2026-07-27',
   }),
+  fishBones: source({
+    id: 'fishBones', publicId: 'NZg3APPfF8',
+    resourceId: '79359761-c093-48ca-a32e-e1703aadb582',
+    title: 'Fish Bones', creator: 'Kenney', license: 'CC0 1.0',
+    sha256: 'CA78E2970A6E8FEFA5498F71B664B90A4C2DD8F87B31861BFCAAA2EC037E1FC9',
+    sourceTriangles: 384, downloadedOn: '2026-08-01',
+  }),
 });
 
 export const POLY_PIZZA_FISHING_MODEL_IDS = Object.freeze(

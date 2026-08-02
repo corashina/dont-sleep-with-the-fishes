@@ -1,11 +1,6 @@
 import {
-  BufferGeometry,
   Group,
-  Material,
-  Mesh,
-  MeshStandardMaterial,
   Object3D,
-  SphereGeometry,
   Vector3,
 } from 'three';
 import {
@@ -13,7 +8,6 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import { disposeResourceSets } from '../world/SceneResources';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 
@@ -27,8 +21,6 @@ const PAD_POSITIONS = Object.freeze([
 export class FlowersPresentation extends KeyedEventPresentation {
   private readonly pads: Group[] = [];
   private readonly basePositions: Vector3[] = [];
-  private readonly geometries = new Set<BufferGeometry>();
-  private readonly materials = new Set<Material>();
   private readonly target = new Vector3();
   private readonly wave: WaveSample = {
     height: 0,
@@ -39,26 +31,12 @@ export class FlowersPresentation extends KeyedEventPresentation {
 
   constructor(models: SurvivalEventModels, private readonly deckTarget: Object3D) {
     super('flowers-presentation');
-    const petalGeometry = new SphereGeometry(0.12, 6, 4);
-    const petalMaterial = new MeshStandardMaterial({
-      color: 0xd0c7aa,
-      emissive: 0x252217,
-      roughness: 0.96,
-      flatShading: true,
-    });
-    this.geometries.add(petalGeometry);
-    this.materials.add(petalMaterial);
     PAD_POSITIONS.forEach(([x, y, z], index) => {
       const pad = new Group();
       pad.name = `flowers:pad:${index}`;
       pad.add(models.clone('flowers'));
       pad.scale.setScalar(0.9 + index * 0.08);
       pad.rotation.y = index * 0.62;
-      const flower = new Mesh(petalGeometry, petalMaterial);
-      flower.name = `flowers:pale-bloom:${index}`;
-      flower.position.set(0.05, 0.28, -0.02);
-      flower.scale.set(1.3, 0.5, 1);
-      pad.add(flower);
       this.pads.push(pad);
       this.basePositions.push(new Vector3(x, y, z));
       this.subject.add(pad);
@@ -102,7 +80,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
   }
 
   protected disposeOwned(): void {
-    disposeResourceSets(this.geometries, this.materials);
+    // The shared model library owns the model resources.
   }
 
   private floatPads(time: number, zOffset: number): void {

@@ -27,8 +27,10 @@ export class GameUI {
   private readonly hud: HTMLElement;
   private readonly introSkip: HTMLElement;
   private readonly startLayer: HTMLElement;
+  private readonly howToPlayLayer: HTMLElement;
   private readonly pauseLayer: HTMLElement;
   private readonly endingLayer: HTMLElement;
+  private readonly clock: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly itemTooltip: HTMLElement;
@@ -38,12 +40,16 @@ export class GameUI {
   private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
     [null, null, null];
   private readonly startButton: HTMLButtonElement;
+  private readonly howToPlayButton: HTMLButtonElement;
+  private readonly howToPlayClose: HTMLButtonElement;
   private readonly resumeButton: HTMLButtonElement;
   private readonly endingAction: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
   private disposed = false;
+  private howToPlayOpen = false;
   private replayHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
+  private renderedTimerSecond = SCAVENGE_DURATION_SECONDS;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -73,27 +79,14 @@ export class GameUI {
         <kbd>SPACE</kbd><span aria-hidden="true"> - </span>SKIP INTRO
       </div>
       <section class="screen is-visible start-screen poster-screen" data-start>
+        <button type="button" class="how-to-play-marker ui-role-context" data-how-to-play-open
+          aria-label="Open How to Play" aria-haspopup="dialog" aria-controls="how-to-play-dialog">
+          ${uiArtwork('howToPlay', 'how-to-play-marker__art')}
+          <span>HOW TO PLAY</span>
+        </button>
         <div class="screen__content">
           <div class="start-screen__top">
-            <h1 class="ui-role-display">DON'T SLEEP<br>WITH THE<br>FISHES</h1>
-            <dl class="controls ui-role-context" aria-label="Controls">
-              <div>
-                <dt>MOVE</dt>
-                <dd class="control-keys control-keys--move"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
-              </div>
-              <div>
-                <dt>LOOK</dt>
-                <dd class="control-keys"><kbd>MOUSE</kbd></dd>
-              </div>
-              <div>
-                <dt>SPRINT</dt>
-                <dd class="control-keys"><kbd>SHIFT</kbd></dd>
-              </div>
-              <div>
-                <dt>ACT</dt>
-                <dd class="control-keys"><kbd>LEFT CLICK</kbd></dd>
-              </div>
-            </dl>
+            <h1 class="ui-role-display">DON'T SLEEP WITH THE FISHES</h1>
           </div>
           <div class="start-screen__action">
             <button type="button" class="primary-action salvage-action ui-role-context" data-start-button aria-label="Start">
@@ -104,6 +97,67 @@ export class GameUI {
               <span data-pointer-lock-error-copy></span>
             </p>
           </div>
+        </div>
+      </section>
+      <section class="screen how-to-play-screen poster-screen" data-how-to-play
+        id="how-to-play-dialog" role="dialog" aria-modal="true" aria-hidden="true"
+        aria-labelledby="how-to-play-title" aria-describedby="how-to-play-intro" inert>
+        <div class="screen__content how-to-play-board">
+          <header class="how-to-play-board__header">
+            <p class="kicker ui-role-context">BEFORE THE WATER WINS</p>
+            <h2 class="ui-role-display" id="how-to-play-title">HOW TO PLAY</h2>
+            <p class="lead ui-role-narrative" id="how-to-play-intro">
+              Save supplies from Dorothy. Then survive in the lifeboat until rescue finds you.
+            </p>
+          </header>
+          <div class="how-to-play-route">
+            <article class="how-to-play-step">
+              <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">1</span>
+              <div>
+                <h3 class="ui-role-context">SEARCH THE SHIP</h3>
+                <p class="ui-role-narrative">You have two minutes before Dorothy sinks.</p>
+                <ul class="ui-role-narrative">
+                  <li>Find food, tools, and emergency supplies.</li>
+                  <li>Carry up to three weight at one time.</li>
+                  <li>Throw supplies into the lifeboat. Only saved items continue.</li>
+                  <li>Reach the lifeboat before the ship goes under.</li>
+                </ul>
+              </div>
+            </article>
+            <article class="how-to-play-step">
+              <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">2</span>
+              <div>
+                <h3 class="ui-role-context">SURVIVE THE SEA</h3>
+                <p class="ui-role-narrative">Use your supplies and the boat before each night begins.</p>
+                <ul class="ui-role-narrative">
+                  <li>Protect Health, Food, Energy, and Hull.</li>
+                  <li>Click the rod, toolbox, lantern, or saved supplies to act.</li>
+                  <li>The lantern ends the day. Night events test your choices.</li>
+                  <li>Rescue becomes more likely as the days pass.</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+          <section class="how-to-play-controls" aria-labelledby="how-to-play-controls-title">
+            <h3 class="ui-role-context" id="how-to-play-controls-title">CONTROLS</h3>
+            <dl class="controls how-to-play-controls__grid ui-role-context" aria-label="Game controls">
+              <div>
+                <dt>MOVE</dt>
+                <dd class="control-keys control-keys--move"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
+              </div>
+              <div><dt>LOOK</dt><dd class="control-keys"><kbd>MOUSE</kbd></dd></div>
+              <div><dt>SPRINT</dt><dd class="control-keys"><kbd>SHIFT</kbd></dd></div>
+              <div><dt>JUMP</dt><dd class="control-keys"><kbd>SPACE</kbd></dd></div>
+              <div><dt>USE / TAKE</dt><dd class="control-keys"><kbd>LEFT CLICK</kbd></dd></div>
+              <div><dt>PAUSE</dt><dd class="control-keys"><kbd>ESC</kbd></dd></div>
+            </dl>
+            <p class="how-to-play-note ui-role-narrative">
+              In the lifeboat, use the mouse or <kbd>TAB</kbd>. Press <kbd>ENTER</kbd> or <kbd>SPACE</kbd> to choose.
+            </p>
+          </section>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-how-to-play-close>
+            BACK TO THE TITLE
+          </button>
         </div>
       </section>
       <section class="screen pause-screen poster-screen" data-pause>
@@ -135,8 +189,10 @@ export class GameUI {
     this.hud = requireElement(this.root, '.hud');
     this.introSkip = requireElement(this.root, '[data-intro-skip]');
     this.startLayer = requireElement(this.root, '[data-start]');
+    this.howToPlayLayer = requireElement(this.root, '[data-how-to-play]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
+    this.clock = requireElement(this.root, '.pocket-watch');
     this.timer = requireElement(this.root, '[data-timer]');
     this.prompt = requireElement(this.root, '[data-prompt]');
     this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
@@ -145,16 +201,22 @@ export class GameUI {
     this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
     if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
     this.startButton = requireElement(this.root, '[data-start-button]');
+    this.howToPlayButton = requireElement(this.root, '[data-how-to-play-open]');
+    this.howToPlayClose = requireElement(this.root, '[data-how-to-play-close]');
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
     this.endingAction = requireElement(this.root, '[data-ending-action]');
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.startButton.addEventListener('click', this.handleStart);
+    this.howToPlayButton.addEventListener('click', this.handleHowToPlayOpen);
+    this.howToPlayClose.addEventListener('click', this.handleHowToPlayClose);
+    this.root.addEventListener('keydown', this.handleKeyDown);
     this.resumeButton.addEventListener('click', this.handleResume);
     this.endingAction.addEventListener('click', this.handleReplay);
     this.setPresentation('title');
   }
 
   hideStart(): void {
+    this.setHowToPlayOpen(false, false);
     this.startLayer.classList.remove('is-visible');
   }
 
@@ -211,6 +273,11 @@ export class GameUI {
   }
 
   render(snapshot: ScavengeSnapshot): void {
+    const timerSecond = Math.max(0, Math.ceil(snapshot.remainingSeconds));
+    if (timerSecond !== this.renderedTimerSecond) {
+      this.renderedTimerSecond = timerSecond;
+      this.clock.dataset.tick = String(timerSecond % 2);
+    }
     this.timer.textContent = formatDuration(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
     this.renderCarry(snapshot);
@@ -240,6 +307,9 @@ export class GameUI {
     if (this.disposed) return;
     this.disposed = true;
     this.startButton.removeEventListener('click', this.handleStart);
+    this.howToPlayButton.removeEventListener('click', this.handleHowToPlayOpen);
+    this.howToPlayClose.removeEventListener('click', this.handleHowToPlayClose);
+    this.root.removeEventListener('keydown', this.handleKeyDown);
     this.resumeButton.removeEventListener('click', this.handleResume);
     this.endingAction.removeEventListener('click', this.handleReplay);
     this.onStart = () => undefined;
@@ -288,6 +358,32 @@ export class GameUI {
   }
 
   private readonly handleStart = (): void => this.onStart();
+  private readonly handleHowToPlayOpen = (): void => this.setHowToPlayOpen(true);
+  private readonly handleHowToPlayClose = (): void => this.setHowToPlayOpen(false);
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (!this.howToPlayOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.setHowToPlayOpen(false);
+      return;
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      this.howToPlayClose.focus();
+    }
+  };
+
+  private setHowToPlayOpen(open: boolean, restoreFocus = true): void {
+    if (this.disposed || this.howToPlayOpen === open) return;
+    this.howToPlayOpen = open;
+    this.howToPlayLayer.classList.toggle('is-visible', open);
+    this.howToPlayLayer.setAttribute('aria-hidden', String(!open));
+    this.howToPlayLayer.toggleAttribute('inert', !open);
+    this.startLayer.toggleAttribute('inert', open);
+    if (open) this.howToPlayClose.focus();
+    else if (restoreFocus) this.howToPlayButton.focus();
+  }
+
   private readonly handleResume = (): void => this.onResume();
   private readonly handleReplay = (): void => {
     if (this.replayHandled) return;

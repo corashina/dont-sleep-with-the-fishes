@@ -19,11 +19,13 @@ const anchors: ScavengeIntroAnchors = {
 };
 
 describe('scavenge intro choreography', () => {
-  it('samples the seated, standing, ladder approach, ladder, and exit poses', () => {
+  it('starts standing, then samples the ladder approach, ladder, and exit poses', () => {
     const frame = createScavengeIntroFrame();
     const cameraPosition = frame.cameraPosition;
     sampleScavengeIntroFrameInto(frame, 0, anchors);
-    expect(frame.cameraPosition).toEqual(anchors.seatedPosition);
+    expect(frame.cameraPosition).toEqual(anchors.standingPosition);
+    sampleScavengeIntroFrameInto(frame, 0.6, anchors);
+    expect(frame.cameraPosition).toEqual(anchors.standingPosition);
     sampleScavengeIntroFrameInto(frame, 1.2, anchors);
     expect(frame.cameraPosition).toEqual(anchors.standingPosition);
     sampleScavengeIntroFrameInto(frame, 9.3, anchors);

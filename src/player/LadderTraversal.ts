@@ -63,6 +63,11 @@ function atHeight(position: LocalPlayerPosition, eyeY: number): boolean {
   return Math.abs(position.y - eyeY) <= ENTRY_EPSILON;
 }
 
+function betweenLadderEnds(position: LocalPlayerPosition, zone: LadderClimbZone): boolean {
+  return position.y > zone.bottomEyeY + ENTRY_EPSILON
+    && position.y < zone.topEyeY - ENTRY_EPSILON;
+}
+
 function unchanged(input: LadderTraversalInput): LadderTraversalResult {
   return {
     position: { ...input.position },
@@ -87,7 +92,10 @@ function findCapture(
 ): LadderClimbZone | undefined {
   return zones.find((zone) => (
     contains(zone.bottomEntry, input.position)
-      && atHeight(input.position, zone.bottomEyeY)
+      && (
+        atHeight(input.position, zone.bottomEyeY)
+        || betweenLadderEnds(input.position, zone)
+      )
       && movingToward(input.planarMovement, -zone.outwardX, -zone.outwardZ)
   ) || (
     contains(zone.topEntry, input.position)

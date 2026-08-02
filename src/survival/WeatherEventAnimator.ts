@@ -9,6 +9,8 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
+  Quaternion,
   Texture,
   TorusGeometry,
   Vector3,
@@ -180,6 +182,10 @@ export class WeatherEventAnimator {
   private readonly ownedMaterials = new Set<Material>();
   private readonly cameraBasePosition = new Vector3();
   private readonly cameraBaseRotation = new Euler();
+  private readonly viewCameraBasePosition = new Vector3();
+  private readonly viewCameraBaseQuaternion = new Quaternion();
+  private readonly viewCameraOffsetEuler = new Euler(0, 0, 0, 'YXZ');
+  private readonly viewCameraOffsetQuaternion = new Quaternion();
   private readonly revealSample: WeatherRevealSample = {
     cameraX: 0,
     cameraY: 0,
@@ -244,6 +250,7 @@ export class WeatherEventAnimator {
     private readonly cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels?: EventModelLibrary,
+    private readonly viewCamera?: Object3D,
   ) {
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
@@ -462,14 +469,18 @@ export class WeatherEventAnimator {
   private updateReveal(eventId: string, progress: number): void {
     if (!sampleWeatherReveal(eventId, progress, this.revealSample)) return;
     const sample = this.revealSample;
-    this.applyCameraPose(
-      sample.cameraX,
-      sample.cameraY,
-      sample.cameraZ,
-      sample.cameraYaw,
-      sample.cameraPitch,
-      sample.cameraRoll,
-    );
+    if (eventId === 'shower-night' && this.viewCamera !== undefined) {
+      this.applyStationaryView(sample.cameraYaw, sample.cameraPitch);
+    } else {
+      this.applyCameraPose(
+        sample.cameraX,
+        sample.cameraY,
+        sample.cameraZ,
+        sample.cameraYaw,
+        sample.cameraPitch,
+        sample.cameraRoll,
+      );
+    }
     if (!isCameraOnlyWeatherEvent(eventId)) {
       this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
     }
@@ -674,6 +685,16 @@ export class WeatherEventAnimator {
     this.cameraRig.rotateZ(roll);
   }
 
+  private applyStationaryView(yaw: number, pitch: number): void {
+    if (this.viewCamera === undefined) return;
+    this.viewCamera.position.copy(this.viewCameraBasePosition);
+    this.viewCameraOffsetEuler.set(pitch, yaw, 0, 'YXZ');
+    this.viewCameraOffsetQuaternion.setFromEuler(this.viewCameraOffsetEuler);
+    this.viewCamera.quaternion
+      .copy(this.viewCameraBaseQuaternion)
+      .multiply(this.viewCameraOffsetQuaternion);
+  }
+
   private showSilhouette(visibility: number): void {
     if (visibility <= 0.015) return;
     this.silhouette.visible = true;
@@ -689,11 +710,19 @@ export class WeatherEventAnimator {
   private rememberCameraBase(): void {
     this.cameraBasePosition.copy(this.cameraRig.position);
     this.cameraBaseRotation.copy(this.cameraRig.rotation);
+    if (this.viewCamera !== undefined) {
+      this.viewCameraBasePosition.copy(this.viewCamera.position);
+      this.viewCameraBaseQuaternion.copy(this.viewCamera.quaternion);
+    }
   }
 
   private restoreCamera(): void {
     this.cameraRig.position.copy(this.cameraBasePosition);
     this.cameraRig.rotation.copy(this.cameraBaseRotation);
+    if (this.viewCamera !== undefined) {
+      this.viewCamera.position.copy(this.viewCameraBasePosition);
+      this.viewCamera.quaternion.copy(this.viewCameraBaseQuaternion);
+    }
   }
 
   private hideTransientEffects(): void {

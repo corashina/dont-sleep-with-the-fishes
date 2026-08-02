@@ -59,9 +59,9 @@ const presentations = {
     rotation: [0, 0, 0],
   },
   traderRowboat: {
-    sourceUrl: 'https://poly.pizza/m/dt1yhb5AYXD',
-    sourceModelId: 'poly-pizza:0c76d378-c3fb-4a1c-aa5f-a25f09bd3ea4',
-    license: 'CC-BY 3.0',
+    sourceUrl: 'https://poly.pizza/m/5UEl54KsuC',
+    sourceModelId: 'poly-pizza:c5fe6584-9f6e-46cf-bcf6-95979c7494e4',
+    license: 'CC0 1.0',
     targetLongestDimension: 4.2,
     maxTriangles: 2_500,
     translation: [0, 0, 0],

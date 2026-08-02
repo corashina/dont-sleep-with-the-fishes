@@ -83,6 +83,8 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 
 ### Fishing
 
+Fishing can reel in Fish Bones as a rare junk catch. It gives no food.
+
 Fishing can also recover utility salvage at the wiki-documented weights: Bait,
 Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. Bait stacks;
 Wet Duct Tape becomes ordinary usable Duct Tape; Energy Bars are usable;

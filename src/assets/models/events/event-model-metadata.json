@@ -64,17 +64,17 @@
     "animations": []
   },
   "flowers": {
-    "triangles": 728,
+    "triangles": 1024,
     "rawBounds": {
       "min": [
-        -5.180932998657227,
-        0,
-        -5.438858985900879
+        -0.7492899894714355,
+        -0.6174730062484741,
+        -1.2075170278549194
       ],
       "max": [
-        5.531528949737549,
-        2.9948410987854004,
-        5.438858985900879
+        1.7076300382614136,
+        1.3069180250167847,
+        1.2083220481872559
       ]
     },
     "animations": []
@@ -168,141 +168,20 @@
     "animations": []
   },
   "siren": {
-    "triangles": 6108,
+    "triangles": 692,
     "rawBounds": {
       "min": [
-        -0.8246226236224174,
-        0.0010581070585241657,
-        -0.11697277324160225
+        -0.7620400190353394,
+        -0.963475227355957,
+        -0.3578434884548187
       ],
       "max": [
-        0.8246226236224174,
-        1.8435580143266943,
-        0.2554729938181829
+        0.38597989082336426,
+        0.7029141187667847,
+        0.676824688911438
       ]
     },
-    "animations": [
-      {
-        "name": "CharacterArmature|Death",
-        "duration": 1.3333333730697632,
-        "channels": 24
-      },
-      {
-        "name": "CharacterArmature|Gun_Shoot",
-        "duration": 0.75,
-        "channels": 29
-      },
-      {
-        "name": "CharacterArmature|HitRecieve",
-        "duration": 0.7083333134651184,
-        "channels": 12
-      },
-      {
-        "name": "CharacterArmature|HitRecieve_2",
-        "duration": 0.7083333134651184,
-        "channels": 12
-      },
-      {
-        "name": "CharacterArmature|Idle",
-        "duration": 2.0833332538604736,
-        "channels": 21
-      },
-      {
-        "name": "CharacterArmature|Idle_Gun",
-        "duration": 2.0833332538604736,
-        "channels": 34
-      },
-      {
-        "name": "CharacterArmature|Idle_Gun_Pointing",
-        "duration": 2.0833332538604736,
-        "channels": 34
-      },
-      {
-        "name": "CharacterArmature|Idle_Gun_Shoot",
-        "duration": 0.8333333134651184,
-        "channels": 37
-      },
-      {
-        "name": "CharacterArmature|Idle_Neutral",
-        "duration": 2.0833332538604736,
-        "channels": 22
-      },
-      {
-        "name": "CharacterArmature|Idle_Sword",
-        "duration": 2.0833332538604736,
-        "channels": 34
-      },
-      {
-        "name": "CharacterArmature|Interact",
-        "duration": 1.5833333730697632,
-        "channels": 15
-      },
-      {
-        "name": "CharacterArmature|Kick_Left",
-        "duration": 1.1666666269302368,
-        "channels": 54
-      },
-      {
-        "name": "CharacterArmature|Kick_Right",
-        "duration": 1.1666666269302368,
-        "channels": 54
-      },
-      {
-        "name": "CharacterArmature|Punch_Left",
-        "duration": 1.0416666269302368,
-        "channels": 55
-      },
-      {
-        "name": "CharacterArmature|Punch_Right",
-        "duration": 1.0416666269302368,
-        "channels": 55
-      },
-      {
-        "name": "CharacterArmature|Roll",
-        "duration": 1.6666666269302368,
-        "channels": 57
-      },
-      {
-        "name": "CharacterArmature|Run",
-        "duration": 1,
-        "channels": 53
-      },
-      {
-        "name": "CharacterArmature|Run_Back",
-        "duration": 1.0416666269302368,
-        "channels": 53
-      },
-      {
-        "name": "CharacterArmature|Run_Left",
-        "duration": 1,
-        "channels": 55
-      },
-      {
-        "name": "CharacterArmature|Run_Right",
-        "duration": 1,
-        "channels": 55
-      },
-      {
-        "name": "CharacterArmature|Run_Shoot",
-        "duration": 1.0416666269302368,
-        "channels": 53
-      },
-      {
-        "name": "CharacterArmature|Sword_Slash",
-        "duration": 1.2916666269302368,
-        "channels": 34
-      },
-      {
-        "name": "CharacterArmature|Walk",
-        "duration": 1.6666666269302368,
-        "channels": 29
-      },
-      {
-        "name": "CharacterArmature|Wave",
-        "duration": 2.0833332538604736,
-        "channels": 22
-      }
-    ]
+    "animations": []
   },
   "sirenRock": {
     "triangles": 214,
@@ -403,6 +282,27 @@
     "hasSkins": false,
     "animationCount": 0,
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "deathStareBlob": {
+    "triangles": 4888,
+    "rawBounds": {
+      "min": [
+        -1.750093512237072,
+        -0.05271026813864615,
+        -2.300224833759341
+      ],
+      "max": [
+        1.750093512237072,
+        4.08988352279223,
+        1.8584338091678818
+      ]
+    },
+    "sourceSha256": "AD5E8B1CDF8C0D328B4B44537D3DA8FA98119A9A99FB6163E2F325DBB8BBECC1",
+    "sourceTriangles": 4888,
+    "outputSha256": "CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F",
+    "hasSkins": true,
+    "animationCount": 9,
+    "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
   "whirlpoolCore": {
     "triangles": 324,

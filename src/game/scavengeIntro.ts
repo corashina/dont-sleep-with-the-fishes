@@ -122,14 +122,7 @@ export function sampleScavengeIntroFrameInto(
   const elapsed = Number.isFinite(elapsedSeconds)
     ? Math.max(0, Math.min(SCAVENGE_INTRO_DURATION_SECONDS, elapsedSeconds))
     : 0;
-  if (elapsed <= 1.2) {
-    interpolatePosition(
-      output.cameraPosition,
-      anchors.seatedPosition,
-      anchors.standingPosition,
-      elapsed / 1.2,
-    );
-  } else if (elapsed <= 9) {
+  if (elapsed <= 9) {
     copyPosition(output.cameraPosition, anchors.standingPosition);
   } else if (elapsed <= 9.3) {
     interpolatePosition(

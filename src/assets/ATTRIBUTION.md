@@ -66,7 +66,7 @@ The existing Lantern model remains the event lantern source.
 | chestClosed | `chestClosed.glb` | Chest Closed / Quaternius | https://poly.pizza/m/AngpV0HxD8 | `poly-pizza:0ae3f497-8628-4864-b5d4-e81ab14704f8` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1636 | 1636 | Source GLB SHA-256 `1E018BAAB333027683C867357180B25F4228B878116CE5A69220161543A2A057`; output GLB SHA-256 `0DB2596F63196835A2B988D6438476008DE44D8802C66D3456ED6178DD93421F`; separated the closed lid at its seam and added a named hinge pivot; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
 | midnightIsland | `midnightIsland.glb` | Island / J-Toastie | https://poly.pizza/m/C03O8OQq6O | `poly-pizza:1fda6a0b-6228-4c16-9a3f-8ca36d9af6b6` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 84 | 84 | Source GLB SHA-256 `F2CA3A8EE6856FD312C8B6E5B1F2AA1D5234CB220FB441F836942CF4125274E6`; output GLB SHA-256 `DD2CF11A77DCFFEB7F259D0D2302AEEDB595DD564FB9383F6A9A1391218A76CB`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
 | deadTree | `deadTree.glb` | Dead Tree / Quaternius | https://poly.pizza/m/CD4edbPSGm | `poly-pizza:4db29f97-8e10-413d-be54-39ecda1a7c8d` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 5648 | 5648 | Source GLB SHA-256 `C6A2B34DE53EA610D4DCF20785340B12B023BD3B648A8F3DB3DCDB962008B9D3`; output GLB SHA-256 `20BB0B01D7BC968AA966452B9B290B4AA5793E60AC6D77A86CA43B2DA304B628`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
-| traderRowboat | `traderRowboat.glb` | Rowboat / Poly by Google | https://poly.pizza/m/dt1yhb5AYXD | `poly-pizza:0c76d378-c3fb-4a1c-aa5f-a25f09bd3ea4` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1898 | 1898 | Source GLB SHA-256 `D044E98D9C87D65CD650D6F054940A5F3C62C06457F32BB864D24615E71906FA`; output GLB SHA-256 `A1756FD3E6857F99029CBD6DF9901600DA207C384E8CEF3EC1D4E0A3E977D67E`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
+| traderRowboat | `traderRowboat.glb` | Boat / Quaternius | https://poly.pizza/m/5UEl54KsuC | `poly-pizza:c5fe6584-9f6e-46cf-bcf6-95979c7494e4` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 224 | 224 | Source GLB SHA-256 `263E5D46F79E8B37AFECD0DB9056B22DC33C6456074D260589285D1891192335`; output GLB SHA-256 `6DCE2E97F0C18F6CCC7551B2C6F84D392FA070B5409F47DE97DF649156953360`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-08-01 |
 | riggedHand | `riggedHand.glb` | Rigged Hand / J-Toastie | https://poly.pizza/m/BEy8jbxm6A | `poly-pizza:a36ea2d8-8437-4215-98d3-2fa53be67d85` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1518 | 1518 | Source GLB SHA-256 `32705E2EE2BADC9DF04886CC0705545D6640C34E927D4DB67AFFF2802AEC945E`; output GLB SHA-256 `C63A08C01D86DD26C5260BD17BCC026BB60C0843A04D94DC52CD199DFCFD13B1`; retained the skin, 20 named joints, and 19-channel source animation; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
 | containerShip | `containerShip.glb` | Container Ship / Alex Safayan | https://poly.pizza/m/3AmDGcCu6Ll | `poly-pizza:df197d9f-5d8c-4744-bc03-75ee514e8df3` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1620 | 1620 | Source GLB SHA-256 `A6F5E74082C8DFE8D251B7D70AF5C2BD8570D108B3CA2A97C3D55F38871FCB4B`; output GLB SHA-256 `B969EF01204841B4E09965740BEE30E7B5227576E4921253F3AFA0D306E2404D`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
 
@@ -141,11 +141,11 @@ pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
   License: CC0 1.0.
   Source asset ID: `poly-pizza:66b57880-bcb0-479a-8d72-5c3e88afaa39`.
   Source GLB SHA-256: `31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763`.
-- "Animated Woman" by Quaternius.
-  Source: https://poly.pizza/m/nIItLV9nxS
-  License: CC0 1.0.
-  Source asset ID: `poly-pizza:46d6db5a-3c9f-4238-8cdf-8eb7194498dc`.
-  Source GLB SHA-256: `A6522FE53D15DE21130A957D1BF2B8A9A58D4E4E9A12AF646645B667A9BB2D17`.
+- "Mermaid" by Kamylle B. Grenier.
+  Source: https://poly.pizza/m/7X8_6iciXvk
+  License: CC-BY 3.0.
+  Source asset ID: `poly-pizza:3d0f814b-505e-45b1-b82b-b2148653ea28`.
+  Source GLB SHA-256: `C6752A93684A1A1DAE07CBA84B7F059645A4FEF9F4963060F6E7AE41AFDC2757`.
 - "Rock Flat" by Kenney.
   Source: https://poly.pizza/m/CrSoV13mCU
   License: CC0 1.0.
@@ -175,6 +175,7 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 | seaweed | `seaweed.glb` | Kelp / Poly by Google | https://poly.pizza/m/4cFllH6Iazk | `poly-pizza:8c51572a-1938-4c61-b971-63c3b69f3ea7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 784 | 784 | Source GLB SHA-256 `3D8E3071C69E6F701A7061AB820293F63E96023CED132C559CC0CDB12542C7C6`; used for the seaweed junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | boot | `boot.glb` | Boots / Poly by Google | https://poly.pizza/m/7HbqG8RwRcA | `poly-pizza:888317ad-20f0-4b0d-ba01-0bdd017adfd8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 154 | 154 | Source GLB SHA-256 `4FA4372D9AF01C2CD0E67462C9AFDD3EBA86FECCDB8FE3FEF3F71FB51B7CCA94`; used for the boot junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
 | plasticBottle | `plasticBottle.glb` | Water bottle / Poly by Google | https://poly.pizza/m/dha06wFxUwA | `poly-pizza:31674c92-502a-453a-a484-6da95ae4f13c` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 480 | 480 | Source GLB SHA-256 `926B58E4B9E5EFFBCB330DD708D7BA0BBF05D61DCC3294C1FA546E4567AA8211`; used for the plastic-bottle junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-07-27 |
+| fishBones | `fishBones.glb` | Fish Bones / Kenney | https://poly.pizza/m/NZg3APPfF8 | `poly-pizza:79359761-c093-48ca-a32e-e1703aadb582` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 384 | 384 | Source GLB SHA-256 `CA78E2970A6E8FEFA5498F71B664B90A4C2DD8F87B31861BFCAAA2EC037E1FC9`; used for the Fish Bones junk catch; pruned, deduplicated, unpartitioned, renamed, and embedded. | 2026-08-01 |
 
 ## Runtime featured-event model ledger
 
@@ -187,7 +188,7 @@ Runtime setup normalizes their scale and applies the game palette.
 | driftingLootCrate | `driftingLootCrate.glb` | Crate / Quaternius | https://poly.pizza/m/3VGWnZPXmG | `poly-pizza:720097e2-63ed-4e5f-9b66-eb416942eea0` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 784 | 784 | Source GLB SHA-256 `4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E`; committed without geometry changes. | 2026-07-30 |
 | driftingBottle | `driftingBottle.glb` | Bottle of Wine / Jeremy | https://poly.pizza/m/13g9ucgxbHV | `poly-pizza:b1a8f402-de55-4e49-b63e-1439e5851c13` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 304 | 304 | Source GLB SHA-256 `5C1169A709CF2B897E9037771BC8B33EDE3C546A2CA872F33BF8A9348F112D54`; committed without geometry changes. | 2026-07-30 |
 | mysteryChest | `mysteryChest.glb` | Chest / Quaternius | https://poly.pizza/m/O72u4Drp8k | `poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1676 | 1676 | Source GLB SHA-256 `07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B`; committed without geometry changes. | 2026-07-30 |
-| flowers | `flowers.glb` | Lily Pad / Poly by Google | https://poly.pizza/m/0-_GjMekeob | `poly-pizza:856b7c36-4bd0-48f1-a308-529366b6a7fd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 728 | 728 | Source GLB SHA-256 `CC4BA073B2CC94B4CADA9BB25C15C3832052E2F3A018B3E2EB7F9429E6D2384B`; committed without geometry changes. | 2026-07-30 |
+| flowers | `flowers.glb` | Anemone / Poly by Google | https://poly.pizza/m/1FMGb52XdD- | `poly-pizza:e038aa13-5138-4504-9737-a9e90539275f` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1024 | 1024 | Source GLB SHA-256 `7CB57FE979D7D6FD71DED0787C91C1EC61B75B9EF2C28F32F9C5034E18E292E0`; committed without geometry changes. | 2026-08-01 |
 
 ## Runtime night-event model ledger
 
@@ -201,6 +202,7 @@ The Tentacle Attack model keeps its source rig and four animation clips.
 | schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 | snatcher | `snatcher.glb` | Tentacle / Quaternius | https://poly.pizza/m/BR1vpIvvvv | `poly-pizza:b39d86e5-e51f-4bd8-bc63-c7fc0cdea864` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931` | 3874 | 3874 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-31 |
 | anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| deathStareBlob | `deathStareBlob.glb` | Green Spiky Blob / Quaternius | https://poly.pizza/m/IoWG5F9WUc | `poly-pizza:cd25a048-719e-4ec4-bbf5-a266776fe129` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `AD5E8B1CDF8C0D328B4B44537D3DA8FA98119A9A99FB6163E2F325DBB8BBECC1` | 4888 | 4888 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-08-01 |
 | whirlpoolCore | `whirlpoolCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 
 ## Runtime audio ledger
@@ -225,6 +227,8 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | rain | `rain.mp3` | [Rain Loop / Snoopy20111](https://freesound.org/people/Snoopy20111/sounds/399072/) |
 | thunderLightning | `thunderLightning.mp3` | [Thunder2 / Yoyodaman234](https://freesound.org/people/Yoyodaman234/sounds/267551/) |
 | roomTone | `roomTone.mp3` | [Ferry Room Tone / kyles](https://freesound.org/people/kyles/sounds/454012/) |
+| scavengeChase | `scavengeChase.mp3` | [The Chase / Victor_Natas](https://freesound.org/people/Victor_Natas/sounds/634513/) |
+| scavengeCountdown | `scavengeCountdown.mp3` | [Time Running Out / qubodup](https://freesound.org/people/qubodup/sounds/211102/) |
 | woodStep | `woodStep.mp3` | [Wood Footstep / SoundsAreGr8](https://freesound.org/people/SoundsAreGr8/sounds/340983/) |
 | jump | `jump.mp3` | [Quick Whoosh / florianreichelt](https://freesound.org/people/florianreichelt/sounds/683101/) |
 | itemHandling | `itemHandling.mp3` | [Short Whoosh / petenice](https://freesound.org/people/petenice/sounds/9509/) |
@@ -256,6 +260,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | flareGun | `flareGun.mp3` | [Firework Rocket Ignition / derplayer](https://freesound.org/people/derplayer/sounds/587173/) |
 | harpoonGun | `harpoonGun.mp3` | [Crossbow Shot / Lunevix](https://freesound.org/people/Lunevix/sounds/246015/) |
 | goingToSleep | `goingToSleep.mp3` | [Rustling Bed Sheets / Froey_](https://freesound.org/people/Froey_/sounds/644490/) |
+| yawn | `yawn.mp3` | [Yawn.wav / spookymodem](https://freesound.org/people/spookymodem/sounds/202105/) |
 | nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |

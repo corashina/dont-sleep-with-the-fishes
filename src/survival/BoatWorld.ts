@@ -844,6 +844,7 @@ export class BoatWorld {
       this.cameraRig,
       this.supplyDisplay,
       this.eventModels,
+      this.camera,
     );
     this.supernaturalEventAnimator = new SupernaturalEventAnimator(
       this.cameraRig,

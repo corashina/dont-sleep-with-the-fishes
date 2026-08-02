@@ -223,8 +223,6 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'bad-sleep';
-
 export interface FishingUiState {
   readonly mode: FishingUiMode;
   readonly message: string;
@@ -440,10 +438,7 @@ export class SurvivalUI {
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
-        <span data-dream-eyelid="top"></span>
-        <span data-dream-eyelid="bottom"></span>
-      </div>
+      <div class="sleep-cover" data-sleep-cover aria-hidden="true"></div>
       <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
         <i></i><i></i><i></i>
       </div>
@@ -748,23 +743,23 @@ export class SurvivalUI {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     delete this.eventCaption.dataset.result;
-    this.updateText('event:title', this.eventTitle, event.title);
-    this.updateText('event:detail', this.eventDetail, event.revealText);
+    this.updateText('event:title', this.eventTitle, '');
+    this.updateText('event:detail', this.eventDetail, '');
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     delete this.eventCaption.dataset.result;
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
-    this.eventCaption.setAttribute(
-      'aria-label',
+    this.eventPresentationActive = true;
+    this.eventCaption.classList.remove('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'true');
+    this.eventCaption.removeAttribute('aria-label');
+    this.clearEventResult();
+    this.syncCommandState();
+    this.publishAnnouncement(
       `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event: `
         + `${event.title}. ${event.revealText}`,
     );
-    this.eventPresentationActive = true;
-    this.eventCaption.classList.add('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'false');
-    this.clearEventResult();
-    this.syncCommandState();
     return Promise.resolve();
   }
 
@@ -788,6 +783,8 @@ export class SurvivalUI {
       }));
       this.eventResultLines.hidden = view.lines.length === 0;
       this.eventResult.hidden = false;
+      this.eventCaption.classList.add('is-visible');
+      this.eventCaption.setAttribute('aria-hidden', 'false');
       return;
     }
     this.anchoredEventResultCaption.textContent = view.caption;
@@ -829,6 +826,8 @@ export class SurvivalUI {
     this.eventCaption.dataset.result = view.state;
     const announcement = `${view.title}. ${view.detail} ${view.result}.`;
     this.eventCaption.setAttribute('aria-label', announcement);
+    this.eventCaption.classList.add('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'false');
     this.publishAnnouncement(announcement);
   }
 
@@ -913,7 +912,6 @@ export class SurvivalUI {
     this.eventDetail.textContent = '';
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
-    void this.setSleepCoverProfile('solid');
     this.clearEventResult();
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
@@ -945,12 +943,6 @@ export class SurvivalUI {
     this.feedbackTimer = window.setTimeout(() => {
       if (!this.disposed) this.feedback.classList.remove('is-visible');
     }, 2600);
-  }
-
-  setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.sleepCover.dataset.profile = profile;
-    return Promise.resolve();
   }
 
   private clearEventResult(): void {
@@ -1636,6 +1628,8 @@ export class SurvivalUI {
       });
     this.eventChoices.replaceChildren(...choices);
     this.eventChoices.hidden = choices.length === 0;
+    this.eventCaption.classList.toggle('is-visible', choices.length > 0);
+    this.eventCaption.setAttribute('aria-hidden', choices.length > 0 ? 'false' : 'true');
   }
 
   private eventLanternChoice(): EventContextChoice | undefined {
