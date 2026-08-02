@@ -390,8 +390,11 @@ describe('player movement helpers', () => {
     try {
       const outside = new Vector3(direction * EXTERIOR_ROUTE_X, PLAYER_Y, doorZ);
       const inside = new Vector3(door.center[0] - direction * 0.55, PLAYER_Y, doorZ);
-      followPath(outside, [inside, new Vector3(0, PLAYER_Y, doorZ)], ship.colliders);
-      followPath(new Vector3(0, PLAYER_Y, doorZ), [inside, outside], ship.colliders);
+      const roomLoop = layoutTarget(direction < 0
+        ? 'workroom-loop-port'
+        : 'workroom-loop-starboard');
+      followPath(outside, [inside, roomLoop], ship.colliders);
+      followPath(roomLoop, [inside, outside], ship.colliders);
     } finally {
       ship.dispose();
     }
@@ -412,7 +415,7 @@ describe('player movement helpers', () => {
         layoutTarget('port-loop-forward'),
         layoutTarget('wheelhouse-aft-door-outside'),
         layoutTarget('wheelhouse-aft-door-inside'),
-        layoutTarget('wheelhouse-port-door-inside'),
+        layoutTarget('wheelhouse-loop-port'),
       ], ship.colliders);
     } finally {
       ship.dispose();
@@ -432,20 +435,24 @@ describe('player movement helpers', () => {
     }
   });
 
-  it('enters one wheelhouse door, exits the second, and closes the exterior circuit', () => {
+  it('crosses both wheelhouse doors and closes the exterior circuit', () => {
     const ship = createTestShip();
     const start = layoutTarget('starboard-loop-forward');
     try {
+      followPath(layoutTarget('wheelhouse-aft-door-outside'), [
+        layoutTarget('wheelhouse-aft-door-inside'),
+        layoutTarget('wheelhouse-aft-door-outside'),
+      ], ship.colliders);
+      followPath(layoutTarget('wheelhouse-port-door-outside'), [
+        layoutTarget('wheelhouse-port-door-inside'),
+        layoutTarget('wheelhouse-port-door-outside'),
+      ], ship.colliders);
       const end = followPath(start, [
         new Vector3(6.2, PLAYER_Y, 22),
         layoutTarget('bow-starboard'),
         layoutTarget('bow-center'),
         layoutTarget('bow-port'),
         layoutTarget('port-loop-forward'),
-        layoutTarget('wheelhouse-port-door-outside'),
-        layoutTarget('wheelhouse-port-door-inside'),
-        layoutTarget('wheelhouse-aft-door-inside'),
-        layoutTarget('wheelhouse-aft-door-outside'),
         new Vector3(
           -EXTERIOR_ROUTE_X,
           PLAYER_Y,
@@ -455,6 +462,8 @@ describe('player movement helpers', () => {
         layoutTarget('port-loop-aft'),
         layoutTarget('storage-port-door-outside'),
         layoutTarget('storage-port-door-inside'),
+        layoutTarget('workroom-loop-port'),
+        layoutTarget('workroom-loop-starboard'),
         layoutTarget('storage-starboard-door-inside'),
         layoutTarget('storage-starboard-door-outside'),
         layoutTarget('starboard-loop-aft'),
@@ -470,31 +479,31 @@ describe('player movement helpers', () => {
     const ship = createTestShip();
     const point = (x: number, z: number) => new Vector3(x, PLAYER_Y, z);
     try {
-      const crewMiddle = point(0, 9);
+      const crewMiddle = point(0, 9.6);
       followPath(crewMiddle, [
-        point(-3, 9), point(-3, 5.4), point(3, 5.4), point(3, 9), crewMiddle,
+        point(-2.7, 9.6), point(-2.7, 6), point(2.7, 6), point(2.7, 9.6), crewMiddle,
       ], ship.colliders);
       followPath(crewMiddle, [
-        point(-3, 9), point(-3, 12.5), point(3, 12.5), point(3, 9), crewMiddle,
+        point(-1.9, 9.6), point(-1.9, 12.8), point(1.9, 12.8), point(1.9, 9.6), crewMiddle,
       ], ship.colliders);
 
       const wheelhousePort = laneCenter('wheelhouse-loop-port');
       const wheelhouseStarboard = laneCenter('wheelhouse-loop-starboard');
       followPath(wheelhousePort, [
-        point(-4.3, 18), point(4.3, 18), wheelhouseStarboard,
+        point(0.35, 17.9), point(3, 17.9), point(0.35, 17.9), wheelhousePort,
       ], ship.colliders);
       followPath(wheelhousePort, [
-        point(-4.3, 20.65), point(4.3, 20.65), wheelhouseStarboard,
+        point(0.35, 21.1), point(4.3, 21.1), wheelhouseStarboard,
       ], ship.colliders);
 
-      const workroomMiddle = point(0, -13.75);
+      const workroomMiddle = point(0, -13.8);
       followPath(workroomMiddle, [
-        point(-2.9, -13.75), point(-2.15, -16.25), point(2.15, -16.25),
-        point(2.15, -15.7), point(2.5, -13.75), workroomMiddle,
+        point(-0.7, -13.8), point(-0.7, -16.5), point(0.7, -16.5),
+        point(0.7, -13.8), workroomMiddle,
       ], ship.colliders);
       followPath(workroomMiddle, [
-        point(-2.9, -13.75), point(-2.9, -11.55), point(1.6, -11.55),
-        point(2.5, -13.75), workroomMiddle,
+        point(-0.7, -13.8), point(-0.7, -11.3), point(0.7, -11.3),
+        point(0.7, -13.8), workroomMiddle,
       ], ship.colliders);
     } finally {
       ship.dispose();

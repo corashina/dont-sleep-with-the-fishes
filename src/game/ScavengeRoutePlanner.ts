@@ -4,7 +4,7 @@ import {
   scavengeSpeedMultiplier,
 } from './scavengeMovement';
 
-export const SCAVENGE_PICKUP_ACTION_SECONDS = 0.18;
+export const SCAVENGE_PICKUP_ACTION_SECONDS = 0.14;
 export const SCAVENGE_DEPOSIT_ACTION_SECONDS = 0.28;
 export const SCAVENGE_EVACUATE_ACTION_SECONDS = 0.1;
 
