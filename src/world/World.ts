@@ -70,7 +70,12 @@ import { ScavengeIntroPresentation } from './ScavengeIntroPresentation';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT, type Rect2 } from './ShipLayout';
+import {
+  createShipRouteMetric,
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  type Rect2,
+} from './ShipLayout';
 
 export type WorldConstructionStage =
   | 'physics'
@@ -372,6 +377,15 @@ export class World {
         this.shipBuild.itemSurfaces,
         random,
         this.shipBuild.colliders,
+        {
+          routeMetric: createShipRouteMetric(SHIP_LAYOUT),
+          start: [this.shipBuild.playerStart.x, this.shipBuild.playerStart.z],
+          deposit: [this.boatDepositTarget.position.x, this.boatDepositTarget.position.z],
+          evacuation: [
+            this.shipBuild.evacuationPoint.x,
+            this.shipBuild.evacuationPoint.z,
+          ],
+        },
       );
       instances.forEach((instance) => {
         const transform = assignments.get(instance.instanceId)!;

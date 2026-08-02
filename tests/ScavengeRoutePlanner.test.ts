@@ -9,6 +9,7 @@ import {
   type ScavengeRouteAssignment,
 } from '../src/game/ScavengeRoutePlanner';
 import {
+  SCAVENGE_WALK_SPEED,
   SCAVENGE_SPRINT_SPEED,
   scavengeSpeedMultiplier,
 } from '../src/game/scavengeMovement';
@@ -37,6 +38,17 @@ function maxCarriedWeight(actions: readonly ScavengeRouteAction[]): number {
 }
 
 describe('expert scavenge route planner', () => {
+  it('uses the approved scavenging movement speeds and load multipliers', () => {
+    expect(SCAVENGE_WALK_SPEED).toBe(3.8);
+    expect(SCAVENGE_SPRINT_SPEED).toBe(8.4);
+    expect([
+      scavengeSpeedMultiplier(0),
+      scavengeSpeedMultiplier(1),
+      scavengeSpeedMultiplier(2),
+      scavengeSpeedMultiplier(3),
+    ]).toEqual([1, 1, 0.92, 0.84]);
+  });
+
   it('builds a capacity-safe route that deposits and evacuates', () => {
     const plan = planExpertScavengeRoute({
       assignments: [
@@ -136,7 +148,7 @@ describe('expert scavenge route planner', () => {
 
   it('rejects routes that exceed the 60-second deadline', () => {
     expect(planExpertScavengeRoute({
-      assignments: [assignment('too-far', 1, [200, 0])],
+      assignments: [assignment('too-far', 1, [300, 0])],
       start: [0, 0],
       deposit: [0, 0],
       evacuation: [0, 0],
@@ -146,6 +158,27 @@ describe('expert scavenge route planner', () => {
 });
 
 describe('baseline scavenge route planner', () => {
+  it('starts an empty trip beyond eight metres, then deposits when loaded', () => {
+    const plan = planBaselineScavengeRoute({
+      assignments: [
+        assignment('first', 1, [9, 0]),
+        assignment('second', 1, [18, 0]),
+      ],
+      start: [0, 0],
+      deposit: [0, 0],
+      evacuation: [0, 0],
+      metric,
+    });
+
+    const significantActions = plan.actions.filter((action) => action.type !== 'move');
+    expect(significantActions.map((action) => action.type)).toEqual([
+      'pickup', 'deposit', 'pickup', 'deposit', 'evacuate',
+    ]);
+    expect(significantActions
+      .filter((action) => action.type === 'pickup')
+      .map((action) => action.instanceId)).toEqual(['first', 'second']);
+  });
+
   it('stops before a route step would cross the deadline', () => {
     const plan = planBaselineScavengeRoute({
       assignments: [

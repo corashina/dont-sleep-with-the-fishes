@@ -639,7 +639,7 @@ describe('world builders', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     let observed: Map<BufferGeometry | Material, number> | undefined;
-    const oversizedInventory = Array.from({ length: 40 }, (_, index): ItemInstance => ({
+    const oversizedInventory = Array.from({ length: 80 }, (_, index): ItemInstance => ({
       instanceId: `cannedFood-${index + 1}` as ItemInstance['instanceId'],
       type: 'cannedFood',
     }));

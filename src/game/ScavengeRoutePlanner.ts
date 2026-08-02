@@ -14,6 +14,12 @@ const EXPERT_NEAREST_ITEM_LIMIT = 6;
 const BASELINE_ITEM_RANGE = 8;
 const BASELINE_MAX_BRANCH_DETOUR = 4;
 const DEFAULT_DEADLINE_SECONDS = 60;
+const EXPERT_CACHE_LIMIT = 128;
+
+const expertPlanCache = new WeakMap<
+  ShipRouteMetric,
+  Map<string, ScavengeRoutePlan | null>
+>();
 
 type Position = readonly [number, number];
 
@@ -231,10 +237,41 @@ function keepCheapestStates(states: readonly ExpertState[]): readonly ExpertStat
   return [...cheapest.values()].sort(compareStates).slice(0, EXPERT_BEAM_WIDTH);
 }
 
+function expertCacheKey(input: ScavengeRouteInput, deadline: number): string {
+  return JSON.stringify([
+    deadline,
+    input.start,
+    input.deposit,
+    input.evacuation,
+    input.assignments.map((value) => [
+      value.instanceId,
+      value.weight,
+      value.position,
+      value.branch,
+    ]),
+  ]);
+}
+
+function immutablePlan(plan: ScavengeRoutePlan): ScavengeRoutePlan {
+  const actions = plan.actions.map((action) => Object.freeze(
+    action.type === 'deposit'
+      ? { ...action, instanceIds: Object.freeze([...action.instanceIds]) }
+      : { ...action },
+  ));
+  return Object.freeze({ ...plan, actions: Object.freeze(actions) });
+}
+
 export function planExpertScavengeRoute(
   input: ScavengeRouteInput,
 ): ScavengeRoutePlan | null {
   const deadline = deadlineFor(input);
+  let cache = expertPlanCache.get(input.metric);
+  if (!cache) {
+    cache = new Map();
+    expertPlanCache.set(input.metric, cache);
+  }
+  const cacheKey = expertCacheKey(input, deadline);
+  if (cache.has(cacheKey)) return cache.get(cacheKey)!;
   const fullMask = (1n << BigInt(input.assignments.length)) - 1n;
   let beam: readonly ExpertState[] = [{
     remainingMask: fullMask,
@@ -265,7 +302,10 @@ export function planExpertScavengeRoute(
     beam = keepCheapestStates(expanded);
   }
 
-  return bestPlan;
+  const cachedPlan = bestPlan ? immutablePlan(bestPlan) : null;
+  if (cache.size >= EXPERT_CACHE_LIMIT) cache.clear();
+  cache.set(cacheKey, cachedPlan);
+  return cachedPlan;
 }
 
 function baselineBranchDetour(
@@ -298,7 +338,9 @@ function findBaselineCandidate(
     if (candidate === undefined) return;
     if (carriedWeight + candidate.weight > SCAVENGE_CAPACITY) return;
     const distance = routeDistance(input.metric, current, candidate.position);
-    if (distance === null || distance > BASELINE_ITEM_RANGE) return;
+    if (distance === null) return;
+    if (distance > BASELINE_ITEM_RANGE
+      && (carriedWeight > 0 || candidate.branch)) return;
     const reachable = { index, distance, assignment: candidate };
     if (!candidate.branch) {
       main.push(reachable);
