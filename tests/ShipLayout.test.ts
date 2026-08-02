@@ -908,6 +908,76 @@ describe('scavenging ship layout', () => {
       .toThrow(/unrelated:top-left.*cabin-desk-aft/i);
   });
 
+  it('rejects surface regions that do not match their physical owners', () => {
+    const mislabeledCabin = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'cabin-desk-aft'
+          ? {
+              ...placement,
+              surfaces: placement.surfaces.map((surface, index) => index === 0
+                ? { ...surface, regionId: 'wheelhouse' as const }
+                : surface),
+            }
+          : placement),
+    };
+    expect(() => validateShipLayout(mislabeledCabin))
+      .toThrow(/cabin-desk-aft:top-left.*physical owner.*crewCabin/i);
+
+    const mislabeledCargo = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'cargo-rack-port'
+          ? {
+              ...placement,
+              surfaces: placement.surfaces.map((surface, index) => index === 0
+                ? { ...surface, regionId: 'bow' as const }
+                : surface),
+            }
+          : placement),
+    };
+    expect(() => validateShipLayout(mislabeledCargo))
+      .toThrow(/cargo-rack-port:top-left.*physical owner.*centralCargo/i);
+
+    const cargoInsideCabin = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'cargo-rack-port'
+          ? { ...placement, position: [0, 2.22, 8] as const }
+          : placement),
+    };
+    expect(() => validateShipLayout(cargoInsideCabin))
+      .toThrow(/cargo-rack-port:top-left.*approved physical owner placement/i);
+  });
+
+  it('requires raised approved owners inside the physical bow and stern zones', () => {
+    const invalidBowOwner = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'bow-crate-port'
+          ? { ...placement, modelId: 'timberBench' as const }
+          : placement),
+    };
+    expect(() => validateShipLayout(invalidBowOwner))
+      .toThrow(/bow-crate-port.*bow.*raised.*cargoCrate.*barrel.*cargoBox/i);
+
+    const lowSternSurface = {
+      ...SHIP_LAYOUT,
+      furniture: SHIP_LAYOUT.furniture.map((placement) =>
+        placement.id === 'stern-crate-port'
+          ? {
+              ...placement,
+              surfaces: placement.surfaces.map((surface) => ({
+                ...surface,
+                localPosition: [surface.localPosition[0], 0.4, surface.localPosition[2]] as const,
+              })),
+            }
+          : placement),
+    };
+    expect(() => validateShipLayout(lowSternSurface))
+      .toThrow(/stern-crate-port:top.*stern.*raised top/i);
+  });
+
   it('derives both sides of every current door instead of trusting stale targets', () => {
     const movedDoor = {
       ...SHIP_LAYOUT,

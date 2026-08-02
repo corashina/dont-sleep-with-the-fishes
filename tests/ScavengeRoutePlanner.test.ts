@@ -63,6 +63,7 @@ describe('expert scavenge route planner', () => {
     });
 
     expect(plan).not.toBeNull();
+    expect(plan!.evacuated).toBe(true);
     expect(plan!.savedCount).toBe(3);
     expect(plan!.actions.at(-1)?.type).toBe('evacuate');
     expect(maxCarriedWeight(plan!.actions)).toBeLessThanOrEqual(3);
@@ -212,11 +213,36 @@ describe('baseline scavenge route planner', () => {
     });
 
     expect(plan.seconds).toBeLessThanOrEqual(1);
+    expect(plan.evacuated).toBe(true);
     expect(plan.savedCount).toBe(1);
     expect(plan.actions.at(-1)?.type).toBe('evacuate');
     expect(plan.actions.some(
       (action) => action.type === 'pickup' && action.instanceId === 'deadline-blocked',
     )).toBe(false);
+  });
+
+  it('reports failure when saved-count work fits but evacuation is unreachable', () => {
+    const evacuation: readonly [number, number] = [99, 0];
+    const blockedEvacuationMetric = {
+      distance: (left: readonly [number, number], right: readonly [number, number]) =>
+        left[0] === evacuation[0] || right[0] === evacuation[0]
+          ? null
+          : Math.abs(left[0] - right[0]),
+    };
+    const plan = planBaselineScavengeRoute({
+      assignments: Array.from(
+        { length: 15 },
+        (_, index) => assignment(`saved-${index + 1}`, 1, [1, 0]),
+      ),
+      start: [0, 0],
+      deposit: [0, 0],
+      evacuation,
+      metric: blockedEvacuationMetric,
+    });
+
+    expect(plan.savedCount).toBe(15);
+    expect(plan.evacuated).toBe(false);
+    expect(plan.actions.at(-1)?.type).toBe('deposit');
   });
 
   it('accepts a branch with a four-metre round-trip detour', () => {

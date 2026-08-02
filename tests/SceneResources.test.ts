@@ -30,10 +30,20 @@ describe('scene resources', () => {
       const meshes = benches.flatMap((bench) => bench.children.filter(
         (child): child is Mesh => child instanceof Mesh,
       ));
-      expect(meshes).toHaveLength(15);
+      expect(meshes).toHaveLength(45);
       expect(new Set(meshes.map(({ geometry }) => geometry)).size).toBe(1);
       expect(new Set(meshes.map(({ material }) => material)))
         .toEqual(new Set([materials.hatchTimber, materials.darkMetal]));
+      benches.forEach((bench) => {
+        const names = bench.children.map(({ name }) => name);
+        expect(names.filter((name) => name.startsWith('bench-plank-'))).toHaveLength(3);
+        expect(names.filter((name) => name.startsWith('bench-brace-'))).toHaveLength(2);
+        expect(names.filter((name) => name.startsWith('bench-fastener-'))).toHaveLength(6);
+        expect(names.filter((name) => name.startsWith('bench-band-'))).toHaveLength(2);
+        const planks = bench.children.filter(({ name }) => name.startsWith('bench-plank-'));
+        expect(new Set(planks.map(({ scale }) => scale.x)).size).toBeGreaterThan(1);
+        expect(planks.some(({ rotation }) => rotation.y !== 0 || rotation.z !== 0)).toBe(true);
+      });
 
       const dispose = vi.spyOn(meshes[0]!.geometry, 'dispose');
       furniture.disposeGeometry();

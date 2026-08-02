@@ -625,7 +625,11 @@ function routeChecksPass(
   const expert = planExpertScavengeRoute(input);
   if (!expert || expert.seconds < 54 - EPSILON || expert.seconds > 58 + EPSILON) return false;
   const baseline = planBaselineScavengeRoute(input);
-  return baseline.savedCount >= 15 && baseline.savedCount <= 17;
+  return baseline.savedCount >= 15
+    && baseline.savedCount <= 17
+    && baseline.evacuated
+    && baseline.seconds <= 60 + EPSILON
+    && baseline.actions.at(-1)?.type === 'evacuate';
 }
 
 function separatedFromAssignments(
@@ -903,7 +907,7 @@ function fallbackAssignment(
     const expert = planExpertScavengeRoute(input);
     const baseline = planBaselineScavengeRoute(input);
     throw new Error(
-      `Fallback route checks fail: expert ${expert?.seconds ?? 'null'}, baseline ${baseline.savedCount}`,
+      `Fallback route checks fail: expert ${expert?.seconds ?? 'null'}, baseline ${baseline.savedCount}, evacuated ${baseline.evacuated}`,
     );
   }
   return assignments;
