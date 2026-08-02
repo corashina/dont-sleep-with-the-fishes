@@ -142,10 +142,7 @@ const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
 
 const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
   {
-    'cannedFood-2': 'workroom-crate-center-starboard:top',
-    'ductTape-1': 'stern-crate-starboard:top',
-    'anchor-1': 'cargo-rack-port:top-right',
-    'captainWhiskers-1': 'cabin-bunk-port:rest',
+    'map-1': 'cabin-bunk-starboard:rest',
   },
   {
     'cannedFood-2': 'workroom-crate-center-starboard:top',
@@ -231,7 +228,7 @@ const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
   {
     'cannedFood-2': 'workroom-crate-center-starboard:top',
     'baitTin-1': 'storage-shelf-forward:shelf-right',
-    'compass-1': 'cabin-desk-aft:top-left',
+    'compass-1': 'cabin-desk-aft:top-right',
     'map-1': 'cargo-crate-forward-port:top',
     'medicalKit-1': 'cargo-crate-aft-starboard:top',
     'bucket-1': 'cargo-rack-port:top-right',
@@ -661,7 +658,8 @@ function generatedSpatialTemplates(
   blockers: readonly CollisionBox[],
   context: ShipPlacementContext,
 ): readonly ReadonlyMap<ItemInstanceId, ShipItemTransform>[] {
-  const cached = generatedTemplateCache.get(context);
+  const useCache = context.routeMetric.stable === true;
+  const cached = useCache ? generatedTemplateCache.get(context) : undefined;
   if (cached?.surfaces === surfaces && cached.blockers === blockers) return cached.templates;
 
   const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));
@@ -692,7 +690,9 @@ function generatedSpatialTemplates(
       templates.push(assignment);
     }
   }
-  generatedTemplateCache.set(context, { surfaces, blockers, templates });
+  if (useCache) {
+    generatedTemplateCache.set(context, { surfaces, blockers, templates });
+  }
   return templates;
 }
 
