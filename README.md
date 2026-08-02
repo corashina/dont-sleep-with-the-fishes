@@ -1,6 +1,6 @@
 # Don't Sleep With The Fishes
 
-A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a two-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
+A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a one-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
 ## Visual identity
 
@@ -21,9 +21,9 @@ maritime scattering, a locally committed original gibbous-moon texture,
 weather-aware celestial light, fog, lighting, and synchronized ocean
 reflections without external sky art.
 
-The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each two-minute run two practical search directions.
+The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each one-minute run two practical search directions.
 
-Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates. Each item type uses compatible surfaces, so food stays near cabin storage, emergency supplies stay near the wheelhouse, tools stay near work surfaces, and bulky diving gear stays on large equipment racks. Dorothy contains exactly 17 collectible types and 20 physical pickups: Food appears three times, Bait twice, and every other scavenging collectible type once.
+Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 18 scavenging item types and 21 physical pickups: Food appears three times, Bait twice, and every other item type once.
 
 The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials: subdued non-slip decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
 
@@ -113,7 +113,7 @@ Accepted daytime actions play through the lifeboat scene, update the condition d
 
 ## Game loop
 
-The ship sinks in two minutes. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
+The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
 
 In the lifeboat, each day gives three energy for daytime actions:
 
