@@ -55,10 +55,10 @@ function expectClosedLaneCycle(prefix: string, minimumLaneCount = 4): void {
 describe('scavenging ship layout', () => {
   const minimumSpots = {
     crewCabin: 10,
-    wheelhouse: 8,
+    wheelhouse: 11,
     storageWorkroom: 10,
     centralCargo: 14,
-    bow: 4,
+    bow: 1,
     stern: 4,
   } as const;
 
@@ -70,7 +70,7 @@ describe('scavenging ship layout', () => {
       expect(new Set(regionSurfaces.map(({ physicalSlotId }) => physicalSlotId)).size)
         .toBeGreaterThanOrEqual(minimum);
     }
-    expect(surfaces.filter(({ branch }) => branch)).toHaveLength(8);
+    expect(surfaces.filter(({ branch }) => branch)).toHaveLength(10);
   });
 
   it('authors closed, connected room lane cycles', () => {
@@ -119,12 +119,31 @@ describe('scavenging ship layout', () => {
         .filter(({ regionId }) => regionId === 'bow' || regionId === 'stern')
         .map((surface) => ({ owner, surface })));
 
-    expect(endSurfaces).toHaveLength(8);
+    expect(endSurfaces).toHaveLength(5);
     endSurfaces.forEach(({ owner, surface }) => {
       expect(['cargoCrate', 'barrel', 'cargoBox']).toContain(owner.modelId);
       expect(surface.branch).toBe(false);
       expect(owner.position[1]).toBe(FREIGHTER_DIMENSIONS.deckY);
     });
+  });
+
+  it('moves bow cargo inside, centers benches, and keeps stern cargo aft', () => {
+    const bowOwners = SHIP_LAYOUT.furniture.filter((owner) =>
+      owner.surfaces.some(({ regionId }) => regionId === 'bow'));
+    expect(bowOwners.map(({ id }) => id)).toEqual(['bow-crate-starboard']);
+    expect(bowOwners[0]!.position[0]).toBe(0);
+
+    for (const id of ['bow-crate-port', 'bow-barrel-port-center', 'bow-box-starboard-center']) {
+      expect(SHIP_LAYOUT.furniture.find((owner) => owner.id === id)?.zoneId).toBe('wheelhouse');
+    }
+
+    const benches = SHIP_LAYOUT.furniture.filter(({ modelId }) => modelId === 'timberBench');
+    expect(benches).toHaveLength(3);
+    benches.forEach(({ position }) => expect(Math.abs(position[0])).toBeLessThan(5));
+
+    SHIP_LAYOUT.furniture.filter((owner) =>
+      owner.surfaces.some(({ regionId }) => regionId === 'stern'))
+      .forEach(({ position }) => expect(position[2]).toBeLessThan(SHIP_LAYOUT.machineryClosure.minZ));
   });
 
   it('defines the approved enlarged single-level plan', () => {
@@ -198,6 +217,9 @@ describe('scavenging ship layout', () => {
     expect(furnitureIds).toEqual(expect.arrayContaining([
       'cabin-bunk-port',
       'cabin-bunk-starboard',
+      'cabin-bunk-port-wall',
+      'cabin-bunk-starboard-wall-aft',
+      'cabin-bunk-starboard-wall-forward',
       'cabin-desk-aft',
       'cabin-bookcase-forward',
       'chart-table-port',
@@ -210,7 +232,8 @@ describe('scavenging ship layout', () => {
       'cabin-cabinet-port-forward',
       'cabin-table-starboard-center',
       'workroom-storage-shelf-port-forward',
-      'workroom-pallet-starboard-forward',
+      'workroom-crate-stack-port-forward',
+      'workroom-crate-stack-starboard-forward',
     ]));
     expect(furnitureIds).not.toEqual(expect.arrayContaining([
       'cabin-food-cabinet',
@@ -531,7 +554,7 @@ describe('scavenging ship layout', () => {
         position: [-5.1, 2.22, 0.9] as const,
       },
     };
-    expect(() => validateShipLayout(accessConflict)).toThrow(/deck-hatch.*item access/i);
+    expect(() => validateShipLayout(accessConflict)).toThrow(/deck-hatch.*(item access|deck-bench)/i);
   });
 
   it('assigns deck detail colliders to every retained barrel', () => {
@@ -572,8 +595,8 @@ describe('scavenging ship layout', () => {
   it('measures the shortest navigable route around furniture', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
     expect(metric.stable).toBe(true);
-    const direct = Math.hypot(7.025, 11);
-    const routed = metric.distance([0, 11], [7.025, 0]);
+    const direct = Math.hypot(7.025, 9.6);
+    const routed = metric.distance([0, 9.6], [7.025, 0]);
     expect(routed).not.toBeNull();
     expect(routed!).toBeGreaterThan(direct);
   });
@@ -625,13 +648,14 @@ describe('scavenging ship layout', () => {
       SHIP_LAYOUT.details.find((detail) => detail.id === id)!,
     );
     expect(boxRect('cargoBox-1').maxZ).toBeLessThan(crew.minZ);
-    expect(boxRect('cargoBox-2').minZ).toBeCloseTo(storage.maxZ);
+    expect(boxRect('cargoBox-2').minZ).toBeGreaterThan(storage.maxZ);
+    expect(boxRect('cargoBox-2').maxZ).toBeLessThan(crew.minZ);
     expect(boxRect('cargoBox-3').maxX).toBeCloseTo(storage.minX);
     SHIP_LAYOUT.details.filter(({ kind }) => kind === 'cargoBox')
       .forEach(({ rotationY }) => expect(rotationY).toBe(0));
   });
 
-  it('authors offset cabin bunks while keeping wall furniture aligned', () => {
+  it('authors five cabin bunks, a corner table, and stacked storage crates', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
     const fixtureRect = (id: string) => furnitureRect(
@@ -639,18 +663,29 @@ describe('scavenging ship layout', () => {
     );
 
     expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-port')?.position)
-      .toEqual([-1.7, FREIGHTER_DIMENSIONS.deckY, 7.2]);
+      .toEqual([-0.72, FREIGHTER_DIMENSIONS.deckY, 7.75]);
     expect(SHIP_LAYOUT.furniture.find(({ id }) => id === 'cabin-bunk-starboard')?.position)
-      .toEqual([1.5, FREIGHTER_DIMENSIONS.deckY, 10.8]);
+      .toEqual([0.72, FREIGHTER_DIMENSIONS.deckY, 7.75]);
+    const wallBunks = SHIP_LAYOUT.furniture.filter(({ id }) => [
+      'cabin-bunk-port-wall',
+      'cabin-bunk-starboard-wall-aft',
+      'cabin-bunk-starboard-wall-forward',
+    ].includes(id));
+    expect(wallBunks).toHaveLength(3);
+    wallBunks.forEach(({ rotationY }) => expect(rotationY).toBe(Math.PI / 2));
     expect(fixtureRect('cabin-desk-aft').minZ).toBeGreaterThanOrEqual(crew.minZ);
-    expect(fixtureRect('cabin-cabinet-port-forward').minX)
-      .toBeCloseTo(crew.minX + SHIP_ROOM_WALL_THICKNESS);
+    expect(Math.abs(SHIP_LAYOUT.furniture.find(
+      ({ id }) => id === 'cabin-cabinet-port-forward',
+    )!.position[0])).toBeLessThan(1);
     const cabinTable = SHIP_LAYOUT.furniture.find(
       ({ id }) => id === 'cabin-table-starboard-center',
     )!;
-    expect(cabinTable.position).toEqual([4.55, FREIGHTER_DIMENSIONS.deckY, 10.7]);
+    expect(cabinTable.position).toEqual([-4.45, FREIGHTER_DIMENSIONS.deckY, 12.25]);
     expect(SHIP_LAYOUT.furniture.filter(({ zoneId }) => zoneId === 'wheelhouse'))
-      .toHaveLength(2);
+      .toHaveLength(5);
+    const storageStacks = SHIP_LAYOUT.furniture.filter(({ modelId }) => modelId === 'cargoCrateStack');
+    expect(storageStacks).toHaveLength(2);
+    expect(storageStacks.map(({ position }) => position[0])).toEqual([-4.45, 4.75]);
     const workroomCorkboard = SHIP_LAYOUT.decorations.find(
       ({ id }) => id === 'workroom-corkboard-aft',
     )!;
@@ -748,7 +783,7 @@ describe('scavenging ship layout', () => {
         : owner),
     };
     expect(() => validateShipLayout(crossingWall))
-      .toThrow(/stern-barrel-port-center:top.*access.*wall/i);
+      .toThrow(/stern-barrel-port-center:top.*(access.*wall|no reachable standing point)/i);
   });
 
   it.each([
@@ -817,7 +852,7 @@ describe('scavenging ship layout', () => {
       .toThrow(/barrel-1.*cargo-crate-aft-port:top-access-1/i);
   });
 
-  it('rejects visual footprints spaced less than one metre apart', () => {
+  it('rejects visual footprints that overlap the central benches', () => {
     const crowdedDetails = {
       ...SHIP_LAYOUT,
       details: SHIP_LAYOUT.details.map((detail) => detail.id === 'barrel-2'
@@ -826,7 +861,7 @@ describe('scavenging ship layout', () => {
     };
 
     expect(() => validateShipLayout(crowdedDetails))
-      .toThrow(/barrel-1.*barrel-2.*1 metre/i);
+      .toThrow(/barrel-2.*deck-bench/i);
   });
 
   it('measures lane bounds instead of trusting a declared clearance', () => {
@@ -954,12 +989,12 @@ describe('scavenging ship layout', () => {
     const invalidBowOwner = {
       ...SHIP_LAYOUT,
       furniture: SHIP_LAYOUT.furniture.map((placement) =>
-        placement.id === 'bow-crate-port'
+        placement.id === 'bow-crate-starboard'
           ? { ...placement, modelId: 'timberBench' as const }
           : placement),
     };
     expect(() => validateShipLayout(invalidBowOwner))
-      .toThrow(/bow-crate-port.*bow.*raised.*cargoCrate.*barrel.*cargoBox/i);
+      .toThrow(/bow-crate-starboard.*bow.*raised.*cargoCrate.*barrel.*cargoBox/i);
 
     const lowSternSurface = {
       ...SHIP_LAYOUT,

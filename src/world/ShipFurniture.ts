@@ -77,6 +77,28 @@ function createCargoCrate(
   parent.add(model);
 }
 
+function createCargoCrateStack(
+  parent: Group,
+  library: ShipFurnitureLibrary,
+  size: readonly [number, number, number],
+): void {
+  const columns = size[0] > 1.2 ? 2 : 1;
+  const crateSize = 1.05;
+  for (let row = 0; row < 2; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const crate = new Group();
+      crate.position.set(
+        (column - (columns - 1) / 2) * crateSize,
+        row * crateSize,
+        0,
+      );
+      crate.rotation.y = (row + column) % 2 === 0 ? -0.018 : 0.022;
+      createCargoCrate(crate, library, [crateSize, crateSize, crateSize]);
+      parent.add(crate);
+    }
+  }
+}
+
 function createCargoRack(
   parent: Group,
   geometry: BoxGeometry,
@@ -309,6 +331,12 @@ export function createShipFurniture(
     placementRoot.userData.modelId = placementSpec.modelId;
     if (placementSpec.modelId === 'cargoCrate') {
       createCargoCrate(
+        placementRoot,
+        library,
+        placementSpec.colliderSize,
+      );
+    } else if (placementSpec.modelId === 'cargoCrateStack') {
+      createCargoCrateStack(
         placementRoot,
         library,
         placementSpec.colliderSize,
