@@ -39,6 +39,7 @@ export type ScavengeRouteAction =
 export interface ScavengeRoutePlan {
   readonly seconds: number;
   readonly savedCount: number;
+  readonly evacuated: boolean;
   readonly actions: readonly ScavengeRouteAction[];
 }
 
@@ -97,6 +98,54 @@ function appendMove(
 ): readonly ScavengeRouteAction[] {
   if (distance === 0) return actions;
   return [...actions, { type: 'move', distance, carriedWeight }];
+}
+
+function directEvacuationFinishSeconds(
+  input: ScavengeRouteInput,
+  current: Position,
+  carriedWeight: number,
+  seconds: number,
+): number | null {
+  const distance = routeDistance(input.metric, current, input.evacuation);
+  return distance === null
+    ? null
+    : seconds
+      + moveSeconds(distance, carriedWeight)
+      + SCAVENGE_EVACUATE_ACTION_SECONDS;
+}
+
+function depositedEvacuationFinishSeconds(
+  input: ScavengeRouteInput,
+  current: Position,
+  carriedWeight: number,
+  seconds: number,
+): number | null {
+  const depositDistance = routeDistance(input.metric, current, input.deposit);
+  const evacuationDistance = routeDistance(input.metric, input.deposit, input.evacuation);
+  return depositDistance === null || evacuationDistance === null
+    ? null
+    : seconds
+      + moveSeconds(depositDistance, carriedWeight)
+      + SCAVENGE_DEPOSIT_ACTION_SECONDS
+      + moveSeconds(evacuationDistance, 0)
+      + SCAVENGE_EVACUATE_ACTION_SECONDS;
+}
+
+function canDepositWithoutBlockingEvacuation(
+  input: ScavengeRouteInput,
+  current: Position,
+  carriedWeight: number,
+  seconds: number,
+  deadline: number,
+): boolean {
+  const depositedFinish = depositedEvacuationFinishSeconds(
+    input,
+    current,
+    carriedWeight,
+    seconds,
+  );
+  if (depositedFinish !== null) return depositedFinish <= deadline;
+  return directEvacuationFinishSeconds(input, current, carriedWeight, seconds) === null;
 }
 
 function compareText(left: string, right: string): number {
@@ -214,6 +263,7 @@ function finishExpertRoute(
   return {
     seconds,
     savedCount: input.assignments.length,
+    evacuated: true,
     actions: [
       ...appendMove(state.actions, distance, 0),
       { type: 'evacuate' },
@@ -388,7 +438,22 @@ export function planBaselineScavengeRoute(
       const nextSeconds = seconds
         + moveSeconds(candidate.distance, carriedWeight)
         + SCAVENGE_PICKUP_ACTION_SECONDS;
-      if (nextSeconds > deadline) break;
+      const finishOptions = [
+        depositedEvacuationFinishSeconds(
+          input,
+          candidate.assignment.position,
+          carriedWeight + candidate.assignment.weight,
+          nextSeconds,
+        ),
+        directEvacuationFinishSeconds(
+          input,
+          candidate.assignment.position,
+          carriedWeight + candidate.assignment.weight,
+          nextSeconds,
+        ),
+      ].filter((value): value is number => value !== null);
+      if (nextSeconds > deadline
+        || finishOptions.length > 0 && Math.min(...finishOptions) > deadline) break;
       actions = [
         ...appendMove(actions, candidate.distance, carriedWeight),
         {
@@ -411,7 +476,14 @@ export function planBaselineScavengeRoute(
     const nextSeconds = seconds
       + moveSeconds(distance, carriedWeight)
       + SCAVENGE_DEPOSIT_ACTION_SECONDS;
-    if (nextSeconds > deadline) break;
+    if (nextSeconds > deadline
+      || !canDepositWithoutBlockingEvacuation(
+        input,
+        current,
+        carriedWeight,
+        seconds,
+        deadline,
+      )) break;
     actions = [
       ...appendMove(actions, distance, carriedWeight),
       { type: 'deposit', instanceIds: carriedIds },
@@ -429,7 +501,13 @@ export function planBaselineScavengeRoute(
       const nextSeconds = seconds
         + moveSeconds(distance, carriedWeight)
         + SCAVENGE_DEPOSIT_ACTION_SECONDS;
-      if (nextSeconds <= deadline) {
+      if (nextSeconds <= deadline && canDepositWithoutBlockingEvacuation(
+        input,
+        current,
+        carriedWeight,
+        seconds,
+        deadline,
+      )) {
         actions = [
           ...appendMove(actions, distance, carriedWeight),
           { type: 'deposit', instanceIds: carriedIds },
@@ -443,6 +521,7 @@ export function planBaselineScavengeRoute(
     }
   }
 
+  let evacuated = false;
   const evacuationDistance = routeDistance(input.metric, current, input.evacuation);
   if (evacuationDistance !== null) {
     const nextSeconds = seconds
@@ -454,8 +533,9 @@ export function planBaselineScavengeRoute(
         { type: 'evacuate' },
       ];
       seconds = nextSeconds;
+      evacuated = true;
     }
   }
 
-  return { seconds, savedCount, actions };
+  return { seconds, savedCount, evacuated, actions };
 }

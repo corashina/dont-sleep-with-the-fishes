@@ -111,16 +111,24 @@ function createTimberBench(
   materials: ShipMaterials,
   size: readonly [number, number, number],
 ): void {
-  const seatHeight = 0.16;
-  const legHeight = size[1] - seatHeight;
-  addBox(
-    parent,
-    geometry,
-    materials.hatchTimber,
-    'bench-seat',
-    [size[0], seatHeight, size[2]],
-    [0, size[1] - seatHeight / 2, 0],
-  );
+  const plankDepth = size[2] * 0.27;
+  const plankSpecs = [
+    { x: 0.015, z: -size[2] * 0.34, width: size[0] - 0.04, height: 0.13, y: -0.008, yaw: 0.006, roll: 0.003 },
+    { x: -0.02, z: 0, width: size[0], height: 0.15, y: 0, yaw: -0.004, roll: -0.006 },
+    { x: 0.025, z: size[2] * 0.34, width: size[0] - 0.09, height: 0.14, y: 0.006, yaw: 0.008, roll: 0.004 },
+  ] as const;
+  plankSpecs.forEach((plank, index) => {
+    const mesh = addBox(
+      parent,
+      geometry,
+      materials.hatchTimber,
+      `bench-plank-${index + 1}`,
+      [plank.width, plank.height, plankDepth],
+      [plank.x, size[1] - plank.height / 2 + plank.y, plank.z],
+    );
+    mesh.rotation.set(0, plank.yaw, plank.roll);
+  });
+  const legHeight = size[1] - 0.15;
   ([-1, 1] as const).forEach((sign) => {
     addBox(
       parent,
@@ -128,8 +136,17 @@ function createTimberBench(
       materials.hatchTimber,
       `bench-leg-${sign}`,
       [0.16, legHeight, size[2] * 0.78],
-      [sign * (size[0] / 2 - 0.24), legHeight / 2, 0],
+      [sign * (size[0] / 2 - 0.24), legHeight / 2, sign * 0.015],
     );
+    const brace = addBox(
+      parent,
+      geometry,
+      materials.hatchTimber,
+      `bench-brace-${sign}`,
+      [size[0] * 0.43, 0.09, 0.1],
+      [sign * size[0] * 0.24, legHeight * 0.58, -sign * 0.035],
+    );
+    brace.rotation.z = -sign * 0.3;
     addBox(
       parent,
       geometry,
@@ -139,6 +156,20 @@ function createTimberBench(
       [sign * (size[0] / 2 - 0.24), size[1] - 0.24, 0],
     );
   });
+  plankSpecs.forEach((plank, plankIndex) => ([-1, 1] as const).forEach((sign) => {
+    addBox(
+      parent,
+      geometry,
+      materials.darkMetal,
+      `bench-fastener-${plankIndex + 1}-${sign}`,
+      [0.07, 0.035, 0.07],
+      [
+        plank.x + sign * (plank.width / 2 - 0.12),
+        size[1] + plank.y + 0.0175,
+        plank.z,
+      ],
+    );
+  }));
 }
 
 function createOpenShelf(

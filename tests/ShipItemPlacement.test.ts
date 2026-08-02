@@ -123,6 +123,27 @@ function expectProductionConstraints(
     if (weight === 3) expect(distance!).toBeLessThanOrEqual(14 + 1e-6);
     if (weight === 2) expect(distance!).toBeLessThanOrEqual(22 + 1e-6);
   }
+  const routeInput = {
+    assignments: createScavengeItemInstances().map((instance) => {
+      const value = assignments.get(instance.instanceId)!;
+      return {
+        instanceId: instance.instanceId,
+        weight: ITEM_DEFINITIONS[instance.type].weight,
+        position: [value.standingPoint.x, value.standingPoint.z] as const,
+        branch: value.branch,
+      };
+    }),
+    start: context.start,
+    deposit: context.deposit,
+    evacuation: context.evacuation,
+    metric: context.routeMetric,
+  };
+  const baseline = planBaselineScavengeRoute(routeInput);
+  expect(baseline.savedCount).toBeGreaterThanOrEqual(15);
+  expect(baseline.savedCount).toBeLessThanOrEqual(17);
+  expect(baseline.evacuated).toBe(true);
+  expect(baseline.actions.at(-1)?.type).toBe('evacuate');
+  expect(baseline.seconds).toBeLessThanOrEqual(60);
 }
 
 describe('ship item placement', () => {
@@ -247,6 +268,72 @@ describe('ship item placement', () => {
 
   it('caps generated placement at sixty-four attempts', () => {
     expect(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS).toBe(64);
+  });
+
+  it('rejects all sixty-four generated attempts before using fallback', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const instances = createScavengeItemInstances();
+    const fallbackSurfaceIds = new Set(Object.values(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE));
+    const surfaces = ship.itemSurfaces.filter(({ id }) => fallbackSurfaceIds.has(id));
+    const run = (maxAttempts: number) => {
+      let randomCalls = 0;
+      const assignments = assignShipItems(
+        instances,
+        surfaces,
+        () => {
+          randomCalls += 1;
+          return 1 - Number.EPSILON;
+        },
+        ship.colliders,
+        placementContext(ship, maxAttempts),
+      );
+      expect([...assignments.values()].every(
+        ({ placementSource }) => placementSource === 'fallback',
+      )).toBe(true);
+      return randomCalls;
+    };
+    try {
+      const oneAttemptCalls = run(1);
+      const fullAttemptCalls = run(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS);
+      expect(oneAttemptCalls).toBeGreaterThan(0);
+      expect(fullAttemptCalls).toBe(
+        oneAttemptCalls * SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS,
+      );
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
+
+  it('keeps cold placement construction deterministic without a warm context cache', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const instances = createScavengeItemInstances();
+    try {
+      const firstContext = placementContext(ship);
+      const secondContext = placementContext(ship);
+      const first = assignShipItems(
+        instances,
+        ship.itemSurfaces,
+        mulberry32(7),
+        ship.colliders,
+        firstContext,
+      );
+      const second = assignShipItems(
+        instances,
+        ship.itemSurfaces,
+        mulberry32(7),
+        ship.colliders,
+        secondContext,
+      );
+      expect([...second].map(([id, value]) => [id, value.surfaceId]))
+        .toEqual([...first].map(([id, value]) => [id, value.surfaceId]));
+      expectProductionConstraints(first, firstContext);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
   });
 
   it('generates without a surface required only by the fallback', () => {
@@ -453,6 +540,9 @@ describe('ship item placement', () => {
         const baseline = planBaselineScavengeRoute(routeInput);
         expect(baseline.savedCount).toBeGreaterThanOrEqual(15);
         expect(baseline.savedCount).toBeLessThanOrEqual(17);
+        expect(baseline.evacuated).toBe(true);
+        expect(baseline.actions.at(-1)?.type).toBe('evacuate');
+        expect(baseline.seconds).toBeLessThanOrEqual(60);
       }
       expect(generatedCount).toBe(1_000);
       expect(signatures.size).toBe(12);
