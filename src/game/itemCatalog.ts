@@ -10,9 +10,6 @@ export type ItemInstanceId = `${ItemId}-${number}`;
 export type ItemDayAction =
   | 'dive' | 'eat' | 'treat' | 'repairItem'
   | 'sendMessage' | 'useEnergyBar' | null;
-export type ShipPlacementCategory =
-  | 'provisions' | 'navigation' | 'workshop' | 'deckGear' | 'comfort';
-
 export interface ItemDefinition {
   readonly label: string;
   readonly weight: 1 | 2 | 3;
@@ -21,7 +18,6 @@ export interface ItemDefinition {
   readonly durable: boolean;
   readonly breakable: boolean;
   readonly dayAction: ItemDayAction;
-  readonly placementCategory: ShipPlacementCategory;
   readonly modelId: ItemId;
   readonly artworkId: ItemId;
 }
@@ -34,35 +30,34 @@ const define = (
   durable: boolean,
   breakable: boolean,
   dayAction: ItemDayAction,
-  placementCategory: ShipPlacementCategory,
 ): ItemDefinition => ({
   label, weight, spawnCount, charges, durable, breakable, dayAction,
-  placementCategory, modelId: '' as ItemId, artworkId: '' as ItemId,
+  modelId: '' as ItemId, artworkId: '' as ItemId,
 });
 
 const rawDefinitions = {
-  cannedFood: define('FOOD', 1, 3, 1, false, false, 'eat', 'provisions'),
-  baitTin: define('BAIT', 1, 2, 1, false, false, null, 'provisions'),
-  ductTape: define('DUCT TAPE', 1, 1, 1, false, false, 'repairItem', 'workshop'),
-  compass: define('COMPASS', 1, 1, null, true, true, null, 'navigation'),
-  map: define('MAP', 1, 1, null, true, true, null, 'navigation'),
-  medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat', 'workshop'),
-  spyglass: define('BINOCULARS', 1, 1, null, true, true, null, 'navigation'),
-  fishingNet: define('FISHING NET', 2, 1, null, true, true, null, 'deckGear'),
-  bucket: define('BUCKET', 2, 1, null, true, true, null, 'deckGear'),
-  flareGun: define('FLARE GUN', 1, 1, 1, false, false, null, 'navigation'),
-  scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive', 'deckGear'),
-  anchor: define('ANCHOR', 3, 1, null, true, true, null, 'deckGear'),
+  cannedFood: define('FOOD', 1, 3, 1, false, false, 'eat'),
+  baitTin: define('BAIT', 1, 2, 1, false, false, null),
+  ductTape: define('DUCT TAPE', 1, 1, 1, false, false, 'repairItem'),
+  compass: define('COMPASS', 1, 1, null, true, true, null),
+  map: define('MAP', 1, 1, null, true, true, null),
+  medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat'),
+  spyglass: define('BINOCULARS', 1, 1, null, true, true, null),
+  fishingNet: define('FISHING NET', 2, 1, null, true, true, null),
+  bucket: define('BUCKET', 2, 1, null, true, true, null),
+  flareGun: define('FLARE GUN', 1, 1, 1, false, false, null),
+  scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive'),
+  anchor: define('ANCHOR', 3, 1, null, true, true, null),
   bottledPaper: define(
-    'BOTTLED PAPER', 1, 1, 1, false, false, 'sendMessage', 'navigation',
+    'BOTTLED PAPER', 1, 1, 1, false, false, 'sendMessage',
   ),
-  umbrella: define('UMBRELLA', 2, 1, null, true, true, null, 'deckGear'),
-  swimRing: define('SWIM RING', 2, 1, null, true, true, null, 'deckGear'),
-  flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null, 'workshop'),
-  harpoonGun: define('HARPOON GUN', 2, 1, 1, false, false, null, 'workshop'),
-  energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar', 'provisions'),
+  umbrella: define('UMBRELLA', 2, 1, null, true, true, null),
+  swimRing: define('SWIM RING', 2, 1, null, true, true, null),
+  flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null),
+  harpoonGun: define('HARPOON GUN', 2, 1, 1, false, false, null),
+  energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar'),
   captainWhiskers: define(
-    'CAPTAIN WHISKERS', 2, 1, null, true, false, null, 'comfort',
+    'CAPTAIN WHISKERS', 2, 1, null, true, false, null,
   ),
 } satisfies Record<ItemId, ItemDefinition>;
 

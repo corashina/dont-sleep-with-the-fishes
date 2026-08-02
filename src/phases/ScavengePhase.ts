@@ -33,6 +33,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
+import { scavengeSpeedMultiplier } from '../game/scavengeMovement';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -255,7 +256,11 @@ export class ScavengePhase implements GamePhase {
       current = this.session.snapshot();
       this.synchronizeElapsed(current);
       if (current.status === 'running') {
-        motion = this.player.update(deltaSeconds, this.input);
+        motion = this.player.update(
+          deltaSeconds,
+          this.input,
+          scavengeSpeedMultiplier(current.carriedWeight),
+        );
         current = this.session.snapshot();
         this.synchronizeElapsed(current);
         if (current.status === 'running') {

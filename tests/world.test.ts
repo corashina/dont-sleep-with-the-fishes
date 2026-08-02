@@ -24,6 +24,7 @@ import {
   Vector4,
 } from 'three';
 import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
+import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
@@ -157,6 +158,42 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('uses the scavenging roster and stable placement metadata by default', () => {
+    const firstScene = new Scene();
+    const firstModels = createTestPropModels();
+    const firstFurniture = createTestShipFurniture();
+    const firstRandom = mulberry32(73);
+    const first = new World(
+      firstScene,
+      firstModels,
+      firstFurniture,
+      1,
+      createTestMoonTexture(),
+      physicsRuntime,
+      undefined,
+      () => firstRandom.next(),
+    );
+
+    try {
+      expect(first.itemObjects.size).toBe(createScavengeItemInstances().length);
+      expect(first.itemObjects.has('energyBar-1')).toBe(false);
+      expect(new Set([...first.itemObjects.values()].map(
+        (item) => item.userData.shipRegionId,
+      )).size).toBe(6);
+      first.itemObjects.forEach((item) => {
+        expect(item.userData.shipSurfaceId).toEqual(expect.any(String));
+        expect(item.userData.shipRegionId).toEqual(expect.any(String));
+        expect(item.userData.shipBranch).toEqual(expect.any(Boolean));
+        expect(['generated', 'fallback']).toContain(item.userData.shipPlacementSource);
+        expect(item.userData.placementSource).toBe(item.userData.shipPlacementSource);
+      });
+    } finally {
+      first.dispose();
+      firstFurniture.dispose();
+      firstModels.dispose();
+    }
+  });
+
   it('composes the scavenging intro impact with shared-wave vessel motion', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -639,7 +676,7 @@ describe('world builders', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     let observed: Map<BufferGeometry | Material, number> | undefined;
-    const oversizedInventory = Array.from({ length: 40 }, (_, index): ItemInstance => ({
+    const oversizedInventory = Array.from({ length: 80 }, (_, index): ItemInstance => ({
       instanceId: `cannedFood-${index + 1}` as ItemInstance['instanceId'],
       type: 'cannedFood',
     }));

@@ -13,11 +13,11 @@ import {
   Vector3,
 } from 'three';
 import {
-  createItemInstances,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
+import { createScavengeItemInstances } from '../game/scavengeCatalog';
 import type { SinkingState } from '../game/sinking';
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import {
@@ -70,7 +70,12 @@ import { ScavengeIntroPresentation } from './ScavengeIntroPresentation';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT, type Rect2 } from './ShipLayout';
+import {
+  createShipRouteMetric,
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  type Rect2,
+} from './ShipLayout';
 
 export type WorldConstructionStage =
   | 'physics'
@@ -240,7 +245,7 @@ export class World {
     maxTextureAnisotropy: number,
     moonTexture: Texture,
     physicsRuntime: PhysicsRuntime | null,
-    instances: readonly ItemInstance[] = createItemInstances(),
+    instances: readonly ItemInstance[] = createScavengeItemInstances(),
     random: () => number = Math.random,
     construction: WorldConstructionDependencies = {},
     lifeboatAssets?: LifeboatAssets,
@@ -367,11 +372,21 @@ export class World {
       );
       this.ship.add(this.boatDepositTarget);
       rollback.push(() => this.boatDepositTarget.removeFromParent());
+      const routeMetric = createShipRouteMetric(SHIP_LAYOUT);
       const assignments = assignShipItems(
         instances,
         this.shipBuild.itemSurfaces,
         random,
         this.shipBuild.colliders,
+        {
+          routeMetric,
+          start: [this.shipBuild.playerStart.x, this.shipBuild.playerStart.z],
+          deposit: [this.boatDepositTarget.position.x, this.boatDepositTarget.position.z],
+          evacuation: [
+            this.shipBuild.evacuationPoint.x,
+            this.shipBuild.evacuationPoint.z,
+          ],
+        },
       );
       instances.forEach((instance) => {
         const transform = assignments.get(instance.instanceId)!;
@@ -399,6 +414,10 @@ export class World {
         prop.userData.shipSurfaceId = transform.surfaceId;
         prop.userData.shipPhysicalSlotId = transform.physicalSlotId;
         prop.userData.shipFurnitureId = transform.furnitureId;
+        prop.userData.shipRegionId = transform.regionId;
+        prop.userData.shipBranch = transform.branch;
+        prop.userData.shipPlacementSource = transform.placementSource;
+        prop.userData.placementSource = transform.placementSource;
         this.ship.add(prop);
         rollback.push(() => prop.removeFromParent());
         this.itemObjects.set(instance.instanceId, prop);

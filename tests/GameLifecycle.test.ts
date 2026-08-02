@@ -23,6 +23,7 @@ import {
 } from '../src/game/scavengeEnding';
 import { createScavengeIntroFrame } from '../src/game/scavengeIntro';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
+import { scavengeSpeedMultiplier } from '../src/game/scavengeMovement';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
@@ -69,10 +70,13 @@ vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
         surfaceId: `lifecycle-surface-${index}`,
         physicalSlotId: `lifecycle-slot-${index}`,
         furnitureId: 'lifecycle-fixture',
+        regionId: 'cargoDeck',
+        branch: false,
+        standingPoint: new Vector3(index, 1, 0),
         position: new Vector3(index, 1, 0),
         rotation: new Euler(),
         scale: 1,
-        usedFallbackSurface: false,
+        placementSource: 'generated' as const,
       }],
     )),
   };
@@ -922,7 +926,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Vector3),
       true,
     );
-    expect(updatePlayer).toHaveBeenCalledWith(0.25, input);
+    expect(updatePlayer).toHaveBeenCalledWith(0.25, input, 1);
 
     input.pointerLocked = false;
     tick.mockClear();
@@ -953,6 +957,48 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(updateFlight).toHaveBeenCalledOnce();
     expect(input.clearLook).toHaveBeenCalled();
     expect(input.consumeLook).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['cannedFood-1', 1],
+    ['medicalKit-1', 0.92],
+    ['scubaSet-1', 0.84],
+  ] as const)('uses carried weight speed for direct control: %s', (itemId, expected) => {
+    const session = new ScavengeSession();
+    session.start();
+    expect(session.pickUp(itemId)).toBe(true);
+    const { phase, input } = createUpdateHarness(session);
+    const player = (phase as unknown as {
+      player: { update: ReturnType<typeof vi.fn> };
+    }).player;
+
+    phase.update(0.016, 0.016);
+
+    expect(player.update).toHaveBeenCalledWith(
+      0.016,
+      input,
+      scavengeSpeedMultiplier(session.snapshot().carriedWeight),
+    );
+    expect(player.update).toHaveBeenLastCalledWith(0.016, input, expected);
+  });
+
+  it('restores direct-control speed on the update after a deposit', () => {
+    const session = new ScavengeSession();
+    session.start();
+    expect(session.pickUp('scubaSet-1')).toBe(true);
+    const { phase, input } = createUpdateHarness(session);
+    const player = (phase as unknown as {
+      player: { update: ReturnType<typeof vi.fn> };
+    }).player;
+
+    phase.update(0.016, 0.016);
+    expect(player.update).toHaveBeenLastCalledWith(0.016, input, 0.84);
+    expect(session.saveCarriedBundle()).not.toBeNull();
+    player.update.mockClear();
+
+    phase.update(0.032, 0.016);
+
+    expect(player.update).toHaveBeenLastCalledWith(0.016, input, 1);
   });
 
   it('freezes shared-wave time with player movement while gameplay is paused', () => {

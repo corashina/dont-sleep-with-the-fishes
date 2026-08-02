@@ -32,8 +32,8 @@ describe('scavenging item roster', () => {
       durable: true,
       breakable: false,
       dayAction: null,
-      placementCategory: 'comfort',
     });
+    expect(ITEM_DEFINITIONS.captainWhiskers).not.toHaveProperty('placementCategory');
     expect(SCAVENGE_ITEM_IDS).toContain('captainWhiskers');
     expect(SURVIVAL_ITEM_DESCRIPTIONS.captainWhiskers).toContain('company');
     expect(itemArtwork('captainWhiskers')).toContain(

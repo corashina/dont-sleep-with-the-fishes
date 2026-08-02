@@ -1,4 +1,8 @@
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import {
+  SCAVENGE_SPRINT_SPEED,
+  SCAVENGE_WALK_SPEED,
+} from '../game/scavengeMovement';
 import type { InputController } from '../input/InputController';
 import type { CollisionArc, CollisionBox, LocalPlayerPosition } from './collisions';
 import {
@@ -91,7 +95,11 @@ export class PlayerController {
     this.floorEyeHeight = start.y;
   }
 
-  update(delta: number, input: InputController): PlayerMotionSample {
+  update(
+    delta: number,
+    input: InputController,
+    speedMultiplier = 1,
+  ): PlayerMotionSample {
     const previousX = this.localPosition.x;
     const previousZ = this.localPosition.z;
     const look = input.consumeLook();
@@ -104,7 +112,11 @@ export class PlayerController {
     this.ladderRegrabDelay = Math.max(0, this.ladderRegrabDelay - delta);
 
     const axes = input.movement;
-    const speed = input.sprinting ? 6.2 : 3.8;
+    const safeMultiplier = Number.isFinite(speedMultiplier)
+      ? Math.max(0, speedMultiplier)
+      : 1;
+    const baseSpeed = input.sprinting ? SCAVENGE_SPRINT_SPEED : SCAVENGE_WALK_SPEED;
+    const speed = baseSpeed * safeMultiplier;
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     this.movement.set(
