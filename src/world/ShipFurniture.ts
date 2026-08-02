@@ -239,7 +239,6 @@ function transformedSurfaces(
       physicalSlotId: surface.physicalSlotId,
       furnitureId: owner.id,
       furnitureModelId: owner.modelId,
-      categories: surface.categories,
       regionId: surface.regionId,
       branch: surface.branch,
       position: new Vector3(...surface.localPosition).applyMatrix4(ownerRoot.matrixWorld),
@@ -253,7 +252,6 @@ function transformedSurfaces(
       clearanceHeight: surface.clearanceHeight * owner.scale[1],
       standingPoints: surface.standingPoints.map((point) =>
         new Vector3(...point).applyMatrix4(ownerRoot.matrixWorld)),
-      fallback: surface.fallback,
     };
   });
 }

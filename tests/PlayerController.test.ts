@@ -5,6 +5,7 @@ import type { InputController } from '../src/input/InputController';
 import type { MovementAxes } from '../src/player/collisions';
 import type { LadderClimbZone } from '../src/player/LadderTraversal';
 import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
+import { SCAVENGE_SPRINT_SPEED, SCAVENGE_WALK_SPEED } from '../src/game/scavengeMovement';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createTestShip } from './helpers/shipFurniture';
 
@@ -160,8 +161,8 @@ describe('PlayerController', () => {
     input.sprinting = true;
     sprinting.update(1, input.asControllerInput());
 
-    expect(walking.localPosition.z).toBeCloseTo(3.8);
-    expect(sprinting.localPosition.z).toBeCloseTo(6.2);
+    expect(walking.localPosition.z).toBeCloseTo(SCAVENGE_WALK_SPEED);
+    expect(sprinting.localPosition.z).toBeCloseTo(SCAVENGE_SPRINT_SPEED);
   });
 
   it.each([

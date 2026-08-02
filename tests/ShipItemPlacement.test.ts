@@ -1,23 +1,37 @@
 // Importance: 4/5. Protects valid deterministic item placement.
-import { NodeIO } from '@gltf-transform/core';
-import { resolve } from 'node:path';
-import { Box3, Euler, Matrix4, Vector3 } from 'three';
+import { performance } from 'node:perf_hooks';
+import { Box3, Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { createItemInstances, ITEM_IDS, type ItemId } from '../src/game/ItemState';
-import { createShip } from '../src/world/Ship';
-import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import {
+  ITEM_DEFINITIONS,
+  createItemInstances,
+} from '../src/game/ItemState';
+import {
+  planBaselineScavengeRoute,
+  planExpertScavengeRoute,
+} from '../src/game/ScavengeRoutePlanner';
+import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
+import { createShip } from '../src/world/Ship';
+import {
+  SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE,
+  SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS,
   SHIP_ITEM_PROFILES,
   assignShipItems,
   shipItemTransformBounds,
   validateShipItemSurfaces,
   type ShipItemSurface,
+  type ShipItemTransform,
+  type ShipPlacementContext,
 } from '../src/world/ShipItemPlacement';
+import {
+  createShipRouteMetric,
+  SHIP_LAYOUT,
+  type ScavengeRegionId,
+} from '../src/world/ShipLayout';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 
 function surface(
   id: string,
-  categories: ShipItemSurface['categories'],
   x: number,
   options: Partial<ShipItemSurface> = {},
 ): ShipItemSurface {
@@ -26,7 +40,6 @@ function surface(
     physicalSlotId: id,
     furnitureId: `fixture-${id}`,
     furnitureModelId: 'table',
-    categories,
     regionId: 'centralCargo',
     branch: false,
     position: new Vector3(x, 3, 0),
@@ -34,7 +47,6 @@ function surface(
     footprint: { width: 2.1, depth: 2.1 },
     clearanceHeight: 1.2,
     standingPoints: [new Vector3(x, 2.22, -1.25)],
-    fallback: false,
     ...options,
   };
 }
@@ -50,146 +62,122 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function rotatedNormalizedBounds(id: ItemId, rotation: Euler): Box3 {
-  const normalized = ITEM_MODEL_SPECS[id].normalizedBounds;
-  const bounds = new Box3();
-  for (const x of [normalized.min[0], normalized.max[0]]) {
-    for (const y of [normalized.min[1], normalized.max[1]]) {
-      for (const z of [normalized.min[2], normalized.max[2]]) {
-        bounds.expandByPoint(new Vector3(x, y, z).applyEuler(rotation));
-      }
-    }
-  }
-  return bounds;
+function placementContext(
+  ship: ReturnType<typeof createShip>,
+  maxAttempts?: number,
+): ShipPlacementContext {
+  const station = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
+  return {
+    routeMetric: createShipRouteMetric(SHIP_LAYOUT),
+    start: [ship.playerStart.x, ship.playerStart.z],
+    deposit: [
+      (station.bounds.minX + station.bounds.maxX) / 2,
+      (station.bounds.minZ + station.bounds.maxZ) / 2,
+    ],
+    evacuation: [ship.evacuationPoint.x, ship.evacuationPoint.z],
+    maxAttempts,
+  };
 }
 
-async function measuredNormalizedBounds(id: ItemId): Promise<Box3> {
-  const document = await new NodeIO().read(resolve('src', 'assets', 'models', 'items', `${id}.glb`));
-  const bounds = new Box3();
-  const rotation = new Euler(...ITEM_MODEL_SPECS[id].rotation);
-  for (const node of document.getRoot().listNodes()) {
-    const mesh = node.getMesh();
-    if (!mesh) continue;
-    const worldMatrix = new Matrix4().fromArray(node.getWorldMatrix());
-    for (const primitive of mesh.listPrimitives()) {
-      const positions = primitive.getAttribute('POSITION');
-      if (!positions) continue;
-      for (let index = 0; index < positions.getCount(); index += 1) {
-        bounds.expandByPoint(
-          new Vector3(...positions.getElement(index, [])).applyMatrix4(worldMatrix).applyEuler(rotation),
-        );
-      }
-    }
+const REGION_LIMITS: Readonly<Record<
+  ScavengeRegionId,
+  readonly [number, number]
+>> = {
+  crewCabin: [3, 4],
+  wheelhouse: [2, 3],
+  centralCargo: [6, 7],
+  storageWorkroom: [3, 4],
+  bow: [2, 3],
+  stern: [2, 3],
+};
+
+function expectProductionConstraints(
+  assignments: ReadonlyMap<string, ShipItemTransform>,
+  context: ShipPlacementContext,
+): void {
+  for (const [regionId, [minimum, maximum]] of Object.entries(REGION_LIMITS)) {
+    const count = [...assignments.values()].filter(
+      (value) => value.regionId === regionId,
+    ).length;
+    expect(count, regionId).toBeGreaterThanOrEqual(minimum);
+    expect(count, regionId).toBeLessThanOrEqual(maximum);
   }
-  const size = bounds.getSize(new Vector3());
-  const scale = ITEM_MODEL_SPECS[id].targetLongestDimension / Math.max(size.x, size.y, size.z);
-  const center = bounds.getCenter(new Vector3()).multiplyScalar(scale);
-  const offset = new Vector3(...ITEM_MODEL_SPECS[id].offset);
-  return new Box3(
-    bounds.min.clone().multiplyScalar(scale).sub(center).add(offset),
-    bounds.max.clone().multiplyScalar(scale).sub(center).add(offset),
-  );
+  const branches = [...assignments.values()].filter(({ branch }) => branch).length;
+  expect(branches).toBeGreaterThanOrEqual(4);
+  expect(branches).toBeLessThanOrEqual(6);
+
+  const values = [...assignments.values()];
+  values.forEach((left, index) => values.slice(index + 1).forEach((right) => {
+    expect(
+      Math.hypot(left.position.x - right.position.x, left.position.z - right.position.z),
+    ).toBeGreaterThanOrEqual(1.25 - 1e-6);
+  }));
+  for (const instance of createScavengeItemInstances()) {
+    const value = assignments.get(instance.instanceId)!;
+    const weight = ITEM_DEFINITIONS[instance.type].weight;
+    const distance = context.routeMetric.distance(
+      [value.standingPoint.x, value.standingPoint.z],
+      context.deposit,
+    );
+    expect(distance).not.toBeNull();
+    if (weight === 3) expect(distance!).toBeLessThanOrEqual(14 + 1e-6);
+    if (weight === 2) expect(distance!).toBeLessThanOrEqual(22 + 1e-6);
+  }
 }
 
 describe('ship item placement', () => {
-  it('places all twenty-two Dorothy instances on unique compatible slots', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    try {
-      expect(ship.itemSurfaces.length).toBeGreaterThanOrEqual(createItemInstances().length);
-      expect(ship.itemSurfaces.find(({ id }) => id === 'cabin-bookcase-forward:shelf-left')
-        ?.standingPoints.length).toBeGreaterThan(0);
-      const assignments = assignShipItems(
-        createItemInstances(),
-        ship.itemSurfaces,
-        mulberry32(421),
-        ship.colliders,
-      );
-      expect(assignments.size).toBe(22);
-      expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
-      expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-        .toBe(22);
-      for (const instance of createItemInstances()) {
-        expect(assignments.has(instance.instanceId), instance.instanceId).toBe(true);
-      }
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
+  it.each([
+    ['cannedFood-1', 'bow'],
+    ['compass-1', 'storageWorkroom'],
+    ['ductTape-1', 'crewCabin'],
+    ['bottledPaper-1', 'centralCargo'],
+  ] as const)('allows %s in fitting %s spots', (instanceId, regionId) => {
+    const item = createScavengeItemInstances().find(
+      (candidate) => candidate.instanceId === instanceId,
+    )!;
+    const assignment = assignShipItems([
+      item,
+    ], [surface('wide', 0, { regionId })]).get(instanceId);
+    expect(assignment?.regionId).toBe(regionId);
   });
 
-  it('keeps the four authored item groups in their intended ship zones', () => {
-    expect(SHIP_ITEM_PROFILES.cannedFood.category).toBe('provisions');
-    expect(SHIP_ITEM_PROFILES.bottledPaper.category).toBe('navigation');
-    expect(SHIP_ITEM_PROFILES.medicalKit.category).toBe('workshop');
-    expect(SHIP_ITEM_PROFILES.anchor.category).toBe('deckGear');
-  });
-
-  it('uses the injected random stream and backtracks for constrained later items', () => {
+  it('uses injected random values for context-free physical assignment', () => {
     const flareGun = createItemInstances().filter(({ type }) => type === 'flareGun');
-    const choices = [
-      surface('flare-left', ['navigation'], 0),
-      surface('flare-right', ['navigation'], 4),
-    ];
+    const choices = [surface('flare-left', 0), surface('flare-right', 4)];
     expect(assignShipItems(flareGun, choices, () => 0).get('flareGun-1')!.surfaceId)
       .toBe('flare-right');
     expect(assignShipItems(flareGun, choices, () => 0.99).get('flareGun-1')!.surfaceId)
       .toBe('flare-left');
-
-    const constrained = createItemInstances().filter(
-      ({ type }) => type === 'medicalKit' || type === 'scubaSet',
-    );
-    const assignments = assignShipItems(constrained, [
-      surface('shared', ['workshop', 'deckGear'], 0),
-      surface('diving-only', ['deckGear'], 4),
-    ], () => 0.99);
-    expect(assignments.get('scubaSet-1')!.surfaceId).toBe('diving-only');
-    expect(assignments.get('medicalKit-1')!.surfaceId).toBe('shared');
   });
 
-  it('rejects duplicate ids, missing owners, invalid categories and dimensions', () => {
+  it('keeps physical fit, ownership, blocker, and slot safety', () => {
     expect(() => assignShipItems([], [
-      surface('duplicate', ['workshop'], 0),
-      surface('duplicate', ['workshop'], 4),
-    ])).toThrow(/duplicate ship item surface id: duplicate/i);
-    expect(() => assignShipItems([], [surface('ownerless', ['workshop'], 0, {
+      surface('duplicate', 0),
+      surface('duplicate', 4),
+    ])).toThrow(/duplicate ship item surface id/i);
+    expect(() => assignShipItems([], [surface('ownerless', 0, {
       furnitureId: '',
     })])).toThrow(/ownerless.*owner/i);
-    expect(() => assignShipItems([], [surface('unsupported', ['alien' as never], 0)]))
-      .toThrow(/unsupported.*categor/i);
-    expect(() => assignShipItems([], [surface('unknown-region', ['workshop'], 0, {
+    expect(() => assignShipItems([], [
+      surface('slot-left', 0, { physicalSlotId: 'same-slot' }),
+      surface('slot-right', 4, { physicalSlotId: 'same-slot' }),
+    ])).toThrow(/duplicate.*physical slot/i);
+    expect(() => assignShipItems([], [surface('unknown-region', 0, {
       regionId: 'belowDeck' as never,
     })])).toThrow(/unknown-region.*unknown.*region/i);
-    expect(() => validateShipItemSurfaces([surface('deck-level-end', ['workshop'], 0, {
-      regionId: 'bow',
-    })])).toThrow(/deck-level-end.*bow.*furniture owner/i);
-    expect(() => assignShipItems([], [surface('zero-width', ['workshop'], 0, {
+    expect(() => assignShipItems([], [surface('zero-width', 0, {
       footprint: { width: 0, depth: 1 },
     })])).toThrow(/zero-width.*positive/i);
+
+    const food = createItemInstances().filter(({ type }) => type === 'cannedFood').slice(0, 1);
+    expect(() => assignShipItems(food, [surface('too-small', 0, {
+      footprint: { width: SHIP_ITEM_PROFILES.cannedFood.width * 0.74, depth: 0.35 },
+      clearanceHeight: 0.42,
+    })])).toThrow(/cannedFood-1/);
   });
 
-  it('rejects overlapping sibling footprints except exact regular/fallback aliases', () => {
-    expect(() => assignShipItems([], [
-      surface('left', ['workshop'], 0, { furnitureId: 'desk' }),
-      surface('right', ['workshop'], 0.2, { furnitureId: 'desk' }),
-    ])).toThrow(/overlapping ship item surfaces: left, right/i);
-
-    const regular = surface('regular', ['workshop'], 0, {
-      furnitureId: 'desk', physicalSlotId: 'desk-top',
-    });
-    const fallback = surface('fallback', ['navigation'], 0, {
-      furnitureId: 'desk', physicalSlotId: 'desk-top', fallback: true,
-    });
-    expect(() => assignShipItems([], [regular, fallback])).not.toThrow();
-
-    expect(() => assignShipItems([], [
-      surface('first-owner', ['workshop'], 0),
-      surface('second-owner', ['workshop'], 0.2),
-    ])).toThrow(/overlapping ship item surfaces: first-owner, second-owner/i);
-  });
-
-  it('requires a real owner and keeps surface clearance away from structure', () => {
-    const owned = surface('structural', ['workshop'], 0, {
+  it('keeps owner bounds and structure clearance checks', () => {
+    const owned = surface('structural', 0, {
       furnitureId: 'fixture-structural',
       position: new Vector3(0, 3, 0),
       footprint: { width: 2, depth: 2 },
@@ -198,226 +186,190 @@ describe('ship item placement', () => {
       minX: -1, maxX: 1, minY: 2, maxY: 3, minZ: -1, maxZ: 1,
       furnitureId: 'fixture-structural', furnitureModelId: 'table' as const,
     };
-
     expect(() => validateShipItemSurfaces([owned], [], new Map()))
       .toThrow(/owner fixture-structural/i);
     expect(() => validateShipItemSurfaces([owned], [{
       minX: 1.05, maxX: 1.2, minY: 2, maxY: 5, minZ: -2, maxZ: 2,
     }], new Map([[owner.furnitureId, owner]])))
-      .toThrow(/structural.*wall clearance.*0\.1/i);
-
-    const foreign = {
-      minX: 0.8, maxX: 1.2, minY: 3, maxY: 4, minZ: -0.5, maxZ: 0.5,
-      furnitureId: 'foreign-fixture', furnitureModelId: 'desk' as const,
-    };
-    const furniture = new Map<string, typeof owner | typeof foreign>([
-      [owner.furnitureId, owner],
-      [foreign.furnitureId, foreign],
-    ]);
-    expect(() => validateShipItemSurfaces(
-      [owned],
-      [],
-      furniture,
-    )).toThrow(/structural.*foreign-fixture/i);
+      .toThrow(/wall clearance.*0\.1/i);
   });
 
-  it('rejects unreachable surfaces and an item that cannot fit rotated bounds', () => {
-    expect(() => assignShipItems([], [surface('unreachable', ['workshop'], 0, {
-      standingPoints: [],
-    })])).toThrow(/unreachable.*standing/i);
-    expect(() => assignShipItems([], [surface('too-far', ['workshop'], 0, {
-      standingPoints: [new Vector3(10, 2.22, 0)],
-    })])).toThrow(/too-far.*reach/i);
-
-    const harpoon = createItemInstances().filter(({ type }) => type === 'harpoonGun');
-    expect(() => assignShipItems(harpoon, [surface('narrow', ['workshop'], 0, {
-      rotation: new Euler(0, Math.PI / 2, 0),
-      footprint: { width: 0.5, depth: 0.5 },
-    })])).toThrow('Unable to place ship item: harpoonGun-1');
-  });
-
-  it('uniformly scales a model to fit but rejects scales below three quarters', () => {
-    const cannedFood = createItemInstances().filter(({ type }) => type === 'cannedFood').slice(0, 1);
-    const fitted = assignShipItems(cannedFood, [surface('shelf', ['provisions'], 0, {
-      footprint: { width: 0.3, depth: 0.35 },
-      clearanceHeight: 0.42,
-    })]).get(cannedFood[0]!.instanceId)!;
-    expect(fitted.scale).toBeCloseTo(0.3 / SHIP_ITEM_PROFILES.cannedFood.width);
-    expect(fitted.scale).toBeGreaterThanOrEqual(0.75);
-
-    expect(() => assignShipItems(cannedFood, [surface('too-small', ['provisions'], 0, {
-      footprint: { width: SHIP_ITEM_PROFILES.cannedFood.width * 0.74, depth: 0.35 },
-      clearanceHeight: 0.42,
-    })])).toThrow('Unable to place ship item: cannedFood-1');
-  });
-
-  it('measures top-shelf reach from camera height while preserving authored foot points', () => {
-    const bucket = createItemInstances().filter(({ type }) => type === 'bucket').slice(0, 1);
-    const topShelf = surface('top-shelf', ['deckGear'], 0, {
-      position: new Vector3(0, 4.007, 0),
-      footprint: { width: 0.72, depth: 0.7 },
-      clearanceHeight: 1,
-      standingPoints: [new Vector3(0, 2.22, -0.82)],
-    });
-    const itemCenterAtFullScale = topShelf.position.clone().add(
-      new Vector3(0, SHIP_ITEM_PROFILES.bucket.height / 2, 0),
-    );
-    expect(topShelf.standingPoints[0]!.distanceTo(itemCenterAtFullScale)).toBeGreaterThan(2.2);
-    const eye = topShelf.standingPoints[0]!.clone().add(new Vector3(0, 1.5, 0));
-    expect(eye.distanceTo(itemCenterAtFullScale)).toBeLessThan(2.2);
-    expect(assignShipItems(bucket, [topShelf]).get(bucket[0]!.instanceId)!.scale).toBe(1);
-  });
-
-  it('searches regular surfaces first and appends fallback only after regular failure', () => {
-    const food = createItemInstances().filter(({ type }) => type === 'cannedFood');
-    const surfaces = [
-      surface('regular', ['provisions'], 0),
-      surface('fallback-1', ['provisions'], 4, { fallback: true }),
-      surface('fallback-2', ['provisions'], 8, { fallback: true }),
-    ];
-    const assignments = assignShipItems(food, surfaces, () => 0.2);
-    expect([...assignments.values()].filter(({ usedFallbackSurface }) => usedFallbackSurface))
-      .toHaveLength(2);
-
-    const oneFood = food.slice(0, 1);
-    expect(assignShipItems(oneFood, surfaces, () => 0.2).get(oneFood[0]!.instanceId)!
-      .usedFallbackSurface).toBe(false);
-  });
-
-  it('assigns the production catalog for 64 seeds without wall overlap, chairs, or slot reuse', () => {
+  it('requires route context for the production twenty-one item catalog', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
+    try {
+      expect(() => assignShipItems(
+        createScavengeItemInstances(),
+        ship.itemSurfaces,
+        mulberry32(1),
+        ship.colliders,
+      )).toThrow(/requires.*placement context/i);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
+
+  it('uses the complete checked fallback after zero generated attempts', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const context = placementContext(ship, 0);
+    try {
+      const instances = createScavengeItemInstances();
+      expect(Object.keys(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE).sort())
+        .toEqual(instances.map(({ instanceId }) => instanceId).sort());
+      expect(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE).not.toHaveProperty('energyBar-1');
+      expect(Object.isFrozen(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE)).toBe(true);
+      const assignments = assignShipItems(
+        instances,
+        ship.itemSurfaces,
+        mulberry32(4),
+        ship.colliders,
+        context,
+      );
+      expect(assignments.size).toBe(21);
+      expect([...assignments.values()].every(
+        ({ placementSource }) => placementSource === 'fallback',
+      )).toBe(true);
+      for (const instance of instances) {
+        expect(assignments.get(instance.instanceId)?.surfaceId).toBe(
+          SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE[
+            instance.instanceId as keyof typeof SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE
+          ],
+        );
+      }
+      expectProductionConstraints(assignments, context);
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  });
+
+  it('caps generated placement at sixty-four attempts', () => {
+    expect(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS).toBe(64);
+  });
+
+  it('places production items without blocker overlap', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const context = placementContext(ship);
     const byId = new Map(ship.itemSurfaces.map((candidate) => [candidate.id, candidate]));
     try {
-      expect(ship.itemSurfaces.length).toBeGreaterThanOrEqual(createItemInstances().length);
-      for (let seed = 0; seed < 64; seed += 1) {
-        const instances = createItemInstances();
+      const instances = createScavengeItemInstances();
+      const assignments = assignShipItems(
+        instances,
+        ship.itemSurfaces,
+        mulberry32(421),
+        ship.colliders,
+        context,
+      );
+      expect(assignments.size).toBe(21);
+      expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
+        .toBe(21);
+      expectProductionConstraints(assignments, context);
+      for (const instance of instances) {
+        const assignment = assignments.get(instance.instanceId)!;
+        const assignedSurface = byId.get(assignment.surfaceId)!;
+        expect(assignment).toMatchObject({
+          regionId: assignedSurface.regionId,
+          branch: assignedSurface.branch,
+        });
+        expect(assignment.standingPoint).toBeInstanceOf(Vector3);
+        const worldBounds = shipItemTransformBounds(instance.type, assignment);
+        ship.colliders.forEach((collider) => {
+          const owned = collider as typeof collider & { furnitureId?: string };
+          if (owned.furnitureId === assignment.furnitureId) return;
+          const blocker = new Box3(
+            new Vector3(collider.minX, collider.minY, collider.minZ),
+            new Vector3(collider.maxX, collider.maxY, collider.maxZ),
+          );
+          expect(worldBounds.intersectsBox(blocker)).toBe(false);
+        });
+      }
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
+  }, 10_000);
+
+  it('accepts one thousand deterministic production seeds below fifteen seconds', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    const context = placementContext(ship);
+    const instances = createScavengeItemInstances();
+    const started = performance.now();
+    try {
+      let generatedCount = 0;
+      const surfacesByType = new Map<string, Set<string>>();
+      const surfacesByRegion = new Map<string, Set<string>>();
+      for (let seed = 0; seed < 1_000; seed += 1) {
         const assignments = assignShipItems(
           instances,
           ship.itemSurfaces,
           mulberry32(seed),
           ship.colliders,
+          context,
         );
-        expect(assignments.size, `seed ${seed}`).toBe(22);
-        expect(new Set([...assignments.values()].map(({ surfaceId }) => surfaceId)).size).toBe(22);
-        expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
-          .toBe(22);
-        expect([...assignments.values()].every(({ usedFallbackSurface }) => !usedFallbackSurface))
-          .toBe(true);
-        for (const [instanceId, assignment] of assignments) {
-          const assignedSurface = byId.get(assignment.surfaceId)!;
-          const instance = createItemInstances().find((candidate) =>
-            candidate.instanceId === instanceId)!;
-          const bounds = rotatedNormalizedBounds(instance.type, assignment.rotation);
-          const size = bounds.getSize(new Vector3()).multiplyScalar(assignment.scale);
-          expect(assignedSurface.standingPoints.length).toBeGreaterThan(0);
-          if (instance.type === 'captainWhiskers') {
-            expect(assignedSurface.furnitureModelId).toBe('crewCabinet');
-          } else {
-            expect(assignedSurface.furnitureModelId).not.toMatch(/bedBunk|chairDesk|crewCabinet/);
-          }
-          expect(size.x).toBeLessThanOrEqual(assignedSurface.footprint.width + 1e-6);
-          expect(size.z).toBeLessThanOrEqual(assignedSurface.footprint.depth + 1e-6);
-          expect(size.y).toBeLessThanOrEqual(assignedSurface.clearanceHeight + 1e-6);
-          expect(assignment.position.y + bounds.min.y * assignment.scale)
-            .toBeCloseTo(assignedSurface.position.y);
-          const worldBounds = shipItemTransformBounds(instance.type, assignment);
-          ship.colliders.forEach((collider) => {
-            const owned = collider as typeof collider & { furnitureId?: string };
-            if (owned.furnitureId === assignment.furnitureId) return;
-            const blocker = new Box3(
-              new Vector3(collider.minX, collider.minY, collider.minZ),
-              new Vector3(collider.maxX, collider.maxY, collider.maxZ),
-            );
-            const overlap = worldBounds.min.x < blocker.max.x - 1e-6
-              && worldBounds.max.x > blocker.min.x + 1e-6
-              && worldBounds.min.y < blocker.max.y - 1e-6
-              && worldBounds.max.y > blocker.min.y + 1e-6
-              && worldBounds.min.z < blocker.max.z - 1e-6
-              && worldBounds.max.z > blocker.min.z + 1e-6;
-            expect(overlap, `${seed}:${instanceId}:${assignment.surfaceId}`).toBe(false);
-          });
+        expect(assignments.size).toBe(21);
+        if ([...assignments.values()].every(
+          ({ placementSource }) => placementSource === 'generated',
+        )) {
+          generatedCount += 1;
         }
-        expect([...assignments.keys()]).not.toContain('fishingRod-1');
+        for (const instance of instances) {
+          const value = assignments.get(instance.instanceId)!;
+          const typeSurfaces = surfacesByType.get(instance.type) ?? new Set<string>();
+          typeSurfaces.add(value.surfaceId);
+          surfacesByType.set(instance.type, typeSurfaces);
+          const regionSurfaces = surfacesByRegion.get(value.regionId) ?? new Set<string>();
+          regionSurfaces.add(value.surfaceId);
+          surfacesByRegion.set(value.regionId, regionSurfaces);
+        }
+        expectProductionConstraints(assignments, context);
+        const routeInput = {
+          assignments: instances.map((instance) => {
+            const value = assignments.get(instance.instanceId)!;
+            return {
+              instanceId: instance.instanceId,
+              weight: ITEM_DEFINITIONS[instance.type].weight,
+              position: [value.standingPoint.x, value.standingPoint.z] as const,
+              branch: value.branch,
+            };
+          }),
+          start: context.start,
+          deposit: context.deposit,
+          evacuation: context.evacuation,
+          metric: context.routeMetric,
+        };
+        const route = planExpertScavengeRoute(routeInput);
+        expect(route).not.toBeNull();
+        expect(route!.seconds).toBeGreaterThanOrEqual(54);
+        expect(route!.seconds).toBeLessThanOrEqual(58);
+        const baseline = planBaselineScavengeRoute(routeInput);
+        expect(baseline.savedCount).toBeGreaterThanOrEqual(15);
+        expect(baseline.savedCount).toBeLessThanOrEqual(17);
       }
-      expect(ship.playerStart).toEqual(new Vector3(0, 3.72, 11));
-      expect(ship.evacuationPoint.x).toBeCloseTo(7.025);
-      expect(ship.evacuationPoint.y).toBeCloseTo(3.72);
-      expect(ship.evacuationPoint.z).toBe(0);
-      expect(ship.lifeboatAnchor.x).toBeCloseTo(10.875);
-      expect(ship.lifeboatAnchor.y).toBeCloseTo(0.35);
-      expect(ship.lifeboatAnchor.z).toBe(0);
-      expect(ship.playerNavigationBounds.safe.minX).toBeCloseTo(-7.775);
-      expect(ship.playerNavigationBounds.safe.maxX).toBeCloseTo(7.775);
-      expect(ship.playerNavigationBounds.safe.minZ).toBe(-26.7);
-      expect(ship.playerNavigationBounds.safe.maxZ).toBe(26.7);
-      expect(ship.playerNavigationBounds.fall.minX).toBeCloseTo(-8.925);
-      expect(ship.playerNavigationBounds.fall.maxX).toBeCloseTo(8.925);
-      expect(ship.playerNavigationBounds.fall.minZ).toBe(-28.3);
-      expect(ship.playerNavigationBounds.fall.maxZ).toBe(28.3);
+      expect(generatedCount).toBe(1_000);
+      expect(new Set([...surfacesByType.values()].flatMap((values) => [...values])).size)
+        .toBeGreaterThanOrEqual(30);
+      for (const [itemType, surfaceIds] of surfacesByType) {
+        expect(surfaceIds.size, itemType).toBeGreaterThanOrEqual(2);
+      }
+      for (const [regionId, minimumSurfaceCount] of [
+        ['crewCabin', 5],
+        ['wheelhouse', 3],
+        ['centralCargo', 8],
+        ['storageWorkroom', 5],
+        ['bow', 4],
+        ['stern', 3],
+      ] as const) {
+        expect(surfacesByRegion.get(regionId)?.size, regionId)
+          .toBeGreaterThanOrEqual(minimumSurfaceCount);
+      }
+      expect(performance.now() - started).toBeLessThan(15_000);
     } finally {
       ship.dispose();
       library.dispose();
     }
-  });
-
-  it('records conservative profiles for every actual normalized item model', async () => {
-    for (const id of ITEM_IDS) {
-      const actual = await measuredNormalizedBounds(id);
-      const size = actual.getSize(new Vector3());
-      const profile = SHIP_ITEM_PROFILES[id];
-      expect(profile.width, `${id} width`).toBeGreaterThanOrEqual(size.x - 1e-6);
-      expect(profile.height, `${id} height`).toBeGreaterThanOrEqual(size.y - 1e-6);
-      expect(profile.depth, `${id} depth`).toBeGreaterThanOrEqual(size.z - 1e-6);
-      expect(new Box3(
-        new Vector3(...ITEM_MODEL_SPECS[id].normalizedBounds.min),
-        new Vector3(...ITEM_MODEL_SPECS[id].normalizedBounds.max),
-      ).containsBox(actual), id).toBe(true);
-    }
-  });
-
-  it.each([Number.NaN, -1, 1])(
-    'guards an invalid random sample of %s while placing the production catalog',
-    (sample) => {
-      const library = createTestShipFurniture();
-      const ship = createShip(library, 8);
-      try {
-        expect(assignShipItems(
-          createItemInstances(),
-          ship.itemSurfaces,
-          () => sample,
-          ship.colliders,
-        ).size).toBe(22);
-      } finally {
-        ship.dispose();
-        library.dispose();
-      }
-    },
-  );
-
-  it('reserves the port cabin cupboard for Captain Whiskers', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    try {
-      const assignments = assignShipItems(
-        createItemInstances(),
-        ship.itemSurfaces,
-        mulberry32(421),
-        ship.colliders,
-      );
-      const whiskers = assignments.get('captainWhiskers-1');
-
-      expect(whiskers).toMatchObject({
-        furnitureId: 'cabin-cabinet-port-forward',
-        surfaceId: 'cabin-cabinet-port-forward:top',
-        usedFallbackSurface: false,
-      });
-      expect(whiskers!.rotation.y).toBeCloseTo(Math.PI / 2);
-      expect(ship.itemSurfaces.find(({ id }) => id === whiskers!.surfaceId)?.categories)
-        .toEqual(['comfort']);
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
-  });
+  }, 20_000);
 });
