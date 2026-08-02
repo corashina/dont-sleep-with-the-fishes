@@ -260,6 +260,7 @@ export class BoatSupplyDisplay {
     new Map<ItemInstanceId, BorrowedSupplyBinding>();
   private readonly borrowedCountByGroup = new Map<BoatSupplyGroupId, number>();
   private readonly releaseBorrowedOnSync = new Set<ItemInstanceId>();
+  private readonly presentationHiddenItemIds = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -362,6 +363,13 @@ export class BoatSupplyDisplay {
 
   recordFor(id: BoatSupplyGroupId): BoatSupplyPresentationRecord | undefined {
     return this.recordsById.get(id);
+  }
+
+  setPresentationItemHidden(instanceId: ItemInstanceId, hidden: boolean): void {
+    if (this.disposed) return;
+    if (hidden) this.presentationHiddenItemIds.add(instanceId);
+    else this.presentationHiddenItemIds.delete(instanceId);
+    if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
   }
 
   sync(snapshot: SurvivalSnapshot): void {
@@ -672,6 +680,7 @@ export class BoatSupplyDisplay {
     this.eventEligibleOutlines.clear();
     this.clearEventMotion();
     this.cancelActiveAnimation();
+    this.presentationHiddenItemIds.clear();
     this.disposed = true;
     for (const copies of this.copiesById.values()) {
       for (const copy of copies) copy.presentation?.dispose();
@@ -732,20 +741,25 @@ export class BoatSupplyDisplay {
         activeItems.unshift(backing!);
       }
     }
-    record.root.visible = record.visibleCopies > 0;
     const copies = this.copiesById.get(groupId)!;
     for (let index = 0; index < copies.length; index += 1) {
       const copy = copies[index]!;
-      copy.root.visible = index < record.visibleCopies;
-      if (!copy.root.visible) continue;
+      const hasVisibleSlot = index < record.visibleCopies;
+      if (!hasVisibleSlot) {
+        copy.root.visible = false;
+        continue;
+      }
       const activeItem = activeItems[index];
       copy.instanceId = activeItem?.instance.instanceId ?? copy.instanceId;
       copy.condition = activeItem?.condition
         ?? (groupId === 'repairMaterial' || groupId === 'cannedFood' || groupId === 'baitTin'
           ? 'usable'
           : 'lost');
+      copy.root.visible = copy.instanceId === null
+        || !this.presentationHiddenItemIds.has(copy.instanceId);
       this.applyCopyMaterials(groupId, copy);
     }
+    record.root.visible = copies.some((copy) => copy.root.visible);
   }
 
   private preferredBackingId(
