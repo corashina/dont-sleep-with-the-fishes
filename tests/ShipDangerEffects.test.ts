@@ -3,6 +3,8 @@ import { type Material, Mesh, PointLight } from 'three';
 import { getShipDangerState } from '../src/game/shipDanger';
 import { ShipAlarmLights } from '../src/world/ShipAlarmLights';
 import { ShipDamageDetails } from '../src/world/ShipDamageDetails';
+import { ShipFireEffects } from '../src/world/ShipFireEffects';
+import { ShipFloodEffects } from '../src/world/ShipFloodEffects';
 import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
 
 describe('ship danger effects', () => {
@@ -37,5 +39,71 @@ describe('ship danger effects', () => {
     alarms.dispose();
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('shows layered fires and primed fixed smoke and ember pools immediately', () => {
+    const effects = new ShipFireEffects(
+      SHIP_DANGER_LAYOUT.fires,
+      SHIP_DANGER_LAYOUT.smokeOutlets,
+    );
+    expect(effects.snapshotForTest()).toMatchObject({
+      fireCount: 3,
+      smokeCapacity: 64,
+      emberCapacity: 36,
+    });
+    expect(effects.snapshotForTest().activeSmoke).toBeGreaterThan(0);
+    expect(effects.snapshotForTest().activeEmbers).toBeGreaterThan(0);
+    effects.dispose();
+  });
+
+  it('shows every leak, stream, puddle, streak, and fixed spray particle at start', () => {
+    const effects = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
+    expect(effects.snapshotForTest()).toMatchObject({
+      leakCount: 6,
+      streamCount: 3,
+      puddleCount: 5,
+      wetStreakCount: 3,
+      sprayCapacity: 48,
+      activeSpray: 48,
+    });
+    effects.dispose();
+  });
+
+  it('raises fire, smoke, and water strength without changing pool capacity', () => {
+    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets);
+    const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
+    fire.update(1 / 60, getShipDangerState(60, 60));
+    flood.update(1 / 60, getShipDangerState(60, 60));
+    expect(fire.snapshotForTest()).toMatchObject({ smokeCapacity: 64, emberCapacity: 36 });
+    expect(flood.snapshotForTest()).toMatchObject({ sprayCapacity: 48, activeSpray: 48 });
+    expect(flood.snapshotForTest().flowScale).toBeCloseTo(1.3);
+    fire.dispose();
+    flood.dispose();
+  });
+
+  it('disposes fire and flood resources once and ignores later updates', () => {
+    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets);
+    const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
+    const fireMesh = fire.root.getObjectByName('ship-danger-flame:wheelhouse-roof:1') as Mesh;
+    const floodMesh = flood.root.getObjectByName('ship-danger-leak:crew-starboard') as Mesh;
+    const fireGeometryDispose = vi.spyOn(fireMesh.geometry, 'dispose');
+    const fireMaterialDispose = vi.spyOn(fireMesh.material as Material, 'dispose');
+    const firePointsDispose = vi.spyOn(fire.smoke.geometry, 'dispose');
+    const floodGeometryDispose = vi.spyOn(floodMesh.geometry, 'dispose');
+    const floodMaterialDispose = vi.spyOn(floodMesh.material as Material, 'dispose');
+    const floodPointsDispose = vi.spyOn(flood.spray.geometry, 'dispose');
+
+    fire.dispose();
+    flood.dispose();
+    fire.dispose();
+    flood.dispose();
+    expect(() => {
+      fire.update(1 / 60, getShipDangerState(60, 60));
+      flood.update(1 / 60, getShipDangerState(60, 60));
+    }).not.toThrow();
+    [
+      fireGeometryDispose, fireMaterialDispose, firePointsDispose,
+      floodGeometryDispose, floodMaterialDispose, floodPointsDispose,
+    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 });
