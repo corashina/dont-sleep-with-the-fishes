@@ -5,7 +5,6 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
-  Quaternion,
   TorusGeometry,
   Vector3,
 } from 'three';
@@ -29,6 +28,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 type ChestAttackAnimationKind =
   | 'reveal'
@@ -51,8 +51,6 @@ interface MutableChestEventPose {
 const REVEAL_DURATION = 1.35;
 const CHOICE_DURATION = 0.85;
 const RESULT_DURATION = 0.9;
-const X_AXIS = new Vector3(1, 0, 0);
-
 function createMaterial(color: number, roughness: number, metalness = 0): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color,
@@ -67,9 +65,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   private readonly net = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseQuaternion = new Quaternion();
-  private readonly cameraKickQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera;
   private readonly netStart = new Vector3(-1.55, 1.45, -1.75);
   private readonly netEnd = new Vector3(-0.72, 0.67, -1.06);
   private readonly supplyNetPose: MutableSupplyPose = {
@@ -92,7 +88,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     overboard: 0,
   };
   private activeAnimation: ActiveAnimation | null = null;
-  private cameraCaptured = false;
   private netInstanceId: EventChoicePresentation['instanceId'] = null;
   private usingSupplyNet = false;
   private staged = false;
@@ -101,6 +96,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
+    this.cameraLook = new StationaryEventCamera(dependencies.camera);
     this.root.name = 'focused-event:chest-attack';
     this.root.visible = false;
     this.root.userData.revealRattles = 0;
@@ -327,7 +323,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   private applyHideChoice(progress: number): void {
     const lower = smoothstep(progress);
-    this.applyCameraOffset(-0.58 * lower, 0.06 * lower, 0);
+    this.applyCameraLook(0, -0.34 * lower);
     this.resetPose();
     this.pose.mouthOpen = 1;
     this.pose.bite = 0.2;
@@ -353,45 +349,28 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       const biteProgress = progress / 0.46;
       this.pose.bite = Math.sin(biteProgress * Math.PI);
       if (progress >= 0.06) this.root.userData.bites = 1;
-      this.applyCameraOffset(
-        -0.58,
-        0.06,
-        -Math.sin(biteProgress * Math.PI) * 0.1,
+      this.applyCameraLook(
+        0,
+        -0.34 - Math.sin(biteProgress * Math.PI) * 0.12,
       );
     } else {
       this.root.userData.bites = 1;
       this.pose.overboard = smoothstep((progress - 0.46) / 0.54);
-      this.applyCameraOffset(-0.58, 0.06, 0);
+      this.applyCameraLook(0, -0.34);
     }
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
-  private applyCameraOffset(
-    y: number,
-    pitch: number,
-    z: number,
-  ): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.position.y += y;
-    this.dependencies.cameraRig.position.z += z;
-    this.cameraKickQuaternion.setFromAxisAngle(X_AXIS, pitch);
-    this.dependencies.cameraRig.quaternion
-      .copy(this.cameraBaseQuaternion)
-      .multiply(this.cameraKickQuaternion);
+  private applyCameraLook(yaw: number, pitch: number): void {
+    this.cameraLook.apply(yaw, pitch);
   }
 
   private captureCamera(): void {
-    this.cameraBasePosition.copy(this.dependencies.cameraRig.position);
-    this.cameraBaseQuaternion.copy(this.dependencies.cameraRig.quaternion);
-    this.cameraCaptured = true;
+    this.cameraLook.capture();
   }
 
   private restoreCamera(): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.quaternion.copy(this.cameraBaseQuaternion);
-    this.cameraCaptured = false;
+    this.cameraLook.restore();
   }
 
   private resetPose(): void {

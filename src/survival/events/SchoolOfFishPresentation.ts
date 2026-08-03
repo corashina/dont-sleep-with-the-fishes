@@ -1,5 +1,6 @@
 import {
   BufferGeometry,
+  Color,
   ConeGeometry,
   DoubleSide,
   Group,
@@ -53,8 +54,9 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
-const BODY_DEPTH = 0.48;
+const BODY_DEPTH = 0.12;
 const SURFACE_EFFECT_LIFT = 0.02;
+const SCHOOL_BODY_TINT = new Color(0xa9bcc0);
 
 const DEFAULT_VARIANT: SchoolVariant = {
   scale: 1,
@@ -73,6 +75,25 @@ function activeFishCount(seed: number): number {
   const safeSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
   return MIN_FISH + ((safeSeed % (MAX_FISH - MIN_FISH + 1))
     + (MAX_FISH - MIN_FISH + 1)) % (MAX_FISH - MIN_FISH + 1);
+}
+
+function styleSchoolFish(root: Group): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    for (let index = 0; index < materials.length; index += 1) {
+      const material = materials[index]!;
+      if (!(material instanceof MeshStandardMaterial)) continue;
+      material.color.lerp(SCHOOL_BODY_TINT, 0.38);
+      material.emissive.lerp(SCHOOL_BODY_TINT, 0.12);
+      material.emissiveIntensity = Math.min(0.3, Math.max(0.12, material.emissiveIntensity));
+      material.roughness = Math.min(0.64, material.roughness);
+      material.flatShading = true;
+      material.needsUpdate = true;
+    }
+  });
 }
 
 export class SchoolOfFishPresentation implements DedicatedEventPresentation {
@@ -163,6 +184,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       const root = model.root;
       root.name = `school-fish-${index + 1}`;
       setFlatShading(root);
+      styleSchoolFish(root);
       this.worldRoot.add(root);
       this.fishActors.push({
         model,
@@ -423,7 +445,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         pose.yaw,
         pose.roll - fish.wave.normal.x * 0.1,
       );
-      fish.root.scale.set(pose.scale, pose.scale, pose.scale);
+      const bodyScale = pose.scale * 1.15;
+      fish.root.scale.setScalar(bodyScale);
       fish.root.visible = index < this.activeFish && (!showCatch || index !== 0);
     }
 

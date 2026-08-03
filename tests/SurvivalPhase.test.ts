@@ -2694,7 +2694,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setBusy).toHaveBeenLastCalledWith(false);
   });
 
-  it('finishes the contextual press beat before resolving and reacting', async () => {
+  it('finishes the contextual press beat without showing outcome text', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     let current = snapshot({
       state: 'dayEvent',
@@ -2770,12 +2770,7 @@ describe('SurvivalPhase orchestration', () => {
       'resolve',
       'react',
     ]);
-    expect(showEventOutcome).toHaveBeenCalledWith({
-      title: 'HULL \u221225',
-      detail: 'The rocks damage the boat.',
-      result: 'SEVERE ROCK STRIKE',
-      state: 'severe',
-    });
+    expect(showEventOutcome).not.toHaveBeenCalled();
   });
 
   it('anchors Handyman Chest and Touch choices to their world subjects', async () => {
@@ -2825,7 +2820,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('orders a focused contextual result before permanent sync and the held caption', async () => {
+  it('orders a focused contextual result before permanent sync and the held pose', async () => {
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'midnight-tour',
@@ -2948,8 +2943,9 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'stage', 'reveal', 'unlock', 'choice', 'resolve', 'result',
-      'sync', 'caption', 'hold',
+      'sync', 'hold',
     ]);
+    expect(ui.showEventOutcome).not.toHaveBeenCalled();
     expect(showFeedback).not.toHaveBeenCalled();
 
     hold.resolve();
@@ -2958,7 +2954,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('orders a focused item result before permanent inventory and Chest sync', async () => {
+  it('orders a focused item result without showing outcome text', async () => {
     const map = {
       instanceId: 'map-1' as const,
       type: 'map' as const,
@@ -3098,8 +3094,9 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'stage', 'reveal', 'unlock', 'choice', 'resolve', 'result',
-      'sync', 'caption', 'hold',
+      'sync', 'hold',
     ]);
+    expect(ui.showEventOutcome).not.toHaveBeenCalled();
     expect(showFeedback).not.toHaveBeenCalled();
 
     hold.resolve();
@@ -3588,8 +3585,8 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(calls.indexOf('reaction')).toBeLessThan(calls.indexOf('outcome'));
-    expect(calls.indexOf('outcome')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls.indexOf('reaction')).toBeLessThan(calls.indexOf('hold'));
+    expect(showEventOutcome).not.toHaveBeenCalled();
     expect(showFeedback).not.toHaveBeenCalled();
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('dawn'));
@@ -3608,7 +3605,6 @@ describe('SurvivalPhase orchestration', () => {
     let sleepCoverClosed = false;
     const setBusy = vi.fn();
     const restoreCommandFocus = vi.fn();
-    let outcomeView: ReturnType<typeof formatDangerousWatersOutcome> | null = null;
     const ui: Partial<SurvivalUI> = {
       beginEventPresentation: vi.fn(),
       setSleepCovered: vi.fn((isCovered) => {
@@ -3629,19 +3625,10 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       setBusy,
-      showEventOutcome: vi.fn((view) => {
-        outcomeView = view;
-        calls.push('outcome');
-      }),
+      showEventOutcome: vi.fn(() => { calls.push('outcome'); }),
       showFeedback: vi.fn(),
       holdEventOutcome: vi.fn(() => {
         calls.push('hold-result');
-        expect(outcomeView).toEqual({
-          title: 'HULL −7',
-          detail: 'The rocks damage the boat.',
-          result: 'ROCK STRIKE',
-          state: 'damage',
-        });
         return Promise.resolve();
       }),
       render: vi.fn(),
@@ -3714,9 +3701,10 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(calls).toEqual([
-      'choice-ui', 'choice-world', 'resolve', 'impact', 'outcome', 'hold-result',
+      'choice-ui', 'choice-world', 'resolve', 'impact', 'hold-result',
       'cover', 'clear-event', 'dawn', 'scene-render', 'uncover',
     ]);
+    expect(ui.showEventOutcome).not.toHaveBeenCalled();
     expect(setBusy).toHaveBeenLastCalledWith(true);
     expect(restoreCommandFocus).not.toHaveBeenCalled();
 
@@ -3987,11 +3975,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:drifting-bottle'));
     expect(calls.indexOf('reveal:drifting-bottle')).toBeLessThan(calls.indexOf('selection'));
     expect(calls.indexOf('use:swimRing-1')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
-    expect(showEventResult).toHaveBeenCalledWith(expect.objectContaining({
-      caption: 'Paper inside',
-      detail: 'You recover bottled paper.',
-      target: expect.objectContaining({ x: 440, y: 300 }),
-    }));
+    expect(showEventResult).not.toHaveBeenCalled();
     expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('hold'));
     expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
@@ -4123,15 +4107,7 @@ describe('SurvivalPhase orchestration', () => {
       inventory: { 'flareGun-1': { condition: 'consumed' } },
     });
     expect(showEnding).toHaveBeenCalledOnce();
-    expect(showEventOutcome).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventResult: {
-          eventId: 'other-people',
-          choiceId: 'flareGun',
-          resultId: 'people-rescue',
-        },
-      }),
-    );
+    expect(showEventOutcome).not.toHaveBeenCalled();
     expect(showFeedback).not.toHaveBeenCalled();
     expect(rescueTableauVisible).toBe(true);
     expect(clearEvent).not.toHaveBeenCalled();
@@ -4556,7 +4532,7 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('passes an exact dedicated before-and-after diff to world and UI', async () => {
+  it('passes an exact dedicated before-and-after diff to the world', async () => {
     let current = snapshot({
       state: 'dayEvent',
       day: 6,
@@ -4653,10 +4629,7 @@ describe('SurvivalPhase orchestration', () => {
       },
       presentation,
     );
-    expect(showEventResult).toHaveBeenCalledWith({
-      message: 'The spyglass breaks.',
-      lines: ['HULL -12', 'BINOCULARS BROKEN'],
-    });
+    expect(showEventResult).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -4666,7 +4639,6 @@ describe('SurvivalPhase orchestration', () => {
       initialResources: { health: 7 },
       terminalResources: { health: 0 },
       deltas: { health: -7 },
-      expectedLine: 'HEALTH -7',
     },
     {
       terminalState: 'sunk' as const,
@@ -4674,17 +4646,15 @@ describe('SurvivalPhase orchestration', () => {
       initialResources: { hull: 11 },
       terminalResources: { hull: 0 },
       deltas: { hull: -11 },
-      expectedLine: 'HULL -11',
     },
   ])(
-    'holds a dedicated $terminalState result before clearing it for the ending',
+    'holds a dedicated $terminalState reaction before clearing it for the ending',
     async ({
       terminalState,
       eventId,
       initialResources,
       terminalResources,
       deltas,
-      expectedLine,
     }) => {
       let current = snapshot({
         state: 'dayEvent',
@@ -4762,8 +4732,8 @@ describe('SurvivalPhase orchestration', () => {
       phase.handleEndure();
       await flushPromises();
 
-      expect(visibleLines).toEqual([expectedLine]);
-      expect(calls).toEqual(['result', 'hold']);
+      expect(visibleLines).toBeNull();
+      expect(calls).toEqual(['hold']);
       expect(showEnding).not.toHaveBeenCalled();
       expect(clearEventPresentation).not.toHaveBeenCalled();
       expect(setBusy).not.toHaveBeenCalledWith(false);
@@ -4775,7 +4745,7 @@ describe('SurvivalPhase orchestration', () => {
       hold.resolve();
       await flushPromises();
 
-      expect(calls).toEqual(['result', 'hold', 'clear-world', 'clear-ui', 'ending']);
+      expect(calls).toEqual(['hold', 'clear-world', 'clear-ui', 'ending']);
       expect(visibleLines).toBeNull();
       expect(showEnding).toHaveBeenCalledOnce();
       expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -5308,7 +5278,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('settles a hidden focused result but defers sync and its caption until resume', async () => {
+  it('settles a hidden focused result and defers sync until resume', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -5402,14 +5372,14 @@ describe('SurvivalPhase orchestration', () => {
     phase.setPaused(false);
     await flushPromises();
     expect(syncInventory).toHaveBeenCalledWith(resolvedSnapshot);
-    expect(showEventOutcome).toHaveBeenCalledWith(outcome);
+    expect(showEventOutcome).not.toHaveBeenCalled();
 
     phase.dispose();
     hold.resolve();
     await flushPromises();
   });
 
-  it('defers item resolution and outcome feedback across hidden item and reaction boundaries', async () => {
+  it('defers item resolution across hidden item and reaction boundaries', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -5509,7 +5479,7 @@ describe('SurvivalPhase orchestration', () => {
     fakeDocument.hidden = false;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
-    expect(showEventOutcome).toHaveBeenCalledWith(outcome);
+    expect(showEventOutcome).not.toHaveBeenCalled();
     hold.resolve();
     phase.dispose();
   });
@@ -5613,7 +5583,7 @@ describe('SurvivalPhase orchestration', () => {
     ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
     ['whirlpool', 'swimRing', 'swimRing-1', 'swimRing'],
   ] as const)(
-    'continues %s %s result text after hide and restore',
+    'keeps %s %s outcome text hidden after hide and restore',
     async (eventId, choiceId, instanceId, itemType) => {
       const listeners = new Map<string, EventListener>();
       const fakeDocument = {
@@ -5690,10 +5660,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(setDocumentHidden).toHaveBeenNthCalledWith(1, true);
       expect(setDocumentHidden).toHaveBeenNthCalledWith(2, false);
       expect(resolveEvent).toHaveBeenCalledOnce();
-      expect(showEventResult).toHaveBeenCalledOnce();
-      expect(showEventResult).toHaveBeenCalledWith(expect.objectContaining({
-        message: `${eventId} result`,
-      }));
+      expect(showEventResult).not.toHaveBeenCalled();
       phase.dispose();
     },
   );

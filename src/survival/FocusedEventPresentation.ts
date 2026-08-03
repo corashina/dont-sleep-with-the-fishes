@@ -1,4 +1,4 @@
-import type { Group, Object3D } from 'three';
+import type { Group, Object3D, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -56,6 +56,7 @@ export interface FocusedEventPresentationDependencies {
   readonly propModels: PropModelLibrary;
   readonly waves: readonly WaveComponent[];
   readonly cameraRig: Group;
+  readonly camera: PerspectiveCamera;
   readonly boatMotionRoot?: Group;
   readonly supplyDisplay: BoatSupplyDisplay;
   readonly chestDisplay: ChestDisplay;

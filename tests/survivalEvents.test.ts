@@ -128,20 +128,20 @@ const EXPECTED_CHOICES = {
   ],
   leak: [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', [], [item('consume', 'ductTape')])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'Nothing happens.'), outcome(20, 'The boat is damaged and the bucket breaks.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'bucket')])),
-    choice('map', 'Use Map', 'map', outcome(1, 'The map breaks.', [], [item('break', 'map')])),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'Nothing happens.'), outcome(20, 'The boat is damaged.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'bucket')])),
+    choice('map', 'Use Map', 'map', outcome(1, 'The map slows the leak.', [], [item('break', 'map')])),
     choice('sleep', 'Sleep', undefined,
       outcome(60, 'The leak damages the boat.', [subtract('hull', { min: 15, max: 20 }), set('energy', 2)]),
       outcome(40, 'The leak damages the boat and takes an item.', [subtract('hull', { min: 5, max: 20 })], [randomItem('loseRandom', 1)])),
   ],
   'school-of-fish': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(60, 'You gain three food.', [add('food', 3)]), outcome(40, 'You gain two food and the net breaks.', [add('food', 2)], [item('break', 'fishingNet')])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(50, 'You gain one food.', [add('food', 1)]), outcome(50, 'The bucket breaks.', [], [item('break', 'bucket')])),
+    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(60, 'You gain three food.', [add('food', 3)]), outcome(40, 'You gain two food.', [add('food', 2)], [item('break', 'fishingNet')])),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(50, 'You gain one food.', [add('food', 1)]), outcome(50, 'Nothing happens.', [], [item('break', 'bucket')])),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', [add('food', 1)])),
     choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
   ],
   snatcher: [
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The binoculars break.', [], [item('break', 'spyglass')])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'You keep sight of the tentacle.', [], [item('break', 'spyglass')])),
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', [], [item('lose', 'swimRing')])),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', [], [target()])),
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'harpoonGun')])),
@@ -156,45 +156,45 @@ const EXPECTED_CHOICES = {
     choice('sleep', 'Sleep', undefined, outcome(5, 'Nothing happens.'), outcome(85, 'The creature attacks.', [subtract('hull', { min: 44, max: 66 }), subtract('health', 60)])),
   ],
   'swarm-of-anglerfish': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The fishing net breaks.', [], [item('break', 'fishingNet')])),
+    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net holds the swarm back.', [], [item('break', 'fishingNet')])),
     choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'harpoonGun')])),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])),
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', [subtract('bait', 2)])),
     choice('sleep', 'Sleep', undefined, outcome(65, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)]), outcome(25, 'Nothing happens.')),
   ],
   whirlpool: [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged and the anchor breaks.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'anchor')])),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })]), outcome(50, 'The boat is damaged and the swim ring breaks.', [subtract('hull', { min: 20, max: 40 })], [item('break', 'swimRing')])),
+    choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'anchor')])),
+    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })]), outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })], [item('break', 'swimRing')])),
     choice('sleep', 'Sleep', undefined, outcome(80, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 }), set('energy', 0)]), outcome(30, 'The boat is badly damaged and two items are lost.', [subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [randomItem('loseRandom', 2)])),
   ],
   'shower-night': [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket breaks.', [], [item('break', 'bucket')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters you.'), outcome(50, 'The umbrella breaks.', [], [item('break', 'umbrella')])),
-    choice('map', 'Use Map', 'map', outcome(1, 'The map breaks.', [], [item('break', 'map')])),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket keeps the rain under control.', [], [item('break', 'bucket')])),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters you.'), outcome(50, 'The umbrella shelters you.', [], [item('break', 'umbrella')])),
+    choice('map', 'Use Map', 'map', outcome(1, 'The map covers the exposed supplies.', [], [item('break', 'map')])),
     choice('sleep', 'Sleep', undefined, outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
   ],
   'windy-night': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net breaks.', [], [item('break', 'fishingNet')])),
+    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net secures the loose supplies.', [], [item('break', 'fishingNet')])),
     choice('map', 'Use Map', 'map', outcome(1, 'The map is lost, but you find food.', [add('food', 1)], [item('lose', 'map')])),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(60, 'The umbrella is lost.', [], [item('lose', 'umbrella')]), outcome(40, 'You wake with two energy.', [set('energy', 2)])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'The wind batters the boat and breaks two items.', [subtract('hull', { min: 10, max: 30 })], [randomItem('breakRandom', 2)]), outcome(20, 'The wind batters the boat.', [subtract('hull', { min: 10, max: 30 }), set('energy', 1)])),
+    choice('sleep', 'Sleep', undefined, outcome(80, 'The wind batters the boat.', [subtract('hull', { min: 10, max: 30 })], [randomItem('breakRandom', 2)]), outcome(20, 'The wind batters the boat.', [subtract('hull', { min: 10, max: 30 }), set('energy', 1)])),
   ],
   'bad-sleep': [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'Nothing happens.')),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'Nothing happens.')),
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'Nothing happens.')),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'Nothing happens.'), outcome(5, 'The umbrella breaks.', [], [item('break', 'umbrella')])),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'Nothing happens.'), outcome(5, 'Nothing happens.', [], [item('break', 'umbrella')])),
     choice('sleep', 'Sleep', undefined, outcome(1, 'You wake with two energy.', [set('energy', 2)])),
   ],
   thunderstorm: [
     choice('anchor', 'Use Anchor', 'anchor', outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(40, 'The boat and bucket are damaged.', [subtract('hull', { min: 15, max: 25 })], [item('break', 'bucket')]), outcome(30, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })]), outcome(20, 'A random item is lost.', [], [randomItem('loseRandom', 1)]), outcome(5, 'A random item is lost and the bucket breaks.', [], [randomItem('loseRandom', 1), item('break', 'bucket')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(65, 'The boat is damaged and the umbrella breaks.', [subtract('hull', { min: 10, max: 20 })], [item('break', 'umbrella')]), outcome(35, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })])),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(40, 'The boat is damaged.', [subtract('hull', { min: 15, max: 25 })], [item('break', 'bucket')]), outcome(30, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })]), outcome(20, 'A random item is lost.', [], [randomItem('loseRandom', 1)]), outcome(5, 'A random item is lost.', [], [randomItem('loseRandom', 1), item('break', 'bucket')])),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(65, 'The boat is damaged.', [subtract('hull', { min: 10, max: 20 })], [item('break', 'umbrella')]), outcome(35, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })])),
     choice('sleep', 'Sleep', undefined, outcome(60, 'The storm damages the boat and takes an item.', [subtract('hull', { min: 30, max: 48 }), set('energy', 2)], [randomItem('loseRandom', 1)]), outcome(30, 'The storm damages the boat.', [subtract('hull', { min: 20, max: 35 }), set('energy', 2)])),
   ],
   'restless-waves': [
     choice('anchor', 'Use Anchor', 'anchor', outcome(1, 'Nothing happens.')),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The waves damage the boat.', [subtract('hull', { min: 10, max: 20 })]), outcome(50, 'The swim ring breaks.', [], [item('break', 'swimRing')])),
+    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The waves damage the boat.', [subtract('hull', { min: 10, max: 20 })]), outcome(50, 'The swim ring steadies the boat.', [], [item('break', 'swimRing')])),
     choice('sleep', 'Sleep', undefined, outcome(50, 'The waves damage the boat.', [subtract('hull', { min: 20, max: 30 }), set('energy', 1)]), outcome(50, 'The waves damage the boat and take an item.', [subtract('hull', { min: 15, max: 25 })], [randomItem('loseRandom', 1)])),
   ],
   'man-in-the-fog': [
@@ -209,7 +209,7 @@ const EXPECTED_CHOICES = {
     choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', [set('energy', 2)]), outcome(30, 'You wake with one energy.', [set('energy', 1)])),
   ],
   'eerie-melody': [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'The bucket breaks.', [set('energy', 1)], [item('break', 'bucket')])),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', [set('energy', 1)], [item('break', 'bucket')])),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', [subtract('hull', { min: 40, max: 60 }), set('energy', 1)])),
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', [], [item('consume', 'ductTape')])),
@@ -217,12 +217,18 @@ const EXPECTED_CHOICES = {
   ],
   'face-on-the-moon': [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', [set('energy', 2)])),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'The binoculars break.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'You wake with one energy.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
     choice('sleep', 'Sleep', undefined, outcome(100, 'You wake exhausted.', [set('energy', 0)]), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
   ],
 } as const;
 
 describe('survival events', () => {
+  it('removes Shark Men from event data', () => {
+    expect(SURVIVAL_EVENTS.some(({ id }) => id === 'shark-men')).toBe(false);
+    expect(survivalEventById('shark-men')).toBeUndefined();
+    expect(Object.hasOwn(INCLUDED_EVENT_PHASES, 'shark-men')).toBe(false);
+  });
+
   it('keeps only Drifting Loot in the random day catalog', () => {
     expect(
       SURVIVAL_EVENTS

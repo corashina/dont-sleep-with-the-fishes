@@ -4,7 +4,7 @@ export const SCHOOL_REVEAL_DURATION = 2.6;
 export const SCHOOL_ITEM_DURATION = 1.25;
 export const SCHOOL_REACTION_DURATION = 1.1;
 export const SCHOOL_CENTER_X = 0;
-export const SCHOOL_CENTER_Z = -0.8;
+export const SCHOOL_CENTER_Z = -4.2;
 
 export type SchoolItemEffectKind =
   | 'none'
@@ -84,12 +84,12 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
   for (let index = 0; index < safeCount; index += 1) {
     const lane = index % 4;
     variants.push({
-      scale: 0.72 + variantUnit(safeSeed, index, 0) * 0.46,
+      scale: 0.78 + variantUnit(safeSeed, index, 0) * 0.46,
       orbitAngle: (index / Math.max(1, safeCount)) * Math.PI * 2
         + (variantUnit(safeSeed, index, 1) - 0.5) * 0.22,
-      orbitRadiusX: 2.8 + lane * 0.36 + variantUnit(safeSeed, index, 2) * 0.34,
-      orbitRadiusZ: 2.7 + lane * 0.56 + variantUnit(safeSeed, index, 3) * 0.42,
-      depth: 0.28 + variantUnit(safeSeed, index, 4) * 0.5,
+      orbitRadiusX: 3.4 + lane * 0.28 + variantUnit(safeSeed, index, 2) * 0.22,
+      orbitRadiusZ: 1.2 + lane * 0.28 + variantUnit(safeSeed, index, 3) * 0.34,
+      depth: 0.04 + variantUnit(safeSeed, index, 4) * 0.16,
       scatterX: (variantUnit(safeSeed, index, 5) < 0.5 ? -1 : 1)
         * (5.8 + variantUnit(safeSeed, index, 6) * 2.4),
       scatterZ: (variantUnit(safeSeed, index, 7) - 0.5) * 11,

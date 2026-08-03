@@ -191,8 +191,9 @@ export function sampleSupernaturalReveal(
     const ghosts = smoothstep((t - 0.06) / 0.18)
       * (1 - smoothstep((t - 0.84) / 0.12));
     const flight = smoothstep((t - 0.08) / 0.76);
-    output.cameraYaw = 0.18 * smoothstep(t / 0.38);
-    output.cameraPitch = -0.06 * smoothstep((t - 0.22) / 0.42);
+    const cameraSweep = smoothstep((t - 0.08) / 0.68);
+    output.cameraYaw = 0.3 - cameraSweep * 0.56;
+    output.cameraPitch = 0.04 - cameraSweep * 0.1;
     output.ghostVisibility = ghosts;
     for (let index = 0; index < GHOST_FLIGHT_PATHS.length; index += 1) {
       const path = GHOST_FLIGHT_PATHS[index]!;
@@ -205,8 +206,8 @@ export function sampleSupernaturalReveal(
     output.flareFlash = pulse(t, 0.34, 0.47, 0.62);
   } else {
     const curtain = smoothstep((t - 0.12) / 0.42);
-    output.cameraX = -0.1 * smoothstep((t - 0.18) / 0.42);
-    output.cameraPitch = -0.08 * smoothstep((t - 0.18) / 0.44);
+    output.cameraYaw = 0.42 * smoothstep((t - 0.14) / 0.46);
+    output.cameraPitch = -0.1 * smoothstep((t - 0.18) / 0.44);
     output.fogCurtain = curtain;
     output.melodyClarity = smoothstep((t - 0.26) / 0.42);
     output.sirenHeadTurn = smoothstep((t - 0.58) / 0.22);
