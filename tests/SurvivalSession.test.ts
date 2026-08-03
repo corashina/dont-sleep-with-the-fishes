@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { formatJournalEntry } from '../src/survival/journal';
 import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
 import type {
   DayActionId,
@@ -141,6 +142,116 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession daytime actions', () => {
+  it('hands Captain Whiskers from saved items to companion state', () => {
+    const session = new SurvivalSession(saved('captainWhiskers', 'cannedFood', 'medicalKit'), { seed: 7 });
+    const snapshot = session.snapshot();
+
+    expect(snapshot.captainWhiskers).toMatchObject({ alive: true, hunger: 5 });
+    expect(snapshot.inventory['captainWhiskers-1']).toBeUndefined();
+    expect(snapshot.savedItems.some(({ type }) => type === 'captainWhiskers')).toBe(false);
+  });
+
+  it('has no companion state when Captain Whiskers was not saved', () => {
+    const session = new SurvivalSession(saved('cannedFood'), { seed: 7 });
+
+    expect(session.snapshot().captainWhiskers).toBeNull();
+  });
+
+  it('returns immutable Captain Whiskers snapshots', () => {
+    const session = new SurvivalSession(saved('captainWhiskers'), { seed: 7 });
+    const snapshot = session.snapshot();
+
+    expect(Object.isFrozen(snapshot.captainWhiskers)).toBe(true);
+    expect(() => {
+      (snapshot.captainWhiskers as { hunger: number }).hunger = 0;
+    }).toThrow();
+    expect(session.snapshot().captainWhiskers?.hunger).toBe(5);
+  });
+
+  it('cares for Captain Whiskers without using energy', () => {
+    const session = new SurvivalSession(saved('captainWhiskers', 'cannedFood', 'medicalKit'), {
+      seed: 7,
+      initialCaptainWhiskers: { hunger: 2, sickness: 2, unhappiness: 5 },
+    });
+
+    expect(session.perform('petWhiskers')).toMatchObject({
+      accepted: true, code: 'whiskers-petted', deltas: {}, cue: 'none',
+    });
+    expect(session.perform('feedWhiskers')).toMatchObject({
+      accepted: true, code: 'whiskers-fed', deltas: { food: -1 }, cue: 'none',
+    });
+    expect(session.perform('treatWhiskers')).toMatchObject({
+      accepted: true, code: 'whiskers-treated', deltas: {}, cue: 'none',
+    });
+    expect(session.snapshot()).toMatchObject({
+      energy: 3,
+      captainWhiskers: { hunger: 5, sickness: 0, unhappiness: 1, pettedToday: true },
+    });
+    expect(session.snapshot().inventory).toMatchObject({
+      'cannedFood-1': { condition: 'consumed' },
+      'medicalKit-1': { condition: 'consumed' },
+    });
+  });
+
+  it('rejects unavailable Captain Whiskers care actions', () => {
+    const healthy = new SurvivalSession(saved('captainWhiskers'), { seed: 7 });
+    expect(healthy.perform('feedWhiskers')).toMatchObject({ code: 'whiskers-not-hungry' });
+    expect(healthy.perform('treatWhiskers')).toMatchObject({ code: 'whiskers-healthy' });
+    expect(healthy.perform('petWhiskers').accepted).toBe(true);
+    expect(healthy.perform('petWhiskers')).toMatchObject({ code: 'already-petted' });
+
+    const noSupplies = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 7,
+      initialCaptainWhiskers: { hunger: 2, sickness: 1 },
+    });
+    expect(noSupplies.perform('feedWhiskers')).toMatchObject({ code: 'no-food' });
+    expect(noSupplies.perform('treatWhiskers')).toMatchObject({ code: 'no-medical-kit' });
+
+    const dead = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 7,
+      initialCaptainWhiskers: { alive: false, deathCause: 'sickness' },
+    });
+    expect(dead.perform('petWhiskers')).toMatchObject({ code: 'captain-whiskers-dead' });
+
+    const absent = new SurvivalSession(saved(), { seed: 7 });
+    expect(absent.perform('petWhiskers')).toMatchObject({ code: 'no-captain-whiskers' });
+
+    healthy.perform('endDay');
+    expect(healthy.perform('petWhiskers')).toMatchObject({ code: 'not-daytime' });
+
+    const fishing = new SurvivalSession(saved('captainWhiskers'), { seed: 7 });
+    expect(fishing.beginFishing().accepted).toBe(true);
+    expect(fishing.perform('petWhiskers')).toMatchObject({ code: 'fishing-in-progress' });
+  });
+
+  it('records Captain Whiskers care and dawn results in the journal', () => {
+    const caredFor = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 7,
+      random: sequenceRandom([0, 0, 0, 0]),
+    });
+    caredFor.perform('petWhiskers');
+    caredFor.perform('endDay');
+    caredFor.beginDawn();
+    const caredForEntry = caredFor.snapshot().journalEntries[0]!;
+
+    expect(caredForEntry.actions).toEqual([
+      { kind: 'captainWhiskersCare', action: 'pet' },
+      { kind: 'captainWhiskersDawn', alive: true, deathCause: null },
+    ]);
+    expect(formatJournalEntry(caredForEntry).daytime).toContain('Captain Whiskers greeted the dawn.');
+
+    const died = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 7,
+      random: sequenceRandom([0]),
+      initialCaptainWhiskers: { hunger: 1 },
+    });
+    died.perform('endDay');
+    died.beginDawn();
+
+    expect(formatJournalEntry(died.snapshot().journalEntries[0]!).daytime)
+      .toContain('Captain Whiskers died during the night.');
+  });
+
   it('reuses an immutable snapshot until an action changes state', () => {
     const session = new SurvivalSession(saved(), { seed: 1 });
     const initial = session.snapshot();

@@ -5,6 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { FishingCatchId } from './fishingCatalog';
+import type { CaptainWhiskersDeathCause } from './CaptainWhiskersState';
 import type { EventPresentationKey, WeatherId } from './survivalTypes';
 
 export type JournalResolution = 'suitableItem' | 'unsuitableItem' | 'endure';
@@ -53,7 +54,21 @@ export interface JournalFishingRecord {
   readonly baitConsumed: boolean;
 }
 
-export type JournalDayActionRecord = JournalFishingRecord;
+export interface JournalCaptainWhiskersCareRecord {
+  readonly kind: 'captainWhiskersCare';
+  readonly action: 'pet' | 'feed' | 'treat';
+}
+
+export interface JournalCaptainWhiskersDawnRecord {
+  readonly kind: 'captainWhiskersDawn';
+  readonly alive: boolean;
+  readonly deathCause: CaptainWhiskersDeathCause | null;
+}
+
+export type JournalDayActionRecord =
+  | JournalFishingRecord
+  | JournalCaptainWhiskersCareRecord
+  | JournalCaptainWhiskersDawnRecord;
 
 export interface JournalEntry {
   day: number;
@@ -157,8 +172,20 @@ function formatFishing(record: JournalFishingRecord): string {
   return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
 }
 
+function formatCaptainWhiskers(record: JournalCaptainWhiskersCareRecord | JournalCaptainWhiskersDawnRecord): string {
+  if (record.kind === 'captainWhiskersCare') {
+    if (record.action === 'pet') return 'I petted Captain Whiskers.';
+    if (record.action === 'feed') return 'I fed Captain Whiskers.';
+    return 'I treated Captain Whiskers.';
+  }
+  if (!record.alive) return 'Captain Whiskers died during the night.';
+  return 'Captain Whiskers greeted the dawn.';
+}
+
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
-  const actions = entry.actions.map(formatFishing).join(' ');
+  const actions = entry.actions.map((record) => (
+    record.kind === 'fishing' ? formatFishing(record) : formatCaptainWhiskers(record)
+  )).join(' ');
   const daytime = formatDaytime(entry.daytime);
   return {
     heading: `DAY ${entry.day}`,
