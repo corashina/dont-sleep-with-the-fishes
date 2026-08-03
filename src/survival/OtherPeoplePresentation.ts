@@ -60,7 +60,6 @@ const RESCUE_DURATION = 3.2;
 const EXIT_DURATION = 4.2;
 const SHIP_YAW = -0.08;
 const RESCUE_YAW = SHIP_YAW + 0.58;
-const SHIP_HIDDEN = new Vector3(-15, 0.68, -48.7);
 const SHIP_BASE = new Vector3(-8.5, 0.68, -48);
 const SHIP_APPROACH = new Vector3(-3.8, 0.8, -21);
 const SHIP_EXIT = new Vector3(11, 0.68, -45.4);
@@ -202,7 +201,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.motionSource = 'steady-authored-path';
     this.root.userData.holdOnClear = false;
 
-    this.ship.name = 'other-people-container-ship';
+    this.ship.name = 'other-people-ship';
     this.ship.userData.motionSource = 'steady-authored-path';
     this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.y = SHIP_YAW;
@@ -258,6 +257,11 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.visible = true;
     this.root.userData.holdOnClear = false;
     this.resetActors();
+    this.ship.visible = true;
+    this.ship.position.copy(SHIP_BASE);
+    this.ship.rotation.y = SHIP_YAW;
+    this.updateBeaconPose();
+    this.updateOpenWaterDistance();
     this.root.userData.state = 'staged';
     this.root.userData.revealOrder = [];
     this.root.userData.signalPulses = 0;
@@ -390,11 +394,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         animation.resolve();
       }
     }
-    if (
-      this.ship.visible
-      && !this.terminalRescue
-      && (animation === null || animation.kind.startsWith('choice-'))
-    ) {
+    if (this.staged && this.ship.visible && !this.terminalRescue) {
       this.advanceCruise(delta);
     }
   }
@@ -583,27 +583,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
           .push('light-starboard');
       }
     }
-    if (progress < 0.24) {
-      this.ship.visible = false;
-      this.ship.position.copy(SHIP_HIDDEN);
-      this.ship.rotation.y = SHIP_YAW;
-      this.updateBeaconPose();
-      this.applyCameraPose(
-        0.04 * smoothstep(progress / 0.24) * cameraReturn,
-        0,
-      );
-      this.updateOpenWaterDistance();
-      return;
-    }
-    if (!this.shipRevealed) {
+    if (progress >= 0.24 && !this.shipRevealed) {
       this.shipRevealed = true;
-      this.ship.visible = true;
       (this.root.userData.revealOrder as string[]).push('ship');
     }
-    const travel = smoothstep((progress - 0.24) / 0.76);
-    this.ship.position.lerpVectors(SHIP_HIDDEN, SHIP_BASE, travel);
-    this.ship.rotation.y = SHIP_YAW;
-    this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
     this.updateBeaconPose();
     this.applyCameraPose(
       0.17 * smoothstep(progress) * cameraReturn,
@@ -841,7 +824,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   private resetActors(): void {
     this.ship.visible = false;
-    this.ship.position.copy(SHIP_HIDDEN);
+    this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.set(0, SHIP_YAW, 0);
     this.portBeacon.visible = false;
     this.starboardBeacon.visible = false;
