@@ -657,6 +657,27 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('keeps normal Flowers choices while routing sleep through the lantern', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      { id: 'collect', label: 'Collect', unavailableReason: null },
+      { id: 'bucket', label: 'Use Bucket', unavailableReason: null },
+      { id: 'sleep', label: 'Sleep', unavailableReason: null },
+    ]);
+
+    expect(labels('[data-event-choices] [data-event-choice]')).toEqual([
+      'Collect',
+      'Use Bucket',
+    ]);
+    expect(mount.querySelector('[data-anchor-id="end-day-lantern"]')?.getAttribute(
+      'data-event-choice',
+    )).toBe('sleep');
+  });
+
   it('shows a held result caption after a captionless reveal and clears its state', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');

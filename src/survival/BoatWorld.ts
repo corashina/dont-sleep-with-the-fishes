@@ -960,8 +960,8 @@ export class BoatWorld {
       this.ambient,
       this.key,
       this.key.target,
-      this.eventPresentation.root,
       this.featuredEvents.root,
+      this.eventPresentation.root,
       this.weatherEventAnimator.worldRoot,
       this.supernaturalEventAnimator.worldRoot,
       ...(this.dedicatedEvents === null
@@ -2433,7 +2433,6 @@ export class BoatWorld {
     if (eventId === 'drifting-bottle') return 'sleep';
     if (eventId === 'check-the-back') return 'check';
     if (eventId === 'mystery-chest') return 'take';
-    if (eventId === 'flowers') return 'sleep';
     return null;
   }
 

@@ -103,6 +103,7 @@ export class FeaturedEventPresentations {
 
   interactionRoot(eventId: string): Object3D | null {
     if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) return null;
+    if (eventId === 'flowers') return null;
     return eventId === 'drifting-loot'
       ? this.driftingLoot.interactionRoot()
       : this.presentations[eventId].interactionRoot();
