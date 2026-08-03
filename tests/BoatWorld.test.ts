@@ -718,6 +718,49 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('aims Midnight Tour attack cameras toward each seeded side', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const attackDirectionX = async (seed: number): Promise<number> => {
+      world.stageEvent('midnight-tour', null, seed);
+      const reaction = world.reactToEventOutcome('midnight-tour', {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'Something on the island attacks.',
+        deltas: { health: -35 },
+        cue: 'impact',
+        eventResult: {
+          eventId: 'midnight-tour',
+          choiceId: 'visit',
+          resultId: 'tour-attack',
+        },
+      }, {
+        choiceId: 'visit',
+        instanceId: null,
+        condition: null,
+      });
+      world.update(2, 2);
+      await reaction;
+      const directionX = camera.getWorldDirection(new Vector3()).x;
+      world.clearEvent();
+      return directionX;
+    };
+
+    const leftDirectionX = await attackDirectionX(8);
+    const rightDirectionX = await attackDirectionX(9);
+
+    expect(leftDirectionX).toBeGreaterThan(0);
+    expect(rightDirectionX).toBeLessThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('stages Night Trader as an empty rowboat', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
