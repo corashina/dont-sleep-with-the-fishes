@@ -267,17 +267,28 @@ const fragmentShader = `
     vec2 faceUv = moonUv;
     faceUv.x += (faceUv.y - 0.5) * uMoonGrin * 0.055;
     faceUv.y += sin((faceUv.x + 0.1) * 10.0) * uMoonGrin * 0.012;
+    float faceAsymmetry = faceUv.x < 0.5 ? -0.035 : 0.018;
+    vec2 browCenter = faceUv.x < 0.5
+      ? vec2(0.34, 0.75 + faceAsymmetry)
+      : vec2(0.67, 0.705 + faceAsymmetry);
+    vec2 browSize = faceUv.x < 0.5
+      ? vec2(0.112, 0.031)
+      : vec2(0.09, 0.026);
+    float browAngle = faceUv.x < 0.5 ? 0.36 : -0.12;
+    float browShape = eyeShape(faceUv, browCenter, browSize, browAngle);
+    float browReveal = faceUv.x < 0.5 ? leftEyeReveal : rightEyeReveal;
+    float brows = browShape * browReveal * mix(0.58, 0.92, uMoonGrin);
     float leftEye = eyeShape(
       faceUv,
-      vec2(0.35 - uMoonGrin * 0.018, 0.59 - uMoonGrin * 0.025),
-      vec2(0.075 + uMoonGrin * 0.018, 0.13 + uMoonGrin * 0.035),
-      0.24
+      vec2(0.342 - uMoonGrin * 0.018, 0.592 - uMoonGrin * 0.025),
+      vec2(0.086 + uMoonGrin * 0.018, 0.145 + uMoonGrin * 0.035),
+      0.32
     ) * leftEyeReveal;
     float rightEye = eyeShape(
       faceUv,
-      vec2(0.655 + uMoonGrin * 0.012, 0.565 + uMoonGrin * 0.018),
-      vec2(0.066 + uMoonGrin * 0.012, 0.112 + uMoonGrin * 0.026),
-      -0.18
+      vec2(0.665 + uMoonGrin * 0.012, 0.558 + uMoonGrin * 0.018),
+      vec2(0.06 + uMoonGrin * 0.012, 0.102 + uMoonGrin * 0.026),
+      -0.15
     ) * rightEyeReveal;
     float leftTear = eyeShape(
       faceUv,
@@ -295,6 +306,8 @@ const fragmentShader = `
       faceUv - vec2(0.5, 0.0),
       mix(0.12, 0.42, uMoonGrin)
     ) * mouthReveal;
+    float mouthNotch = eyeShape(faceUv, vec2(0.535, 0.315), vec2(0.026, 0.052), -0.22);
+    mouth = max(mouth, mouthNotch * mouthReveal * mix(0.42, 0.86, uMoonGrin));
     float noseSlit = eyeShape(
       faceUv,
       vec2(0.515, 0.445),
@@ -303,7 +316,7 @@ const fragmentShader = `
     ) * mouthReveal * uMoonGrin;
     float eyeStreaks = max(leftTear, rightTear) * 0.76;
     float faceInk = clamp(
-      max(max(max(max(leftEye, rightEye), eyeStreaks), noseSlit), mouth),
+      max(max(max(max(max(leftEye, rightEye), brows), eyeStreaks), noseSlit), mouth),
       0.0,
       1.0
     );

@@ -2286,6 +2286,10 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
 
+    expect(sky.material.fragmentShader).toContain('browShape');
+    expect(sky.material.fragmentShader).toContain('mouthNotch');
+    expect(sky.material.fragmentShader).toContain('faceAsymmetry');
+
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
     world.update(0.76, 0.76);
@@ -2346,6 +2350,7 @@ describe('BoatWorld helpers', () => {
     world.update(4.9, 1.1);
     await pressureReaction;
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.88);
 
     const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
       accepted: true,
