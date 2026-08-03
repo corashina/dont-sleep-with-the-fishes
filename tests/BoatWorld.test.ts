@@ -56,7 +56,10 @@ import {
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
-import { GHOST_FLIGHT_PATHS } from '../src/survival/supernaturalEventChoreography';
+import {
+  GHOST_FLIGHT_PATHS,
+  supernaturalRevealDuration,
+} from '../src/survival/supernaturalEventChoreography';
 import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
@@ -1819,7 +1822,7 @@ describe('BoatWorld helpers', () => {
     ['thunderstorm', 2, 4, 'down'],
     ['restless-waves', 1.9, 3.8, 'down'],
     ['man-in-the-fog', 2.6, 5.2, 'left'],
-    ['ghosts', 2, 4, 'changed'],
+    ['ghosts', 3.2, 6.4, 'changed'],
     ['eerie-melody', 2.2, 4.4, 'left'],
     ['other-people', 1.7, 3.4, 'left'],
   ] as const)(
@@ -2414,9 +2417,10 @@ describe('BoatWorld helpers', () => {
 
     expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
     expect(tableau.position.x).toBe(-4.3);
-    expect(tableau.position.y).toBeCloseTo(1.659);
+    expect(tableau.position.y).toBeCloseTo(-0.28);
     expect(tableau.position.z).toBe(-9.2);
     expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+    expect(tableau.userData.followsWaves).toBe(false);
     expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
 
     world.dispose();
@@ -2495,7 +2499,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('delays Ghosts and faces each ghost along its flight path', async () => {
+  it('moves delayed Ghosts slowly through low, wide, separated flight paths', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -2509,13 +2513,25 @@ describe('BoatWorld helpers', () => {
     );
 
     world.stageEvent('ghosts');
+    expect(supernaturalRevealDuration('ghosts')).toBe(6.4);
+    GHOST_FLIGHT_PATHS.forEach((path, index) => {
+      expect(path.start[1]).toBeGreaterThanOrEqual(0.35);
+      expect(path.start[1]).toBeLessThanOrEqual(0.7);
+      expect(path.end[1]).toBeGreaterThanOrEqual(0.35);
+      expect(path.end[1]).toBeLessThanOrEqual(0.7);
+      expect(Math.abs(path.end[0] - path.start[0])).toBeGreaterThanOrEqual(19);
+      if (index > 0) {
+        expect(Math.abs(path.start[2] - GHOST_FLIGHT_PATHS[index - 1]!.start[2]))
+          .toBeGreaterThanOrEqual(3.8);
+      }
+    });
     const reveal = world.revealEvent('ghosts');
     world.update(0.25, 0.25);
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
     world.update(1.2, 0.95);
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
     expect(world.scene.getObjectByName('ghost-4')?.visible).toBe(false);
-    world.update(1.5, 0.3);
+    world.update(1.8, 0.6);
     expect(world.scene.getObjectByName('ghost-5')?.visible).toBe(true);
     GHOST_FLIGHT_PATHS.forEach((path, index) => {
       const ghost = world.scene.getObjectByName(`ghost-${index + 1}`)!;
@@ -2525,25 +2541,38 @@ describe('BoatWorld helpers', () => {
       );
       expect(ghost.rotation.y).toBeCloseTo(expectedYaw);
       expect(ghost.userData.facingPath).toBe(true);
+      const facing = new Vector3(0, 0, 1)
+        .applyQuaternion(ghost.getWorldQuaternion(new Quaternion()))
+        .normalize();
+      const travel = new Vector3(
+        path.end[0] - path.start[0],
+        0,
+        path.end[2] - path.start[2],
+      ).normalize();
+      expect(facing.dot(travel)).toBeGreaterThan(0.995);
     });
     expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
-    world.update(4, 2.5);
+    world.update(6.5, 4.7);
     await reveal;
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('stages the Eerie Melody subject above layered fog and waves', () => {
+  it('seats Eerie Melody at mean water with low mist, player-facing siren, and colored light', () => {
     const propModels = createTestPropModels();
     const sirenRock = new Group();
+    const rockMaterial = new MeshStandardMaterial({ color: 0x35513d });
     sirenRock.add(new Mesh(
       new BoxGeometry(4, 2, 4),
-      new MeshStandardMaterial(),
+      rockMaterial,
     ));
+    const siren = new Group();
+    const sirenMaterial = new MeshStandardMaterial({ color: 0x9e5d47 });
+    siren.add(new Mesh(new BoxGeometry(1, 2, 0.7), sirenMaterial));
     const eventModels = createTestEventModels();
     vi.mocked(eventModels.create).mockImplementation((id: string) => (
-      id === 'sirenRock' ? sirenRock : new Group()
+      id === 'sirenRock' ? sirenRock : id === 'siren' ? siren : new Group()
     ));
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -2559,18 +2588,41 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('eerie-melody');
     const tableau = world.scene.getObjectByName('siren-tableau')!;
     const rock = world.scene.getObjectByName('event-siren-rock')!;
+    const sirenFacing = world.scene.getObjectByName('siren-facing-anchor')!;
+    const fog = world.scene.getObjectByName('supernatural-sea-mist')!;
     world.scene.updateMatrixWorld(true);
     const rockBounds = new Box3().setFromObject(rock);
-    const maximumWaveCrest = DEFAULT_WAVES.reduce(
-      (height, wave) => height
-        + wave.amplitude * presentationWeatherProfile('waves').waveScale,
-      0,
+    expect(rockBounds.min.y).toBeLessThan(0);
+    expect(rockBounds.max.y).toBeGreaterThanOrEqual(0.75);
+    expect(tableau.userData.waterlineY).toBe(0);
+    expect(tableau.userData.followsWaves).toBe(false);
+    expect(fog.children.length).toBeGreaterThanOrEqual(5);
+    fog.children.forEach((layer) => {
+      expect(layer.rotation.x).toBeCloseTo(0);
+      expect(layer.position.y).toBeGreaterThanOrEqual(0.38);
+      expect(layer.position.y).toBeLessThanOrEqual(0.55);
+      const material = (layer as Mesh).material;
+      expect(material).toBeInstanceOf(ShaderMaterial);
+      expect((material as ShaderMaterial).depthTest).toBe(true);
+    });
+    const sirenWorldPosition = sirenFacing.getWorldPosition(new Vector3());
+    const sirenForward = new Vector3(1, 0, 0)
+      .applyQuaternion(sirenFacing.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    const playerDirection = new Vector3(0, sirenWorldPosition.y, 0)
+      .sub(sirenWorldPosition)
+      .normalize();
+    expect(sirenForward.dot(playerDirection)).toBeGreaterThan(0.995);
+    expect(sirenFacing.userData.facesPlayer).toBe(true);
+    const tableauLights = tableau.children.filter(
+      (child): child is PointLight => child instanceof PointLight,
     );
-    const measuredClearance = rockBounds.min.y - maximumWaveCrest;
-    expect(measuredClearance).toBeGreaterThan(0);
-    expect(tableau.userData.minimumWaveClearance).toBeCloseTo(measuredClearance);
-    expect(tableau.userData.fogLayerCount).toBeGreaterThanOrEqual(3);
-    expect(tableau.userData.subjectValueSeparation).toBeGreaterThan(0);
+    expect(tableauLights).toHaveLength(2);
+    expect(tableauLights.every((light) => light.intensity > 0)).toBe(true);
+    expect((firstMesh(siren).material as MeshStandardMaterial).color.getHex())
+      .toBe(0x9e5d47);
+    expect((firstMesh(sirenRock).material as MeshStandardMaterial).color.getHex())
+      .toBe(0x35513d);
 
     world.dispose();
     propModels.dispose();
