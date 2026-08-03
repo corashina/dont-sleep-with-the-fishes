@@ -12,6 +12,7 @@ export class ScavengeAudio {
   private chase: AudioVoice | null = null;
   private countdown: AudioVoice | null = null;
   private countdownStarted = false;
+  private runBegun = false;
   private disposed = false;
 
   constructor(private readonly scope: AudioScope) {}
@@ -22,7 +23,9 @@ export class ScavengeAudio {
   }
 
   beginRun(): void {
-    if (this.disposed || this.chase !== null || this.countdownStarted) return;
+    if (this.disposed || this.runBegun) return;
+    this.runBegun = true;
+    this.scope.startLoop('shipAlarm');
     this.chase = this.scope.play('scavengeChase');
     this.chase?.onEnded(() => {
       this.chase = null;
@@ -72,11 +75,18 @@ export class ScavengeAudio {
   sink(): void {
     if (this.disposed || this.sinkingPlayed) return;
     this.sinkingPlayed = true;
+    this.stopShipAlarm();
     this.chase?.stop(0.12);
     this.chase = null;
     this.countdown?.stop(0.12);
     this.countdown = null;
     this.scope.play('sinkingEnding');
+  }
+
+  complete(): void {
+    if (this.disposed || !this.runBegun) return;
+    this.runBegun = false;
+    this.stopShipAlarm();
   }
 
   crash(): void {
@@ -89,5 +99,9 @@ export class ScavengeAudio {
     if (this.disposed) return;
     this.disposed = true;
     this.scope.dispose();
+  }
+
+  private stopShipAlarm(): void {
+    this.scope.stopLoop('shipAlarm', 0.12);
   }
 }

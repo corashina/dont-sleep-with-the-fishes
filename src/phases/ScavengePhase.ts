@@ -376,6 +376,7 @@ export class ScavengePhase implements GamePhase {
       const result = this.session.result();
       if (result !== null) {
         this.completionReported = true;
+        this.audio.complete();
         this.onComplete(result);
       }
     }

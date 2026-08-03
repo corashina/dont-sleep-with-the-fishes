@@ -15,6 +15,15 @@ function audioScopeStub(): AudioScope {
 }
 
 describe('Scavenge intro audio', () => {
+  it('configures the ship klaxon as one effects loop', () => {
+    expect(AUDIO_MANIFEST.shipAlarm).toMatchObject({
+      bus: 'effects',
+      gain: 0.46,
+      loop: true,
+      maxVoices: 1,
+    });
+  });
+
   it('maps the crash cue to the approved CC0 ship-break recording', () => {
     expect(AUDIO_MANIFEST.shipCrash.url).toBe(AUDIO_MANIFEST.sinkingEnding.url);
     expect(AUDIO_MANIFEST.shipCrash).toMatchObject({
