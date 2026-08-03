@@ -7,7 +7,6 @@ import {
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
-  PointLight,
   Vector3,
 } from 'three';
 import {
@@ -28,7 +27,6 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
   private readonly materials = new Set<Material>();
   private readonly target = new Vector3();
   private readonly cameraLook: StationaryEventCamera;
-  private readonly chestLight = new PointLight(0xffc98a, 1.25, 7, 1.6);
   private readonly wave: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -43,9 +41,7 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
   ) {
     super('mystery-chest-presentation');
     this.cameraLook = new StationaryEventCamera(camera);
-    this.chestLight.name = 'mystery-chest-light';
-    this.chestLight.position.set(0, 1.25, 0.75);
-    this.subject.add(model, this.chestLight);
+    this.subject.add(model);
     this.lid = model.getObjectByName('Chest_Top') ?? null;
     const toothGeometry = new ConeGeometry(0.055, 0.18, 5);
     const toothMaterial = new MeshStandardMaterial({

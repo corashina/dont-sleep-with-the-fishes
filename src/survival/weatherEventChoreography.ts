@@ -312,10 +312,7 @@ export function sampleWeatherReveal(
       output.figureDistance = 0;
       break;
     case 'bad-sleep':
-      output.cameraYaw = 0.16 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraPitch = -0.28 * pulse(t, 0.1, 0.5, 0.9);
-      output.supplyRoll = 0.05 * Math.sin(3 * Math.PI * t) * sweep;
-      break;
+      return true;
   }
 
   const ingressEnvelope = smoothstep(t / 0.12);

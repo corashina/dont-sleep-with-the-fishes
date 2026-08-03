@@ -2,7 +2,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
+  Bone,
   Box3,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   DirectionalLight,
@@ -21,6 +23,8 @@ import {
   Points,
   Quaternion,
   ShaderMaterial,
+  Skeleton,
+  SkinnedMesh,
   Texture,
   Vector3,
   Vector4,
@@ -52,6 +56,10 @@ import {
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
+import {
+  GHOST_FLIGHT_PATHS,
+  supernaturalRevealDuration,
+} from '../src/survival/supernaturalEventChoreography';
 import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
@@ -89,6 +97,44 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
   type,
 });
+
+const HANDYMAN_FINGER_CHAINS = [
+  ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
+  ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
+  ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
+  ['RingF_lower', 'RingF_middle', 'RingF_tip'],
+  ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
+] as const;
+
+function testRiggedHand(): Group {
+  const root = new Group();
+  const bones: Bone[] = [];
+  for (const chain of HANDYMAN_FINGER_CHAINS) {
+    let parent: Bone | null = null;
+    for (const name of chain) {
+      const bone = new Bone();
+      bone.name = name;
+      if (parent === null) root.add(bone);
+      else parent.add(bone);
+      bones.push(bone);
+      parent = bone;
+    }
+  }
+  const geometry = new BoxGeometry(1, 0.25, 1.5);
+  const vertexCount = geometry.getAttribute('position').count;
+  const indices = new Uint16Array(vertexCount * 4);
+  const weights = new Float32Array(vertexCount * 4);
+  for (let index = 0; index < vertexCount; index += 1) {
+    weights[index * 4] = 1;
+  }
+  geometry.setAttribute('skinIndex', new BufferAttribute(indices, 4));
+  geometry.setAttribute('skinWeight', new BufferAttribute(weights, 4));
+  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
+  mesh.name = 'handyman-imported-palm-surface';
+  mesh.bind(new Skeleton(bones));
+  root.add(mesh);
+  return root;
+}
 
 class FakeBoatSupplyDisplay {
   readonly pinCalls: ItemInstanceId[] = [];
@@ -678,14 +724,254 @@ describe('BoatWorld helpers', () => {
       world.scene.getObjectByName('focused-event:other-people')?.visible,
     ).toBe(true);
     const ship = world.scene.getObjectByName(
-      'other-people-container-ship',
+      'other-people-ship',
     )!;
     const heldPosition = ship.position.clone();
     world.update(2, 1 / 60);
     expect(
       world.scene.getObjectByName('focused-event:other-people')?.visible,
     ).toBe(true);
-    expect(ship.position.toArray()).toEqual(heldPosition.toArray());
+    expect(ship.position.distanceTo(heldPosition)).toBeGreaterThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages the procedural Handyman palm facing the player with bounded idle motion', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('handyman');
+    const palm = world.scene.getObjectByName('handyman-palm')!;
+    const baseQuaternion = palm.quaternion.clone();
+    expect(palm.userData.facesPlayer).toBe(true);
+    expect(palm.userData.outsideHull).toBe(true);
+    expect(palm.scale.x).toBeGreaterThan(1.25);
+
+    const reveal = world.revealEvent('handyman');
+    world.update(1.5, 1.5);
+    await reveal;
+    world.scene.updateMatrixWorld(true);
+    const palmSurface = world.scene.getObjectByName(
+      'handyman-procedural-palm',
+    )!;
+    const faceNormal = new Vector3(0, 1, 0)
+      .transformDirection(palmSurface.matrixWorld);
+    const toPlayer = camera.getWorldPosition(new Vector3())
+      .sub(palmSurface.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
+    expect(palm.quaternion.angleTo(baseQuaternion)).toBeGreaterThan(0);
+    expect(palm.userData.idleMotion).toBe('restrained');
+    expect(Math.abs(palm.userData.wristDrift as number)).toBeLessThan(0.04);
+    expect(palm.userData.fingerBend).toBeGreaterThan(0);
+    expect(palm.userData.fingerBend).toBeLessThan(0.12);
+
+    world.clearEvent();
+    expect(palm.quaternion.angleTo(baseQuaternion)).toBeCloseTo(0);
+    expect(palm.userData.wristDrift).toBe(0);
+    expect(palm.userData.fingerTension).toBe(0);
+    expect(palm.userData.fingerBend).toBe(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages the imported Handyman palm face toward the player', async () => {
+    const propModels = createTestPropModels();
+    const createEventModel = propModels.createEventModel.bind(propModels);
+    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => (
+      id === 'riggedHand'
+        ? { root: testRiggedHand(), animations: [] }
+        : createEventModel(id)
+    ));
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.stageEvent('handyman');
+    const reveal = world.revealEvent('handyman');
+    world.update(1.5, 1.5);
+    await reveal;
+    world.scene.updateMatrixWorld(true);
+    const palm = world.scene.getObjectByName('handyman-palm')!;
+    const palmSurface = world.scene.getObjectByName(
+      'handyman-imported-palm-surface',
+    )!;
+    const faceNormal = new Vector3(0, 1, 0)
+      .transformDirection(palmSurface.matrixWorld);
+    const toPlayer = camera.getWorldPosition(new Vector3())
+      .sub(palmSurface.getWorldPosition(new Vector3()))
+      .normalize();
+
+    expect(palm.userData.modelKind).toBe('imported');
+    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages Midnight Tour deep in the water on deterministic distant sides', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('midnight-tour', null, 8);
+    const leftReveal = world.revealEvent('midnight-tour');
+    world.setDocumentHidden(true);
+    await leftReveal;
+    world.setDocumentHidden(false);
+    const leftIsland = world.scene.getObjectByName('midnight-tour-island')!;
+    const leftX = leftIsland.position.x;
+    const leftY = leftIsland.position.y;
+    const leftZ = leftIsland.position.z;
+    world.clearEvent();
+    world.stageEvent('midnight-tour', null, 9);
+    const rightX = world.scene.getObjectByName('midnight-tour-island')!.position.x;
+
+    expect(leftX).toBeLessThan(0);
+    expect(rightX).toBeGreaterThan(0);
+    expect(Math.abs(leftX)).toBeGreaterThan(11);
+    expect(Math.abs(rightX)).toBeGreaterThan(11);
+    expect(leftY).toBeLessThanOrEqual(-1.5);
+    expect(leftZ).toBeLessThanOrEqual(-27);
+    expect(leftIsland.userData.greenTopWaveClearance).toBeGreaterThan(0);
+    expect(leftIsland.userData.disableHoverOutline).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('aims Midnight Tour attack cameras toward each seeded side', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const attackDirectionX = async (seed: number): Promise<number> => {
+      world.stageEvent('midnight-tour', null, seed);
+      const reaction = world.reactToEventOutcome('midnight-tour', {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'Something on the island attacks.',
+        deltas: { health: -35 },
+        cue: 'impact',
+        eventResult: {
+          eventId: 'midnight-tour',
+          choiceId: 'visit',
+          resultId: 'tour-attack',
+        },
+      }, {
+        choiceId: 'visit',
+        instanceId: null,
+        condition: null,
+      });
+      world.update(2, 2);
+      await reaction;
+      const directionX = camera.getWorldDirection(new Vector3()).x;
+      world.clearEvent();
+      return directionX;
+    };
+
+    const leftDirectionX = await attackDirectionX(8);
+    const rightDirectionX = await attackDirectionX(9);
+
+    expect(leftDirectionX).toBeGreaterThan(0);
+    expect(rightDirectionX).toBeLessThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('mounts the static Night Trader and lantern on the rowboat', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('night-trader');
+
+    expect(world.scene.getObjectByName('night-trader-rowboat')?.visible).toBe(true);
+    const trader = world.scene.getObjectByName('night-trader-trader')!;
+    expect(trader.visible).toBe(true);
+    expect(trader.userData.animationMode).toBe('none');
+    expect(trader.getObjectByName('event-model:traderOctopus')).toBeDefined();
+    world.scene.updateMatrixWorld(true);
+    const traderDirection = trader.getWorldDirection(new Vector3());
+    const directionToPlayer = trader.getWorldPosition(new Vector3())
+      .multiplyScalar(-1)
+      .setY(0)
+      .normalize();
+    traderDirection.setY(0).normalize();
+    expect(traderDirection.dot(directionToPlayer)).toBeGreaterThan(0.99);
+    expect(world.scene.getObjectByName('night-trader-lantern')?.position.y)
+      .toBeCloseTo(0.44);
+    expect(world.scene.getObjectByName('night-trader-case')).toBeUndefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps Other People on a slow cruise at triple distance', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('other-people');
+    const ship = world.scene.getObjectByName('other-people-ship')!;
+    expect(ship.visible).toBe(true);
+    expect(Math.hypot(ship.position.x, ship.position.z)).toBeCloseTo(
+      Math.hypot(8.5, 48) * 3,
+    );
+    expect(ship.position.z).toBeLessThan(-140);
+    const start = ship.position.clone();
+    world.update(4, 4);
+    expect(ship.position.distanceTo(start)).toBeGreaterThan(0);
+    expect(ship.position.distanceTo(start)).toBeLessThan(4);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('plays Other People Sleep as letting the boat pass', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('other-people');
+    const choice = world.playEventChoice('other-people', {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    });
+
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.userData.state,
+    ).toBe('letting-pass');
+    world.update(0.32, 0.32);
+    await choice;
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.userData.state,
+    ).toBe('choice-pass');
 
     world.dispose();
     propModels.dispose();
@@ -927,6 +1213,62 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('restores Handyman supply and chest trade actors on clear', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    const supply = world.scene.getObjectByName('boat-supply:bucket')!;
+    const chest = world.scene.getObjectByName('persistent-chest')!;
+    const supplyBasePosition = supply.position.toArray();
+    const supplyBaseQuaternion = supply.quaternion.toArray();
+    const supplyBaseScale = supply.scale.toArray();
+    const chestBasePosition = chest.position.toArray();
+    const chestBaseQuaternion = chest.quaternion.toArray();
+    const chestBaseScale = chest.scale.toArray();
+
+    world.stageEvent('handyman');
+    const supplyTrade = world.playEventChoice('handyman', {
+      choiceId: 'bucket',
+      instanceId: bucket.instanceId,
+      condition: 'usable',
+    });
+    world.update(1.2, 1.2);
+    await supplyTrade;
+    expect(supply.position.toArray()).not.toEqual(supplyBasePosition);
+
+    world.clearEvent();
+    expect(supply.position.toArray()).toEqual(supplyBasePosition);
+    expect(supply.quaternion.toArray()).toEqual(supplyBaseQuaternion);
+    expect(supply.scale.toArray()).toEqual(supplyBaseScale);
+
+    world.stageEvent('handyman');
+    const chestTrade = world.playEventChoice('handyman', {
+      choiceId: 'chest',
+      instanceId: null,
+      condition: null,
+    });
+    world.update(2.4, 1.2);
+    await chestTrade;
+    expect(chest.position.toArray()).not.toEqual(chestBasePosition);
+
+    world.clearEvent();
+    expect(chest.position.toArray()).toEqual(chestBasePosition);
+    expect(chest.quaternion.toArray()).toEqual(chestBaseQuaternion);
+    expect(chest.scale.toArray()).toEqual(chestBaseScale);
+    expect(chest.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the generic tableau when focused construction fails', () => {
     const propModels = createTestPropModels();
     const factories: FocusedEventPresentationFactories = {
@@ -1153,7 +1495,114 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('applies the Bad Sleep reveal to the camera and supplies', async () => {
+  it('stages the Drifting Bottle on its seeded side with shared-wave particles', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('drifting-bottle', null, 8);
+    world.update(1, 1);
+    const left = world.scene.getObjectByName('event-prop:drifting-bottle')!;
+    expect(left.position.x).toBeLessThan(-2.5);
+    expect(left.userData.motionSource).toBe('shared-wave-field');
+
+    world.clearEvent();
+    world.stageEvent('drifting-bottle', null, 9);
+    world.update(2, 1);
+    const right = world.scene.getObjectByName('event-prop:drifting-bottle')!;
+    expect(right.position.x).toBeGreaterThan(2.5);
+    expect(world.scene.getObjectByName('drifting-bottle:wake')).toBeUndefined();
+    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps Drifting Bottle particles active after reveal and stops them for results', async () => {
+    const emit = vi.spyOn(FishingBiteParticles.prototype, 'emit');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('drifting-bottle', null, 8);
+    const reveal = world.revealEvent('drifting-bottle');
+    world.update(2, 2);
+    await reveal;
+    emit.mockClear();
+
+    world.update(2.2, 0.2);
+    world.update(2.4, 0.2);
+    expect(emit).toHaveBeenCalled();
+
+    emit.mockClear();
+    const retrieve = world.reactToEventOutcome('drifting-bottle', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bottle is aboard.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'drifting-bottle.retrieve',
+    });
+    world.update(4, 2);
+    await retrieve;
+    expect(emit).not.toHaveBeenCalled();
+
+    world.stageEvent('drifting-bottle', null, 9);
+    const secondReveal = world.revealEvent('drifting-bottle');
+    world.update(6, 2);
+    await secondReveal;
+    emit.mockClear();
+    const lost = world.reactToEventOutcome('drifting-bottle', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bottle drifts away.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'drifting-bottle.lost',
+    });
+    world.update(8, 2);
+    await lost;
+    expect(emit).not.toHaveBeenCalled();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the Flowers field fixed in place and removes its world interaction', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('flowers');
+    const flowers = world.scene.getObjectByName('event-prop:flowers')!;
+    expect(flowers.children.length).toBeGreaterThanOrEqual(28);
+    const before = flowers.children.map(({ position }) => [position.x, position.z]);
+    expect(flowers.children.every(({ position }) => position.z <= -4.3)).toBe(true);
+    for (let left = 0; left < flowers.children.length; left += 1) {
+      for (let right = left + 1; right < flowers.children.length; right += 1) {
+        const a = flowers.children[left]!.position;
+        const b = flowers.children[right]!.position;
+        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(1.45);
+      }
+    }
+    world.update(2, 2);
+    expect(flowers.children.map(({ position }) => [position.x, position.z])).toEqual(before);
+    expect(world.projectEventInteractionBounds('flowers', 800, 600)).toBeNull();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the Bad Sleep reveal camera and supplies stationary', async () => {
     const cameraRig = new Group();
     const camera = new PerspectiveCamera();
     const basePosition = camera.position.toArray();
@@ -1170,9 +1619,10 @@ describe('BoatWorld helpers', () => {
     animator.update(1.7, 1.7);
 
     expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(supplies.ambientRoll).not.toBe(0);
+    expect(supplies.ambientRoll).toBe(0);
+    expect(supplies.ambientLift).toBe(0);
 
     animator.clear();
     await reveal;
@@ -1429,10 +1879,8 @@ describe('BoatWorld helpers', () => {
     ['thunderstorm', 2, 4, 'down'],
     ['restless-waves', 1.9, 3.8, 'down'],
     ['man-in-the-fog', 2.6, 5.2, 'left'],
-    ['bad-sleep', 1.7, 3.4, 'down'],
-    ['ghosts', 2, 4, 'changed'],
+    ['ghosts', 3.2, 6.4, 'changed'],
     ['eerie-melody', 2.2, 4.4, 'left'],
-    ['check-the-back', 0.425, 0.85, 'left'],
     ['other-people', 1.7, 3.4, 'left'],
   ] as const)(
     'keeps the %s reveal camera stationary while looking at its cue',
@@ -1492,6 +1940,35 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     },
   );
+
+  it('keeps Check the Back front-facing until its result turns astern', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const baseQuaternion = camera.quaternion.toArray();
+
+    world.stageEvent('check-the-back');
+    const reveal = world.revealEvent('check-the-back');
+    world.update(2, 2);
+    await reveal;
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+
+    const fish = world.reactToEventOutcome('check-the-back', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'A fish has landed aboard.',
+      deltas: { food: 1 },
+      cue: 'none',
+      eventPresentationKey: 'check-the-back.fish',
+    });
+    world.update(4, 2);
+    await fish;
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
 
   it('keeps Shower Night item and reaction camera poses stationary', async () => {
     const bucket = savedItem('bucket');
@@ -1591,7 +2068,7 @@ describe('BoatWorld helpers', () => {
     expectFixedRocks();
     expect(Math.abs(motionRig.position.x - baseMotionX)).toBeGreaterThan(0.2);
     expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
     expect(cueCameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     world.update(2.4, 1.2);
     await reveal;
@@ -2030,8 +2507,11 @@ describe('BoatWorld helpers', () => {
     world.update(time, delta);
 
     expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
-    expect(tableau.position.toArray()).toEqual([-4.3, -0.26, -9.2]);
+    expect(tableau.position.x).toBe(-4.3);
+    expect(tableau.position.y).toBeCloseTo(-0.28);
+    expect(tableau.position.z).toBe(-9.2);
     expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+    expect(tableau.userData.followsWaves).toBe(false);
     expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
 
     world.dispose();
@@ -2083,6 +2563,162 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('places the Fog Man midpoint at the waterline', () => {
+    const propModels = createTestPropModels();
+    const fogMan = new Group();
+    fogMan.add(new Mesh(new BoxGeometry(1, 2, 1), new MeshStandardMaterial()));
+    const eventModels = createTestEventModels();
+    vi.mocked(eventModels.create).mockImplementation((id: string) => (
+      id === 'fogMan' ? fogMan : new Group()
+    ));
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+
+    world.stageEvent('man-in-the-fog');
+    const man = world.scene.getObjectByName('event-tableau:man-in-the-fog')!;
+    expect(man.userData.waterlineFraction).toBeCloseTo(0.5, 1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('moves delayed Ghosts slowly through low, wide, separated flight paths', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+
+    world.stageEvent('ghosts');
+    expect(supernaturalRevealDuration('ghosts')).toBe(6.4);
+    GHOST_FLIGHT_PATHS.forEach((path, index) => {
+      expect(path.start[1]).toBeGreaterThanOrEqual(0.35);
+      expect(path.start[1]).toBeLessThanOrEqual(0.7);
+      expect(path.end[1]).toBeGreaterThanOrEqual(0.35);
+      expect(path.end[1]).toBeLessThanOrEqual(0.7);
+      expect(Math.abs(path.end[0] - path.start[0])).toBeGreaterThanOrEqual(19);
+      if (index > 0) {
+        expect(Math.abs(path.start[2] - GHOST_FLIGHT_PATHS[index - 1]!.start[2]))
+          .toBeGreaterThanOrEqual(3.8);
+      }
+    });
+    const reveal = world.revealEvent('ghosts');
+    world.update(0.25, 0.25);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
+    world.update(1.2, 0.95);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('ghost-4')?.visible).toBe(false);
+    world.update(1.8, 0.6);
+    expect(world.scene.getObjectByName('ghost-5')?.visible).toBe(true);
+    GHOST_FLIGHT_PATHS.forEach((path, index) => {
+      const ghost = world.scene.getObjectByName(`ghost-${index + 1}`)!;
+      const expectedYaw = Math.atan2(
+        path.end[0] - path.start[0],
+        path.end[2] - path.start[2],
+      );
+      expect(ghost.rotation.y).toBeCloseTo(expectedYaw);
+      expect(ghost.userData.facingPath).toBe(true);
+      const facing = new Vector3(0, 0, 1)
+        .applyQuaternion(ghost.getWorldQuaternion(new Quaternion()))
+        .normalize();
+      const travel = new Vector3(
+        path.end[0] - path.start[0],
+        0,
+        path.end[2] - path.start[2],
+      ).normalize();
+      expect(facing.dot(travel)).toBeGreaterThan(0.995);
+    });
+    expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
+    world.update(6.5, 4.7);
+    await reveal;
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('seats Eerie Melody at mean water with low mist, player-facing siren, and colored light', () => {
+    const propModels = createTestPropModels();
+    const sirenRock = new Group();
+    const rockMaterial = new MeshStandardMaterial({ color: 0x35513d });
+    sirenRock.add(new Mesh(
+      new BoxGeometry(4, 2, 4),
+      rockMaterial,
+    ));
+    const siren = new Group();
+    const sirenMaterial = new MeshStandardMaterial({ color: 0x9e5d47 });
+    siren.add(new Mesh(new BoxGeometry(1, 2, 0.7), sirenMaterial));
+    const eventModels = createTestEventModels();
+    vi.mocked(eventModels.create).mockImplementation((id: string) => (
+      id === 'sirenRock' ? sirenRock : id === 'siren' ? siren : new Group()
+    ));
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+
+    world.stageEvent('eerie-melody');
+    const tableau = world.scene.getObjectByName('siren-tableau')!;
+    const rock = world.scene.getObjectByName('event-siren-rock')!;
+    const sirenFacing = world.scene.getObjectByName('siren-facing-anchor')!;
+    const fog = world.scene.getObjectByName('supernatural-sea-mist')!;
+    world.scene.updateMatrixWorld(true);
+    const rockBounds = new Box3().setFromObject(rock);
+    expect(rockBounds.min.y).toBeLessThan(0);
+    expect(rockBounds.max.y).toBeGreaterThanOrEqual(0.75);
+    expect(tableau.userData.waterlineY).toBe(0);
+    expect(tableau.userData.followsWaves).toBe(false);
+    expect(fog.children.length).toBeGreaterThanOrEqual(5);
+    fog.children.forEach((layer) => {
+      expect(layer.rotation.x).toBeCloseTo(0);
+      expect(layer.position.y).toBeGreaterThanOrEqual(0.38);
+      expect(layer.position.y).toBeLessThanOrEqual(0.55);
+      const material = (layer as Mesh).material;
+      expect(material).toBeInstanceOf(ShaderMaterial);
+      expect((material as ShaderMaterial).depthTest).toBe(true);
+    });
+    const sirenWorldPosition = sirenFacing.getWorldPosition(new Vector3());
+    const sirenForward = new Vector3(1, 0, 0)
+      .applyQuaternion(sirenFacing.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    const playerDirection = new Vector3(0, sirenWorldPosition.y, 0)
+      .sub(sirenWorldPosition)
+      .normalize();
+    expect(sirenForward.dot(playerDirection)).toBeGreaterThan(0.995);
+    expect(sirenFacing.userData.facesPlayer).toBe(true);
+    const tableauLights = tableau.children.filter(
+      (child): child is PointLight => child instanceof PointLight,
+    );
+    expect(tableauLights).toHaveLength(2);
+    expect(tableauLights.every((light) => light.intensity > 0)).toBe(true);
+    expect((firstMesh(siren).material as MeshStandardMaterial).color.getHex())
+      .toBe(0x9e5d47);
+    expect((firstMesh(sirenRock).material as MeshStandardMaterial).color.getHex())
+      .toBe(0x35513d);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('coordinates supernatural staging, item motion, and cleanup', async () => {
     const weatherSupport = vi.spyOn(WeatherEventAnimator.prototype, 'supportsItemUse');
     const supernaturalSupport = vi.spyOn(
@@ -2119,7 +2755,7 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([flare]));
 
     world.stageEvent('ghosts');
-    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
     expect(weatherSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
@@ -2204,6 +2840,13 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
 
+    expect(sky.material.fragmentShader).toContain('browShape');
+    expect(sky.material.fragmentShader).toContain('mouthNotch');
+    expect(sky.material.fragmentShader).toContain('faceAsymmetry');
+    expect(sky.material.fragmentShader).toContain('predatorPupils');
+    expect(sky.material.fragmentShader).toContain('moonTeeth');
+    expect(sky.material.fragmentShader).toContain('cheekCuts');
+
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
     world.update(0.76, 0.76);
@@ -2219,8 +2862,9 @@ describe('BoatWorld helpers', () => {
     world.update(3.8, 2.09);
     await reveal;
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(3.5);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(5);
     const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
     world.update(0.7, 0.7);
     expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
@@ -2264,6 +2908,7 @@ describe('BoatWorld helpers', () => {
     world.update(4.9, 1.1);
     await pressureReaction;
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.96);
 
     const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
       accepted: true,
@@ -2571,65 +3216,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('shows a lit Mystery Chest at the outer hull throughout its cue', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('mystery-chest');
-    const chest = world.scene.getObjectByName('mystery-chest-presentation:subject')!;
-    const light = chest.getObjectByName('mystery-chest-light') as PointLight;
-    world.update(0, 0);
-    const firstY = chest.position.y;
-    const cueStartZ = chest.position.z;
-    const firstQuaternion = chest.quaternion.clone();
-    expect(chest.visible).toBe(true);
-    expect(chest.position.x).toBeLessThan(-2.5);
-    expect(light.intensity).toBeGreaterThan(1);
-    world.setHighlightedItem('event:mystery-chest');
-    expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-
-    const reveal = world.revealEvent('mystery-chest');
-    expect(chest.position.z).toBeCloseTo(cueStartZ);
-    world.update(0.42, 0.42);
-    expect(Math.abs(chest.position.z - cueStartZ)).toBeLessThan(0.2);
-    expect(chest.position.y).not.toBe(firstY);
-    expect(chest.quaternion.angleTo(firstQuaternion)).toBeGreaterThan(0.001);
-    expect(Math.abs(chest.rotation.x)).toBeLessThan(0.2);
-    expect(Math.abs(chest.rotation.z)).toBeLessThan(0.2);
-    world.setDocumentHidden(true);
-    await reveal;
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps Chest Attack at the persistent chest deck pose', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.syncInventory(snapshot([], {
-      chest: { state: 'mimic', acquiredDay: 4 },
-    }));
-    const chest = world.scene.getObjectByName('persistent-chest')!;
-    const restPosition = chest.position.toArray();
-    const restQuaternion = chest.quaternion.toArray();
-
-    world.stageEvent('chest-attack');
-    expect(chest.position.toArray()).toEqual(restPosition);
-    expect(chest.quaternion.toArray()).toEqual(restQuaternion);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('projects and outlines focused event subjects as physical choices', async () => {
+  it('projects focused subjects and skips the Midnight Tour island outline', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
@@ -2650,7 +3237,7 @@ describe('BoatWorld helpers', () => {
     ]));
     world.setHighlightedItem('midnight-tour:island');
     expect(world.scene.getObjectByName('midnight-tour-island')
-      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
 
     world.clearEvent();
     world.syncInventory(snapshot([], {

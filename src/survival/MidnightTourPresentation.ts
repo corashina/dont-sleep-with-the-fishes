@@ -14,10 +14,12 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
+import { DEFAULT_WAVES } from '../ocean/WaveField';
 import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import { EVENT_MODEL_SPECS } from '../world/eventModelManifest';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
@@ -33,6 +35,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { StationaryEventCamera } from './StationaryEventCamera';
 
 type MidnightTourAnimationKind =
@@ -51,6 +54,15 @@ const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
 const VISIT_DURATION = 1.5;
 const RESULT_DURATION = 1.05;
+const ISLAND_DISTANCE = 11.8;
+const ISLAND_BASE_Y = -1.55;
+const ISLAND_Z = -28;
+const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
+  (height, wave) => height + wave.amplitude,
+  0,
+);
+const IMPORTED_GREEN_TOP_Y = EVENT_MODEL_SPECS.midnightIsland
+  .normalizedBounds.max[1];
 function keyedTravel(progress: number): number {
   if (progress < 0.16) return -0.045 * smoothstep(progress / 0.16);
   if (progress < 0.82) {
@@ -80,18 +92,20 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly staticMaterials = new Set<Material>();
   private readonly resultGeometries = new Set<BufferGeometry>();
   private readonly resultMaterials = new Set<Material>();
-  private readonly islandBase = new Vector3(-7.4, -0.55, -20);
-  private readonly islandHidden = new Vector3(-7.4, -3.75, -20);
-  private readonly islandBehind = new Vector3(4.6, -0.72, 10.5);
+  private readonly islandBase = new Vector3();
+  private readonly islandHidden = new Vector3();
+  private readonly islandBehind = new Vector3();
   private readonly islandStart = new Vector3();
-  private readonly actorStart = new Vector3(-8.7, 4.35, -19.5);
+  private readonly actorStart = new Vector3();
   private readonly chestEnd = new Vector3(-0.72, 0.58, -1.18);
   private readonly baitEnd = new Vector3(0.38, 0.52, -1.3);
   private readonly foodEnd = new Vector3(0.18, 0.58, -1.22);
-  private readonly creatureEnd = new Vector3(-7.8, -0.1, -19.25);
+  private readonly creatureEnd = new Vector3();
   private readonly cameraLook: StationaryEventCamera;
   private activeAnimation: ActiveAnimation | null = null;
   private activeActor: Group | null = null;
+  private side: EventSide = -1;
+  private greenTopLocalY = 0;
   private staged = false;
   private disposed = false;
 
@@ -106,9 +120,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.userData.cameraKicks = 0;
     this.root.userData.rewardLandings = 0;
 
+    this.setSidePositions();
     this.island.name = 'midnight-tour-island';
     this.island.position.copy(this.islandBase);
     this.island.userData.motionSource = 'fixed';
+    this.island.userData.disableHoverOutline = true;
     this.buildIsland();
     this.root.add(this.island);
 
@@ -118,8 +134,10 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     collectMeshResources(this.root, this.staticGeometries, this.staticMaterials);
   }
 
-  stage(): void {
+  stage(variantSeed = 0): void {
     if (this.disposed) return;
+    this.side = eventSideFromSeed(variantSeed);
+    this.setSidePositions();
     this.cancelActiveAnimation(false);
     this.clearResultActors();
     this.captureCamera();
@@ -128,7 +146,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.visible = true;
     this.island.visible = true;
     this.island.position.copy(this.islandHidden);
-    this.island.rotation.set(0, -0.08, 0);
+    this.island.rotation.set(0, 0.08 * this.side, 0);
+    this.updateGreenTopClearance();
     this.root.userData.state = 'staged';
     this.root.userData.approachBeats = 0;
     this.root.userData.approachDistance = 0;
@@ -202,7 +221,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.clearResultActors();
     this.restoreCamera();
     this.island.position.copy(this.islandBase);
-    this.island.rotation.set(0, -0.08, 0);
+    this.island.rotation.set(0, 0.08 * this.side, 0);
     this.island.visible = false;
     this.root.visible = false;
     this.root.userData.state = 'idle';
@@ -327,14 +346,15 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private applyReveal(progress: number): void {
     const travel = keyedTravel(progress);
     this.island.position.lerpVectors(this.islandHidden, this.islandBase, travel);
-    this.island.rotation.y = -0.08 + Math.sin(progress * Math.PI) * 0.035;
+    this.island.rotation.y = 0.08 * this.side
+      - this.side * Math.sin(progress * Math.PI) * 0.035;
     this.island.userData.revealProgress = progress;
   }
 
   private applyPass(progress: number): void {
     const travel = smoothstep(progress);
     this.island.position.lerpVectors(this.islandStart, this.islandBehind, travel);
-    this.island.rotation.y = -0.08 + travel * 0.2;
+    this.island.rotation.y = 0.08 * this.side - this.side * travel * 0.2;
   }
 
   private applyVisit(progress: number): void {
@@ -351,7 +371,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     );
     this.root.userData.approachDistance = approach * 3.6;
     this.applyCameraVisitPose(
-      -0.22 * smoothstep(progress),
+      0.22 * this.side * smoothstep(progress),
       -0.12 * smoothstep(progress) - beat * 0.045,
       -approach * 3.6 + beat * 0.045,
     );
@@ -396,7 +416,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     actor.rotation.z = Math.sin(progress * Math.PI) * 0.18;
     const kickWindow = clamp01((progress - 0.48) / 0.34);
     const kick = Math.sin(kickWindow * Math.PI);
-    this.applyCameraVisitPose(-0.22, -0.12 - kick * 0.16, -3.6 + kick * 0.12);
+    this.applyCameraVisitPose(
+      0.22 * this.side,
+      -0.12 - kick * 0.16,
+      -3.6 + kick * 0.12,
+    );
     if (progress >= 0.5) this.root.userData.cameraKicks = 1;
   }
 
@@ -434,11 +458,13 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const islandModel = this.dependencies.propModels.createEventModel('midnightIsland');
     if (islandModel === null) {
       const earth = createMaterial(0x343b38, 1);
-      const fallback = new Mesh(new ConeGeometry(5.2, 2.4, 7), earth);
+      const fallback = new Mesh(new ConeGeometry(5.2, 3.4, 7), earth);
       fallback.name = 'midnight-tour-island-fallback';
-      fallback.position.y = -0.55;
+      fallback.position.y = 0.45;
       fallback.scale.z = 0.72;
       this.island.add(fallback);
+      this.greenTopLocalY = 2.15;
+      this.updateGreenTopClearance();
       this.island.userData.islandModel = 'procedural';
     } else {
       islandModel.root.name = 'event-model:midnightIsland';
@@ -453,6 +479,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         }
       });
       this.island.add(islandModel.root);
+      this.greenTopLocalY = IMPORTED_GREEN_TOP_Y;
+      this.updateGreenTopClearance();
       this.island.userData.islandModel = 'imported';
     }
 
@@ -504,6 +532,21 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     ember.name = 'midnight-tour-shore-ember';
     ember.position.set(-1.4, 1.8, 3.8);
     this.island.add(ember);
+  }
+
+  private setSidePositions(): void {
+    const islandX = ISLAND_DISTANCE * this.side;
+    this.islandBase.set(islandX, ISLAND_BASE_Y, ISLAND_Z);
+    this.islandHidden.set(islandX, ISLAND_BASE_Y - 3.2, ISLAND_Z);
+    this.islandBehind.set(-4.6 * this.side, -0.72, 10.5);
+    this.actorStart.set(islandX + 1.3 * this.side, 4.35, ISLAND_Z + 0.5);
+    this.creatureEnd.set(islandX + 0.4 * this.side, -0.1, ISLAND_Z + 0.75);
+  }
+
+  private updateGreenTopClearance(): void {
+    this.island.userData.greenTopWaveClearance = ISLAND_BASE_Y
+      + this.greenTopLocalY
+      - MAXIMUM_WAVE_CREST;
   }
 
   private buildFallbackTree(parent: Group): void {

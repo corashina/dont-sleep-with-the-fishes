@@ -945,6 +945,56 @@ describe('SurvivalPhase orchestration', () => {
     expect(realSession.snapshot()).toMatchObject({ state: 'day', day: 3 });
   });
 
+  it('draws and reveals Drifting Bottle through a normal dawn', async () => {
+    const session = new SurvivalSession([], {
+      seed: 203,
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { day: 2 },
+    });
+    const stageEvent = vi.fn();
+    const revealEvent = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent,
+        revealEvent,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        holdSleep: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    await flushPromises();
+
+    expect(session.snapshot()).toMatchObject({
+      state: 'dayEvent',
+      day: 3,
+      pendingEventId: 'drifting-bottle',
+    });
+    expect(stageEvent).toHaveBeenCalledWith(
+      'drifting-bottle',
+      null,
+      expect.any(Number),
+    );
+    expect(revealEvent).toHaveBeenCalledWith('drifting-bottle');
+    phase.dispose();
+  });
+
   it('lets Drifting Loot recede without a result and resumes the same day', async () => {
     let current = snapshot({
       state: 'dayEvent',
@@ -1125,7 +1175,7 @@ describe('SurvivalPhase orchestration', () => {
       });
       expect(resolveEvent).not.toHaveBeenCalled();
       expect(stageEvent).toHaveBeenCalledOnce();
-      expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'barrel');
+      expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'barrel', expect.any(Number));
       expect(playEventChoiceBeat).not.toHaveBeenCalled();
       expect(retrieveDriftingLoot).not.toHaveBeenCalled();
       expect(recedeDriftingLoot).not.toHaveBeenCalled();
@@ -1244,7 +1294,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'crate');
+    expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'crate', expect.any(Number));
     expect(current).toMatchObject({ state: 'dayEvent', day: 3 });
   });
 
@@ -2441,6 +2491,45 @@ describe('SurvivalPhase orchestration', () => {
     ]);
   });
 
+  it('routes a stable seed into a focused event presenter', async () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      day: 6,
+      seed: 42,
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+    });
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent,
+        revealEvent: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(stageEvent).toHaveBeenCalledWith(
+      'midnight-tour',
+      null,
+      deriveEventVariantSeed(current.seed, current.day, 'midnight-tour'),
+    );
+  });
+
   it.each([
     ['shower-night', 'rain'],
     ['windy-night', 'wind'],
@@ -3596,6 +3685,60 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('plays the Bad Sleep yawn after the scene opens and before reveal', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'bad-sleep')!;
+    let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
+    const calls: string[] = [];
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent: vi.fn(() => calls.push('stage')),
+        revealEvent: vi.fn(() => {
+          calls.push('reveal');
+          return Promise.resolve();
+        }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn((covered: boolean) => {
+          calls.push(covered ? 'cover' : 'uncover');
+          return Promise.resolve();
+        }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return Promise.resolve();
+        }),
+        showEventReveal: vi.fn(() => {
+          calls.push('caption');
+          return Promise.resolve();
+        }),
+        setBadSleepCue: vi.fn(),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    vi.spyOn(phaseAudio, 'eventReveal').mockImplementation((eventId) => {
+      calls.push(`audio:${eventId}`);
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(calls).toEqual([
+      'cover',
+      'stage',
+      'settle',
+      'uncover',
+      'audio:bad-sleep',
+      'reveal',
+      'caption',
+    ]);
+    phase.dispose();
+  });
+
   it('runs the full Dangerous Waters lifecycle while choices stay locked until reveal completes', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
@@ -3893,7 +4036,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(render).toHaveBeenCalledTimes(rendersBeforeRestart);
   });
 
-  it('integrates Swim Ring bottle recovery through reveal, inventory sync, reaction, and dawn', async () => {
+  it('integrates Swim Ring bottle recovery through day-event resolution', async () => {
     const calls: string[] = [];
     const session = new SurvivalSession(
       [{ instanceId: 'swimRing-1', type: 'swimRing' }],
@@ -3964,7 +4107,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       state: 'day',
-      day: 3,
+      day: 2,
       inventory: {
         'swimRing-1': { condition: 'usable' },
         'bottledPaper-1': { condition: 'usable' },
@@ -3980,7 +4123,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('clear:drifting-bottle'));
-    expect(calls.indexOf('clear:drifting-bottle')).toBeLessThan(calls.indexOf('cue:dawn'));
+    expect(calls).not.toContain('cue:dawn');
     expect(calls.indexOf('inventory:day:usable')).toBeLessThan(calls.lastIndexOf('uncover'));
   });
 
@@ -5198,6 +5341,149 @@ describe('SurvivalPhase orchestration', () => {
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(setEventSelection).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
+  it('routes Other People lantern Sleep with a usable signal item', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'flashlight-1', type: 'flashlight' }],
+      {
+        seed: 204,
+        random: sequenceRandom([0, 0.99, 0.99]),
+        initial: { day: 15, rescueProgress: 15 },
+        initialEventId: 'other-people',
+      },
+    );
+    const playEventChoice = vi.fn(() => Promise.resolve());
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const setEventSelection = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection,
+      setBusy: vi.fn(),
+      showFeedback: vi.fn(),
+      showEventOutcome: vi.fn(),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
+      clearEventPresentation: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice,
+        reactToEventOutcome,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: ui as SurvivalUI,
+    });
+    phase.start();
+    await flushPromises();
+
+    expect(setEventSelection).toHaveBeenLastCalledWith(
+      new Map([['flashlight-1', 'flashlight']]),
+      [{ id: 'sleep', label: 'Let It Pass', unavailableReason: null }],
+    );
+
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+    await flushPromises();
+
+    expect(playEventChoice).toHaveBeenCalledWith('other-people', {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    });
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'other-people',
+      expect.objectContaining({
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'sleep',
+          resultId: 'people-pass',
+        },
+      }),
+      expect.anything(),
+    );
+    expect(session.snapshot()).toMatchObject({
+      state: 'day',
+      pendingEventId: null,
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
+    phase.dispose();
+  });
+
+  it('keeps the Other People Flashlight signal choice usable', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'flashlight-1', type: 'flashlight' }],
+      {
+        seed: 205,
+        random: sequenceRandom([0]),
+        initial: { day: 15, rescueProgress: 15 },
+        initialEventId: 'other-people',
+      },
+    );
+    const playEventChoice = vi.fn(() => Promise.resolve());
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice,
+        reactToEventOutcome,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        setBusy: vi.fn(),
+        showFeedback: vi.fn(),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+
+    phase.handleEventItem('flashlight', 'flashlight-1');
+    await flushPromises();
+    await flushPromises();
+
+    expect(playEventChoice).toHaveBeenCalledWith('other-people', {
+      choiceId: 'flashlight',
+      instanceId: 'flashlight-1',
+      condition: 'usable',
+    });
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'other-people',
+      expect.objectContaining({
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'flashlight',
+          resultId: 'people-rescue',
+        },
+      }),
+      expect.anything(),
+    );
+    expect(session.snapshot()).toMatchObject({
+      state: 'rescued',
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
     phase.dispose();
   });
 

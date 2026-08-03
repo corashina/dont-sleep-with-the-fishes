@@ -57,8 +57,13 @@ const REFUSE_CHOICE_DURATION = 0.46;
 const RESULT_DURATION = 1.05;
 const ROW_AWAY_DURATION = 1.3;
 const BOAT_BASE = new Vector3(4.15, 0.08, -7.1);
-const BOAT_HIDDEN = new Vector3(8.9, -0.42, -11.8);
 const BOAT_AWAY = new Vector3(10.8, -0.2, -17.2);
+const TRADER_POSITION = new Vector3(0.35, 0.38, -0.1);
+const TRADER_YAW = Math.atan2(
+  -(BOAT_BASE.x + TRADER_POSITION.x),
+  -(BOAT_BASE.z + TRADER_POSITION.z),
+);
+const LANTERN_DECK_Y = 0.44;
 const CASE_TARGET = new Vector3(3.62, 1.02, -6.38);
 const PAYMENT_START = new Vector3(-0.35, 0.72, -1.05);
 const REWARD_END = new Vector3(-0.35, 0.72, -1.05);
@@ -106,11 +111,9 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly vessel = new Group();
   private readonly vesselContent = new Group();
   private readonly rowboat = new Group();
+  private readonly trader = new Group();
   private readonly lantern = new Group();
   private readonly lanternReflection = new Group();
-  private readonly caseRoot = new Group();
-  private readonly caseLid = new Group();
-  private readonly traderHead = new Group();
   private readonly leftOar = new Group();
   private readonly rightOar = new Group();
   private readonly mist = new Group();
@@ -140,7 +143,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     scaleZ: 1,
   };
   private readonly lanternLight: PointLight;
-  private readonly traderFillLight = new PointLight(0x9dbec7, 0, 22, 1.2);
   private readonly reflectionMaterial: MeshStandardMaterial;
   private readonly mistMaterial: MeshStandardMaterial;
   private activeAnimation: ActiveAnimation | null = null;
@@ -171,16 +173,17 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.vesselContent.add(this.rowboat);
     this.vessel.add(this.vesselContent);
     this.buildRowboat();
-    this.buildTrader();
     this.buildOars();
+
+    this.trader.name = 'night-trader-trader';
+    this.trader.userData.motionSource = 'vessel-carried-static';
+    this.trader.userData.animationMode = 'none';
+    this.buildTrader();
+    this.vesselContent.add(this.trader);
 
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
-    this.traderFillLight.name = 'night-trader-cool-fill';
-    this.traderFillLight.position.set(0.45, 3.1, 2.4);
-    this.traderFillLight.castShadow = false;
     this.vesselContent.add(this.lantern);
-    this.vesselContent.add(this.traderFillLight);
     this.lanternReflection.name = 'night-trader-lantern-reflection';
     this.reflectionMaterial = createMaterial(0xd48746, 0.64, {
       emissive: 0x6b381a,
@@ -226,13 +229,15 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
+    this.resetStaticActors();
     this.staged = true;
     this.root.visible = true;
     this.vessel.visible = true;
-    this.rowboat.visible = false;
+    this.rowboat.visible = true;
+    this.trader.visible = true;
     this.lantern.visible = false;
-    this.boatMotionBase.copy(BOAT_HIDDEN);
-    this.resetStaticActors();
+    this.boatMotionBase.copy(BOAT_BASE);
+    this.vessel.position.copy(BOAT_BASE);
     this.root.userData.state = 'staged';
     this.root.userData.revealOrder = [];
     this.root.userData.oarStrokes = 0;
@@ -252,8 +257,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     if (this.disposed) return Promise.resolve();
     this.activeChoiceId = choice.choiceId;
     if (choice.choiceId === 'sleep') {
-      this.caseLid.rotation.x = -0.92;
-      this.root.userData.state = 'closing-case';
+      this.root.userData.state = 'refusing';
       return this.startAnimation('choice-refuse', REFUSE_CHOICE_DURATION);
     }
     if (TRADER_REWARDS[choice.choiceId] === undefined) {
@@ -292,7 +296,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
         return this.startAnimation('result-reward', RESULT_DURATION);
       case 'trader-refuse':
         this.hidePayment();
-        this.caseLid.rotation.x = 0;
         this.root.userData.state = 'rowing-away';
         return this.startAnimation('result-refuse', ROW_AWAY_DURATION);
       default:
@@ -397,7 +400,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'payment-held';
         break;
       case 'choice-refuse':
-        this.root.userData.state = 'case-closed';
+        this.root.userData.state = 'refused';
         break;
       case 'result-reward':
         this.root.userData.state = this.rewardActor?.userData.itemType === 'cannedFood'
@@ -415,26 +418,17 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.lantern.visible = true;
       this.lanternReflection.visible = true;
       this.lanternLight.intensity = 5.2 * smoothstep(progress / 0.22);
-      this.traderFillLight.intensity = 2.4 * smoothstep(progress / 0.32);
       this.reflectionMaterial.opacity = 0.34 * smoothstep(progress / 0.25);
       if ((this.root.userData.revealOrder as string[]).length === 0) {
         (this.root.userData.revealOrder as string[]).push('lantern');
       }
     }
-    if (progress < 0.24) {
-      this.rowboat.visible = false;
-      return;
-    }
-    if (!this.rowboat.visible) {
-      this.rowboat.visible = true;
+    if ((this.root.userData.revealOrder as string[]).length === 1) {
       (this.root.userData.revealOrder as string[]).push('rowboat');
     }
-    const travel = keyedTravel((progress - 0.24) / 0.76);
-    this.boatMotionBase.lerpVectors(BOAT_HIDDEN, BOAT_BASE, travel);
-    const strokeProgress = clamp01((progress - 0.24) / 0.68);
-    this.applyOarStrokes(strokeProgress, 2);
-    this.caseLid.rotation.x = -0.92 * smoothstep((progress - 0.76) / 0.24);
-    if (progress >= 1) this.root.userData.oarStrokes = 2;
+    this.boatMotionBase.copy(BOAT_BASE);
+    this.applyOarStrokes(progress, 1);
+    if (progress >= 1) this.root.userData.oarStrokes = 1;
   }
 
   private applyPaymentChoice(progress: number): void {
@@ -478,16 +472,11 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.root.userData.paymentReachedCase = true;
       this.root.userData.paymentAtCase = true;
     }
-    const tilt = smoothstep((progress - 0.78) / 0.22);
-    this.traderHead.rotation.z = -0.08 - tilt * 0.18;
-    this.root.userData.headTilts = tilt > 0 ? 1 : 0;
     this.updateExchangeState();
   }
 
   private applyRefuseChoice(progress: number): void {
-    const close = smoothstep(progress);
-    this.caseLid.rotation.x = -0.92 * (1 - close);
-    this.traderHead.rotation.z = -0.08 + Math.sin(progress * Math.PI) * 0.04;
+    this.root.userData.refusalProgress = smoothstep(progress);
   }
 
   private applyRewardResult(progress: number): void {
@@ -506,7 +495,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   private applyRefuseResult(progress: number): void {
     const travel = smoothstep(progress);
-    this.caseLid.rotation.x = 0;
     this.boatMotionBase.lerpVectors(BOAT_BASE, BOAT_AWAY, travel);
     this.applyOarStrokes(progress, 2);
     this.mist.visible = progress > 0.32;
@@ -515,9 +503,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     ) * 0.34;
     this.lanternLight.intensity = 5.2 * (1 - smoothstep(
       (progress - 0.52) / 0.48,
-    ));
-    this.traderFillLight.intensity = 2.4 * (1 - smoothstep(
-      (progress - 0.38) / 0.62,
     ));
     if (progress >= 1) {
       this.root.userData.refuseRows = 2;
@@ -749,17 +734,15 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private resetStaticActors(): void {
     this.vessel.visible = true;
     this.rowboat.visible = false;
-    this.vessel.position.copy(BOAT_HIDDEN);
+    this.vessel.position.copy(BOAT_BASE);
     this.vessel.quaternion.identity();
-    this.boatMotionBase.copy(BOAT_HIDDEN);
+    this.boatMotionBase.copy(BOAT_BASE);
     this.vesselContent.visible = true;
+    this.trader.visible = false;
     this.lantern.visible = false;
     this.lanternReflection.visible = false;
     this.lanternLight.intensity = 0;
-    this.traderFillLight.intensity = 0;
     this.reflectionMaterial.opacity = 0;
-    this.caseLid.rotation.x = 0;
-    this.traderHead.rotation.set(0, 0, -0.08);
     this.leftOar.rotation.set(-0.08, 0.12, -0.18);
     this.rightOar.rotation.set(0.08, -0.12, 0.18);
     this.mist.visible = false;
@@ -812,72 +795,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.vessel.userData.modelKind = 'procedural';
   }
 
-  private buildTrader(): void {
-    const cloth = createMaterial(0x35474d, 0.98, { emissive: 0x10191c });
-    const clothEdge = createMaterial(0x52646a, 0.96, { emissive: 0x172328 });
-    const leather = createMaterial(0x6d513b, 0.96, { emissive: 0x1c1008 });
-    const iron = createMaterial(0x626f6d, 0.72, {
-      metalness: 0.3,
-      emissive: 0x101718,
-    });
-
-    const torso = new Mesh(
-      new ConeGeometry(0.48, 1.3, 7),
-      cloth,
-    );
-    torso.name = 'night-trader-cloak';
-    torso.position.set(0.45, 0.84, -0.1);
-    torso.rotation.z = -0.06;
-    this.rowboat.add(torso);
-
-    this.traderHead.name = 'night-trader-hooded-head';
-    this.traderHead.position.set(0.42, 1.58, -0.1);
-    this.traderHead.rotation.z = -0.08;
-    const hood = new Mesh(
-      new ConeGeometry(0.34, 0.68, 7),
-      clothEdge,
-    );
-    hood.name = 'night-trader-hood';
-    const faceShadow = new Mesh(
-      new SphereGeometry(0.19, 7, 5),
-      createMaterial(0x0c1113, 1),
-    );
-    faceShadow.name = 'night-trader-hidden-face';
-    faceShadow.position.set(-0.02, -0.06, 0.16);
-    faceShadow.scale.set(0.84, 1, 0.42);
-    this.traderHead.add(hood, faceShadow);
-    this.rowboat.add(this.traderHead);
-
-    this.caseRoot.name = 'night-trader-case';
-    this.caseRoot.position.set(-0.55, 0.44, 0.08);
-    this.caseRoot.rotation.y = -0.12;
-    const caseBase = new Mesh(
-      new BoxGeometry(1.02, 0.28, 0.72),
-      leather,
-    );
-    caseBase.name = 'night-trader-case-base';
-    this.caseLid.name = 'night-trader-case-lid';
-    this.caseLid.position.set(0, 0.14, -0.34);
-    const lidPanel = new Mesh(
-      new BoxGeometry(1.02, 0.08, 0.7),
-      leather,
-    );
-    lidPanel.name = 'night-trader-case-lid-panel';
-    lidPanel.position.z = 0.35;
-    this.caseLid.add(lidPanel);
-    for (const x of [-0.35, 0.35]) {
-      const latch = new Mesh(
-        new BoxGeometry(0.09, 0.14, 0.05),
-        iron,
-      );
-      latch.name = `night-trader-case-latch-${x}`;
-      latch.position.set(x, 0.02, 0.38);
-      this.caseLid.add(latch);
-    }
-    this.caseRoot.add(caseBase, this.caseLid);
-    this.rowboat.add(this.caseRoot);
-  }
-
   private buildOars(): void {
     const wood = createMaterial(0x65452f, 0.96);
     const build = (oar: Group, name: string, z: number): void => {
@@ -901,6 +818,27 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     };
     build(this.leftOar, 'night-trader-oar-left', 0.72);
     build(this.rightOar, 'night-trader-oar-right', -0.72);
+  }
+
+  private buildTrader(): void {
+    let selected: Group | null = null;
+    try {
+      selected = this.dependencies.propModels.createEventModel(
+        'traderOctopus',
+      )?.root ?? null;
+    } catch {
+      selected = null;
+    }
+    if (selected !== null && hasRenderableBounds(selected)) {
+      selected.name = 'event-model:traderOctopus';
+      this.trader.add(selected);
+      this.trader.userData.modelKind = 'imported';
+    } else {
+      if (selected !== null) disposeRejectedModel(selected);
+      this.trader.userData.modelKind = 'missing';
+    }
+    this.trader.position.copy(TRADER_POSITION);
+    this.trader.rotation.y = TRADER_YAW;
   }
 
   private buildLantern(): PointLight {
@@ -935,7 +873,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.lantern.add(body, cap);
       this.lantern.userData.modelKind = 'procedural';
     }
-    this.lantern.position.set(-1.3, 0.72, 0.5);
+    this.lantern.position.set(-1.3, LANTERN_DECK_Y, 0.5);
     const light = new PointLight(0xffae58, 0, 14, 1.6);
     light.name = 'night-trader-lantern-light';
     light.position.y = 0.08;
