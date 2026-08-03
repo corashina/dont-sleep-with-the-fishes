@@ -2,8 +2,6 @@ import { clamp01, smootherStep } from './easing';
 
 export interface ShipDangerState {
   progress: number;
-  smokeDensity: number;
-  waterFlow: number;
   alarmRate: number;
   alarmPulse: number;
 }
@@ -22,8 +20,6 @@ function keyedAlarmPulse(cycle: number): number {
 export function createShipDangerState(): ShipDangerState {
   return {
     progress: 0,
-    smokeDensity: 1,
-    waterFlow: 1,
     alarmRate: 0.7,
     alarmPulse: 1,
   };
@@ -68,8 +64,6 @@ export function sampleShipDangerStateInto(
   const alarmRate = 0.7 + 1.3 * finalRush;
   const alarmCycle = (safeAlarmElapsed * alarmRate) % 1;
   output.progress = progress;
-  output.smokeDensity = 1 + 0.35 * finalRush;
-  output.waterFlow = 1 + 0.3 * finalRush;
   output.alarmRate = alarmRate;
   output.alarmPulse = keyedAlarmPulse(alarmCycle);
   return output;

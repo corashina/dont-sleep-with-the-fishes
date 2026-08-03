@@ -3,15 +3,13 @@ import type { ShipDangerState } from '../game/shipDanger';
 import { ignoreCleanupError, runCleanupSteps } from './SceneResources';
 import { ShipAlarmLights } from './ShipAlarmLights';
 import { SHIP_DANGER_LAYOUT } from './ShipDangerLayout';
-import { ShipSmokeEffects } from './ShipSmokeEffects';
-import { ShipFloodEffects } from './ShipFloodEffects';
+import { ShipPuddleEffects } from './ShipPuddleEffects';
 
-export type ShipDangerConstructionStage = 'alarms' | 'smoke' | 'flood';
+export type ShipDangerConstructionStage = 'alarms' | 'puddles';
 
 export type ShipDangerOwnedResource =
   | ShipAlarmLights
-  | ShipSmokeEffects
-  | ShipFloodEffects;
+  | ShipPuddleEffects;
 
 export interface ShipDangerConstructionOptions {
   readonly checkpoint?: (stage: ShipDangerConstructionStage) => void;
@@ -20,16 +18,14 @@ export interface ShipDangerConstructionOptions {
 
 export interface ShipDangerEffectsSnapshot {
   readonly alarms: number;
-  readonly smokeOutlets: number;
-  readonly leaks: number;
+  readonly puddles: number;
 }
 
 export class ShipDangerEffects {
   readonly root = new Group();
 
   private readonly alarms!: ShipAlarmLights;
-  private readonly smoke!: ShipSmokeEffects;
-  private readonly flood!: ShipFloodEffects;
+  private readonly puddles!: ShipPuddleEffects;
   private disposed = false;
 
   constructor(options: ShipDangerConstructionOptions = {}) {
@@ -41,20 +37,14 @@ export class ShipDangerEffects {
       options.onResource?.(this.alarms);
       options.checkpoint?.('alarms');
 
-      this.smoke = new ShipSmokeEffects(SHIP_DANGER_LAYOUT.smokeOutlets);
-      cleanup.push(() => this.smoke.dispose());
-      options.onResource?.(this.smoke);
-      options.checkpoint?.('smoke');
-
-      this.flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
-      cleanup.push(() => this.flood.dispose());
-      options.onResource?.(this.flood);
-      options.checkpoint?.('flood');
+      this.puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
+      cleanup.push(() => this.puddles.dispose());
+      options.onResource?.(this.puddles);
+      options.checkpoint?.('puddles');
 
       this.root.add(
         this.alarms.root,
-        this.smoke.root,
-        this.flood.root,
+        this.puddles.root,
       );
     } catch (error) {
       for (let index = cleanup.length - 1; index >= 0; index -= 1) {
@@ -64,18 +54,15 @@ export class ShipDangerEffects {
     }
   }
 
-  update(delta: number, state: Readonly<ShipDangerState>): void {
+  update(_delta: number, state: Readonly<ShipDangerState>): void {
     if (this.disposed) return;
     this.alarms.update(state);
-    this.smoke.update(delta, state);
-    this.flood.update(delta, state);
   }
 
   snapshotForTest(): ShipDangerEffectsSnapshot {
     return {
       alarms: this.alarms.snapshotForTest().lampCount,
-      smokeOutlets: this.smoke.snapshotForTest().sourceCount,
-      leaks: this.flood.snapshotForTest().leakCount,
+      puddles: this.puddles.snapshotForTest().puddleCount,
     };
   }
 
@@ -83,8 +70,7 @@ export class ShipDangerEffects {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
-      () => this.flood.dispose(),
-      () => this.smoke.dispose(),
+      () => this.puddles.dispose(),
       () => this.alarms.dispose(),
       () => this.root.clear(),
     ]);
