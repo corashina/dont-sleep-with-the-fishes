@@ -228,6 +228,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | rain | `rain.mp3` | [Rain Loop / Snoopy20111](https://freesound.org/people/Snoopy20111/sounds/399072/) |
 | thunderLightning | `thunderLightning.mp3` | [Thunder2 / Yoyodaman234](https://freesound.org/people/Yoyodaman234/sounds/267551/) |
 | roomTone | `roomTone.mp3` | [Ferry Room Tone / kyles](https://freesound.org/people/kyles/sounds/454012/) |
+| shipAlarm | `shipAlarm.mp3` | [Klaxon / InfamousLazure](https://freesound.org/people/InfamousLazure/sounds/584001/) |
 | scavengeChase | `scavengeChase.mp3` | [The Chase / Victor_Natas](https://freesound.org/people/Victor_Natas/sounds/634513/) |
 | scavengeCountdown | `scavengeCountdown.mp3` | [Time Running Out / qubodup](https://freesound.org/people/qubodup/sounds/211102/) |
 | woodStep | `woodStep.mp3` | [Wood Footstep / SoundsAreGr8](https://freesound.org/people/SoundsAreGr8/sounds/340983/) |

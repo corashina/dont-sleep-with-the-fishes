@@ -28,7 +28,7 @@ function createHarness() {
       calls.push(`loop:${id}`);
       return null;
     }),
-    stopLoop: vi.fn(),
+    stopLoop: vi.fn((id, fadeSeconds) => calls.push(`stopLoop:${id}:${fadeSeconds}`)),
     setLoopGain: vi.fn(),
     setPaused: vi.fn(),
     dispose: vi.fn(),
@@ -36,16 +36,21 @@ function createHarness() {
   return {
     audio: new ScavengeAudio(scope),
     calls,
+    stopLoop: scope.stopLoop,
   };
 }
 
 describe('ScavengeAudio', () => {
-  it('starts room tone before play and starts music once when the run begins', () => {
+  it('starts the klaxon once with the active run', () => {
     const { audio, calls } = createHarness();
     audio.start();
     audio.beginRun();
     audio.beginRun();
-    expect(calls).toEqual(['loop:roomTone', 'play:scavengeChase']);
+    expect(calls).toEqual([
+      'loop:roomTone',
+      'loop:shipAlarm',
+      'play:scavengeChase',
+    ]);
   });
 
   it('replaces the chase with the countdown at 50 elapsed seconds', () => {
@@ -55,6 +60,7 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.update(null, false, 59);
     expect(calls).toEqual([
+      'loop:shipAlarm',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',
       'play:scavengeCountdown',
@@ -67,11 +73,25 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.sink();
     expect(calls).toEqual([
+      'loop:shipAlarm',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',
       'play:scavengeCountdown',
+      'stopLoop:shipAlarm:0.12',
       'stop:scavengeCountdown:0.12',
       'play:sinkingEnding',
     ]);
+  });
+
+  it('stops the klaxon for evacuation and sinking', () => {
+    const completeHarness = createHarness();
+    completeHarness.audio.beginRun();
+    completeHarness.audio.complete();
+    expect(completeHarness.stopLoop).toHaveBeenCalledWith('shipAlarm', 0.12);
+
+    const sinkHarness = createHarness();
+    sinkHarness.audio.beginRun();
+    sinkHarness.audio.sink();
+    expect(sinkHarness.stopLoop).toHaveBeenCalledWith('shipAlarm', 0.12);
   });
 });
