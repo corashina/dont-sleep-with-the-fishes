@@ -3,9 +3,9 @@ import {
   BoxGeometry,
   BufferGeometry,
   Group,
+  Material,
   Mesh,
   MeshStandardMaterial,
-  type Material,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -171,6 +171,48 @@ describe('CaptainWhiskersPresentation', () => {
     expect(modelDispose).toHaveBeenCalledOnce();
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('disposes partial hand resources when hand construction fails', () => {
+    const propModels = createTestPropModels();
+    const failure = new Error('petting hand construction failed');
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
+    const materialDispose = vi.spyOn(Material.prototype, 'dispose');
+
+    expect(() => new CaptainWhiskersPresentation(propModels, {
+      onPropPartCreated: (prop, part) => {
+        if (prop === 'hand' && part.name === 'captain-whiskers-hand:thumb') {
+          throw failure;
+        }
+      },
+    })).toThrow(failure);
+
+    expect(geometryDispose).toHaveBeenCalledTimes(3);
+    expect(materialDispose).toHaveBeenCalledTimes(3);
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+    propModels.dispose();
+  });
+
+  it('disposes the completed hand and partial food when food construction fails', () => {
+    const propModels = createTestPropModels();
+    const failure = new Error('food construction failed');
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
+    const materialDispose = vi.spyOn(Material.prototype, 'dispose');
+
+    expect(() => new CaptainWhiskersPresentation(propModels, {
+      onPropPartCreated: (prop, part) => {
+        if (prop === 'food' && part.name === 'captain-whiskers-food:bowl') {
+          throw failure;
+        }
+      },
+    })).toThrow(failure);
+
+    expect(geometryDispose).toHaveBeenCalledTimes(8);
+    expect(materialDispose).toHaveBeenCalledTimes(5);
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+    propModels.dispose();
   });
 
   it('disposes every model, hand, and food geometry and material once', () => {

@@ -44,6 +44,19 @@ interface ActiveAction {
   readonly resolve: () => void;
 }
 
+export interface CaptainWhiskersPresentationConstructionHooks {
+  readonly onPropPartCreated?: (
+    prop: 'hand' | 'food',
+    part: Mesh,
+  ) => void;
+}
+
+interface OwnedCompanionProp {
+  readonly root: Group;
+  readonly geometries: Set<BufferGeometry>;
+  readonly materials: Set<Material>;
+}
+
 export class CaptainWhiskersPresentation {
   readonly root = new Group();
   readonly interactionRoot = new Group();
@@ -66,7 +79,10 @@ export class CaptainWhiskersPresentation {
   private living = false;
   private disposed = false;
 
-  constructor(propModels: Pick<PropModelLibrary, 'createPresentation'>) {
+  constructor(
+    propModels: Pick<PropModelLibrary, 'createPresentation'>,
+    hooks: CaptainWhiskersPresentationConstructionHooks = {},
+  ) {
     this.root.name = 'captain-whiskers-companion';
     const transform = boatStorageTransform(CAPTAIN_WHISKERS_INSTANCE);
     this.root.position.copy(transform.position);
@@ -90,10 +106,12 @@ export class CaptainWhiskersPresentation {
       this.interactionRoot.add(this.poseRoot);
       this.root.add(this.interactionRoot);
 
-      this.hand = createPettingHand();
-      collectMeshResources(this.hand, this.ownedGeometries, this.ownedMaterials);
-      this.food = createFoodProp();
-      collectMeshResources(this.food, this.ownedGeometries, this.ownedMaterials);
+      const hand = createPettingHand(hooks.onPropPartCreated);
+      this.hand = hand.root;
+      this.takePropOwnership(hand);
+      const food = createFoodProp(hooks.onPropPartCreated);
+      this.food = food.root;
+      this.takePropOwnership(food);
       this.root.add(this.hand, this.food);
       this.setLiving(false);
       this.applyPose();
@@ -169,6 +187,11 @@ export class CaptainWhiskersPresentation {
     this.interactionRoot.visible = living;
   }
 
+  private takePropOwnership(prop: OwnedCompanionProp): void {
+    for (const geometry of prop.geometries) this.ownedGeometries.add(geometry);
+    for (const material of prop.materials) this.ownedMaterials.add(material);
+  }
+
   private finishAction(): void {
     const action = this.activeAction;
     if (action === null) return;
@@ -208,78 +231,134 @@ export class CaptainWhiskersPresentation {
   }
 }
 
-function createPettingHand(): Group {
+function createPettingHand(
+  onPartCreated?: CaptainWhiskersPresentationConstructionHooks['onPropPartCreated'],
+): OwnedCompanionProp {
   const root = new Group();
   root.name = 'captain-whiskers-petting-hand';
-  const skin = new MeshStandardMaterial({
-    color: 0xa77658,
-    roughness: 0.88,
-    flatShading: true,
-  });
-  const cloth = new MeshStandardMaterial({
-    color: 0x263f46,
-    roughness: 0.96,
-    flatShading: true,
-  });
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  try {
+    const skin = new MeshStandardMaterial({
+      color: 0xa77658,
+      roughness: 0.88,
+      flatShading: true,
+    });
+    materials.add(skin);
+    const cloth = new MeshStandardMaterial({
+      color: 0x263f46,
+      roughness: 0.96,
+      flatShading: true,
+    });
+    materials.add(cloth);
+    const palmGeometry = new BoxGeometry(0.24, 0.075, 0.2, 1, 1, 1);
+    geometries.add(palmGeometry);
+    const palm = new Mesh(palmGeometry, skin);
+    palm.name = 'captain-whiskers-hand:palm';
+    palm.rotation.y = -0.08;
+    root.add(palm);
+    onPartCreated?.('hand', palm);
 
-  const palm = new Mesh(new BoxGeometry(0.24, 0.075, 0.2, 1, 1, 1), skin);
-  palm.name = 'captain-whiskers-hand:palm';
-  palm.rotation.y = -0.08;
-  root.add(palm);
+    const thumbGeometry = new CylinderGeometry(0.025, 0.035, 0.14, 5);
+    geometries.add(thumbGeometry);
+    const thumb = new Mesh(thumbGeometry, skin);
+    thumb.name = 'captain-whiskers-hand:thumb';
+    thumb.position.set(-0.12, -0.005, 0.035);
+    thumb.rotation.z = 1.08;
+    root.add(thumb);
+    onPartCreated?.('hand', thumb);
 
-  const thumb = new Mesh(new CylinderGeometry(0.025, 0.035, 0.14, 5), skin);
-  thumb.name = 'captain-whiskers-hand:thumb';
-  thumb.position.set(-0.12, -0.005, 0.035);
-  thumb.rotation.z = 1.08;
-  root.add(thumb);
+    for (let index = 0; index < 3; index += 1) {
+      const fingerGeometry = new BoxGeometry(
+        0.055,
+        0.045,
+        0.2 - index * 0.012,
+        1,
+        1,
+        1,
+      );
+      geometries.add(fingerGeometry);
+      const finger = new Mesh(fingerGeometry, skin);
+      finger.name = `captain-whiskers-hand:finger-${index + 1}`;
+      finger.position.set(-0.064 + index * 0.066, -0.045, -0.17);
+      finger.rotation.x = 0.08 + index * 0.025;
+      finger.rotation.y = (index - 1) * 0.035;
+      root.add(finger);
+      onPartCreated?.('hand', finger);
+    }
 
-  for (let index = 0; index < 3; index += 1) {
-    const finger = new Mesh(
-      new BoxGeometry(0.055, 0.045, 0.2 - index * 0.012, 1, 1, 1),
-      skin,
-    );
-    finger.name = `captain-whiskers-hand:finger-${index + 1}`;
-    finger.position.set(-0.064 + index * 0.066, -0.045, -0.17);
-    finger.rotation.x = 0.08 + index * 0.025;
-    finger.rotation.y = (index - 1) * 0.035;
-    root.add(finger);
+    const cuffGeometry = new CylinderGeometry(0.13, 0.155, 0.16, 7);
+    geometries.add(cuffGeometry);
+    const cuff = new Mesh(cuffGeometry, cloth);
+    cuff.name = 'captain-whiskers-hand:cuff';
+    cuff.position.z = 0.19;
+    cuff.rotation.x = Math.PI / 2;
+    root.add(cuff);
+    onPartCreated?.('hand', cuff);
+    enableItemAmbientOcclusion(root);
+    return { root, geometries, materials };
+  } catch (error) {
+    cleanupFailedProp(root, geometries, materials);
+    throw error;
   }
-
-  const cuff = new Mesh(new CylinderGeometry(0.13, 0.155, 0.16, 7), cloth);
-  cuff.name = 'captain-whiskers-hand:cuff';
-  cuff.position.z = 0.19;
-  cuff.rotation.x = Math.PI / 2;
-  root.add(cuff);
-  enableItemAmbientOcclusion(root);
-  return root;
 }
 
-function createFoodProp(): Group {
+function createFoodProp(
+  onPartCreated?: CaptainWhiskersPresentationConstructionHooks['onPropPartCreated'],
+): OwnedCompanionProp {
   const root = new Group();
   root.name = 'captain-whiskers-food';
-  const bowlMaterial = new MeshStandardMaterial({
-    color: 0x53646a,
-    roughness: 0.82,
-    metalness: 0.18,
-    flatShading: true,
-  });
-  const foodMaterial = new MeshStandardMaterial({
-    color: 0x754532,
-    roughness: 0.98,
-    flatShading: true,
-  });
-  const bowl = new Mesh(
-    new CylinderGeometry(0.2, 0.145, 0.09, 8, 1, false),
-    bowlMaterial,
-  );
-  bowl.name = 'captain-whiskers-food:bowl';
-  root.add(bowl);
-  const ration = new Mesh(new SphereGeometry(0.12, 7, 4), foodMaterial);
-  ration.name = 'captain-whiskers-food:ration';
-  ration.position.y = 0.065;
-  ration.scale.set(1, 0.38, 0.78);
-  ration.rotation.y = 0.24;
-  root.add(ration);
-  enableItemAmbientOcclusion(root);
-  return root;
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
+  try {
+    const bowlMaterial = new MeshStandardMaterial({
+      color: 0x53646a,
+      roughness: 0.82,
+      metalness: 0.18,
+      flatShading: true,
+    });
+    materials.add(bowlMaterial);
+    const foodMaterial = new MeshStandardMaterial({
+      color: 0x754532,
+      roughness: 0.98,
+      flatShading: true,
+    });
+    materials.add(foodMaterial);
+    const bowlGeometry = new CylinderGeometry(0.2, 0.145, 0.09, 8, 1, false);
+    geometries.add(bowlGeometry);
+    const bowl = new Mesh(bowlGeometry, bowlMaterial);
+    bowl.name = 'captain-whiskers-food:bowl';
+    root.add(bowl);
+    onPartCreated?.('food', bowl);
+
+    const rationGeometry = new SphereGeometry(0.12, 7, 4);
+    geometries.add(rationGeometry);
+    const ration = new Mesh(rationGeometry, foodMaterial);
+    ration.name = 'captain-whiskers-food:ration';
+    ration.position.y = 0.065;
+    ration.scale.set(1, 0.38, 0.78);
+    ration.rotation.y = 0.24;
+    root.add(ration);
+    onPartCreated?.('food', ration);
+    enableItemAmbientOcclusion(root);
+    return { root, geometries, materials };
+  } catch (error) {
+    cleanupFailedProp(root, geometries, materials);
+    throw error;
+  }
+}
+
+function cleanupFailedProp(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  materials: Set<Material>,
+): void {
+  try {
+    runCleanupSteps([
+      () => root.clear(),
+      () => disposeResourceSets(geometries, materials),
+    ]);
+  } catch {
+    // Preserve the prop construction error after each resource runs.
+  }
 }
