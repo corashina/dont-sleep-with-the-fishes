@@ -292,6 +292,8 @@ describe('survival events', () => {
       .toEqual(['stay-awake', 'sleep']);
     expect(event('guarded-sleep').choices.map(({ id }) => id))
       .toEqual(['watch', 'sleep']);
+    expect(event('sick-companion').choices.find(({ id }) => id === 'ductTape')
+      ?.outcomes.map(({ weight }) => weight)).toEqual([80, 20]);
 
     const delegate = event('drifting-loot').choices.find(({ id }) => id === 'delegate-whiskers');
     expect(delegate).toMatchObject({
