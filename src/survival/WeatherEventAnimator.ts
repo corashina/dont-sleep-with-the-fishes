@@ -474,7 +474,7 @@ export class WeatherEventAnimator {
       sample.cameraPitch,
       sample.cameraRoll,
     );
-    if (!isCameraOnlyWeatherEvent(eventId)) {
+    if (!isCameraOnlyWeatherEvent(eventId) && eventId !== 'bad-sleep') {
       this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
     }
     if (eventId === 'man-in-the-fog') {

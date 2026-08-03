@@ -3635,6 +3635,60 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('plays the Bad Sleep yawn after the scene opens and before reveal', async () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'bad-sleep')!;
+    let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
+    const calls: string[] = [];
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent: vi.fn(() => calls.push('stage')),
+        revealEvent: vi.fn(() => {
+          calls.push('reveal');
+          return Promise.resolve();
+        }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn((covered: boolean) => {
+          calls.push(covered ? 'cover' : 'uncover');
+          return Promise.resolve();
+        }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return Promise.resolve();
+        }),
+        showEventReveal: vi.fn(() => {
+          calls.push('caption');
+          return Promise.resolve();
+        }),
+        setBadSleepCue: vi.fn(),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    vi.spyOn(phaseAudio, 'eventReveal').mockImplementation((eventId) => {
+      calls.push(`audio:${eventId}`);
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(calls).toEqual([
+      'cover',
+      'stage',
+      'settle',
+      'uncover',
+      'audio:bad-sleep',
+      'reveal',
+      'caption',
+    ]);
+    phase.dispose();
+  });
+
   it('runs the full Dangerous Waters lifecycle while choices stay locked until reveal completes', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'dangerous-waters')!;
     let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });

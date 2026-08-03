@@ -225,7 +225,7 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'bad-sleep' | 'dive';
+export type SleepCoverProfile = 'solid' | 'dive';
 
 export interface DiveResultView {
   readonly title: 'DIVE RESULT';
@@ -343,7 +343,7 @@ export class SurvivalUI {
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
-  private readonly dreamEyelids: readonly HTMLElement[];
+  private readonly badSleepCue: HTMLElement;
   private readonly diveResultLayer: HTMLElement;
   private readonly diveResultTitle: HTMLElement;
   private readonly diveResultRewards: HTMLElement;
@@ -460,9 +460,10 @@ export class SurvivalUI {
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true">
-        <span data-dream-eyelid="top"></span>
-        <span data-dream-eyelid="bottom"></span>
+      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true"></div>
+      <div class="bad-sleep-cue" data-bad-sleep-cue aria-hidden="true">
+        <span class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></span>
+        <span class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></span>
       </div>
       <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
         <div class="dive-result__paper">
@@ -598,7 +599,7 @@ export class SurvivalUI {
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
-    this.dreamEyelids = [...this.sleepCover.querySelectorAll<HTMLElement>('[data-dream-eyelid]')];
+    this.badSleepCue = requireElement(this.root, '[data-bad-sleep-cue]');
     this.diveResultLayer = requireElement(this.root, '[data-dive-result]');
     this.diveResultTitle = requireElement(this.root, '[data-dive-result-title]');
     this.diveResultRewards = requireElement(this.root, '[data-dive-result-rewards]');
@@ -935,6 +936,7 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.pendingEventChoiceBeat?.finish();
     this.eventSleepMask.classList.remove('is-visible');
+    this.badSleepCue.classList.remove('is-visible');
     const focusedContextualChoice = document.activeElement !== null
       && this.eventChoices.contains(document.activeElement);
     this.eventEligibility = null;
@@ -988,8 +990,12 @@ export class SurvivalUI {
   setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.sleepCover.dataset.profile = profile;
-    for (const eyelid of this.dreamEyelids) eyelid.hidden = profile === 'dive';
     return Promise.resolve();
+  }
+
+  setBadSleepCue(visible: boolean): void {
+    if (this.disposed) return;
+    this.badSleepCue.classList.toggle('is-visible', visible);
   }
 
   private clearEventResult(): void {
@@ -1434,6 +1440,7 @@ export class SurvivalUI {
     this.eventSelectedInstanceId = null;
     this.eventSelectedChoiceId = null;
     this.eventPresentationActive = false;
+    this.badSleepCue.classList.remove('is-visible');
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
     this.endureButton.hidden = true;

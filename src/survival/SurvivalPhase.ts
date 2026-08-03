@@ -1666,7 +1666,7 @@ export class SurvivalPhase implements GamePhase {
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
     this.audio.beginEvent(event.id);
-    this.audio.eventReveal(event.id);
+    if (event.id !== 'bad-sleep') this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
     this.setBusy(true);
@@ -1707,7 +1707,15 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (event.id === 'bad-sleep') {
+      this.audio.eventReveal(event.id);
+      this.ui.setBadSleepCue?.(true);
+    }
+    try {
+      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    } finally {
+      if (event.id === 'bad-sleep') this.ui.setBadSleepCue?.(false);
+    }
     if (!this.isContinuationActive(generation)) return;
     if (!isDedicatedEventId(event.id)) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());

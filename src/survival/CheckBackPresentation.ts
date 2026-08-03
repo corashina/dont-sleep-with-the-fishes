@@ -11,9 +11,9 @@ import {
 import { disposeResourceSets } from '../world/SceneResources';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import type { EventPresentationKey } from './survivalTypes';
 
 export class CheckBackPresentation extends KeyedEventPresentation {
-  private static readonly REVEAL_TURN = Math.PI * 0.78;
   private readonly fish: Object3D;
   private readonly wake: Mesh;
   private readonly geometries = new Set<BufferGeometry>();
@@ -84,27 +84,15 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   protected applyAnimation(kind: string, _time: number, progress: number): void {
     const eased = progress * progress * (3 - 2 * progress);
     if (kind === 'reveal') {
-      const turnIn = Math.min(1, progress / 0.55);
-      const turnInEased = turnIn * turnIn * (3 - 2 * turnIn);
-      const returnProgress = Math.max(0, (progress - 0.72) / 0.28);
-      const returnEased = returnProgress * returnProgress
-        * (3 - 2 * returnProgress);
-      this.cameraLook.apply(
-        turnInEased * (1 - returnEased) * CheckBackPresentation.REVEAL_TURN,
-        0,
-      );
+      this.cameraLook.apply(0, 0);
       this.wake.rotation.z = Math.sin(progress * Math.PI * 2) * 0.08;
       return;
     }
     if (kind === 'check-the-back.ignore') {
-      this.cameraLook.apply((1 - eased) * CheckBackPresentation.REVEAL_TURN, 0);
+      this.cameraLook.apply(0, 0);
       return;
     }
-    this.cameraLook.apply(
-      CheckBackPresentation.REVEAL_TURN
-        + eased * (Math.PI - CheckBackPresentation.REVEAL_TURN),
-      0,
-    );
+    this.cameraLook.apply(eased * Math.PI, 0);
     if (kind === 'check-the-back.fish') {
       this.fish.rotation.z = Math.sin(progress * Math.PI * 5) * (1 - progress) * 0.7;
       this.fish.position.y = 0.28 + Math.sin(progress * Math.PI) * 0.26;
@@ -115,6 +103,12 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       this.showFace();
       this.fish.position.z = eased * -0.18;
     }
+  }
+
+  protected reactionDuration(kind: EventPresentationKey): number {
+    return kind === 'check-the-back.fish' || kind === 'check-the-back.empty'
+      ? 1.8
+      : super.reactionDuration(kind);
   }
 
   protected disposeOwned(): void {

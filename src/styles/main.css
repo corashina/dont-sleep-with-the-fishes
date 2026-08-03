@@ -1679,29 +1679,38 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   background: #010405;
   transition-duration: 750ms;
 }
-.sleep-cover [data-dream-eyelid] {
+.bad-sleep-cue {
   position: absolute;
-  left: -6%;
-  width: 112%;
-  height: 62%;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bad-sleep-cue__eyelid {
+  position: absolute;
+  left: -4%;
+  width: 108%;
+  height: 12%;
   background: #010202;
   will-change: transform;
 }
-.sleep-cover [data-dream-eyelid="top"] {
-  top: -12%;
-  border-radius: 0 0 48% 55%;
+.bad-sleep-cue__eyelid--top {
+  top: 0;
+  border-radius: 0 0 52% 47%;
   box-shadow: inset 0 -3px #172126;
+  transform: translateY(-100%);
 }
-.sleep-cover [data-dream-eyelid="bottom"] {
-  bottom: -12%;
-  border-radius: 52% 46% 0 0;
+.bad-sleep-cue__eyelid--bottom {
+  bottom: 0;
+  border-radius: 48% 53% 0 0;
   box-shadow: inset 0 3px #172126;
+  transform: translateY(100%);
 }
-.sleep-cover[data-profile="bad-sleep"].is-covered [data-dream-eyelid="top"] {
-  animation: bad-sleep-top-eyelid 3.4s cubic-bezier(.38, .04, .22, 1) forwards;
+.bad-sleep-cue.is-visible .bad-sleep-cue__eyelid--top {
+  animation: bad-sleep-cue-top 900ms cubic-bezier(.38, .04, .22, 1) both;
 }
-.sleep-cover[data-profile="bad-sleep"].is-covered [data-dream-eyelid="bottom"] {
-  animation: bad-sleep-bottom-eyelid 3.4s cubic-bezier(.38, .04, .22, 1) forwards;
+.bad-sleep-cue.is-visible .bad-sleep-cue__eyelid--bottom {
+  animation: bad-sleep-cue-bottom 900ms cubic-bezier(.38, .04, .22, 1) both;
 }
 .dive-result {
   position: absolute;
@@ -1853,21 +1862,17 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   outline: 3px solid #8f3f29;
   outline-offset: 2px;
 }
-@keyframes bad-sleep-top-eyelid {
-  0% { transform: translateY(0); }
-  18% { transform: translateY(-34%); }
-  43% { transform: translateY(-18%); }
-  58% { transform: translateY(-32%); }
-  76% { transform: translateY(-23%); }
-  100% { transform: translateY(-20%); }
+@keyframes bad-sleep-cue-top {
+  0% { transform: translateY(-100%); }
+  30% { transform: translateY(0); }
+  62% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
 }
-@keyframes bad-sleep-bottom-eyelid {
-  0% { transform: translateY(0); }
-  21% { transform: translateY(31%); }
-  46% { transform: translateY(16%); }
-  61% { transform: translateY(29%); }
-  78% { transform: translateY(21%); }
-  100% { transform: translateY(18%); }
+@keyframes bad-sleep-cue-bottom {
+  0% { transform: translateY(100%); }
+  30% { transform: translateY(0); }
+  62% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
 }
 .event-sleep-mask {
   position: absolute;

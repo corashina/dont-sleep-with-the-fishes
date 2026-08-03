@@ -696,24 +696,23 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
   });
 
-  it('does not render an eye mask for Bad Sleep', async () => {
+  it('shows and clears the small Bad Sleep eyelid cue', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.beginEventPresentation();
-    ui.setEventSelection(new Map());
-    await ui.setSleepCovered(true);
+    ui.setBadSleepCue(true);
 
-    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
-    expect(mount.querySelectorAll('[data-dream-eyes]')).toHaveLength(0);
-    expect(mount.querySelectorAll('[data-dream-eyelid]')).toHaveLength(0);
-    expect(endure.hidden).toBe(false);
-    endure.focus();
-    expect(document.activeElement).toBe(endure);
+    const eyelids = mount.querySelector<HTMLElement>('[data-bad-sleep-cue]')!;
+    expect(eyelids.classList).toContain('is-visible');
+    expect(mainStyles).toMatch(/\.bad-sleep-cue\.is-visible/);
+    ui.setBadSleepCue(false);
+    expect(eyelids.classList).not.toContain('is-visible');
+    ui.setBadSleepCue(true);
+    ui.clearEventPresentation();
+    expect(eyelids.classList).not.toContain('is-visible');
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
-    expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
-    expect(mainStyles).not.toMatch(/bad-sleep-(left|right)-(upper|lower)/);
+    expect(mainStyles).toMatch(/height:\s*12%/);
   });
 
   it('reuses the event caption for the exact held result', async () => {
