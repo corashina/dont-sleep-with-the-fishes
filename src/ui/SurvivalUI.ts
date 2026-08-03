@@ -5,6 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
+import { captainWhiskersStatus } from '../survival/CaptainWhiskersState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
@@ -16,6 +17,7 @@ import type {
   ResourceDelta,
   RewardSummary,
   SurvivalEventDefinition,
+  SurvivalEndingReason,
   SurvivalSnapshot,
   SurvivalState,
   WeatherId,
@@ -95,7 +97,16 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
   { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
+  { id: 'petWhiskers', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
+  { id: 'feedWhiskers', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
+  { id: 'treatWhiskers', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },
 ];
+
+const WHISKERS_ACTIONS = [
+  'petWhiskers',
+  'feedWhiskers',
+  'treatWhiskers',
+] as const satisfies readonly DayActionId[];
 
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
 
@@ -351,6 +362,8 @@ export class SurvivalUI {
   private readonly diveResultClose: HTMLButtonElement;
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
+  private readonly whiskersCard: HTMLElement;
+  private readonly whiskersPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
   private readonly anchoredEventResultPanel: HTMLElement;
@@ -452,6 +465,7 @@ export class SurvivalUI {
   private eventSelectedInstanceId: ItemInstanceId | null = null;
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
+  private whiskersReturnTarget: HTMLButtonElement | null = null;
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -492,6 +506,43 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
+      <section class="whiskers-card" data-whiskers-card aria-labelledby="whiskers-card-title" aria-hidden="true" hidden>
+        <div class="whiskers-card__heading">
+          <div>
+            <p class="whiskers-card__eyebrow ui-role-context">CREWMATE STATUS</p>
+            <h2 class="ui-role-display" id="whiskers-card-title">CAPTAIN WHISKERS</h2>
+          </div>
+          <button type="button" class="whiskers-card__close ui-role-context" data-whiskers-close aria-label="Close Captain Whiskers status">CLOSE</button>
+        </div>
+        <div class="whiskers-card__statuses">
+          <div class="whiskers-status" data-whiskers-hunger-row>
+            <span class="whiskers-status__name ui-role-context">HUNGER</span>
+            <span class="whiskers-hunger" aria-hidden="true">
+              ${Array.from({ length: 5 }, (_, index) => `<i data-whiskers-hunger-step="${index + 1}" data-filled="false"></i>`).join('')}
+            </span>
+            <strong class="ui-role-context" data-whiskers-hunger-label></strong>
+            <span class="whiskers-status__danger ui-role-context" data-whiskers-hunger-danger hidden>! DANGER</span>
+          </div>
+          <div class="whiskers-status" data-whiskers-happiness-row>
+            <span class="whiskers-status__name ui-role-context">HAPPINESS</span>
+            <strong class="ui-role-context" data-whiskers-happiness></strong>
+            <span class="whiskers-status__danger ui-role-context" data-whiskers-happiness-danger hidden>! DANGER</span>
+          </div>
+          <div class="whiskers-status" data-whiskers-health-row>
+            <span class="whiskers-status__name ui-role-context">HEALTH</span>
+            <strong class="ui-role-context" data-whiskers-health></strong>
+            <span class="whiskers-status__danger ui-role-context" data-whiskers-health-danger hidden>! DANGER</span>
+          </div>
+        </div>
+        <nav class="whiskers-care" aria-label="Captain Whiskers care">
+          ${WHISKERS_ACTIONS.map((action) => `
+            <button type="button" class="whiskers-care__action ui-role-context" data-action="${action}" aria-disabled="false">
+              <span>${action === 'petWhiskers' ? 'PET' : action === 'feedWhiskers' ? 'FEED' : 'TREAT'}</span>
+              <small class="ui-role-narrative" data-whiskers-action-reason hidden></small>
+            </button>`).join('')}
+        </nav>
+        <p class="whiskers-card__passive ui-role-narrative"><strong>SHIP'S CAT:</strong> Slightly improves fishing luck</p>
+      </section>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
@@ -607,6 +658,8 @@ export class SurvivalUI {
     this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
+    this.whiskersCard = requireElement(this.root, '[data-whiskers-card]');
+    this.whiskersPet = requireElement(this.whiskersCard, '[data-action="petWhiskers"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.anchoredEventResultPanel = requireElement(this.root, '[data-event-result-panel]');
@@ -674,6 +727,7 @@ export class SurvivalUI {
     this.root.addEventListener('focusin', this.handleAnchorFocusIn);
     this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     document.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
   }
 
@@ -689,6 +743,7 @@ export class SurvivalUI {
       const reason = unavailable(id);
       this.actionReasons.set(id, reason);
     });
+    this.renderWhiskers(snapshot);
     this.anchors.forEach((anchor, id) => this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor));
     this.syncCommandState();
   }
@@ -757,6 +812,14 @@ export class SurvivalUI {
       this.anchors.delete(id);
       this.anchorLayouts.delete(id);
     });
+    const companionAnchor = anchors.find(
+      (anchor) => anchor.companionId === 'captainWhiskers' && anchor.visible,
+    );
+    if (companionAnchor === undefined) this.closeWhiskersCard(false);
+    else if (!this.whiskersCard.hidden) {
+      this.whiskersReturnTarget = this.anchorButtons.get(companionAnchor.id) ?? null;
+      this.positionWhiskersCard(companionAnchor);
+    }
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.positionOpenRoutineDialogs();
     this.syncCommandState();
@@ -774,6 +837,7 @@ export class SurvivalUI {
 
   beginEventPresentation(): void {
     if (this.disposed) return;
+    this.closeWhiskersCard(false);
     this.clearAnchorHighlight();
     this.eventPresentationActive = true;
     this.syncCommandState();
@@ -783,6 +847,7 @@ export class SurvivalUI {
     event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.closeWhiskersCard(false);
     delete this.eventCaption.dataset.result;
     this.updateText('event:title', this.eventTitle, '');
     this.updateText('event:detail', this.eventDetail, '');
@@ -1387,6 +1452,7 @@ export class SurvivalUI {
 
   setPaused(paused: boolean): void {
     if (this.disposed || paused === this.paused) return;
+    if (paused) this.closeWhiskersCard(true);
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
@@ -1409,13 +1475,17 @@ export class SurvivalUI {
     day: number,
     seed: number,
     scavengeElapsedSeconds: number,
+    endingReason: SurvivalEndingReason = 'standard',
   ): void {
     if (this.disposed) return;
-    const copy = state === 'rescued'
+    const copy = endingReason === 'kidnapped'
+      ? { title: 'Taken in the dark.', body: 'The false shape carries you beyond the lantern light.' }
+      : state === 'rescued'
       ? { title: 'Rescue found you.', body: 'A vessel cuts across the horizon and carries you home.' }
       : state === 'dead'
         ? { title: 'The sea outlasted you.', body: 'Your empty lifeboat drifts on beneath the weather.' }
         : { title: 'Boat is gone.', body: 'The damaged hull slips under and leaves no refuge behind.' };
+    this.closeWhiskersCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
     this.updateText('ending:title', this.endingTitle, copy.title);
@@ -1471,6 +1541,7 @@ export class SurvivalUI {
     this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
     this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
     document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('click', this.handleDocumentClick);
     window.removeEventListener('resize', this.handleWindowResize);
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
@@ -1604,7 +1675,9 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleLabel = anchor.label ?? (anchor.itemType !== null
+    const visibleLabel = anchor.companionId === 'captainWhiskers'
+      ? 'CAPTAIN WHISKERS: CHECK STATUS'
+      : anchor.label ?? (anchor.itemType !== null
       ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
         ? quantityLabel('REPAIR MATERIAL', quantity)
@@ -1631,6 +1704,8 @@ export class SurvivalUI {
     }
     const spokenCost = spokenEnergyCost(energyCost);
     button.dataset.action = anchor.action ?? '';
+    if (anchor.companionId === undefined) delete button.dataset.companion;
+    else button.dataset.companion = anchor.companionId;
     if (anchor.itemType === null) delete button.dataset.item;
     else button.dataset.item = anchor.itemType;
     if (anchor.toolId === null) delete button.dataset.tool;
@@ -1666,6 +1741,147 @@ export class SurvivalUI {
       ? 'left'
       : x > viewportWidth - edgeGutter ? 'right' : 'center';
     button.dataset.tooltipY = y < 96 ? 'below' : 'above';
+  }
+
+  private renderWhiskers(snapshot: SurvivalSnapshot): void {
+    const whiskers = snapshot.captainWhiskers;
+    if (whiskers === null || !whiskers.alive) {
+      this.closeWhiskersCard(false);
+      return;
+    }
+    const status = captainWhiskersStatus(whiskers);
+    requireElement(this.whiskersCard, '[data-whiskers-hunger-label]').textContent =
+      status.hunger.toLocaleUpperCase('en-US');
+    requireElement(this.whiskersCard, '[data-whiskers-happiness]').textContent =
+      status.happiness.toLocaleUpperCase('en-US');
+    requireElement(this.whiskersCard, '[data-whiskers-health]').textContent =
+      status.health.toLocaleUpperCase('en-US');
+    this.whiskersCard.querySelectorAll<HTMLElement>('[data-whiskers-hunger-step]')
+      .forEach((step, index) => {
+        step.dataset.filled = String(index < whiskers.hunger);
+      });
+    this.setWhiskersDanger(
+      '[data-whiskers-hunger-row]',
+      '[data-whiskers-hunger-danger]',
+      status.hunger === 'Starving',
+    );
+    this.setWhiskersDanger(
+      '[data-whiskers-happiness-row]',
+      '[data-whiskers-happiness-danger]',
+      status.happiness === 'Depressed' || status.happiness === 'Miserable',
+    );
+    this.setWhiskersDanger(
+      '[data-whiskers-health-row]',
+      '[data-whiskers-health-danger]',
+      status.health === 'Sick' || status.health === 'Dying',
+    );
+    this.syncWhiskersActions();
+    const anchor = [...this.anchors.values()].find(
+      (candidate) => candidate.companionId === 'captainWhiskers' && candidate.visible,
+    );
+    if (!this.whiskersCard.hidden && anchor !== undefined) this.positionWhiskersCard(anchor);
+  }
+
+  private setWhiskersDanger(rowSelector: string, labelSelector: string, danger: boolean): void {
+    const row = requireElement<HTMLElement>(this.whiskersCard, rowSelector);
+    const label = requireElement<HTMLElement>(this.whiskersCard, labelSelector);
+    row.dataset.state = danger ? 'danger' : 'stable';
+    label.hidden = !danger;
+  }
+
+  private syncWhiskersActions(): void {
+    WHISKERS_ACTIONS.forEach((action) => {
+      const button = requireElement<HTMLButtonElement>(
+        this.whiskersCard,
+        `[data-action="${action}"]`,
+      );
+      const reason = this.actionReasons.get(action) ?? null;
+      button.disabled = this.busy;
+      button.setAttribute('aria-disabled', String(this.busy || reason !== null));
+      button.setAttribute(
+        'aria-description',
+        reason ?? (
+          action === 'petWhiskers'
+            ? 'Pet Captain Whiskers.'
+            : action === 'feedWhiskers'
+              ? 'Feed Captain Whiskers one food.'
+              : 'Treat Captain Whiskers with one medical kit.'
+        ),
+      );
+      const reasonNode = requireElement<HTMLElement>(button, '[data-whiskers-action-reason]');
+      reasonNode.hidden = reason === null;
+      reasonNode.textContent = reason ?? '';
+    });
+  }
+
+  private openWhiskersCard(anchorButton: HTMLButtonElement): void {
+    const snapshot = this.currentSnapshot;
+    if (
+      snapshot?.captainWhiskers?.alive !== true
+      || this.busy
+      || this.paused
+      || this.eventPresentationActive
+      || this.overlayOpen()
+      || anchorButton.disabled
+      || anchorButton.getAttribute('aria-hidden') === 'true'
+    ) return;
+    const anchorId = anchorButton.dataset.anchorId;
+    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
+    if (anchor?.companionId !== 'captainWhiskers' || !anchor.visible) return;
+    this.whiskersReturnTarget = anchorButton;
+    this.whiskersCard.hidden = false;
+    this.whiskersCard.setAttribute('aria-hidden', 'false');
+    this.whiskersCard.classList.add('is-visible');
+    this.positionWhiskersCard(anchor);
+    this.whiskersPet.focus();
+  }
+
+  private closeWhiskersCard(restoreFocus: boolean): void {
+    if (this.whiskersCard.hidden) return;
+    this.whiskersCard.hidden = true;
+    this.whiskersCard.setAttribute('aria-hidden', 'true');
+    this.whiskersCard.classList.remove('is-visible');
+    const target = this.whiskersReturnTarget;
+    this.whiskersReturnTarget = null;
+    if (!restoreFocus || target === null) return;
+    const anchorId = target.dataset.anchorId;
+    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
+    if (
+      anchor?.companionId === 'captainWhiskers'
+      && anchor.visible
+      && target.isConnected
+      && !target.hidden
+    ) target.focus();
+  }
+
+  private positionWhiskersCard(anchor: BoatInteractionAnchor): void {
+    const rootBounds = this.root.getBoundingClientRect();
+    const viewportWidth = rootBounds.width || this.root.clientWidth || window.innerWidth;
+    const viewportHeight = rootBounds.height || this.root.clientHeight || window.innerHeight;
+    const cardBounds = this.whiskersCard.getBoundingClientRect();
+    const cardWidth = cardBounds.width || 312;
+    const cardHeight = cardBounds.height || 344;
+    const anchorWidth = anchor.hitArea?.width ?? DEFAULT_ANCHOR_HIT_AREA.width;
+    const gutter = 16;
+    const gap = 18;
+    const right = anchor.x + anchorWidth / 2 + gap;
+    const placeLeft = right + cardWidth > viewportWidth - gutter;
+    const unclampedX = placeLeft
+      ? anchor.x - anchorWidth / 2 - gap - cardWidth
+      : right;
+    const maximumX = Math.max(gutter, viewportWidth - gutter - cardWidth);
+    const maximumY = Math.max(gutter, viewportHeight - gutter - cardHeight);
+    const x = Math.min(
+      maximumX,
+      Math.max(gutter, unclampedX),
+    );
+    const y = Math.min(
+      maximumY,
+      Math.max(gutter, anchor.y - cardHeight / 2),
+    );
+    this.whiskersCard.style.setProperty('--whiskers-card-x', `${Math.round(x)}px`);
+    this.whiskersCard.style.setProperty('--whiskers-card-y', `${Math.round(y)}px`);
+    this.whiskersCard.dataset.placement = placeLeft ? 'left' : 'right';
   }
 
   private updateMeter(id: MeterId, value: number): void {
@@ -1778,6 +1994,7 @@ export class SurvivalUI {
       );
     });
     this.endureButton.disabled = this.busy;
+    this.syncWhiskersActions();
   }
 
   private renderContextualEventChoices(): void {
@@ -1914,7 +2131,12 @@ export class SurvivalUI {
   }
 
   private readonly handleWindowResize = (): void => {
-    if (!this.disposed) this.positionOpenRoutineDialogs();
+    if (this.disposed) return;
+    this.positionOpenRoutineDialogs();
+    const anchor = [...this.anchors.values()].find(
+      (candidate) => candidate.companionId === 'captainWhiskers' && candidate.visible,
+    );
+    if (!this.whiskersCard.hidden && anchor !== undefined) this.positionWhiskersCard(anchor);
   };
 
   private readonly handleAnchorPointerOver = (event: Event): void => {
@@ -2304,6 +2526,14 @@ export class SurvivalUI {
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
+    if (button.hasAttribute('data-whiskers-close')) {
+      this.closeWhiskersCard(true);
+      return;
+    }
+    if (button.dataset.companion === 'captainWhiskers') {
+      this.openWhiskersCard(button);
+      return;
+    }
     const eventInstanceId = button.dataset.backingInstanceId as ItemInstanceId | undefined
       ?? (
         button.dataset.anchorId?.startsWith('supply:')
@@ -2399,6 +2629,11 @@ export class SurvivalUI {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
+    if (event.key === 'Escape' && !this.whiskersCard.hidden) {
+      event.preventDefault();
+      this.closeWhiskersCard(true);
+      return;
+    }
     const topmostModal = this.topmostModal();
     if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
     if (this.trapEventFocus(event)) return;
@@ -2424,6 +2659,15 @@ export class SurvivalUI {
       return;
     }
     const target = event.target;
+    if (
+      target instanceof HTMLButtonElement
+      && target.dataset.companion === 'captainWhiskers'
+      && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
+    ) {
+      event.preventDefault();
+      this.openWhiskersCard(target);
+      return;
+    }
     if (
       this.eventPresentationActive
       && target instanceof Element
@@ -2464,6 +2708,18 @@ export class SurvivalUI {
         this.onEventItem(choiceId, instanceId);
       }
     }
+  };
+
+  private readonly handleDocumentClick = (event: MouseEvent): void => {
+    if (this.disposed || this.whiskersCard.hidden) return;
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (this.whiskersCard.contains(target) || this.whiskersReturnTarget?.contains(target)) return;
+    const restoreFocus = !this.busy
+      && !this.eventPresentationActive
+      && !this.paused
+      && this.topmostModal() === null;
+    this.closeWhiskersCard(restoreFocus);
   };
 
   private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {
