@@ -1424,7 +1424,7 @@ describe('BoatWorld helpers', () => {
   });
 
   it.each([
-    ['dangerous-waters', 1.2, 2.4, 'left'],
+    ['dangerous-waters', 1.2, 2.4, 'still'],
     ['windy-night', 1.2, 3.6, 'left'],
     ['thunderstorm', 2, 4, 'down'],
     ['restless-waves', 1.9, 3.8, 'down'],
@@ -1449,7 +1449,11 @@ describe('BoatWorld helpers', () => {
       world.update(sampleTime, sampleTime);
 
       expect(camera.position.toArray()).toEqual(basePosition);
-      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      if (direction === 'still') {
+        expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+      } else {
+        expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      }
       const cueAngle = camera.quaternion.angleTo(
         new Quaternion().fromArray(baseQuaternion),
       );
@@ -1464,7 +1468,9 @@ describe('BoatWorld helpers', () => {
         expect(rig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
       }
       const viewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-      if (direction === 'left') {
+      if (direction === 'still') {
+        expect(viewDirection.toArray()).toEqual(baseDirection.toArray());
+      } else if (direction === 'left') {
         expect(viewDirection.x).toBeLessThan(baseDirection.x - 0.02);
       } else if (direction === 'down') {
         expect(viewDirection.y).toBeLessThan(baseDirection.y - 0.02);
@@ -1475,7 +1481,8 @@ describe('BoatWorld helpers', () => {
       const returnAngle = camera.quaternion.angleTo(
         new Quaternion().fromArray(baseQuaternion),
       );
-      expect(returnAngle).toBeLessThan(cueAngle);
+      if (direction === 'still') expect(returnAngle).toBe(0);
+      else expect(returnAngle).toBeLessThan(cueAngle);
 
       world.update(duration + 1, duration + 1 - returnTime);
       await reveal;
