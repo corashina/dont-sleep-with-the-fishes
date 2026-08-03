@@ -5,11 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
+import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
+import { BoatWorld } from '../src/survival/BoatWorld';
+import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
 import {
   EventModelLoadError,
   type EventModelLibrary,
 } from '../src/survival/EventModelLibrary';
+import { selectFishingCatch } from '../src/survival/fishingCatalog';
+import { SurvivalPhase, type SurvivalPhaseTestDependencies } from '../src/survival/SurvivalPhase';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
 import {
   ShipFurnitureLoadError,
@@ -27,6 +34,8 @@ import {
 import { ShipItemPlacementError } from '../src/world/ShipItemPlacement';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { testPhysicsRuntime } from './helpers/physics';
+import { createTestPropModels } from './helpers/propModels';
+import { sequenceRandom } from './helpers/random';
 import { createTestShipAssets } from './helpers/shipAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
@@ -154,6 +163,208 @@ describe('launchGame', () => {
     );
     expect(loadEventModels).toHaveBeenCalledOnce();
     expect(game.start).toHaveBeenCalledOnce();
+  });
+
+  it('carries Captain Whiskers through the launched survival lifecycle', async () => {
+    const mount = connectedMount();
+    const models = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const lifeboatAssets = createTestLifeboatAssets();
+    const shipAssets = createTestShipAssets();
+    const loadedEventModels = eventModels();
+    const savedItems = [
+      { instanceId: 'captainWhiskers-1' as ItemInstanceId, type: 'captainWhiskers' },
+      { instanceId: 'cannedFood-1' as ItemInstanceId, type: 'cannedFood' },
+      { instanceId: 'medicalKit-1' as ItemInstanceId, type: 'medicalKit' },
+    ] as const satisfies readonly ItemInstance[];
+    const livingFishRoll = 0.36;
+    const livingBoostedCatch = selectFishingCatch(1, false, livingFishRoll, new Set(), 1.01);
+    const livingBaseCatch = selectFishingCatch(1, false, livingFishRoll);
+    const activeFishingItems = new Set(['medicalKit'] as const);
+    const deadFishRoll = Array.from({ length: 10_000 }, (_, index) => (index + 0.5) / 10_000)
+      .find((roll) => (
+        selectFishingCatch(2, false, roll, activeFishingItems, 1.01).id
+        !== selectFishingCatch(2, false, roll, activeFishingItems).id
+      ));
+    if (deadFishRoll === undefined) throw new Error('Expected a Captain Whiskers fishing boundary.');
+    const deadBoostedCatch = selectFishingCatch(
+      2,
+      false,
+      deadFishRoll,
+      activeFishingItems,
+      1.01,
+    );
+    const deadBaseCatch = selectFishingCatch(2, false, deadFishRoll, activeFishingItems);
+    let session!: SurvivalSession;
+    let world!: BoatWorld;
+    let ui!: SurvivalUI;
+    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(73);
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+
+    const createGame = vi.fn((gameMount: HTMLElement) => Game.forTest({
+      createScavenge: (_context, onComplete) => ({
+        start: () => onComplete({ savedItems, elapsedSeconds: 12 }),
+        update: vi.fn(),
+        resize: vi.fn(),
+        render: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      createSurvival: (context, result, seed, onRestart) => {
+        session = new SurvivalSession(result.savedItems, {
+          seed,
+          random: sequenceRandom([
+            0,
+            livingFishRoll,
+            0,
+            0.49,
+            0,
+            0,
+            deadFishRoll,
+          ]),
+          initialCaptainWhiskers: { hunger: 2, sickness: 4 },
+        });
+        world = new BoatWorld(
+          context.camera,
+          context.propModels,
+          context.skyAssets.moonTexture,
+          session.snapshot().savedItems,
+          context.lifeboatAssets,
+          context.shipFurniture,
+          context.waterQuality?.get() ?? 'low',
+        );
+        ui = new SurvivalUI(context.mount);
+        const dependencies: SurvivalPhaseTestDependencies = { session, world, ui, onRestart };
+        const TestConstructor = SurvivalPhase as unknown as new (
+          phaseContext: typeof context,
+          phaseSavedItems: readonly ItemInstance[],
+          phaseSeed: number,
+          elapsedSeconds: number,
+          restart: () => void,
+          initialEventId: string | undefined,
+          testDependencies: SurvivalPhaseTestDependencies,
+        ) => SurvivalPhase;
+        return new TestConstructor(
+          context,
+          result.savedItems,
+          seed,
+          result.elapsedSeconds,
+          onRestart,
+          undefined,
+          dependencies,
+        );
+      },
+    }, {
+      mount: gameMount,
+      propModels: models,
+      shipFurniture,
+      skyAssets,
+      lifeboatAssets,
+      shipAssets,
+      eventModels: loadedEventModels,
+      physicsRuntime,
+      physicsMode: 'off',
+      createSeed: () => 7,
+      audioSystem: AudioSystem.silent(),
+    }));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      {
+        loadShipFurniture: () => Promise.resolve(shipFurniture),
+        loadSkyAssets: () => Promise.resolve(skyAssets),
+        loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
+        loadShipAssets: () => Promise.resolve(shipAssets),
+        loadEventModels: () => Promise.resolve(loadedEventModels),
+        createGame,
+      },
+    ));
+
+    const game = await handle.completion;
+    expect(game).not.toBeNull();
+    expect(session.snapshot()).toMatchObject({
+      food: 1,
+      captainWhiskers: { alive: true, hunger: 2, sickness: 4 },
+      inventory: {
+        'cannedFood-1': { condition: 'usable' },
+        'medicalKit-1': { condition: 'usable' },
+      },
+    });
+    expect(session.snapshot().savedItems).not.toContainEqual(
+      expect.objectContaining({ type: 'captainWhiskers' }),
+    );
+
+    const companionAnchor = world.projectInteractionAnchors(
+      window.innerWidth,
+      window.innerHeight,
+    ).find(({ companionId }) => companionId === 'captainWhiskers');
+    expect(companionAnchor).toMatchObject({
+      id: 'captain-whiskers',
+      visible: true,
+      label: 'CAPTAIN WHISKERS',
+    });
+
+    const anchorButton = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="captain-whiskers"]',
+    );
+    expect(anchorButton).not.toBeNull();
+    anchorButton!.click();
+    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]');
+    expect(card).toMatchObject({ hidden: false });
+    card!.querySelector<HTMLButtonElement>('[data-action="feedWhiskers"]')!.click();
+    expect(session.snapshot()).toMatchObject({
+      food: 0,
+      captainWhiskers: { hunger: 5 },
+    });
+
+    const livingFishing = session.beginFishing();
+    expect(livingFishing.accepted).toBe(true);
+    if (!livingFishing.accepted) throw new Error('Expected living fishing to start.');
+    livingFishing.attempt.cast({ x: 0, z: -6.4 });
+    livingFishing.attempt.completeCast();
+    livingFishing.attempt.advance(livingFishing.attempt.snapshot().biteDelaySeconds);
+    const livingReel = livingFishing.attempt.reel();
+    expect(livingReel).toMatchObject({
+      accepted: true,
+      result: { kind: 'catch', catch: { id: livingBoostedCatch.id } },
+    });
+    expect(livingBoostedCatch.id).not.toBe(livingBaseCatch.id);
+    if (livingReel.result === undefined) throw new Error('Expected a living fishing result.');
+    livingFishing.attempt.completeReel();
+    expect(session.finishFishing(livingFishing.attempt.snapshot().id, livingReel.result).accepted)
+      .toBe(true);
+
+    expect(session.perform('endDay')).toMatchObject({ accepted: true, code: 'quiet-night' });
+    expect(session.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
+    expect(session.snapshot().captainWhiskers).toMatchObject({
+      alive: false,
+      deathCause: 'sickness',
+      hunger: 4,
+      sickness: 5,
+    });
+
+    const deadFishing = session.beginFishing();
+    expect(deadFishing.accepted).toBe(true);
+    if (!deadFishing.accepted) throw new Error('Expected post-death fishing to start.');
+    deadFishing.attempt.cast({ x: 0, z: -6.4 });
+    deadFishing.attempt.completeCast();
+    deadFishing.attempt.advance(deadFishing.attempt.snapshot().biteDelaySeconds);
+    expect(deadFishing.attempt.reel()).toMatchObject({
+      accepted: true,
+      result: { kind: 'catch', catch: { id: deadBaseCatch.id } },
+    });
+    expect(deadBaseCatch.id).not.toBe(deadBoostedCatch.id);
+
+    const disposeWorld = vi.spyOn(world, 'dispose');
+    const disposeUi = vi.spyOn(ui, 'dispose');
+    handle.cancel();
+    handle.cancel();
+
+    expect(disposeCompanion).toHaveBeenCalledOnce();
+    expect(disposeWorld).toHaveBeenCalledOnce();
+    expect(disposeUi).toHaveBeenCalledOnce();
+    expect(requestFrame).toHaveBeenCalledOnce();
+    expect(cancelFrame).toHaveBeenCalledWith(73);
   });
 
   it('loads audio with the other assets and disposes it after construction failure', async () => {

@@ -18,6 +18,7 @@ import type {
   JournalDaytimeRecord,
   JournalEntry,
   JournalEventRecord,
+  JournalCaptainWhiskersDawnRecord,
   JournalNightRecord,
   JournalInventoryMutation,
   JournalResolution,
@@ -30,6 +31,18 @@ import {
 } from './chest';
 import { nightDamageMultiplier, pressureForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
+import {
+  advanceCaptainWhiskersDawn,
+  captainWhiskersStatus,
+  captainWhiskersWellness,
+  createCaptainWhiskersState,
+  feedCaptainWhiskers,
+  petCaptainWhiskers,
+  killCaptainWhiskers,
+  treatCaptainWhiskers,
+  type CaptainWhiskersSnapshot,
+  type CaptainWhiskersState,
+} from './CaptainWhiskersState';
 import type {
   ActionOutcome,
   BeginFishingResult,
@@ -50,6 +63,10 @@ import type {
   RewardSummary,
   ChestSnapshot,
   ChestState,
+  CompanionEventActionAvailability,
+  CompanionEventActionId,
+  CompanionEventEffect,
+  SurvivalEndingReason,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
@@ -76,6 +93,7 @@ export interface SurvivalSessionOptions {
   initialChest?: ChestSnapshot;
   initialEventFlags?: readonly string[];
   initialAppearanceCounts?: Readonly<Record<string, number>>;
+  initialCaptainWhiskers?: Partial<CaptainWhiskersSnapshot>;
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -94,6 +112,7 @@ interface ActiveFishingTransaction {
 
 export class SurvivalSession {
   private state: SurvivalState = 'day';
+  private endingReason: SurvivalEndingReason = 'standard';
   private day: number;
   private pressure: number;
   private health: number;
@@ -113,11 +132,13 @@ export class SurvivalSession {
   private actedToday = false;
   private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
+  private readonly captainWhiskers: CaptainWhiskersState | null;
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
   private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
+  private nextDawnEnergyOverride: 0 | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -158,7 +179,13 @@ export class SurvivalSession {
       this.appearanceCounts.set(eventId, count);
     }
     this.pendingEventId = null;
-    this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
+    const hasCaptainWhiskers = savedItems.some(({ type }) => type === 'captainWhiskers');
+    this.savedItems = Object.freeze(savedItems
+      .filter(({ type }) => type !== 'captainWhiskers')
+      .map((item) => Object.freeze({ ...item })));
+    this.captainWhiskers = hasCaptainWhiskers
+      ? createCaptainWhiskersState(options.initialCaptainWhiskers)
+      : null;
     this.inventory = new SurvivalInventoryState(this.savedItems);
     this.applyInitialConditions(options.initialConditions);
 
@@ -190,6 +217,7 @@ export class SurvivalSession {
 
     this.cachedSnapshot = Object.freeze({
       state: this.state,
+      endingReason: this.endingReason,
       day: this.day,
       pressure: this.pressure,
       health: this.health,
@@ -212,6 +240,9 @@ export class SurvivalSession {
       journalEntries: this.journalSnapshot(),
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
+      captainWhiskers: this.captainWhiskers === null
+        ? null
+        : Object.freeze({ ...this.captainWhiskers }),
       pendingEventId: this.pendingEventId,
       pendingDriftingLootVariant: this.pendingDriftingLootVariant,
       pendingEventTargetId: this.pendingEventTargetId,
@@ -223,6 +254,40 @@ export class SurvivalSession {
 
   availableReason(action: DayActionId, option?: DayActionOption): string | null {
     return this.unavailable(action, option)?.message ?? null;
+  }
+
+  companionEventActionAvailability(
+    action: CompanionEventActionId,
+  ): CompanionEventActionAvailability {
+    if (action !== 'delegateWhiskers') {
+      throw new Error(`Unknown companion event action: ${action}`);
+    }
+    if (this.captainWhiskers === null) {
+      return {
+        visible: false,
+        unavailableReason: 'Captain Whiskers is not aboard.',
+      };
+    }
+    if (!this.captainWhiskers.alive) {
+      return {
+        visible: false,
+        unavailableReason: 'Captain Whiskers cannot retrieve the loot.',
+      };
+    }
+    if (captainWhiskersWellness(this.captainWhiskers) >= 4) {
+      return { visible: true, unavailableReason: null };
+    }
+
+    const status = captainWhiskersStatus(this.captainWhiskers);
+    const label = this.captainWhiskers.hunger < 4
+      ? status.hunger
+      : this.captainWhiskers.sickness > 0
+        ? status.health
+        : status.happiness;
+    return {
+      visible: true,
+      unavailableReason: `Captain Whiskers is ${label} and cannot retrieve the loot.`,
+    };
   }
 
   perform(action: Exclude<DayActionId, 'fish'>, option?: DayActionOption): ActionOutcome {
@@ -239,6 +304,9 @@ export class SurvivalSession {
       case 'sendMessage': outcome = this.sendMessage(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'openChest': outcome = this.openChest(); break;
+      case 'petWhiskers': outcome = this.petWhiskers(); break;
+      case 'feedWhiskers': outcome = this.feedWhiskers(); break;
+      case 'treatWhiskers': outcome = this.treatWhiskers(); break;
       case 'endDay': return this.endDay();
     }
     this.actedToday = true;
@@ -270,6 +338,7 @@ export class SurvivalSession {
       day: this.day,
       capturedBait,
       activeItemIds,
+      ...(this.captainWhiskers?.alive ? { fishWeightMultiplier: 1.01 } : {}),
       random: this.random,
     });
     const outcome = this.commit(
@@ -452,6 +521,10 @@ export class SurvivalSession {
     if (choice === undefined) {
       return this.reject('choice-unavailable', 'That response is not available for this event.');
     }
+    const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
+    if (companionRejection !== null) {
+      return this.reject(companionRejection.code, companionRejection.message);
+    }
     if (!this.meetsChoiceRequirements(choice.requirements)) {
       return this.reject('requirements-unmet', 'You do not have the resources for that response.');
     }
@@ -503,8 +576,16 @@ export class SurvivalSession {
     }
     this.applyChestEffect(resolved.effects.chest);
     this.applyFlagEffects(resolved.effects.flags);
+    this.applyCompanionEventEffects(resolved.effects.companion);
+    if (resolved.effects.nextDawnEnergy !== undefined) {
+      this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
+    }
+    if (resolved.effects.endingReason === 'kidnapped') {
+      this.endingReason = 'kidnapped';
+      this.state = 'dead';
+    }
 
-    if (resolved.effects.rescue === true) {
+    if (resolved.effects.rescue === true && !this.isTerminal()) {
       this.state = 'rescued';
       this.clearPendingEvent();
     }
@@ -545,19 +626,26 @@ export class SurvivalSession {
       ...(eventResult === undefined ? {} : { eventResult }),
     };
     this.lastOutcome = outcome;
-    this.recordJournalEvent(
-      event,
-      choiceId,
-      attemptedItemId,
-      resolution,
-      outcome,
-      inventoryMutations,
-    );
+    if (resolved.effects.followUpNight !== true) {
+      this.recordJournalEvent(
+        event,
+        choiceId,
+        attemptedItemId,
+        resolution,
+        outcome,
+        inventoryMutations,
+      );
+    }
     this.changed();
 
     if (!this.isTerminal()) {
-      if (phase === 'day') this.state = 'day';
-      else this.state = 'nightEvent';
+      if (phase === 'day') {
+        this.state = 'day';
+      } else if (resolved.effects.followUpNight === true) {
+        this.openEvent(this.drawEvent('night', new Set(['guarded-sleep'])));
+      } else {
+        this.state = 'nightEvent';
+      }
     }
     return this.cloneOutcome(outcome);
   }
@@ -576,6 +664,7 @@ export class SurvivalSession {
     this.clearPendingEvent();
     this.state = 'day';
     this.applyPendingDawnBreaks();
+    this.advanceCaptainWhiskersDawn();
 
     this.weather = 'calm';
 
@@ -583,11 +672,13 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
     );
-    const morningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
+    const normalMorningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
       ? SURVIVAL_BALANCE.dawn.starvingEnergy
       : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
         ? SURVIVAL_BALANCE.dawn.hungryEnergy
         : SURVIVAL_BALANCE.dawn.normalEnergy;
+    const morningEnergy = this.nextDawnEnergyOverride ?? normalMorningEnergy;
+    this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
@@ -722,6 +813,12 @@ export class SurvivalSession {
           return { code: 'not-enough-energy', message: 'Opening the chest requires three energy.' };
         }
         return null;
+      case 'petWhiskers':
+        return this.unavailableCaptainWhiskersCare('pet');
+      case 'feedWhiskers':
+        return this.unavailableCaptainWhiskersCare('feed');
+      case 'treatWhiskers':
+        return this.unavailableCaptainWhiskersCare('treat');
       case 'endDay':
         return null;
     }
@@ -736,6 +833,45 @@ export class SurvivalSession {
           ? option?.kind === 'itemRepair'
           : option === undefined;
     return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
+  }
+
+  private unavailableCaptainWhiskersCare(action: 'pet' | 'feed' | 'treat'): Rejection | null {
+    if (this.captainWhiskers === null) {
+      return { code: 'no-captain-whiskers', message: 'Captain Whiskers is not aboard.' };
+    }
+    if (!this.captainWhiskers.alive) {
+      return { code: 'captain-whiskers-dead', message: 'Captain Whiskers cannot respond.' };
+    }
+    if (action === 'pet' && this.captainWhiskers.pettedToday) {
+      return { code: 'already-petted', message: 'Captain Whiskers has already been petted today.' };
+    }
+    if (action === 'feed') {
+      if (this.captainWhiskers.hunger >= 5) {
+        return { code: 'whiskers-not-hungry', message: 'Captain Whiskers is already satiated.' };
+      }
+      if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
+    }
+    if (action === 'treat') {
+      if (this.captainWhiskers.sickness <= 0) {
+        return { code: 'whiskers-healthy', message: 'Captain Whiskers needs no treatment.' };
+      }
+      if (!this.inventory.hasUsable('medicalKit')) {
+        return { code: 'no-medical-kit', message: 'No medical kit remains.' };
+      }
+    }
+    return null;
+  }
+
+  private unavailableCompanionEventAction(
+    action: CompanionEventActionId | undefined,
+  ): Rejection | null {
+    if (action === undefined) return null;
+    const availability = this.companionEventActionAvailability(action);
+    if (availability.unavailableReason === null) return null;
+    return {
+      code: 'companion-action-unavailable',
+      message: availability.unavailableReason,
+    };
   }
 
   private dive(): ActionOutcome {
@@ -822,6 +958,34 @@ export class SurvivalSession {
     );
   }
 
+  private petWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !petCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers pet action was not available.');
+    }
+    const outcome = this.commit('whiskers-petted', 'You pet Captain Whiskers.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'pet' }));
+    return outcome;
+  }
+
+  private feedWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !feedCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers feed action was not available.');
+    }
+    const outcome = this.commit('whiskers-fed', 'You feed Captain Whiskers.', { food: -1 }, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'feed' }));
+    return outcome;
+  }
+
+  private treatWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !treatCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers treatment was not available.');
+    }
+    this.inventory.consume('medicalKit', 1);
+    const outcome = this.commit('whiskers-treated', 'You treat Captain Whiskers.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'treat' }));
+    return outcome;
+  }
+
   private sendMessage(): ActionOutcome {
     this.inventory.consume('bottledPaper', 1);
     return this.commit('message-sent', 'You cast the message into the current.', {
@@ -893,6 +1057,7 @@ export class SurvivalSession {
       pressure: this.pressure,
       eventFlags: this.eventFlags,
       chestState: this.chestState,
+      hasLivingCompanion: this.captainWhiskers?.alive === true,
     }).filter(({ id }) => !excludedIds.has(id));
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -916,7 +1081,8 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (eventId !== 'drifting-loot' || choiceId !== 'retrieve') return undefined;
+    if (eventId !== 'drifting-loot'
+      || (choiceId !== 'retrieve' && choiceId !== 'delegate-whiskers')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
@@ -1300,6 +1466,51 @@ export class SurvivalSession {
     this.pendingDawnBreaks.clear();
   }
 
+  private advanceCaptainWhiskersDawn(): void {
+    if (this.captainWhiskers === null) return;
+    const before = this.captainWhiskersDawnState();
+    advanceCaptainWhiskersDawn(this.captainWhiskers, this.random);
+    const after = this.captainWhiskersDawnState();
+    if (!this.captainWhiskersDawnChanged(before, after)) return;
+    const entryIndex = this.journalEntries.findIndex((entry) => entry.day === this.day - 1);
+    if (entryIndex < 0) return;
+    const entry = this.journalEntries[entryIndex]!;
+    this.journalEntries[entryIndex] = {
+      ...entry,
+      actions: this.cloneJournalActions([
+        ...entry.actions,
+        Object.freeze({
+          kind: 'captainWhiskersDawn',
+          before,
+          after,
+        }),
+      ]),
+    };
+  }
+
+  private captainWhiskersDawnState(): JournalCaptainWhiskersDawnRecord['before'] {
+    if (this.captainWhiskers === null) throw new Error('Captain Whiskers is not aboard.');
+    return Object.freeze({
+      alive: this.captainWhiskers.alive,
+      hunger: this.captainWhiskers.hunger,
+      sickness: this.captainWhiskers.sickness,
+      unhappiness: this.captainWhiskers.unhappiness,
+      pettedToday: this.captainWhiskers.pettedToday,
+      deathCause: this.captainWhiskers.deathCause,
+    });
+  }
+
+  private captainWhiskersDawnChanged(
+    before: JournalCaptainWhiskersDawnRecord['before'],
+    after: JournalCaptainWhiskersDawnRecord['after'],
+  ): boolean {
+    return before.hunger !== after.hunger
+      || before.sickness !== after.sickness
+      || before.unhappiness !== after.unhappiness
+      || before.alive !== after.alive
+      || before.deathCause !== after.deathCause;
+  }
+
   private applyChestGain(fallbackFood: 1): boolean {
     if (this.chestState === 'none') {
       this.chestState = 'closed';
@@ -1331,6 +1542,24 @@ export class SurvivalSession {
     if (effects === undefined) return;
     for (const flag of effects.clear ?? []) this.eventFlags.delete(flag);
     for (const flag of effects.set ?? []) this.eventFlags.add(flag);
+  }
+
+  private applyCompanionEventEffects(
+    effects: readonly CompanionEventEffect[] | undefined,
+  ): void {
+    if (effects === undefined || this.captainWhiskers === null) return;
+    for (const effect of effects) {
+      if (effect.kind === 'kill') {
+        killCaptainWhiskers(this.captainWhiskers, effect.cause);
+        continue;
+      }
+      const current = this.captainWhiskers.sickness;
+      const next = effect.operation === 'set' ? effect.value : current + effect.value;
+      this.captainWhiskers.sickness = Math.min(5, Math.max(0, next));
+      if (this.captainWhiskers.sickness === 5) {
+        killCaptainWhiskers(this.captainWhiskers, 'sickness');
+      }
+    }
   }
 
   private mutateMatchingInstances(

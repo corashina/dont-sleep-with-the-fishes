@@ -16,6 +16,7 @@ function fakePresentation(eventId: DedicatedEventId) {
     boatRoot: new Group(),
     stage: vi.fn<(context: EventSceneContext) => void>(),
     reveal: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    skip: vi.fn<() => void>(),
     playItemUse: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
     react: vi.fn<() => Promise<void>>().mockResolvedValue(),
     update: vi.fn<(time: number, delta: number) => void>(),
@@ -97,24 +98,27 @@ describe('EventPresentationCoordinator', () => {
     expect(leak.update).toHaveBeenCalledExactlyOnceWith(3, 0.25);
   });
 
-  it('routes reveal, item use, reaction, update, and hidden settling to the active module', async () => {
+  it('routes reveal, skip, item use, reaction, update, and hidden settling to the active module', async () => {
     const leak = fakePresentation('leak');
     const snatcher = fakePresentation('snatcher');
     const coordinator = new EventPresentationCoordinator([leak, snatcher]);
     coordinator.stage(context('snatcher'));
 
     await expect(coordinator.reveal()).resolves.toBeUndefined();
+    coordinator.skip();
     await expect(coordinator.playItemUse('map', 'map-1')).resolves.toBe(true);
     await expect(coordinator.react(outcome)).resolves.toBeUndefined();
     coordinator.update(4, 0.5);
     coordinator.settleForVisibilityChange();
 
     expect(snatcher.reveal).toHaveBeenCalledOnce();
+    expect(snatcher.skip).toHaveBeenCalledOnce();
     expect(snatcher.playItemUse).toHaveBeenCalledExactlyOnceWith('map', 'map-1');
     expect(snatcher.react).toHaveBeenCalledExactlyOnceWith(outcome);
     expect(snatcher.update).toHaveBeenCalledExactlyOnceWith(4, 0.5);
     expect(snatcher.settleForVisibilityChange).toHaveBeenCalledOnce();
     expect(leak.reveal).not.toHaveBeenCalled();
+    expect(leak.skip).not.toHaveBeenCalled();
     expect(leak.update).not.toHaveBeenCalled();
   });
 
@@ -127,10 +131,12 @@ describe('EventPresentationCoordinator', () => {
     coordinator.clear();
     coordinator.update(1, 1);
     coordinator.settleForVisibilityChange();
+    coordinator.skip();
 
     expect(leak.clear).toHaveBeenCalledOnce();
     expect(leak.update).not.toHaveBeenCalled();
     expect(leak.settleForVisibilityChange).not.toHaveBeenCalled();
+    expect(leak.skip).not.toHaveBeenCalled();
     await expect(coordinator.reveal()).resolves.toBeUndefined();
     await expect(coordinator.playItemUse('none', 'map-1')).resolves.toBe(false);
     await expect(coordinator.react(outcome)).resolves.toBeUndefined();

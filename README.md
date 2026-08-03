@@ -31,7 +31,7 @@ The ship combines original procedural geometry with locally committed wood maps 
 
 The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Harpoon Gun, and Captain Whiskers. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, Flashlight, and Captain Whiskers are durable items used by actions, events, or companionship. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Captain Whiskers changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Whiskers. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
@@ -80,6 +80,17 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 | Closed chest | Spend three energy to open the chest |
+| Captain Whiskers | Select **Check Status** to open his scene-linked care card |
+
+### Captain Whiskers
+
+Captain Whiskers is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
+
+Select **Check Status** beside him to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
+
+Pet eases loneliness once each day. Feed uses one Food. Treat uses one Medkit when he is sick.
+
+Living Whiskers gives a small passive fishing-luck bonus. He also enables crewmate events that can harm or kill him.
 
 ### Fishing
 
@@ -210,4 +221,6 @@ Water exclusion is rendered in the ocean shader rather than by layering flat pat
 
 ## Milestone boundaries
 
-This milestone targets desktop browsers with keyboard and mouse. It does not include saves, touch or mobile controls, crewmate systems, or persistent progression.
+This milestone targets desktop browsers with keyboard and mouse. Captain Whiskers is its only crewmate.
+
+It does not include saves, touch controls, mobile controls, other crewmates, or persistent progression.

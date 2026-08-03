@@ -5,6 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { FishingCatchId } from './fishingCatalog';
+import type { CaptainWhiskersDeathCause } from './CaptainWhiskersState';
 import type { EventPresentationKey, WeatherId } from './survivalTypes';
 
 export type JournalResolution = 'suitableItem' | 'unsuitableItem' | 'endure';
@@ -53,7 +54,30 @@ export interface JournalFishingRecord {
   readonly baitConsumed: boolean;
 }
 
-export type JournalDayActionRecord = JournalFishingRecord;
+export interface JournalCaptainWhiskersCareRecord {
+  readonly kind: 'captainWhiskersCare';
+  readonly action: 'pet' | 'feed' | 'treat';
+}
+
+export interface JournalCaptainWhiskersDawnRecord {
+  readonly kind: 'captainWhiskersDawn';
+  readonly before: JournalCaptainWhiskersDawnState;
+  readonly after: JournalCaptainWhiskersDawnState;
+}
+
+export interface JournalCaptainWhiskersDawnState {
+  readonly alive: boolean;
+  readonly hunger: number;
+  readonly sickness: number;
+  readonly unhappiness: number;
+  readonly pettedToday: boolean;
+  readonly deathCause: CaptainWhiskersDeathCause | null;
+}
+
+export type JournalDayActionRecord =
+  | JournalFishingRecord
+  | JournalCaptainWhiskersCareRecord
+  | JournalCaptainWhiskersDawnRecord;
 
 export interface JournalEntry {
   day: number;
@@ -157,8 +181,33 @@ function formatFishing(record: JournalFishingRecord): string {
   return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
 }
 
+function formatCaptainWhiskers(record: JournalCaptainWhiskersCareRecord | JournalCaptainWhiskersDawnRecord): string {
+  if (record.kind === 'captainWhiskersCare') {
+    if (record.action === 'pet') return 'I petted Captain Whiskers.';
+    if (record.action === 'feed') return 'I fed Captain Whiskers.';
+    return 'I treated Captain Whiskers.';
+  }
+  if (record.before.alive && !record.after.alive) {
+    return 'Captain Whiskers died during the night.';
+  }
+  const changes: string[] = [];
+  if (record.before.hunger !== record.after.hunger) {
+    changes.push(`hunger ${record.before.hunger} to ${record.after.hunger}`);
+  }
+  if (record.before.sickness !== record.after.sickness) {
+    changes.push(`sickness ${record.before.sickness} to ${record.after.sickness}`);
+  }
+  if (record.before.unhappiness !== record.after.unhappiness) {
+    changes.push(`unhappiness ${record.before.unhappiness} to ${record.after.unhappiness}`);
+  }
+  if (changes.length > 0) return `Captain Whiskers: ${changes.join('; ')}.`;
+  return 'Captain Whiskers changed during the night.';
+}
+
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
-  const actions = entry.actions.map(formatFishing).join(' ');
+  const actions = entry.actions.map((record) => (
+    record.kind === 'fishing' ? formatFishing(record) : formatCaptainWhiskers(record)
+  )).join(' ');
   const daytime = formatDaytime(entry.daytime);
   return {
     heading: `DAY ${entry.day}`,

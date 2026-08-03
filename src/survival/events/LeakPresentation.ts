@@ -359,6 +359,10 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.finishActive(0);
   }
 
+  skip(): void {
+    this.settleForVisibilityChange();
+  }
+
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();
