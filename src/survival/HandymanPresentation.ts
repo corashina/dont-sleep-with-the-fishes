@@ -83,6 +83,14 @@ const TOUCH_HELD_CAMERA_X = -0.16;
 const TOUCH_HELD_CAMERA_Z = -2.05;
 const X_AXIS = new Vector3(1, 0, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
+const PALM_SCALE = 1.34;
+const PALM_FACING_DIRECTION = new Vector3(0, 0.88, 1.72)
+  .sub(WRIST_BASE)
+  .normalize();
+const PALM_BASE_QUATERNION = new Quaternion().setFromUnitVectors(
+  Z_AXIS,
+  PALM_FACING_DIRECTION,
+);
 
 const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
   Object.freeze({
@@ -193,6 +201,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.wrist.userData.motionSource = 'shared-wave-field';
     this.handPose.name = 'handyman-hand';
     this.handVisual.name = 'handyman-palm';
+    this.handVisual.userData.facesPlayer = true;
+    this.handVisual.userData.outsideHull = true;
+    this.handVisual.userData.idleMotion = 'restrained';
     this.fingertips.name = 'handyman-fingertips';
     this.drain.name = 'handyman-joint-drain';
     this.paymentActors.name = 'handyman-payment-actors';
@@ -343,6 +354,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     }
     if (this.touchCameraHeld) this.applyHeldTouchCameraPose();
     this.applySharedWave(time);
+    this.applyRestrainedIdle(time);
   }
 
   settleForVisibilityChange(): void {
@@ -675,6 +687,20 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.wrist.userData.waveSampleTime = time;
   }
 
+  private applyRestrainedIdle(time: number): void {
+    const wristDrift = Math.sin(time * 0.43) * 0.024
+      + Math.sin(time * 0.19 + 0.7) * 0.009;
+    this.handVisual.quaternion.copy(PALM_BASE_QUATERNION);
+    this.handVisual.rotateX(wristDrift);
+    this.handVisual.userData.wristDrift = wristDrift;
+
+    const state = this.root.userData.state;
+    if (state !== 'staged' && state !== 'revealed') return;
+    const fingerTension = 0.055 + Math.sin(time * 0.71 + 0.35) * 0.025;
+    this.setFingerBend(fingerTension);
+    this.handVisual.userData.fingerTension = fingerTension;
+  }
+
   private setFingerBend(amount: number): void {
     this.fingerBend = clamp01(amount);
     applyHandJointCurl(this.fingerJoints, this.fingerBend);
@@ -962,6 +988,11 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.wristMotionBase.copy(WRIST_HIDDEN);
     this.handPose.position.set(0, 0, 0);
     this.handPose.rotation.set(0, 0, 0);
+    this.handVisual.position.set(0, 0, 0);
+    this.handVisual.quaternion.copy(PALM_BASE_QUATERNION);
+    this.handVisual.scale.setScalar(PALM_SCALE);
+    this.handVisual.userData.wristDrift = 0;
+    this.handVisual.userData.fingerTension = 0;
     this.handVisual.visible = false;
     this.fingertips.visible = false;
     this.drain.visible = false;

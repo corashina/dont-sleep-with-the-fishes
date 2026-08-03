@@ -693,6 +693,29 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('stages the Handyman palm as a large restrained player-facing pose', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('handyman');
+    const palm = world.scene.getObjectByName('handyman-palm')!;
+    expect(palm.userData.facesPlayer).toBe(true);
+    expect(palm.userData.outsideHull).toBe(true);
+    expect(palm.scale.x).toBeGreaterThan(1.25);
+
+    const before = palm.quaternion.clone();
+    world.update(1.3, 1.3);
+    expect(palm.quaternion.angleTo(before)).toBeGreaterThan(0);
+    expect(palm.userData.idleMotion).toBe('restrained');
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('stages Midnight Tour on deterministic distant sides', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
