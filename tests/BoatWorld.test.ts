@@ -1157,6 +1157,59 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps Drifting Bottle particles active after reveal and stops them for results', async () => {
+    const emit = vi.spyOn(FishingBiteParticles.prototype, 'emit');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('drifting-bottle', null, 8);
+    const reveal = world.revealEvent('drifting-bottle');
+    world.update(2, 2);
+    await reveal;
+    emit.mockClear();
+
+    world.update(2.2, 0.2);
+    world.update(2.4, 0.2);
+    expect(emit).toHaveBeenCalled();
+
+    emit.mockClear();
+    const retrieve = world.reactToEventOutcome('drifting-bottle', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bottle is aboard.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'drifting-bottle.retrieve',
+    });
+    world.update(4, 2);
+    await retrieve;
+    expect(emit).not.toHaveBeenCalled();
+
+    world.stageEvent('drifting-bottle', null, 9);
+    const secondReveal = world.revealEvent('drifting-bottle');
+    world.update(6, 2);
+    await secondReveal;
+    emit.mockClear();
+    const lost = world.reactToEventOutcome('drifting-bottle', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bottle drifts away.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'drifting-bottle.lost',
+    });
+    world.update(8, 2);
+    await lost;
+    expect(emit).not.toHaveBeenCalled();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the Flowers field fixed in place and removes its world interaction', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
