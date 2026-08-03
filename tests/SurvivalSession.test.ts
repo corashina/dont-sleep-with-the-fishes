@@ -227,18 +227,23 @@ describe('SurvivalSession daytime actions', () => {
   it('records Captain Whiskers care and dawn results in the journal', () => {
     const caredFor = new SurvivalSession(saved('captainWhiskers'), {
       seed: 7,
-      random: sequenceRandom([0, 0, 0, 0]),
+      random: sequenceRandom([0, 0, 0.99, 0]),
+      initialCaptainWhiskers: { sickness: 1, unhappiness: 3 },
     });
-    caredFor.perform('petWhiskers');
     caredFor.perform('endDay');
     caredFor.beginDawn();
     const caredForEntry = caredFor.snapshot().journalEntries[0]!;
 
     expect(caredForEntry.actions).toEqual([
-      { kind: 'captainWhiskersCare', action: 'pet' },
-      { kind: 'captainWhiskersDawn', alive: true, deathCause: null },
+      {
+        kind: 'captainWhiskersDawn',
+        before: expect.objectContaining({ alive: true, hunger: 5, sickness: 1, unhappiness: 3 }),
+        after: expect.objectContaining({ alive: true, hunger: 4, sickness: 0, unhappiness: 4 }),
+      },
     ]);
-    expect(formatJournalEntry(caredForEntry).daytime).toContain('Captain Whiskers greeted the dawn.');
+    expect(formatJournalEntry(caredForEntry).daytime).toContain(
+      'Captain Whiskers: hunger 5 to 4; sickness 1 to 0; unhappiness 3 to 4.',
+    );
 
     const died = new SurvivalSession(saved('captainWhiskers'), {
       seed: 7,
@@ -250,6 +255,12 @@ describe('SurvivalSession daytime actions', () => {
 
     expect(formatJournalEntry(died.snapshot().journalEntries[0]!).daytime)
       .toContain('Captain Whiskers died during the night.');
+
+    died.perform('endDay');
+    died.beginDawn();
+    const secondDay = died.snapshot().journalEntries[1]!;
+    expect(secondDay.actions).not.toContainEqual(expect.objectContaining({ kind: 'captainWhiskersDawn' }));
+    expect(formatJournalEntry(secondDay).daytime).not.toContain('Captain Whiskers died during the night.');
   });
 
   it('reuses an immutable snapshot until an action changes state', () => {
