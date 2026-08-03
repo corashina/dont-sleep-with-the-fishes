@@ -1070,6 +1070,12 @@ export class BoatWorld {
     this.chestDisplay.sync(snapshot.chest);
   }
 
+  playCaptainWhiskersAction(
+    action: 'petWhiskers' | 'feedWhiskers',
+  ): Promise<void> {
+    return this.captainWhiskers.play(action === 'petWhiskers' ? 'pet' : 'feed');
+  }
+
   playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.clearDivePresentation();

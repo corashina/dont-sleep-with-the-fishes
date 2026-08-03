@@ -5072,10 +5072,117 @@ describe('SurvivalPhase orchestration', () => {
     phase.update(2, 0.016);
 
     expect(showEnding).toHaveBeenCalledOnce();
-    expect(showEnding).toHaveBeenCalledWith('sunk', 6, 8, expect.any(Number));
+    expect(showEnding).toHaveBeenCalledWith('sunk', 6, 8, expect.any(Number), 'standard');
     phase.requestRestart();
     phase.requestRestart();
     expect(restart).toHaveBeenCalledOnce();
+  });
+
+  it('passes the kidnapped ending reason to the UI', () => {
+    const showEnding = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dead',
+          endingReason: 'kidnapped',
+          day: 21,
+        })),
+      },
+      world: { update: vi.fn(), dispose: vi.fn() },
+      ui: { render: vi.fn(), showEnding, dispose: vi.fn() },
+    });
+
+    phase.update(1, 0.016);
+
+    expect(showEnding).toHaveBeenCalledWith(
+      'dead',
+      21,
+      8,
+      expect.any(Number),
+      'kidnapped',
+    );
+    phase.dispose();
+  });
+
+  it.each(['petWhiskers', 'feedWhiskers'] as const)(
+    'syncs and plays accepted %s before rendering the changed companion state',
+    async (action) => {
+      const calls: string[] = [];
+      let current = snapshot({
+        captainWhiskers: {
+          alive: true, hunger: 4, sickness: 0, unhappiness: 4,
+          pettedToday: false, deathCause: null,
+        },
+      });
+      const playCaptainWhiskersAction = vi.fn(() => {
+        calls.push('play');
+        return Promise.resolve();
+      });
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          perform: vi.fn(() => {
+            current = snapshot({
+              captainWhiskers: {
+                ...current.captainWhiskers!,
+                hunger: action === 'feedWhiskers' ? 5 : 4,
+                unhappiness: action === 'petWhiskers' ? 0 : 4,
+                pettedToday: action === 'petWhiskers',
+              },
+            });
+            return accepted({ code: action, cue: 'none', deltas: {} });
+          }),
+          availableReason: vi.fn(() => null),
+        },
+        world: {
+          syncInventory: vi.fn(() => calls.push('sync')),
+          playCaptainWhiskersAction,
+          dispose: vi.fn(),
+        },
+        ui: {
+          render: vi.fn(() => calls.push('render')),
+          setBusy: vi.fn(),
+          showFeedback: vi.fn(),
+          restoreCommandFocus: vi.fn(),
+          dispose: vi.fn(),
+        },
+      });
+      phase.start();
+      calls.length = 0;
+
+      phase.handleAction(action);
+      await flushPromises();
+
+      expect(calls).toEqual(['sync', 'play', 'render']);
+      expect(playCaptainWhiskersAction).toHaveBeenCalledWith(action);
+      phase.dispose();
+    },
+  );
+
+  it('keeps rejected Whiskers actions in the existing feedback path', () => {
+    const showFeedback = vi.fn();
+    const playCaptainWhiskersAction = vi.fn();
+    const rejected = accepted({
+      accepted: false,
+      code: 'already-petted',
+      message: 'Captain Whiskers has already been petted today.',
+      cue: 'none',
+      deltas: {},
+    });
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot()),
+        perform: vi.fn(() => rejected),
+      },
+      world: { playCaptainWhiskersAction, dispose: vi.fn() },
+      ui: { showFeedback, dispose: vi.fn() },
+    });
+
+    phase.handleAction('petWhiskers');
+
+    expect(showFeedback).toHaveBeenCalledWith(rejected);
+    expect(playCaptainWhiskersAction).not.toHaveBeenCalled();
+    phase.dispose();
   });
 
   it('shows a terminal daytime ending only after its cue completes', async () => {

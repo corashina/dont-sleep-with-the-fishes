@@ -534,6 +534,11 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     this.audio.action(action, selectedOption);
+    if (action === 'petWhiskers' || action === 'feedWhiskers') {
+      this.syncPresentation(this.session.snapshot());
+      void this.runCaptainWhiskersAction(action, outcome);
+      return;
+    }
     void this.runDayAction(outcome);
   }
 
@@ -1008,6 +1013,19 @@ export class SurvivalPhase implements GamePhase {
       this.presentTerminalOnce(snapshot);
       return;
     }
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
+  }
+
+  private async runCaptainWhiskersAction(
+    action: 'petWhiskers' | 'feedWhiskers',
+    outcome: ActionOutcome,
+  ): Promise<void> {
+    this.setBusy(true);
+    await (this.world.playCaptainWhiskersAction?.(action) ?? Promise.resolve());
+    if (this.disposed) return;
+    this.renderSnapshot(false, false);
+    this.ui.showFeedback?.(outcome);
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }
@@ -1933,6 +1951,7 @@ export class SurvivalPhase implements GamePhase {
       snapshot.day,
       snapshot.seed,
       this.scavengeElapsedSeconds,
+      snapshot.endingReason,
     );
   }
 
