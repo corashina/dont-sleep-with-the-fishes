@@ -12,7 +12,7 @@ import {
   PointLight,
   SphereGeometry,
 } from 'three';
-import type { ItemInstanceId } from '../../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import {
   disposeResourceSets,
@@ -21,6 +21,12 @@ import {
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
 import type { EventModelInstance } from '../EventModelLibrary';
+import {
+  createEventItemUseSample,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from '../eventItemUseChoreography';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
@@ -105,7 +111,12 @@ function supportedChoice(choiceId: string): boolean {
   return choiceId === 'fishingNet'
     || choiceId === 'harpoonGun'
     || choiceId === 'flashlight'
-    || choiceId === 'baitTin';
+    || choiceId === 'baitTin'
+    || choiceId === 'bait';
+}
+
+function sceneChoiceId(choiceId: string): string {
+  return choiceId === 'bait' ? 'baitTin' : choiceId;
 }
 
 export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
@@ -160,6 +171,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     flatShading: true,
   });
   private readonly sample: SwarmSample = createSwarmSample();
+  private readonly itemUseSample = createEventItemUseSample();
   private readonly reactionState: {
     attacked: boolean;
     foodDelta: number;
@@ -171,7 +183,10 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     baitDelta: 0,
     brokenItem: false,
   };
-  private active: DedicatedEventAnimation | null = null;
+  private active: DedicatedEventAnimation<{
+    readonly itemId: ItemId;
+    readonly itemUseContext: EventItemUseContext;
+  }> | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -321,13 +336,21 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     }
     this.cancelActive();
     if (!this.borrowActor(instanceId)) return Promise.resolve(false);
-    sampleSwarmItemUse(choiceId, 0, this.sample);
-    this.borrowedActor!.applyPose(this.sample);
+    const itemId = this.environment.supplies.itemType(instanceId);
+    if (itemId === null) return Promise.resolve(false);
+    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
+    if (itemUseContext === null) return Promise.resolve(false);
+    this.environment.itemUseAdapter.begin(this.borrowedActor!);
+    sampleSwarmItemUse(sceneChoiceId(choiceId), 0, this.sample);
+    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
+    this.environment.itemUseAdapter.apply(this.itemUseSample);
     this.applySample(0);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
+        itemId,
+        itemUseContext,
         elapsed: 0,
         duration: SWARM_ITEM_DURATION,
         resolve,
@@ -376,8 +399,11 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       if (active.kind === 'reveal') {
         sampleSwarmReveal(progress, this.currentVariants(), this.sample);
       } else if (active.kind === 'item') {
-        sampleSwarmItemUse(active.choiceId, progress, this.sample);
-        this.borrowedActor?.applyPose(this.sample);
+        sampleSwarmItemUse(sceneChoiceId(active.choiceId), progress, this.sample);
+        sampleEventItemUse(
+          active.itemUseContext, active.itemId, progress, this.itemUseSample,
+        );
+        this.environment.itemUseAdapter.apply(this.itemUseSample);
       } else {
         sampleSwarmReaction(this.reactionState, progress, this.sample);
         this.borrowedActor?.applyPose(this.sample);
@@ -393,8 +419,11 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     if (this.active.kind === 'reveal') {
       sampleSwarmReveal(1, this.currentVariants(), this.sample);
     } else if (this.active.kind === 'item') {
-      sampleSwarmItemUse(this.active.choiceId, 1, this.sample);
-      this.borrowedActor?.applyPose(this.sample);
+      sampleSwarmItemUse(sceneChoiceId(this.active.choiceId), 1, this.sample);
+      sampleEventItemUse(
+        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
+      );
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
     } else {
       sampleSwarmReaction(this.reactionState, 1, this.sample);
       this.borrowedActor?.applyPose(this.sample);
@@ -418,6 +447,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
     runCleanupSteps([
       () => actor?.release(),
@@ -451,8 +481,12 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     if (active === null) return;
     this.active = null;
     if (active.kind === 'item') {
-      sampleSwarmItemUse(active.choiceId, 1, this.sample);
-      this.borrowedActor?.applyPose(this.sample);
+      sampleSwarmItemUse(sceneChoiceId(active.choiceId), 1, this.sample);
+      sampleEventItemUse(
+        active.itemUseContext, active.itemId, 1, this.itemUseSample,
+      );
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
+      this.environment.itemUseAdapter.clear();
       active.resolve(true);
       return;
     }
@@ -462,6 +496,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 
