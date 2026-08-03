@@ -64,9 +64,13 @@ import {
   eventItemUseDuration,
   type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
+import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
+import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
+import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import {
   GHOST_FLIGHT_PATHS,
+  supernaturalItemUseDuration,
   supernaturalRevealDuration,
 } from '../src/survival/supernaturalEventChoreography';
 import type {
@@ -78,6 +82,7 @@ import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
+import { weatherItemUseDuration } from '../src/survival/weatherEventChoreography';
 import {
   boatStorageTransform,
   boatSupplyTransform,
@@ -254,6 +259,46 @@ function firstMesh(root: Object3D): Mesh {
   });
   if (!found) throw new Error('Expected saved prop mesh');
   return found;
+}
+
+function expectEventEffectRootsCleared(scene: Object3D): void {
+  for (const name of [
+    'event-item-effects',
+    'weather-event-world',
+    'weather-event-boat',
+    'supernatural-event-world',
+  ]) {
+    const root = scene.getObjectByName(name);
+    expect(root, `${name} exists`).toBeDefined();
+    root!.children.forEach((effect) => {
+      expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
+    });
+  }
+  for (const name of ['dedicated-event-world', 'dedicated-event-boat']) {
+    const root = scene.getObjectByName(name);
+    expect(root, `${name} exists`).toBeDefined();
+    root!.children.forEach((effect) => {
+      const hasRenderableContent = effect.children.length > 0
+        || effect instanceof Mesh
+        || effect instanceof Line
+        || effect instanceof Points;
+      if (hasRenderableContent) {
+        expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
+      }
+    });
+  }
+  scene.getObjectByName('event-item-effects')!.traverse((object) => {
+    if (object instanceof PointLight) expect(object.intensity).toBe(0);
+  });
+  for (const name of [
+    'dedicated-event-camera-effects',
+    'dedicated-event-boat-effects',
+  ]) {
+    const root = scene.getObjectByName(name)!;
+    expect(root.position.toArray(), `${name} position`).toEqual([0, 0, 0]);
+    expect(root.quaternion.angleTo(new Quaternion()), `${name} rotation`).toBeCloseTo(0);
+    expect(root.scale.toArray(), `${name} scale`).toEqual([1, 1, 1]);
+  }
 }
 
 function expectTestModelTransform(root: Object3D): void {
@@ -2439,26 +2484,28 @@ describe('BoatWorld helpers', () => {
       eventId: string,
       choiceId: string,
       itemId: ItemId,
+      routedDuration: number,
     ][] = [
-      ['throw-target', 'flowers', 'energyBar', 'energyBar'],
-      ['tape-stretch', 'flowers', 'ductTape', 'ductTape'],
-      ['compass-search', 'flowers', 'compass', 'compass'],
-      ['map-read', 'flowers', 'map', 'map'],
-      ['binocular-look', 'flowers', 'spyglass', 'spyglass'],
-      ['net-throw', 'flowers', 'fishingNet', 'fishingNet'],
-      ['bucket-scoop', 'leak', 'bucket', 'bucket'],
-      ['bucket-cover', 'eerie-melody', 'bucket', 'bucket'],
-      ['flare-target', 'ghosts', 'flareGun', 'flareGun'],
-      ['flare-sky', 'other-people', 'flareGun', 'flareGun'],
-      ['anchor-drop', 'whirlpool', 'anchor', 'anchor'],
-      ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella'],
-      ['umbrella-shield', 'death-stare', 'umbrella', 'umbrella'],
-      ['flashlight-flash', 'flowers', 'flashlight', 'flashlight'],
-      ['harpoon-shot', 'flowers', 'harpoonGun', 'harpoonGun'],
+      ['throw-target', 'flowers', 'energyBar', 'energyBar', eventItemUseDuration('throw-target')],
+      ['tape-stretch', 'flowers', 'ductTape', 'ductTape', eventItemUseDuration('tape-stretch')],
+      ['compass-search', 'flowers', 'compass', 'compass', eventItemUseDuration('compass-search')],
+      ['map-read', 'flowers', 'map', 'map', eventItemUseDuration('map-read')],
+      ['binocular-look', 'flowers', 'spyglass', 'spyglass', eventItemUseDuration('binocular-look')],
+      ['net-throw', 'flowers', 'fishingNet', 'fishingNet', eventItemUseDuration('net-throw')],
+      ['bucket-scoop', 'leak', 'bucket', 'bucket', LEAK_ITEM_DURATION],
+      ['bucket-cover', 'eerie-melody', 'bucket', 'bucket', supernaturalItemUseDuration('eerie-melody', 'bucket')!],
+      ['flare-target', 'ghosts', 'flareGun', 'flareGun', supernaturalItemUseDuration('ghosts', 'flareGun')!],
+      ['flare-sky', 'other-people', 'flareGun', 'flareGun', eventItemUseDuration('flare-sky')],
+      ['anchor-drop', 'whirlpool', 'anchor', 'anchor', WHIRLPOOL_ITEM_DURATION],
+      ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella', weatherItemUseDuration('shower-night', 'umbrella')!],
+      ['umbrella-shield', 'death-stare', 'umbrella', 'umbrella', DEATH_STARE_ITEM_DURATION],
+      ['flashlight-flash', 'flowers', 'flashlight', 'flashlight', eventItemUseDuration('flashlight-flash')],
+      ['harpoon-shot', 'flowers', 'harpoonGun', 'harpoonGun', eventItemUseDuration('harpoon-shot')],
     ];
     const savedItems = [...new Set(cases.map(([, , , itemId]) => itemId))]
       .map((itemId) => savedItem(itemId));
     const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
     const camera = new PerspectiveCamera(63, 1.6, 0.1, 100);
     camera.position.set(0.32, 1.08, -0.24);
     const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
@@ -2467,16 +2514,20 @@ describe('BoatWorld helpers', () => {
       propModels,
       createTestMoonTexture(),
       savedItems,
+      undefined,
+      undefined,
+      'low',
+      eventModels,
     );
     world.syncInventory(snapshot(savedItems));
     const basePosition = camera.position.clone();
     const baseFieldOfView = camera.fov;
-    const effects = world.scene.getObjectByName('event-item-effects')!;
     let time = 0;
 
     try {
-      for (const [context, eventId, choiceId, itemId] of cases) {
+      for (const [context, eventId, choiceId, itemId, routedDuration] of cases) {
         const item = savedItems.find(({ type }) => type === itemId)!;
+        world.stageEvent(eventId);
         const borrowCount = borrowActor.mock.results.length;
         const use = world.playEventItemUse(eventId, choiceId, item.instanceId);
         const resolved = vi.fn();
@@ -2484,7 +2535,7 @@ describe('BoatWorld helpers', () => {
         expect(borrowActor.mock.results.length).toBe(borrowCount + 1);
         const actor = borrowActor.mock.results.at(-1)!.value as BorrowedSupplyActor;
         const release = vi.spyOn(actor, 'release');
-        const delta = eventItemUseDuration(context) * 0.4;
+        const delta = routedDuration * 0.4;
         time += delta;
         world.update(time, delta);
         expect(await remainsPending(use)).toBe(true);
@@ -2499,11 +2550,9 @@ describe('BoatWorld helpers', () => {
         expect(release).toHaveBeenCalledOnce();
         expect(camera.position).toEqual(basePosition);
         expect(camera.fov).toBe(baseFieldOfView);
-        effects.children.forEach((effect) => expect(effect.visible).toBe(false));
-        effects.traverse((object) => {
-          if (object instanceof PointLight) expect(object.intensity).toBe(0);
-        });
+        expectEventEffectRootsCleared(world.scene);
 
+        world.stageEvent(eventId);
         const secondBorrowCount = borrowActor.mock.results.length;
         const secondUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
         expect(borrowActor.mock.results.length).toBe(secondBorrowCount + 1);
@@ -3029,12 +3078,13 @@ describe('BoatWorld helpers', () => {
     expect(weatherSupport.mock.invocationCallOrder[0]).toBeLessThan(
       supernaturalSupport.mock.invocationCallOrder[0]!,
     );
-    world.update(0.6, 0.6);
+    const flarePeak = supernaturalItemUseDuration('ghosts', 'flareGun')! * 0.47;
+    world.update(flarePeak, flarePeak);
     const flareFlash = world.scene.getObjectByName('supernatural-flare-flash')!;
     expect(flareFlash.visible).toBe(true);
     const flareSize = boundsRelativeTo(flareFlash).getSize(new Vector3());
     expect(Math.max(flareSize.x, flareSize.y)).toBeLessThanOrEqual(1.6);
-    world.update(1.2, 0.6);
+    world.update(1.2, 1.2 - flarePeak);
     await itemUse;
     const reaction = world.reactToEventOutcome(
       'ghosts',
