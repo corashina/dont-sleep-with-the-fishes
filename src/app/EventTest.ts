@@ -5,12 +5,16 @@ import {
 } from '../game/ItemState';
 import type { ScavengeResult } from '../game/ScavengeSession';
 import { SURVIVAL_EVENTS } from '../survival/events';
+import {
+  ITEM_ANIMATION_LAB_ID,
+  ITEM_ANIMATION_LAB_TITLE,
+} from '../survival/ItemAnimationLab';
 import type { PresentationCue } from '../survival/survivalTypes';
 
 export interface EventTestOption {
   readonly id: string;
   readonly title: string;
-  readonly phase: 'day' | 'night';
+  readonly phase: 'lab' | 'day' | 'night';
 }
 
 const NIGHT_EVENT_TYPE_ORDER: readonly PresentationCue[] = Object.freeze([
@@ -29,6 +33,11 @@ function nightEventTypeRank(cue: PresentationCue): number {
 
 export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze(
   [
+    {
+      id: ITEM_ANIMATION_LAB_ID,
+      title: ITEM_ANIMATION_LAB_TITLE,
+      phase: 'lab' as const,
+    },
     ...SURVIVAL_EVENTS.filter(({ phase }) => phase === 'day'),
     ...SURVIVAL_EVENTS
       .filter(({ phase }) => phase === 'night')
