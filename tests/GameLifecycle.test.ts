@@ -106,6 +106,7 @@ function scavengeAudioStub(): ScavengeAudio {
     deny: vi.fn(),
     setPaused: vi.fn(),
     sink: vi.fn(),
+    complete: vi.fn(),
     dispose: vi.fn(),
   } as unknown as ScavengeAudio;
 }
@@ -1294,12 +1295,20 @@ describe('ScavengePhase lifecycle integration', () => {
     const session = new ScavengeSession();
     session.start();
     const { phase } = createUpdateHarness(session);
-    const player = (phase as unknown as { player: { localPosition: Vector3 } }).player;
+    const internals = phase as unknown as {
+      player: { localPosition: Vector3 };
+      audio: { complete: ReturnType<typeof vi.fn> };
+      onComplete: ReturnType<typeof vi.fn>;
+    };
+    const { player } = internals;
     player.localPosition.set(8.9, player.localPosition.y, 0);
 
     phase.update(0, SCAVENGE_DURATION_SECONDS);
 
     expect(session.snapshot().status).toBe('success');
+    expect(internals.audio.complete).toHaveBeenCalledOnce();
+    expect(internals.audio.complete.mock.invocationCallOrder[0])
+      .toBeLessThan(internals.onComplete.mock.invocationCallOrder[0]!);
   });
 
   it('sinks at the deadline outside the lifeboat bounds and keeps the cinematic active', () => {
