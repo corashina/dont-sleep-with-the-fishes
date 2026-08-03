@@ -167,8 +167,8 @@ function samplePickupAndHold(
 ): void {
   output.cameraSpaceBlend = pickup;
   output.viewX = 0.14 * pickup;
-  output.viewY = -0.16 + 0.42 * pickup;
-  output.viewZ = -0.18 - 0.76 * hold;
+  output.viewY = -0.12 + 0.22 * pickup;
+  output.viewZ = -0.64 - 0.38 * hold;
   output.pitch = -0.08 * pickup;
   output.roll = -0.04 * pickup;
 }

@@ -539,6 +539,7 @@ export class BoatSupplyDisplay {
         target.scaleX = pose.scaleX;
         target.scaleY = pose.scaleY;
         target.scaleZ = pose.scaleZ;
+        this.applyBorrowedEventMotion(binding);
       },
       releaseOnNextSync: () => {
         if (this.borrowedBindings.get(instanceId) !== binding) return;
@@ -877,6 +878,14 @@ export class BoatSupplyDisplay {
     const root = cloneSkeleton(record.root) as Group;
     root.name = `boat-supply-event:${instanceId}`;
     root.userData.supplyInstanceId = instanceId;
+    const heldCopy = root.children[0];
+    if (heldCopy === undefined) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      this.syncGroup(groupId, this.currentSnapshot);
+      return null;
+    }
+    heldCopy.position.set(0, 0, 0);
+    heldCopy.quaternion.identity();
     for (let index = 1; index < root.children.length; index += 1) {
       root.children[index]!.visible = false;
     }
@@ -964,22 +973,26 @@ export class BoatSupplyDisplay {
       }
     }
     for (const binding of this.borrowedBindings.values()) {
-      const root = binding.root;
-      const pose = binding.pose;
-      root.visible = true;
-      root.position.copy(this.basePositionById.get(binding.groupId)!);
-      root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
-      root.scale.set(1, 1, 1);
-      root.position.y += this.eventAmbientLift;
-      root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
-      root.position.x += pose.x;
-      root.position.y += pose.y;
-      root.position.z += pose.z;
-      root.rotateY(pose.yaw);
-      root.rotateX(pose.pitch);
-      root.rotateZ(pose.roll);
-      root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+      this.applyBorrowedEventMotion(binding);
     }
+  }
+
+  private applyBorrowedEventMotion(binding: BorrowedSupplyBinding): void {
+    const root = binding.root;
+    const pose = binding.pose;
+    root.visible = true;
+    root.position.copy(this.basePositionById.get(binding.groupId)!);
+    root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
+    root.scale.set(1, 1, 1);
+    root.position.y += this.eventAmbientLift;
+    root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
+    root.position.x += pose.x;
+    root.position.y += pose.y;
+    root.position.z += pose.z;
+    root.rotateY(pose.yaw);
+    root.rotateX(pose.pitch);
+    root.rotateZ(pose.roll);
+    root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
   }
 
   private restoreEventMotionBase(): void {

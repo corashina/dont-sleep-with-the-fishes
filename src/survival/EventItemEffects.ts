@@ -49,6 +49,7 @@ export class EventItemEffects {
   private readonly actorPosition = new Vector3();
   private readonly flareLight: PointLight;
   private readonly flashlightLight: PointLight;
+  private readonly heldFillLight: PointLight;
   private readonly tape: EffectRoot;
   private readonly net: EffectRoot;
   private readonly flare: EffectRoot;
@@ -69,6 +70,9 @@ export class EventItemEffects {
     [this.flashlight, this.flashlightLight] = this.createFlashlight();
     this.harpoon = this.createHarpoon();
     this.binocularMask = this.createBinocularMask();
+    this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
+    this.heldFillLight.name = 'event-item-held-fill';
+    this.heldFillLight.position.set(-0.24, 0.36, 0.48);
     this.effects = [
       this.tape,
       this.net,
@@ -79,19 +83,22 @@ export class EventItemEffects {
       this.harpoon,
       this.binocularMask,
     ];
-    this.root.add(...this.effects);
+    this.root.add(...this.effects, this.heldFillLight);
     this.clear();
   }
 
   apply(sample: Readonly<EventItemUseSample>, actor: Object3D): void {
     if (this.disposed) return;
     this.clear();
-    if (sample.effectKind === 'none' || sample.effectKind === 'bucket-cover') return;
 
     actor.updateWorldMatrix(true, false);
     actor.getWorldPosition(this.actorPosition);
     this.root.position.copy(this.actorPosition);
     actor.getWorldQuaternion(this.root.quaternion);
+    this.heldFillLight.visible = sample.cameraSpaceBlend > 0;
+    this.heldFillLight.intensity = clampEffect(sample.cameraSpaceBlend) * 3.4;
+
+    if (sample.effectKind === 'none' || sample.effectKind === 'bucket-cover') return;
 
     const primary = clampEffect(sample.primaryEffect);
     const secondary = clampEffect(sample.secondaryEffect);
@@ -160,12 +167,19 @@ export class EventItemEffects {
     for (const [material, opacity] of this.baseOpacities) material.opacity = opacity;
     if (this.flareLight) this.flareLight.intensity = 0;
     if (this.flashlightLight) this.flashlightLight.intensity = 0;
+    if (this.heldFillLight) {
+      this.heldFillLight.visible = false;
+      this.heldFillLight.intensity = 0;
+    }
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.clear();
+    this.flareLight.shadow.dispose();
+    this.flashlightLight.shadow.dispose();
+    this.heldFillLight.shadow.dispose();
     this.geometries.forEach((geometry) => geometry.dispose());
     this.materials.forEach((material) => material.dispose());
     this.geometries.clear();
@@ -253,8 +267,8 @@ export class EventItemEffects {
       'event-item-flare-core',
     );
     const halo = this.mesh(
-      new RingGeometry(0.11, 0.28, 9),
-      new MeshBasicMaterial({ color: 0xff7350, transparent: true, opacity: 0.48, depthWrite: false }),
+      new RingGeometry(0.09, 0.16, 9),
+      new MeshBasicMaterial({ color: 0xff7350, transparent: true, opacity: 0.3, depthWrite: false }),
       'event-item-flare-halo',
     );
     halo.rotation.y = Math.PI;
@@ -282,8 +296,16 @@ export class EventItemEffects {
   private createUmbrella(): EffectRoot {
     const umbrella = new Group();
     umbrella.name = UMBRELLA;
-    const cloth = new MeshStandardMaterial({ color: 0x445c68, roughness: 0.9, metalness: 0, side: 2 });
-    const canopy = this.mesh(new ConeGeometry(0.52, 0.28, 7, 1, true), cloth, 'event-item-umbrella-canopy');
+    const cloth = new MeshStandardMaterial({
+      color: 0x445c68,
+      roughness: 0.9,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+      side: 2,
+    });
+    const canopy = this.mesh(new ConeGeometry(0.46, 0.24, 7, 1, true), cloth, 'event-item-umbrella-canopy');
     canopy.rotation.x = Math.PI;
     const ribGeometry = new CylinderGeometry(0.01, 0.012, 0.52, 4);
     const ribMaterial = new MeshStandardMaterial({ color: 0x312e2a, roughness: 0.72, metalness: 0.5 });

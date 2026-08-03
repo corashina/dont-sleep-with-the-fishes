@@ -87,6 +87,7 @@ describe('event item use choreography', () => {
 
       expect(start.cameraSpaceBlend).toBe(0);
       expect(lift.cameraSpaceBlend).toBeGreaterThan(0);
+      expect(lift.viewZ).toBeLessThanOrEqual(-0.6);
       expect(hold.cameraSpaceBlend).toBeGreaterThan(0.9);
       expect(hold.viewZ).toBeLessThan(0);
       expect(Number.isFinite(action.yaw)).toBe(true);
@@ -96,6 +97,8 @@ describe('event item use choreography', () => {
 
     expect(sampleAt('binocular-look', 0.65).fovScale).toBeLessThan(1);
     expect(sampleAt('compass-search', 0.65).cameraYaw).not.toBe(0);
+    expect(sampleAt('flare-target', 0.3).viewY).toBeLessThanOrEqual(0.12);
+    expect(sampleAt('umbrella-overhead', 0.3).viewY).toBeLessThanOrEqual(0.12);
   });
 
   it('uses distinct throw rolls for rigid, soft, and ring items', () => {

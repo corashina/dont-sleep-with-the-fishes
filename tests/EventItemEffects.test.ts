@@ -81,14 +81,66 @@ describe('EventItemEffects', () => {
     }
   });
 
+  it('keeps the umbrella translucent and the flare compact', () => {
+    const effects = new EventItemEffects();
+    const actor = new Group();
+
+    try {
+      const umbrellaSample = createEventItemUseSample();
+      umbrellaSample.effectKind = 'umbrella';
+      umbrellaSample.primaryEffect = 1;
+      effects.apply(umbrellaSample, actor);
+      const canopy = effects.root.getObjectByName('event-item-umbrella-canopy') as Mesh;
+      const canopyMaterial = canopy.material as Material;
+      expect(canopyMaterial.transparent).toBe(true);
+      expect(canopyMaterial.opacity).toBeLessThanOrEqual(0.75);
+      expect(canopyMaterial.depthWrite).toBe(false);
+
+      const flareSample = createEventItemUseSample();
+      flareSample.effectKind = 'flare';
+      flareSample.primaryEffect = 1;
+      effects.apply(flareSample, actor);
+      const halo = effects.root.getObjectByName('event-item-flare-halo') as Mesh;
+      halo.geometry.computeBoundingSphere();
+      expect(halo.geometry.boundingSphere!.radius).toBeLessThanOrEqual(0.18);
+      expect((halo.material as Material).opacity).toBeLessThanOrEqual(0.35);
+      const flareLight = effects.root.getObjectByName('event-item-flare-light') as PointLight;
+      expect(flareLight.intensity).toBeGreaterThanOrEqual(6);
+    } finally {
+      effects.dispose();
+    }
+  });
+
+  it('lights the held actor and clears the fill light', () => {
+    const effects = new EventItemEffects();
+    const actor = new Group();
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+
+    effects.apply(sample, actor);
+    const fill = effects.root.getObjectByName('event-item-held-fill') as PointLight;
+    expect(fill.intensity).toBeGreaterThan(0);
+
+    effects.clear();
+    expect(fill.intensity).toBe(0);
+    effects.dispose();
+  });
+
   it('disposes each owned resource once', () => {
     const effects = new EventItemEffects();
     const disposals = ownedResources(effects.root)
       .map((resource) => vi.spyOn(resource, 'dispose'));
+    const lightDisposals: ReturnType<typeof vi.spyOn>[] = [];
+    effects.root.traverse((object) => {
+      if (object instanceof PointLight) {
+        lightDisposals.push(vi.spyOn(object.shadow, 'dispose'));
+      }
+    });
 
     effects.dispose();
     effects.dispose();
 
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    lightDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 });
