@@ -2429,6 +2429,111 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it.each([
+    ['cannedFood', 'food'],
+    ['baitTin', 'bait'],
+    ['medicalKit', 'medicalKit'],
+    ['energyBar', 'energyBar'],
+    ['swimRing', 'swimRing'],
+    ['bottledPaper', 'bottledPaper'],
+  ] as const)(
+    'routes generic %s item use through the shared throw-target adapter',
+    async (itemId, choiceId) => {
+      const item = savedItem(itemId);
+      const inventory = snapshot([item], itemId === 'cannedFood'
+        ? { food: 1 }
+        : itemId === 'baitTin'
+          ? { bait: 1 }
+          : {});
+      const propModels = createTestPropModels();
+      const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [item],
+      );
+      world.syncInventory(inventory);
+      world.stageEvent('flowers');
+
+      const use = world.playEventItemUse('flowers', choiceId, item.instanceId);
+      const active = (world as unknown as {
+        activeSharedEventItemUse: { context: string } | null;
+      }).activeSharedEventItemUse;
+
+      expect(active?.context).toBe('throw-target');
+      expect(supplyItem).not.toHaveBeenCalled();
+
+      world.update(1.5, 1.5);
+      await use;
+      world.dispose();
+      supplyItem.mockRestore();
+      propModels.dispose();
+    },
+  );
+
+  it('keeps the old fallback when no shared item context exists', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket]));
+    world.stageEvent('flowers');
+
+    const use = world.playEventItemUse('flowers', 'bucket', bucket.instanceId);
+
+    expect(supplyItem).toHaveBeenCalledWith(bucket.instanceId);
+    world.update(1.5, 1.5);
+    await use;
+    world.dispose();
+    supplyItem.mockRestore();
+    propModels.dispose();
+  });
+
+  it.each([
+    ['event replacement', (world: BoatWorld) => world.stageEvent('check-the-back')],
+    ['visibility settle', (world: BoatWorld) => world.setDocumentHidden(true)],
+    ['disposal', (world: BoatWorld) => world.dispose()],
+  ] as const)(
+    'clears and releases a shared event actor on %s',
+    async (_reason, clear) => {
+      const item = savedItem('energyBar');
+      const propModels = createTestPropModels();
+      const clearAdapter = vi.spyOn(EventItemUseAdapter.prototype, 'clear');
+      const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [item],
+      );
+      world.syncInventory(snapshot([item]));
+      world.stageEvent('flowers');
+      const use = world.playEventItemUse('flowers', 'energyBar', item.instanceId);
+      const actor = borrowActor.mock.results.at(-1)!.value as BorrowedSupplyActor;
+      const release = vi.spyOn(actor, 'release');
+      clearAdapter.mockClear();
+
+      clear(world);
+      await use;
+
+      expect(clearAdapter).toHaveBeenCalled();
+      expect(release).toHaveBeenCalledOnce();
+      expect(clearAdapter.mock.invocationCallOrder[0]!).toBeLessThan(
+        release.mock.invocationCallOrder[0]!,
+      );
+      world.dispose();
+      clearAdapter.mockRestore();
+      borrowActor.mockRestore();
+      propModels.dispose();
+    },
+  );
+
   it('applies the canonical supply restore and event pose once per frame', () => {
     const propModels = createTestPropModels();
     const updateSupply = vi.spyOn(BoatSupplyDisplay.prototype, 'update');
@@ -3348,7 +3453,7 @@ describe('BoatWorld helpers', () => {
     );
     await Promise.resolve();
 
-    world.update(1, 1);
+    world.update(1.5, 1.5);
     await pending;
 
     expect(group.position.toArray()).toEqual([0, 0, 0]);

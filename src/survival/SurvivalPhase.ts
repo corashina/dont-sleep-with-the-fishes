@@ -1093,8 +1093,7 @@ export class SurvivalPhase implements GamePhase {
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     const itemType = pending.inventory[instanceId]?.type;
-    if (isDedicatedEventId(eventId)) this.audio.eventAction(eventId, choiceId);
-    else if (itemType !== undefined) this.audio.tool(itemType);
+    if (itemType !== undefined) this.audio.eventItem(itemType);
     const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
