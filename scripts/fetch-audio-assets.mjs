@@ -17,6 +17,7 @@ const freesoundSources = [
   ['rain', 'Snoopy20111', '399072'],
   ['thunderLightning', 'Yoyodaman234', '267551'],
   ['roomTone', 'kyles', '454012'],
+  ['shipAlarm', 'InfamousLazure', '584001'],
   ['woodStep', 'SoundsAreGr8', '340983'],
   ['jump', 'florianreichelt', '683101'],
   ['itemHandling', 'petenice', '9509'],
@@ -154,4 +155,4 @@ const results = await Promise.all([
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');
 const totalBytes = results.reduce((total, { size }) => total + size, 0);
-process.stdout.write(`Ready: 49 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);
+process.stdout.write(`Ready: 50 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);

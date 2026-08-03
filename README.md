@@ -25,7 +25,7 @@ The scavenging phase takes place on a furnished single-level coastal freighter. 
 
 Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 18 scavenging item types and 21 physical pickups: Food appears three times, Bait twice, and every other item type once.
 
-The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials: subdued non-slip decks, weathered bulkheads, wooden cargo fittings, rust details, railings, working-deck equipment, twin smokestacks, and pooled smoke that responds to sinking progress and reduced-motion preference.
+The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Static puddles add tension without changing movement. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
 
 ## Dorothy supplies
 
@@ -158,6 +158,8 @@ audit, and atomically publish the complete set.
 Source pages, licenses, resource IDs, hashes, and processing records are listed
 in [the asset ledger](src/assets/ATTRIBUTION.md).
 
+The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/InfamousLazure/sounds/584001/) from Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
 Dorothy's main cargo deck uses [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). All room floors use [Poly Haven — Blue Painted Planks](https://polyhaven.com/a/blue_painted_planks), interior and exterior room walls use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C), and the exterior hull sides and waterline use [ambientCG — Painted Metal 006](https://ambientcg.com/view?id=PaintedMetal006). Windows, roofs, machinery, rails, ropes, safety markings, canvas, and small hardware retain distinct authored materials for readability.
 
 ## Commands
@@ -185,6 +187,8 @@ download, initialization, world construction, simulation, debug rendering,
 and cleanup.
 
 ## Architecture
+
+`src/world/ShipDangerEffects` owns room alarms and static puddles.
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
