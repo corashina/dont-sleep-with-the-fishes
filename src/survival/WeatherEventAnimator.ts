@@ -3,14 +3,12 @@ import {
   BufferGeometry,
   ConeGeometry,
   DoubleSide,
-  Euler,
   Group,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  Quaternion,
   Texture,
   TorusGeometry,
   Vector3,
@@ -22,6 +20,7 @@ import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 import {
   isCameraOnlyWeatherEvent,
   sampleWeatherItemUse,
@@ -180,12 +179,7 @@ export class WeatherEventAnimator {
 
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseRotation = new Euler();
-  private readonly viewCameraBasePosition = new Vector3();
-  private readonly viewCameraBaseQuaternion = new Quaternion();
-  private readonly viewCameraOffsetEuler = new Euler(0, 0, 0, 'YXZ');
-  private readonly viewCameraOffsetQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera | null;
   private readonly revealSample: WeatherRevealSample = {
     cameraX: 0,
     cameraY: 0,
@@ -247,11 +241,14 @@ export class WeatherEventAnimator {
   private disposed = false;
 
   constructor(
-    private readonly cameraRig: Group,
+    _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels?: EventModelLibrary,
-    private readonly viewCamera?: Object3D,
+    viewCamera?: Object3D,
   ) {
+    this.cameraLook = viewCamera === undefined
+      ? null
+      : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
     this.figureMaterial = new MeshStandardMaterial({
@@ -469,18 +466,14 @@ export class WeatherEventAnimator {
   private updateReveal(eventId: string, progress: number): void {
     if (!sampleWeatherReveal(eventId, progress, this.revealSample)) return;
     const sample = this.revealSample;
-    if (eventId === 'shower-night' && this.viewCamera !== undefined) {
-      this.applyStationaryView(sample.cameraYaw, sample.cameraPitch);
-    } else {
-      this.applyCameraPose(
-        sample.cameraX,
-        sample.cameraY,
-        sample.cameraZ,
-        sample.cameraYaw,
-        sample.cameraPitch,
-        sample.cameraRoll,
-      );
-    }
+    this.applyCameraPose(
+      sample.cameraX,
+      sample.cameraY,
+      sample.cameraZ,
+      sample.cameraYaw,
+      sample.cameraPitch,
+      sample.cameraRoll,
+    );
     if (!isCameraOnlyWeatherEvent(eventId)) {
       this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
     }
@@ -677,22 +670,15 @@ export class WeatherEventAnimator {
     pitch: number,
     roll: number,
   ): void {
-    this.cameraRig.position.x += x;
-    this.cameraRig.position.y += y;
-    this.cameraRig.position.z += z;
-    this.cameraRig.rotateY(yaw);
-    this.cameraRig.rotateX(pitch);
-    this.cameraRig.rotateZ(roll);
+    void roll;
+    this.applyStationaryView(
+      yaw - x * 0.45,
+      pitch + y * 0.65 + z * 0.45,
+    );
   }
 
   private applyStationaryView(yaw: number, pitch: number): void {
-    if (this.viewCamera === undefined) return;
-    this.viewCamera.position.copy(this.viewCameraBasePosition);
-    this.viewCameraOffsetEuler.set(pitch, yaw, 0, 'YXZ');
-    this.viewCameraOffsetQuaternion.setFromEuler(this.viewCameraOffsetEuler);
-    this.viewCamera.quaternion
-      .copy(this.viewCameraBaseQuaternion)
-      .multiply(this.viewCameraOffsetQuaternion);
+    this.cameraLook?.apply(yaw, pitch);
   }
 
   private showSilhouette(visibility: number): void {
@@ -708,21 +694,11 @@ export class WeatherEventAnimator {
   }
 
   private rememberCameraBase(): void {
-    this.cameraBasePosition.copy(this.cameraRig.position);
-    this.cameraBaseRotation.copy(this.cameraRig.rotation);
-    if (this.viewCamera !== undefined) {
-      this.viewCameraBasePosition.copy(this.viewCamera.position);
-      this.viewCameraBaseQuaternion.copy(this.viewCamera.quaternion);
-    }
+    this.cameraLook?.capture();
   }
 
   private restoreCamera(): void {
-    this.cameraRig.position.copy(this.cameraBasePosition);
-    this.cameraRig.rotation.copy(this.cameraBaseRotation);
-    if (this.viewCamera !== undefined) {
-      this.viewCamera.position.copy(this.viewCameraBasePosition);
-      this.viewCamera.quaternion.copy(this.viewCameraBaseQuaternion);
-    }
+    this.cameraLook?.restore();
   }
 
   private hideTransientEffects(): void {

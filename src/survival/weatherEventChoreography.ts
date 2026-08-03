@@ -282,44 +282,38 @@ export function sampleWeatherReveal(
       }
       return true;
     }
-    case 'windy-night':
-      output.cameraX = 0.18 * Math.sin(Math.PI * (t - 0.05));
-      output.cameraYaw = 0.44 * Math.sin(Math.PI * (t - 0.12));
-      output.cameraRoll = 0.07 * Math.sin(3 * Math.PI * t) * sweep;
-      break;
-    case 'thunderstorm':
-      output.cameraY = 0.15 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraYaw = 0.38 * Math.sin(Math.PI * (t - 0.16));
-      output.cameraPitch = -0.13 * pulse(t, 0.16, 0.52, 0.84);
-      output.cameraRoll = 0.1 * Math.sin(3 * Math.PI * t) * sweep;
-      output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
-      break;
-    case 'restless-waves': {
-      const riseCarrier = (
-        Math.sin(Math.PI * t)
-        + 0.72 * Math.sin(3 * Math.PI * t)
-        + 0.38 * Math.sin(5 * Math.PI * t)
-      );
-      output.cameraX = 0.14 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraY = 0.18 * riseCarrier * Math.sin(3 * Math.PI * t);
-      output.cameraYaw = 0.28 * Math.sin(Math.PI * (t - 0.14));
-      output.cameraRoll = 0.15 * Math.sin(2 * Math.PI * t);
+    case 'windy-night': {
+      if (t < 0.24) {
+        output.cameraYaw = 0.34 * smootherstep(t / 0.24);
+      } else if (t < 0.42) {
+        output.cameraYaw = 0.34;
+      } else if (t < 0.72) {
+        output.cameraYaw = 0.34 - 0.68 * smootherstep((t - 0.42) / 0.3);
+      } else {
+        output.cameraYaw = -0.34;
+      }
+      output.cameraPitch = 0.025 * Math.sin(2 * Math.PI * t) * sweep;
       break;
     }
+    case 'thunderstorm':
+      output.cameraYaw = 0.13 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraPitch = -0.24 * pulse(t, 0.1, 0.54, 0.9);
+      output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
+      break;
+    case 'restless-waves':
+      output.cameraYaw = 0.25 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraPitch = -0.2 * pulse(t, 0.08, 0.5, 0.92);
+      break;
     case 'man-in-the-fog':
-      output.cameraX = 0.1 * Math.sin(Math.PI * (t - 0.1));
-      output.cameraYaw = 0.35 * Math.sin(Math.PI * (t - 0.18));
-      output.cameraPitch = -0.06 * pulse(t, 0.16, 0.54, 0.82);
+      output.cameraYaw = 0.23 * smoothstep((t - 0.08) / 0.3);
+      output.cameraPitch = -0.08 * smoothstep((t - 0.12) / 0.3);
       output.figureVisibility = smoothstep((t - 0.2) / 0.18)
         * (1 - smoothstep((t - 0.84) / 0.12));
       output.figureDistance = 0;
       break;
     case 'bad-sleep':
-      output.cameraX = 0.1 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraY = -0.1 * pulse(t, 0.12, 0.5, 0.88);
-      output.cameraYaw = 0.19 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraPitch = 0.08 * pulse(t, 0.2, 0.54, 0.82);
-      output.cameraRoll = 0.12 * Math.sin(3 * Math.PI * t) * sweep;
+      output.cameraYaw = 0.16 * Math.sin(2 * Math.PI * t) * sweep;
+      output.cameraPitch = -0.28 * pulse(t, 0.1, 0.5, 0.9);
       output.supplyRoll = 0.05 * Math.sin(3 * Math.PI * t) * sweep;
       break;
   }

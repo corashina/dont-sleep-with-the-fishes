@@ -698,11 +698,12 @@ export class DangerousWatersPresentation {
     const travel = keyedTravel(progress);
     const peek = smoothstep((progress - 0.42) / 0.2);
     const sink = smoothstep((progress - 0.82) / 0.16);
+    const cameraReturn = 1 - smoothstep((progress - 0.72) / 0.28);
     this.passage.position.x += (1 - travel) * 3.2;
     this.lurker.scale.y = peek * (1 - sink);
     this.materials.foam.opacity = 0.12 + smoothstep(progress) * 0.32;
     this.boatReaction.driftX = Math.sin(Math.PI * progress) * -0.34;
-    this.boatReaction.cameraYaw = smoothstep(progress) * -0.09;
+    this.boatReaction.cameraYaw = smoothstep(progress) * 0.32 * cameraReturn;
     this.boatReaction.yaw = Math.sin(Math.PI * progress) * 0.035;
     this.boatReaction.roll = Math.sin(Math.PI * progress) * -0.018;
   }

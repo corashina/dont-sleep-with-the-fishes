@@ -22,6 +22,7 @@ import {
 } from './eventPhysicalResponseChoreography';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { ActionOutcome } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 import {
   GHOST_FLIGHT_PATHS,
   sampleSupernaturalItemUse,
@@ -193,8 +194,7 @@ export class SupernaturalEventAnimator {
 
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseRotation = new Euler();
+  private readonly cameraLook: StationaryEventCamera | null;
   private readonly revealSample: SupernaturalRevealSample = {
     cameraX: 0,
     cameraY: 0,
@@ -318,10 +318,14 @@ export class SupernaturalEventAnimator {
   private disposed = false;
 
   constructor(
-    private readonly cameraRig: Group,
+    _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels: EventModelLibrary,
+    viewCamera?: Object3D,
   ) {
+    this.cameraLook = viewCamera === undefined
+      ? null
+      : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'supernatural-event-world';
     this.ghosts = Array.from({ length: 5 }, (_, index) => {
       const ghost = eventModels.create('ghost');
@@ -705,13 +709,11 @@ export class SupernaturalEventAnimator {
   }
 
   private rememberCameraBase(): void {
-    this.cameraBasePosition.copy(this.cameraRig.position);
-    this.cameraBaseRotation.copy(this.cameraRig.rotation);
+    this.cameraLook?.capture();
   }
 
   private restoreCamera(): void {
-    this.cameraRig.position.copy(this.cameraBasePosition);
-    this.cameraRig.rotation.copy(this.cameraBaseRotation);
+    this.cameraLook?.restore();
   }
 
   private applyCameraPose(
@@ -722,12 +724,11 @@ export class SupernaturalEventAnimator {
     pitch: number,
     roll: number,
   ): void {
-    this.cameraRig.position.x += x;
-    this.cameraRig.position.y += y;
-    this.cameraRig.position.z += z;
-    this.cameraRig.rotateY(yaw);
-    this.cameraRig.rotateX(pitch);
-    this.cameraRig.rotateZ(roll);
+    void roll;
+    this.cameraLook?.apply(
+      yaw - x * 0.45,
+      pitch + y * 0.65 + z * 0.45,
+    );
   }
 
   private finishActive(): void {

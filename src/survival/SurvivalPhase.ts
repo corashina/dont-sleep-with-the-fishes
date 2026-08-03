@@ -69,7 +69,6 @@ import type {
   DayActionId,
   DayActionOption,
   DriftingLootVariant,
-  EventPresentationKey,
   EventResponse,
   EventResponseId,
   RewardSummary,
@@ -116,23 +115,6 @@ type EventPresentationState =
   | 'retrieving'
   | 'result'
   | 'receding';
-
-const EVENT_RESULT_CAPTIONS: Readonly<Partial<Record<EventPresentationKey, string>>> = {
-  'drifting-loot.food': 'Recovered',
-  'drifting-loot.bait': 'Recovered',
-  'drifting-loot.repair': 'Recovered',
-  'drifting-loot.energy-bar': 'Recovered',
-  'drifting-loot.drift': 'Slipped away',
-  'drifting-bottle.retrieve': 'Paper inside',
-  'drifting-bottle.lost': 'Lost in the wake',
-  'check-the-back.fish': 'A fish',
-  'check-the-back.empty': 'Only water',
-  'check-the-back.face': 'It was me',
-  'check-the-back.ignore': 'Left unseen',
-  'mystery-chest.safe': 'A real chest',
-  'mystery-chest.mimic': 'Teeth',
-  'mystery-chest.leave': 'Left below',
-};
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
@@ -1485,38 +1467,6 @@ export class SurvivalPhase implements GamePhase {
     const terminal = this.session.snapshot();
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
-    }
-    if (focusedResult) {
-      this.ui.showEventOutcome?.(outcome);
-    } else {
-      const resultCaption = outcome.eventPresentationKey === undefined
-        ? undefined
-        : EVENT_RESULT_CAPTIONS[outcome.eventPresentationKey];
-      if (
-        !isDedicatedEventId(eventId)
-        && eventId !== 'drifting-loot'
-        && resultCaption !== undefined
-      ) {
-        const resultView: EventResultView = {
-          caption: resultCaption,
-          detail: outcome.message,
-          target: this.world.projectEventResultBounds?.(
-            eventId,
-            this.viewportWidth,
-            this.viewportHeight,
-          ) ?? null,
-        };
-        this.ui.showEventResult?.(resultView);
-      }
-      if (eventId === 'dangerous-waters') {
-        this.ui.showEventOutcome?.(formatDangerousWatersOutcome(outcome));
-      } else if (isDedicatedEventId(eventId)) {
-        this.ui.showEventResult?.(formatEventResult(presentation));
-      } else if (eventState === 'nightEvent' && resultCaption === undefined) {
-        this.ui.showEventOutcome?.(outcome);
-      } else if (eventState !== 'nightEvent') {
-        this.ui.showFeedback?.(outcome);
-      }
     }
     const isDedicatedEvent = isDedicatedEventId(eventId);
     if (isTerminal(terminal.state)) {
