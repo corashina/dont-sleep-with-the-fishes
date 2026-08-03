@@ -169,7 +169,7 @@ describe('SurvivalSession Captain Whiskers events', () => {
 
     const tapeWorsens = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
       seed: 1,
-      random: sequenceRandom([0]),
+      random: sequenceRandom([0.799999]),
       initialCaptainWhiskers: { sickness: 2 },
       initialEventId: 'sick-companion',
     });
@@ -178,7 +178,7 @@ describe('SurvivalSession Captain Whiskers events', () => {
 
     const tapeHolds = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
       seed: 1,
-      random: sequenceRandom([0.999999]),
+      random: sequenceRandom([0.8]),
       initialCaptainWhiskers: { sickness: 2 },
       initialEventId: 'sick-companion',
     });
