@@ -55,6 +55,10 @@ export class EventPresentationCoordinator {
     return this.activePresentation?.playChoice?.(choiceId) ?? Promise.resolve();
   }
 
+  skip(): void {
+    this.activePresentation?.skip();
+  }
+
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
     return this.activePresentation?.playItemUse(choiceId, instanceId)
       ?? Promise.resolve(false);

@@ -5144,6 +5144,52 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('does not animate Whiskers when Drifting Loot delegation is rejected', async () => {
+    const current = snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'drifting-loot',
+      pendingDriftingLootVariant: 'barrel',
+    });
+    const rejected = accepted({
+      accepted: false,
+      code: 'captain-whiskers-unavailable',
+      message: 'Captain Whiskers is too hungry to help.',
+    });
+    const delegateDriftingLoot = vi.fn(() => Promise.resolve());
+    const showFeedback = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      showFeedback,
+      setBusy: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => rejected),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        delegateDriftingLoot,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('delegate-whiskers');
+    await flushPromises();
+
+    expect(showFeedback).toHaveBeenCalledWith(rejected);
+    expect(delegateDriftingLoot).not.toHaveBeenCalled();
+    phase.dispose();
+  });
+
   it('passes the kidnapped ending reason to the UI', () => {
     const showEnding = vi.fn();
     const phase = SurvivalPhase.forTest({
