@@ -307,12 +307,12 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
-    if (!this.borrowActor(instanceId)) return Promise.resolve(false);
     const itemId = this.environment.supplies.itemType(instanceId);
     if (itemId === null) return Promise.resolve(false);
     const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
     if (itemUseContext === null) return Promise.resolve(false);
+    this.cancelActive();
+    if (!this.borrowActor(instanceId)) return Promise.resolve(false);
     this.environment.itemUseAdapter.begin(this.borrowedActor!);
     sampleSnatcherItemUse(choiceId, 0, this.sample);
     sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);

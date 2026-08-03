@@ -58,6 +58,15 @@ export class EventItemEffects {
   private readonly flashlight: EffectRoot;
   private readonly harpoon: EffectRoot;
   private readonly binocularMask: EffectRoot;
+  private effectOpacity = 0;
+  private readonly applyEffectOpacity = (object: Object3D): void => {
+    if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+    if (Array.isArray(object.material)) {
+      for (const material of object.material) this.setMaterialOpacity(material);
+      return;
+    }
+    this.setMaterialOpacity(object.material);
+  };
   private disposed = false;
 
   constructor() {
@@ -104,50 +113,51 @@ export class EventItemEffects {
     const secondary = clampEffect(sample.secondaryEffect);
     switch (sample.effectKind) {
       case 'tape':
-        this.show(this.tape);
+        this.show(this.tape, primary);
         this.tape.position.set(-0.06, 0.1, -0.52);
         this.tape.rotation.z = 0.08;
         this.tape.scale.set(0.72 + primary * 0.76, 0.9, 1);
         break;
       case 'net':
-        this.show(this.net);
+        this.show(this.net, primary);
         this.net.position.set(0.26 + primary * 0.35, 0.14, -0.58);
         this.net.rotation.set(0.08, -0.24, -0.18 - primary * 0.2);
         this.net.scale.setScalar(0.7 + primary * 0.42);
         break;
       case 'flare':
-        this.show(this.flare);
+        this.show(this.flare, primary);
         this.flare.position.set(0.36, 0.22 + primary * 0.34, -0.48);
         this.flare.scale.setScalar(0.7 + primary * 0.42);
-        this.flareLight.intensity = 1.8 + primary * 5.4;
+        this.flareLight.intensity = primary * (1.8 + primary * 5.4);
         break;
       case 'chain':
-        this.show(this.chain);
+        this.show(this.chain, primary);
         this.chain.position.set(0.13, -0.18 - primary * 0.75, -0.36);
         this.chain.rotation.z = 0.1 + primary * 0.22;
         this.chain.scale.y = 0.58 + primary * 0.72;
         break;
       case 'umbrella':
-        this.show(this.umbrella);
+        this.show(this.umbrella, primary);
         this.umbrella.position.set(0.04, 0.38 + primary * 0.42, -0.38 - primary * 0.14);
         this.umbrella.rotation.set(-0.16 - primary * 0.24, 0.06, 0.04);
         this.umbrella.scale.setScalar(0.76 + primary * 0.3);
         break;
       case 'flashlight':
-        this.show(this.flashlight);
+        this.show(this.flashlight, primary);
         this.flashlight.position.set(0.18, -0.02, -0.38);
         this.flashlight.rotation.set(0.02, -0.14, 0);
         this.flashlight.scale.setScalar(0.8 + primary * 0.28);
-        this.flashlightLight.intensity = 1.1 + primary * 3.2 + secondary * 2.5;
+        this.flashlightLight.intensity = primary
+          * (1.1 + primary * 3.2 + secondary * 2.5);
         break;
       case 'harpoon':
-        this.show(this.harpoon);
+        this.show(this.harpoon, primary);
         this.harpoon.position.set(0.08, 0.04, -0.42 - primary * 1.2);
         this.harpoon.rotation.set(0.02, -0.08, -0.04);
         this.harpoon.scale.setScalar(0.84 + primary * 0.24);
         break;
       case 'binocular-mask':
-        this.show(this.binocularMask);
+        this.show(this.binocularMask, primary);
         this.binocularMask.position.set(0, 0.02, -1.05);
         this.binocularMask.scale.setScalar(0.76 + primary * 0.26);
         this.binocularMask.rotation.y = Math.PI;
@@ -164,7 +174,7 @@ export class EventItemEffects {
       effect.rotation.set(0, 0, 0);
       effect.scale.set(1, 1, 1);
     }
-    for (const [material, opacity] of this.baseOpacities) material.opacity = opacity;
+    for (const material of this.baseOpacities.keys()) material.opacity = 0;
     if (this.flareLight) this.flareLight.intensity = 0;
     if (this.flashlightLight) this.flashlightLight.intensity = 0;
     if (this.heldFillLight) {
@@ -188,8 +198,14 @@ export class EventItemEffects {
     this.root.clear();
   }
 
-  private show(effect: EffectRoot): void {
-    effect.visible = true;
+  private show(effect: EffectRoot, weight: number): void {
+    this.effectOpacity = weight;
+    effect.visible = weight > 0;
+    effect.traverse(this.applyEffectOpacity);
+  }
+
+  private setMaterialOpacity(material: Material): void {
+    material.opacity = (this.baseOpacities.get(material) ?? 1) * this.effectOpacity;
   }
 
   private mesh(
@@ -207,6 +223,7 @@ export class EventItemEffects {
   private trackMaterial(material: Material): void {
     this.materials.add(material);
     this.baseOpacities.set(material, material.opacity);
+    material.transparent = true;
   }
 
   private createTape(): EffectRoot {

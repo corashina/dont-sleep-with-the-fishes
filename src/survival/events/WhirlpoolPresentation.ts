@@ -267,12 +267,12 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     if (this.disposed || !this.staged || !supportedChoice(choiceId)) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
-    if (!this.borrowItemActor(instanceId)) return Promise.resolve(false);
     const itemId = this.environment.supplies.itemType(instanceId);
     if (itemId === null) return Promise.resolve(false);
     const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
     if (itemUseContext === null) return Promise.resolve(false);
+    this.cancelActive();
+    if (!this.borrowItemActor(instanceId)) return Promise.resolve(false);
     this.environment.itemUseAdapter.begin(this.itemActor!);
     this.lastChoiceId = choiceId;
     sampleWhirlpoolItemUse(choiceId, 0, this.sample);

@@ -10,7 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import {
   createEventItemUseSample,
+  sampleEventItemUse,
   type EventItemEffectKind,
+  type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
 
 const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
@@ -25,6 +27,16 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
   flashlight: 'event-item-flashlight-beam',
   harpoon: 'event-item-harpoon',
 };
+
+const actionEffects = [
+  ['tape-stretch', 'event-item-tape'],
+  ['net-throw', 'event-item-net'],
+  ['flare-target', 'event-item-flare'],
+  ['anchor-drop', 'event-item-chain'],
+  ['umbrella-shield', 'event-item-umbrella'],
+  ['flashlight-flash', 'event-item-flashlight-beam'],
+  ['harpoon-shot', 'event-item-harpoon'],
+] as const satisfies readonly (readonly [EventItemUseContext, string])[];
 
 function ownedResources(root: Group): readonly (BufferGeometry | Material)[] {
   const resources = new Set<BufferGeometry | Material>();
@@ -59,6 +71,21 @@ describe('EventItemEffects', () => {
       for (const effectKind of Object.keys(effectNames) as EventItemEffectKind[]) {
         const sample = createEventItemUseSample();
         sample.effectKind = effectKind;
+        effects.apply(sample, actor);
+
+        const requestedName = effectNames[effectKind];
+        if (requestedName !== null) {
+          const requested = effects.root.getObjectByName(requestedName)!;
+          expect(requested.visible).toBe(false);
+          requested.traverse((object) => {
+            if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+            const materials = Array.isArray(object.material)
+              ? object.material
+              : [object.material];
+            materials.forEach((material) => expect(material.opacity).toBe(0));
+          });
+        }
+
         sample.primaryEffect = 0.8;
         sample.secondaryEffect = 0.6;
         effects.apply(sample, actor);
@@ -80,6 +107,42 @@ describe('EventItemEffects', () => {
       effects.dispose();
     }
   });
+
+  it.each(actionEffects)(
+    'hides %s effects before action and after its effect weight ends',
+    (context, effectName) => {
+      const effects = new EventItemEffects();
+      const actor = new Group();
+      const sample = createEventItemUseSample();
+
+      try {
+        for (const progress of [0.29, 0.95]) {
+          sampleEventItemUse(context, progress, sample);
+          expect(sample.primaryEffect).toBe(0);
+          effects.apply(sample, actor);
+          const effect = effects.root.getObjectByName(effectName)!;
+          expect(effect.visible).toBe(false);
+          effect.traverse((object) => {
+            if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+            const materials = Array.isArray(object.material)
+              ? object.material
+              : [object.material];
+            materials.forEach((material) => expect(material.opacity).toBe(0));
+          });
+          effects.root.traverse((object) => {
+            if (
+              object instanceof PointLight
+              && object.name !== 'event-item-held-fill'
+            ) {
+              expect(object.intensity).toBe(0);
+            }
+          });
+        }
+      } finally {
+        effects.dispose();
+      }
+    },
+  );
 
   it('keeps the umbrella translucent and the flare compact', () => {
     const effects = new EventItemEffects();

@@ -199,7 +199,7 @@ function sampleTapeStretch(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'tape';
+  output.effectKind = action > 0 ? 'tape' : 'none';
   output.viewX -= 0.12 * action;
   output.yaw = 0.18 * action;
   output.scaleX = 1 + 0.72 * action;
@@ -228,15 +228,15 @@ function sampleMapRead(
   output.yaw = -0.16 * hold;
   output.pitch = 0.44 * hold;
   output.roll = -0.08 * action;
-  output.scaleX = 1.1;
-  output.scaleY = 1.1;
+  output.scaleX = 1 + 0.1 * hold;
+  output.scaleY = 1 + 0.1 * hold;
 }
 
 function sampleBinocularLook(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'binocular-mask';
+  output.effectKind = hold > 0 ? 'binocular-mask' : 'none';
   output.viewY += 0.2 * hold;
   output.viewZ -= 0.14 * hold;
   output.pitch = 0.08 * action;
@@ -249,7 +249,7 @@ function sampleNetThrow(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'net';
+  output.effectKind = action > 0 ? 'net' : 'none';
   output.viewX += 0.46 * action;
   output.viewY += 0.2 * action;
   output.viewZ += 0.48 * action;
@@ -276,7 +276,7 @@ function sampleBucketCover(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'bucket-cover';
+  output.effectKind = action > 0 ? 'bucket-cover' : 'none';
   output.viewY += 0.5 * action;
   output.viewZ -= 0.18 * action;
   output.pitch = -0.42 * action;
@@ -291,7 +291,7 @@ function sampleFlare(
   sky: boolean,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'flare';
+  output.effectKind = action > 0 ? 'flare' : 'none';
   output.viewY += (sky ? 0.52 : 0.16) * action;
   output.viewX += (sky ? 0.14 : 0.42) * action;
   output.pitch = (sky ? -0.72 : 0.08) * action;
@@ -304,7 +304,7 @@ function sampleAnchorDrop(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'chain';
+  output.effectKind = action > 0 ? 'chain' : 'none';
   output.viewY -= 0.64 * action;
   output.viewZ += 0.42 * action;
   output.yaw = 0.24 * action;
@@ -321,7 +321,7 @@ function sampleUmbrella(
   shield: boolean,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'umbrella';
+  output.effectKind = action > 0 ? 'umbrella' : 'none';
   output.viewY += (shield ? 0.14 : 0.66) * action;
   output.viewZ -= (shield ? 0.42 : 0.12) * action;
   output.pitch = (shield ? 0.18 : -0.6) * action;
@@ -333,7 +333,7 @@ function sampleFlashlightFlash(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'flashlight';
+  output.effectKind = action > 0 ? 'flashlight' : 'none';
   output.viewX += 0.22 * action;
   output.yaw = -0.18 * action;
   output.pitch = 0.14 * action;
@@ -345,7 +345,7 @@ function sampleHarpoonShot(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = 'harpoon';
+  output.effectKind = action > 0 ? 'harpoon' : 'none';
   output.viewZ += 0.32 * action;
   output.yaw = -0.22 * action;
   output.pitch = 0.1 * action;

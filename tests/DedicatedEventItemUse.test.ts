@@ -146,6 +146,46 @@ function createActor(
 }
 
 describe('dedicated event item use', () => {
+  it.each(Object.entries(choices) as readonly (readonly [
+    DedicatedEventId,
+    readonly string[],
+  ])[])(
+    'rejects a mismatched %s item before borrowing an actor',
+    async (eventId, eventChoices) => {
+      const choiceId = eventChoices[0]!;
+      const instanceId = 'compass-1' as ItemInstanceId;
+      const scene = new Scene();
+      const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+      const supplyRoot = new Group();
+      scene.add(camera, supplyRoot);
+      const { actor, release } = createActor(supplyRoot, instanceId);
+      const borrowEventActor = vi.fn(() => actor);
+      const effects = new EventItemEffects();
+      const adapter = new EventItemUseAdapter(camera, effects);
+      const environment: DedicatedEventEnvironment = {
+        eventModels: createEventModels(),
+        supplies: {
+          borrowEventActor,
+          itemType: () => 'compass',
+        } as unknown as DedicatedEventEnvironment['supplies'],
+        vortexWave: createInactiveVortexWaveState(),
+        sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
+        camera,
+        itemUseAdapter: adapter,
+        itemEffects: effects,
+      };
+      const presentation = factories[eventId](environment);
+      presentation.stage({ eventId, targetInstanceId: null, variantSeed: 41 });
+
+      await expect(presentation.playItemUse(choiceId, instanceId)).resolves.toBe(false);
+      expect(borrowEventActor).not.toHaveBeenCalled();
+      expect(release).not.toHaveBeenCalled();
+
+      presentation.dispose();
+      adapter.dispose();
+    },
+  );
+
   it.each(cases)(
     'uses shared %s %s choreography without replacing its event scene',
     async (eventId, choiceId) => {
