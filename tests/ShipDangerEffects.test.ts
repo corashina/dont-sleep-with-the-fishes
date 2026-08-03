@@ -5,10 +5,59 @@ import { ShipAlarmLights } from '../src/world/ShipAlarmLights';
 import { ShipDamageDetails } from '../src/world/ShipDamageDetails';
 import { ShipFireEffects } from '../src/world/ShipFireEffects';
 import { ShipFloodEffects } from '../src/world/ShipFloodEffects';
+import {
+  ShipDangerEffects,
+  type ShipDangerOwnedResource,
+} from '../src/world/ShipDangerEffects';
 import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
 import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
 
 describe('ship danger effects', () => {
+  it('constructs every focused system below one ship root', () => {
+    const effects = new ShipDangerEffects();
+    expect(effects.root.name).toBe('ship-danger-effects');
+    expect(effects.snapshotForTest()).toMatchObject({
+      alarms: 3,
+      fires: 3,
+      leaks: 6,
+      brokenPlankClusters: 3,
+    });
+    effects.dispose();
+  });
+
+  it.each(['damage', 'alarms', 'fire', 'flood'] as const)(
+    'cleans completed danger resources after %s construction failure',
+    (stage) => {
+      const disposals: ReturnType<typeof vi.spyOn>[] = [];
+      expect(() => new ShipDangerEffects({
+        onResource: (resource: ShipDangerOwnedResource) => {
+          disposals.push(vi.spyOn(resource, 'dispose'));
+        },
+        checkpoint: (current) => {
+          if (current === stage) throw new Error(`fail after ${stage}`);
+        },
+      })).toThrow(`fail after ${stage}`);
+      expect(disposals).toHaveLength(
+        ['damage', 'alarms', 'fire', 'flood'].indexOf(stage) + 1,
+      );
+      disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    },
+  );
+
+  it('disposes every owned danger resource once', () => {
+    const disposals: ReturnType<typeof vi.spyOn>[] = [];
+    const effects = new ShipDangerEffects({
+      onResource: (resource) => disposals.push(vi.spyOn(resource, 'dispose')),
+    });
+
+    effects.dispose();
+    effects.dispose();
+
+    expect(disposals).toHaveLength(4);
+    disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(effects.root.children).toHaveLength(0);
+  });
+
   it('builds authored broken-plank clusters without colliders', () => {
     const details = new ShipDamageDetails(SHIP_DANGER_LAYOUT.brokenPlanks);
     expect(details.root.name).toBe('ship-danger-damage');

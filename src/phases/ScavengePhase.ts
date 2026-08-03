@@ -34,6 +34,7 @@ import {
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
 import { scavengeSpeedMultiplier } from '../game/scavengeMovement';
+import { getShipDangerState } from '../game/shipDanger';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -336,12 +337,14 @@ export class ScavengePhase implements GamePhase {
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
+    const danger = getShipDangerState(this.elapsed, SCAVENGE_DURATION_SECONDS);
     this.world.update(
       this.worldTime,
       worldDeltaSeconds,
       sinking,
       this.context.camera.position,
       simulatePhysics,
+      danger,
     );
     if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
       this.player.placeCamera();
