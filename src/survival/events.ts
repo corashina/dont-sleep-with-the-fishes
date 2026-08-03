@@ -21,7 +21,8 @@ export const INCLUDED_EVENT_PHASES = Object.freeze({
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
-  'shark-men': 'night',
+  'shark-men': 'night', 'sick-companion': 'night', 'shadow-figure': 'night',
+  'sea-watcher': 'night', 'guarded-sleep': 'night',
   'drifting-loot': 'day', 'drifting-bottle': 'day', 'check-the-back': 'night',
   'mystery-chest': 'night', 'midnight-tour': 'night', 'night-trader': 'night',
   handyman: 'night', 'other-people': 'night', flowers: 'night',
@@ -49,6 +50,10 @@ const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.free
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
   'shark-men': 'Fins circle the boat as wet hands reach over the rail.',
+  'sick-companion': 'Captain Whiskers lies low and shivers beside the gunwale.',
+  'shadow-figure': 'A second cat-shaped shadow watches from beyond the lantern light.',
+  'sea-watcher': 'Unblinking eyes gather across the black water.',
+  'guarded-sleep': 'Captain Whiskers sits alert while the night presses close.',
   'drifting-loot': 'Something useful drifts within reach of the boat.',
   'drifting-bottle': 'A sealed bottle bobs against the hull.',
   'check-the-back': 'Something thumps against the back of the boat.',
@@ -165,7 +170,7 @@ function event(
     SurvivalEventDefinition,
     | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueProgress'
     | 'minimumPressure' | 'maximumPressure' | 'requiredFlags'
-    | 'forbiddenFlags' | 'allowedChestStates'
+    | 'forbiddenFlags' | 'allowedChestStates' | 'requiresLivingCompanion'
   > = {},
 ): SurvivalEventDefinition {
   return {
@@ -264,7 +269,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', effects([subtract('bait', 2)]))),
     choice('sleep', 'Sleep', undefined,
       outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'Nothing happens.')),
-  ], undefined, { minimumPressure: 1 }),
+  ], undefined, { minimumPressure: 1, requiresLivingCompanion: true }),
   event('whirlpool', 'Whirlpool', 'impact', 5, 12, 30, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
@@ -351,6 +356,67 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(100, 'You wake exhausted.', effects([set('energy', 0)])),
       outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
   ], undefined, { minimumPressure: 3 }),
+  event('sick-companion', 'Sick Companion', 'darkness', 6, 5, 26, [
+    choice('medicalKit', 'Use Medkit', 'medicalKit', outcome(
+      1,
+      'Captain Whiskers recovers.',
+      { items: [consume('medicalKit')], companion: [{ kind: 'sickness', operation: 'set', value: 0 }] },
+    )),
+    choice('energyBar', 'Use Energy Bar', 'energyBar', outcome(
+      1,
+      'The energy bar is gone, but his condition does not change.',
+      { items: [consume('energyBar')] },
+    )),
+    choice('ductTape', 'Use Duct Tape', 'ductTape',
+      outcome(80, 'The tape makes his sickness worse.', {
+        items: [consume('ductTape')],
+        companion: [{ kind: 'sickness', operation: 'add', value: 1 }],
+      }),
+      outcome(10, 'The tape changes nothing.', { items: [consume('ductTape')] })),
+    contextualChoice('sleep', 'Sleep', outcome(
+      1,
+      'Captain Whiskers grows sicker through the night.',
+      { companion: [{ kind: 'sickness', operation: 'add', value: 2 }] },
+    )),
+  ], undefined, { requiresLivingCompanion: true }),
+  event('shadow-figure', 'Shadow Figure', 'darkness', 4, 20, 30, [
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
+      1,
+      'The false shape sharpens in the dark.',
+      effects([add('pressure', 1)]),
+    )),
+    choice('flashlight', 'Use Flashlight', 'flashlight',
+      outcome(50, 'The false shape remains beyond the light.', effects([add('pressure', 1)])),
+      outcome(50, 'The false shape carries you into the dark.', { endingReason: 'kidnapped' })),
+    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
+      1,
+      'The false shape carries you into the dark.',
+      { items: [consume('flareGun')], endingReason: 'kidnapped' },
+    )),
+    contextualChoice('sleep', 'Sleep', outcome(1, 'The shadow leaves before dawn.')),
+  ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
+  event('sea-watcher', 'Sea Watcher', 'sighting', 9, 20, 40, [
+    contextualChoice('stay-awake', 'Stay Awake', outcome(
+      1,
+      'You keep watch until dawn.',
+      { nextDawnEnergy: 0 },
+    )),
+    contextualChoice('sleep', 'Sleep',
+      outcome(90, 'The watcher takes Captain Whiskers.', {
+        companion: [{ kind: 'kill', cause: 'sea-watcher' }],
+      }),
+      outcome(10, 'The watcher leaves before dawn.')),
+  ], undefined, { minimumPressure: 2, requiresLivingCompanion: true }),
+  event('guarded-sleep', 'Guarded Sleep', 'darkness', 50, 7, 0, [
+    contextualChoice('watch', 'Let Whiskers Watch',
+      outcome(85, 'Captain Whiskers keeps the night peaceful.'),
+      outcome(15, 'Something slips past his watch.', { followUpNight: true })),
+    contextualChoice('sleep', 'Sleep Normally', outcome(
+      1,
+      'The normal night continues.',
+      { followUpNight: true },
+    )),
+  ], undefined, { requiresLivingCompanion: true }),
   event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 0, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
@@ -360,6 +426,14 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         featuredOutcome('drifting-loot.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
+    },
+    {
+      ...contextualChoice('delegate-whiskers', 'Send Whiskers',
+        featuredOutcome('drifting-loot.food', 45, 'Captain Whiskers recovers two food.', effects([add('food', 2)])),
+        featuredOutcome('drifting-loot.bait', 25, 'Captain Whiskers recovers two bait.', effects([add('bait', 2)])),
+        featuredOutcome('drifting-loot.repair', 20, 'Captain Whiskers recovers repair timber.', effects([add('repairMaterial', 2)])),
+        featuredOutcome('drifting-loot.energy-bar', 10, 'Captain Whiskers recovers an energy bar.', effects(undefined, [gain('energyBar')]))),
+      companionAction: 'delegateWhiskers',
     },
     contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-loot.drift', 1, 'The loot drifts out of reach.')),
@@ -610,13 +684,20 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
     candidateEffects,
     `${path}.effects`,
     'effect',
-    ['resources', 'items', 'chest', 'flags', 'rescue'],
+    [
+      'resources', 'items', 'chest', 'flags', 'rescue', 'companion',
+      'nextDawnEnergy', 'followUpNight', 'endingReason',
+    ],
   );
   const hasResources = Object.hasOwn(candidateEffects, 'resources');
   const hasItems = Object.hasOwn(candidateEffects, 'items');
   const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasFlags = Object.hasOwn(candidateEffects, 'flags');
+  const hasCompanion = Object.hasOwn(candidateEffects, 'companion');
+  const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
+  const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
+  const hasEndingReason = Object.hasOwn(candidateEffects, 'endingReason');
   const chest = hasChest ? candidateEffects.chest : undefined;
   const flags = hasFlags ? candidateEffects.flags : undefined;
   const resourceEntries = hasResources
@@ -672,6 +753,55 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
       }
     }
   }
+  if (hasCompanion) {
+    const companionEffects = candidateEffects.companion;
+    if (!Array.isArray(companionEffects) || companionEffects.length === 0) {
+      throw new Error(`${path}.companion must be a non-empty array`);
+    }
+    companionEffects.forEach((candidate, index) => {
+      const effectPath = `${path}.companion[${index}]`;
+      assertPlainObject(candidate, `${effectPath} companion effect`);
+      if (candidate.kind === 'sickness') {
+        assertExactKeys(
+          candidate,
+          effectPath,
+          'companion sickness effect',
+          ['kind', 'operation', 'value'],
+          ['kind', 'operation', 'value'],
+        );
+        if (candidate.operation !== 'add' && candidate.operation !== 'set') {
+          throw new Error(`${effectPath} has an invalid companion sickness operation`);
+        }
+        if (!Number.isInteger(candidate.value) || (candidate.value as number) < 0) {
+          throw new Error(`${effectPath} has an invalid companion sickness value`);
+        }
+        return;
+      }
+      if (candidate.kind === 'kill') {
+        assertExactKeys(
+          candidate,
+          effectPath,
+          'companion kill effect',
+          ['kind', 'cause'],
+          ['kind', 'cause'],
+        );
+        if (candidate.cause !== 'sea-watcher') {
+          throw new Error(`${effectPath} has an invalid companion death cause`);
+        }
+        return;
+      }
+      throw new Error(`${effectPath} has an unknown companion effect kind`);
+    });
+  }
+  if (hasNextDawnEnergy && candidateEffects.nextDawnEnergy !== 0) {
+    throw new Error(`${path}.nextDawnEnergy must be zero`);
+  }
+  if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
+    throw new Error(`${path}.followUpNight must be true`);
+  }
+  if (hasEndingReason && candidateEffects.endingReason !== 'kidnapped') {
+    throw new Error(`${path}.endingReason must be kidnapped`);
+  }
 }
 
 export function validateSurvivalEventCatalog(
@@ -693,6 +823,10 @@ export function validateSurvivalEventCatalog(
     }
     if (!Number.isInteger(eventEntry.cooldownDays) || eventEntry.cooldownDays < 0) {
       throw new Error(`${eventEntry.id} has an invalid cooldown`);
+    }
+    if (Object.hasOwn(eventEntry, 'requiresLivingCompanion')
+      && typeof eventEntry.requiresLivingCompanion !== 'boolean') {
+      throw new Error(`${eventEntry.id} living companion requirement must be boolean`);
     }
     if (eventEntry.maximumAppearances !== undefined
       && (!Number.isInteger(eventEntry.maximumAppearances) || eventEntry.maximumAppearances < 1)) {
@@ -774,6 +908,10 @@ export function validateSurvivalEventCatalog(
       if (choiceIds.has(eventChoice.id)) throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
       choiceIds.add(eventChoice.id);
       if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
+      if (Object.hasOwn(eventChoice, 'companionAction')
+        && eventChoice.companionAction !== 'delegateWhiskers') {
+        throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid companion action`);
+      }
       if (eventChoice.requiredChestState !== undefined
         && !['none', 'closed', 'mimic'].includes(eventChoice.requiredChestState)) {
         throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid required chest state`);
@@ -825,6 +963,7 @@ export interface EventEligibility {
   pressure?: number;
   eventFlags?: ReadonlySet<string>;
   chestState?: import('./survivalTypes').ChestState;
+  hasLivingCompanion?: boolean;
 }
 
 export function eligibleEvents(
@@ -833,6 +972,7 @@ export function eligibleEvents(
 ): SurvivalEventDefinition[] {
   return catalog.filter((eventEntry) => {
     if (eventEntry.phase !== criteria.phase || eventEntry.id === criteria.lastEventId) return false;
+    if (eventEntry.requiresLivingCompanion === true && criteria.hasLivingCompanion !== true) return false;
     if (criteria.day < eventEntry.earliestDay
       || (eventEntry.latestDay !== undefined && criteria.day > eventEntry.latestDay)) return false;
     if (eventEntry.weather !== undefined && !eventEntry.weather.includes(criteria.weather)) return false;

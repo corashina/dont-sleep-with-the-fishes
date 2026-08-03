@@ -223,6 +223,87 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
+  it('defines Captain Whiskers event gates and living-companion eligibility', () => {
+    expect(survivalEventById('sick-companion')).toMatchObject({
+      earliestDay: 5, weight: 6, cooldownDays: 26, requiresLivingCompanion: true,
+    });
+    expect(survivalEventById('shadow-figure')).toMatchObject({
+      earliestDay: 20, minimumPressure: 3, weight: 4, cooldownDays: 30,
+      requiresLivingCompanion: true,
+    });
+    expect(survivalEventById('sea-watcher')).toMatchObject({
+      earliestDay: 20, minimumPressure: 2, weight: 9, cooldownDays: 40,
+      requiresLivingCompanion: true,
+    });
+    expect(survivalEventById('guarded-sleep')).toMatchObject({
+      earliestDay: 7, weight: 50, cooldownDays: 0, requiresLivingCompanion: true,
+    });
+    expect(survivalEventById('swarm-of-anglerfish')).toMatchObject({
+      requiresLivingCompanion: true,
+    });
+
+    const criteria = {
+      phase: 'night' as const,
+      day: 30,
+      weather: 'calm' as const,
+      lastEventId: null,
+      lastSeenDay: new Map<string, number>(),
+      targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map<string, number>(),
+      inventoryItemIds: new Set<ItemId>(),
+      rescueProgress: 0,
+      pressure: 4,
+    };
+    const companionEvents = [
+      'sick-companion', 'shadow-figure', 'sea-watcher', 'guarded-sleep',
+      'swarm-of-anglerfish',
+    ];
+    const absent = eligibleEvents(SURVIVAL_EVENTS, {
+      ...criteria,
+      hasLivingCompanion: false,
+    }).map(({ id }) => id);
+    expect(companionEvents.every((id) => !absent.includes(id))).toBe(true);
+
+    const living = eligibleEvents(SURVIVAL_EVENTS, {
+      ...criteria,
+      hasLivingCompanion: true,
+    }).map(({ id }) => id);
+    expect(companionEvents.every((id) => living.includes(id))).toBe(true);
+  });
+
+  it('defines exact Captain Whiskers choices and delegated loot weights', () => {
+    const event = (id: string) => survivalEventById(id)!;
+
+    expect(event('sick-companion').choices.map(({ id, itemId }) => ({ id, itemId })))
+      .toEqual([
+        { id: 'medicalKit', itemId: 'medicalKit' },
+        { id: 'energyBar', itemId: 'energyBar' },
+        { id: 'ductTape', itemId: 'ductTape' },
+        { id: 'sleep', itemId: undefined },
+      ]);
+    expect(event('shadow-figure').choices.map(({ id, itemId }) => ({ id, itemId })))
+      .toEqual([
+        { id: 'spyglass', itemId: 'spyglass' },
+        { id: 'flashlight', itemId: 'flashlight' },
+        { id: 'flareGun', itemId: 'flareGun' },
+        { id: 'sleep', itemId: undefined },
+      ]);
+    expect(event('sea-watcher').choices.map(({ id }) => id))
+      .toEqual(['stay-awake', 'sleep']);
+    expect(event('guarded-sleep').choices.map(({ id }) => id))
+      .toEqual(['watch', 'sleep']);
+
+    const delegate = event('drifting-loot').choices.find(({ id }) => id === 'delegate-whiskers');
+    expect(delegate).toMatchObject({
+      label: 'Send Whiskers',
+      companionAction: 'delegateWhiskers',
+    });
+    expect(delegate?.requirements).toBeUndefined();
+    expect(delegate?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
+    expect(delegate?.outcomes.flatMap(({ effects }) => effects.resources ?? [])
+      .some(({ resource }) => resource === 'energy')).toBe(false);
+  });
+
   it('keeps Drifting Loot and Drifting Bottle in the random day catalog', () => {
     expect(
       SURVIVAL_EVENTS
@@ -571,6 +652,30 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
     rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);
+    rejects((catalog) => { catalog[0].requiresLivingCompanion = 'yes'; }, /living companion.*boolean/i);
+    rejects((catalog) => { catalog[0].requiresLivingCompanion = undefined; }, /living companion.*boolean/i);
+    rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
+    rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.companion = [
+        { kind: 'sickness', operation: 'subtract', value: 1 },
+      ];
+    }, /companion sickness operation/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.companion = [
+        { kind: 'sickness', operation: 'add', value: 1.5 },
+      ];
+    }, /companion sickness value/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.companion = [
+        { kind: 'kill', cause: 'storm' },
+      ];
+    }, /companion death cause/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.companion = [
+        { kind: 'kill', cause: 'sea-watcher', hidden: true },
+      ];
+    }, /unsupported companion kill effect key hidden/i);
   });
 
   it.each([

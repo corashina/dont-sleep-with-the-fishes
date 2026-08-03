@@ -52,7 +52,7 @@ function inventory(
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    state: 'day', day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
+    state: 'day', endingReason: 'standard', day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
     rescueProgress: 0, chest: { state: 'none', acquiredDay: null }, eventFlags: [],
     weather: 'calm', actedToday: false,
@@ -2778,6 +2778,7 @@ describe('SurvivalPhase orchestration', () => {
         anchorId: 'drifting-loot',
         energyCost: 3,
       },
+      { id: 'delegate-whiskers', label: 'Send Whiskers', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -3586,6 +3587,7 @@ describe('SurvivalPhase orchestration', () => {
         anchorId: 'drifting-loot',
         energyCost: 3,
       },
+      { id: 'delegate-whiskers', label: 'Send Whiskers', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
   });

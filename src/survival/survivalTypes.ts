@@ -106,6 +106,10 @@ export interface ChestSnapshot {
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
+export type CompanionEventEffect =
+  | { readonly kind: 'sickness'; readonly operation: 'add' | 'set'; readonly value: number }
+  | { readonly kind: 'kill'; readonly cause: 'sea-watcher' };
+export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export interface EventFlagEffects {
   readonly set?: readonly string[];
   readonly clear?: readonly string[];
@@ -128,6 +132,10 @@ export interface EventEffects {
   readonly chest?: ChestEventEffect;
   readonly flags?: EventFlagEffects;
   readonly rescue?: boolean;
+  readonly companion?: readonly CompanionEventEffect[];
+  readonly nextDawnEnergy?: 0;
+  readonly followUpNight?: true;
+  readonly endingReason?: 'kidnapped';
 }
 export interface WeightedEventOutcome {
   readonly resultId?: string;
@@ -143,6 +151,7 @@ export interface EventChoiceDefinition {
   readonly itemId?: ItemId;
   readonly requirements?: readonly EventChoiceRequirement[];
   readonly requiredChestState?: ChestState;
+  readonly companionAction?: 'delegateWhiskers';
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
@@ -187,12 +196,14 @@ export interface SurvivalEventDefinition {
   allowedChestStates?: readonly ChestState[];
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
+  readonly requiresLivingCompanion?: boolean;
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
 }
 
 export interface SurvivalSnapshot {
   state: SurvivalState;
+  readonly endingReason: SurvivalEndingReason;
   day: number;
   pressure: number;
   health: number;

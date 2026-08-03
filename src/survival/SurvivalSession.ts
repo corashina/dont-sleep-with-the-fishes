@@ -33,9 +33,12 @@ import { nightDamageMultiplier, pressureForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import {
   advanceCaptainWhiskersDawn,
+  captainWhiskersStatus,
+  captainWhiskersWellness,
   createCaptainWhiskersState,
   feedCaptainWhiskers,
   petCaptainWhiskers,
+  killCaptainWhiskers,
   treatCaptainWhiskers,
   type CaptainWhiskersSnapshot,
   type CaptainWhiskersState,
@@ -60,6 +63,8 @@ import type {
   RewardSummary,
   ChestSnapshot,
   ChestState,
+  CompanionEventEffect,
+  SurvivalEndingReason,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
@@ -105,6 +110,7 @@ interface ActiveFishingTransaction {
 
 export class SurvivalSession {
   private state: SurvivalState = 'day';
+  private endingReason: SurvivalEndingReason = 'standard';
   private day: number;
   private pressure: number;
   private health: number;
@@ -130,6 +136,7 @@ export class SurvivalSession {
   private pendingEventTargetId: ItemInstanceId | null = null;
   private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
+  private nextDawnEnergyOverride: 0 | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -208,6 +215,7 @@ export class SurvivalSession {
 
     this.cachedSnapshot = Object.freeze({
       state: this.state,
+      endingReason: this.endingReason,
       day: this.day,
       pressure: this.pressure,
       health: this.health,
@@ -477,6 +485,10 @@ export class SurvivalSession {
     if (choice === undefined) {
       return this.reject('choice-unavailable', 'That response is not available for this event.');
     }
+    const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
+    if (companionRejection !== null) {
+      return this.reject(companionRejection.code, companionRejection.message);
+    }
     if (!this.meetsChoiceRequirements(choice.requirements)) {
       return this.reject('requirements-unmet', 'You do not have the resources for that response.');
     }
@@ -528,8 +540,16 @@ export class SurvivalSession {
     }
     this.applyChestEffect(resolved.effects.chest);
     this.applyFlagEffects(resolved.effects.flags);
+    this.applyCompanionEventEffects(resolved.effects.companion);
+    if (resolved.effects.nextDawnEnergy !== undefined) {
+      this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
+    }
+    if (resolved.effects.endingReason === 'kidnapped') {
+      this.endingReason = 'kidnapped';
+      this.state = 'dead';
+    }
 
-    if (resolved.effects.rescue === true) {
+    if (resolved.effects.rescue === true && !this.isTerminal()) {
       this.state = 'rescued';
       this.clearPendingEvent();
     }
@@ -570,19 +590,26 @@ export class SurvivalSession {
       ...(eventResult === undefined ? {} : { eventResult }),
     };
     this.lastOutcome = outcome;
-    this.recordJournalEvent(
-      event,
-      choiceId,
-      attemptedItemId,
-      resolution,
-      outcome,
-      inventoryMutations,
-    );
+    if (resolved.effects.followUpNight !== true) {
+      this.recordJournalEvent(
+        event,
+        choiceId,
+        attemptedItemId,
+        resolution,
+        outcome,
+        inventoryMutations,
+      );
+    }
     this.changed();
 
     if (!this.isTerminal()) {
-      if (phase === 'day') this.state = 'day';
-      else this.state = 'nightEvent';
+      if (phase === 'day') {
+        this.state = 'day';
+      } else if (resolved.effects.followUpNight === true) {
+        this.openEvent(this.drawEvent('night', new Set(['guarded-sleep'])));
+      } else {
+        this.state = 'nightEvent';
+      }
     }
     return this.cloneOutcome(outcome);
   }
@@ -609,11 +636,13 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
     );
-    const morningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
+    const normalMorningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
       ? SURVIVAL_BALANCE.dawn.starvingEnergy
       : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
         ? SURVIVAL_BALANCE.dawn.hungryEnergy
         : SURVIVAL_BALANCE.dawn.normalEnergy;
+    const morningEnergy = this.nextDawnEnergyOverride ?? normalMorningEnergy;
+    this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
@@ -795,6 +824,36 @@ export class SurvivalSession {
       }
     }
     return null;
+  }
+
+  private unavailableCompanionEventAction(
+    action: 'delegateWhiskers' | undefined,
+  ): Rejection | null {
+    if (action === undefined) return null;
+    if (this.captainWhiskers === null) {
+      return {
+        code: 'companion-action-unavailable',
+        message: 'Captain Whiskers is not aboard.',
+      };
+    }
+    if (!this.captainWhiskers.alive) {
+      return {
+        code: 'companion-action-unavailable',
+        message: 'Captain Whiskers cannot retrieve the loot.',
+      };
+    }
+    if (captainWhiskersWellness(this.captainWhiskers) >= 4) return null;
+
+    const status = captainWhiskersStatus(this.captainWhiskers);
+    const label = this.captainWhiskers.hunger < 4
+      ? status.hunger
+      : this.captainWhiskers.sickness > 0
+        ? status.health
+        : status.happiness;
+    return {
+      code: 'companion-action-unavailable',
+      message: `Captain Whiskers is ${label} and cannot retrieve the loot.`,
+    };
   }
 
   private dive(): ActionOutcome {
@@ -980,6 +1039,7 @@ export class SurvivalSession {
       pressure: this.pressure,
       eventFlags: this.eventFlags,
       chestState: this.chestState,
+      hasLivingCompanion: this.captainWhiskers?.alive === true,
     }).filter(({ id }) => !excludedIds.has(id));
     return drawWeightedEvent(pool, this.random, phase);
   }
@@ -1003,7 +1063,8 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (eventId !== 'drifting-loot' || choiceId !== 'retrieve') return undefined;
+    if (eventId !== 'drifting-loot'
+      || (choiceId !== 'retrieve' && choiceId !== 'delegate-whiskers')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
@@ -1463,6 +1524,24 @@ export class SurvivalSession {
     if (effects === undefined) return;
     for (const flag of effects.clear ?? []) this.eventFlags.delete(flag);
     for (const flag of effects.set ?? []) this.eventFlags.add(flag);
+  }
+
+  private applyCompanionEventEffects(
+    effects: readonly CompanionEventEffect[] | undefined,
+  ): void {
+    if (effects === undefined || this.captainWhiskers === null) return;
+    for (const effect of effects) {
+      if (effect.kind === 'kill') {
+        killCaptainWhiskers(this.captainWhiskers, effect.cause);
+        continue;
+      }
+      const current = this.captainWhiskers.sickness;
+      const next = effect.operation === 'set' ? effect.value : current + effect.value;
+      this.captainWhiskers.sickness = Math.min(5, Math.max(0, next));
+      if (this.captainWhiskers.sickness === 5) {
+        killCaptainWhiskers(this.captainWhiskers, 'sickness');
+      }
+    }
   }
 
   private mutateMatchingInstances(

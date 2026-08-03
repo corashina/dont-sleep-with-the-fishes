@@ -141,6 +141,206 @@ function choiceResponse(choiceId: string): EventResponse {
   return { kind: 'choice', choiceId };
 }
 
+describe('SurvivalSession Captain Whiskers events', () => {
+  it('applies each Sick Companion choice through typed effects', () => {
+    const medkit = new SurvivalSession(saved('captainWhiskers', 'medicalKit'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialCaptainWhiskers: { sickness: 3 },
+      initialEventId: 'sick-companion',
+    });
+    medkit.resolveEvent({ kind: 'item', choiceId: 'medicalKit', instanceId: 'medicalKit-1' });
+    expect(medkit.snapshot()).toMatchObject({
+      captainWhiskers: { sickness: 0, alive: true },
+      inventory: { 'medicalKit-1': { condition: 'consumed' } },
+    });
+
+    const energyBar = new SurvivalSession(saved('captainWhiskers', 'energyBar'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialCaptainWhiskers: { sickness: 2 },
+      initialEventId: 'sick-companion',
+    });
+    energyBar.resolveEvent({ kind: 'item', choiceId: 'energyBar', instanceId: 'energyBar-1' });
+    expect(energyBar.snapshot()).toMatchObject({
+      captainWhiskers: { sickness: 2, alive: true },
+      inventory: { 'energyBar-1': { condition: 'consumed' } },
+    });
+
+    const tapeWorsens = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialCaptainWhiskers: { sickness: 2 },
+      initialEventId: 'sick-companion',
+    });
+    tapeWorsens.resolveEvent({ kind: 'item', choiceId: 'ductTape', instanceId: 'ductTape-1' });
+    expect(tapeWorsens.snapshot().captainWhiskers?.sickness).toBe(3);
+
+    const tapeHolds = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
+      seed: 1,
+      random: sequenceRandom([0.999999]),
+      initialCaptainWhiskers: { sickness: 2 },
+      initialEventId: 'sick-companion',
+    });
+    tapeHolds.resolveEvent({ kind: 'item', choiceId: 'ductTape', instanceId: 'ductTape-1' });
+    expect(tapeHolds.snapshot().captainWhiskers?.sickness).toBe(2);
+
+    const sleep = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialCaptainWhiskers: { sickness: 1 },
+      initialEventId: 'sick-companion',
+    });
+    sleep.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(sleep.snapshot().captainWhiskers?.sickness).toBe(3);
+  });
+
+  it('uses exact Shadow Figure kidnapping boundaries', () => {
+    const spyglass = new SurvivalSession(saved('captainWhiskers', 'spyglass'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { pressure: 3 },
+      initialEventId: 'shadow-figure',
+    });
+    spyglass.resolveEvent({ kind: 'item', choiceId: 'spyglass', instanceId: 'spyglass-1' });
+    expect(spyglass.snapshot()).toMatchObject({ pressure: 4, state: 'nightEvent' });
+
+    const pressure = new SurvivalSession(saved('captainWhiskers', 'flashlight'), {
+      seed: 1,
+      random: sequenceRandom([0.499999]),
+      initialEventId: 'shadow-figure',
+    });
+    pressure.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
+    expect(pressure.snapshot()).toMatchObject({
+      state: 'nightEvent', pressure: 1, endingReason: 'standard',
+    });
+
+    const kidnapped = new SurvivalSession(saved('captainWhiskers', 'flashlight'), {
+      seed: 1,
+      random: sequenceRandom([0.5]),
+      initialEventId: 'shadow-figure',
+    });
+    kidnapped.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
+    expect(kidnapped.snapshot()).toMatchObject({ state: 'dead', endingReason: 'kidnapped' });
+
+    const flare = new SurvivalSession(saved('captainWhiskers', 'flareGun'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'shadow-figure',
+    });
+    flare.resolveEvent({ kind: 'item', choiceId: 'flareGun', instanceId: 'flareGun-1' });
+    expect(flare.snapshot()).toMatchObject({
+      state: 'dead', endingReason: 'kidnapped',
+      inventory: { 'flareGun-1': { condition: 'consumed' } },
+    });
+
+    const sleep = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initialEventId: 'shadow-figure',
+    });
+    sleep.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(sleep.snapshot()).toMatchObject({
+      state: 'nightEvent', pressure: 0, endingReason: 'standard',
+    });
+  });
+
+  it('uses Sea Watcher boundaries without ending the player run', () => {
+    const killed = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0.899999]),
+      initialEventId: 'sea-watcher',
+    });
+    killed.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(killed.snapshot()).toMatchObject({
+      state: 'nightEvent', endingReason: 'standard',
+      captainWhiskers: { alive: false, deathCause: 'sea-watcher' },
+    });
+
+    const spared = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0.9]),
+      initialEventId: 'sea-watcher',
+    });
+    spared.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(spared.snapshot()).toMatchObject({ state: 'nightEvent', captainWhiskers: { alive: true } });
+
+    const awake = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0, 0.99, 0.99, 0, 0.99, 0.99, 0.99]),
+      initial: { energy: 2 },
+      initialEventId: 'sea-watcher',
+    });
+    awake.resolveEvent({ kind: 'choice', choiceId: 'stay-awake' });
+    awake.beginDawn();
+    expect(awake.snapshot().energy).toBe(0);
+    awake.perform('endDay');
+    awake.beginDawn();
+    expect(awake.snapshot().energy).toBe(3);
+  });
+
+  it('uses Guarded Sleep boundaries and excludes itself from follow-up selection', () => {
+    const guarded = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0.849999]),
+      initial: { day: 20, pressure: 4 },
+      initialEventId: 'guarded-sleep',
+    });
+    guarded.resolveEvent({ kind: 'choice', choiceId: 'watch' });
+    expect(guarded.snapshot().pendingEventId).toBeNull();
+
+    const failed = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0.85, 0]),
+      initial: { day: 20, pressure: 4 },
+      initialEventId: 'guarded-sleep',
+    });
+    failed.resolveEvent({ kind: 'choice', choiceId: 'watch' });
+    expect(failed.snapshot().pendingEventId).not.toBeNull();
+    expect(failed.snapshot().pendingEventId).not.toBe('guarded-sleep');
+
+    const normal = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 20, pressure: 4 },
+      initialEventId: 'guarded-sleep',
+    });
+    normal.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(normal.snapshot().pendingEventId).not.toBeNull();
+    expect(normal.snapshot().pendingEventId).not.toBe('guarded-sleep');
+  });
+
+  it('delegates Drifting Loot at sufficient wellness without spending energy', () => {
+    const session = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { energy: 1 },
+      initialCaptainWhiskers: { hunger: 5 },
+      initialEventId: 'drifting-loot',
+    });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-whiskers' });
+    expect(outcome).toMatchObject({
+      accepted: true,
+      deltas: { food: 2 },
+      rewardSummary: { kind: 'resource', id: 'food', quantity: 2 },
+    });
+    expect(session.snapshot().energy).toBe(1);
+  });
+
+  it('rejects Drifting Loot delegation with a status label', () => {
+    const session = new SurvivalSession(saved('captainWhiskers'), {
+      seed: 1,
+      initialCaptainWhiskers: { hunger: 3, sickness: 1 },
+      initialEventId: 'drifting-loot',
+    });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-whiskers' });
+    expect(outcome).toMatchObject({ accepted: false, code: 'companion-action-unavailable' });
+    expect(outcome.message).toContain('Hungry');
+    expect(outcome.message).not.toMatch(/\b[0-9]+\b/);
+    expect(session.snapshot().pendingEventId).toBe('drifting-loot');
+  });
+});
+
 describe('SurvivalSession daytime actions', () => {
   it('applies fishing luck only while Captain Whiskers is alive', () => {
     const options = { seed: 7, random: sequenceRandom([0, 0.36]) };

@@ -77,6 +77,25 @@ describe('resolveWeightedOutcome', () => {
     ]);
   });
 
+  it('preserves and clones typed companion flow effects', () => {
+    const source = choice({
+      outcomes: [{
+        weight: 1,
+        message: 'changed',
+        effects: {
+          companion: [{ kind: 'sickness', operation: 'add', value: 2 }],
+          nextDawnEnergy: 0,
+          followUpNight: true,
+          endingReason: 'kidnapped',
+        },
+      }],
+    });
+    const resolved = resolveWeightedOutcome(source, sequenceRandom([0]));
+
+    expect(resolved.effects).toEqual(source.outcomes[0]?.effects);
+    expect(resolved.effects.companion).not.toBe(source.outcomes[0]?.effects.companion);
+  });
+
   it('selects the next outcome when a roll lands exactly on a cumulative boundary', () => {
     expect(resolveWeightedOutcome(choice(), sequenceRandom([0.25, 0, 0])).message).toBe('second');
   });
