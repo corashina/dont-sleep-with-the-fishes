@@ -5078,6 +5078,72 @@ describe('SurvivalPhase orchestration', () => {
     expect(restart).toHaveBeenCalledOnce();
   });
 
+  it('delegates Drifting Loot through Whiskers and shows the reward without an energy cost', async () => {
+    let current = snapshot({
+      state: 'dayEvent',
+      day: 3,
+      pendingEventId: 'drifting-loot',
+      pendingDriftingLootVariant: 'crate',
+      captainWhiskers: {
+        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        pettedToday: false, deathCause: null,
+      },
+    });
+    const delegateDriftingLoot = vi.fn(() => Promise.resolve());
+    const retrieveDriftingLoot = vi.fn(() => Promise.resolve());
+    const showDriftingLootResult = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      clearEventPresentation: vi.fn(),
+      showDriftingLootResult,
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'day', day: 3, food: 2 });
+          return accepted({
+            code: 'event-resolved',
+            cue: 'none',
+            deltas: { food: 2 },
+            rewardSummary: { kind: 'resource', id: 'food', quantity: 2 },
+          });
+        }),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        delegateDriftingLoot,
+        retrieveDriftingLoot,
+        projectDriftingLoot: vi.fn(() => null),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('delegate-whiskers');
+    await flushPromises();
+
+    expect(delegateDriftingLoot).toHaveBeenCalledOnce();
+    expect(retrieveDriftingLoot).not.toHaveBeenCalled();
+    expect(showDriftingLootResult).toHaveBeenCalledWith({
+      caption: 'SALVAGE RECOVERED',
+      reward: { kind: 'resource', id: 'food', quantity: 2 },
+      energyCost: 0,
+      target: null,
+    });
+    phase.dispose();
+  });
+
   it('passes the kidnapped ending reason to the UI', () => {
     const showEnding = vi.fn();
     const phase = SurvivalPhase.forTest({

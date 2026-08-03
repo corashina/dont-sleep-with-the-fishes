@@ -243,11 +243,12 @@ export function formatDangerousWatersOutcome(
 
 export function formatDriftingLootResult(
   reward: RewardSummary,
+  energyCost = 3,
 ): DriftingLootResultView {
   return {
     caption: 'SALVAGE RECOVERED',
     reward,
-    energyCost: 3,
+    energyCost,
     target: null,
   };
 }
@@ -1341,7 +1342,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventEligibleItems?.(null);
     this.ui.clearEventPresentation?.();
 
-    if (choiceId === 'retrieve') {
+    if (choiceId === 'retrieve' || choiceId === 'delegate-whiskers') {
       if (outcome.rewardSummary === undefined) {
         const feedback: ActionOutcome = {
           accepted: false,
@@ -1355,10 +1356,17 @@ export class SurvivalPhase implements GamePhase {
         return;
       }
       this.eventPresentation = 'retrieving';
-      await (this.world.retrieveDriftingLoot?.() ?? Promise.resolve());
+      await (
+        choiceId === 'delegate-whiskers'
+          ? this.world.delegateDriftingLoot?.() ?? Promise.resolve()
+          : this.world.retrieveDriftingLoot?.() ?? Promise.resolve()
+      );
       if (!this.isContinuationActive(generation)) return;
       this.eventPresentation = 'result';
-      const view = formatDriftingLootResult(outcome.rewardSummary);
+      const view = formatDriftingLootResult(
+        outcome.rewardSummary,
+        choiceId === 'delegate-whiskers' ? 0 : 3,
+      );
       this.ui.showDriftingLootResult?.({
         ...view,
         target: this.world.projectDriftingLoot?.(

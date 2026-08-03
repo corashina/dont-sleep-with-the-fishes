@@ -2,6 +2,7 @@ import type { Group, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import type { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type {
   ActionOutcome,
@@ -16,6 +17,10 @@ export const DEDICATED_EVENT_IDS = [
   'death-stare',
   'swarm-of-anglerfish',
   'whirlpool',
+  'sick-companion',
+  'shadow-figure',
+  'sea-watcher',
+  'guarded-sleep',
 ] as const;
 
 export type DedicatedEventId = typeof DEDICATED_EVENT_IDS[number];
@@ -48,6 +53,7 @@ export type WorldWaveSampler = (
 export interface DedicatedEventEnvironment {
   readonly eventModels: EventModelLibrary;
   readonly supplies: BoatSupplyDisplay;
+  readonly captainWhiskers: CaptainWhiskersPresentation;
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly cameraEffectsRoot?: Group;
@@ -61,6 +67,7 @@ export interface DedicatedEventPresentation {
   readonly boatRoot: Group;
   stage(context: EventSceneContext): void;
   reveal(): Promise<void>;
+  playChoice?(choiceId: string): Promise<void>;
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
   react(result: EventOutcomePresentation): Promise<void>;
   update(time: number, delta: number): void;
