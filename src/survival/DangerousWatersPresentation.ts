@@ -26,7 +26,21 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import { clamp01, smoothstep, type TimedAnimation } from './animationMath';
+import {
+  borrowSupplyActor,
+  releaseSupplyActor,
+  type BoatSupplyDisplay,
+  type BorrowedSupplyActor,
+} from './BoatSupplyDisplay';
+import {
+  createEventItemUseSample,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from './eventItemUseChoreography';
+import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { ActionOutcome } from './survivalTypes';
 
 export interface DangerousWatersBoatReaction {
@@ -41,16 +55,9 @@ export interface DangerousWatersBoatReaction {
   supplyLift: number;
 }
 
-export interface DangerousWatersItemPose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
+export interface DangerousWatersPresentationDependencies {
+  readonly supplyDisplay: Pick<BoatSupplyDisplay, 'borrowEventActor' | 'itemType'>;
+  readonly itemUseAdapter: EventItemUseAdapter;
 }
 
 type DangerousWatersChoiceId = 'map' | 'compass' | 'sleep';
@@ -58,6 +65,8 @@ type MotionKind = 'reveal' | 'choice' | 'safe' | 'damage' | 'severe';
 
 type ActiveMotion = TimedAnimation<MotionKind, {
   readonly choiceId: DangerousWatersChoiceId | null;
+  readonly itemUse: boolean;
+  readonly cancel: () => void;
 }>;
 
 interface PoolMember {
@@ -335,11 +344,7 @@ export class DangerousWatersPresentation {
   private readonly ownedMaterials = new Set<Material>();
   private readonly foamMembers: PoolMember[] = [];
   private readonly fragmentMembers: PoolMember[] = [];
-  private readonly itemPose: DangerousWatersItemPose = {
-    x: 0, y: 0, z: 0,
-    yaw: 0, pitch: 0, roll: 0,
-    scaleX: 1, scaleY: 1, scaleZ: 1,
-  };
+  private readonly sharedItemSample = createEventItemUseSample();
   private readonly boatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -358,6 +363,9 @@ export class DangerousWatersPresentation {
     normal: { x: 0, y: 1, z: 0 },
   };
   private activeMotion: ActiveMotion | null = null;
+  private borrowedActor: BorrowedSupplyActor | null = null;
+  private itemId: ItemId | null = null;
+  private itemUseContext: EventItemUseContext | null = null;
   private heldKind: MotionKind = 'reveal';
   private heldProgress = 0;
   private heldChoiceId: DangerousWatersChoiceId | null = null;
@@ -365,7 +373,7 @@ export class DangerousWatersPresentation {
   private lastTime = 0;
   private disposed = false;
 
-  constructor() {
+  constructor(private readonly dependencies: DangerousWatersPresentationDependencies) {
     this.root.name = 'dangerous-waters-presentation';
     this.root.visible = false;
     this.passage.name = 'dangerous-waters-passage';
@@ -476,6 +484,44 @@ export class DangerousWatersPresentation {
     return this.startMotion('choice', choiceId, CHOICE_DURATION);
   }
 
+  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+    if (
+      this.disposed
+      || (choiceId !== 'map' && choiceId !== 'compass')
+    ) return Promise.resolve(false);
+    this.cancelActiveMotion();
+    const itemId = this.dependencies.supplyDisplay.itemType(instanceId);
+    if (itemId === null) return Promise.resolve(false);
+    const itemUseContext = resolveEventItemUseContext(
+      'dangerous-waters',
+      choiceId,
+      itemId,
+    );
+    if (itemUseContext === null) return Promise.resolve(false);
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor,
+      this.dependencies.supplyDisplay,
+      instanceId,
+    );
+    if (this.borrowedActor === null) return Promise.resolve(false);
+    this.itemId = itemId;
+    this.itemUseContext = itemUseContext;
+    this.dependencies.itemUseAdapter.begin(this.borrowedActor);
+    sampleEventItemUse(itemUseContext, itemId, 0, this.sharedItemSample);
+    this.dependencies.itemUseAdapter.apply(this.sharedItemSample);
+    this.resultBaseChoiceId = null;
+    return new Promise((resolve) => {
+      this.beginMotion(
+        'choice',
+        choiceId,
+        CHOICE_DURATION,
+        true,
+        () => resolve(true),
+        () => resolve(false),
+      );
+    });
+  }
+
   react(outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.resultBaseChoiceId = this.heldKind === 'choice'
@@ -502,25 +548,6 @@ export class DangerousWatersPresentation {
     target.lightScale = this.boatReaction.lightScale;
     target.supplyRoll = this.boatReaction.supplyRoll;
     target.supplyLift = this.boatReaction.supplyLift;
-    return true;
-  }
-
-  copyItemPose(target: DangerousWatersItemPose): boolean {
-    if (
-      this.disposed
-      || (this.activeMotion?.kind !== 'choice' && this.heldKind !== 'choice')
-      || (this.activeMotion?.choiceId ?? this.heldChoiceId) === 'sleep'
-      || (this.activeMotion?.choiceId ?? this.heldChoiceId) === null
-    ) return false;
-    target.x = this.itemPose.x;
-    target.y = this.itemPose.y;
-    target.z = this.itemPose.z;
-    target.yaw = this.itemPose.yaw;
-    target.pitch = this.itemPose.pitch;
-    target.roll = this.itemPose.roll;
-    target.scaleX = this.itemPose.scaleX;
-    target.scaleY = this.itemPose.scaleY;
-    target.scaleZ = this.itemPose.scaleZ;
     return true;
   }
 
@@ -551,6 +578,7 @@ export class DangerousWatersPresentation {
     this.heldKind = motion.kind === 'choice' ? 'reveal' : motion.kind;
     this.heldProgress = 1;
     this.applyPose(this.heldKind, 1, null, this.lastTime);
+    if (motion.itemUse) this.finishItemUse();
     motion.resolve();
   }
 
@@ -567,6 +595,7 @@ export class DangerousWatersPresentation {
     motion.elapsed = Math.min(motion.duration, motion.elapsed + Math.max(0, delta));
     const progress = motion.elapsed / motion.duration;
     this.applyPose(motion.kind, progress, motion.choiceId, time);
+    if (motion.itemUse) this.applyItemUse(progress);
     if (progress < 1) return;
 
     this.activeMotion = null;
@@ -574,6 +603,7 @@ export class DangerousWatersPresentation {
     this.heldProgress = 1;
     this.heldChoiceId = motion.kind === 'choice' ? motion.choiceId : null;
     this.applyPose(this.heldKind, 1, this.heldChoiceId, time);
+    if (motion.itemUse) this.finishItemUse();
     motion.resolve();
   }
 
@@ -656,15 +686,28 @@ export class DangerousWatersPresentation {
   ): Promise<void> {
     this.cancelActiveMotion();
     return new Promise((resolve) => {
-      this.activeMotion = {
-        kind,
-        choiceId,
-        elapsed: 0,
-        duration,
-        resolve,
-      };
-      this.applyPose(kind, 0, choiceId, this.lastTime);
+      this.beginMotion(kind, choiceId, duration, false, resolve, resolve);
     });
+  }
+
+  private beginMotion(
+    kind: MotionKind,
+    choiceId: DangerousWatersChoiceId | null,
+    duration: number,
+    itemUse: boolean,
+    resolve: () => void,
+    cancel: () => void,
+  ): void {
+    this.activeMotion = {
+      kind,
+      choiceId,
+      elapsed: 0,
+      duration,
+      itemUse,
+      resolve,
+      cancel,
+    };
+    this.applyPose(kind, 0, choiceId, this.lastTime);
   }
 
   private applyPose(
@@ -703,15 +746,6 @@ export class DangerousWatersPresentation {
     this.passage.position.set(0, 0, 0);
     this.lurker.scale.set(1, 1, 1);
     this.materials.foam.opacity = 0.18;
-    this.itemPose.x = 0;
-    this.itemPose.y = 0;
-    this.itemPose.z = 0;
-    this.itemPose.yaw = 0;
-    this.itemPose.pitch = 0;
-    this.itemPose.roll = 0;
-    this.itemPose.scaleX = 1;
-    this.itemPose.scaleY = 1;
-    this.itemPose.scaleZ = 1;
     this.boatReaction.pitch = 0;
     this.boatReaction.driftX = 0;
     this.boatReaction.yaw = 0;
@@ -750,25 +784,8 @@ export class DangerousWatersPresentation {
     const pulse = progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     const lift = smoothstep(Math.min(1, progress / 0.55));
     if (choiceId === 'map') {
-      this.itemPose.y = lift * 0.56;
-      this.itemPose.z = -lift * 0.2;
-      this.itemPose.pitch = -lift * 0.32;
-      this.itemPose.roll = lift * 0.08;
-      this.itemPose.scaleX = 1 + lift * 0.3;
-      this.itemPose.scaleY = 1 - lift * 0.06;
-      this.itemPose.scaleZ = 1 + lift * 0.2;
       this.boatReaction.yaw -= pulse * 0.025 + lift * 0.02;
     } else if (choiceId === 'compass') {
-      this.itemPose.y = lift * 0.48;
-      this.itemPose.z = -lift * 0.18;
-      this.itemPose.pitch = -lift * 0.18;
-      this.itemPose.yaw = (
-        Math.sin(6 * Math.PI * progress) * 0.3 * (1 - progress)
-        + lift * 0.18
-      );
-      this.itemPose.scaleX = 1 + lift * 0.16;
-      this.itemPose.scaleY = 1 + lift * 0.16;
-      this.itemPose.scaleZ = 1 + lift * 0.16;
       this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
     } else if (choiceId === 'sleep') {
       this.boatReaction.driftX -= lift * 0.12;
@@ -844,6 +861,25 @@ export class DangerousWatersPresentation {
   private cancelActiveMotion(): void {
     const motion = this.activeMotion;
     this.activeMotion = null;
-    motion?.resolve();
+    if (motion?.itemUse) this.finishItemUse();
+    motion?.cancel();
+  }
+
+  private applyItemUse(progress: number): void {
+    if (this.itemId === null || this.itemUseContext === null) return;
+    sampleEventItemUse(
+      this.itemUseContext,
+      this.itemId,
+      progress,
+      this.sharedItemSample,
+    );
+    this.dependencies.itemUseAdapter.apply(this.sharedItemSample);
+  }
+
+  private finishItemUse(): void {
+    this.dependencies.itemUseAdapter.clear();
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
+    this.itemId = null;
+    this.itemUseContext = null;
   }
 }

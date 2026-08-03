@@ -81,10 +81,7 @@ import {
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
-import type {
-  DangerousWatersBoatReaction,
-  DangerousWatersItemPose,
-} from './DangerousWatersPresentation';
+import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import { EventItemEffects } from './EventItemEffects';
@@ -561,18 +558,6 @@ export class BoatWorld {
   private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly supernaturalEventAnimator: SupernaturalEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
-  private dangerousWatersItemId: ItemInstanceId | null = null;
-  private readonly dangerousWatersItemPose: DangerousWatersItemPose = {
-    x: 0,
-    y: 0,
-    z: 0,
-    yaw: 0,
-    pitch: 0,
-    roll: 0,
-    scaleX: 1,
-    scaleY: 1,
-    scaleZ: 1,
-  };
   private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -871,12 +856,14 @@ export class BoatWorld {
     this.weatherEventAnimator = new WeatherEventAnimator(
       this.cameraRig,
       this.supplyDisplay,
+      this.itemUseAdapter,
       this.eventModels,
       this.camera,
     );
     this.supernaturalEventAnimator = new SupernaturalEventAnimator(
       this.cameraRig,
       this.supplyDisplay,
+      this.itemUseAdapter,
       this.eventModels,
       this.camera,
     );
@@ -945,6 +932,7 @@ export class BoatWorld {
       camera: this.camera,
       boatMotionRoot: this.motionRig,
       supplyDisplay: this.supplyDisplay,
+      itemUseAdapter: this.itemUseAdapter,
       chestDisplay: this.chestDisplay,
     }, resolvedFocusedFactories);
     this.featuredEvents = new FeaturedEventPresentations(
@@ -1091,20 +1079,14 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
-    if (
-      eventId === 'dangerous-waters'
-      && this.supplyDisplay.pinEventActor(instanceId)
-    ) {
-      this.dangerousWatersItemId = instanceId;
-      try {
-        await this.eventPresentation.playChoice(eventId, choiceId);
-      } finally {
-        if (!this.disposed && operation === this.weatherEventOperation) {
-          this.dangerousWatersItemId = null;
-          this.supplyDisplay.releaseEventActor();
-        }
-      }
-      return;
+    if (eventId === 'dangerous-waters') {
+      if (
+        await this.eventPresentation.playDangerousWatersItemUse(
+          choiceId,
+          instanceId,
+        )
+      ) return;
+      if (this.disposed || operation !== this.weatherEventOperation) return;
     }
     if (this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.playItemUse(choiceId, instanceId);
@@ -1343,7 +1325,6 @@ export class BoatWorld {
     this.activeFeaturedEventId = null;
     this.activeDriftingLootVariant = null;
     this.weatherEventAnimator.clear();
-    this.dangerousWatersItemId = null;
     this.supernaturalEventAnimator.clear();
     this.clearMoonEvent();
     this.supplyDisplay.clearEventMotion();
@@ -1358,7 +1339,6 @@ export class BoatWorld {
     this.eventPresentation.settleForVisibilityChange();
     this.featuredEvents.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
-    this.dangerousWatersItemId = null;
     this.supernaturalEventAnimator.settleForVisibilityChange();
     this.settleMoonForVisibilityChange();
     this.dedicatedEvents?.settleForVisibilityChange();
@@ -2008,17 +1988,6 @@ export class BoatWorld {
       this.supplyDisplay.applyEventAmbientPose(
         reaction.supplyRoll,
         reaction.supplyLift,
-      );
-    }
-    if (
-      this.dangerousWatersItemId !== null
-      && this.eventPresentation.copyDangerousWatersItemPose(
-        this.dangerousWatersItemPose,
-      )
-    ) {
-      this.supplyDisplay.applyEventItemPose(
-        this.dangerousWatersItemId,
-        this.dangerousWatersItemPose,
       );
     }
   }

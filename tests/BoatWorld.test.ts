@@ -46,7 +46,10 @@ import {
   FISHING_PLAYER_SEAT,
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
-import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import {
+  BoatSupplyDisplay,
+  type BorrowedSupplyActor,
+} from '../src/survival/BoatSupplyDisplay';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   FOCUSED_EVENT_IDS,
@@ -55,6 +58,8 @@ import {
 } from '../src/survival/FocusedEventPresentation';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
+import { EventItemEffects } from '../src/survival/EventItemEffects';
+import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import {
   GHOST_FLIGHT_PATHS,
@@ -190,6 +195,37 @@ class FakeBoatSupplyDisplay {
     this.pinnedActor = null;
     this.clearCount += 1;
   }
+
+  itemType(instanceId: ItemInstanceId): ItemId | null {
+    const itemId = instanceId.slice(0, instanceId.lastIndexOf('-')) as ItemId;
+    return Object.hasOwn(ITEM_DEFINITIONS, itemId) ? itemId : null;
+  }
+
+  borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
+    if (instanceId === this.rejectedActorId) return null;
+    const root = new Group();
+    return {
+      instanceId,
+      root,
+      applyPose: (pose) => {
+        if (
+          pose.x === 0 && pose.y === 0 && pose.z === 0
+          && pose.yaw === 0 && pose.pitch === 0 && pose.roll === 0
+          && pose.scaleX === 1 && pose.scaleY === 1 && pose.scaleZ === 1
+        ) {
+          this.poses.delete(instanceId);
+          return;
+        }
+        this.poses.set(instanceId, { ...pose });
+      },
+      releaseOnNextSync: () => undefined,
+      release: () => this.poses.delete(instanceId),
+    };
+  }
+}
+
+function createTestItemUseAdapter(camera = new PerspectiveCamera()): EventItemUseAdapter {
+  return new EventItemUseAdapter(camera, new EventItemEffects());
 }
 
 function createTestEventModels(): EventModelLibrary {
@@ -1611,6 +1647,7 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -1637,6 +1674,7 @@ describe('BoatWorld helpers', () => {
       const animator = new WeatherEventAnimator(
         cameraRig,
         supplies as unknown as BoatSupplyDisplay,
+        createTestItemUseAdapter(),
       );
       const instanceId = `${choiceId}-1` as ItemInstanceId;
 
@@ -1655,7 +1693,7 @@ describe('BoatWorld helpers', () => {
     ['windy-night', 'umbrella', 'umbrella-1'],
     ['thunderstorm', 'anchor', 'anchor-1'],
   ] as const)(
-    'moves only the camera for %s item use and result',
+    'uses shared item motion and keeps %s reaction ownership unchanged',
     async (eventId, choiceId, instanceId) => {
       const cameraRig = new Group();
       const camera = new PerspectiveCamera();
@@ -1665,6 +1703,7 @@ describe('BoatWorld helpers', () => {
       const animator = new WeatherEventAnimator(
         cameraRig,
         supplies as unknown as BoatSupplyDisplay,
+        createTestItemUseAdapter(camera),
         undefined,
         camera,
       );
@@ -1672,10 +1711,10 @@ describe('BoatWorld helpers', () => {
       const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
       animator.update(0.6, 0.6);
 
-      expect(supplies.poses.size).toBe(0);
+      expect(supplies.poses.size).toBe(1);
       expect(supplies.pinCalls).toHaveLength(0);
       expect(camera.position.toArray()).toEqual(basePosition);
-      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
       expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
 
       animator.update(2, 2);
@@ -1714,6 +1753,7 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      createTestItemUseAdapter(),
     );
 
     const result = animator.react(
@@ -1748,6 +1788,7 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -1797,6 +1838,7 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -2079,9 +2121,11 @@ describe('BoatWorld helpers', () => {
       'map',
       map.instanceId,
     );
+    const mapActor = world.scene.getObjectByName(`boat-supply-event:${map.instanceId}`)!;
     world.update(2.95, 0.55);
     expectFixedRocks();
-    expect(mapRoot.scale.x).toBeGreaterThan(baseScale.x);
+    expect(mapRoot.visible).toBe(false);
+    expect(mapActor.scale.x).toBeGreaterThan(baseScale.x);
     world.update(3.5, 0.55);
     expectFixedRocks();
     await itemUse;
@@ -2976,13 +3020,14 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses existing supply motion for the Moon Umbrella and Telescope choices', async () => {
+  it('uses shared supply motion for the Moon Umbrella and Telescope choices', async () => {
     const umbrella = savedItem('umbrella');
     const telescope = savedItem('spyglass');
     const propModels = createTestPropModels();
-    const supplyMotion = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      camera,
       propModels,
       createTestMoonTexture(),
       [umbrella, telescope],
@@ -3002,14 +3047,15 @@ describe('BoatWorld helpers', () => {
       'spyglass',
       telescope.instanceId,
     );
-    world.update(3, 1.5);
+    world.update(3.5, 2);
     await telescopeMotion;
 
-    expect(supplyMotion).toHaveBeenNthCalledWith(1, umbrella.instanceId);
-    expect(supplyMotion).toHaveBeenNthCalledWith(2, telescope.instanceId);
+    expect(borrowActor).toHaveBeenNthCalledWith(1, umbrella.instanceId);
+    expect(borrowActor).toHaveBeenNthCalledWith(2, telescope.instanceId);
+    expect(camera.fov).toBe(65);
     world.dispose();
     propModels.dispose();
-    supplyMotion.mockRestore();
+    borrowActor.mockRestore();
   });
 
   it('holds active moon state during ambient pause updates without advancing it', async () => {
