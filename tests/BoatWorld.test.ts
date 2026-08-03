@@ -680,14 +680,78 @@ describe('BoatWorld helpers', () => {
       world.scene.getObjectByName('focused-event:other-people')?.visible,
     ).toBe(true);
     const ship = world.scene.getObjectByName(
-      'other-people-container-ship',
+      'other-people-ship',
     )!;
     const heldPosition = ship.position.clone();
     world.update(2, 1 / 60);
     expect(
       world.scene.getObjectByName('focused-event:other-people')?.visible,
     ).toBe(true);
-    expect(ship.position.toArray()).toEqual(heldPosition.toArray());
+    expect(ship.position.distanceTo(heldPosition)).toBeGreaterThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages Midnight Tour on deterministic distant sides', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('midnight-tour', null, 8);
+    const leftIsland = world.scene.getObjectByName('midnight-tour-island')!;
+    const leftX = leftIsland.position.x;
+    world.clearEvent();
+    world.stageEvent('midnight-tour', null, 9);
+    const rightX = world.scene.getObjectByName('midnight-tour-island')!.position.x;
+
+    expect(leftX).toBeLessThan(0);
+    expect(rightX).toBeGreaterThan(0);
+    expect(Math.abs(leftX)).toBeGreaterThan(9);
+    expect(Math.abs(rightX)).toBeGreaterThan(9);
+    expect(leftIsland.userData.greenTopWaveClearance).toBeGreaterThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages Night Trader as an empty rowboat', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('night-trader');
+
+    expect(world.scene.getObjectByName('night-trader-rowboat')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('night-trader-trader')).toBeUndefined();
+    expect(world.scene.getObjectByName('night-trader-case')).toBeUndefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps Other People on a slow distant cruise', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('other-people');
+    const ship = world.scene.getObjectByName('other-people-ship')!;
+    expect(ship.visible).toBe(true);
+    expect(ship.position.z).toBeLessThan(-35);
+    const start = ship.position.clone();
+    world.update(4, 4);
+    expect(ship.position.distanceTo(start)).toBeGreaterThan(0);
+    expect(ship.position.distanceTo(start)).toBeLessThan(4);
 
     world.dispose();
     propModels.dispose();
