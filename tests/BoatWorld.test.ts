@@ -53,6 +53,7 @@ import {
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
+import { GHOST_FLIGHT_PATHS } from '../src/survival/supernaturalEventChoreography';
 import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
@@ -2102,9 +2103,20 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
     world.update(1.2, 0.95);
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('ghost-1')?.userData.facingPath).toBe(true);
-    expect(world.scene.getObjectByName('supernatural-burst')?.visible).not.toBe(true);
-    world.update(4, 2.8);
+    expect(world.scene.getObjectByName('ghost-4')?.visible).toBe(false);
+    world.update(1.5, 0.3);
+    expect(world.scene.getObjectByName('ghost-5')?.visible).toBe(true);
+    GHOST_FLIGHT_PATHS.forEach((path, index) => {
+      const ghost = world.scene.getObjectByName(`ghost-${index + 1}`)!;
+      const expectedYaw = Math.atan2(
+        path.end[0] - path.start[0],
+        path.end[2] - path.start[2],
+      );
+      expect(ghost.rotation.y).toBeCloseTo(expectedYaw);
+      expect(ghost.userData.facingPath).toBe(true);
+    });
+    expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
+    world.update(4, 2.5);
     await reveal;
 
     world.dispose();
@@ -2113,6 +2125,15 @@ describe('BoatWorld helpers', () => {
 
   it('stages the Eerie Melody subject above layered fog and waves', () => {
     const propModels = createTestPropModels();
+    const sirenRock = new Group();
+    sirenRock.add(new Mesh(
+      new BoxGeometry(4, 2, 4),
+      new MeshStandardMaterial(),
+    ));
+    const eventModels = createTestEventModels();
+    vi.mocked(eventModels.create).mockImplementation((id: string) => (
+      id === 'sirenRock' ? sirenRock : new Group()
+    ));
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -2121,12 +2142,22 @@ describe('BoatWorld helpers', () => {
       undefined,
       undefined,
       'low',
-      createTestEventModels(),
+      eventModels,
     );
 
     world.stageEvent('eerie-melody');
     const tableau = world.scene.getObjectByName('siren-tableau')!;
-    expect(tableau.userData.minimumWaveClearance).toBeGreaterThan(0);
+    const rock = world.scene.getObjectByName('event-siren-rock')!;
+    world.scene.updateMatrixWorld(true);
+    const rockBounds = new Box3().setFromObject(rock);
+    const maximumWaveCrest = DEFAULT_WAVES.reduce(
+      (height, wave) => height
+        + wave.amplitude * presentationWeatherProfile('waves').waveScale,
+      0,
+    );
+    const measuredClearance = rockBounds.min.y - maximumWaveCrest;
+    expect(measuredClearance).toBeGreaterThan(0);
+    expect(tableau.userData.minimumWaveClearance).toBeCloseTo(measuredClearance);
     expect(tableau.userData.fogLayerCount).toBeGreaterThanOrEqual(3);
     expect(tableau.userData.subjectValueSeparation).toBeGreaterThan(0);
 
