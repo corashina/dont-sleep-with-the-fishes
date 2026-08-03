@@ -9,7 +9,7 @@ import {
   MeshStandardMaterial,
   RingGeometry,
 } from 'three';
-import type { ItemInstanceId } from '../../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import {
   disposeResourceSets,
@@ -18,6 +18,12 @@ import {
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
+import {
+  createEventItemUseSample,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from '../eventItemUseChoreography';
 import { StationaryEventCamera } from '../StationaryEventCamera';
 import type {
   DedicatedEventEnvironment,
@@ -149,6 +155,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private readonly cameraLook: StationaryEventCamera | null;
   private readonly rimWave = waveSample();
   private readonly sample: WhirlpoolSample = createWhirlpoolSample();
+  private readonly itemUseSample = createEventItemUseSample();
   private readonly reactionState: {
     hullDamage: number;
     anchorBroken: boolean;
@@ -166,7 +173,10 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     { ...IDENTITY_ITEM_POSE },
   ];
   private readonly lostActors: Array<BorrowedSupplyActor | null> = [null, null];
-  private active: DedicatedEventAnimation | null = null;
+  private active: DedicatedEventAnimation<{
+    readonly itemId: ItemId;
+    readonly itemUseContext: EventItemUseContext;
+  }> | null = null;
   private itemActor: BorrowedSupplyActor | null = null;
   private lastChoiceId = '';
   private staged = false;
@@ -259,14 +269,22 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     }
     this.cancelActive();
     if (!this.borrowItemActor(instanceId)) return Promise.resolve(false);
+    const itemId = this.environment.supplies.itemType(instanceId);
+    if (itemId === null) return Promise.resolve(false);
+    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
+    if (itemUseContext === null) return Promise.resolve(false);
+    this.environment.itemUseAdapter.begin(this.itemActor!);
     this.lastChoiceId = choiceId;
     sampleWhirlpoolItemUse(choiceId, 0, this.sample);
-    this.applyItemPose();
+    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
     this.applySample(0);
+    this.environment.itemUseAdapter.apply(this.itemUseSample);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
+        itemId,
+        itemUseContext,
         elapsed: 0,
         duration: WHIRLPOOL_ITEM_DURATION,
         resolve,
@@ -329,13 +347,18 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       } else if (active.kind === 'item') {
         this.cameraLook?.apply(0, 0);
         sampleWhirlpoolItemUse(active.choiceId, progress, this.sample);
-        this.applyItemPose();
+        sampleEventItemUse(
+          active.itemUseContext, active.itemId, progress, this.itemUseSample,
+        );
       } else {
         this.cameraLook?.apply(0, 0);
         sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
         this.applyReactionPoses();
       }
       this.applySample(time);
+      if (active.kind === 'item') {
+        this.environment.itemUseAdapter.apply(this.itemUseSample);
+      }
       if (progress === 1) this.finishActive();
       return;
     }
@@ -351,13 +374,18 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     } else if (this.active.kind === 'item') {
       this.cameraLook?.apply(0, 0);
       sampleWhirlpoolItemUse(this.active.choiceId, 1, this.sample);
-      this.applyItemPose();
+      sampleEventItemUse(
+        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
+      );
     } else {
       this.cameraLook?.apply(0, 0);
       sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
       this.applyReactionPoses();
     }
     this.applySample(0);
+    if (this.active.kind === 'item') {
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
+    }
     this.finishActive();
   }
 
@@ -377,6 +405,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     const itemActor = this.itemActor;
     this.active = null;
     this.itemActor = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     this.cameraLook?.restore();
     resolveCancelledEventAnimation(active);
     runCleanupSteps([
@@ -417,7 +446,13 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.active = null;
     if (active.kind === 'item') {
       sampleWhirlpoolItemUse(active.choiceId, 1, this.sample);
-      this.applyItemPose();
+      sampleEventItemUse(
+        active.itemUseContext, active.itemId, 1, this.itemUseSample,
+      );
+      this.applySample(0);
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
+      this.environment.itemUseAdapter.clear();
+      this.cameraLook?.apply(0, 0);
       this.applySample(0);
       active.resolve(true);
       return;
@@ -429,6 +464,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 

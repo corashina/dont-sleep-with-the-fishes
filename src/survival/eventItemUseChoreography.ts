@@ -31,7 +31,7 @@ export interface EventItemUseSample {
   effectKind: EventItemEffectKind;
 }
 
-const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set(['school-of-fish']);
+const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set(['leak', 'school-of-fish']);
 const BUCKET_COVER_EVENTS: ReadonlySet<string> = new Set(['eerie-melody']);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set(['shower-night']);
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set(['death-stare']);
@@ -83,8 +83,14 @@ export function resolveEventItemUseContext(
     return 'anchor-drop';
   }
 
-  if (itemId === 'cannedFood' && choiceId === 'food') return 'throw-target';
-  if (itemId === 'baitTin' && choiceId === 'bait') return 'throw-target';
+  if (
+    itemId === 'cannedFood'
+    && (choiceId === 'food' || choiceId === 'cannedFood')
+  ) return 'throw-target';
+  if (
+    itemId === 'baitTin'
+    && (choiceId === 'bait' || choiceId === 'baitTin')
+  ) return 'throw-target';
   if (itemId === 'medicalKit' && choiceId === 'medicalKit') return 'throw-target';
   if (itemId === 'energyBar' && choiceId === 'energyBar') return 'throw-target';
   if (itemId === 'swimRing' && choiceId === 'swimRing') return 'throw-target';

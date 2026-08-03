@@ -87,6 +87,8 @@ import type {
 } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import { EventItemEffects } from './EventItemEffects';
+import { EventItemUseAdapter } from './EventItemUseAdapter';
 import type {
   EventModelInstance,
   EventModelLibrary,
@@ -551,6 +553,8 @@ export class BoatWorld {
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly chestDisplay: ChestDisplay;
+  private readonly itemEffects: EventItemEffects;
+  private readonly itemUseAdapter: EventItemUseAdapter;
   private readonly dedicatedEvents: EventPresentationCoordinator | null;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
@@ -819,6 +823,8 @@ export class BoatWorld {
         ? propModels.createEventModel('chestClosed')?.root ?? null
         : resolvedEventModels.clone('mysteryChest'),
     );
+    this.itemEffects = new EventItemEffects();
+    this.itemUseAdapter = new EventItemUseAdapter(this.camera, this.itemEffects);
     this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
     this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
     try {
@@ -829,6 +835,8 @@ export class BoatWorld {
             supplies: this.supplyDisplay,
             vortexWave: this.vortexWave,
             sampleWorldWaveInto: this.sampleWorldWaveInto,
+            itemUseAdapter: this.itemUseAdapter,
+            itemEffects: this.itemEffects,
             cameraEffectsRoot: this.cameraEffectsRoot,
             boatEffectsRoot: this.boatEffectsRoot,
             camera: this.camera,
@@ -838,6 +846,7 @@ export class BoatWorld {
         runCleanupSteps([
           () => this.supplyDisplay.dispose(),
           () => this.chestDisplay.dispose(),
+          () => this.itemUseAdapter.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => this.lantern.dispose(),
           () => this.weatherEffects.dispose(),
@@ -965,6 +974,7 @@ export class BoatWorld {
       this.eventPresentation.root,
       this.weatherEventAnimator.worldRoot,
       this.supernaturalEventAnimator.worldRoot,
+      this.itemEffects.root,
       ...(this.dedicatedEvents === null
         ? []
         : [this.dedicatedEvents.worldRoot]),
@@ -1920,6 +1930,7 @@ export class BoatWorld {
       () => this.cancelActiveSequence(),
       () => this.clearMoonEvent(),
       () => this.dedicatedEvents?.dispose(),
+      () => this.itemUseAdapter.dispose(),
       () => this.resetDedicatedEffects(),
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
       () => this.weatherEventAnimator.dispose(),
@@ -1944,6 +1955,7 @@ export class BoatWorld {
         this.ambient,
         this.key,
         this.key.target,
+        this.itemEffects.root,
         this.fishing.root,
         this.fishingBiteParticles.points,
       ),

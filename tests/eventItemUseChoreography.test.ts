@@ -48,6 +48,8 @@ describe('event item use choreography', () => {
   });
 
   it('resolves event-specific use contexts', () => {
+    expect(resolveEventItemUseContext('leak', 'bucket', 'bucket'))
+      .toBe('bucket-scoop');
     expect(resolveEventItemUseContext('school-of-fish', 'bucket', 'bucket'))
       .toBe('bucket-scoop');
     expect(resolveEventItemUseContext('eerie-melody', 'bucket', 'bucket'))
@@ -62,6 +64,10 @@ describe('event item use choreography', () => {
       .toBe('flare-target');
     expect(resolveEventItemUseContext('whirlpool', 'anchor', 'anchor'))
       .toBe('anchor-drop');
+    expect(resolveEventItemUseContext('death-stare', 'cannedFood', 'cannedFood'))
+      .toBe('throw-target');
+    expect(resolveEventItemUseContext('swarm-of-anglerfish', 'baitTin', 'baitTin'))
+      .toBe('throw-target');
   });
 
   it('keeps the item in camera space through the shared pickup and hold stages', () => {
