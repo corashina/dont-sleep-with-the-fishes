@@ -147,6 +147,11 @@ function expectProductionConstraints(
 }
 
 describe('ship item placement', () => {
+  it('keeps the umbrella clear of the starboard workbench box', () => {
+    expect(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE['umbrella-1'])
+      .toBe('workbench-starboard:top-left');
+  });
+
   it.each([
     ['cannedFood-1', 'bow'],
     ['compass-1', 'storageWorkroom'],
@@ -377,7 +382,7 @@ describe('ship item placement', () => {
           `${instanceId}:${filtered.get(instanceId)!.surfaceId}`
         )).sort().join('|'));
       }
-      expect(fullSignatures.size).toBe(7);
+      expect(fullSignatures.size).toBe(3);
       expect(filteredSignatures).toEqual(fullSignatures);
     } finally {
       ship.dispose();
@@ -542,7 +547,7 @@ describe('ship item placement', () => {
         expect(baseline.seconds).toBeLessThanOrEqual(60);
       }
       expect(generatedCount).toBe(1_000);
-      expect(signatures.size).toBe(7);
+      expect(signatures.size).toBe(3);
       for (let seed = 0; seed < 64; seed += 1) {
         const assignments = assignShipItems(
           instances,
@@ -558,10 +563,9 @@ describe('ship item placement', () => {
       }
       expect(new Set([...surfacesByType.values()].flatMap((values) => [...values])).size)
         .toBe(21);
-      for (const itemType of [
-        'cannedFood', 'baitTin', 'ductTape', 'compass', 'spyglass',
-        'bottledPaper', 'flashlight',
-      ]) expect(surfacesByType.get(itemType)?.size, itemType).toBeGreaterThanOrEqual(2);
+      for (const itemType of ['cannedFood', 'baitTin', 'ductTape']) {
+        expect(surfacesByType.get(itemType)?.size, itemType).toBeGreaterThanOrEqual(2);
+      }
       for (const [regionId, minimumSurfaceCount] of [
         ['crewCabin', 3],
         ['wheelhouse', 5],
