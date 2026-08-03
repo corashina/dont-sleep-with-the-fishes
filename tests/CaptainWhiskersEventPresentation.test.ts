@@ -8,6 +8,7 @@ import {
   SphereGeometry,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import type { ItemInstanceId } from '../src/game/ItemState';
 import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
 import { CaptainWhiskersEventPresentation } from '../src/survival/events/CaptainWhiskersEventPresentation';
 import type { CaptainWhiskersEventId } from '../src/survival/events/CaptainWhiskersEventPresentation';
@@ -16,7 +17,7 @@ import type {
 } from '../src/survival/eventPresentationTypes';
 import { createTestPropModels } from './helpers/propModels';
 
-function setup(eventId: CaptainWhiskersEventId) {
+function setup(eventId: CaptainWhiskersEventId, waveAmplitude = 1) {
   const propModels = createTestPropModels();
   const companion = new CaptainWhiskersPresentation(propModels);
   companion.sync({
@@ -33,6 +34,17 @@ function setup(eventId: CaptainWhiskersEventId) {
   const baseCamera = camera.quaternion.clone();
   const poseRoot = companion.root.getObjectByName('captain-whiskers-pose')!;
   const basePose = poseRoot.rotation.clone();
+  const sampleWorldWaveInto = vi.fn((
+    output: { height: number; displacementX: number; displacementZ: number },
+    time: number,
+    _x: number,
+    _z: number,
+    amplitude: number,
+  ) => {
+    output.height = time * amplitude;
+    output.displacementX = amplitude * 0.1;
+    output.displacementZ = amplitude * -0.1;
+  });
   const environment = {
     captainWhiskers: companion,
     camera,
@@ -43,7 +55,8 @@ function setup(eventId: CaptainWhiskersEventId) {
     },
     supplies: {},
     vortexWave: {},
-    sampleWorldWaveInto: vi.fn(),
+    sampleWorldWaveInto,
+    readWorldWaveAmplitudeScale: () => waveAmplitude,
   } as unknown as DedicatedEventEnvironment;
   const presentation = new CaptainWhiskersEventPresentation(eventId, environment);
   presentation.stage({ eventId, targetInstanceId: null, variantSeed: 19 });
@@ -54,6 +67,7 @@ function setup(eventId: CaptainWhiskersEventId) {
     baseCamera,
     poseRoot,
     basePose,
+    sampleWorldWaveInto,
     presentation,
   };
 }
@@ -67,6 +81,20 @@ function finishReveal(
 }
 
 describe('CaptainWhiskersEventPresentation', () => {
+  it('shows the keyed reveal anticipation before decisive travel', async () => {
+    const state = setup('sick-companion');
+    const reveal = state.presentation.reveal();
+
+    state.presentation.update(1, 0.07);
+
+    expect(state.poseRoot.rotation.x).toBeLessThan(state.basePose.x);
+    state.presentation.clear();
+    await reveal;
+    state.presentation.dispose();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
+
   it('turns toward the real sick companion and restores camera and pose', async () => {
     const state = setup('sick-companion');
 
@@ -122,6 +150,103 @@ describe('CaptainWhiskersEventPresentation', () => {
 
     state.presentation.settleForVisibilityChange();
     expect(eyes.every(({ visible }) => !visible)).toBe(true);
+    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
+    state.presentation.dispose();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
+
+  it('samples Sea Watcher eyes at the exact rendered amplitude', async () => {
+    const state = setup('sea-watcher', 0.37);
+
+    await finishReveal(state.presentation);
+
+    expect(state.sampleWorldWaveInto).toHaveBeenCalled();
+    for (const call of state.sampleWorldWaveInto.mock.calls) {
+      expect(call[4]).toBe(0.37);
+    }
+    state.presentation.dispose();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
+
+  it.each([
+    ['choice', (state: ReturnType<typeof setup>) => state.presentation.playChoice('sleep')],
+    ['item', (state: ReturnType<typeof setup>) => state.presentation.playItemUse(
+      'spyglass',
+      'spyglass-1' as ItemInstanceId,
+    )],
+    ['result', (state: ReturnType<typeof setup>) => state.presentation.react({
+      outcome: {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The watcher remains.',
+        deltas: {},
+        cue: 'none',
+      },
+      resourceDeltas: {},
+      brokenInstanceIds: [],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: null,
+      selectedCondition: null,
+      targetInstanceId: null,
+    })],
+  ] as const)('keeps the current Sea Watcher wave time through %s completion', async (
+    _kind,
+    start,
+  ) => {
+    const state = setup('sea-watcher', 0.42);
+    await finishReveal(state.presentation);
+    state.sampleWorldWaveInto.mockClear();
+
+    const active = start(state);
+    state.presentation.update(7.25, 2);
+    const completion = await active;
+
+    const finalEyeSamples = state.sampleWorldWaveInto.mock.calls.slice(-6);
+    expect(finalEyeSamples).toHaveLength(6);
+    expect(finalEyeSamples.every((call) => call[1] === 7.25)).toBe(true);
+    expect(finalEyeSamples.every((call) => call[4] === 0.42)).toBe(true);
+    if (_kind === 'item') expect(completion).toBe(true);
+    state.presentation.dispose();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
+
+  it('cancels item playback and restores state on clear', async () => {
+    const state = setup('sick-companion');
+    await finishReveal(state.presentation);
+    const item = state.presentation.playItemUse('energyBar', 'energyBar-1' as ItemInstanceId);
+    state.presentation.update(4, 0.2);
+
+    state.presentation.clear();
+
+    await expect(item).resolves.toBe(false);
+    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
+    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
+    state.presentation.dispose();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
+
+  it('skips once and restores camera, companion, and owned visuals', async () => {
+    const state = setup('shadow-figure');
+    const falseCat = state.presentation.boatRoot.getObjectByName('shadow-figure:false-cat')!;
+    let completions = 0;
+    const reveal = state.presentation.reveal().then(() => {
+      completions += 1;
+    });
+    state.presentation.update(2, 0.3);
+    expect(falseCat.visible).toBe(true);
+
+    state.presentation.skip();
+    state.presentation.skip();
+    await reveal;
+
+    expect(completions).toBe(1);
+    expect(falseCat.visible).toBe(false);
+    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
     expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
     state.presentation.dispose();
     state.companion.dispose();

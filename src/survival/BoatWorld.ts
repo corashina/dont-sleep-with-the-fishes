@@ -658,6 +658,9 @@ export class BoatWorld {
     amplitudeScale,
     this.vortexWave,
   );
+  private readonly readWorldWaveAmplitudeScale = (): number => (
+    this.weatherProfile.waveScale
+  );
   private readonly buoyancy = new BoatBuoyancy(
     this.sampleWorldWave,
     undefined,
@@ -883,6 +886,7 @@ export class BoatWorld {
             captainWhiskers: this.captainWhiskers,
             vortexWave: this.vortexWave,
             sampleWorldWaveInto: this.sampleWorldWaveInto,
+            readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
             cameraEffectsRoot: this.cameraEffectsRoot,
             boatEffectsRoot: this.boatEffectsRoot,
             camera: this.camera,
@@ -1938,13 +1942,15 @@ export class BoatWorld {
   presentationCueForTest(): PresentationCue | null { return this.settledCue; }
 
   skipSequence(): void {
-    if (!this.activeSequence) return;
     const sequence = this.activeSequence;
-    this.activeSequence = null;
-    this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
-    this.applyBasePresentation();
-    this.applyCue(sequence.cue, 1, sequence.duration);
-    sequence.resolve();
+    if (sequence !== null) {
+      this.activeSequence = null;
+      this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
+      this.applyBasePresentation();
+      this.applyCue(sequence.cue, 1, sequence.duration);
+      sequence.resolve();
+    }
+    this.dedicatedEvents?.skip();
   }
 
   update(time: number, delta: number): void {

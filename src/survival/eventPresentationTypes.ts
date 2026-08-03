@@ -56,6 +56,7 @@ export interface DedicatedEventEnvironment {
   readonly captainWhiskers: CaptainWhiskersPresentation;
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
+  readonly readWorldWaveAmplitudeScale: () => number;
   readonly cameraEffectsRoot?: Group;
   readonly camera?: PerspectiveCamera;
   readonly boatEffectsRoot?: Group;
@@ -67,6 +68,7 @@ export interface DedicatedEventPresentation {
   readonly boatRoot: Group;
   stage(context: EventSceneContext): void;
   reveal(): Promise<void>;
+  skip(): void;
   playChoice?(choiceId: string): Promise<void>;
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
   react(result: EventOutcomePresentation): Promise<void>;

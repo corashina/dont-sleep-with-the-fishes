@@ -36,6 +36,10 @@ const CHOICE_DURATION = 0.65;
 const REACTION_DURATION = 0.8;
 const EYE_COUNT = 6;
 
+function signedSmoothstep(value: number): number {
+  return value < 0 ? -smoothstep(-value) : smoothstep(value);
+}
+
 type AnimationKind = 'reveal' | 'choice' | 'item' | 'reaction';
 
 interface ActiveAnimation {
@@ -163,6 +167,12 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
     return this.startAnimation('reaction', REACTION_DURATION) as Promise<void>;
   }
 
+  skip(): void {
+    if (this.disposed || !this.staged) return;
+    this.cancelActive();
+    this.restoreAndHide();
+  }
+
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const active = this.active;
@@ -178,7 +188,7 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
     else if (active.kind === 'reaction') strength = 1 - pulse(progress, 0, 0.38, 0.78) * 0.28;
     else strength = 1 + pulse(progress, 0, 0.38, 0.82) * 0.12;
     this.applyStrength(strength, time);
-    if (progress === 1) this.finishActive();
+    if (progress === 1) this.finishActive(time);
   }
 
   settleForVisibilityChange(): void {
@@ -220,11 +230,11 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
     });
   }
 
-  private finishActive(): void {
+  private finishActive(time: number): void {
     const active = this.active;
     if (active === null) return;
     this.active = null;
-    this.applyStrength(1, 0);
+    this.applyStrength(1, time);
     active.resolve(active.kind === 'item' ? true : undefined);
   }
 
@@ -279,7 +289,7 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
   }
 
   private applyStrength(strength: number, time: number): void {
-    const value = Math.max(0, strength);
+    const value = Number.isFinite(strength) ? strength : 0;
     if (this.eventId === 'sick-companion') {
       this.poseRoot.position.y = this.basePosePosition[1]! - value * 0.07;
       this.poseRoot.rotation.x = this.basePoseRotation[0]! + value * 0.38;
@@ -300,10 +310,11 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
     }
     if (this.eventId === 'shadow-figure') {
       if (this.falseCat === null) return;
-      this.falseCat.visible = value > 0.01;
-      this.falseCat.position.y = -0.1 + smoothstep(value) * 0.18;
-      this.falseCat.rotation.y = -0.58 + smoothstep(value) * 0.1;
-      this.falseCat.scale.setScalar(0.82 + smoothstep(value) * 0.18);
+      const travel = signedSmoothstep(value);
+      this.falseCat.visible = Math.abs(value) > 0.01;
+      this.falseCat.position.y = -0.1 + travel * 0.18;
+      this.falseCat.rotation.y = -0.58 + travel * 0.1;
+      this.falseCat.scale.setScalar(0.82 + travel * 0.18);
       this.cameraLook?.apply(-0.27 * value, 0.025 * value);
       return;
     }
@@ -311,11 +322,19 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
   }
 
   private applySeaWatcher(strength: number, time: number): void {
-    const reveal = smoothstep(strength);
+    const reveal = signedSmoothstep(strength);
+    const visibleScale = Math.abs(reveal);
+    const amplitudeScale = this.environment.readWorldWaveAmplitudeScale();
     for (let index = 0; index < this.eyes.length; index += 1) {
       const eye = this.eyes[index]!;
-      this.environment.sampleWorldWaveInto(eye.wave, time, eye.x, eye.z, 1);
-      eye.mesh.visible = strength > 0.015;
+      this.environment.sampleWorldWaveInto(
+        eye.wave,
+        time,
+        eye.x,
+        eye.z,
+        amplitudeScale,
+      );
+      eye.mesh.visible = Math.abs(strength) > 0.015;
       eye.mesh.position.set(
         eye.x + eye.wave.displacementX * 0.12,
         0.08 + eye.wave.height + reveal * (0.12 + (index % 2) * 0.035),
@@ -327,9 +346,9 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
         -eye.wave.normal.x * 0.04,
       );
       eye.mesh.scale.set(
-        eye.scaleX * reveal,
-        eye.scaleY * reveal,
-        0.24 * reveal,
+        eye.scaleX * visibleScale,
+        eye.scaleY * visibleScale,
+        0.24 * visibleScale,
       );
     }
     this.cameraLook?.apply(0, -0.035 * reveal);

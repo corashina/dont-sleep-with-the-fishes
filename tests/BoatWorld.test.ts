@@ -66,6 +66,7 @@ import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
 import type { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
+import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
@@ -3404,6 +3405,138 @@ describe('BoatWorld helpers', () => {
     expect(world.projectDriftingLoot(800, 600)).not.toBeNull();
     world.dispose();
     furniture.dispose();
+    propModels.dispose();
+  });
+
+  it.each(['clear', 'visibility', 'dispose'] as const)(
+    'restores delegated Whiskers when %s interrupts the pull',
+    async (interruption) => {
+      const propModels = createTestPropModels();
+      const furniture = createTestShipFurniture();
+      const world = new BoatWorld(
+        new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+        propModels,
+        createTestMoonTexture(),
+        [],
+        undefined,
+        furniture,
+      );
+      world.syncInventory(snapshot([], {
+        captainWhiskers: {
+          alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+          pettedToday: false, deathCause: null,
+        },
+      }));
+      world.stageEvent('drifting-loot', 'crate');
+      const reveal = world.revealEvent('drifting-loot');
+      world.update(1, 0.9);
+      await reveal;
+      const companion = world.scene.getObjectByName('captain-whiskers-companion')!;
+      const basePosition = companion.position.clone();
+      const delegated = world.delegateDriftingLoot();
+      world.update(2, 0.3);
+      expect(companion.position.equals(basePosition)).toBe(false);
+
+      if (interruption === 'clear') world.clearEvent();
+      else if (interruption === 'visibility') world.setDocumentHidden(true);
+      else world.dispose();
+      await delegated;
+
+      expect(companion.position.toArray()).toEqual(basePosition.toArray());
+      if (interruption !== 'dispose') world.dispose();
+      furniture.dispose();
+      propModels.dispose();
+    },
+  );
+
+  it('skips a Captain Whiskers event with its general cue exactly once', async () => {
+    const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    world.syncInventory(snapshot([], {
+      captainWhiskers: {
+        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        pettedToday: false, deathCause: null,
+      },
+    }));
+    const companion = world.scene.getObjectByName('captain-whiskers-companion')!;
+    const pose = companion.getObjectByName('captain-whiskers-pose')!;
+    const baseRotation = pose.rotation.clone();
+    world.stageEvent({
+      eventId: 'sick-companion',
+      targetInstanceId: null,
+      variantSeed: 4,
+    });
+    let revealCompletions = 0;
+    let cueCompletions = 0;
+    const reveal = world.revealEvent('sick-companion').then(() => {
+      revealCompletions += 1;
+    });
+    const cue = world.play('impact').then(() => {
+      cueCompletions += 1;
+    });
+    world.update(1, 0.25);
+
+    world.skipSequence();
+    world.skipSequence();
+    await Promise.all([reveal, cue]);
+
+    expect(revealCompletions).toBe(1);
+    expect(cueCompletions).toBe(1);
+    expect(pose.rotation.toArray()).toEqual(baseRotation.toArray());
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('samples Sea Watcher at the rendered weather wave scale', () => {
+    const propModels = createTestPropModels();
+    const eventModels = createTestEventModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+    const coordinator = (
+      world as unknown as {
+        dedicatedEvents: {
+          presentations: Map<string, {
+            environment: {
+              sampleWorldWaveInto: DedicatedEventEnvironment['sampleWorldWaveInto'];
+            };
+          }>;
+        };
+      }
+    ).dedicatedEvents;
+    const environment = coordinator.presentations.get('sea-watcher')!.environment;
+    const sample = vi.spyOn(environment, 'sampleWorldWaveInto');
+    world.setPresentationWeather('thunderstorm');
+    world.stageEvent({
+      eventId: 'sea-watcher',
+      targetInstanceId: null,
+      variantSeed: 9,
+    });
+
+    world.update(12, 0.2);
+
+    expect(sample).toHaveBeenCalled();
+    expect(sample.mock.calls.at(-1)?.[4]).toBe(
+      presentationWeatherProfile('thunderstorm').waveScale,
+    );
+    world.dispose();
     propModels.dispose();
   });
 
