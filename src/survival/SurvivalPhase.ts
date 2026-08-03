@@ -385,17 +385,18 @@ export class SurvivalPhase implements GamePhase {
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
     if (testDependencies === undefined) {
+      const session = new SurvivalSession(savedItems, {
+        seed,
+        ...(initialEventId === undefined ? {} : { initialEventId }),
+      });
       this.initialize(
         context,
-        new SurvivalSession(savedItems, {
-          seed,
-          ...(initialEventId === undefined ? {} : { initialEventId }),
-        }),
+        session,
         new BoatWorld(
           context.camera,
           context.propModels,
           context.skyAssets.moonTexture,
-          savedItems,
+          session.snapshot().savedItems,
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
