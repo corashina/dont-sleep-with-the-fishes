@@ -48,6 +48,7 @@ import {
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
+import { ChestDisplay } from '../src/survival/ChestDisplay';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   FOCUSED_EVENT_IDS,
@@ -3780,6 +3781,68 @@ describe('BoatWorld helpers', () => {
     createEventModel.mockRestore();
     disposeSupplies.mockRestore();
     disposeCompanion.mockRestore();
+    disposeParticles.mockRestore();
+    propModels.dispose();
+  });
+
+  it('rolls back every earlier owner when late dive construction fails after the rod', () => {
+    const originalParent = new Group();
+    const camera = new PerspectiveCamera();
+    camera.position.set(3, 4, 5);
+    camera.rotation.set(0.2, -0.3, 0.1);
+    originalParent.add(camera);
+    const originalPosition = camera.position.clone();
+    const originalQuaternion = camera.quaternion.clone();
+    const propModels = createTestPropModels();
+    const failure = new Error('late dive construction failed');
+    const originalCreateEquipment = propModels.createEquipment.bind(propModels);
+    let rodGeometryDispose: ReturnType<typeof vi.spyOn> | null = null;
+    let rodMaterialDispose: ReturnType<typeof vi.spyOn> | null = null;
+    const createEquipment = vi.spyOn(propModels, 'createEquipment')
+      .mockImplementation((id) => {
+        const root = originalCreateEquipment(id);
+        const mesh = firstMesh(root);
+        rodGeometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+        const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
+        rodMaterialDispose = vi.spyOn(material, 'dispose');
+        return root;
+      });
+    const create = vi.spyOn(propModels, 'create').mockImplementation(() => {
+      throw failure;
+    });
+    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
+    const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
+    const disposeChest = vi.spyOn(ChestDisplay.prototype, 'dispose');
+    const disposeWeather = vi.spyOn(WeatherEventAnimator.prototype, 'dispose');
+    const disposeSupernatural = vi.spyOn(SupernaturalEventAnimator.prototype, 'dispose');
+    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
+
+    expect(() => new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    )).toThrow(failure);
+
+    expect(disposeCompanion).toHaveBeenCalledOnce();
+    expect(disposeSupplies).toHaveBeenCalledOnce();
+    expect(disposeChest).toHaveBeenCalledOnce();
+    expect(disposeWeather).toHaveBeenCalledOnce();
+    expect(disposeSupernatural).toHaveBeenCalledOnce();
+    expect(disposeParticles).toHaveBeenCalledOnce();
+    expect(rodGeometryDispose).not.toBeNull();
+    expect(rodGeometryDispose!).toHaveBeenCalledOnce();
+    expect(rodMaterialDispose!).toHaveBeenCalledOnce();
+    expect(camera.parent).toBe(originalParent);
+    expect(camera.position.toArray()).toEqual(originalPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(originalQuaternion.toArray());
+
+    createEquipment.mockRestore();
+    create.mockRestore();
+    disposeCompanion.mockRestore();
+    disposeSupplies.mockRestore();
+    disposeChest.mockRestore();
+    disposeWeather.mockRestore();
+    disposeSupernatural.mockRestore();
     disposeParticles.mockRestore();
     propModels.dispose();
   });

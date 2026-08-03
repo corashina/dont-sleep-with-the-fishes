@@ -754,17 +754,6 @@ export class BoatWorld {
       ?? (isEventModelLibrary(models) ? models : undefined);
     this.eventModels = dedicatedEventModels ?? createEmptyEventModelLibraryForTest();
     this.scene = new Scene();
-    this.sky = new Skybox(
-      this.scene,
-      this.skyState,
-      moonTexture,
-      {
-        sun: SURVIVAL_CELESTIAL_DIRECTION,
-        moon: SURVIVAL_CELESTIAL_DIRECTION,
-      },
-    );
-    this.weatherEffects = new WeatherEffects(this.scene);
-    this.weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
     this.camera = camera;
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
@@ -781,41 +770,67 @@ export class BoatWorld {
           } satisfies SurvivalEventModels
     );
 
-    const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
-      new Texture(),
-      new Texture(),
-      new Texture(),
-    );
-    if (lifeboatAssets === undefined) {
-      this.ownedTextures.add(resolvedLifeboatAssets.color);
-      this.ownedTextures.add(resolvedLifeboatAssets.roughness);
-      this.ownedTextures.add(resolvedLifeboatAssets.normal);
-    }
-    const build = createLifeboat(resolvedLifeboatAssets);
-    this.boat = build.root;
-    this.waterExclusion = build.waterExclusion;
-    collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
-    this.fishingCatchRest.name = 'fishing-catch-bow-rest';
-    this.fishingCatchRest.position.set(
-      FISHING_CATCH_BOW_REST.x,
-      FISHING_CATCH_BOW_REST.y,
-      FISHING_CATCH_BOW_REST.z,
-    );
-    this.boat.add(this.fishingCatchRest);
-    this.driftingLootSternRest.name = 'drifting-loot-stern-rest';
-    this.driftingLootSternRest.position.set(
-      DRIFTING_LOOT_STERN_REST.x,
-      DRIFTING_LOOT_STERN_REST.y,
-      DRIFTING_LOOT_STERN_REST.z,
-    );
-    this.boat.add(this.driftingLootSternRest);
-    this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
-    this.boat.add(this.lantern.root);
-
+    let sky: Skybox | null = null;
+    let weatherEffects: WeatherEffects | null = null;
+    let lantern: SurvivalLantern | null = null;
     let captainWhiskers: CaptainWhiskersPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
+    let dedicatedEvents: EventPresentationCoordinator | null = null;
+    let weatherEventAnimator: WeatherEventAnimator | null = null;
+    let supernaturalEventAnimator: SupernaturalEventAnimator | null = null;
+    let divePresentation: DivePresentation | null = null;
+    let fishingCatches: FishingCatchLibrary | null = null;
+    let eventPresentation: EventPresentationLayer | null = null;
+    let featuredEvents: FeaturedEventPresentations | null = null;
+    let ocean: OceanRenderer | null = null;
     try {
+      sky = new Skybox(
+        this.scene,
+        this.skyState,
+        moonTexture,
+        {
+          sun: SURVIVAL_CELESTIAL_DIRECTION,
+          moon: SURVIVAL_CELESTIAL_DIRECTION,
+        },
+      );
+      this.sky = sky;
+      weatherEffects = new WeatherEffects(this.scene);
+      this.weatherEffects = weatherEffects;
+      weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
+
+      const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
+        new Texture(),
+        new Texture(),
+        new Texture(),
+      );
+      if (lifeboatAssets === undefined) {
+        this.ownedTextures.add(resolvedLifeboatAssets.color);
+        this.ownedTextures.add(resolvedLifeboatAssets.roughness);
+        this.ownedTextures.add(resolvedLifeboatAssets.normal);
+      }
+      const build = createLifeboat(resolvedLifeboatAssets);
+      this.boat = build.root;
+      this.waterExclusion = build.waterExclusion;
+      collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+      this.fishingCatchRest.name = 'fishing-catch-bow-rest';
+      this.fishingCatchRest.position.set(
+        FISHING_CATCH_BOW_REST.x,
+        FISHING_CATCH_BOW_REST.y,
+        FISHING_CATCH_BOW_REST.z,
+      );
+      this.boat.add(this.fishingCatchRest);
+      this.driftingLootSternRest.name = 'drifting-loot-stern-rest';
+      this.driftingLootSternRest.position.set(
+        DRIFTING_LOOT_STERN_REST.x,
+        DRIFTING_LOOT_STERN_REST.y,
+        DRIFTING_LOOT_STERN_REST.z,
+      );
+      this.boat.add(this.driftingLootSternRest);
+      lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
+      this.lantern = lantern;
+      this.boat.add(lantern.root);
+
       captainWhiskers = new CaptainWhiskersPresentation(propModels);
       this.captainWhiskers = captainWhiskers;
       this.boat.add(captainWhiskers.root);
@@ -834,7 +849,7 @@ export class BoatWorld {
       this.chestDisplay = chestDisplay;
       this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
       this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
-      this.dedicatedEvents = dedicatedEventModels === undefined
+      dedicatedEvents = dedicatedEventModels === undefined
         ? null
         : createDedicatedEventCoordinator({
             eventModels: dedicatedEventModels,
@@ -845,18 +860,169 @@ export class BoatWorld {
             boatEffectsRoot: this.boatEffectsRoot,
             camera: this.camera,
           });
+      this.dedicatedEvents = dedicatedEvents;
+      if (this.dedicatedEvents !== null) {
+        this.boat.add(this.dedicatedEvents.boatRoot);
+      }
+      this.boat.add(this.chestDisplay.root);
+      weatherEventAnimator = new WeatherEventAnimator(
+        this.cameraRig,
+        this.supplyDisplay,
+        this.eventModels,
+        this.camera,
+      );
+      this.weatherEventAnimator = weatherEventAnimator;
+      supernaturalEventAnimator = new SupernaturalEventAnimator(
+        this.cameraRig,
+        this.supplyDisplay,
+        this.eventModels,
+        this.camera,
+      );
+      this.supernaturalEventAnimator = supernaturalEventAnimator;
+      this.boat.add(this.weatherEventAnimator.boatRoot);
+
+      const repairTools = createRepairToolbox();
+      repairTools.position.set(-1.05, 0.225, 0.78);
+      repairTools.rotation.y = -Math.PI / 2;
+      repairTools.scale.setScalar(0.72);
+      this.boat.add(repairTools);
+      collectMeshResources(repairTools, this.ownedGeometries, this.ownedMaterials);
+      this.repairTools = repairTools;
+
+      this.rodPivot.name = 'fishing-rod-pivot';
+      this.rodPivot.position.set(0, 0.56, -2.28);
+      this.rodPivot.rotation.x = FISHING_ROD_LEAN;
+      this.rod = propModels.createEquipment('fishingRod');
+      collectMeshResources(this.rod, this.ownedGeometries, this.ownedMaterials);
+      this.rod.position.set(0, 0, -0.9);
+      this.rod.rotation.x = -Math.PI / 2;
+      this.fishingLineOrigin.name = 'fishing-line-origin';
+      this.fishingLineOrigin.position.copy(localTipOf(this.rod));
+      this.rod.add(this.fishingLineOrigin);
+      this.rodPivot.add(this.rod);
+      this.boat.add(this.rodPivot);
+      collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);
+
+      this.motionRig.name = 'boat-motion-rig';
+      this.cueCameraRig.name = 'boat-cue-camera-rig';
+      this.featuredEventCameraRig.name = 'boat-featured-event-camera-rig';
+      this.cameraRig.name = 'boat-camera-rig';
+      this.motionRig.add(this.boatEffectsRoot, this.cueCameraRig);
+      this.boatEffectsRoot.add(this.boat);
+      this.cueCameraRig.add(this.featuredEventCameraRig);
+      this.featuredEventCameraRig.add(this.cameraEffectsRoot);
+      this.cameraEffectsRoot.add(this.cameraRig);
+      this.cameraRig.add(camera);
+      camera.position.set(0, 0.88, 1.72);
+      camera.lookAt(this.baseCameraLookTarget);
+      this.baseCameraPosition.copy(camera.position);
+      this.baseCameraQuaternion = camera.quaternion.clone();
+      this.diveStarboardQuaternion.copy(this.baseCameraQuaternion)
+        .multiply(DIVE_LEFT_TURN);
+      divePresentation = new DivePresentation({
+        camera,
+        starboardPosition: DIVE_STARBOARD_POSITION,
+        starboardQuaternion: this.diveStarboardQuaternion,
+        goggleModel: propModels.create({
+          instanceId: 'dive-goggles-model' as ItemInstanceId,
+          type: 'scubaSet',
+        }),
+      });
+      this.divePresentation = divePresentation;
+      this.fishingMatrixScratch.lookAt(
+        this.fishingCameraAngleOrigin,
+        this.fishingCameraLookTarget,
+        camera.up,
+      );
+      this.fishingCameraQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
+      this.baseRodPivotRotationX = this.rodPivot.rotation.x;
+
+      fishingCatches = new FishingCatchLibrary();
+      this.fishingCatches = fishingCatches;
+      this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
+      eventPresentation = new EventPresentationLayer({
+        propModels,
+        waves: DEFAULT_WAVES,
+        cameraRig: this.cameraRig,
+        camera: this.camera,
+        boatMotionRoot: this.motionRig,
+        supplyDisplay: this.supplyDisplay,
+        chestDisplay: this.chestDisplay,
+      }, resolvedFocusedFactories);
+      this.eventPresentation = eventPresentation;
+      featuredEvents = new FeaturedEventPresentations(
+        resolvedEventModels,
+        this.camera,
+        this.driftingLootSternRest,
+      );
+      this.featuredEvents = featuredEvents;
+      ocean = new OceanRenderer(
+        waterQuality,
+        SURVIVAL_CELESTIAL_DIRECTION,
+      );
+      this.ocean = ocean;
+      this.key.target.position.set(0, 0, -3);
+      alignDirectionalLightWithSun(
+        this.key,
+        12,
+        SURVIVAL_CELESTIAL_DIRECTION,
+      );
+      this.key.castShadow = true;
+
+      this.scene.add(
+        this.motionRig,
+        this.ocean.mesh,
+        this.ambient,
+        this.key,
+        this.key.target,
+        this.featuredEvents.root,
+        this.eventPresentation.root,
+        this.weatherEventAnimator.worldRoot,
+        this.supernaturalEventAnimator.worldRoot,
+        ...(this.dedicatedEvents === null
+          ? []
+          : [this.dedicatedEvents.worldRoot]),
+        this.fishing.root,
+        this.fishingBiteParticles.points,
+      );
+      for (const record of this.supplyDisplay.records()) {
+        this.supplyAnchorBounds.set(
+          record.groupId,
+          createBoatObjectBoundsCache(record.root),
+        );
+      }
+      this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
+      this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
+      this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
+      this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
+      this.captainWhiskersAnchorBounds = createBoatObjectBoundsCache(
+        this.captainWhiskers.interactionRoot,
+      );
+      this.applyBasePresentation();
     } catch (error) {
       try {
         runCleanupSteps([
+          () => ocean?.dispose(),
+          () => featuredEvents?.dispose(),
+          () => eventPresentation?.dispose(),
+          () => fishingCatches?.dispose(),
+          () => divePresentation?.dispose(),
+          () => supernaturalEventAnimator?.dispose(),
+          () => weatherEventAnimator?.dispose(),
+          () => dedicatedEvents?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
           () => captainWhiskers?.dispose(),
           () => this.toolHoverOutline.dispose(),
-          () => this.lantern.dispose(),
-          () => this.weatherEffects.dispose(),
+          () => lantern?.dispose(),
+          () => weatherEffects?.dispose(),
           () => this.fishingBiteParticles.dispose(),
-          () => this.sky.dispose(),
+          () => sky?.dispose(),
           () => this.scene.clear(),
+          () => camera.removeFromParent(),
+          () => camera.position.copy(this.originalCameraPosition),
+          () => camera.quaternion.copy(this.originalCameraQuaternion),
+          () => this.originalCameraParent?.add(camera),
           () => disposeResourceSets(
             this.ownedGeometries,
             this.ownedMaterials,
@@ -864,140 +1030,10 @@ export class BoatWorld {
           ),
         ]);
       } catch {
-        // Preserve the event construction error after every owned sibling runs.
+        // Preserve the construction error after every owned resource runs.
       }
       throw error;
     }
-    if (this.dedicatedEvents !== null) {
-      this.boat.add(this.dedicatedEvents.boatRoot);
-    }
-    this.boat.add(this.chestDisplay.root);
-    this.weatherEventAnimator = new WeatherEventAnimator(
-      this.cameraRig,
-      this.supplyDisplay,
-      this.eventModels,
-      this.camera,
-    );
-    this.supernaturalEventAnimator = new SupernaturalEventAnimator(
-      this.cameraRig,
-      this.supplyDisplay,
-      this.eventModels,
-      this.camera,
-    );
-    this.boat.add(this.weatherEventAnimator.boatRoot);
-
-    const repairTools = createRepairToolbox();
-    repairTools.position.set(-1.05, 0.225, 0.78);
-    repairTools.rotation.y = -Math.PI / 2;
-    repairTools.scale.setScalar(0.72);
-    this.boat.add(repairTools);
-    collectMeshResources(repairTools, this.ownedGeometries, this.ownedMaterials);
-    this.repairTools = repairTools;
-
-    this.rodPivot.name = 'fishing-rod-pivot';
-    this.rodPivot.position.set(0, 0.56, -2.28);
-    this.rodPivot.rotation.x = FISHING_ROD_LEAN;
-    this.rod = propModels.createEquipment('fishingRod');
-    this.rod.position.set(0, 0, -0.9);
-    this.rod.rotation.x = -Math.PI / 2;
-    this.fishingLineOrigin.name = 'fishing-line-origin';
-    this.fishingLineOrigin.position.copy(localTipOf(this.rod));
-    this.rod.add(this.fishingLineOrigin);
-    this.rodPivot.add(this.rod);
-    this.boat.add(this.rodPivot);
-    collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);
-
-    this.motionRig.name = 'boat-motion-rig';
-    this.cueCameraRig.name = 'boat-cue-camera-rig';
-    this.featuredEventCameraRig.name = 'boat-featured-event-camera-rig';
-    this.cameraRig.name = 'boat-camera-rig';
-    this.motionRig.add(this.boatEffectsRoot, this.cueCameraRig);
-    this.boatEffectsRoot.add(this.boat);
-    this.cueCameraRig.add(this.featuredEventCameraRig);
-    this.featuredEventCameraRig.add(this.cameraEffectsRoot);
-    this.cameraEffectsRoot.add(this.cameraRig);
-    this.cameraRig.add(camera);
-    camera.position.set(0, 0.88, 1.72);
-    camera.lookAt(this.baseCameraLookTarget);
-    this.baseCameraPosition.copy(camera.position);
-    this.baseCameraQuaternion = camera.quaternion.clone();
-    this.diveStarboardQuaternion.copy(this.baseCameraQuaternion)
-      .multiply(DIVE_LEFT_TURN);
-    this.divePresentation = new DivePresentation({
-      camera,
-      starboardPosition: DIVE_STARBOARD_POSITION,
-      starboardQuaternion: this.diveStarboardQuaternion,
-      goggleModel: propModels.create({
-        instanceId: 'dive-goggles-model' as ItemInstanceId,
-        type: 'scubaSet',
-      }),
-    });
-    this.fishingMatrixScratch.lookAt(
-      this.fishingCameraAngleOrigin,
-      this.fishingCameraLookTarget,
-      camera.up,
-    );
-    this.fishingCameraQuaternion.setFromRotationMatrix(this.fishingMatrixScratch);
-    this.baseRodPivotRotationX = this.rodPivot.rotation.x;
-
-    this.fishingCatches = new FishingCatchLibrary();
-    this.fishing = createFishingVisuals(this.ownedGeometries, this.ownedMaterials);
-    this.eventPresentation = new EventPresentationLayer({
-      propModels,
-      waves: DEFAULT_WAVES,
-      cameraRig: this.cameraRig,
-      camera: this.camera,
-      boatMotionRoot: this.motionRig,
-      supplyDisplay: this.supplyDisplay,
-      chestDisplay: this.chestDisplay,
-    }, resolvedFocusedFactories);
-    this.featuredEvents = new FeaturedEventPresentations(
-      resolvedEventModels,
-      this.camera,
-      this.driftingLootSternRest,
-    );
-    this.ocean = new OceanRenderer(
-      waterQuality,
-      SURVIVAL_CELESTIAL_DIRECTION,
-    );
-    this.key.target.position.set(0, 0, -3);
-    alignDirectionalLightWithSun(
-      this.key,
-      12,
-      SURVIVAL_CELESTIAL_DIRECTION,
-    );
-    this.key.castShadow = true;
-
-    this.scene.add(
-      this.motionRig,
-      this.ocean.mesh,
-      this.ambient,
-      this.key,
-      this.key.target,
-      this.featuredEvents.root,
-      this.eventPresentation.root,
-      this.weatherEventAnimator.worldRoot,
-      this.supernaturalEventAnimator.worldRoot,
-      ...(this.dedicatedEvents === null
-        ? []
-        : [this.dedicatedEvents.worldRoot]),
-      this.fishing.root,
-      this.fishingBiteParticles.points,
-    );
-    for (const record of this.supplyDisplay.records()) {
-      this.supplyAnchorBounds.set(
-        record.groupId,
-        createBoatObjectBoundsCache(record.root),
-      );
-    }
-    this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
-    this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
-    this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
-    this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
-    this.captainWhiskersAnchorBounds = createBoatObjectBoundsCache(
-      this.captainWhiskers.interactionRoot,
-    );
-    this.applyBasePresentation();
   }
 
   setPhase(phase: 'day' | 'night'): void {
