@@ -143,6 +143,9 @@ interface BorrowedSupplyBinding {
   readonly groupId: BoatSupplyGroupId;
   readonly motionIndex: number;
   readonly root: Group;
+  readonly copyPosition: Vector3;
+  readonly copyQuaternion: Quaternion;
+  readonly copyScale: Vector3;
   readonly pose: MutableSupplyPose;
 }
 
@@ -255,6 +258,7 @@ export class BoatSupplyDisplay {
   private readonly ownedMaterials = new Set<Material>();
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
+  private readonly borrowedCopyOffset = new Vector3();
   private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
   private readonly borrowedBindings =
     new Map<ItemInstanceId, BorrowedSupplyBinding>();
@@ -884,8 +888,12 @@ export class BoatSupplyDisplay {
       this.syncGroup(groupId, this.currentSnapshot);
       return null;
     }
+    const copyPosition = heldCopy.position.clone();
+    const copyQuaternion = heldCopy.quaternion.clone();
+    const copyScale = heldCopy.scale.clone();
     heldCopy.position.set(0, 0, 0);
     heldCopy.quaternion.identity();
+    heldCopy.scale.set(1, 1, 1);
     for (let index = 1; index < root.children.length; index += 1) {
       root.children[index]!.visible = false;
     }
@@ -898,6 +906,9 @@ export class BoatSupplyDisplay {
       groupId,
       motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
       root,
+      copyPosition,
+      copyQuaternion,
+      copyScale,
       pose: createIdentitySupplyPose(),
     };
     this.borrowedBindings.set(instanceId, binding);
@@ -906,6 +917,7 @@ export class BoatSupplyDisplay {
       (this.borrowedCountByGroup.get(groupId) ?? 0) + 1,
     );
     this.releaseBorrowedOnSync.delete(instanceId);
+    this.applyBorrowedEventMotion(binding);
     return binding;
   }
 
@@ -986,13 +998,20 @@ export class BoatSupplyDisplay {
     root.scale.set(1, 1, 1);
     root.position.y += this.eventAmbientLift;
     root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
+    this.borrowedCopyOffset.copy(binding.copyPosition).applyQuaternion(root.quaternion);
+    root.position.add(this.borrowedCopyOffset);
+    root.quaternion.multiply(binding.copyQuaternion);
     root.position.x += pose.x;
     root.position.y += pose.y;
     root.position.z += pose.z;
     root.rotateY(pose.yaw);
     root.rotateX(pose.pitch);
     root.rotateZ(pose.roll);
-    root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+    root.scale.set(
+      binding.copyScale.x * pose.scaleX,
+      binding.copyScale.y * pose.scaleY,
+      binding.copyScale.z * pose.scaleZ,
+    );
   }
 
   private restoreEventMotionBase(): void {

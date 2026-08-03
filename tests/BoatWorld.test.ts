@@ -61,7 +61,9 @@ import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import {
+  createEventItemUseSample,
   eventItemUseDuration,
+  sampleEventItemUse,
   type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
 import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
@@ -2164,13 +2166,13 @@ describe('BoatWorld helpers', () => {
     world.update(2.4, 1.2);
     await reveal;
 
-    const baseScale = mapRoot.scale.clone();
     const itemUse = world.playEventItemUse(
       'dangerous-waters',
       'map',
       map.instanceId,
     );
     const mapActor = world.scene.getObjectByName(`boat-supply-event:${map.instanceId}`)!;
+    const baseScale = mapActor.scale.clone();
     world.update(2.95, 0.55);
     expectFixedRocks();
     expect(mapRoot.visible).toBe(false);
@@ -4120,12 +4122,17 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('borrows one stable supply actor without transferring resource ownership', () => {
+  it('keeps a real borrowed actor at its stored world pose at progress zero', () => {
     const map = savedItem('map');
     const propModels = createTestPropModels();
     const parent = new Group();
     const display = new BoatSupplyDisplay(propModels, parent, [map]);
     display.sync(snapshot([map]));
+    parent.updateMatrixWorld(true);
+    const storedCopy = parent.getObjectByName('boat-supply:map:copy-1')!;
+    const storedWorldPosition = storedCopy.getWorldPosition(new Vector3());
+    const storedWorldQuaternion = storedCopy.getWorldQuaternion(new Quaternion());
+    const storedWorldScale = storedCopy.getWorldScale(new Vector3());
     const actor = display.borrowEventActor(map.instanceId);
     const sameActor = display.borrowEventActor(map.instanceId);
 
@@ -4138,6 +4145,25 @@ describe('BoatWorld helpers', () => {
     const heldCopy = actor!.root.children.find((child) => child.visible)!;
     expect(heldCopy.position.toArray()).toEqual([0, 0, 0]);
     expect(heldCopy.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+    expect(heldCopy.scale.toArray()).toEqual([1, 1, 1]);
+
+    const adapter = new EventItemUseAdapter(
+      new PerspectiveCamera(),
+      new EventItemEffects(),
+    );
+    const progressZero = createEventItemUseSample();
+    adapter.begin(actor!);
+    sampleEventItemUse('map-read', 0, progressZero);
+    adapter.apply(progressZero);
+    parent.updateMatrixWorld(true);
+    expect(actor!.root.getWorldPosition(new Vector3()).distanceTo(storedWorldPosition))
+      .toBeLessThan(1e-6);
+    expect(actor!.root.getWorldQuaternion(new Quaternion()).angleTo(storedWorldQuaternion))
+      .toBeLessThan(1e-6);
+    expect(actor!.root.getWorldScale(new Vector3()).distanceTo(storedWorldScale))
+      .toBeLessThan(1e-6);
+    adapter.dispose();
+    const storedLocalPosition = actor!.root.position.clone();
 
     const mesh = firstMesh(actor!.root);
     const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
@@ -4154,9 +4180,13 @@ describe('BoatWorld helpers', () => {
       scaleY: 0.9,
       scaleZ: 1.2,
     });
-    expect(actor!.root.position.toArray()).toEqual([0.4, 0.2, -0.3]);
+    expect(actor!.root.position).toEqual(
+      storedLocalPosition.clone().add(new Vector3(0.4, 0.2, -0.3)),
+    );
     display.update(0);
-    expect(actor!.root.position.toArray()).toEqual([0.4, 0.2, -0.3]);
+    expect(actor!.root.position).toEqual(
+      storedLocalPosition.clone().add(new Vector3(0.4, 0.2, -0.3)),
+    );
 
     actor!.releaseOnNextSync();
     display.sync(snapshot([map]));
@@ -4391,6 +4421,8 @@ describe('BoatWorld helpers', () => {
 
     const firstActor = display.borrowEventActor(firstMap.instanceId)!;
     const secondActor = display.borrowEventActor(secondMap.instanceId)!;
+    const firstStoredPosition = firstActor.root.position.clone();
+    const secondStoredPosition = secondActor.root.position.clone();
     expect(display.borrowEventActor(firstMap.instanceId)).toBe(firstActor);
     expect(display.borrowEventActor(secondMap.instanceId)).toBe(secondActor);
     expect(firstActor.root).not.toBe(secondActor.root);
@@ -4438,8 +4470,12 @@ describe('BoatWorld helpers', () => {
     });
     display.update(0);
 
-    expect(firstActor.root.position.toArray()).toEqual([1.2, 0.3, -0.4]);
-    expect(secondActor.root.position.toArray()).toEqual([-1.4, 0.5, -0.7]);
+    expect(firstActor.root.position).toEqual(
+      firstStoredPosition.clone().add(new Vector3(1.2, 0.3, -0.4)),
+    );
+    expect(secondActor.root.position).toEqual(
+      secondStoredPosition.clone().add(new Vector3(-1.4, 0.5, -0.7)),
+    );
 
     firstActor.release();
     secondActor.applyPose({
@@ -4455,7 +4491,9 @@ describe('BoatWorld helpers', () => {
     });
     display.update(0);
     expect(firstActor.root.parent).toBeNull();
-    expect(secondActor.root.position.toArray()).toEqual([-1.8, 0.6, -0.9]);
+    expect(secondActor.root.position).toEqual(
+      secondStoredPosition.clone().add(new Vector3(-1.8, 0.6, -0.9)),
+    );
     expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
 
     secondActor.releaseOnNextSync();
@@ -4492,6 +4530,7 @@ describe('BoatWorld helpers', () => {
     display.sync(snapshot([map, ring]));
     const mapActor = display.borrowEventActor(map.instanceId)!;
     const ringActor = display.borrowEventActor(ring.instanceId)!;
+    const ringStoredPosition = ringActor.root.position.clone();
 
     mapActor.release();
     expect(display.borrowEventActor('missing-1' as ItemInstanceId)).toBeNull();
@@ -4509,7 +4548,9 @@ describe('BoatWorld helpers', () => {
     display.update(0);
 
     expect(mapActor.root.position.toArray()).toEqual([0, 0, 0]);
-    expect(ringActor.root.position.toArray()).toEqual([0.3, 0, 0]);
+    expect(ringActor.root.position).toEqual(
+      ringStoredPosition.clone().add(new Vector3(0.3, 0, 0)),
+    );
 
     ringActor.release();
     display.dispose();
@@ -4527,6 +4568,7 @@ describe('BoatWorld helpers', () => {
     );
     display.sync(snapshot([firstMap]));
     const activeActor = display.borrowEventActor(firstMap.instanceId)!;
+    const storedPosition = activeActor.root.position.clone();
 
     expect(display.recordFor('map')?.backingInstanceId).toBe(firstMap.instanceId);
     expect(display.borrowEventActor(absentMap.instanceId)).toBeNull();
@@ -4544,7 +4586,9 @@ describe('BoatWorld helpers', () => {
       scaleZ: 1,
     });
     display.update(0);
-    expect(activeActor.root.position.toArray()).toEqual([-0.25, 0.1, 0]);
+    expect(activeActor.root.position).toEqual(
+      storedPosition.clone().add(new Vector3(-0.25, 0.1, 0)),
+    );
 
     activeActor.release();
     display.dispose();
