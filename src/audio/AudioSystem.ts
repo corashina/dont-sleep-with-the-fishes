@@ -1,4 +1,9 @@
-import type { AudioBackend } from './AudioBackend';
+import type {
+  AudioBackend,
+  AudioListenerPose,
+  SpatialAudioEmitter,
+  SpatialAudioOptions,
+} from './AudioBackend';
 import {
   createAudioPreference,
   type AudioControlState,
@@ -14,6 +19,12 @@ class SilentAudioBackend implements AudioBackend {
   load(): Promise<void> { return Promise.resolve(); }
   unlock(): Promise<void> { return Promise.resolve(); }
   play(): null { return null; }
+  playSpatialLoop(
+    _id: Parameters<AudioBackend['playSpatialLoop']>[0],
+    _emitters: readonly SpatialAudioEmitter[],
+    _options: Readonly<SpatialAudioOptions>,
+  ): null { return null; }
+  setListenerPose(_pose: Readonly<AudioListenerPose>): void {}
   setBusGain(): void {}
   setMasterGain(): void {}
   dispose(): void {}

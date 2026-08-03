@@ -1,9 +1,20 @@
 import type { PlayerMotionSample } from '../player/PlayerController';
-import type { AudioVoice } from './AudioBackend';
+import type {
+  AudioListenerPose,
+  AudioVoice,
+  SpatialAudioEmitter,
+  SpatialAudioOptions,
+} from './AudioBackend';
 import type { AudioScope } from './AudioScope';
 
 const STEP_DISTANCE = 1.35;
 const COUNTDOWN_START_SECONDS = 50;
+const SHIP_ALARM_SPATIAL_OPTIONS: Readonly<SpatialAudioOptions> = Object.freeze({
+  gain: 0.5,
+  refDistance: 1.5,
+  maxDistance: 11,
+  rolloffFactor: 1,
+});
 
 export class ScavengeAudio {
   private stepDistance = 0;
@@ -15,7 +26,10 @@ export class ScavengeAudio {
   private runBegun = false;
   private disposed = false;
 
-  constructor(private readonly scope: AudioScope) {}
+  constructor(
+    private readonly scope: AudioScope,
+    private readonly alarmEmitters: readonly SpatialAudioEmitter[],
+  ) {}
 
   start(): void {
     if (this.disposed) return;
@@ -25,7 +39,11 @@ export class ScavengeAudio {
   beginRun(): void {
     if (this.disposed || this.runBegun) return;
     this.runBegun = true;
-    this.scope.startLoop('shipAlarm');
+    this.scope.startSpatialLoop(
+      'shipAlarm',
+      this.alarmEmitters,
+      SHIP_ALARM_SPATIAL_OPTIONS,
+    );
     this.chase = this.scope.play('scavengeChase');
     this.chase?.onEnded(() => {
       this.chase = null;
@@ -36,8 +54,10 @@ export class ScavengeAudio {
     motion: Readonly<PlayerMotionSample> | null,
     movementActive: boolean,
     elapsedSeconds = 0,
+    listenerPose: Readonly<AudioListenerPose> | null = null,
   ): void {
     if (this.disposed) return;
+    if (listenerPose !== null) this.scope.setListenerPose(listenerPose);
     if (!this.countdownStarted && elapsedSeconds >= COUNTDOWN_START_SECONDS) {
       this.countdownStarted = true;
       this.chase?.stop(0.08);

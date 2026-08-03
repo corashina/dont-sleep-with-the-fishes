@@ -659,8 +659,9 @@ describe('world builders', () => {
 
     expect(world.ship.getObjectByName('ship-danger-effects')).toBeDefined();
     expect(world.ship.getObjectByName('ship-danger-alarm:crew-cabin')).toBeDefined();
-    expect(world.ship.getObjectByName('ship-danger-fire:wheelhouse-roof')).toBeDefined();
+    expect(world.ship.getObjectByName('ship-danger-smoke')).toBeDefined();
     expect(world.ship.getObjectByName('ship-danger-leak:crew-starboard')).toBeDefined();
+    expect(world.ship.getObjectByName('ship-danger-fire:wheelhouse-roof')).toBeUndefined();
     expect(world.ship.getObjectByName('decoration:cabin-ceiling-light')).toBeDefined();
     expect(world.colliders).toHaveLength(before);
 
@@ -684,7 +685,7 @@ describe('world builders', () => {
         expect(ship.getObjectByName('freighter-smoke')).toBeDefined();
         expect(ship.getObjectByName('ship-danger-effects')).toBeDefined();
         expect(ship.getObjectByName('ship-danger-alarm:crew-cabin')).toBeDefined();
-        expect(ship.getObjectByName('ship-danger-fire:wheelhouse-roof')).toBeDefined();
+        expect(ship.getObjectByName('ship-danger-smoke')).toBeDefined();
         expect(ship.getObjectByName('ship-danger-leak:crew-starboard')).toBeDefined();
         const resources = collectRenderResources(ship);
         observed = observeDisposals([...resources.geometries, ...resources.materials]);

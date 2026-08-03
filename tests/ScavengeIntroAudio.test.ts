@@ -7,8 +7,10 @@ function audioScopeStub(): AudioScope {
   return {
     play: vi.fn(() => null),
     startLoop: vi.fn(() => null),
+    startSpatialLoop: vi.fn(() => null),
     stopLoop: vi.fn(),
     setLoopGain: vi.fn(),
+    setListenerPose: vi.fn(),
     setPaused: vi.fn(),
     dispose: vi.fn(),
   };
@@ -33,7 +35,7 @@ describe('Scavenge intro audio', () => {
 
   it('plays the crash once per scavenging audio owner', () => {
     const scope = audioScopeStub();
-    const audio = new ScavengeAudio(scope);
+    const audio = new ScavengeAudio(scope, []);
     audio.crash();
     audio.crash();
     expect(scope.play).toHaveBeenCalledTimes(1);

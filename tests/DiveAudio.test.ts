@@ -6,8 +6,10 @@ function createScope(): AudioScope {
   return {
     play: vi.fn(() => null),
     startLoop: vi.fn(() => null),
+    startSpatialLoop: vi.fn(() => null),
     stopLoop: vi.fn(),
     setLoopGain: vi.fn(),
+    setListenerPose: vi.fn(),
     setPaused: vi.fn(),
     dispose: vi.fn(),
   };
