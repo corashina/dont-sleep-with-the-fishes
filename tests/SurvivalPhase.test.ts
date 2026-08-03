@@ -5344,7 +5344,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('routes Other People Endure with a usable signal item', async () => {
+  it('routes Other People lantern Sleep with a usable signal item', async () => {
     const session = new SurvivalSession(
       [{ instanceId: 'flashlight-1', type: 'flashlight' }],
       {
@@ -5356,6 +5356,21 @@ describe('SurvivalPhase orchestration', () => {
     );
     const playEventChoice = vi.fn(() => Promise.resolve());
     const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const setEventSelection = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection,
+      setBusy: vi.fn(),
+      showFeedback: vi.fn(),
+      showEventOutcome: vi.fn(),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
+      clearEventPresentation: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      dispose: vi.fn(),
+    };
     const phase = SurvivalPhase.forTest({
       session,
       world: {
@@ -5367,25 +5382,17 @@ describe('SurvivalPhase orchestration', () => {
         clearEvent: vi.fn(),
         dispose: vi.fn(),
       },
-      ui: {
-        beginEventPresentation: vi.fn(),
-        setSleepCovered: vi.fn(() => Promise.resolve()),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setBusy: vi.fn(),
-        showFeedback: vi.fn(),
-        showEventOutcome: vi.fn(),
-        holdEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEventPresentation: vi.fn(),
-        render: vi.fn(),
-        setJournalUnread: vi.fn(),
-        dispose: vi.fn(),
-      },
+      ui: ui as SurvivalUI,
     });
     phase.start();
     await flushPromises();
 
-    phase.handleEndure();
+    expect(setEventSelection).toHaveBeenLastCalledWith(
+      new Map([['flashlight-1', 'flashlight']]),
+      [{ id: 'sleep', label: 'Let It Pass', unavailableReason: null }],
+    );
+
+    ui.onEventChoice?.('sleep');
     await flushPromises();
     await flushPromises();
 
@@ -5408,6 +5415,73 @@ describe('SurvivalPhase orchestration', () => {
     expect(session.snapshot()).toMatchObject({
       state: 'day',
       pendingEventId: null,
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
+    phase.dispose();
+  });
+
+  it('keeps the Other People Flashlight signal choice usable', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'flashlight-1', type: 'flashlight' }],
+      {
+        seed: 205,
+        random: sequenceRandom([0]),
+        initial: { day: 15, rescueProgress: 15 },
+        initialEventId: 'other-people',
+      },
+    );
+    const playEventChoice = vi.fn(() => Promise.resolve());
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice,
+        reactToEventOutcome,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        setBusy: vi.fn(),
+        showFeedback: vi.fn(),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+
+    phase.handleEventItem('flashlight', 'flashlight-1');
+    await flushPromises();
+    await flushPromises();
+
+    expect(playEventChoice).toHaveBeenCalledWith('other-people', {
+      choiceId: 'flashlight',
+      instanceId: 'flashlight-1',
+      condition: 'usable',
+    });
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'other-people',
+      expect.objectContaining({
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'flashlight',
+          resultId: 'people-rescue',
+        },
+      }),
+      expect.anything(),
+    );
+    expect(session.snapshot()).toMatchObject({
+      state: 'rescued',
       inventory: { 'flashlight-1': { condition: 'usable' } },
     });
     phase.dispose();

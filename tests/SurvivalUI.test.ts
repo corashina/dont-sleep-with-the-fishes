@@ -657,6 +657,40 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('keeps Other People sleep on the lantern beside eligible signals', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const choose = vi.fn();
+    ui.onEventChoice = choose;
+
+    ui.render(snapshot(), () => null);
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(
+      new Map([['flashlight-1', 'flashlight']]),
+      [{ id: 'sleep', label: 'Let It Pass', unavailableReason: null }],
+    );
+
+    expect(
+      mount.querySelector('[data-event-choices] [data-event-choice="sleep"]'),
+    ).toBeNull();
+    expect(mount.querySelector('[data-event-choices]')?.textContent)
+      .not.toContain('Let It Pass');
+    const lantern = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="end-day-lantern"]',
+    )!;
+    expect(lantern.dataset.eventChoice).toBe('sleep');
+    expect(lantern.querySelector('[role="tooltip"]')?.textContent).toBe('SLEEP');
+    expect(lantern.disabled).toBe(false);
+    expect(lantern.getAttribute('aria-disabled')).toBe('false');
+    expect(mount.querySelector<HTMLButtonElement>('[data-endure]')?.hidden).toBe(
+      true,
+    );
+
+    lantern.click();
+    expect(choose).toHaveBeenCalledWith('sleep');
+  });
+
   it('keeps normal Flowers choices while routing sleep through the lantern', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
