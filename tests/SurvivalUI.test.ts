@@ -70,6 +70,31 @@ function createUI(mount: HTMLElement): SurvivalUI {
   return ui;
 }
 
+describe('item animation lab caption', () => {
+  it('shows a persistent instruction beside selectable world items', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map<ItemInstanceId, string>([
+      ['bucket-1', 'bucket'],
+      ['scubaSet-test' as ItemInstanceId, 'scubaSet'],
+    ]));
+
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.classList.contains('is-visible')).toBe(true);
+    expect(caption.textContent).toContain('ITEM ANIMATION LAB');
+    expect(caption.textContent).toContain('SELECT AN ITEM');
+    expect(caption.getAttribute('aria-label')).toContain('Each item returns');
+    expect(
+      mount.querySelector<HTMLElement>('[data-anchor-id="scubaSet-test"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('SCUBA GEAR');
+  });
+});
+
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
     ...new SurvivalSession(saved('map'), {
