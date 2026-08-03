@@ -117,6 +117,7 @@ export class SurvivalSession {
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
   private pendingDriftingLootVariant: DriftingLootVariant | null = null;
+  private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -477,6 +478,17 @@ export class SurvivalSession {
       ));
     }
     for (const mutation of resolved.effects.items ?? []) {
+      if (phase === 'night' && (mutation.kind === 'break' || mutation.kind === 'breakRandom')) {
+        const deferredBreak = this.deferNightBreak(
+          phase,
+          mutation,
+          mutationExclusions,
+          selectedInstanceId,
+          attemptedItemId,
+        );
+        if (deferredBreak !== null) inventoryMutations.push(deferredBreak);
+        continue;
+      }
       const mutationResult = this.applyEventMutation(
         mutation,
         mutationExclusions,
@@ -560,6 +572,7 @@ export class SurvivalSession {
     this.actedToday = false;
     this.clearPendingEvent();
     this.state = 'day';
+    this.applyPendingDawnBreaks();
 
     this.weather = 'calm';
 
@@ -1230,6 +1243,54 @@ export class SurvivalSession {
     if (instanceIds.length === 0) return { mutation: null, fallbackFoodGranted };
     this.synchronizeRemovedResources(kind, instanceIds);
     return { mutation: { kind, instanceIds }, fallbackFoodGranted };
+  }
+
+  private deferNightBreak(
+    phase: SurvivalEventDefinition['phase'],
+    mutation: EventInventoryMutation,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
+    selectedInstanceId: ItemInstanceId | null,
+    attemptedItemId: ItemId | null,
+  ): JournalInventoryMutation | null {
+    if (phase !== 'night' || (mutation.kind !== 'break' && mutation.kind !== 'breakRandom')) {
+      return null;
+    }
+    let instanceIds: ItemInstanceId[];
+    if (mutation.kind === 'breakRandom') {
+      const exclusions = new Set(excludedInstanceIds);
+      for (const instanceId of this.pendingDawnBreaks) exclusions.add(instanceId);
+      instanceIds = this.inventory.selectRandomBreakable(
+        mutation.quantity,
+        this.random,
+        exclusions,
+      );
+    } else {
+      if (mutation.kind !== 'break') return null;
+      const preferredInstanceId = mutation.itemId === attemptedItemId
+        ? selectedInstanceId
+        : null;
+      const snapshot = this.inventory.snapshot();
+      instanceIds = this.mutateMatchingInstances(
+        mutation.itemId,
+        mutation.quantity,
+        excludedInstanceIds,
+        preferredInstanceId,
+        (instanceId) => (
+          snapshot[instanceId]?.condition === 'usable'
+          && !this.pendingDawnBreaks.has(instanceId)
+        ),
+      );
+    }
+    if (instanceIds.length === 0) return null;
+    for (const instanceId of instanceIds) this.pendingDawnBreaks.add(instanceId);
+    return { kind: 'break', instanceIds };
+  }
+
+  private applyPendingDawnBreaks(): void {
+    for (const instanceId of [...this.pendingDawnBreaks].sort()) {
+      this.inventory.break(instanceId);
+    }
+    this.pendingDawnBreaks.clear();
   }
 
   private applyChestGain(fallbackFood: 1): boolean {

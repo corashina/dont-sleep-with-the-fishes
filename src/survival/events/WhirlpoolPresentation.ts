@@ -1,11 +1,13 @@
 import {
   BufferGeometry,
+  CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
   Group,
   Material,
   Mesh,
   MeshStandardMaterial,
+  RingGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
@@ -16,6 +18,7 @@ import {
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
+import { StationaryEventCamera } from '../StationaryEventCamera';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventAnimation,
@@ -44,9 +47,10 @@ interface SpiralStreamActor {
 const STREAM_COUNT = 6;
 const MAX_LOST_ACTORS = 2;
 const WATERLINE = 0.04;
-const VORTEX_X = 4.6;
-const VORTEX_Z = -6.8;
-const VORTEX_RADIUS = 2.35;
+const VORTEX_X = 12.8;
+const VORTEX_Z = -19;
+const VORTEX_RADIUS = 14.1;
+const VORTEX_SURFACE_OFFSET = -0.14;
 const VORTEX_DISTANCE = Math.hypot(VORTEX_X, VORTEX_Z);
 
 const IDENTITY_ITEM_POSE: MutableSupplyPose = {
@@ -68,9 +72,9 @@ function createSpiralStreamGeometry(): BufferGeometry {
   for (let index = 0; index <= segmentCount; index += 1) {
     const t = index / segmentCount;
     const angle = t * Math.PI * 6.4;
-    const radius = 1.9 - t * 1.68;
-    const width = 0.11 - t * 0.045;
-    const y = -0.08 - t * 2.72;
+    const radius = 11.4 - t * 10.08;
+    const width = 0.6 - t * 0.24;
+    const y = -0.16 - t * 5.44;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const offset = index * 6;
@@ -116,6 +120,33 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     flatShading: true,
     side: DoubleSide,
   });
+  private readonly funnelMaterial = new MeshStandardMaterial({
+    color: 0x071317,
+    emissive: 0x020608,
+    emissiveIntensity: 0.18,
+    roughness: 0.9,
+    metalness: 0,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: DoubleSide,
+    flatShading: true,
+  });
+  private readonly ringMaterial = new MeshStandardMaterial({
+    color: 0x659ba1,
+    emissive: 0x102f35,
+    emissiveIntensity: 0.22,
+    roughness: 0.38,
+    metalness: 0,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: DoubleSide,
+    flatShading: true,
+  });
+  private readonly funnel: Mesh;
+  private readonly surfaceRings: Mesh[] = [];
+  private readonly cameraLook: StationaryEventCamera | null;
   private readonly rimWave = waveSample();
   private readonly sample: WhirlpoolSample = createWhirlpoolSample();
   private readonly reactionState: {
@@ -142,16 +173,42 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
+    this.cameraLook = environment.camera === undefined
+      ? null
+      : new StationaryEventCamera(environment.camera);
     this.worldRoot.name = 'whirlpool-world';
     this.boatRoot.name = 'whirlpool-boat';
     this.worldRoot.userData.streamCount = STREAM_COUNT;
     this.worldRoot.userData.vortexCenter = [VORTEX_X, VORTEX_Z];
     this.worldRoot.userData.vortexRadius = VORTEX_RADIUS;
     this.worldRoot.userData.distanceFromBoat = VORTEX_DISTANCE;
+    this.worldRoot.userData.surfaceOffset = VORTEX_SURFACE_OFFSET;
 
     const streamGeometry = createSpiralStreamGeometry();
+    const funnelGeometry = new CylinderGeometry(9.6, 1.35, 5.6, 32, 6, true);
+    const ringGeometry = new RingGeometry(0.88, 1, 32, 1);
     this.ownedGeometries.add(streamGeometry);
+    this.ownedGeometries.add(funnelGeometry);
+    this.ownedGeometries.add(ringGeometry);
     this.ownedMaterials.add(this.streamMaterial);
+    this.ownedMaterials.add(this.funnelMaterial);
+    this.ownedMaterials.add(this.ringMaterial);
+    this.funnel = new Mesh(funnelGeometry, this.funnelMaterial);
+    this.funnel.name = 'whirlpool-dark-funnel';
+    this.funnel.visible = false;
+    this.funnel.renderOrder = 1;
+    this.worldRoot.add(this.funnel);
+    const ringScales = [6.45, 9.75, 13.05] as const;
+    for (let index = 0; index < ringScales.length; index += 1) {
+      const ring = new Mesh(ringGeometry, this.ringMaterial);
+      ring.name = `whirlpool-ring-${index + 1}`;
+      ring.rotation.x = -Math.PI / 2;
+      ring.scale.setScalar(ringScales[index]!);
+      ring.visible = false;
+      ring.renderOrder = 2;
+      this.surfaceRings.push(ring);
+      this.worldRoot.add(ring);
+    }
     for (let index = 0; index < STREAM_COUNT; index += 1) {
       const mesh = new Mesh(streamGeometry, this.streamMaterial);
       mesh.name = `whirlpool-water-stream-${index + 1}`;
@@ -172,6 +229,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.clear();
+    this.cameraLook?.capture();
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
@@ -182,6 +240,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
     this.cancelActive();
+    this.cameraLook?.capture();
     sampleWhirlpoolReveal(0, this.sample);
     this.applySample(0);
     return new Promise((resolve) => {
@@ -266,10 +325,13 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
       if (active.kind === 'reveal') {
         sampleWhirlpoolReveal(progress, this.sample);
+        this.applyRevealCamera(progress);
       } else if (active.kind === 'item') {
+        this.cameraLook?.apply(0, 0);
         sampleWhirlpoolItemUse(active.choiceId, progress, this.sample);
         this.applyItemPose();
       } else {
+        this.cameraLook?.apply(0, 0);
         sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
         this.applyReactionPoses();
       }
@@ -285,10 +347,13 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.active.elapsed = this.active.duration;
     if (this.active.kind === 'reveal') {
       sampleWhirlpoolReveal(1, this.sample);
+      this.applyRevealCamera(1);
     } else if (this.active.kind === 'item') {
+      this.cameraLook?.apply(0, 0);
       sampleWhirlpoolItemUse(this.active.choiceId, 1, this.sample);
       this.applyItemPose();
     } else {
+      this.cameraLook?.apply(0, 0);
       sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
       this.applyReactionPoses();
     }
@@ -302,6 +367,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.releaseItemActor();
     this.releaseLostActors(false);
     this.resetPresentationState();
+    this.cameraLook?.restore();
   }
 
   dispose(): void {
@@ -311,6 +377,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     const itemActor = this.itemActor;
     this.active = null;
     this.itemActor = null;
+    this.cameraLook?.restore();
     resolveCancelledEventAnimation(active);
     runCleanupSteps([
       () => itemActor?.release(),
@@ -370,6 +437,14 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.applyStreams(time);
   }
 
+  private applyRevealCamera(progress: number): void {
+    const value = Math.max(0, Math.min(1, progress));
+    const enter = value * value * (3 - 2 * value);
+    const returnProgress = Math.max(0, Math.min(1, (value - 0.72) / 0.28));
+    const leave = 1 - returnProgress * returnProgress * (3 - 2 * returnProgress);
+    this.cameraLook?.apply(-0.42 * enter * leave, -0.055 * enter * leave);
+  }
+
   private applyVortex(): void {
     const vortex = this.environment.vortexWave;
     if (this.sample.vortexStrength === 0) {
@@ -397,6 +472,26 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
         1,
       );
     }
+    const centerX = VORTEX_X + this.rimWave.displacementX * 0.08;
+    const centerY = WATERLINE + this.rimWave.height + VORTEX_SURFACE_OFFSET;
+    const centerZ = VORTEX_Z + this.rimWave.displacementZ * 0.08;
+    this.funnel.visible = visible;
+    this.funnelMaterial.opacity = Math.min(0.88, this.sample.streamStrength * 0.82);
+    this.funnel.position.set(centerX, centerY - 2.72, centerZ);
+    this.funnel.rotation.y = -this.sample.vortexPhase * 0.11 - time * 0.18;
+    const ringOpacity = Math.min(0.54, this.sample.streamStrength * 0.5);
+    this.ringMaterial.opacity = ringOpacity;
+    for (let index = 0; index < this.surfaceRings.length; index += 1) {
+      const ring = this.surfaceRings[index]!;
+      ring.visible = visible;
+      ring.position.set(centerX, centerY + index * 0.012, centerZ);
+      ring.rotation.set(
+        -Math.PI / 2 + this.rimWave.normal.z * 0.025,
+        0,
+        this.sample.vortexPhase * (0.045 + index * 0.012)
+          + time * (0.12 + index * 0.035),
+      );
+    }
     const revealScale = Math.max(0.04, this.sample.vortexStrength);
     const flow = this.sample.streamFlow * 0.46;
     for (let index = 0; index < this.streams.length; index += 1) {
@@ -404,9 +499,9 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       actor.mesh.visible = visible;
       if (!visible) continue;
       actor.mesh.position.set(
-        VORTEX_X + this.rimWave.displacementX * 0.08,
-        WATERLINE + this.rimWave.height + 0.08,
-        VORTEX_Z + this.rimWave.displacementZ * 0.08,
+        centerX,
+        centerY,
+        centerZ,
       );
       actor.mesh.rotation.set(
         this.rimWave.normal.z * 0.025,
@@ -491,6 +586,12 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
     this.streamMaterial.opacity = 0;
+    this.funnel.visible = false;
+    this.funnelMaterial.opacity = 0;
+    this.ringMaterial.opacity = 0;
+    for (let index = 0; index < this.surfaceRings.length; index += 1) {
+      this.surfaceRings[index]!.visible = false;
+    }
     for (let index = 0; index < this.streams.length; index += 1) {
       this.streams[index]!.mesh.visible = false;
     }

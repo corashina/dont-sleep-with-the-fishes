@@ -1,4 +1,4 @@
-import type { Group } from 'three';
+import type { Group, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
@@ -51,6 +51,7 @@ export interface DedicatedEventEnvironment {
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly cameraEffectsRoot?: Group;
+  readonly camera?: PerspectiveCamera;
   readonly boatEffectsRoot?: Group;
 }
 

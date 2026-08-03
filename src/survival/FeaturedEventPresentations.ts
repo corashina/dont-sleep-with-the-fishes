@@ -29,7 +29,7 @@ export class FeaturedEventPresentations {
 
   constructor(
     models: SurvivalEventModels,
-    cameraRig: Group,
+    camera: PerspectiveCamera,
     deckTarget: Object3D,
   ) {
     this.root.name = 'featured-event-presentations';
@@ -44,12 +44,12 @@ export class FeaturedEventPresentations {
       ),
       'check-the-back': new CheckBackPresentation(
         models.clone('checkBackFish'),
-        cameraRig,
+        camera,
       ),
       'mystery-chest': new MysteryChestPresentation(
         models.clone('mysteryChest'),
         deckTarget,
-        cameraRig,
+        camera,
       ),
       flowers: new FlowersPresentation(models, deckTarget),
     };

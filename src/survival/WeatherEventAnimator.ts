@@ -3,14 +3,14 @@ import {
   BufferGeometry,
   ConeGeometry,
   DoubleSide,
-  Euler,
   Group,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  Quaternion,
+  Shape,
+  ShapeGeometry,
   Texture,
   TorusGeometry,
   Vector3,
@@ -22,6 +22,7 @@ import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 import {
   isCameraOnlyWeatherEvent,
   sampleWeatherItemUse,
@@ -180,12 +181,7 @@ export class WeatherEventAnimator {
 
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseRotation = new Euler();
-  private readonly viewCameraBasePosition = new Vector3();
-  private readonly viewCameraBaseQuaternion = new Quaternion();
-  private readonly viewCameraOffsetEuler = new Euler(0, 0, 0, 'YXZ');
-  private readonly viewCameraOffsetQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera | null;
   private readonly revealSample: WeatherRevealSample = {
     cameraX: 0,
     cameraY: 0,
@@ -242,16 +238,20 @@ export class WeatherEventAnimator {
   private readonly flashlightBeamCone: Mesh;
   private readonly anchorChain: Group;
   private readonly lightningFlash: Group;
+  private readonly windPaper: Mesh;
   private active: ActiveWeatherAnimation | null = null;
   private selectedActorId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
-    private readonly cameraRig: Group,
+    _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels?: EventModelLibrary,
-    private readonly viewCamera?: Object3D,
+    viewCamera?: Object3D,
   ) {
+    this.cameraLook = viewCamera === undefined
+      ? null
+      : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
     this.figureMaterial = new MeshStandardMaterial({
@@ -293,7 +293,27 @@ export class WeatherEventAnimator {
     this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
     this.anchorChain = createAnchorChain(chainMaterial);
     this.lightningFlash = createLightningFlash(this.lightningMaterial);
-    this.worldRoot.add(this.silhouette, this.lightningFlash);
+    const paperShape = new Shape();
+    paperShape.moveTo(-0.34, -0.22);
+    paperShape.lineTo(0.31, -0.2);
+    paperShape.lineTo(0.35, 0.18);
+    paperShape.lineTo(-0.29, 0.23);
+    paperShape.lineTo(-0.36, 0.04);
+    paperShape.closePath();
+    const paperMaterial = new MeshStandardMaterial({
+      color: 0xb7a787,
+      emissive: 0x261f18,
+      emissiveIntensity: 0.08,
+      roughness: 0.94,
+      metalness: 0,
+      side: DoubleSide,
+      flatShading: true,
+    });
+    this.windPaper = new Mesh(new ShapeGeometry(paperShape), paperMaterial);
+    this.windPaper.name = 'weather-windy-paper';
+    this.windPaper.visible = false;
+    this.windPaper.renderOrder = 3;
+    this.worldRoot.add(this.silhouette, this.lightningFlash, this.windPaper);
     this.boatRoot.add(this.flashlightBeam, this.anchorChain);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
@@ -469,24 +489,21 @@ export class WeatherEventAnimator {
   private updateReveal(eventId: string, progress: number): void {
     if (!sampleWeatherReveal(eventId, progress, this.revealSample)) return;
     const sample = this.revealSample;
-    if (eventId === 'shower-night' && this.viewCamera !== undefined) {
-      this.applyStationaryView(sample.cameraYaw, sample.cameraPitch);
-    } else {
-      this.applyCameraPose(
-        sample.cameraX,
-        sample.cameraY,
-        sample.cameraZ,
-        sample.cameraYaw,
-        sample.cameraPitch,
-        sample.cameraRoll,
-      );
-    }
+    this.applyCameraPose(
+      sample.cameraX,
+      sample.cameraY,
+      sample.cameraZ,
+      sample.cameraYaw,
+      sample.cameraPitch,
+      sample.cameraRoll,
+    );
     if (!isCameraOnlyWeatherEvent(eventId)) {
       this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
     }
     if (eventId === 'man-in-the-fog') {
       this.showSilhouette(sample.figureVisibility);
     }
+    if (eventId === 'windy-night') this.applyWindPaper(progress);
     if (eventId === 'thunderstorm' && sample.lightningEmphasis > 0.015) {
       this.lightningFlash.visible = true;
       this.lightningFlash.scale.setScalar(0.9 + sample.lightningEmphasis * 0.22);
@@ -677,22 +694,15 @@ export class WeatherEventAnimator {
     pitch: number,
     roll: number,
   ): void {
-    this.cameraRig.position.x += x;
-    this.cameraRig.position.y += y;
-    this.cameraRig.position.z += z;
-    this.cameraRig.rotateY(yaw);
-    this.cameraRig.rotateX(pitch);
-    this.cameraRig.rotateZ(roll);
+    void roll;
+    this.applyStationaryView(
+      yaw - x * 0.45,
+      pitch + y * 0.65 + z * 0.45,
+    );
   }
 
   private applyStationaryView(yaw: number, pitch: number): void {
-    if (this.viewCamera === undefined) return;
-    this.viewCamera.position.copy(this.viewCameraBasePosition);
-    this.viewCameraOffsetEuler.set(pitch, yaw, 0, 'YXZ');
-    this.viewCameraOffsetQuaternion.setFromEuler(this.viewCameraOffsetEuler);
-    this.viewCamera.quaternion
-      .copy(this.viewCameraBaseQuaternion)
-      .multiply(this.viewCameraOffsetQuaternion);
+    this.cameraLook?.apply(yaw, pitch);
   }
 
   private showSilhouette(visibility: number): void {
@@ -707,22 +717,27 @@ export class WeatherEventAnimator {
     this.silhouette.scale.setScalar(0.86);
   }
 
+  private applyWindPaper(progress: number): void {
+    const value = clamp01(progress);
+    this.windPaper.visible = value > 0.03 && value < 0.94;
+    this.windPaper.position.set(
+      -3.4 + value * 7.1,
+      1.35 + Math.sin(value * Math.PI * 3) * 0.42,
+      -3.2 - Math.sin(value * Math.PI) * 0.7,
+    );
+    this.windPaper.rotation.set(
+      Math.sin(value * Math.PI * 8) * 0.28,
+      value * Math.PI * 3.2,
+      -0.24 + Math.sin(value * Math.PI * 6) * 0.34,
+    );
+  }
+
   private rememberCameraBase(): void {
-    this.cameraBasePosition.copy(this.cameraRig.position);
-    this.cameraBaseRotation.copy(this.cameraRig.rotation);
-    if (this.viewCamera !== undefined) {
-      this.viewCameraBasePosition.copy(this.viewCamera.position);
-      this.viewCameraBaseQuaternion.copy(this.viewCamera.quaternion);
-    }
+    this.cameraLook?.capture();
   }
 
   private restoreCamera(): void {
-    this.cameraRig.position.copy(this.cameraBasePosition);
-    this.cameraRig.rotation.copy(this.cameraBaseRotation);
-    if (this.viewCamera !== undefined) {
-      this.viewCamera.position.copy(this.viewCameraBasePosition);
-      this.viewCamera.quaternion.copy(this.viewCameraBaseQuaternion);
-    }
+    this.cameraLook?.restore();
   }
 
   private hideTransientEffects(): void {
@@ -740,6 +755,9 @@ export class WeatherEventAnimator {
     this.lightningFlash.visible = false;
     this.lightningFlash.scale.set(1, 1, 1);
     this.lightningMaterial.opacity = 0;
+    this.windPaper.visible = false;
+    this.windPaper.position.set(-3.4, 1.35, -3.2);
+    this.windPaper.rotation.set(0, 0, -0.24);
   }
 
   private finishActive(): void {

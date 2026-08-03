@@ -50,6 +50,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 type HandymanAnimationKind =
   | 'reveal'
@@ -81,7 +82,6 @@ const TOUCH_HELD_CAMERA_PITCH = -0.2;
 const TOUCH_HELD_CAMERA_X = -0.16;
 const TOUCH_HELD_CAMERA_Z = -2.05;
 const X_AXIS = new Vector3(1, 0, 0);
-const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
 
 const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
@@ -160,10 +160,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     scaleY: 1,
     scaleZ: 1,
   };
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseQuaternion = new Quaternion();
-  private readonly cameraYawQuaternion = new Quaternion();
-  private readonly cameraPitchQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera;
   private readonly chestStartPosition = new Vector3();
   private readonly chestStartQuaternion = new Quaternion();
   private readonly chestStartScale = new Vector3(1, 1, 1);
@@ -174,7 +171,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private activeChoiceId: string | null = null;
   private usingSupplyPayment = false;
   private usingChestPayment = false;
-  private cameraCaptured = false;
   private touchCameraHeld = false;
   private chestCaptured = false;
   private paymentVisible = false;
@@ -186,6 +182,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
+    this.cameraLook = new StationaryEventCamera(dependencies.camera);
     this.root.name = 'focused-event:handyman';
     this.root.visible = false;
     this.root.userData.motionSource = 'shared-wave-field';
@@ -913,34 +910,20 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private captureCamera(): void {
-    this.cameraBasePosition.copy(this.dependencies.cameraRig.position);
-    this.cameraBaseQuaternion.copy(this.dependencies.cameraRig.quaternion);
-    this.cameraCaptured = true;
+    this.cameraLook.capture();
   }
 
   private restoreCamera(): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.quaternion.copy(this.cameraBaseQuaternion);
-    this.cameraCaptured = false;
+    this.cameraLook.restore();
   }
 
   private applyCameraPose(
     yaw: number,
     pitch: number,
-    x: number,
-    z: number,
+    _x: number,
+    _z: number,
   ): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.position.x += x;
-    this.dependencies.cameraRig.position.z += z;
-    this.cameraYawQuaternion.setFromAxisAngle(Y_AXIS, yaw);
-    this.cameraPitchQuaternion.setFromAxisAngle(X_AXIS, pitch);
-    this.dependencies.cameraRig.quaternion
-      .copy(this.cameraBaseQuaternion)
-      .multiply(this.cameraYawQuaternion)
-      .multiply(this.cameraPitchQuaternion);
+    this.cameraLook.apply(yaw, pitch);
   }
 
   private applyHeldTouchCameraPose(): void {
