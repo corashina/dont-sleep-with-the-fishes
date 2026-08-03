@@ -243,11 +243,12 @@ export function formatDangerousWatersOutcome(
 
 export function formatDriftingLootResult(
   reward: RewardSummary,
+  energyCost = 3,
 ): DriftingLootResultView {
   return {
     caption: 'SALVAGE RECOVERED',
     reward,
-    energyCost: 3,
+    energyCost,
     target: null,
   };
 }
@@ -385,17 +386,18 @@ export class SurvivalPhase implements GamePhase {
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
     if (testDependencies === undefined) {
+      const session = new SurvivalSession(savedItems, {
+        seed,
+        ...(initialEventId === undefined ? {} : { initialEventId }),
+      });
       this.initialize(
         context,
-        new SurvivalSession(savedItems, {
-          seed,
-          ...(initialEventId === undefined ? {} : { initialEventId }),
-        }),
+        session,
         new BoatWorld(
           context.camera,
           context.propModels,
           context.skyAssets.moonTexture,
-          savedItems,
+          session.snapshot().savedItems,
           context.lifeboatAssets,
           context.shipFurniture,
           context.waterQuality?.get() ?? 'low',
@@ -533,6 +535,11 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     this.audio.action(action, selectedOption);
+    if (action === 'petWhiskers' || action === 'feedWhiskers') {
+      this.syncPresentation(this.session.snapshot());
+      void this.runCaptainWhiskersAction(action, outcome);
+      return;
+    }
     void this.runDayAction(outcome);
   }
 
@@ -1011,6 +1018,19 @@ export class SurvivalPhase implements GamePhase {
     this.ui.restoreCommandFocus?.();
   }
 
+  private async runCaptainWhiskersAction(
+    action: 'petWhiskers' | 'feedWhiskers',
+    outcome: ActionOutcome,
+  ): Promise<void> {
+    this.setBusy(true);
+    await (this.world.playCaptainWhiskersAction?.(action) ?? Promise.resolve());
+    if (this.disposed) return;
+    this.renderSnapshot(false, false);
+    this.ui.showFeedback?.(outcome);
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
+  }
+
   private async runDiveAction(outcome: ActionOutcome): Promise<void> {
     const generation = ++this.lifecycleGeneration;
     const scuba = Object.values(this.session.snapshot().inventory).find(
@@ -1322,7 +1342,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventEligibleItems?.(null);
     this.ui.clearEventPresentation?.();
 
-    if (choiceId === 'retrieve') {
+    if (choiceId === 'retrieve' || choiceId === 'delegate-whiskers') {
       if (outcome.rewardSummary === undefined) {
         const feedback: ActionOutcome = {
           accepted: false,
@@ -1336,10 +1356,17 @@ export class SurvivalPhase implements GamePhase {
         return;
       }
       this.eventPresentation = 'retrieving';
-      await (this.world.retrieveDriftingLoot?.() ?? Promise.resolve());
+      await (
+        choiceId === 'delegate-whiskers'
+          ? this.world.delegateDriftingLoot?.() ?? Promise.resolve()
+          : this.world.retrieveDriftingLoot?.() ?? Promise.resolve()
+      );
       if (!this.isContinuationActive(generation)) return;
       this.eventPresentation = 'result';
-      const view = formatDriftingLootResult(outcome.rewardSummary);
+      const view = formatDriftingLootResult(
+        outcome.rewardSummary,
+        choiceId === 'delegate-whiskers' ? 0 : 3,
+      );
       this.ui.showDriftingLootResult?.({
         ...view,
         target: this.world.projectDriftingLoot?.(
@@ -1497,6 +1524,14 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
+    if (
+      eventState === 'nightEvent'
+      && terminal.state === 'nightEvent'
+      && terminal.pendingEventId !== null
+    ) {
+      await this.runPendingEventReveal(terminal, generation, true);
+      return;
+    }
     const snapshot = eventState === 'nightEvent'
       ? await this.runDawn(generation)
       : this.renderSnapshot(false, false);
@@ -1774,7 +1809,13 @@ export class SurvivalPhase implements GamePhase {
   ): EventContextChoice[] {
     return event.choices
       .filter((choice) => choice.itemId === undefined)
-      .map((choice) => {
+      .flatMap((choice): EventContextChoice[] => {
+        const companionAvailability = choice.companionAction === undefined
+          ? undefined
+          : this.session.companionEventActionAvailability?.(choice.companionAction);
+        if (choice.companionAction !== undefined && companionAvailability?.visible !== true) {
+          return [];
+        }
         const anchorId = this.contextualEventAnchorId(event.id, choice.id);
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
@@ -1789,8 +1830,12 @@ export class SurvivalPhase implements GamePhase {
           ...(chestUnavailable
             ? [`Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`]
             : []),
+          ...(companionAvailability?.unavailableReason === null
+            || companionAvailability?.unavailableReason === undefined
+            ? []
+            : [companionAvailability.unavailableReason]),
         ];
-        return {
+        return [{
           id: choice.id,
           label: choice.label,
           unavailableReason: unavailableReasons.length === 0 ? null : unavailableReasons.join(' '),
@@ -1804,7 +1849,7 @@ export class SurvivalPhase implements GamePhase {
                 )?.minimum ?? 0,
               }
             : {}),
-        };
+        }];
       });
   }
 
@@ -1932,6 +1977,7 @@ export class SurvivalPhase implements GamePhase {
       snapshot.day,
       snapshot.seed,
       this.scavengeElapsedSeconds,
+      snapshot.endingReason,
     );
   }
 

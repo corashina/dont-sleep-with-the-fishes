@@ -372,6 +372,10 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.finishActive();
   }
 
+  skip(): void {
+    this.settleForVisibilityChange();
+  }
+
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();

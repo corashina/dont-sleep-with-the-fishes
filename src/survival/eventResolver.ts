@@ -66,6 +66,18 @@ export function resolveWeightedOutcome(
           }
         : {}),
       ...(selected.effects.rescue !== undefined ? { rescue: selected.effects.rescue } : {}),
+      ...(selected.effects.companion !== undefined
+        ? { companion: selected.effects.companion.map((effect) => ({ ...effect })) }
+        : {}),
+      ...(selected.effects.nextDawnEnergy !== undefined
+        ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
+        : {}),
+      ...(selected.effects.followUpNight !== undefined
+        ? { followUpNight: selected.effects.followUpNight }
+        : {}),
+      ...(selected.effects.endingReason !== undefined
+        ? { endingReason: selected.effects.endingReason }
+        : {}),
     },
   };
 }

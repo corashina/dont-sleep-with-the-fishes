@@ -1,13 +1,22 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
+import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 /** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
-  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay';
+  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay'
+  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers';
+export type CompanionEventActionId = 'delegateWhiskers';
+export type CompanionActionId =
+  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers' | CompanionEventActionId;
+export interface CompanionEventActionAvailability {
+  readonly visible: boolean;
+  readonly unavailableReason: string | null;
+}
 export type DayActionOption =
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
@@ -102,6 +111,10 @@ export interface ChestSnapshot {
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
+export type CompanionEventEffect =
+  | { readonly kind: 'sickness'; readonly operation: 'add' | 'set'; readonly value: number }
+  | { readonly kind: 'kill'; readonly cause: 'sea-watcher' };
+export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export interface EventFlagEffects {
   readonly set?: readonly string[];
   readonly clear?: readonly string[];
@@ -124,6 +137,10 @@ export interface EventEffects {
   readonly chest?: ChestEventEffect;
   readonly flags?: EventFlagEffects;
   readonly rescue?: boolean;
+  readonly companion?: readonly CompanionEventEffect[];
+  readonly nextDawnEnergy?: 0;
+  readonly followUpNight?: true;
+  readonly endingReason?: 'kidnapped';
 }
 export interface WeightedEventOutcome {
   readonly resultId?: string;
@@ -139,6 +156,7 @@ export interface EventChoiceDefinition {
   readonly itemId?: ItemId;
   readonly requirements?: readonly EventChoiceRequirement[];
   readonly requiredChestState?: ChestState;
+  readonly companionAction?: CompanionEventActionId;
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 
@@ -183,12 +201,14 @@ export interface SurvivalEventDefinition {
   allowedChestStates?: readonly ChestState[];
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
+  readonly requiresLivingCompanion?: boolean;
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
 }
 
 export interface SurvivalSnapshot {
   state: SurvivalState;
+  readonly endingReason: SurvivalEndingReason;
   day: number;
   pressure: number;
   health: number;
@@ -208,6 +228,7 @@ export interface SurvivalSnapshot {
   readonly journalEntries: readonly JournalEntry[];
   inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
+  readonly captainWhiskers: Readonly<CaptainWhiskersSnapshot> | null;
   pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
   readonly pendingDriftingLootVariant: DriftingLootVariant | null;

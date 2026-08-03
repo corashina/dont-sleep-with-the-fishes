@@ -44,6 +44,28 @@ describe('fishing utility catalog', () => {
     }
   });
 
+  it('boosts fish only after bait weights apply', () => {
+    const weighted = new Map(
+      eligibleFishingCatches(3, false, new Set(), 1.01).map(({ catch: entry, weight }) => [entry.id, weight]),
+    );
+    const baited = new Map(
+      eligibleFishingCatches(3, true, new Set(), 1.01).map(({ catch: entry, weight }) => [entry.id, weight]),
+    );
+
+    expect(weighted.get('cod')).toBeCloseTo(20.2);
+    expect(weighted.get('seaweed')).toBe(82);
+    expect(baited.get('cod')).toBeCloseTo(40.4);
+    expect(baited.get('bait')).toBe(5);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid fish weight multiplier %s',
+    (fishWeightMultiplier) => {
+      expect(() => eligibleFishingCatches(3, false, new Set(), fishWeightMultiplier)).toThrow(RangeError);
+      expect(() => selectFishingCatch(3, false, 0, new Set(), fishWeightMultiplier)).toThrow(RangeError);
+    },
+  );
+
   it('filters active unique utilities but not stackable bait', () => {
     const active = new Set(['ductTape', 'compass', 'fishingNet', 'energyBar'] as const);
     const ids = eligibleFishingCatches(3, false, active).map(({ catch: entry }) => entry.id);

@@ -55,6 +55,33 @@ describe('FishingSession', () => {
     });
   });
 
+  it('passes the fish weight multiplier to hidden catch selection', () => {
+    const session = new FishingSession({
+      id: 'attempt-1',
+      day: 0,
+      capturedBait: false,
+      fishWeightMultiplier: 1.01,
+      random: sequenceRandom([0, 0.36]),
+    });
+
+    castToWaiting(session);
+    session.advance(session.snapshot().biteDelaySeconds);
+    expect(session.reel()).toMatchObject({ result: { kind: 'catch', catch: { id: 'clownfish' } } });
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid fish weight multiplier %s',
+    (fishWeightMultiplier) => {
+      expect(() => new FishingSession({
+        id: 'attempt-1',
+        day: 0,
+        capturedBait: false,
+        fishWeightMultiplier,
+        random: sequenceRandom([0, 0]),
+      })).toThrow(RangeError);
+    },
+  );
+
   it('derives bite delays from the full documented range', () => {
     expect(createSession([0, 0]).snapshot().biteDelaySeconds).toBe(3);
     expect(createSession([0.999999, 0]).snapshot().biteDelaySeconds).toBeCloseTo(6.999996);

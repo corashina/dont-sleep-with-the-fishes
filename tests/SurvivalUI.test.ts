@@ -134,7 +134,212 @@ function openContextualEvent(ui: SurvivalUI): void {
   ]);
 }
 
+const captainWhiskersAnchor = (x = 720, y = 360) => ({
+  id: 'captain-whiskers',
+  itemType: null,
+  toolId: null,
+  action: null,
+  companionId: 'captainWhiskers' as const,
+  label: 'CAPTAIN WHISKERS',
+  description: 'Check his hunger, happiness, and health.',
+  remainingUses: null,
+  x,
+  y,
+  visible: true,
+  depleted: false,
+});
+
 describe('SurvivalUI', () => {
+  it('opens the compact Whiskers card with status and short unavailable labels', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.setAnchors([captainWhiskersAnchor()]);
+    ui.render(snapshot({
+      captainWhiskers: {
+        alive: true,
+        hunger: 4,
+        sickness: 2,
+        unhappiness: 5,
+        pettedToday: true,
+        deathCause: null,
+      },
+    }), (action) => ({
+      petWhiskers: 'Captain Whiskers has already been petted today.',
+      feedWhiskers: 'No food remains.',
+      treatWhiskers: 'No medical kit remains.',
+    } as Partial<Record<string, string>>)[action] ?? null);
+
+    const anchor = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="captain-whiskers"]',
+    )!;
+    anchor.focus();
+    press('[data-anchor-id="captain-whiskers"]', 'Enter');
+
+    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    expect(card.hidden).toBe(false);
+    expect(card.querySelector('[data-whiskers-hunger-label]')?.textContent).toBe('PECKISH');
+    expect(card.querySelectorAll('[data-whiskers-hunger-step][data-filled="true"]')).toHaveLength(4);
+    expect(card.querySelector('[data-whiskers-happiness]')?.textContent).toBe('LONELY');
+    expect(card.querySelector('[data-whiskers-health]')?.textContent).toBe('SICK');
+    expect(card.textContent).not.toContain('CREWMATE STATUS');
+    expect(card.textContent).not.toContain("SHIP'S CAT");
+    expect(card.textContent).not.toContain('DANGER');
+    for (const [actionId, reason, shortReason] of [
+      ['petWhiskers', 'Captain Whiskers has already been petted today.', 'PETTED'],
+      ['feedWhiskers', 'No food remains.', 'NO FOOD'],
+      ['treatWhiskers', 'No medical kit remains.', 'NO KIT'],
+    ] as const) {
+      const button = card.querySelector<HTMLButtonElement>(`[data-action="${actionId}"]`)!;
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.getAttribute('aria-description')).toBe(reason);
+      expect(button.querySelector('[data-whiskers-action-reason]')?.textContent).toBe(shortReason);
+      button.click();
+    }
+    expect(action).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(card.querySelector('[data-action="petWhiskers"]'));
+    expect(mount.querySelector('[data-pause]')?.contains(card)).toBe(false);
+  });
+
+  it('supports Whiskers pointer, keyboard, dismissal, focus, and action flows', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const pause = vi.fn();
+    ui.onAction = action;
+    ui.onPauseChange = pause;
+    ui.setAnchors([captainWhiskersAnchor(1000, 760)]);
+    ui.render(snapshot({
+      captainWhiskers: {
+        alive: true,
+        hunger: 3,
+        sickness: 1,
+        unhappiness: 3,
+        pettedToday: false,
+        deathCause: null,
+      },
+    }), () => null);
+
+    const anchor = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="captain-whiskers"]',
+    )!;
+    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    anchor.click();
+    expect(card.hidden).toBe(false);
+    expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'))).toBeGreaterThanOrEqual(16);
+    expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'))).toBeGreaterThanOrEqual(16);
+    card.querySelector<HTMLButtonElement>('[data-action="petWhiskers"]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-action="feedWhiskers"]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-action="treatWhiskers"]')!.click();
+    expect(action.mock.calls).toEqual([
+      ['petWhiskers', undefined],
+      ['feedWhiskers', undefined],
+      ['treatWhiskers', undefined],
+    ]);
+
+    card.querySelector<HTMLButtonElement>('[data-whiskers-close]')!.click();
+    expect(card.hidden).toBe(true);
+    expect(document.activeElement).toBe(anchor);
+
+    press('[data-anchor-id="captain-whiskers"]', ' ');
+    expect(card.hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(card.hidden).toBe(true);
+    expect(pause).not.toHaveBeenCalled();
+
+    anchor.click();
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(card.hidden).toBe(true);
+
+    anchor.click();
+    ui.beginEventPresentation();
+    expect(card.hidden).toBe(true);
+    ui.clearEventPresentation();
+
+    anchor.click();
+    ui.setPaused(true);
+    expect(card.hidden).toBe(true);
+    ui.setPaused(false);
+
+    anchor.click();
+    ui.setAnchors([]);
+    expect(card.hidden).toBe(true);
+    expect(document.activeElement).not.toBe(anchor);
+  });
+
+  it('clamps the Whiskers card inside the right and bottom viewport gutters', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    const viewport = {
+      x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600,
+      width: 800, height: 600, toJSON: () => ({}),
+    };
+    const measuredCard = {
+      x: 0, y: 0, top: 0, left: 0, right: 280, bottom: 260,
+      width: 280, height: 260, toJSON: () => ({}),
+    };
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(viewport);
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(measuredCard);
+    ui.setAnchors([captainWhiskersAnchor(850, 590)]);
+    ui.render(snapshot({
+      captainWhiskers: {
+        alive: true,
+        hunger: 4,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
+    }), () => null);
+
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="captain-whiskers"]')!.click();
+
+    const x = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'));
+    const y = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'));
+    expect(x).toBe(viewport.width - 16 - measuredCard.width);
+    expect(y).toBe(viewport.height - 16 - measuredCard.height);
+    expect(x + measuredCard.width).toBeLessThanOrEqual(viewport.width - 16);
+    expect(y + measuredCard.height).toBeLessThanOrEqual(viewport.height - 16);
+  });
+
+  it('closes the Whiskers card when Captain Whiskers dies', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([captainWhiskersAnchor()]);
+    const living = {
+      alive: true,
+      hunger: 4,
+      sickness: 2,
+      unhappiness: 5,
+      pettedToday: false,
+      deathCause: null,
+    } as const;
+    ui.render(snapshot({ captainWhiskers: living }), () => null);
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="captain-whiskers"]')!.click();
+    ui.render(snapshot({
+      captainWhiskers: { ...living, alive: false, deathCause: 'sickness' },
+    }), () => null);
+    expect(mount.querySelector<HTMLElement>('[data-whiskers-card]')!.hidden).toBe(true);
+  });
+
+  it('shows the exact kidnapped ending copy', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.showEnding('dead', 8, 1234, 37, 'kidnapped');
+
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('Taken in the dark.');
+    expect(mount.querySelector('[data-ending-body]')?.textContent)
+      .toBe('The false shape carries you beyond the lantern light.');
+  });
+
   it('keeps visual quality controls out of the pause overlay', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
@@ -502,6 +707,26 @@ describe('SurvivalUI', () => {
     choice.click();
     press('[data-event-choice="retrieve"]', ' ');
     expect(onEventChoice).not.toHaveBeenCalled();
+  });
+
+  it('exposes the exact Whiskers delegation reason through aria-disabled', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const reason = 'Captain Whiskers is Sick and cannot retrieve the loot.';
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'delegate-whiskers',
+      label: 'Send Whiskers',
+      unavailableReason: reason,
+    }]);
+
+    const choice = mount.querySelector<HTMLButtonElement>(
+      '[data-event-choice="delegate-whiskers"]',
+    )!;
+    expect(choice.getAttribute('aria-disabled')).toBe('true');
+    expect(choice.getAttribute('aria-description')).toBe(reason);
+    expect(choice.textContent).toContain(reason);
   });
 
   it('clears contextual choice state before disposal removes the UI', () => {
