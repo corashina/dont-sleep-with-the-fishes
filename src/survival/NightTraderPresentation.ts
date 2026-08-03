@@ -58,6 +58,12 @@ const RESULT_DURATION = 1.05;
 const ROW_AWAY_DURATION = 1.3;
 const BOAT_BASE = new Vector3(4.15, 0.08, -7.1);
 const BOAT_AWAY = new Vector3(10.8, -0.2, -17.2);
+const TRADER_POSITION = new Vector3(0.35, 0.38, -0.1);
+const TRADER_YAW = Math.atan2(
+  -(BOAT_BASE.x + TRADER_POSITION.x),
+  -(BOAT_BASE.z + TRADER_POSITION.z),
+);
+const LANTERN_DECK_Y = 0.44;
 const CASE_TARGET = new Vector3(3.62, 1.02, -6.38);
 const PAYMENT_START = new Vector3(-0.35, 0.72, -1.05);
 const REWARD_END = new Vector3(-0.35, 0.72, -1.05);
@@ -105,6 +111,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly vessel = new Group();
   private readonly vesselContent = new Group();
   private readonly rowboat = new Group();
+  private readonly trader = new Group();
   private readonly lantern = new Group();
   private readonly lanternReflection = new Group();
   private readonly leftOar = new Group();
@@ -168,6 +175,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.buildRowboat();
     this.buildOars();
 
+    this.trader.name = 'night-trader-trader';
+    this.trader.userData.motionSource = 'vessel-carried-static';
+    this.trader.userData.animationMode = 'none';
+    this.buildTrader();
+    this.vesselContent.add(this.trader);
+
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
     this.vesselContent.add(this.lantern);
@@ -221,6 +234,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.root.visible = true;
     this.vessel.visible = true;
     this.rowboat.visible = true;
+    this.trader.visible = true;
     this.lantern.visible = false;
     this.boatMotionBase.copy(BOAT_BASE);
     this.vessel.position.copy(BOAT_BASE);
@@ -724,6 +738,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.vessel.quaternion.identity();
     this.boatMotionBase.copy(BOAT_BASE);
     this.vesselContent.visible = true;
+    this.trader.visible = false;
     this.lantern.visible = false;
     this.lanternReflection.visible = false;
     this.lanternLight.intensity = 0;
@@ -805,6 +820,27 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     build(this.rightOar, 'night-trader-oar-right', -0.72);
   }
 
+  private buildTrader(): void {
+    let selected: Group | null = null;
+    try {
+      selected = this.dependencies.propModels.createEventModel(
+        'traderOctopus',
+      )?.root ?? null;
+    } catch {
+      selected = null;
+    }
+    if (selected !== null && hasRenderableBounds(selected)) {
+      selected.name = 'event-model:traderOctopus';
+      this.trader.add(selected);
+      this.trader.userData.modelKind = 'imported';
+    } else {
+      if (selected !== null) disposeRejectedModel(selected);
+      this.trader.userData.modelKind = 'missing';
+    }
+    this.trader.position.copy(TRADER_POSITION);
+    this.trader.rotation.y = TRADER_YAW;
+  }
+
   private buildLantern(): PointLight {
     let selected: Group | null = null;
     try {
@@ -837,7 +873,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.lantern.add(body, cap);
       this.lantern.userData.modelKind = 'procedural';
     }
-    this.lantern.position.set(-1.3, 0.72, 0.5);
+    this.lantern.position.set(-1.3, LANTERN_DECK_Y, 0.5);
     const light = new PointLight(0xffae58, 0, 14, 1.6);
     light.name = 'night-trader-lantern-light';
     light.position.y = 0.08;

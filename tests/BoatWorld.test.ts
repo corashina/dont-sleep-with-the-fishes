@@ -894,7 +894,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('stages Night Trader as an empty rowboat', () => {
+  it('mounts the static Night Trader and lantern on the rowboat', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -905,7 +905,20 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('night-trader');
 
     expect(world.scene.getObjectByName('night-trader-rowboat')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('night-trader-trader')).toBeUndefined();
+    const trader = world.scene.getObjectByName('night-trader-trader')!;
+    expect(trader.visible).toBe(true);
+    expect(trader.userData.animationMode).toBe('none');
+    expect(trader.getObjectByName('event-model:traderOctopus')).toBeDefined();
+    world.scene.updateMatrixWorld(true);
+    const traderDirection = trader.getWorldDirection(new Vector3());
+    const directionToPlayer = trader.getWorldPosition(new Vector3())
+      .multiplyScalar(-1)
+      .setY(0)
+      .normalize();
+    traderDirection.setY(0).normalize();
+    expect(traderDirection.dot(directionToPlayer)).toBeGreaterThan(0.99);
+    expect(world.scene.getObjectByName('night-trader-lantern')?.position.y)
+      .toBeCloseTo(0.44);
     expect(world.scene.getObjectByName('night-trader-case')).toBeUndefined();
 
     world.dispose();

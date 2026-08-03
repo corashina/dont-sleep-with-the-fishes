@@ -12,6 +12,7 @@ export const EVENT_MODEL_IDS = [
   'midnightIsland',
   'deadTree',
   'traderRowboat',
+  'traderOctopus',
   'riggedHand',
   'containerShip',
 ] as const;
@@ -65,6 +66,15 @@ const presentations = {
     targetLongestDimension: 4.2,
     maxTriangles: 2_500,
     translation: [0, 0, 0],
+    rotation: [0, 0, 0],
+  },
+  traderOctopus: {
+    sourceUrl: 'https://poly.pizza/m/9F8QJKUT77V',
+    sourceModelId: 'poly-pizza:81286501-750b-4d4b-9c41-2e3bbadcc9ae',
+    license: 'CC-BY 3.0',
+    targetLongestDimension: 1.5,
+    maxTriangles: 3_500,
+    translation: [0, 0.72, 0],
     rotation: [0, 0, 0],
   },
   riggedHand: {
