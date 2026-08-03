@@ -365,6 +365,11 @@ export class BoatSupplyDisplay {
     return this.recordsById.get(id);
   }
 
+  itemType(instanceId: ItemInstanceId): ItemId | null {
+    const groupId = this.groupByInstanceId.get(instanceId);
+    return groupId === undefined || groupId === 'repairMaterial' ? null : groupId;
+  }
+
   setPresentationItemHidden(instanceId: ItemInstanceId, hidden: boolean): void {
     if (this.disposed) return;
     if (hidden) this.presentationHiddenItemIds.add(instanceId);
