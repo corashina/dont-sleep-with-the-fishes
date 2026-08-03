@@ -13,6 +13,7 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
+import { DEFAULT_WAVES } from '../ocean/WaveField';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventModelLibrary } from './EventModelLibrary';
@@ -64,21 +65,18 @@ type ActiveSupernaturalAnimation =
 
 const REACTION_DURATION = 0.84;
 const SIREN_ROCK_X = -4.3;
-const SIREN_ROCK_Y = -0.26;
 const SIREN_ROCK_Z = -9.2;
+const MAX_PRESENTATION_WAVE_SCALE = 1.7;
+const SIREN_MINIMUM_WAVE_CLEARANCE = 0.18;
+const SIREN_ROCK_Y = DEFAULT_WAVES.reduce(
+  (height, wave) => height + wave.amplitude * MAX_PRESENTATION_WAVE_SCALE,
+  SIREN_MINIMUM_WAVE_CLEARANCE,
+);
 const FOG_OPACITY_WEIGHTS = [0.72, 1, 0.58] as const;
 const FLARE_RADII = [
   1, 0.68, 0.94, 0.62, 1.08, 0.7,
   0.88, 0.6, 1.02, 0.66, 0.9, 0.64,
 ] as const;
-const GHOST_ATTACK_TARGETS = [
-  [-1.8, 1.18, -2.4],
-  [-0.9, 1.42, -1.9],
-  [0, 1.08, -1.55],
-  [0.92, 1.36, -2.05],
-  [1.72, 1.12, -2.55],
-] as const;
-
 function replaceMaterials(root: Group, material: Material): void {
   const replacedMaterials = new Set<Material>();
   const replacedTextures = new Set<Texture>();
@@ -203,6 +201,7 @@ export class SupernaturalEventAnimator {
     cameraPitch: 0,
     cameraRoll: 0,
     ghostVisibility: 0,
+    ghostVisibilities: [0, 0, 0, 0, 0],
     ghostDistances: [0, 0, 0, 0, 0],
     ghostSideOffsets: [0, 0, 0, 0, 0],
     flareFlash: 0,
@@ -261,14 +260,14 @@ export class SupernaturalEventAnimator {
     depthWrite: false,
   });
   private readonly sirenMaterial = new MeshStandardMaterial({
-    color: 0xb9b1bd,
-    emissive: 0x586879,
-    emissiveIntensity: 0.52,
+    color: 0xd2c8d0,
+    emissive: 0x718696,
+    emissiveIntensity: 0.58,
     roughness: 0.9,
     flatShading: true,
   });
   private readonly rockMaterial = new MeshStandardMaterial({
-    color: 0x4d5b61,
+    color: 0x303b40,
     roughness: 1,
     flatShading: true,
   });
@@ -332,8 +331,7 @@ export class SupernaturalEventAnimator {
       ghost.name = `ghost-${index + 1}`;
       replaceMaterials(ghost, this.ghostMaterial);
       const path = GHOST_FLIGHT_PATHS[index]!;
-      ghost.position.set(path.start[0], path.start[1], path.start[2]);
-      ghost.rotation.y = path.end[0] > path.start[0] ? -0.18 : 0.18;
+      this.poseGhost(ghost, index, path.start[0], path.start[1], path.start[2]);
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
       ghost.visible = false;
       return ghost;
@@ -355,6 +353,9 @@ export class SupernaturalEventAnimator {
 
     this.sirenTableau.name = 'siren-tableau';
     this.sirenTableau.position.set(SIREN_ROCK_X, SIREN_ROCK_Y, SIREN_ROCK_Z);
+    this.sirenTableau.userData.minimumWaveClearance = SIREN_MINIMUM_WAVE_CLEARANCE;
+    this.sirenTableau.userData.fogLayerCount = 3;
+    this.sirenTableau.userData.subjectValueSeparation = 1;
     this.sirenTableau.add(this.sirenRock, this.siren);
     this.sirenTableau.visible = false;
     this.fogCurtain = createFogCurtain(this.fogMaterials);
@@ -530,8 +531,10 @@ export class SupernaturalEventAnimator {
       this.ghostMaterial.opacity = Math.min(0.64, sample.ghostVisibility * 0.56);
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
-        ghost.visible = sample.ghostVisibility > 0.015;
-        ghost.position.set(
+        ghost.visible = sample.ghostVisibilities[index]! > 0.015;
+        this.poseGhost(
+          ghost,
+          index,
           sample.ghostSideOffsets[index]!,
           GHOST_FLIGHT_PATHS[index]!.start[1]
             + (GHOST_FLIGHT_PATHS[index]!.end[1]
@@ -539,7 +542,6 @@ export class SupernaturalEventAnimator {
           -sample.ghostDistances[index]!,
         );
       }
-      this.showFlare(sample.flareFlash);
       return;
     }
 
@@ -625,12 +627,7 @@ export class SupernaturalEventAnimator {
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
         const pathEnd = GHOST_FLIGHT_PATHS[index]!.end;
-        const target = GHOST_ATTACK_TARGETS[index]!;
-        ghost.position.set(
-          pathEnd[0] + (target[0] - pathEnd[0]) * sample.ghostAdvance,
-          pathEnd[1] + (target[1] - pathEnd[1]) * sample.ghostAdvance,
-          pathEnd[2] + (target[2] - pathEnd[2]) * sample.ghostAdvance,
-        );
+        this.poseGhost(ghost, index, pathEnd[0], pathEnd[1], pathEnd[2]);
         ghost.visible = sample.ghostVisibility > 0.015;
       }
       this.showFlare(sample.flareFlash);
@@ -657,6 +654,22 @@ export class SupernaturalEventAnimator {
     this.siren.rotation.y += amount * 0.36;
   }
 
+  private poseGhost(
+    ghost: Group,
+    index: number,
+    x: number,
+    y: number,
+    z: number,
+  ): void {
+    const path = GHOST_FLIGHT_PATHS[index]!;
+    ghost.position.set(x, y, z);
+    ghost.rotation.y = Math.atan2(
+      path.end[0] - path.start[0],
+      path.end[2] - path.start[2],
+    );
+    ghost.userData.facingPath = true;
+  }
+
   private showFlare(amount: number): void {
     this.flareFlash.visible = amount > 0.015;
     this.flareMaterial.opacity = Math.min(0.72, amount * 0.7);
@@ -681,8 +694,8 @@ export class SupernaturalEventAnimator {
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const target = GHOST_FLIGHT_PATHS[index]!.start;
         const ghost = this.ghosts[index]!;
-        ghost.position.set(target[0], target[1], target[2]);
-        ghost.visible = true;
+        this.poseGhost(ghost, index, target[0], target[1], target[2]);
+        ghost.visible = false;
       }
     } else if (this.stagedEventId === 'eerie-melody') {
       this.sirenTableau.visible = true;
@@ -775,9 +788,9 @@ export class SupernaturalEventAnimator {
     if (eventId === 'ghosts' && response?.choiceId !== 'flareGun') {
       this.ghostMaterial.opacity = 0.32;
       for (let index = 0; index < this.ghosts.length; index += 1) {
-        const target = GHOST_ATTACK_TARGETS[index]!;
+        const target = GHOST_FLIGHT_PATHS[index]!.end;
         const ghost = this.ghosts[index]!;
-        ghost.position.set(target[0], target[1], target[2]);
+        this.poseGhost(ghost, index, target[0], target[1], target[2]);
         ghost.visible = true;
       }
     }
