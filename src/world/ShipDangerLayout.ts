@@ -17,11 +17,6 @@ export interface DangerAnchor {
   readonly rotation: Vec3Tuple;
 }
 
-export interface FireAnchor extends DangerAnchor {
-  readonly scale: number;
-  readonly unreachable: true;
-}
-
 export type SmokeClosure = 'roof' | 'storageSide' | 'machinery' | 'hull';
 
 export interface SmokeAnchor extends DangerAnchor {
@@ -41,38 +36,44 @@ export interface FootprintAnchor extends DangerAnchor {
 
 export interface ShipDangerLayout {
   readonly alarms: readonly DangerAnchor[];
-  readonly fires: readonly FireAnchor[];
   readonly smokeOutlets: readonly SmokeAnchor[];
-  readonly sparks: readonly DangerAnchor[];
   readonly leaks: readonly LeakAnchor[];
   readonly puddles: readonly FootprintAnchor[];
   readonly streams: readonly FootprintAnchor[];
-  readonly brokenPlanks: readonly FootprintAnchor[];
-  readonly wetStreaks: readonly FootprintAnchor[];
 }
 
 const FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const ROOM_CEILING_Y = FLOOR_Y + SHIP_ROOM_WALL_HEIGHT;
 
+function centeredCeilingAlarm(
+  id: string,
+  zoneId: DangerRoomId,
+): DangerAnchor {
+  const zone = SHIP_LAYOUT.zones.find(({ id: current }) => current === zoneId);
+  if (zone === undefined) throw new Error(`Missing alarm room ${zoneId}`);
+  return {
+    id,
+    zoneId,
+    position: [
+      (zone.bounds.minX + zone.bounds.maxX) / 2,
+      ROOM_CEILING_Y - 0.08,
+      (zone.bounds.minZ + zone.bounds.maxZ) / 2,
+    ],
+    rotation: [Math.PI / 2, 0, 0],
+  };
+}
+
 export const SHIP_DANGER_LAYOUT: ShipDangerLayout = Object.freeze({
   alarms: Object.freeze<DangerAnchor[]>([
-    { id: 'crew-cabin', zoneId: 'crewCabin', position: [-5.54, 4.58, 10.3], rotation: [0, 0, -Math.PI / 2] },
-    { id: 'wheelhouse', zoneId: 'wheelhouse', position: [3.7, 5.25, 17.18], rotation: [Math.PI / 2, 0, 0] },
-    { id: 'storage-workroom', zoneId: 'storageWorkroom', position: [5.54, 4.58, -12.2], rotation: [0, 0, Math.PI / 2] },
-  ]),
-  fires: Object.freeze<FireAnchor[]>([
-    { id: 'wheelhouse-roof', zoneId: 'wheelhouse', position: [2.4, 5.78, 20.5], rotation: [0, 0, 0], scale: 1.05, unreachable: true },
-    { id: 'machinery-starboard', zoneId: 'cargoDeck', position: [2.85, 4.22, -20.9], rotation: [0, 0, 0], scale: 1.2, unreachable: true },
-    { id: 'starboard-hull', zoneId: 'outerHull', position: [8.18, 2.8, -5.8], rotation: [0, 0, -Math.PI / 2], scale: 0.9, unreachable: true },
+    centeredCeilingAlarm('crew-cabin', 'crewCabin'),
+    centeredCeilingAlarm('wheelhouse', 'wheelhouse'),
+    centeredCeilingAlarm('storage-workroom', 'storageWorkroom'),
   ]),
   smokeOutlets: Object.freeze<SmokeAnchor[]>([
     { id: 'wheelhouse-roof', zoneId: 'wheelhouse', position: [2.4, 6.1, 20.5], rotation: [0, 0, 0], closure: 'roof', unreachable: true },
     { id: 'storage-starboard-side', zoneId: 'storageWorkroom', position: [5.88, 5.18, -12.1], rotation: [0, 0, 0], closure: 'storageSide', unreachable: true },
     { id: 'machinery-starboard', zoneId: 'cargoDeck', position: [2.85, 4.65, -20.9], rotation: [0, 0, 0], closure: 'machinery', unreachable: true },
     { id: 'starboard-hull', zoneId: 'outerHull', position: [8.28, 3.15, -5.8], rotation: [0, 0, 0], closure: 'hull', unreachable: true },
-  ]),
-  sparks: Object.freeze<DangerAnchor[]>([
-    { id: 'wheelhouse-controls', zoneId: 'wheelhouse', position: [-1.5, 3.08, 19.3], rotation: [0, 0, 0] },
   ]),
   leaks: Object.freeze<LeakAnchor[]>([
     { id: 'crew-starboard', zoneId: 'crewCabin', position: [5.63, 3.5, 11.3], rotation: [0, 0, Math.PI / 2], length: 2.1, width: 0.07, unreachable: false },
@@ -93,16 +94,6 @@ export const SHIP_DANGER_LAYOUT: ShipDangerLayout = Object.freeze({
     { id: 'crew-runoff', zoneId: 'crewCabin', position: [4.55, 2.231, 10.6], rotation: [-Math.PI / 2, 0, 0.18], size: [2.1, 0.18] },
     { id: 'storage-port-runoff', zoneId: 'storageWorkroom', position: [-4.65, 2.231, -15.5], rotation: [-Math.PI / 2, 0, -0.35], size: [1.8, 0.2] },
     { id: 'storage-starboard-runoff', zoneId: 'storageWorkroom', position: [4.55, 2.231, -12.15], rotation: [-Math.PI / 2, 0, 0.28], size: [1.9, 0.2] },
-  ]),
-  brokenPlanks: Object.freeze<FootprintAnchor[]>([
-    { id: 'crew-floor', zoneId: 'crewCabin', position: [-0.2, 2.245, 6.2], rotation: [0, 0.08, 0.01], size: [1.8, 0.7] },
-    { id: 'storage-floor', zoneId: 'storageWorkroom', position: [0.2, 2.245, -16.8], rotation: [0, -0.1, -0.015], size: [1.7, 0.75] },
-    { id: 'cargo-deck', zoneId: 'cargoDeck', position: [-5.1, 2.245, 3.9], rotation: [0, 0.12, 0.01], size: [2, 0.8] },
-  ]),
-  wetStreaks: Object.freeze<FootprintAnchor[]>([
-    { id: 'hull-port-aft', zoneId: 'outerHull', position: [-8.18, 1.2, -14], rotation: [0, Math.PI / 2, 0], size: [1.7, 0.42] },
-    { id: 'hull-starboard-mid', zoneId: 'outerHull', position: [8.18, 1.3, 5.6], rotation: [0, -Math.PI / 2, 0], size: [1.5, 0.38] },
-    { id: 'hull-port-forward', zoneId: 'outerHull', position: [-8.08, 1.05, 18.2], rotation: [0, Math.PI / 2, 0], size: [1.9, 0.45] },
   ]),
 });
 
@@ -150,8 +141,16 @@ export function validateShipDangerLayout(
   if (alarmRooms.join('|') !== enclosed.join('|')) {
     throw new Error('Ship danger layout requires one alarm in every enclosed room');
   }
-  danger.fires.forEach((fire) => {
-    if (!fire.unreachable) throw new Error(`${fire.id} fire must remain unreachable`);
+  danger.alarms.forEach((alarm) => {
+    const room = ship.zones.find(({ id }) => id === alarm.zoneId);
+    if (room === undefined) return;
+    const centerX = (room.bounds.minX + room.bounds.maxX) / 2;
+    const centerZ = (room.bounds.minZ + room.bounds.maxZ) / 2;
+    if (Math.abs(alarm.position[0] - centerX) > 1e-6
+      || Math.abs(alarm.position[1] - (ROOM_CEILING_Y - 0.08)) > 1e-6
+      || Math.abs(alarm.position[2] - centerZ) > 1e-6) {
+      throw new Error(`${alarm.id} alarm must stay centered on its room ceiling`);
+    }
   });
   danger.smokeOutlets.forEach((smoke) => {
     if (!smoke.unreachable) throw new Error(`${smoke.id} heavy smoke must remain unreachable`);
@@ -185,8 +184,8 @@ export function validateShipDangerLayout(
   });
 
   const groups: ReadonlyArray<readonly DangerAnchor[]> = [
-    danger.alarms, danger.fires, danger.smokeOutlets, danger.sparks, danger.leaks,
-    danger.puddles, danger.streams, danger.brokenPlanks, danger.wetStreaks,
+    danger.alarms, danger.smokeOutlets, danger.leaks,
+    danger.puddles, danger.streams,
   ];
   for (const group of groups) {
     const ids = new Set<string>();
@@ -211,7 +210,6 @@ export function validateShipDangerLayout(
     }
   }
 
-  danger.fires.forEach(({ id, scale }) => assertPositive(id, scale));
   danger.leaks.forEach(({ id, length, width, zoneId, unreachable }) => {
     assertPositive(id, length);
     assertPositive(id, width);
@@ -219,7 +217,7 @@ export function validateShipDangerLayout(
       throw new Error(`${id} outer-hull leak must remain unreachable`);
     }
   });
-  [danger.puddles, danger.streams, danger.brokenPlanks, danger.wetStreaks]
+  [danger.puddles, danger.streams]
     .flat()
     .forEach(({ id, size }) => {
       assertPositive(id, size[0]);

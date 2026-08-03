@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { SHIP_LAYOUT } from '../src/world/ShipLayout';
+import {
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  SHIP_ROOM_WALL_HEIGHT,
+} from '../src/world/ShipLayout';
 import {
   SHIP_DANGER_LAYOUT,
   validateShipDangerLayout,
@@ -8,14 +12,10 @@ import {
 describe('ship danger layout', () => {
   it('defines the approved fixed hazard counts', () => {
     expect(SHIP_DANGER_LAYOUT.alarms).toHaveLength(3);
-    expect(SHIP_DANGER_LAYOUT.fires).toHaveLength(3);
     expect(SHIP_DANGER_LAYOUT.smokeOutlets).toHaveLength(4);
-    expect(SHIP_DANGER_LAYOUT.sparks).toHaveLength(1);
     expect(SHIP_DANGER_LAYOUT.leaks).toHaveLength(6);
     expect(SHIP_DANGER_LAYOUT.puddles).toHaveLength(5);
     expect(SHIP_DANGER_LAYOUT.streams).toHaveLength(3);
-    expect(SHIP_DANGER_LAYOUT.brokenPlanks).toHaveLength(3);
-    expect(SHIP_DANGER_LAYOUT.wetStreaks).toHaveLength(3);
   });
 
   it('uses one alarm in every enclosed room', () => {
@@ -23,8 +23,15 @@ describe('ship danger layout', () => {
       .toEqual(['crewCabin', 'storageWorkroom', 'wheelhouse']);
   });
 
-  it('keeps roof, machinery, and hull fires outside reachable floor space', () => {
-    SHIP_DANGER_LAYOUT.fires.forEach(({ unreachable }) => expect(unreachable).toBe(true));
+  it('centers every alarm on its room ceiling', () => {
+    const ceilingY = FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT - 0.08;
+    SHIP_DANGER_LAYOUT.alarms.forEach((alarm) => {
+      const room = SHIP_LAYOUT.zones.find(({ id }) => id === alarm.zoneId)!;
+      expect(alarm.position[0]).toBeCloseTo((room.bounds.minX + room.bounds.maxX) / 2);
+      expect(alarm.position[1]).toBeCloseTo(ceilingY);
+      expect(alarm.position[2]).toBeCloseTo((room.bounds.minZ + room.bounds.maxZ) / 2);
+      expect(alarm.rotation).toEqual([Math.PI / 2, 0, 0]);
+    });
   });
 
   it('keeps every heavy-smoke outlet outside reachable floor space', () => {

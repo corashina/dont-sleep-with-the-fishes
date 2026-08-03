@@ -1,6 +1,9 @@
 import type {
   AudioBackend,
+  AudioListenerPose,
   AudioVoice,
+  SpatialAudioEmitter,
+  SpatialAudioOptions,
 } from './AudioBackend';
 import {
   AUDIO_MANIFEST,
@@ -40,6 +43,7 @@ class WebAudioVoice implements AudioVoice {
     private readonly source: AudioBufferSourceNode,
     private readonly gainNode: GainNode,
     private readonly baseGain: number,
+    private readonly outputNodes: readonly AudioNode[],
   ) {
     source.onended = () => this.finish();
   }
@@ -81,7 +85,7 @@ class WebAudioVoice implements AudioVoice {
     this.ended = true;
     this.source.onended = null;
     this.source.disconnect();
-    this.gainNode.disconnect();
+    for (const node of this.outputNodes) node.disconnect();
     const callbacks = [...this.callbacks];
     this.callbacks.clear();
     for (const callback of callbacks) callback();
@@ -152,6 +156,7 @@ export class WebAudioBackend implements AudioBackend {
       source,
       gainNode,
       definition.gain,
+      [gainNode],
     );
     active.push(voice);
     this.voices.set(id, active);
@@ -162,6 +167,78 @@ export class WebAudioBackend implements AudioBackend {
     });
     source.start();
     return voice;
+  }
+
+  playSpatialLoop(
+    id: SoundId,
+    emitters: readonly SpatialAudioEmitter[],
+    options: Readonly<SpatialAudioOptions>,
+  ): AudioVoice | null {
+    if (this.disposed || !this.loaded || emitters.length === 0) return null;
+    const definition = AUDIO_MANIFEST[id];
+    const buffer = this.buffers.get(id);
+    if (buffer === undefined) return null;
+    const active = this.voices.get(id) ?? [];
+    while (active.length >= definition.maxVoices) active.shift()?.stop();
+
+    const source = this.context.createBufferSource();
+    const gainNode = this.context.createGain();
+    const spatialGain = clampGain(options.gain);
+    const baseGain = definition.gain * spatialGain;
+    const refDistance = Math.max(0.01, finiteOr(options.refDistance, 1));
+    const maxDistance = Math.max(refDistance, finiteOr(options.maxDistance, refDistance));
+    const rolloffFactor = Math.max(0, finiteOr(options.rolloffFactor, 1));
+    const panners: PannerNode[] = [];
+    source.buffer = buffer;
+    source.loop = true;
+    gainNode.gain.value = baseGain;
+    source.connect(gainNode);
+    for (const emitter of emitters) {
+      const panner = this.context.createPanner();
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'linear';
+      panner.refDistance = refDistance;
+      panner.maxDistance = maxDistance;
+      panner.rolloffFactor = rolloffFactor;
+      setPosition(panner, emitter.position[0], emitter.position[1], emitter.position[2], this.context.currentTime);
+      gainNode.connect(panner);
+      panner.connect(this.buses[definition.bus]);
+      panners.push(panner);
+    }
+    const voice = new WebAudioVoice(
+      id,
+      this.context,
+      source,
+      gainNode,
+      baseGain,
+      [gainNode, ...panners],
+    );
+    active.push(voice);
+    this.voices.set(id, active);
+    voice.onEnded(() => {
+      const index = active.indexOf(voice);
+      if (index >= 0) active.splice(index, 1);
+      if (active.length === 0) this.voices.delete(id);
+    });
+    source.start();
+    return voice;
+  }
+
+  setListenerPose(pose: Readonly<AudioListenerPose>): void {
+    if (this.disposed) return;
+    const listener = this.context.listener;
+    const now = this.context.currentTime;
+    setListenerPosition(listener, pose.position.x, pose.position.y, pose.position.z, now);
+    setListenerOrientation(
+      listener,
+      pose.forward.x,
+      pose.forward.y,
+      pose.forward.z,
+      pose.up.x,
+      pose.up.y,
+      pose.up.z,
+      now,
+    );
   }
 
   setBusGain(bus: AudioBusId, gain: number, rampSeconds = 0.05): void {
@@ -186,4 +263,50 @@ export class WebAudioBackend implements AudioBackend {
     this.master.disconnect();
     void this.context.close();
   }
+}
+
+function finiteOr(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function setPosition(
+  panner: PannerNode,
+  x: number,
+  y: number,
+  z: number,
+  time: number,
+): void {
+  panner.positionX.setValueAtTime(finiteOr(x, 0), time);
+  panner.positionY.setValueAtTime(finiteOr(y, 0), time);
+  panner.positionZ.setValueAtTime(finiteOr(z, 0), time);
+}
+
+function setListenerPosition(
+  listener: AudioListener,
+  x: number,
+  y: number,
+  z: number,
+  time: number,
+): void {
+  listener.positionX.setValueAtTime(finiteOr(x, 0), time);
+  listener.positionY.setValueAtTime(finiteOr(y, 0), time);
+  listener.positionZ.setValueAtTime(finiteOr(z, 0), time);
+}
+
+function setListenerOrientation(
+  listener: AudioListener,
+  forwardX: number,
+  forwardY: number,
+  forwardZ: number,
+  upX: number,
+  upY: number,
+  upZ: number,
+  time: number,
+): void {
+  listener.forwardX.setValueAtTime(finiteOr(forwardX, 0), time);
+  listener.forwardY.setValueAtTime(finiteOr(forwardY, 0), time);
+  listener.forwardZ.setValueAtTime(finiteOr(forwardZ, -1), time);
+  listener.upX.setValueAtTime(finiteOr(upX, 0), time);
+  listener.upY.setValueAtTime(finiteOr(upY, 1), time);
+  listener.upZ.setValueAtTime(finiteOr(upZ, 0), time);
 }

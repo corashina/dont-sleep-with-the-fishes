@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AudioBackend,
+  AudioListenerPose,
   AudioVoice,
+  SpatialAudioEmitter,
+  SpatialAudioOptions,
 } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
@@ -26,6 +29,12 @@ class FakeAudioBackend implements AudioBackend {
   readonly busGains: [AudioBusId, number, number | undefined][] = [];
   readonly masterGains: number[] = [];
   readonly dispose = vi.fn();
+  readonly spatial: Array<{
+    id: SoundId;
+    emitters: readonly SpatialAudioEmitter[];
+    options: Readonly<SpatialAudioOptions>;
+  }> = [];
+  readonly listenerPoses: AudioListenerPose[] = [];
 
   load(): Promise<void> { return Promise.resolve(); }
   unlock(): Promise<void> { return Promise.resolve(); }
@@ -34,6 +43,19 @@ class FakeAudioBackend implements AudioBackend {
     const voice = new FakeVoice(id);
     this.voices.push(voice);
     return voice;
+  }
+
+  playSpatialLoop(
+    id: SoundId,
+    emitters: readonly SpatialAudioEmitter[],
+    options: Readonly<SpatialAudioOptions>,
+  ): AudioVoice {
+    this.spatial.push({ id, emitters, options });
+    return this.play(id);
+  }
+
+  setListenerPose(pose: Readonly<AudioListenerPose>): void {
+    this.listenerPoses.push(pose);
   }
 
   setBusGain(bus: AudioBusId, gain: number, rampSeconds?: number): void {
@@ -68,6 +90,23 @@ describe('AudioSystem', () => {
     expect(() => scope.startLoop('confirm')).toThrow(
       'Sound is not configured as a loop: confirm',
     );
+  });
+
+  it('owns one synchronized spatial loop and forwards its listener pose', () => {
+    const backend = new FakeAudioBackend();
+    const scope = AudioSystem.forTest(backend).createScope();
+    const emitters = [{ position: [0, 5, 0] as const }];
+    const options = { gain: 0.5, refDistance: 1.5, maxDistance: 11, rolloffFactor: 1 };
+    const pose: AudioListenerPose = {
+      position: { x: 0, y: 3.7, z: 0 },
+      forward: { x: 0, y: 0, z: -1 },
+      up: { x: 0, y: 1, z: 0 },
+    };
+    expect(scope.startSpatialLoop('shipAlarm', emitters, options))
+      .toBe(scope.startSpatialLoop('shipAlarm', emitters, options));
+    scope.setListenerPose(pose);
+    expect(backend.spatial).toEqual([{ id: 'shipAlarm', emitters, options }]);
+    expect(backend.listenerPoses).toEqual([pose]);
   });
 
   it('loops tentacle movement only during Tentacle Attack', () => {

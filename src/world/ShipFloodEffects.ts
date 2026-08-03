@@ -19,7 +19,6 @@ export interface ShipFloodEffectsSnapshot {
   leakCount: number;
   streamCount: number;
   puddleCount: number;
-  wetStreakCount: number;
   sprayCapacity: number;
   activeSpray: number;
   flowScale: number;
@@ -34,7 +33,6 @@ export class ShipFloodEffects {
   private readonly leaks: readonly LeakAnchor[];
   private readonly streams: ShipDangerLayout['streams'];
   private readonly puddles: ShipDangerLayout['puddles'];
-  private readonly wetStreaks: ShipDangerLayout['wetStreaks'];
   private readonly sprayPositions = new Float32Array(SPRAY_CAPACITY * 3);
   private readonly sprayPhases = new Float32Array(SPRAY_CAPACITY);
   private readonly waterMaterial: MeshStandardMaterial;
@@ -46,15 +44,12 @@ export class ShipFloodEffects {
     this.leaks = layout.leaks;
     this.streams = layout.streams;
     this.puddles = layout.puddles;
-    this.wetStreaks = layout.wetStreaks;
     const ribbonGeometry = this.ownGeometry(new PlaneGeometry(1, 1));
     const puddleGeometry = this.ownGeometry(createPuddleGeometry());
     this.waterMaterial = this.ownMaterial(new MeshStandardMaterial({ color: 0x496773, transparent: true, opacity: 0.42, roughness: 0.92, metalness: 0, depthWrite: false }));
-    const streakMaterial = this.ownMaterial(new MeshStandardMaterial({ color: 0x385763, transparent: true, opacity: 0.34, roughness: 0.94, metalness: 0, depthWrite: false }));
 
     layout.leaks.forEach((anchor) => this.addRibbon('leak', anchor.id, anchor.position, anchor.rotation, anchor.width, anchor.length, ribbonGeometry, this.waterMaterial));
     layout.streams.forEach((anchor) => this.addFloorRibbon('stream', anchor.id, anchor.position, anchor.rotation[2], anchor.size[0], anchor.size[1], ribbonGeometry, this.waterMaterial));
-    layout.wetStreaks.forEach((anchor) => this.addRibbon('wet-streak', anchor.id, anchor.position, anchor.rotation, anchor.size[0], anchor.size[1], ribbonGeometry, streakMaterial));
     layout.puddles.forEach((anchor) => {
       const puddle = new Mesh(puddleGeometry, this.waterMaterial);
       puddle.name = `ship-danger-puddle:${anchor.id}`;
@@ -96,7 +91,6 @@ export class ShipFloodEffects {
       leakCount: this.leaks.length,
       streamCount: this.streams.length,
       puddleCount: this.puddles.length,
-      wetStreakCount: this.wetStreaks.length,
       sprayCapacity: SPRAY_CAPACITY,
       activeSpray: SPRAY_CAPACITY,
       flowScale: this.flowScale,
