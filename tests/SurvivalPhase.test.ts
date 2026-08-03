@@ -5799,6 +5799,8 @@ describe('SurvivalPhase orchestration', () => {
                 onEnded: vi.fn(),
               };
         }),
+        playSpatialLoop: vi.fn(() => null),
+        setListenerPose: vi.fn(),
         setBusGain: vi.fn(),
         setMasterGain: vi.fn(),
         dispose: vi.fn(),

@@ -1,4 +1,10 @@
-import type { AudioBackend, AudioVoice } from './AudioBackend';
+import type {
+  AudioBackend,
+  AudioListenerPose,
+  AudioVoice,
+  SpatialAudioEmitter,
+  SpatialAudioOptions,
+} from './AudioBackend';
 import {
   AUDIO_MANIFEST,
   type AudioBusId,
@@ -14,8 +20,14 @@ const GAME_AUDIO_BUSES: readonly AudioBusId[] = Object.freeze([
 export interface AudioScope {
   play(id: SoundId): AudioVoice | null;
   startLoop(id: SoundId): AudioVoice | null;
+  startSpatialLoop(
+    id: SoundId,
+    emitters: readonly SpatialAudioEmitter[],
+    options: Readonly<SpatialAudioOptions>,
+  ): AudioVoice | null;
   stopLoop(id: SoundId, fadeSeconds?: number): void;
   setLoopGain(id: SoundId, gain: number, rampSeconds?: number): void;
+  setListenerPose(pose: Readonly<AudioListenerPose>): void;
   setPaused(paused: boolean): void;
   dispose(): void;
 }
@@ -56,6 +68,26 @@ export class OwnedAudioScope implements AudioScope {
     return voice;
   }
 
+  startSpatialLoop(
+    id: SoundId,
+    emitters: readonly SpatialAudioEmitter[],
+    options: Readonly<SpatialAudioOptions>,
+  ): AudioVoice | null {
+    if (this.disposed) return null;
+    if (!AUDIO_MANIFEST[id].loop) {
+      throw new Error(`Sound is not configured as a loop: ${id}`);
+    }
+    const current = this.loops.get(id);
+    if (current !== undefined) return current;
+    const voice = this.backend.playSpatialLoop(id, emitters, options);
+    if (voice === null) return null;
+    this.loops.set(id, voice);
+    voice.onEnded(() => {
+      if (this.loops.get(id) === voice) this.loops.delete(id);
+    });
+    return voice;
+  }
+
   stopLoop(id: SoundId, fadeSeconds = 0.05): void {
     const voice = this.loops.get(id);
     if (voice === undefined) return;
@@ -65,6 +97,10 @@ export class OwnedAudioScope implements AudioScope {
 
   setLoopGain(id: SoundId, gain: number, rampSeconds = 0.05): void {
     this.loops.get(id)?.setGain(gain, rampSeconds);
+  }
+
+  setListenerPose(pose: Readonly<AudioListenerPose>): void {
+    if (!this.disposed) this.backend.setListenerPose(pose);
   }
 
   setPaused(paused: boolean): void {

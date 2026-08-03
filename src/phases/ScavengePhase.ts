@@ -1,5 +1,6 @@
 import {
   Box3,
+  Quaternion,
   Scene,
   Vector3,
   type BufferGeometry,
@@ -34,6 +35,12 @@ import {
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
 import { scavengeSpeedMultiplier } from '../game/scavengeMovement';
+import {
+  createShipAlarmPhase,
+  createShipDangerState,
+  resetShipAlarmPhase,
+  sampleShipDangerStateInto,
+} from '../game/shipDanger';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -63,11 +70,19 @@ import {
 } from '../world/SceneResources';
 import { commitBoatDeposit } from './scavengeDeposit';
 import { ScavengeAudio } from '../audio/ScavengeAudio';
+import type {
+  AudioListenerPose,
+  SpatialAudioEmitter,
+} from '../audio/AudioBackend';
 import type { PlayerMotionSample } from '../player/PlayerController';
+import { SHIP_DANGER_LAYOUT } from '../world/ShipDangerLayout';
 
 export const TITLE_CAMERA_POSITION = [33, 11.5, -4] as const;
 export const TITLE_CAMERA_TARGET = [0, 5.5, 2] as const;
 const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
+const ALARM_AUDIO_EMITTERS: readonly SpatialAudioEmitter[] = Object.freeze(
+  SHIP_DANGER_LAYOUT.alarms.map(({ position }) => Object.freeze({ position })),
+);
 
 function createScavengeHandModelFactory(
   propModels: PhaseContext['propModels'],
@@ -108,6 +123,8 @@ export class ScavengePhase implements GamePhase {
   private disposed = false;
   private completionReported = false;
   private elapsed = 0;
+  private readonly dangerState = createShipDangerState();
+  private readonly alarmPhase = createShipAlarmPhase();
   private presentation: ScavengePresentation = 'title';
   private introElapsed = 0;
   private introPaused = false;
@@ -139,6 +156,10 @@ export class ScavengePhase implements GamePhase {
   private escapeResumeArmed = false;
   private presentationWeather: PresentationWeatherId = 'calm';
   private readonly audio: ScavengeAudio;
+  private readonly audioForward = new Vector3(0, 0, -1);
+  private readonly audioUp = new Vector3(0, 1, 0);
+  private readonly audioLocalQuaternion = new Quaternion();
+  private readonly audioListenerPose: AudioListenerPose;
 
   constructor(
     private readonly context: PhaseContext,
@@ -192,7 +213,15 @@ export class ScavengePhase implements GamePhase {
       },
     });
     this.carry = new CarryController(this.scene, context.camera);
-    this.audio = new ScavengeAudio(context.audio.createScope());
+    this.audioListenerPose = {
+      position: this.player.localPosition,
+      forward: this.audioForward,
+      up: this.audioUp,
+    };
+    this.audio = new ScavengeAudio(
+      context.audio.createScope(),
+      ALARM_AUDIO_EMITTERS,
+    );
 
     this.ui.onStart = () => {
       void this.requestPointerLock();
@@ -332,16 +361,29 @@ export class ScavengePhase implements GamePhase {
       this.context.camera.updateMatrixWorld(true);
     }
     this.syncVisualState(sinking);
-    this.audio.update(motion, directControlActive, this.elapsed);
+    const audioListenerPose = this.updateAudioListenerPose();
+    this.audio.update(
+      motion,
+      directControlActive,
+      this.elapsed,
+      audioListenerPose,
+    );
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
+    sampleShipDangerStateInto(
+      this.dangerState,
+      this.elapsed,
+      SCAVENGE_DURATION_SECONDS,
+      this.alarmPhase.elapsedAt(this.elapsed),
+    );
     this.world.update(
       this.worldTime,
       worldDeltaSeconds,
       sinking,
       this.context.camera.position,
       simulatePhysics,
+      this.dangerState,
     );
     if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
       this.player.placeCamera();
@@ -373,6 +415,7 @@ export class ScavengePhase implements GamePhase {
       const result = this.session.result();
       if (result !== null) {
         this.completionReported = true;
+        this.audio.complete();
         this.onComplete(result);
       }
     }
@@ -418,6 +461,26 @@ export class ScavengePhase implements GamePhase {
   render(): void {
     if (this.disposed) return;
     this.context.sceneRenderer.render(this.scene, this.context.camera, this.visualState);
+  }
+
+  private updateAudioListenerPose(): AudioListenerPose | null {
+    if (
+      this.audioLocalQuaternion === undefined
+      || this.audioForward === undefined
+      || this.audioUp === undefined
+      || this.audioListenerPose === undefined
+      || this.world?.ship === undefined
+      || this.context?.camera === undefined
+    ) {
+      return null;
+    }
+    this.audioLocalQuaternion
+      .copy(this.world.ship.quaternion)
+      .invert()
+      .multiply(this.context.camera.quaternion);
+    this.audioForward.set(0, 0, -1).applyQuaternion(this.audioLocalQuaternion);
+    this.audioUp.set(0, 1, 0).applyQuaternion(this.audioLocalQuaternion);
+    return this.audioListenerPose;
   }
 
   private syncVisualState(sinking: Readonly<ReturnType<typeof getSinkingState>>): void {
@@ -630,6 +693,7 @@ export class ScavengePhase implements GamePhase {
     this.presentation = 'playing';
     this.ui.setPresentation('playing');
     this.session.start();
+    resetShipAlarmPhase(this.alarmPhase, this.elapsed);
     this.audio.beginRun();
     if (resumeRequired) {
       this.pausedIntroExitCarry = true;

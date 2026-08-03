@@ -18,7 +18,6 @@ import {
   Quaternion,
   Scene,
   ShaderMaterial,
-  SpotLight,
   Texture,
   Vector3,
   Vector4,
@@ -652,21 +651,20 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('keeps the decorative ceiling fixture separate from localized room lighting', () => {
+  it('mounts visible cosmetic hazards without changing ship collisions', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
-    const createPracticalLight = vi.spyOn(propModels, 'createPracticalLight');
     const world = createTestWorld(scene, propModels);
-    const spotLights: SpotLight[] = [];
-    world.ship.traverse((object) => {
-      if (object instanceof SpotLight) spotLights.push(object);
-    });
+    const before = world.colliders.length;
 
-    expect(scene.getObjectByName('ship-room-lights')).toBeUndefined();
-    expect(world.ship.getObjectByName('room-lamp:crew-cabin')).toBeUndefined();
+    expect(world.ship.getObjectByName('ship-danger-effects')).toBeDefined();
+    expect(world.ship.getObjectByName('ship-danger-alarm:crew-cabin')).toBeDefined();
+    expect(world.ship.getObjectByName('ship-danger-puddle:crew-aft')).toBeDefined();
+    expect(world.ship.getObjectByName('ship-danger-smoke')).toBeUndefined();
+    expect(world.ship.getObjectByName('ship-danger-leak:crew-starboard')).toBeUndefined();
+    expect(world.ship.getObjectByName('ship-danger-fire:wheelhouse-roof')).toBeUndefined();
     expect(world.ship.getObjectByName('decoration:cabin-ceiling-light')).toBeDefined();
-    expect(spotLights).toEqual([]);
-    expect(createPracticalLight).not.toHaveBeenCalled();
+    expect(world.colliders).toHaveLength(before);
 
     world.dispose();
     propModels.dispose();
@@ -686,6 +684,9 @@ describe('world builders', () => {
         expect(ship.getObjectByName('ship-deck-details')).toBeDefined();
         expect(ship.getObjectByName('ship-rigging')).toBeDefined();
         expect(ship.getObjectByName('freighter-smoke')).toBeDefined();
+        expect(ship.getObjectByName('ship-danger-effects')).toBeDefined();
+        expect(ship.getObjectByName('ship-danger-alarm:crew-cabin')).toBeDefined();
+        expect(ship.getObjectByName('ship-danger-puddle:crew-aft')).toBeDefined();
         const resources = collectRenderResources(ship);
         observed = observeDisposals([...resources.geometries, ...resources.materials]);
       }

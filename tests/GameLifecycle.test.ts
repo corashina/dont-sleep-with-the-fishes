@@ -26,6 +26,11 @@ import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { scavengeSpeedMultiplier } from '../src/game/scavengeMovement';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
+import {
+  createShipAlarmPhase,
+  createShipDangerState,
+  sampleShipDangerStateInto,
+} from '../src/game/shipDanger';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import type { ContextAction } from '../src/interaction/InteractionSystem';
@@ -48,6 +53,17 @@ import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
 const physicsRuntime = await testPhysicsRuntime();
+
+function dangerAt(elapsed: number, alarmElapsed = elapsed) {
+  const state = createShipDangerState();
+  sampleShipDangerStateInto(
+    state,
+    elapsed,
+    SCAVENGE_DURATION_SECONDS,
+    alarmElapsed,
+  );
+  return state;
+}
 
 if (typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
@@ -105,6 +121,7 @@ function scavengeAudioStub(): ScavengeAudio {
     deny: vi.fn(),
     setPaused: vi.fn(),
     sink: vi.fn(),
+    complete: vi.fn(),
     dispose: vi.fn(),
   } as unknown as ScavengeAudio;
 }
@@ -164,6 +181,8 @@ function createUpdateHarness(
   Object.assign(phase, {
     disposed: false,
     elapsed: 0,
+    dangerState: createShipDangerState(),
+    alarmPhase: createShipAlarmPhase(),
     worldTime: 1,
     presentation: 'playing',
     pausedIntroExitCarry: false,
@@ -245,6 +264,8 @@ function introHarness(elapsed = 0) {
   Object.assign(phase, {
     disposed: false,
     elapsed: 0,
+    dangerState: createShipDangerState(),
+    alarmPhase: createShipAlarmPhase(),
     worldTime: 1,
     presentation: 'intro',
     introElapsed: elapsed,
@@ -382,6 +403,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.objectContaining({ progress: 0 }),
       camera.position,
       false,
+      dangerAt(0),
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
@@ -500,6 +522,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
   });
 
@@ -528,6 +551,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(order).toEqual(['world', 'camera']);
 
@@ -544,6 +568,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -632,6 +657,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(updateWorld).toHaveBeenNthCalledWith(
       2,
@@ -640,6 +666,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(order).toEqual(['world', 'camera', 'world', 'camera']);
 
@@ -662,6 +689,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
   });
 
@@ -818,6 +846,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.anything(),
         expect.any(Vector3),
         false,
+        expect.any(Object),
       );
     } finally {
       Object.defineProperty(document, 'hidden', { configurable: true, value: false });
@@ -881,6 +910,8 @@ describe('ScavengePhase lifecycle integration', () => {
     Object.assign(phase, {
       disposed: false,
       elapsed: 0,
+      dangerState: createShipDangerState(),
+      alarmPhase: createShipAlarmPhase(),
       worldTime: 1,
       presentation: 'playing',
       audio: scavengeAudioStub(),
@@ -925,6 +956,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
     expect(updatePlayer).toHaveBeenCalledWith(0.25, input, 1);
 
@@ -939,6 +971,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(tick).not.toHaveBeenCalled();
 
@@ -950,6 +983,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
     expect(tick).toHaveBeenCalledWith(0.25, true);
     expect(updatePlayer).not.toHaveBeenCalled();
@@ -1023,6 +1057,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Object),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(session.snapshot().remainingSeconds).toBe(SCAVENGE_DURATION_SECONDS);
     expect(input.clearLook).toHaveBeenCalledOnce();
@@ -1074,6 +1109,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
 
     input.pointerLocked = false;
@@ -1084,6 +1120,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -1249,6 +1286,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.anything(),
         expect.any(Vector3),
         false,
+        expect.any(Object),
       );
     } finally {
       hidden.mockRestore();
@@ -1270,6 +1308,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -1277,12 +1316,51 @@ describe('ScavengePhase lifecycle integration', () => {
     const session = new ScavengeSession();
     session.start();
     const { phase } = createUpdateHarness(session);
-    const player = (phase as unknown as { player: { localPosition: Vector3 } }).player;
+    const internals = phase as unknown as {
+      player: { localPosition: Vector3 };
+      audio: { complete: ReturnType<typeof vi.fn> };
+      onComplete: ReturnType<typeof vi.fn>;
+    };
+    const { player } = internals;
     player.localPosition.set(8.9, player.localPosition.y, 0);
 
     phase.update(0, SCAVENGE_DURATION_SECONDS);
 
     expect(session.snapshot().status).toBe('success');
+    expect(internals.audio.complete).toHaveBeenCalledOnce();
+    expect(internals.audio.complete.mock.invocationCallOrder[0])
+      .toBeLessThan(internals.onComplete.mock.invocationCallOrder[0]!);
+  });
+
+  it('starts one shared alarm phase with the loop and freezes both while paused', () => {
+    const {
+      phase, beginRun, setAudioPaused, updateWorld,
+    } = introHarness(2);
+    const handlePointerLockChange = (phase as unknown as {
+      handlePointerLockChange(locked: boolean): void;
+    }).handlePointerLockChange;
+    const alarmPhase = (phase as unknown as {
+      alarmPhase: { startElapsedSeconds: number };
+    }).alarmPhase;
+    alarmPhase.startElapsedSeconds = -0.5;
+    (phase as unknown as { handleKeyDown(event: KeyboardEvent): void }).handleKeyDown(
+      new KeyboardEvent('keydown', { code: 'Space', cancelable: true }),
+    );
+
+    phase.update(2.25, 0.25);
+    const firstDanger = updateWorld.mock.calls.at(-1)![5];
+    expect(beginRun).toHaveBeenCalledOnce();
+    expect(alarmPhase.startElapsedSeconds).toBe(0);
+    expect(firstDanger.alarmPulse).toBe(1);
+
+    (phase as unknown as { input: { pointerLocked: boolean } }).input.pointerLocked = false;
+    handlePointerLockChange.call(phase, false);
+    phase.update(12.25, 10);
+    const pausedDanger = updateWorld.mock.calls.at(-1)![5];
+
+    expect(setAudioPaused).toHaveBeenLastCalledWith(true);
+    expect(pausedDanger).toBe(firstDanger);
+    expect(pausedDanger.alarmPulse).toBe(firstDanger.alarmPulse);
   });
 
   it('sinks at the deadline outside the lifeboat bounds and keeps the cinematic active', () => {
@@ -1348,6 +1426,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.any(Object),
         expect.any(Vector3),
         false,
+        dangerAt(SCAVENGE_DURATION_SECONDS),
       );
     } finally {
       if (originalExitPointerLock) {
@@ -1377,6 +1456,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      dangerAt(SCAVENGE_DURATION_SECONDS),
     );
   });
 

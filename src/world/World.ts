@@ -18,6 +18,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
+import { createShipDangerState, type ShipDangerState } from '../game/shipDanger';
 import type { SinkingState } from '../game/sinking';
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import {
@@ -67,6 +68,7 @@ import {
 } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
 import { ScavengeIntroPresentation } from './ScavengeIntroPresentation';
+import { ShipDangerEffects } from './ShipDangerEffects';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
@@ -186,6 +188,8 @@ export class World {
     sampleDefaultWaveInto,
   );
   private readonly shipBuild: ShipBuild;
+  private readonly shipDangerEffects!: ShipDangerEffects;
+  private readonly defaultDangerState = createShipDangerState();
   private readonly boatAnchor: Vector3;
   private readonly shipItemScales = new Map<ItemInstanceId, number>();
   private readonly animatedItemPresentations = new Map<ItemInstanceId, PropPresentation>();
@@ -290,6 +294,9 @@ export class World {
     try {
       scene.add(this.ship);
       rollback.push(() => scene.remove(this.ship));
+      this.shipDangerEffects = new ShipDangerEffects();
+      this.ship.add(this.shipDangerEffects.root);
+      rollback.push(() => this.shipDangerEffects.dispose());
       this.scavengeIntroPresentation = new ScavengeIntroPresentation();
       this.scavengeIntroPresentation.root.position.set(0, this.deckY + 0.3, -7);
       this.ship.add(this.scavengeIntroPresentation.root);
@@ -527,6 +534,7 @@ export class World {
     sinking: SinkingState,
     cameraPosition: Vector3,
     simulatePhysics: boolean,
+    danger: ShipDangerState = this.defaultDangerState,
   ): void {
     if (this.disposed) return;
     const weatherWaveScale = sinking.waveAmplitudeScale
@@ -563,6 +571,7 @@ export class World {
     this.scavengePhysics?.update(this.shipPhysicsPose, delta, simulatePhysics);
     if (!this.physicsBarrelsAttachedToShip) this.syncPhysicsObjects();
     this.shipBuild.updateEffects(delta, sinking.progress);
+    this.shipDangerEffects.update(delta, danger);
     this.scavengeIntroPresentation.update(delta);
     for (const presentation of this.animatedItemPresentations.values()) {
       presentation.update(delta);
@@ -790,6 +799,7 @@ export class World {
         }
         this.animatedItemPresentations.clear();
       },
+      () => this.shipDangerEffects.dispose(),
       () => this.shipBuild.dispose(),
       () => disposeResourceSets(
         this.ownedGeometries,
