@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type Material, Mesh, PointLight } from 'three';
+import { type Material, Mesh, PointLight, Vector3 } from 'three';
 import { getShipDangerState } from '../src/game/shipDanger';
 import { ShipAlarmLights } from '../src/world/ShipAlarmLights';
 import { ShipDamageDetails } from '../src/world/ShipDamageDetails';
 import { ShipFireEffects } from '../src/world/ShipFireEffects';
 import { ShipFloodEffects } from '../src/world/ShipFloodEffects';
 import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
 
 describe('ship danger effects', () => {
   it('builds authored broken-plank clusters without colliders', () => {
@@ -65,6 +66,39 @@ describe('ship danger effects', () => {
       wetStreakCount: 3,
       sprayCapacity: 48,
       activeSpray: 48,
+    });
+    effects.dispose();
+  });
+
+  it('derives flood snapshot counts from its supplied layout', () => {
+    const effects = new ShipFloodEffects({
+      ...SHIP_DANGER_LAYOUT,
+      leaks: SHIP_DANGER_LAYOUT.leaks.slice(0, 2),
+      streams: SHIP_DANGER_LAYOUT.streams.slice(0, 1),
+      puddles: SHIP_DANGER_LAYOUT.puddles.slice(0, 2),
+      wetStreaks: SHIP_DANGER_LAYOUT.wetStreaks.slice(0, 1),
+    });
+    expect(effects.snapshotForTest()).toMatchObject({
+      leakCount: 2,
+      streamCount: 1,
+      puddleCount: 2,
+      wetStreakCount: 1,
+    });
+    effects.dispose();
+  });
+
+  it('keeps every puddle and stream vertex at floor height', () => {
+    const effects = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
+    const vertex = new Vector3();
+    effects.root.updateWorldMatrix(true, true);
+    effects.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      if (!object.name.startsWith('ship-danger-puddle:') && !object.name.startsWith('ship-danger-stream:')) return;
+      const positions = object.geometry.getAttribute('position');
+      for (let index = 0; index < positions.count; index += 1) {
+        vertex.fromBufferAttribute(positions, index).applyMatrix4(object.matrixWorld);
+        expect(vertex.y).toBeLessThanOrEqual(FREIGHTER_DIMENSIONS.deckY + 0.025);
+      }
     });
     effects.dispose();
   });

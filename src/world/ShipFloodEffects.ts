@@ -32,23 +32,28 @@ export class ShipFloodEffects {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly leaks: readonly LeakAnchor[];
+  private readonly streams: ShipDangerLayout['streams'];
+  private readonly puddles: ShipDangerLayout['puddles'];
+  private readonly wetStreaks: ShipDangerLayout['wetStreaks'];
   private readonly sprayPositions = new Float32Array(SPRAY_CAPACITY * 3);
   private readonly sprayPhases = new Float32Array(SPRAY_CAPACITY);
   private readonly waterMaterial: MeshStandardMaterial;
-  private elapsed = 0;
   private flowScale = 1;
   private disposed = false;
 
   constructor(layout: Readonly<ShipDangerLayout>) {
     this.root.name = 'ship-danger-flood-effects';
     this.leaks = layout.leaks;
+    this.streams = layout.streams;
+    this.puddles = layout.puddles;
+    this.wetStreaks = layout.wetStreaks;
     const ribbonGeometry = this.ownGeometry(new PlaneGeometry(1, 1));
     const puddleGeometry = this.ownGeometry(createPuddleGeometry());
     this.waterMaterial = this.ownMaterial(new MeshStandardMaterial({ color: 0x496773, transparent: true, opacity: 0.42, roughness: 0.92, metalness: 0, depthWrite: false }));
     const streakMaterial = this.ownMaterial(new MeshStandardMaterial({ color: 0x385763, transparent: true, opacity: 0.34, roughness: 0.94, metalness: 0, depthWrite: false }));
 
     layout.leaks.forEach((anchor) => this.addRibbon('leak', anchor.id, anchor.position, anchor.rotation, anchor.width, anchor.length, ribbonGeometry, this.waterMaterial));
-    layout.streams.forEach((anchor) => this.addRibbon('stream', anchor.id, anchor.position, anchor.rotation, anchor.size[0], anchor.size[1], ribbonGeometry, this.waterMaterial));
+    layout.streams.forEach((anchor) => this.addFloorRibbon('stream', anchor.id, anchor.position, anchor.rotation[2], anchor.size[0], anchor.size[1], ribbonGeometry, this.waterMaterial));
     layout.wetStreaks.forEach((anchor) => this.addRibbon('wet-streak', anchor.id, anchor.position, anchor.rotation, anchor.size[0], anchor.size[1], ribbonGeometry, streakMaterial));
     layout.puddles.forEach((anchor) => {
       const puddle = new Mesh(puddleGeometry, this.waterMaterial);
@@ -76,7 +81,6 @@ export class ShipFloodEffects {
   update(delta: number, state: Readonly<ShipDangerState>): void {
     if (this.disposed) return;
     const step = Number.isFinite(delta) ? Math.max(0, Math.min(delta, 0.1)) : 0;
-    this.elapsed += step;
     this.flowScale = state.waterFlow;
     this.waterMaterial.opacity = 0.42 + 0.08 * (state.waterFlow - 1);
     for (let index = 0; index < SPRAY_CAPACITY; index += 1) {
@@ -88,7 +92,15 @@ export class ShipFloodEffects {
   }
 
   snapshotForTest(): ShipFloodEffectsSnapshot {
-    return { leakCount: this.leaks.length, streamCount: 3, puddleCount: 5, wetStreakCount: 3, sprayCapacity: SPRAY_CAPACITY, activeSpray: SPRAY_CAPACITY, flowScale: this.flowScale };
+    return {
+      leakCount: this.leaks.length,
+      streamCount: this.streams.length,
+      puddleCount: this.puddles.length,
+      wetStreakCount: this.wetStreaks.length,
+      sprayCapacity: SPRAY_CAPACITY,
+      activeSpray: SPRAY_CAPACITY,
+      flowScale: this.flowScale,
+    };
   }
 
   dispose(): void {
@@ -103,6 +115,16 @@ export class ShipFloodEffects {
     mesh.name = `ship-danger-${kind}:${id}`;
     mesh.position.set(...position);
     mesh.rotation.set(...rotation);
+    mesh.scale.set(width, length, 1);
+    this.root.add(mesh);
+  }
+
+  private addFloorRibbon(kind: string, id: string, position: readonly [number, number, number], heading: number, width: number, length: number, geometry: PlaneGeometry, material: MeshStandardMaterial): void {
+    const mesh = new Mesh(geometry, material);
+    mesh.name = `ship-danger-${kind}:${id}`;
+    mesh.position.set(...position);
+    mesh.rotation.order = 'YXZ';
+    mesh.rotation.set(-Math.PI / 2, heading, 0, 'YXZ');
     mesh.scale.set(width, length, 1);
     this.root.add(mesh);
   }
