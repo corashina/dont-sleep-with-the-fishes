@@ -265,30 +265,30 @@ const fragmentShader = `
     float rightEyeReveal = smoothstep(0.3, 0.58, uMoonFaceReveal);
     float mouthReveal = smoothstep(0.58, 0.9, uMoonFaceReveal);
     vec2 faceUv = moonUv;
-    faceUv.x += (faceUv.y - 0.5) * uMoonGrin * 0.055;
-    faceUv.y += sin((faceUv.x + 0.1) * 10.0) * uMoonGrin * 0.012;
-    float faceAsymmetry = faceUv.x < 0.5 ? -0.035 : 0.018;
+    faceUv.x += (faceUv.y - 0.5) * uMoonGrin * 0.075;
+    faceUv.y += sin((faceUv.x + 0.1) * 10.0) * uMoonGrin * 0.016;
+    float faceAsymmetry = faceUv.x < 0.5 ? -0.048 : 0.024;
     vec2 browCenter = faceUv.x < 0.5
-      ? vec2(0.34, 0.75 + faceAsymmetry)
-      : vec2(0.67, 0.705 + faceAsymmetry);
+      ? vec2(0.345, 0.75 + faceAsymmetry)
+      : vec2(0.665, 0.735 + faceAsymmetry);
     vec2 browSize = faceUv.x < 0.5
-      ? vec2(0.112, 0.031)
-      : vec2(0.09, 0.026);
-    float browAngle = faceUv.x < 0.5 ? 0.36 : -0.12;
+      ? vec2(0.145, 0.04)
+      : vec2(0.125, 0.035);
+    float browAngle = faceUv.x < 0.5 ? 0.72 : -0.62;
     float browShape = eyeShape(faceUv, browCenter, browSize, browAngle);
     float browReveal = faceUv.x < 0.5 ? leftEyeReveal : rightEyeReveal;
     float brows = browShape * browReveal * mix(0.58, 0.92, uMoonGrin);
     float leftEye = eyeShape(
       faceUv,
-      vec2(0.342 - uMoonGrin * 0.018, 0.592 - uMoonGrin * 0.025),
-      vec2(0.086 + uMoonGrin * 0.018, 0.145 + uMoonGrin * 0.035),
-      0.32
+      vec2(0.338 - uMoonGrin * 0.022, 0.58 - uMoonGrin * 0.032),
+      vec2(0.105 + uMoonGrin * 0.02, 0.13 + uMoonGrin * 0.025),
+      0.58
     ) * leftEyeReveal;
     float rightEye = eyeShape(
       faceUv,
-      vec2(0.665 + uMoonGrin * 0.012, 0.558 + uMoonGrin * 0.018),
-      vec2(0.06 + uMoonGrin * 0.012, 0.102 + uMoonGrin * 0.026),
-      -0.15
+      vec2(0.674 + uMoonGrin * 0.015, 0.555 + uMoonGrin * 0.012),
+      vec2(0.072 + uMoonGrin * 0.012, 0.086 + uMoonGrin * 0.018),
+      -0.46
     ) * rightEyeReveal;
     float leftTear = eyeShape(
       faceUv,
@@ -302,21 +302,49 @@ const fragmentShader = `
       vec2(0.02, 0.085 + uMoonGrin * 0.018),
       -0.26
     ) * rightEyeReveal * uMoonGrin;
-    float mouth = mouthShape(
+    float mouthSnarl = mouthShape(
       faceUv - vec2(0.5, 0.0),
-      mix(0.12, 0.42, uMoonGrin)
+      mix(0.22, 0.62, uMoonGrin)
     ) * mouthReveal;
-    float mouthNotch = eyeShape(faceUv, vec2(0.535, 0.315), vec2(0.026, 0.052), -0.22);
-    mouth = max(mouth, mouthNotch * mouthReveal * mix(0.42, 0.86, uMoonGrin));
+    vec2 jawUv = faceUv;
+    jawUv.y += sin(faceUv.x * 29.0 + 0.8) * 0.012 * uMoonGrin;
+    float mouthCavity = eyeShape(
+      jawUv,
+      vec2(0.515, 0.292),
+      vec2(0.245 + uMoonGrin * 0.025, 0.092 + uMoonGrin * 0.035),
+      0.18
+    ) * mouthReveal;
+    float mouth = max(mouthSnarl, mouthCavity);
+    float mouthNotch = eyeShape(faceUv, vec2(0.545, 0.338), vec2(0.032, 0.065), -0.3);
+    mouth = max(mouth, mouthNotch * mouthReveal * mix(0.56, 0.94, uMoonGrin));
     float noseSlit = eyeShape(
       faceUv,
       vec2(0.515, 0.445),
       vec2(0.018, 0.048 + uMoonGrin * 0.018),
       0.3
     ) * mouthReveal * uMoonGrin;
-    float eyeStreaks = max(leftTear, rightTear) * 0.76;
+    float predatorPupils = max(
+      eyeShape(faceUv, vec2(0.315, 0.568), vec2(0.014, 0.026), 0.45) * leftEye,
+      eyeShape(faceUv, vec2(0.69, 0.55), vec2(0.011, 0.02), -0.35) * rightEye
+    ) * uMoonGrin;
+    float toothBars = 1.0 - smoothstep(
+      0.32,
+      0.48,
+      abs(fract((faceUv.x + 0.018) * 9.0) - 0.5)
+    );
+    float moonTeeth = eyeShape(
+      faceUv,
+      vec2(0.515, 0.306),
+      vec2(0.205, 0.052),
+      0.12
+    ) * mouthCavity * toothBars * uMoonGrin;
+    float cheekCuts = max(
+      eyeShape(faceUv, vec2(0.235, 0.425), vec2(0.085, 0.011), 0.9),
+      eyeShape(faceUv, vec2(0.76, 0.405), vec2(0.072, 0.009), -0.82)
+    ) * mouthReveal * uMoonGrin;
+    float eyeStreaks = max(leftTear, rightTear) * 0.86;
     float faceInk = clamp(
-      max(max(max(max(max(leftEye, rightEye), brows), eyeStreaks), noseSlit), mouth),
+      max(max(max(max(max(max(leftEye, rightEye), brows), eyeStreaks), noseSlit), mouth), cheekCuts),
       0.0,
       1.0
     );
@@ -324,6 +352,16 @@ const fragmentShader = `
       uMoonColor * moonSample.rgb,
       vec3(0.035, 0.055, 0.065),
       faceInk * 0.98
+    );
+    moonDisc = mix(
+      moonDisc,
+      uMoonColor * moonSample.rgb * 1.35,
+      moonTeeth * 0.92
+    );
+    moonDisc = mix(
+      moonDisc,
+      vec3(0.48, 0.075, 0.045),
+      predatorPupils * 0.9
     );
     color += moonDisc
       * moonSample.a
@@ -469,7 +507,7 @@ export class Skybox {
     uniforms.uMoonGrin!.value = clamp01(value.grin);
     uniforms.uMoonStarScale!.value = clamp01(value.starScale);
     uniforms.uMoonEventDim!.value = clamp01(value.dim);
-    uniforms.uMoonScale!.value = clamp(value.scale, 1, 4);
+    uniforms.uMoonScale!.value = clamp(value.scale, 1, 5.5);
   }
 
   setTint(color: Color, amount: number): void {

@@ -1537,6 +1537,14 @@ describe('BoatWorld helpers', () => {
     const flowers = world.scene.getObjectByName('event-prop:flowers')!;
     expect(flowers.children.length).toBeGreaterThanOrEqual(28);
     const before = flowers.children.map(({ position }) => [position.x, position.z]);
+    expect(flowers.children.every(({ position }) => position.z <= -4.3)).toBe(true);
+    for (let left = 0; left < flowers.children.length; left += 1) {
+      for (let right = left + 1; right < flowers.children.length; right += 1) {
+        const a = flowers.children[left]!.position;
+        const b = flowers.children[right]!.position;
+        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(1.45);
+      }
+    }
     world.update(2, 2);
     expect(flowers.children.map(({ position }) => [position.x, position.z])).toEqual(before);
     expect(world.projectEventInteractionBounds('flowers', 800, 600)).toBeNull();
@@ -2752,6 +2760,9 @@ describe('BoatWorld helpers', () => {
     expect(sky.material.fragmentShader).toContain('browShape');
     expect(sky.material.fragmentShader).toContain('mouthNotch');
     expect(sky.material.fragmentShader).toContain('faceAsymmetry');
+    expect(sky.material.fragmentShader).toContain('predatorPupils');
+    expect(sky.material.fragmentShader).toContain('moonTeeth');
+    expect(sky.material.fragmentShader).toContain('cheekCuts');
 
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
@@ -2768,8 +2779,9 @@ describe('BoatWorld helpers', () => {
     world.update(3.8, 2.09);
     await reveal;
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(3.5);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThanOrEqual(5);
     const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
     world.update(0.7, 0.7);
     expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
@@ -2813,7 +2825,7 @@ describe('BoatWorld helpers', () => {
     world.update(4.9, 1.1);
     await pressureReaction;
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.88);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.96);
 
     const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
       accepted: true,

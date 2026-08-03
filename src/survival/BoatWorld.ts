@@ -309,10 +309,11 @@ const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
 const MOON_FACE_REVEAL_DURATION = 3.8;
 const MOON_FACE_REACTION_DURATION = 1.1;
 const MOON_FACE_HOLD_FRACTION = 0.2;
-const MOON_FACE_BASE_GRIN = 0.58;
-const MOON_FACE_STAR_SCALE = 0.28;
-const MOON_FACE_MOON_SCALE = 3.6;
-const MOON_FACE_PRESSURE_GRIN = 0.88;
+const MOON_FACE_BASE_GRIN = 0.74;
+const MOON_FACE_STAR_SCALE = 0.16;
+const MOON_FACE_MOON_SCALE = 5.2;
+const MOON_FACE_BASE_DIM = 0.18;
+const MOON_FACE_PRESSURE_GRIN = 0.96;
 const MOON_FACE_ENERGY_DIM = 0.48;
 const MOON_FACE_CAMERA_LOWER = 0.2;
 const FISHING_CATCH_BOW_REST = Object.freeze({
@@ -2464,7 +2465,7 @@ export class BoatWorld {
         targetReveal: 1,
         targetGrin: MOON_FACE_BASE_GRIN,
         targetStarScale: MOON_FACE_STAR_SCALE,
-        targetDim: 0,
+        targetDim: MOON_FACE_BASE_DIM,
         targetMoonScale: MOON_FACE_MOON_SCALE,
         targetCameraLower: 0,
         response: null,
@@ -2555,6 +2556,7 @@ export class BoatWorld {
         this.moonFace.grin = MOON_FACE_BASE_GRIN * grinProgress;
         this.moonFace.starScale = 1
           - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
+        this.moonFace.dim = MOON_FACE_BASE_DIM * easeInOut(revealProgress);
         this.moonFace.scale = 1
           + (MOON_FACE_MOON_SCALE - 1) * easeOut(revealProgress);
       } else {
@@ -2635,9 +2637,14 @@ export class BoatWorld {
   }
 
   private applyMoonPresentation(): void {
+    const twitchGate = Math.max(
+      0,
+      Math.sin(this.moonPulseElapsed * 0.61 - 1.1),
+    );
     const pulse = this.moonFace.reveal * (
-      Math.sin(this.moonPulseElapsed * 1.45) * 0.065
-      + Math.sin(this.moonPulseElapsed * 3.17 + 1.1) * 0.025
+      Math.sin(this.moonPulseElapsed * 1.13) * 0.018
+      + Math.sin(this.moonPulseElapsed * 4.73 + 1.1) * 0.01
+      + Math.pow(twitchGate, 18) * 0.055
     );
     this.moonFaceDisplay.reveal = this.moonFace.reveal;
     this.moonFaceDisplay.grin = clamp(
