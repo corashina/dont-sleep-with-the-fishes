@@ -142,6 +142,24 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession daytime actions', () => {
+  it('applies fishing luck only while Captain Whiskers is alive', () => {
+    const options = { seed: 7, random: sequenceRandom([0, 0.36]) };
+    const living = new SurvivalSession(saved('captainWhiskers'), options);
+    const dead = new SurvivalSession(saved('captainWhiskers'), {
+      ...options,
+      random: sequenceRandom([0, 0.36]),
+      initialCaptainWhiskers: { alive: false, deathCause: 'sickness' },
+    });
+    const absent = new SurvivalSession(saved(), {
+      ...options,
+      random: sequenceRandom([0, 0.36]),
+    });
+
+    expect(reelCatch(beginFishing(living))).toMatchObject({ kind: 'catch', catch: { id: 'clownfish' } });
+    expect(reelCatch(beginFishing(dead))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
+    expect(reelCatch(beginFishing(absent))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
+  });
+
   it('hands Captain Whiskers from saved items to companion state', () => {
     const session = new SurvivalSession(saved('captainWhiskers', 'cannedFood', 'medicalKit'), { seed: 7 });
     const snapshot = session.snapshot();
