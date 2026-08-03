@@ -79,6 +79,7 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
 import type {
@@ -550,6 +551,7 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly captainWhiskers: CaptainWhiskersPresentation;
   private readonly chestDisplay: ChestDisplay;
   private readonly dedicatedEvents: EventPresentationCoordinator | null;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
@@ -593,6 +595,7 @@ export class BoatWorld {
   private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
   private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
   private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly captainWhiskersAnchorBounds: BoatObjectBoundsCache | null;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
@@ -809,6 +812,9 @@ export class BoatWorld {
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
 
+    this.captainWhiskers = new CaptainWhiskersPresentation(propModels);
+    this.boat.add(this.captainWhiskers.root);
+
     this.supplyDisplay = new BoatSupplyDisplay(
       propModels,
       build.storageRoot,
@@ -837,6 +843,7 @@ export class BoatWorld {
       try {
         runCleanupSteps([
           () => this.supplyDisplay.dispose(),
+          () => this.captainWhiskers.dispose(),
           () => this.chestDisplay.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => this.lantern.dispose(),
@@ -981,6 +988,9 @@ export class BoatWorld {
     this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
     this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
     this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
+    this.captainWhiskersAnchorBounds = createBoatObjectBoundsCache(
+      this.captainWhiskers.interactionRoot,
+    );
     this.applyBasePresentation();
   }
 
@@ -1013,6 +1023,7 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
+    this.captainWhiskers.sync(snapshot.captainWhiskers);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
   }
@@ -1048,6 +1059,8 @@ export class BoatWorld {
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
+        : instanceId === 'captain-whiskers'
+          ? this.captainWhiskers.interactionRoot
         : instanceId === 'end-day-lantern'
           ? this.lantern.root
           : instanceId === 'persistent-chest'
@@ -1398,6 +1411,40 @@ export class BoatWorld {
         },
       } satisfies BoatInteractionAnchor;
       });
+    const companionProjection = this.captainWhiskers.root.visible
+      ? projectCachedBoatObjectBounds(
+          this.captainWhiskers.interactionRoot,
+          this.captainWhiskersAnchorBounds,
+          this.camera,
+          width,
+          height,
+        )
+      : null;
+    const companionAnchor = companionProjection === null
+      ? null
+      : {
+          id: 'captain-whiskers',
+          companionId: 'captainWhiskers',
+          label: 'CAPTAIN WHISKERS',
+          description: 'Check his hunger, happiness, and health.',
+          itemType: null,
+          toolId: null,
+          action: null,
+          x: companionProjection.x,
+          y: companionProjection.y,
+          visible: companionProjection.visible,
+          depleted: false,
+          remainingUses: null,
+          quantity: 1,
+          usableQuantity: 1,
+          brokenQuantity: 0,
+          backingInstanceId: null,
+          hitArea: {
+            width: Math.max(54, companionProjection.width),
+            height: Math.max(54, companionProjection.height),
+            depth: companionProjection.depth,
+          },
+        } satisfies BoatInteractionAnchor;
     const fishingProjection = projectCachedBoatObjectBounds(
       this.rodPivot,
       this.fishingAnchorBounds,
@@ -1564,6 +1611,7 @@ export class BoatWorld {
     const focusedIds = new Set(focusedEventAnchors.map(({ id }) => id));
     return [
       ...itemAnchors,
+      ...(companionAnchor === null ? [] : [companionAnchor]),
       fishingAnchor,
       repairAnchor,
       lanternAnchor,
@@ -1848,6 +1896,7 @@ export class BoatWorld {
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
     this.supplyDisplay.updatePropAnimations(delta);
+    this.captainWhiskers.update(delta);
 
     if (advancePresentation) {
       const sequence = this.activeSequence;
@@ -1926,6 +1975,7 @@ export class BoatWorld {
       () => this.supernaturalEventAnimator.dispose(),
       () => this.clearDivePresentation(),
       () => this.divePresentation.dispose(),
+      () => this.captainWhiskers.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),

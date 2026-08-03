@@ -1,0 +1,263 @@
+import {
+  BoxGeometry,
+  BufferGeometry,
+  CylinderGeometry,
+  Group,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  SphereGeometry,
+} from 'three';
+import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
+import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
+import { boatStorageTransform } from '../world/BoatStorage';
+import type {
+  PropModelLibrary,
+  PropPresentation,
+} from '../world/PropModelLibrary';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  runCleanupSteps,
+} from '../world/SceneResources';
+import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
+import {
+  captainWhiskersPoseState,
+  createCaptainWhiskersPose,
+  sampleCaptainWhiskersPoseInto,
+  type CaptainWhiskersAction,
+  type CaptainWhiskersPoseSample,
+  type CaptainWhiskersPoseState,
+  type MutableCaptainWhiskersPose,
+} from './captainWhiskersMotion';
+
+const CAPTAIN_WHISKERS_INSTANCE = Object.freeze({
+  instanceId: 'captainWhiskers-1' as ItemInstanceId,
+  type: 'captainWhiskers',
+} satisfies ItemInstance);
+
+const ACTION_DURATION = 0.8;
+
+interface ActiveAction {
+  readonly id: CaptainWhiskersAction;
+  elapsed: number;
+  readonly resolve: () => void;
+}
+
+export class CaptainWhiskersPresentation {
+  readonly root = new Group();
+  readonly interactionRoot = new Group();
+  private readonly poseRoot = new Group();
+  private readonly headPoseRoot = new Group();
+  private readonly hand: Group;
+  private readonly food: Group;
+  private readonly modelPresentation: PropPresentation;
+  private readonly ownedGeometries = new Set<BufferGeometry>();
+  private readonly ownedMaterials = new Set<Material>();
+  private readonly pose: MutableCaptainWhiskersPose = createCaptainWhiskersPose();
+  private readonly poseSample: CaptainWhiskersPoseSample = {
+    status: 'healthy',
+    action: null,
+    elapsed: 0,
+    duration: ACTION_DURATION,
+  };
+  private status: CaptainWhiskersPoseState = 'healthy';
+  private activeAction: ActiveAction | null = null;
+  private living = false;
+  private disposed = false;
+
+  constructor(propModels: Pick<PropModelLibrary, 'createPresentation'>) {
+    this.root.name = 'captain-whiskers-companion';
+    const transform = boatStorageTransform(CAPTAIN_WHISKERS_INSTANCE);
+    this.root.position.copy(transform.position);
+    this.root.rotation.copy(transform.rotation);
+    this.root.scale.setScalar(transform.scale);
+
+    this.poseRoot.name = 'captain-whiskers-pose';
+    this.headPoseRoot.name = 'captain-whiskers-head-pose';
+    this.interactionRoot.name = 'captain-whiskers-interaction';
+    this.interactionRoot.userData.companionId = 'captainWhiskers';
+    this.modelPresentation = propModels.createPresentation(CAPTAIN_WHISKERS_INSTANCE);
+    this.modelPresentation.root.name = 'captain-whiskers-model';
+    this.headPoseRoot.add(this.modelPresentation.root);
+    this.poseRoot.add(this.headPoseRoot);
+    this.interactionRoot.add(this.poseRoot);
+    this.root.add(this.interactionRoot);
+
+    this.hand = createPettingHand();
+    this.food = createFoodProp();
+    this.root.add(this.hand, this.food);
+    collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+    this.setLiving(false);
+    this.applyPose();
+  }
+
+  sync(snapshot: CaptainWhiskersSnapshot | null): void {
+    if (this.disposed) return;
+    this.status = snapshot === null ? 'healthy' : captainWhiskersPoseState(snapshot);
+    this.setLiving(snapshot?.alive === true);
+    if (!this.living) this.finishAction();
+    this.samplePose();
+    this.applyPose();
+  }
+
+  play(action: CaptainWhiskersAction): Promise<void> {
+    if (this.disposed || !this.living) return Promise.resolve();
+    this.finishAction();
+    return new Promise((resolve) => {
+      this.activeAction = { id: action, elapsed: 0, resolve };
+      this.samplePose();
+      this.applyPose();
+    });
+  }
+
+  update(deltaSeconds: number): void {
+    if (this.disposed) return;
+    this.modelPresentation.update(deltaSeconds);
+    const action = this.activeAction;
+    if (action === null) return;
+    action.elapsed = Math.min(
+      ACTION_DURATION,
+      action.elapsed + Math.max(0, deltaSeconds),
+    );
+    this.samplePose();
+    this.applyPose();
+    if (action.elapsed < ACTION_DURATION) return;
+    this.activeAction = null;
+    action.resolve();
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.finishAction();
+    this.disposed = true;
+    runCleanupSteps([
+      () => this.modelPresentation.dispose(),
+      () => this.root.removeFromParent(),
+      () => disposeResourceSets(
+        this.ownedGeometries,
+        this.ownedMaterials,
+      ),
+    ]);
+  }
+
+  private setLiving(living: boolean): void {
+    this.living = living;
+    this.root.visible = living;
+    this.interactionRoot.visible = living;
+  }
+
+  private finishAction(): void {
+    const action = this.activeAction;
+    if (action === null) return;
+    this.activeAction = null;
+    this.samplePose();
+    this.applyPose();
+    action.resolve();
+  }
+
+  private samplePose(): void {
+    const action = this.activeAction;
+    this.poseSample.status = this.status;
+    this.poseSample.action = action?.id ?? null;
+    this.poseSample.elapsed = action?.elapsed ?? 0;
+    sampleCaptainWhiskersPoseInto(this.pose, this.poseSample);
+  }
+
+  private applyPose(): void {
+    const pose = this.pose;
+    this.poseRoot.position.y = pose.bodyLift;
+    this.poseRoot.rotation.x = pose.bodyPitch + pose.actionLean;
+    this.poseRoot.rotation.y = pose.bodyYaw;
+    this.headPoseRoot.rotation.x = pose.headPitch;
+    this.headPoseRoot.rotation.y = pose.headYaw;
+
+    this.hand.visible = this.living && pose.handReach !== 0;
+    this.hand.position.x = 0.62 - pose.handReach * 0.34;
+    this.hand.position.y = 0.78 - pose.handReach * 0.24;
+    this.hand.position.z = 0.1 + pose.handReach * 0.03;
+    this.hand.rotation.z = -0.28 + pose.handReach * 0.18;
+
+    this.food.visible = this.living && pose.foodReach !== 0;
+    this.food.position.x = 0.5 - pose.foodReach * 0.3;
+    this.food.position.y = 0.18 + pose.foodReach * 0.02;
+    this.food.position.z = 0.26 - pose.foodReach * 0.15;
+    this.food.rotation.y = -0.22 * pose.foodReach;
+  }
+}
+
+function createPettingHand(): Group {
+  const root = new Group();
+  root.name = 'captain-whiskers-petting-hand';
+  const skin = new MeshStandardMaterial({
+    color: 0xa77658,
+    roughness: 0.88,
+    flatShading: true,
+  });
+  const cloth = new MeshStandardMaterial({
+    color: 0x263f46,
+    roughness: 0.96,
+    flatShading: true,
+  });
+
+  const palm = new Mesh(new BoxGeometry(0.24, 0.075, 0.2, 1, 1, 1), skin);
+  palm.name = 'captain-whiskers-hand:palm';
+  palm.rotation.y = -0.08;
+  root.add(palm);
+
+  const thumb = new Mesh(new CylinderGeometry(0.025, 0.035, 0.14, 5), skin);
+  thumb.name = 'captain-whiskers-hand:thumb';
+  thumb.position.set(-0.12, -0.005, 0.035);
+  thumb.rotation.z = 1.08;
+  root.add(thumb);
+
+  for (let index = 0; index < 3; index += 1) {
+    const finger = new Mesh(
+      new BoxGeometry(0.055, 0.045, 0.2 - index * 0.012, 1, 1, 1),
+      skin,
+    );
+    finger.name = `captain-whiskers-hand:finger-${index + 1}`;
+    finger.position.set(-0.064 + index * 0.066, -0.045, -0.17);
+    finger.rotation.x = 0.08 + index * 0.025;
+    finger.rotation.y = (index - 1) * 0.035;
+    root.add(finger);
+  }
+
+  const cuff = new Mesh(new CylinderGeometry(0.13, 0.155, 0.16, 7), cloth);
+  cuff.name = 'captain-whiskers-hand:cuff';
+  cuff.position.z = 0.19;
+  cuff.rotation.x = Math.PI / 2;
+  root.add(cuff);
+  enableItemAmbientOcclusion(root);
+  return root;
+}
+
+function createFoodProp(): Group {
+  const root = new Group();
+  root.name = 'captain-whiskers-food';
+  const bowlMaterial = new MeshStandardMaterial({
+    color: 0x53646a,
+    roughness: 0.82,
+    metalness: 0.18,
+    flatShading: true,
+  });
+  const foodMaterial = new MeshStandardMaterial({
+    color: 0x754532,
+    roughness: 0.98,
+    flatShading: true,
+  });
+  const bowl = new Mesh(
+    new CylinderGeometry(0.2, 0.145, 0.09, 8, 1, false),
+    bowlMaterial,
+  );
+  bowl.name = 'captain-whiskers-food:bowl';
+  root.add(bowl);
+  const ration = new Mesh(new SphereGeometry(0.12, 7, 4), foodMaterial);
+  ration.name = 'captain-whiskers-food:ration';
+  ration.position.y = 0.065;
+  ration.scale.set(1, 0.38, 0.78);
+  ration.rotation.y = 0.24;
+  root.add(ration);
+  enableItemAmbientOcclusion(root);
+  return root;
+}

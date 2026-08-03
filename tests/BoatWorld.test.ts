@@ -47,6 +47,7 @@ import {
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
+import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   FOCUSED_EVENT_IDS,
@@ -446,14 +447,24 @@ describe('BoatWorld helpers', () => {
       bait: ITEM_DEFINITIONS.baitTin.spawnCount,
       recoveredFood: ITEM_DEFINITIONS.cannedFood.spawnCount,
       recoveredBait: ITEM_DEFINITIONS.baitTin.spawnCount,
+      captainWhiskers: {
+        alive: true,
+        hunger: 5,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
     }));
 
     expect(world.scene.getObjectByName('survival-supply-platform')).toBeUndefined();
     for (const type of Object.keys(ITEM_DEFINITIONS) as ItemId[]) {
       for (let index = 0; index < ITEM_DEFINITIONS[type].spawnCount; index += 1) {
-        const copy = world.scene.getObjectByName(
-          `boat-supply:${type}:copy-${index + 1}`,
-        )!;
+        const copy = type === 'captainWhiskers'
+          ? world.scene.getObjectByName('captain-whiskers-companion')!
+          : world.scene.getObjectByName(
+              `boat-supply:${type}:copy-${index + 1}`,
+            )!;
         const expected = boatSupplyTransform(type, index);
 
         expect(copy.visible, `${type}-${index + 1}`).toBe(true);
@@ -3269,19 +3280,87 @@ describe('BoatWorld helpers', () => {
       [whiskers],
     );
     try {
-      world.syncInventory(snapshot([whiskers]));
-      const copy = world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1')!;
-      const animatedRoot = copy.getObjectByName('CaptainWhiskers')!;
+      world.syncInventory(snapshot([], {
+        captainWhiskers: {
+          alive: true,
+          hunger: 5,
+          sickness: 0,
+          unhappiness: 0,
+          pettedToday: false,
+          deathCause: null,
+        },
+      }));
+      const companion = world.scene.getObjectByName('captain-whiskers-companion')!;
+      const animatedRoot = companion.getObjectByName('CaptainWhiskers')!;
       const before = animatedRoot.quaternion.clone();
 
       world.updateAmbient(0.5, 0.5);
 
-      expect(copy.visible).toBe(true);
+      expect(companion.visible).toBe(true);
       expect(animatedRoot.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
     } finally {
       world.dispose();
       propModels.dispose();
     }
+  });
+
+  it('shows one living companion model and projects its scene anchor', () => {
+    const whiskers = savedItem('captainWhiskers');
+    const propModels = createTestPropModels();
+    const create = vi.spyOn(propModels, 'createPresentation');
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      [whiskers],
+    );
+
+    expect(create.mock.calls.filter(([instance]) => (
+      instance.type === 'captainWhiskers'
+    ))).toHaveLength(1);
+    expect(world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1'))
+      .toBeUndefined();
+
+    world.syncInventory(snapshot([], {
+      captainWhiskers: {
+        alive: true,
+        hunger: 3,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
+    }));
+
+    expect(world.scene.getObjectByName('captain-whiskers-companion')?.visible).toBe(true);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'captain-whiskers',
+        companionId: 'captainWhiskers',
+        label: 'CAPTAIN WHISKERS',
+        description: 'Check his hunger, happiness, and health.',
+        itemType: null,
+        toolId: null,
+        action: null,
+      }),
+    ]));
+
+    world.syncInventory(snapshot([], {
+      captainWhiskers: {
+        alive: false,
+        hunger: 0,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: 'starvation',
+      },
+    }));
+    expect(world.scene.getObjectByName('captain-whiskers-companion')?.visible).toBe(false);
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'captain-whiskers')).toBeUndefined();
+
+    world.dispose();
+    propModels.dispose();
   });
 
   it('restores an animated item group without changing its canonical copy transform', async () => {
@@ -3625,6 +3704,7 @@ describe('BoatWorld helpers', () => {
       dispose: vi.fn(),
     } as unknown as EventModelLibrary;
     const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
+    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
 
     expect(() => new BoatWorld(
       new PerspectiveCamera(),
@@ -3638,9 +3718,11 @@ describe('BoatWorld helpers', () => {
     )).toThrow(constructionFailure);
     expect(schoolModelDispose).toHaveBeenCalledOnce();
     expect(disposeSupplies).toHaveBeenCalledOnce();
+    expect(disposeCompanion).toHaveBeenCalledOnce();
     expect(eventModels.dispose).not.toHaveBeenCalled();
 
     disposeSupplies.mockRestore();
+    disposeCompanion.mockRestore();
     propModels.dispose();
   });
 
