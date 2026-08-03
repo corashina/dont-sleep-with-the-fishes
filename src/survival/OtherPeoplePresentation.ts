@@ -60,9 +60,22 @@ const RESCUE_DURATION = 3.2;
 const EXIT_DURATION = 4.2;
 const SHIP_YAW = -0.08;
 const RESCUE_YAW = SHIP_YAW + 0.58;
-const SHIP_BASE = new Vector3(-8.5, 0.68, -48);
-const SHIP_APPROACH = new Vector3(-3.8, 0.8, -21);
-const SHIP_EXIT = new Vector3(11, 0.68, -45.4);
+const SHIP_DISTANCE_SCALE = 3;
+const SHIP_BASE = new Vector3(
+  -8.5 * SHIP_DISTANCE_SCALE,
+  0.68,
+  -48 * SHIP_DISTANCE_SCALE,
+);
+const SHIP_APPROACH = new Vector3(
+  -3.8 * SHIP_DISTANCE_SCALE,
+  0.8,
+  -21 * SHIP_DISTANCE_SCALE,
+);
+const SHIP_EXIT = new Vector3(
+  11 * SHIP_DISTANCE_SCALE,
+  0.68,
+  -45.4 * SHIP_DISTANCE_SCALE,
+);
 const FLARE_START = new Vector3(1.4, 1.8, -1.8);
 const FLARE_END = new Vector3(-2.4, 19, -23);
 const HORIZON_LIGHT_INTENSITY = 0.82;

@@ -912,7 +912,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps Other People on a slow distant cruise', () => {
+  it('keeps Other People on a slow cruise at triple distance', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -923,7 +923,10 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('other-people');
     const ship = world.scene.getObjectByName('other-people-ship')!;
     expect(ship.visible).toBe(true);
-    expect(ship.position.z).toBeLessThan(-35);
+    expect(Math.hypot(ship.position.x, ship.position.z)).toBeCloseTo(
+      Math.hypot(8.5, 48) * 3,
+    );
+    expect(ship.position.z).toBeLessThan(-140);
     const start = ship.position.clone();
     world.update(4, 4);
     expect(ship.position.distanceTo(start)).toBeGreaterThan(0);
