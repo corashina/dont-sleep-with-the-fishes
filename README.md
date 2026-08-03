@@ -80,6 +80,17 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 | Closed chest | Spend three energy to open the chest |
+| Captain Whiskers | Select **Check Status** to open his scene-linked care card |
+
+### Captain Whiskers
+
+Captain Whiskers is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
+
+Select **Check Status** beside him to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
+
+Pet eases loneliness once each day. Feed uses one Food. Treat uses one Medkit when he is sick.
+
+Living Whiskers gives a small passive fishing-luck bonus. He also enables crewmate events that can harm or kill him.
 
 ### Fishing
 
@@ -206,4 +217,6 @@ Water exclusion is rendered in the ocean shader rather than by layering flat pat
 
 ## Milestone boundaries
 
-This milestone targets desktop browsers with keyboard and mouse. It does not include saves, touch or mobile controls, crewmate systems, or persistent progression.
+This milestone targets desktop browsers with keyboard and mouse. Captain Whiskers is its only crewmate.
+
+It does not include saves, touch controls, mobile controls, other crewmates, or persistent progression.
