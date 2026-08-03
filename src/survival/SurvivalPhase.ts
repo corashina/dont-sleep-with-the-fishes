@@ -1689,14 +1689,15 @@ export class SurvivalPhase implements GamePhase {
       driftingLootVariant = current.pendingDriftingLootVariant;
     }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
+    const variantSeed = deriveEventVariantSeed(current.seed, current.day, event.id);
     if (isDedicatedEventId(event.id)) {
       this.world.stageEvent?.({
         eventId: event.id,
         targetInstanceId: current.pendingEventTargetId,
-        variantSeed: deriveEventVariantSeed(current.seed, current.day, event.id),
+        variantSeed,
       });
     } else {
-      this.world.stageEvent?.(event.id, driftingLootVariant);
+      this.world.stageEvent?.(event.id, driftingLootVariant, variantSeed);
     }
     this.eventPresentation = 'revealing';
     if (isDedicatedEventId(event.id)) {

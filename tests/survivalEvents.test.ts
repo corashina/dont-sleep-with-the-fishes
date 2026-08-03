@@ -223,12 +223,12 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
-  it('keeps only Drifting Loot in the random day catalog', () => {
+  it('keeps Drifting Loot and Drifting Bottle in the random day catalog', () => {
     expect(
       SURVIVAL_EVENTS
         .filter(({ phase }) => phase === 'day')
         .map(({ id }) => id),
-    ).toEqual(['drifting-loot']);
+    ).toEqual(['drifting-loot', 'drifting-bottle']);
     expect(
       MOVED_NIGHT_EVENT_IDS.every((id) => (
         SURVIVAL_EVENTS.find((event) => event.id === id)?.phase === 'night'
@@ -331,7 +331,7 @@ describe('survival events', () => {
     expect(resultIds('handyman', 'sleep')).toEqual(['handyman-sleep']);
     expect(resultIds('other-people', 'flareGun')).toEqual(['people-rescue']);
     expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
-    expect(resultIds('other-people', 'pass')).toEqual(['people-pass']);
+    expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
   });
 
   it('sets supernatural event pressure bounds and effects', () => {
@@ -395,13 +395,14 @@ describe('survival events', () => {
       }],
     });
     expect([
-      ['check-the-back', 'Ignore'],
       ['mystery-chest', 'Leave'],
       ['midnight-tour', 'Sail On'],
       ['night-trader', 'Refuse'],
     ].map(([eventId, label]) => (
       event(eventId!).choices.find(({ id }) => id === 'sleep')?.label === label
-    ))).toEqual([true, true, true, true]);
+    ))).toEqual([true, true, true]);
+    expect(event('check-the-back').choices.map(({ id, label }) => [id, label]))
+      .toEqual([['check', 'Yes'], ['sleep', 'No']]);
   });
 
   it('keeps Drifting Loot in the catalog as a dawn-only zero-cooldown reward event', () => {
@@ -423,6 +424,7 @@ describe('survival events', () => {
 
     expect(event('drifting-loot')).toMatchObject({ phase: 'day', weight: 18, earliestDay: 3 });
     expect(event('drifting-bottle')).toMatchObject({
+      phase: 'day',
       weight: 30,
       earliestDay: 2,
       maximumAppearances: 1,
@@ -431,12 +433,9 @@ describe('survival events', () => {
     expect(event('check-the-back').choices[0]?.outcomes).toMatchObject([
       { weight: 500, presentationKey: 'check-the-back.fish' },
       { weight: 50, presentationKey: 'check-the-back.empty' },
-      {
-        weight: 1,
-        presentationKey: 'check-the-back.face',
-        minimumPriorAppearances: 1,
-      },
     ]);
+    expect(event('check-the-back').choices[0]?.outcomes.map(({ presentationKey }) => presentationKey))
+      .toEqual(['check-the-back.fish', 'check-the-back.empty']);
     expect(event('mystery-chest').choices[0]?.outcomes).toMatchObject([
       { weight: 80, presentationKey: 'mystery-chest.safe' },
       {

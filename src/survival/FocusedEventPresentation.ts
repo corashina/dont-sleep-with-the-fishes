@@ -38,7 +38,7 @@ export interface FocusedEventInteractionTarget {
 
 export interface FocusedEventPresentation {
   readonly root: Group;
-  stage(): void;
+  stage(variantSeed?: number): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;
   react(

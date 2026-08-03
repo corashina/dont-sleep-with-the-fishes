@@ -1125,7 +1125,7 @@ describe('SurvivalPhase orchestration', () => {
       });
       expect(resolveEvent).not.toHaveBeenCalled();
       expect(stageEvent).toHaveBeenCalledOnce();
-      expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'barrel');
+      expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'barrel', expect.any(Number));
       expect(playEventChoiceBeat).not.toHaveBeenCalled();
       expect(retrieveDriftingLoot).not.toHaveBeenCalled();
       expect(recedeDriftingLoot).not.toHaveBeenCalled();
@@ -1244,7 +1244,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'crate');
+    expect(stageEvent).toHaveBeenCalledWith('drifting-loot', 'crate', expect.any(Number));
     expect(current).toMatchObject({ state: 'dayEvent', day: 3 });
   });
 
@@ -2439,6 +2439,45 @@ describe('SurvivalPhase orchestration', () => {
       'world:reveal',
       'choices:on',
     ]);
+  });
+
+  it('routes a stable seed into a focused event presenter', async () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      day: 6,
+      seed: 42,
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+    });
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent,
+        revealEvent: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(stageEvent).toHaveBeenCalledWith(
+      'midnight-tour',
+      null,
+      deriveEventVariantSeed(current.seed, current.day, 'midnight-tour'),
+    );
   });
 
   it.each([
@@ -3893,7 +3932,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(render).toHaveBeenCalledTimes(rendersBeforeRestart);
   });
 
-  it('integrates Swim Ring bottle recovery through reveal, inventory sync, reaction, and dawn', async () => {
+  it('integrates Swim Ring bottle recovery through day-event resolution', async () => {
     const calls: string[] = [];
     const session = new SurvivalSession(
       [{ instanceId: 'swimRing-1', type: 'swimRing' }],
@@ -3964,7 +4003,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       state: 'day',
-      day: 3,
+      day: 2,
       inventory: {
         'swimRing-1': { condition: 'usable' },
         'bottledPaper-1': { condition: 'usable' },
@@ -3980,7 +4019,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('clear:drifting-bottle'));
-    expect(calls.indexOf('clear:drifting-bottle')).toBeLessThan(calls.indexOf('cue:dawn'));
+    expect(calls).not.toContain('cue:dawn');
     expect(calls.indexOf('inventory:day:usable')).toBeLessThan(calls.lastIndexOf('uncover'));
   });
 
