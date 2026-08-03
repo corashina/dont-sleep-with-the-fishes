@@ -60,7 +60,11 @@ export class FeaturedEventPresentations {
     );
   }
 
-  stage(eventId: string, variant: DriftingLootVariant | null): void {
+  stage(
+    eventId: string,
+    variant: DriftingLootVariant | null,
+    variantSeed?: number,
+  ): void {
     if (this.disposed || !isFeaturedEventId(eventId)) return;
     this.clear();
     this.activeEventId = eventId;
@@ -69,7 +73,11 @@ export class FeaturedEventPresentations {
       this.driftingLoot.stage(variant);
       return;
     }
-    this.presentations[eventId].stage();
+    if (variantSeed === undefined) {
+      this.presentations[eventId].stage();
+      return;
+    }
+    this.presentations[eventId].stage(variantSeed);
   }
 
   reveal(eventId: string): Promise<void> {

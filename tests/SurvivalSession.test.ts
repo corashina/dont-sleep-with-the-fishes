@@ -349,26 +349,16 @@ describe('SurvivalSession daytime actions', () => {
     expect(island.snapshot()).toMatchObject({ bait: 1, inventory: {} });
   });
 
-  it('allows the rare stern face only after an earlier appearance', () => {
-    const first = new SurvivalSession(saved(), {
+  it('does not include the removed stern face outcome', () => {
+    const session = new SurvivalSession(saved(), {
       seed: 105,
       random: sequenceRandom([0.999]),
       initial: { day: 2 },
       initialEventId: 'check-the-back',
-    });
-    expect(first.resolveEvent(choiceResponse('check')).eventPresentationKey)
-      .not.toBe('check-the-back.face');
-
-    const later = new SurvivalSession(saved(), {
-      seed: 106,
-      random: sequenceRandom([0.999]),
-      initial: { day: 40 },
-      initialEventId: 'check-the-back',
       initialAppearanceCounts: { 'check-the-back': 1 },
     });
-    expect(later.resolveEvent(choiceResponse('check'))).toMatchObject({
-      eventPresentationKey: 'check-the-back.face',
-    });
+    expect(session.resolveEvent(choiceResponse('check')).eventPresentationKey)
+      .not.toBe('check-the-back.face');
   });
 
   it('enforces contextual requirements without mutating the session', () => {

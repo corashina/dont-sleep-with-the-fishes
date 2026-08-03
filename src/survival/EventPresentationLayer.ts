@@ -426,7 +426,7 @@ export class EventPresentationLayer {
     return this.focused.has(eventId);
   }
 
-  stage(eventId: string): void {
+  stage(eventId: string, variantSeed?: number): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.dangerousWaters.clear();
@@ -445,7 +445,11 @@ export class EventPresentationLayer {
     }
     if (focused === null) return;
     focused.root.visible = true;
-    focused.stage();
+    if (variantSeed === undefined) {
+      focused.stage();
+      return;
+    }
+    focused.stage(variantSeed);
   }
 
   reveal(eventId: string): Promise<void> {

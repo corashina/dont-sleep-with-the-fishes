@@ -1118,10 +1118,15 @@ export class BoatWorld {
   }
 
   stageEvent(context: EventSceneContext): void;
-  stageEvent(eventId: string, variant?: DriftingLootVariant | null): void;
+  stageEvent(
+    eventId: string,
+    variant?: DriftingLootVariant | null,
+    variantSeed?: number,
+  ): void;
   stageEvent(
     eventOrContext: string | EventSceneContext,
     variant: DriftingLootVariant | null = null,
+    variantSeed?: number,
   ): void {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
@@ -1133,7 +1138,7 @@ export class BoatWorld {
         ? {
             eventId,
             targetInstanceId: null,
-            variantSeed: 0,
+            variantSeed: variantSeed ?? 0,
           } as EventSceneContext
         : eventOrContext;
       this.eventPresentation.clear();
@@ -1154,14 +1159,16 @@ export class BoatWorld {
       this.activeFeaturedEventId = null;
       this.activeDriftingLootVariant = null;
       this.stageMoonEvent(eventId);
-      this.eventPresentation.stage(eventId);
+      if (variantSeed === undefined) this.eventPresentation.stage(eventId);
+      else this.eventPresentation.stage(eventId, variantSeed);
       this.weatherEventAnimator.stage(eventId);
       this.supernaturalEventAnimator.clear();
       return;
     }
     if (isFeaturedEventId(eventId)) {
       this.eventPresentation.clear();
-      this.featuredEvents.stage(eventId, variant);
+      if (variantSeed === undefined) this.featuredEvents.stage(eventId, variant);
+      else this.featuredEvents.stage(eventId, variant, variantSeed);
       this.activeFeaturedEventId = eventId;
       this.activeDriftingLootVariant = eventId === 'drifting-loot' ? variant : null;
       this.weatherEventAnimator.stage(eventId);
@@ -1173,7 +1180,8 @@ export class BoatWorld {
     this.activeFeaturedEventId = null;
     this.activeDriftingLootVariant = null;
     this.stageMoonEvent(eventId);
-    this.eventPresentation.stage(eventId);
+    if (variantSeed === undefined) this.eventPresentation.stage(eventId);
+    else this.eventPresentation.stage(eventId, variantSeed);
     this.weatherEventAnimator.stage(eventId);
     this.supernaturalEventAnimator.stage(eventId);
   }

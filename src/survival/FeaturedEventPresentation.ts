@@ -22,7 +22,7 @@ export function isFeaturedEventId(id: string): id is FeaturedEventId {
 
 export interface FeaturedEventPresentation {
   readonly root: Object3D;
-  stage(): void;
+  stage(variantSeed?: number): void;
   reveal(): Promise<void>;
   react(key: EventPresentationKey): Promise<void>;
   interactionRoot(): Object3D | null;
