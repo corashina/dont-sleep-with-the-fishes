@@ -108,6 +108,10 @@ import type {
 } from './eventPresentationTypes';
 import { AnglerfishSwarmPresentation } from './events/AnglerfishSwarmPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
+import {
+  CAPTAIN_WHISKERS_EVENT_IDS,
+  CaptainWhiskersEventPresentation,
+} from './events/CaptainWhiskersEventPresentation';
 import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
@@ -241,6 +245,12 @@ interface ActiveMoonAnimation {
   readonly resolve: () => void;
 }
 
+interface ActiveCaptainWhiskersDelegation {
+  elapsed: number;
+  readonly duration: number;
+  readonly resolve: () => void;
+}
+
 interface FishingVisuals {
   readonly root: Group;
   readonly line: Line<BufferGeometry, LineBasicMaterial>;
@@ -272,6 +282,12 @@ function createDedicatedEventCoordinator(
     presentations.push(new DeathStarePresentation(dedicatedEnvironment));
     presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
     presentations.push(new WhirlpoolPresentation(dedicatedEnvironment));
+    for (const eventId of CAPTAIN_WHISKERS_EVENT_IDS) {
+      presentations.push(new CaptainWhiskersEventPresentation(
+        eventId,
+        dedicatedEnvironment,
+      ));
+    }
     return new EventPresentationCoordinator(presentations);
   } catch (error) {
     try {
@@ -326,6 +342,12 @@ const DRIFTING_LOOT_STERN_REST = Object.freeze({
   x: 0.72,
   y: 0.58,
   z: 1.05,
+});
+const CAPTAIN_WHISKERS_DELEGATE_DURATION = 1.45;
+const CAPTAIN_WHISKERS_DELEGATE_OFFSET = Object.freeze({
+  x: 0.08,
+  y: -0.04,
+  z: 2.08,
 });
 
 function addOwnedFishingMesh(
@@ -552,6 +574,9 @@ export class BoatWorld {
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly captainWhiskers: CaptainWhiskersPresentation;
+  private readonly captainWhiskersDelegateBasePosition = new Vector3();
+  private readonly captainWhiskersDelegateBaseRotation = new Vector3();
+  private activeCaptainWhiskersDelegation: ActiveCaptainWhiskersDelegation | null = null;
   private readonly chestDisplay: ChestDisplay;
   private readonly dedicatedEvents: EventPresentationCoordinator | null;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
@@ -833,6 +858,7 @@ export class BoatWorld {
 
       captainWhiskers = new CaptainWhiskersPresentation(propModels);
       this.captainWhiskers = captainWhiskers;
+      this.captureCaptainWhiskersDelegateBase();
       this.boat.add(captainWhiskers.root);
 
       supplyDisplay = new BoatSupplyDisplay(
@@ -854,6 +880,7 @@ export class BoatWorld {
         : createDedicatedEventCoordinator({
             eventModels: dedicatedEventModels,
             supplies: this.supplyDisplay,
+            captainWhiskers: this.captainWhiskers,
             vortexWave: this.vortexWave,
             sampleWorldWaveInto: this.sampleWorldWaveInto,
             cameraEffectsRoot: this.cameraEffectsRoot,
@@ -1182,6 +1209,11 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.weatherEventOperation += 1;
+    if (this.dedicatedEvents?.handles(eventId)) {
+      return this.dedicatedEvents.playChoice(
+        typeof choice === 'string' ? choice : choice.choiceId,
+      );
+    }
     return this.eventPresentation.playChoice(eventId, choice);
   }
 
@@ -1197,6 +1229,7 @@ export class BoatWorld {
     variantSeed?: number,
   ): void {
     if (this.disposed) return;
+    this.finishCaptainWhiskersDelegation();
     this.weatherEventOperation += 1;
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
@@ -1293,6 +1326,25 @@ export class BoatWorld {
     return this.featuredEvents.react('drifting-loot', 'drifting-loot.food');
   }
 
+  delegateDriftingLoot(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.toolHoverOutline.setTarget(null);
+    this.finishCaptainWhiskersDelegation();
+    this.captureCaptainWhiskersDelegateBase();
+    const companionMotion = new Promise<void>((resolve) => {
+      this.activeCaptainWhiskersDelegation = {
+        elapsed: 0,
+        duration: CAPTAIN_WHISKERS_DELEGATE_DURATION,
+        resolve,
+      };
+    });
+    const lootMotion = this.featuredEvents.react(
+      'drifting-loot',
+      'drifting-loot.food',
+    );
+    return Promise.all([companionMotion, lootMotion]).then(() => undefined);
+  }
+
   recedeDriftingLoot(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
@@ -1387,6 +1439,7 @@ export class BoatWorld {
   clearEvent(): void {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
+    this.finishCaptainWhiskersDelegation();
     this.dedicatedEvents?.clear();
     this.resetDedicatedEffects();
     this.eventPresentation.clear();
@@ -1404,6 +1457,7 @@ export class BoatWorld {
   setDocumentHidden(hidden: boolean): void {
     if (this.disposed || !hidden) return;
     this.weatherEventOperation += 1;
+    this.finishCaptainWhiskersDelegation();
     this.skipSequence();
     this.clearDivePresentation();
     this.eventPresentation.settleForVisibilityChange();
@@ -1963,6 +2017,7 @@ export class BoatWorld {
       this.supplyDisplay.resetEventPoseForFrame();
       this.eventPresentation.update(time, delta);
       this.featuredEvents.update(time, delta);
+      this.updateCaptainWhiskersDelegation(delta);
       this.weatherEventAnimator.update(time, delta);
       this.applyDangerousWatersPresentation();
       this.supernaturalEventAnimator.update(time, delta, amplitudeScale);
@@ -2016,6 +2071,7 @@ export class BoatWorld {
       },
       () => this.cancelActiveSequence(),
       () => this.clearMoonEvent(),
+      () => this.finishCaptainWhiskersDelegation(),
       () => this.dedicatedEvents?.dispose(),
       () => this.resetDedicatedEffects(),
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
@@ -2781,6 +2837,81 @@ export class BoatWorld {
     const sequence = this.activeSequence;
     this.activeSequence = null;
     sequence?.resolve();
+  }
+
+  private captureCaptainWhiskersDelegateBase(): void {
+    this.captainWhiskersDelegateBasePosition.copy(this.captainWhiskers.root.position);
+    this.captainWhiskersDelegateBaseRotation.set(
+      this.captainWhiskers.root.rotation.x,
+      this.captainWhiskers.root.rotation.y,
+      this.captainWhiskers.root.rotation.z,
+    );
+  }
+
+  private updateCaptainWhiskersDelegation(delta: number): void {
+    const animation = this.activeCaptainWhiskersDelegation;
+    if (animation === null) return;
+    const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
+    animation.elapsed = Math.min(animation.duration, animation.elapsed + safeDelta);
+    const progress = animation.duration === 0 ? 1 : animation.elapsed / animation.duration;
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    let yaw = 0;
+    let roll = 0;
+    if (progress < 0.12) {
+      const travel = easeInOut(progress / 0.12);
+      x = -0.08 * travel;
+      y = -0.025 * travel;
+      z = -0.07 * travel;
+      yaw = -0.08 * travel;
+      roll = 0.1 * travel;
+    } else if (progress < 0.56) {
+      const travel = easeInOut((progress - 0.12) / 0.44);
+      x = -0.08 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.x + 0.08) * travel;
+      y = -0.025 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.y + 0.025) * travel;
+      z = -0.07 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.z + 0.07) * travel;
+      yaw = -0.08 + 0.28 * travel;
+      roll = 0.1 - 0.18 * travel;
+    } else if (progress < 0.74) {
+      const pull = Math.sin((progress - 0.56) / 0.18 * Math.PI);
+      x = CAPTAIN_WHISKERS_DELEGATE_OFFSET.x - pull * 0.04;
+      y = CAPTAIN_WHISKERS_DELEGATE_OFFSET.y - pull * 0.025;
+      z = CAPTAIN_WHISKERS_DELEGATE_OFFSET.z;
+      yaw = 0.2;
+      roll = -0.08 - pull * 0.08;
+    } else {
+      const travel = 1 - easeInOut((progress - 0.74) / 0.26);
+      x = CAPTAIN_WHISKERS_DELEGATE_OFFSET.x * travel;
+      y = CAPTAIN_WHISKERS_DELEGATE_OFFSET.y * travel;
+      z = CAPTAIN_WHISKERS_DELEGATE_OFFSET.z * travel;
+      yaw = 0.2 * travel;
+      roll = -0.08 * travel;
+    }
+    this.captainWhiskers.root.position.set(
+      this.captainWhiskersDelegateBasePosition.x + x,
+      this.captainWhiskersDelegateBasePosition.y + y,
+      this.captainWhiskersDelegateBasePosition.z + z,
+    );
+    this.captainWhiskers.root.rotation.set(
+      this.captainWhiskersDelegateBaseRotation.x,
+      this.captainWhiskersDelegateBaseRotation.y + yaw,
+      this.captainWhiskersDelegateBaseRotation.z + roll,
+    );
+    if (progress === 1) this.finishCaptainWhiskersDelegation();
+  }
+
+  private finishCaptainWhiskersDelegation(): void {
+    const animation = this.activeCaptainWhiskersDelegation;
+    if (animation === null) return;
+    this.activeCaptainWhiskersDelegation = null;
+    this.captainWhiskers.root.position.copy(this.captainWhiskersDelegateBasePosition);
+    this.captainWhiskers.root.rotation.set(
+      this.captainWhiskersDelegateBaseRotation.x,
+      this.captainWhiskersDelegateBaseRotation.y,
+      this.captainWhiskersDelegateBaseRotation.z,
+    );
+    animation.resolve();
   }
 
   private cancelActiveFishingAnimation(): void {

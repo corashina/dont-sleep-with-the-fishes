@@ -3370,6 +3370,43 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('moves Whiskers to delegated loot and restores him after the pull', async () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+    );
+    world.syncInventory(snapshot([], {
+      captainWhiskers: {
+        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        pettedToday: false, deathCause: null,
+      },
+    }));
+    world.stageEvent('drifting-loot', 'barrel');
+    const reveal = world.revealEvent('drifting-loot');
+    world.update(1, 0.9);
+    await reveal;
+    const companion = world.scene.getObjectByName('captain-whiskers-companion')!;
+    const basePosition = companion.position.clone();
+
+    const delegated = world.delegateDriftingLoot();
+    world.update(2, 0.35);
+    expect(companion.position.equals(basePosition)).toBe(false);
+    world.update(3, 1.2);
+    await delegated;
+
+    expect(companion.position.toArray()).toEqual(basePosition.toArray());
+    expect(world.projectDriftingLoot(800, 600)).not.toBeNull();
+    world.dispose();
+    furniture.dispose();
+    propModels.dispose();
+  });
+
   it('restores an animated item group without changing its canonical copy transform', async () => {
     const item = savedItem('energyBar');
     const propModels = createTestPropModels();
@@ -3607,6 +3644,10 @@ describe('BoatWorld helpers', () => {
       'death-stare-world',
       'anglerfish-swarm-world',
       'whirlpool-world',
+      'sick-companion-world',
+      'shadow-figure-world',
+      'sea-watcher-world',
+      'guarded-sleep-world',
     ]);
     expect(coordinatorBoat.children.map(({ name }) => name)).toEqual([
       'leak-boat',
@@ -3615,7 +3656,13 @@ describe('BoatWorld helpers', () => {
       'death-stare-boat',
       'anglerfish-swarm-boat',
       'whirlpool-boat',
+      'sick-companion-boat',
+      'shadow-figure-boat',
+      'sea-watcher-boat',
+      'guarded-sleep-boat',
     ]);
+    expect(coordinatorBoat.getObjectByName('shadow-figure:false-cat')).toBeDefined();
+    expect(coordinatorWorld.getObjectByName('sea-watcher:eye-1')).toBeDefined();
     expect(coordinatorWorld.getObjectByName('death-stare-blob-model')).toBeDefined();
     expect(eventModels.create).toHaveBeenCalledWith('deathStareBlob');
     const whirlpoolWorld = coordinatorWorld.getObjectByName('whirlpool-world')!;
