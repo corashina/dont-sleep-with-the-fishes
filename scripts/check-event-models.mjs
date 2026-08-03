@@ -106,6 +106,7 @@ const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
   'midnightIsland',
   'deadTree',
   'traderRowboat',
+  'traderOctopus',
   'riggedHand',
   'containerShip',
 ]);

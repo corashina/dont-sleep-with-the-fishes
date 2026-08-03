@@ -545,7 +545,11 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleEndure(): void {
-    if (this.eventPresentation !== 'choosing' || this.eventEligibility.size !== 0) return;
+    if (this.eventPresentation !== 'choosing') return;
+    if (
+      this.eventEligibility.size !== 0
+      && this.session.snapshot().pendingEventId !== 'other-people'
+    ) return;
     void this.resolveEndure(this.lifecycleGeneration);
   }
 
@@ -1365,6 +1369,10 @@ export class SurvivalPhase implements GamePhase {
       instanceId: null,
       condition: null,
     };
+    if (eventId === 'other-people') {
+      await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.session.resolveEvent?.({ kind: 'endure' });
     if (outcome === undefined || !this.isContinuationActive(generation)) {
@@ -1518,7 +1526,9 @@ export class SurvivalPhase implements GamePhase {
     snapshot: SurvivalSnapshot,
     generation: number,
   ): Promise<boolean> {
-    if (snapshot.pendingEventId !== 'drifting-loot') return false;
+    if (snapshot.state !== 'dayEvent' || snapshot.pendingEventId === null) {
+      return false;
+    }
     this.ui.beginEventPresentation?.();
     await this.runPendingEventReveal(snapshot, generation, true);
     return this.isContinuationActive(generation);
@@ -1666,7 +1676,7 @@ export class SurvivalPhase implements GamePhase {
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
     this.audio.beginEvent(event.id);
-    this.audio.eventReveal(event.id);
+    if (event.id !== 'bad-sleep') this.audio.eventReveal(event.id);
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
     this.setBusy(true);
@@ -1689,14 +1699,15 @@ export class SurvivalPhase implements GamePhase {
       driftingLootVariant = current.pendingDriftingLootVariant;
     }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
+    const variantSeed = deriveEventVariantSeed(current.seed, current.day, event.id);
     if (isDedicatedEventId(event.id)) {
       this.world.stageEvent?.({
         eventId: event.id,
         targetInstanceId: current.pendingEventTargetId,
-        variantSeed: deriveEventVariantSeed(current.seed, current.day, event.id),
+        variantSeed,
       });
     } else {
-      this.world.stageEvent?.(event.id, driftingLootVariant);
+      this.world.stageEvent?.(event.id, driftingLootVariant, variantSeed);
     }
     this.eventPresentation = 'revealing';
     if (isDedicatedEventId(event.id)) {
@@ -1706,7 +1717,15 @@ export class SurvivalPhase implements GamePhase {
     if (!await this.renderAndSettleCoveredScene(generation)) return;
     await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
-    await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    if (event.id === 'bad-sleep') {
+      this.audio.eventReveal(event.id);
+      this.ui.setBadSleepCue?.(true);
+    }
+    try {
+      await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
+    } finally {
+      if (event.id === 'bad-sleep') this.ui.setBadSleepCue?.(false);
+    }
     if (!this.isContinuationActive(generation)) return;
     if (!isDedicatedEventId(event.id)) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());

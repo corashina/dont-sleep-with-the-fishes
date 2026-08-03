@@ -657,6 +657,61 @@ describe('SurvivalUI', () => {
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
   });
 
+  it('keeps Other People sleep on the lantern beside eligible signals', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const choose = vi.fn();
+    ui.onEventChoice = choose;
+
+    ui.render(snapshot(), () => null);
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(
+      new Map([['flashlight-1', 'flashlight']]),
+      [{ id: 'sleep', label: 'Let It Pass', unavailableReason: null }],
+    );
+
+    expect(
+      mount.querySelector('[data-event-choices] [data-event-choice="sleep"]'),
+    ).toBeNull();
+    expect(mount.querySelector('[data-event-choices]')?.textContent)
+      .not.toContain('Let It Pass');
+    const lantern = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="end-day-lantern"]',
+    )!;
+    expect(lantern.dataset.eventChoice).toBe('sleep');
+    expect(lantern.querySelector('[role="tooltip"]')?.textContent).toBe('SLEEP');
+    expect(lantern.disabled).toBe(false);
+    expect(lantern.getAttribute('aria-disabled')).toBe('false');
+    expect(mount.querySelector<HTMLButtonElement>('[data-endure]')?.hidden).toBe(
+      true,
+    );
+
+    lantern.click();
+    expect(choose).toHaveBeenCalledWith('sleep');
+  });
+
+  it('keeps normal Flowers choices while routing sleep through the lantern', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      { id: 'collect', label: 'Collect', unavailableReason: null },
+      { id: 'bucket', label: 'Use Bucket', unavailableReason: null },
+      { id: 'sleep', label: 'Sleep', unavailableReason: null },
+    ]);
+
+    expect(labels('[data-event-choices] [data-event-choice]')).toEqual([
+      'Collect',
+      'Use Bucket',
+    ]);
+    expect(mount.querySelector('[data-anchor-id="end-day-lantern"]')?.getAttribute(
+      'data-event-choice',
+    )).toBe('sleep');
+  });
+
   it('shows a held result caption after a captionless reveal and clears its state', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
@@ -696,24 +751,23 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
   });
 
-  it('does not render an eye mask for Bad Sleep', async () => {
+  it('shows and clears the small Bad Sleep eyelid cue', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.beginEventPresentation();
-    ui.setEventSelection(new Map());
-    await ui.setSleepCovered(true);
+    ui.setBadSleepCue(true);
 
-    const endure = mount.querySelector<HTMLButtonElement>('[data-endure]')!;
-    expect(mount.querySelectorAll('[data-dream-eyes]')).toHaveLength(0);
-    expect(mount.querySelectorAll('[data-dream-eyelid]')).toHaveLength(0);
-    expect(endure.hidden).toBe(false);
-    endure.focus();
-    expect(document.activeElement).toBe(endure);
+    const eyelids = mount.querySelector<HTMLElement>('[data-bad-sleep-cue]')!;
+    expect(eyelids.classList).toContain('is-visible');
+    expect(mainStyles).toMatch(/\.bad-sleep-cue\.is-visible/);
+    ui.setBadSleepCue(false);
+    expect(eyelids.classList).not.toContain('is-visible');
+    ui.setBadSleepCue(true);
+    ui.clearEventPresentation();
+    expect(eyelids.classList).not.toContain('is-visible');
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
-    expect(mainStyles).toMatch(/\.event-endure\s*\{[^}]*z-index:\s*18/s);
-    expect(mainStyles).not.toMatch(/bad-sleep-(left|right)-(upper|lower)/);
+    expect(mainStyles).toMatch(/height:\s*12%/);
   });
 
   it('reuses the event caption for the exact held result', async () => {

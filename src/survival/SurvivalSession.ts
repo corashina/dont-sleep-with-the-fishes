@@ -409,7 +409,10 @@ export class SurvivalSession {
     }
 
     if (response.kind === 'endure') {
-      if (this.hasUsableEventChoice(this.pendingEvent)) {
+      if (
+        this.pendingEvent.id !== 'other-people'
+        && this.hasUsableEventChoice(this.pendingEvent)
+      ) {
         return this.reject('endure-unavailable', 'Use one of the highlighted items to face this event.');
       }
       return this.resolveEventChoice('sleep', null, null);
@@ -601,7 +604,7 @@ export class SurvivalSession {
     if (this.isTerminal()) return dawn;
 
     if (this.day < SURVIVAL_BALANCE.rescue.firstDay) {
-      this.openDriftingLootAfterDawn();
+      this.openDayEventAfterDawn();
       return dawn;
     }
 
@@ -612,7 +615,7 @@ export class SurvivalSession {
     );
     const progressChance = Math.min(SURVIVAL_BALANCE.rescue.progressCap, this.rescueProgress) / 100;
     if (this.random.next() >= Math.min(0.85, baseChance + progressChance)) {
-      this.openDriftingLootAfterDawn();
+      this.openDayEventAfterDawn();
       return dawn;
     }
 
@@ -894,12 +897,16 @@ export class SurvivalSession {
     return drawWeightedEvent(pool, this.random, phase);
   }
 
-  private openDriftingLootAfterDawn(): void {
+  private openDayEventAfterDawn(): void {
     const balance = SURVIVAL_BALANCE.dayEvents.driftingLoot;
     if (this.day < balance.firstDay || this.random.next() >= balance.chance) return;
-    const event = survivalEventById('drifting-loot');
-    if (event === undefined) throw new Error('Missing Drifting Loot event definition.');
-    this.pendingDriftingLootVariant = this.random.next() < balance.barrelChance ? 'barrel' : 'crate';
+    const event = this.drawEvent('day');
+    if (event.id === 'day-calm-fallback') return;
+    if (event.id === 'drifting-loot') {
+      this.pendingDriftingLootVariant = this.random.next() < balance.barrelChance
+        ? 'barrel'
+        : 'crate';
+    }
     this.openEvent(event);
   }
 

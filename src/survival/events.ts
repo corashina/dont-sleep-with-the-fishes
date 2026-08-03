@@ -21,7 +21,8 @@ export const INCLUDED_EVENT_PHASES = Object.freeze({
   'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
   thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
   ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
-  'drifting-loot': 'day', 'drifting-bottle': 'night', 'check-the-back': 'night',
+  'shark-men': 'night',
+  'drifting-loot': 'day', 'drifting-bottle': 'day', 'check-the-back': 'night',
   'mystery-chest': 'night', 'midnight-tour': 'night', 'night-trader': 'night',
   handyman: 'night', 'other-people': 'night', flowers: 'night',
   'chest-attack': 'night',
@@ -47,6 +48,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.free
   ghosts: 'Pale shapes gather around the drifting boat.',
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
+  'shark-men': 'Fins circle the boat as wet hands reach over the rail.',
   'drifting-loot': 'Something useful drifts within reach of the boat.',
   'drifting-bottle': 'A sealed bottle bobs against the hull.',
   'check-the-back': 'Something thumps against the back of the boat.',
@@ -371,12 +373,11 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
   ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'Check the Back', 'fish', 35, 2, 35, [
-    contextualChoice('check', 'Check the Back',
+    contextualChoice('check', 'Yes',
       featuredOutcome('check-the-back.fish', 500, 'A fish has landed aboard.', effects([add('food', 1)])),
       featuredOutcome('check-the-back.empty', 50, 'There is nothing there.'),
-      featuredOutcome('check-the-back.face', 1, 'You see yourself looking back.', {}, 1),
     ),
-    contextualChoice('sleep', 'Ignore',
+    contextualChoice('sleep', 'No',
       featuredOutcome('check-the-back.ignore', 1, 'You leave the sound alone.')),
   ]),
   event('mystery-chest', 'Mystery Chest', 'impact', 45, 6, 33, [
@@ -462,7 +463,12 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
       outcome(60, 'The other boat disappears into the dark.', {}, 'people-missed')),
-    contextualChoice('pass', 'Let It Pass', outcome(1, 'You let the other boat pass.', {}, 'people-pass')),
+    contextualChoice('sleep', 'Let It Pass', outcome(
+      1,
+      'You let the other boat pass.',
+      {},
+      'people-pass',
+    )),
   ], undefined, { minimumRescueProgress: 15, maximumAppearances: 2 }),
 ]);
 

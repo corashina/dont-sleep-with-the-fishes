@@ -10,6 +10,7 @@ export interface SupernaturalRevealSample {
   cameraPitch: number;
   cameraRoll: number;
   ghostVisibility: number;
+  ghostVisibilities: [number, number, number, number, number];
   ghostDistances: [number, number, number, number, number];
   ghostSideOffsets: [number, number, number, number, number];
   flareFlash: number;
@@ -59,7 +60,7 @@ export interface SupernaturalReactionSample {
 }
 
 const REVEAL_DURATIONS: Readonly<Record<SupernaturalAnimationEventId, number>> = Object.freeze({
-  ghosts: 4,
+  ghosts: 6.4,
   'eerie-melody': 4.4,
 });
 
@@ -74,12 +75,15 @@ const ITEM_DURATIONS = Object.freeze({
 });
 
 export const GHOST_FLIGHT_PATHS = Object.freeze([
-  Object.freeze({ start: [-7.2, 0.92, -6.2] as const, end: [6.4, 1.18, -7.1] as const }),
-  Object.freeze({ start: [7.4, 1.2, -8.4] as const, end: [-5.8, 0.98, -9.1] as const }),
-  Object.freeze({ start: [-6.3, 1.28, -11.2] as const, end: [4.8, 1.5, -10.4] as const }),
-  Object.freeze({ start: [6.1, 1.52, -13.4] as const, end: [-4.7, 1.26, -12.2] as const }),
-  Object.freeze({ start: [-4.2, 1.04, -15.2] as const, end: [6.7, 1.42, -14.1] as const }),
+  Object.freeze({ start: [-11.5, 0.38, -6.8] as const, end: [10.8, 0.52, -8.2] as const }),
+  Object.freeze({ start: [12.2, 0.54, -11] as const, end: [-10.4, 0.4, -12.5] as const }),
+  Object.freeze({ start: [-10.8, 0.64, -15.4] as const, end: [9.6, 0.48, -16.8] as const }),
+  Object.freeze({ start: [11.4, 0.44, -19.8] as const, end: [-9.8, 0.62, -21.2] as const }),
+  Object.freeze({ start: [-9.6, 0.56, -24.1] as const, end: [11.8, 0.36, -25.4] as const }),
 ] as const);
+
+const GHOST_REVEAL_START = 0.16;
+const GHOST_REVEAL_STAGGER = 0.02;
 
 function isSupernaturalEventId(eventId: string): eventId is SupernaturalAnimationEventId {
   return Object.hasOwn(REVEAL_DURATIONS, eventId);
@@ -110,6 +114,11 @@ function resetReveal(output: SupernaturalRevealSample): void {
   output.cameraPitch = 0;
   output.cameraRoll = 0;
   output.ghostVisibility = 0;
+  output.ghostVisibilities[0] = 0;
+  output.ghostVisibilities[1] = 0;
+  output.ghostVisibilities[2] = 0;
+  output.ghostVisibilities[3] = 0;
+  output.ghostVisibilities[4] = 0;
   output.ghostDistances[0] = 0;
   output.ghostDistances[1] = 0;
   output.ghostDistances[2] = 0;
@@ -165,6 +174,11 @@ function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number)
   output.cameraPitch *= envelope;
   output.cameraRoll *= envelope;
   output.ghostVisibility *= envelope;
+  output.ghostVisibilities[0] *= envelope;
+  output.ghostVisibilities[1] *= envelope;
+  output.ghostVisibilities[2] *= envelope;
+  output.ghostVisibilities[3] *= envelope;
+  output.ghostVisibilities[4] *= envelope;
   output.flareFlash *= envelope;
   output.fogCurtain *= envelope;
   output.sirenHeadTurn *= envelope;
@@ -188,22 +202,23 @@ export function sampleSupernaturalReveal(
   if (t === 0 || t === 1) return true;
 
   if (eventId === 'ghosts') {
-    const ghosts = smoothstep((t - 0.06) / 0.18)
-      * (1 - smoothstep((t - 0.84) / 0.12));
-    const flight = smoothstep((t - 0.08) / 0.76);
     const cameraSweep = smoothstep((t - 0.08) / 0.68);
     output.cameraYaw = 0.3 - cameraSweep * 0.56;
     output.cameraPitch = 0.04 - cameraSweep * 0.1;
-    output.ghostVisibility = ghosts;
     for (let index = 0; index < GHOST_FLIGHT_PATHS.length; index += 1) {
       const path = GHOST_FLIGHT_PATHS[index]!;
+      const start = GHOST_REVEAL_START + index * GHOST_REVEAL_STAGGER;
+      const visibility = smoothstep((t - start) / 0.1)
+        * (1 - smoothstep((t - 0.84) / 0.12));
+      const flight = smoothstep((t - start) / (0.84 - start));
+      output.ghostVisibilities[index] = visibility;
       output.ghostDistances[index] = -(
         path.start[2] + (path.end[2] - path.start[2]) * flight
       );
       output.ghostSideOffsets[index] = path.start[0]
         + (path.end[0] - path.start[0]) * flight;
     }
-    output.flareFlash = pulse(t, 0.34, 0.47, 0.62);
+    output.ghostVisibility = output.ghostVisibilities[0];
   } else {
     const curtain = smoothstep((t - 0.12) / 0.42);
     output.cameraYaw = 0.42 * smoothstep((t - 0.14) / 0.46);

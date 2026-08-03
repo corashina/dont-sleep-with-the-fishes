@@ -5,7 +5,7 @@
 
 # Bad sleep
 1. Yawning sound should be played after player fades in into the event cue, not at the start.
-2. The items on the boat should not move during event cue. 
+2. The items on the boat should not move during event cue.
 3. The player camera should not move during event cue.
 4. Player camera should simply show player's eyes closing a little like hes about to sleep.
 
