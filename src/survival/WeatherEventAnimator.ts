@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -104,11 +105,25 @@ function prepareFogMan(model: Group, material: Material): Group {
   });
   disposeResourceSets(replacedTextures, replacedMaterials);
 
+  const tableau = new Group();
+  tableau.name = 'event-tableau:man-in-the-fog';
+  tableau.add(model);
+  const bounds = new Box3().setFromObject(model);
+  const modelHeight = bounds.max.y - bounds.min.y;
+  if (Number.isFinite(modelHeight) && modelHeight > 0) {
+    tableau.position.y = -(bounds.min.y + bounds.max.y) * 0.5;
+    tableau.userData.waterlineFraction = (
+      -tableau.position.y - bounds.min.y
+    ) / modelHeight;
+  } else {
+    tableau.userData.waterlineFraction = 0.5;
+  }
+
   const root = new Group();
   root.name = 'fog-man-silhouette';
   root.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
   root.visible = false;
-  root.add(model);
+  root.add(tableau);
   return root;
 }
 

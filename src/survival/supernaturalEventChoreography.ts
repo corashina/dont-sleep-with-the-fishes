@@ -10,6 +10,7 @@ export interface SupernaturalRevealSample {
   cameraPitch: number;
   cameraRoll: number;
   ghostVisibility: number;
+  ghostVisibilities: [number, number, number, number, number];
   ghostDistances: [number, number, number, number, number];
   ghostSideOffsets: [number, number, number, number, number];
   flareFlash: number;
@@ -81,6 +82,9 @@ export const GHOST_FLIGHT_PATHS = Object.freeze([
   Object.freeze({ start: [-4.2, 1.04, -15.2] as const, end: [6.7, 1.42, -14.1] as const }),
 ] as const);
 
+const GHOST_REVEAL_START = 0.22;
+const GHOST_REVEAL_STAGGER = 0.035;
+
 function isSupernaturalEventId(eventId: string): eventId is SupernaturalAnimationEventId {
   return Object.hasOwn(REVEAL_DURATIONS, eventId);
 }
@@ -110,6 +114,11 @@ function resetReveal(output: SupernaturalRevealSample): void {
   output.cameraPitch = 0;
   output.cameraRoll = 0;
   output.ghostVisibility = 0;
+  output.ghostVisibilities[0] = 0;
+  output.ghostVisibilities[1] = 0;
+  output.ghostVisibilities[2] = 0;
+  output.ghostVisibilities[3] = 0;
+  output.ghostVisibilities[4] = 0;
   output.ghostDistances[0] = 0;
   output.ghostDistances[1] = 0;
   output.ghostDistances[2] = 0;
@@ -165,6 +174,11 @@ function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number)
   output.cameraPitch *= envelope;
   output.cameraRoll *= envelope;
   output.ghostVisibility *= envelope;
+  output.ghostVisibilities[0] *= envelope;
+  output.ghostVisibilities[1] *= envelope;
+  output.ghostVisibilities[2] *= envelope;
+  output.ghostVisibilities[3] *= envelope;
+  output.ghostVisibilities[4] *= envelope;
   output.flareFlash *= envelope;
   output.fogCurtain *= envelope;
   output.sirenHeadTurn *= envelope;
@@ -188,22 +202,23 @@ export function sampleSupernaturalReveal(
   if (t === 0 || t === 1) return true;
 
   if (eventId === 'ghosts') {
-    const ghosts = smoothstep((t - 0.06) / 0.18)
-      * (1 - smoothstep((t - 0.84) / 0.12));
-    const flight = smoothstep((t - 0.08) / 0.76);
     const cameraSweep = smoothstep((t - 0.08) / 0.68);
     output.cameraYaw = 0.3 - cameraSweep * 0.56;
     output.cameraPitch = 0.04 - cameraSweep * 0.1;
-    output.ghostVisibility = ghosts;
     for (let index = 0; index < GHOST_FLIGHT_PATHS.length; index += 1) {
       const path = GHOST_FLIGHT_PATHS[index]!;
+      const start = GHOST_REVEAL_START + index * GHOST_REVEAL_STAGGER;
+      const visibility = smoothstep((t - start) / 0.1)
+        * (1 - smoothstep((t - 0.84) / 0.12));
+      const flight = smoothstep((t - start) / (0.84 - start));
+      output.ghostVisibilities[index] = visibility;
       output.ghostDistances[index] = -(
         path.start[2] + (path.end[2] - path.start[2]) * flight
       );
       output.ghostSideOffsets[index] = path.start[0]
         + (path.end[0] - path.start[0]) * flight;
     }
-    output.flareFlash = pulse(t, 0.34, 0.47, 0.62);
+    output.ghostVisibility = output.ghostVisibilities[0];
   } else {
     const curtain = smoothstep((t - 0.12) / 0.42);
     output.cameraYaw = 0.42 * smoothstep((t - 0.14) / 0.46);

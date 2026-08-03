@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
   Box3,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   DirectionalLight,
@@ -2000,7 +2001,9 @@ describe('BoatWorld helpers', () => {
     world.update(time, delta);
 
     expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
-    expect(tableau.position.toArray()).toEqual([-4.3, -0.26, -9.2]);
+    expect(tableau.position.x).toBe(-4.3);
+    expect(tableau.position.y).toBeCloseTo(1.659);
+    expect(tableau.position.z).toBe(-9.2);
     expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
     expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
 
@@ -2053,6 +2056,84 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('places the Fog Man midpoint at the waterline', () => {
+    const propModels = createTestPropModels();
+    const fogMan = new Group();
+    fogMan.add(new Mesh(new BoxGeometry(1, 2, 1), new MeshStandardMaterial()));
+    const eventModels = createTestEventModels();
+    vi.mocked(eventModels.create).mockImplementation((id: string) => (
+      id === 'fogMan' ? fogMan : new Group()
+    ));
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      eventModels,
+    );
+
+    world.stageEvent('man-in-the-fog');
+    const man = world.scene.getObjectByName('event-tableau:man-in-the-fog')!;
+    expect(man.userData.waterlineFraction).toBeCloseTo(0.5, 1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('delays Ghosts and faces each ghost along its flight path', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+
+    world.stageEvent('ghosts');
+    const reveal = world.revealEvent('ghosts');
+    world.update(0.25, 0.25);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
+    world.update(1.2, 0.95);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('ghost-1')?.userData.facingPath).toBe(true);
+    expect(world.scene.getObjectByName('supernatural-burst')?.visible).not.toBe(true);
+    world.update(4, 2.8);
+    await reveal;
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages the Eerie Melody subject above layered fog and waves', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+
+    world.stageEvent('eerie-melody');
+    const tableau = world.scene.getObjectByName('siren-tableau')!;
+    expect(tableau.userData.minimumWaveClearance).toBeGreaterThan(0);
+    expect(tableau.userData.fogLayerCount).toBeGreaterThanOrEqual(3);
+    expect(tableau.userData.subjectValueSeparation).toBeGreaterThan(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('coordinates supernatural staging, item motion, and cleanup', async () => {
     const weatherSupport = vi.spyOn(WeatherEventAnimator.prototype, 'supportsItemUse');
     const supernaturalSupport = vi.spyOn(
@@ -2089,7 +2170,7 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([flare]));
 
     world.stageEvent('ghosts');
-    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
     expect(weatherSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
