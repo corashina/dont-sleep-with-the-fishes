@@ -634,7 +634,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(random.next).not.toHaveBeenCalled();
   });
 
-  it('uses anchor-2 for a choice-targeted break instead of anchor-1', () => {
+  it('breaks anchor-2 at dawn instead of anchor-1', () => {
     const session = new SurvivalSession(saved('anchor', 'anchor'), {
       seed: 1,
       random: sequenceRandom([0]),
@@ -650,6 +650,11 @@ describe('SurvivalSession daytime actions', () => {
       choiceId: 'anchor',
       instanceId: 'anchor-2',
     }).accepted).toBe(true);
+    expect(session.snapshot().inventory).toMatchObject({
+      'anchor-1': { condition: 'usable' },
+      'anchor-2': { condition: 'usable' },
+    });
+    session.beginDawn();
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'usable' },
       'anchor-2': { condition: 'broken' },
@@ -696,7 +701,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(unowned.snapshot()).toEqual(before);
   });
 
-  it('mutates the exact suitable item instance selected for an event', () => {
+  it('breaks the exact selected item at dawn', () => {
     const session = new SurvivalSession(saved('bucket', 'bucket'), {
       seed: 1,
       random: sequenceRandom([0.99]),
@@ -708,6 +713,9 @@ describe('SurvivalSession daytime actions', () => {
       choiceId: 'bucket',
       instanceId: 'bucket-2',
     })).toMatchObject({ accepted: true, cue: 'none' });
+    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory['bucket-2']?.condition).toBe('usable');
+    session.beginDawn();
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
     expect(session.snapshot().inventory['bucket-2']?.condition).toBe('broken');
   });
@@ -1663,7 +1671,13 @@ describe('SurvivalSession daytime actions', () => {
       random: sequenceRandom([0.99]),
       initialEventId: 'shower-night',
     });
-    expect(suitable.resolveEvent(itemResponse('bucket'))).toMatchObject({ accepted: true, code: 'event-resolved' });
+    expect(suitable.resolveEvent(itemResponse('bucket'))).toMatchObject({
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The bucket keeps the rain under control.',
+    });
+    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('usable');
+    suitable.beginDawn();
     expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
   });
 
@@ -1933,8 +1947,9 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'shower-night',
     });
     expect(session.resolveEvent(itemResponse('bucket')).accepted).toBe(true);
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('broken');
+    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
     session.beginDawn();
+    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('broken');
     expect(session.perform('repairItem', { kind: 'itemRepair', target: 'bucket-1' }).accepted).toBe(true);
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
   });
@@ -1961,13 +1976,19 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['map-2']?.condition).toBe('usable');
   });
 
-  it('breaks random eligible items without replacement', () => {
+  it('breaks random eligible items without replacement at dawn', () => {
     const session = new SurvivalSession(saved('anchor', 'bucket', 'spyglass'), {
       seed: 16,
       random: sequenceRandom([0, 0, 0.99, 0]),
       initialEventId: 'windy-night',
     });
     session.resolveEvent({ kind: 'endure' });
+    expect(session.snapshot().inventory).toMatchObject({
+      'anchor-1': { condition: 'usable' },
+      'bucket-1': { condition: 'usable' },
+      'spyglass-1': { condition: 'usable' },
+    });
+    session.beginDawn();
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'broken' },
       'bucket-1': { condition: 'usable' },

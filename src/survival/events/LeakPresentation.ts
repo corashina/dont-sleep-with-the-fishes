@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -39,14 +38,55 @@ import {
   type LeakSample,
 } from './leakChoreography';
 
-const LEAK_HOLES = [
-  { y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
-  { y: -0.03, z: -0.34, scaleX: 0.16, scaleY: 0.1, rotation: 0.23, streamScale: 0.55 },
-  { y: 0.12, z: 0.18, scaleX: 0.18, scaleY: 0.11, rotation: -0.08, streamScale: 0.84 },
-] as const;
+interface LeakHolePlacement {
+  readonly side: -1 | 1;
+  readonly y: number;
+  readonly z: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  readonly rotation: number;
+  readonly streamScale: number;
+}
+
+const LEAK_SIDES = [-1, 1] as const;
+const LEAK_HOLES: readonly LeakHolePlacement[] = LEAK_SIDES.flatMap((side) => [
+  { side, y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
+  { side, y: -0.03, z: -0.34, scaleX: 0.16, scaleY: 0.1, rotation: 0.23, streamScale: 0.55 },
+  { side, y: 0.12, z: 0.18, scaleX: 0.18, scaleY: 0.11, rotation: -0.08, streamScale: 0.84 },
+]);
 const HOLE_X = 1.57;
-const STREAM_X = 1.34;
+const STREAM_X = 1.85;
+const STREAM_DROP = 0.21;
+const INTERIOR_WATER_Y = -0.25;
 const WATER_OPACITY = 0.72;
+
+const INTERIOR_WATER_STATIONS = Object.freeze([
+  { z: -3, halfWidth: 0.28 },
+  { z: -2.65, halfWidth: 0.98 },
+  { z: -2.08, halfWidth: 1.46 },
+  { z: -1.12, halfWidth: 1.61 },
+  { z: 0, halfWidth: 1.61 },
+  { z: 1.18, halfWidth: 1.58 },
+  { z: 2.2, halfWidth: 1.26 },
+  { z: 2.72, halfWidth: 0.68 },
+  { z: 3, halfWidth: 0.28 },
+]);
+
+function createInteriorWaterGeometry(): ShapeGeometry {
+  const shape = new Shape();
+  const [first, ...starboard] = INTERIOR_WATER_STATIONS;
+  if (first === undefined) throw new Error('Leak water requires hull stations.');
+  shape.moveTo(first.halfWidth, -first.z);
+  for (const station of starboard) shape.lineTo(station.halfWidth, -station.z);
+  for (let index = INTERIOR_WATER_STATIONS.length - 1; index >= 0; index -= 1) {
+    const station = INTERIOR_WATER_STATIONS[index]!;
+    shape.lineTo(-station.halfWidth, -station.z);
+  }
+  shape.closePath();
+  const geometry = new ShapeGeometry(shape, 10);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
 
 function makeWaterMaterial(color: number, opacity: number): MeshStandardMaterial {
   return new MeshStandardMaterial({
@@ -140,16 +180,25 @@ export class LeakPresentation implements DedicatedEventPresentation {
       const placement = LEAK_HOLES[index]!;
       const hole = new Mesh(holeGeometry, this.holeMaterial);
       hole.name = `leak-hole-${index + 1}`;
-      hole.position.set(HOLE_X, placement.y, placement.z);
-      hole.rotation.set(0, Math.PI / 2, placement.rotation);
+      hole.position.set(placement.side * HOLE_X, placement.y, placement.z);
+      hole.rotation.set(
+        0,
+        placement.side * Math.PI / 2,
+        placement.side * placement.rotation,
+      );
       hole.scale.set(placement.scaleX, placement.scaleY, 1);
       hole.renderOrder = 1;
       holes.push(hole);
 
       const stream = new Mesh(streamGeometry, this.streamMaterial);
       stream.name = `leak-stream-${index + 1}`;
-      stream.position.set(STREAM_X, (placement.y - 0.307) * 0.5, placement.z);
-      stream.rotation.set(0, 0, 0.72 + index * 0.08);
+      stream.position.set(
+        placement.side * STREAM_X,
+        placement.y - STREAM_DROP,
+        placement.z,
+      );
+      const sideIndex = index % 3;
+      stream.rotation.set(0, 0, placement.side * (0.72 + sideIndex * 0.08));
       stream.renderOrder = 2;
       streams.push(stream);
     }
@@ -159,11 +208,11 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.spray.points.name = 'leak-spray-particles';
     this.spray.points.renderOrder = 3;
 
-    const interiorGeometry = new BoxGeometry(2.7, 0.008, 1.62, 6, 1, 4);
+    const interiorGeometry = createInteriorWaterGeometry();
     this.ownedGeometries.add(interiorGeometry);
     this.interiorWater = new Mesh(interiorGeometry, this.interiorMaterial);
     this.interiorWater.name = 'leak-interior-water';
-    this.interiorWater.position.set(0.48, -0.307, -0.32);
+    this.interiorWater.position.set(0, INTERIOR_WATER_Y, 0);
     this.interiorWater.renderOrder = 1;
 
     this.boatRoot.add(
@@ -412,7 +461,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
       this.sprayElapsed -= 0.22;
       const placement = LEAK_HOLES[this.sprayHoleIndex]!;
       this.sprayOrigin.set(
-        HOLE_X - 0.04,
+        placement.side * (HOLE_X + 0.04),
         placement.y - 0.04,
         placement.z,
       );
@@ -426,13 +475,13 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.environment.sampleWorldWaveInto(
       this.waveSample,
       time,
-      0.56,
-      -0.32,
+      0,
+      0,
       0.16,
     );
-    this.interiorWater.position.y = -0.307
-      + this.sample.interiorWater * 0.006
-      + this.waveSample.height * 0.003;
+    this.interiorWater.position.y = INTERIOR_WATER_Y
+      + this.sample.interiorWater * 0.008
+      + this.waveSample.height * 0.004;
     this.interiorWater.rotation.set(
       this.waveSample.normal.z * 0.035,
       0,

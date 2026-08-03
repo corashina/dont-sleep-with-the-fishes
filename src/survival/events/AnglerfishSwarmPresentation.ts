@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   Color,
   ConeGeometry,
@@ -48,15 +49,19 @@ import {
 
 interface AnglerActor {
   readonly root: Group;
+  readonly bodyMidY: number;
   readonly lure: PointLight | null;
   readonly lureMarker: Mesh;
   readonly wave: WaveSample;
   readonly pose: SwarmFishPose;
+  previousX: number;
+  previousZ: number;
+  headingYaw: number;
+  hasPreviousPosition: boolean;
   variant: SwarmVariant;
 }
 
 const WATERLINE = 0.04;
-const SURFACE_BODY_LIFT = 0.82;
 const BODY_PRESENTATION_SCALE = 1.25;
 const SWARM_BODY_TINT = new Color(0x31535b);
 const CATCH_COUNT = 2;
@@ -65,8 +70,8 @@ const LURE_LIGHT_COUNT = 2;
 const DEFAULT_VARIANT: SwarmVariant = {
   scale: 0.54,
   hullAngle: 0,
-  radiusX: 2.2,
-  radiusZ: 4.1,
+  radiusX: 3.5,
+  radiusZ: 4.95,
   approachDistance: 1.8,
   depth: 0.3,
   speed: 0.8,
@@ -189,6 +194,12 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         : this.modelInstance.root.clone(true);
       root.name = `swarm-angler-${index + 1}`;
       root.userData.presentationScaleMaximum = 1.08;
+      root.updateMatrixWorld(true);
+      const bounds = new Box3().setFromObject(root);
+      const bodyMidY = bounds.isEmpty()
+        ? 0
+        : (bounds.min.y + bounds.max.y) * 0.5;
+      root.userData.bodyMidY = bodyMidY;
       const lure = index < LURE_LIGHT_COUNT
         ? new PointLight(0x67cde4, 0, 4.2, 1.8)
         : null;
@@ -201,10 +212,15 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       lureMarker.renderOrder = 3;
       this.anglers.push({
         root,
+        bodyMidY,
         lure,
         lureMarker,
         wave: waveSample(),
         pose: createSwarmFishPose(),
+        previousX: 0,
+        previousZ: 0,
+        headingYaw: 0,
+        hasPreviousPosition: false,
         variant: DEFAULT_VARIANT,
       });
       this.worldRoot.add(root, lureMarker);
@@ -460,18 +476,34 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         fish.pose.z,
         1,
       );
+      const presentationScale = fish.pose.scale * BODY_PRESENTATION_SCALE;
+      const surfaceY = WATERLINE + fish.wave.height;
+      const positionX = fish.pose.x + fish.wave.displacementX;
+      const positionZ = fish.pose.z + fish.wave.displacementZ;
+      if (fish.hasPreviousPosition) {
+        const travelX = positionX - fish.previousX;
+        const travelZ = positionZ - fish.previousZ;
+        if (travelX * travelX + travelZ * travelZ > 1e-8) {
+          fish.headingYaw = Math.atan2(travelX, travelZ);
+        }
+      } else {
+        fish.headingYaw = fish.pose.yaw;
+        fish.hasPreviousPosition = true;
+      }
+      fish.previousX = positionX;
+      fish.previousZ = positionZ;
+      fish.root.scale.setScalar(presentationScale);
       fish.root.position.set(
-        fish.pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height + SURFACE_BODY_LIFT
-          + fish.variant.scale * 0.08,
-        fish.pose.z + fish.wave.displacementZ,
+        positionX,
+        surfaceY - fish.bodyMidY * presentationScale,
+        positionZ,
       );
+      fish.root.userData.surfaceY = surfaceY;
       fish.root.rotation.set(
         fish.pose.pitch + fish.wave.normal.z * 0.1,
-        fish.pose.yaw,
+        fish.headingYaw,
         fish.pose.roll - fish.wave.normal.x * 0.08,
       );
-      fish.root.scale.setScalar(fish.pose.scale * BODY_PRESENTATION_SCALE);
       const caught = index < this.sample.foodDelta
         && this.sample.catchStrength > 0.008;
       fish.root.visible = index < this.sample.bodyVisibleCount && !caught;
@@ -545,6 +577,10 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       fish.root.position.set(0, 0, 0);
       fish.root.rotation.set(0, 0, 0);
       fish.root.scale.setScalar(1);
+      fish.previousX = 0;
+      fish.previousZ = 0;
+      fish.headingYaw = 0;
+      fish.hasPreviousPosition = false;
       if (fish.lure !== null) fish.lure.visible = false;
       fish.lureMarker.visible = false;
       if (fish.lure !== null) {
