@@ -10,8 +10,13 @@ export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
   | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay'
   | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers';
+export type CompanionEventActionId = 'delegateWhiskers';
 export type CompanionActionId =
-  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers' | 'delegateWhiskers';
+  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers' | CompanionEventActionId;
+export interface CompanionEventActionAvailability {
+  readonly visible: boolean;
+  readonly unavailableReason: string | null;
+}
 export type DayActionOption =
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
@@ -151,7 +156,7 @@ export interface EventChoiceDefinition {
   readonly itemId?: ItemId;
   readonly requirements?: readonly EventChoiceRequirement[];
   readonly requiredChestState?: ChestState;
-  readonly companionAction?: 'delegateWhiskers';
+  readonly companionAction?: CompanionEventActionId;
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 

@@ -63,6 +63,8 @@ import type {
   RewardSummary,
   ChestSnapshot,
   ChestState,
+  CompanionEventActionAvailability,
+  CompanionEventActionId,
   CompanionEventEffect,
   SurvivalEndingReason,
   WeatherId,
@@ -252,6 +254,40 @@ export class SurvivalSession {
 
   availableReason(action: DayActionId, option?: DayActionOption): string | null {
     return this.unavailable(action, option)?.message ?? null;
+  }
+
+  companionEventActionAvailability(
+    action: CompanionEventActionId,
+  ): CompanionEventActionAvailability {
+    if (action !== 'delegateWhiskers') {
+      throw new Error(`Unknown companion event action: ${action}`);
+    }
+    if (this.captainWhiskers === null) {
+      return {
+        visible: false,
+        unavailableReason: 'Captain Whiskers is not aboard.',
+      };
+    }
+    if (!this.captainWhiskers.alive) {
+      return {
+        visible: false,
+        unavailableReason: 'Captain Whiskers cannot retrieve the loot.',
+      };
+    }
+    if (captainWhiskersWellness(this.captainWhiskers) >= 4) {
+      return { visible: true, unavailableReason: null };
+    }
+
+    const status = captainWhiskersStatus(this.captainWhiskers);
+    const label = this.captainWhiskers.hunger < 4
+      ? status.hunger
+      : this.captainWhiskers.sickness > 0
+        ? status.health
+        : status.happiness;
+    return {
+      visible: true,
+      unavailableReason: `Captain Whiskers is ${label} and cannot retrieve the loot.`,
+    };
   }
 
   perform(action: Exclude<DayActionId, 'fish'>, option?: DayActionOption): ActionOutcome {
@@ -827,32 +863,14 @@ export class SurvivalSession {
   }
 
   private unavailableCompanionEventAction(
-    action: 'delegateWhiskers' | undefined,
+    action: CompanionEventActionId | undefined,
   ): Rejection | null {
     if (action === undefined) return null;
-    if (this.captainWhiskers === null) {
-      return {
-        code: 'companion-action-unavailable',
-        message: 'Captain Whiskers is not aboard.',
-      };
-    }
-    if (!this.captainWhiskers.alive) {
-      return {
-        code: 'companion-action-unavailable',
-        message: 'Captain Whiskers cannot retrieve the loot.',
-      };
-    }
-    if (captainWhiskersWellness(this.captainWhiskers) >= 4) return null;
-
-    const status = captainWhiskersStatus(this.captainWhiskers);
-    const label = this.captainWhiskers.hunger < 4
-      ? status.hunger
-      : this.captainWhiskers.sickness > 0
-        ? status.health
-        : status.happiness;
+    const availability = this.companionEventActionAvailability(action);
+    if (availability.unavailableReason === null) return null;
     return {
       code: 'companion-action-unavailable',
-      message: `Captain Whiskers is ${label} and cannot retrieve the loot.`,
+      message: availability.unavailableReason,
     };
   }
 

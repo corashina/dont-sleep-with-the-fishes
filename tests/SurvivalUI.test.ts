@@ -709,6 +709,26 @@ describe('SurvivalUI', () => {
     expect(onEventChoice).not.toHaveBeenCalled();
   });
 
+  it('exposes the exact Whiskers delegation reason through aria-disabled', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const reason = 'Captain Whiskers is Sick and cannot retrieve the loot.';
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'delegate-whiskers',
+      label: 'Send Whiskers',
+      unavailableReason: reason,
+    }]);
+
+    const choice = mount.querySelector<HTMLButtonElement>(
+      '[data-event-choice="delegate-whiskers"]',
+    )!;
+    expect(choice.getAttribute('aria-disabled')).toBe('true');
+    expect(choice.getAttribute('aria-description')).toBe(reason);
+    expect(choice.textContent).toContain(reason);
+  });
+
   it('clears contextual choice state before disposal removes the UI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

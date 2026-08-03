@@ -372,7 +372,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         items: [consume('ductTape')],
         companion: [{ kind: 'sickness', operation: 'add', value: 1 }],
       }),
-      outcome(20, 'The tape changes nothing.', { items: [consume('ductTape')] })),
+      outcome(10, 'The tape changes nothing.', { items: [consume('ductTape')] })),
     contextualChoice('sleep', 'Sleep', outcome(
       1,
       'Captain Whiskers grows sicker through the night.',

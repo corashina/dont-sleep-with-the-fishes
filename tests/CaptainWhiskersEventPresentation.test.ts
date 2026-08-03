@@ -270,6 +270,46 @@ describe('CaptainWhiskersEventPresentation', () => {
     state.propModels.dispose();
   });
 
+  it.each(['shadow-figure', 'sea-watcher'] as const)(
+    'captures the live sick pose before staging %s',
+    (eventId) => {
+      const propModels = createTestPropModels();
+      const companion = new CaptainWhiskersPresentation(propModels);
+      const presentation = new CaptainWhiskersEventPresentation(eventId, {
+        captainWhiskers: companion,
+        camera: new PerspectiveCamera(),
+        sampleWorldWaveInto: vi.fn(),
+        readWorldWaveAmplitudeScale: () => 1,
+      } as unknown as DedicatedEventEnvironment);
+      const poseRoot = companion.root.getObjectByName('captain-whiskers-pose')!;
+      const headRoot = companion.root.getObjectByName('captain-whiskers-head-pose')!;
+      const constructorRotation = poseRoot.rotation.toArray();
+
+      companion.sync({
+        alive: true,
+        hunger: 5,
+        sickness: 2,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      });
+      const livePosition = poseRoot.position.toArray();
+      const liveRotation = poseRoot.rotation.toArray();
+      const liveHeadRotation = headRoot.rotation.toArray();
+      expect(liveRotation).not.toEqual(constructorRotation);
+
+      presentation.stage({ eventId, targetInstanceId: null, variantSeed: 23 });
+      presentation.clear();
+
+      expect(poseRoot.position.toArray()).toEqual(livePosition);
+      expect(poseRoot.rotation.toArray()).toEqual(liveRotation);
+      expect(headRoot.rotation.toArray()).toEqual(liveHeadRotation);
+      presentation.dispose();
+      companion.dispose();
+      propModels.dispose();
+    },
+  );
+
   it('disposes each owned false-cat material once', () => {
     const state = setup('shadow-figure');
     const falseCat = state.presentation.boatRoot.getObjectByName('shadow-figure:false-cat')!;
