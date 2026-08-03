@@ -154,6 +154,8 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
+    const action = vi.fn();
+    ui.onAction = action;
     ui.setAnchors([captainWhiskersAnchor()]);
     ui.render(snapshot({
       captainWhiskers: {
@@ -186,6 +188,17 @@ describe('SurvivalUI', () => {
     expect(card.textContent).toContain('Captain Whiskers has already been petted today.');
     expect(card.textContent).toContain('No food remains.');
     expect(card.textContent).toContain('No medical kit remains.');
+    for (const [actionId, reason] of [
+      ['petWhiskers', 'Captain Whiskers has already been petted today.'],
+      ['feedWhiskers', 'No food remains.'],
+      ['treatWhiskers', 'No medical kit remains.'],
+    ] as const) {
+      const button = card.querySelector<HTMLButtonElement>(`[data-action="${actionId}"]`)!;
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.getAttribute('aria-description')).toBe(reason);
+      button.click();
+    }
+    expect(action).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(card.querySelector('[data-action="petWhiskers"]'));
     expect(mount.querySelector('[data-pause]')?.contains(card)).toBe(false);
   });
@@ -219,7 +232,13 @@ describe('SurvivalUI', () => {
     expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'))).toBeGreaterThanOrEqual(16);
     expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'))).toBeGreaterThanOrEqual(16);
     card.querySelector<HTMLButtonElement>('[data-action="petWhiskers"]')!.click();
-    expect(action).toHaveBeenCalledWith('petWhiskers', undefined);
+    card.querySelector<HTMLButtonElement>('[data-action="feedWhiskers"]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-action="treatWhiskers"]')!.click();
+    expect(action.mock.calls).toEqual([
+      ['petWhiskers', undefined],
+      ['feedWhiskers', undefined],
+      ['treatWhiskers', undefined],
+    ]);
 
     card.querySelector<HTMLButtonElement>('[data-whiskers-close]')!.click();
     expect(card.hidden).toBe(true);
@@ -249,6 +268,44 @@ describe('SurvivalUI', () => {
     ui.setAnchors([]);
     expect(card.hidden).toBe(true);
     expect(document.activeElement).not.toBe(anchor);
+  });
+
+  it('clamps the Whiskers card inside the right and bottom viewport gutters', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    const viewport = {
+      x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600,
+      width: 800, height: 600, toJSON: () => ({}),
+    };
+    const measuredCard = {
+      x: 0, y: 0, top: 0, left: 0, right: 280, bottom: 260,
+      width: 280, height: 260, toJSON: () => ({}),
+    };
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(viewport);
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(measuredCard);
+    ui.setAnchors([captainWhiskersAnchor(850, 590)]);
+    ui.render(snapshot({
+      captainWhiskers: {
+        alive: true,
+        hunger: 4,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
+    }), () => null);
+
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="captain-whiskers"]')!.click();
+
+    const x = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'));
+    const y = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'));
+    expect(x).toBe(viewport.width - 16 - measuredCard.width);
+    expect(y).toBe(viewport.height - 16 - measuredCard.height);
+    expect(x + measuredCard.width).toBeLessThanOrEqual(viewport.width - 16);
+    expect(y + measuredCard.height).toBeLessThanOrEqual(viewport.height - 16);
   });
 
   it('closes the Whiskers card when Captain Whiskers dies', () => {
