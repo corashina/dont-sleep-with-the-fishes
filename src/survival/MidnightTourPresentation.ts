@@ -9,7 +9,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   PointLight,
-  Quaternion,
   SphereGeometry,
   TorusGeometry,
   Vector3,
@@ -34,6 +33,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 type MidnightTourAnimationKind =
   | 'reveal'
@@ -51,9 +51,6 @@ const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
 const VISIT_DURATION = 1.5;
 const RESULT_DURATION = 1.05;
-const Y_AXIS = new Vector3(0, 1, 0);
-const X_AXIS = new Vector3(1, 0, 0);
-
 function keyedTravel(progress: number): number {
   if (progress < 0.16) return -0.045 * smoothstep(progress / 0.16);
   if (progress < 0.82) {
@@ -92,19 +89,16 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly baitEnd = new Vector3(0.38, 0.52, -1.3);
   private readonly foodEnd = new Vector3(0.18, 0.58, -1.22);
   private readonly creatureEnd = new Vector3(-7.8, -0.1, -19.25);
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseQuaternion = new Quaternion();
-  private readonly cameraYawQuaternion = new Quaternion();
-  private readonly cameraPitchQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera;
   private activeAnimation: ActiveAnimation | null = null;
   private activeActor: Group | null = null;
-  private cameraCaptured = false;
   private staged = false;
   private disposed = false;
 
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
+    this.cameraLook = new StationaryEventCamera(dependencies.camera);
     this.root.name = 'focused-event:midnight-tour';
     this.root.visible = false;
     this.root.userData.motionSource = 'fixed';
@@ -419,35 +413,21 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private applyCameraVisitPose(
     yaw: number,
     pitch: number,
-    z: number,
+    _z: number,
   ): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.position.z += z;
-    this.cameraYawQuaternion.setFromAxisAngle(Y_AXIS, yaw);
-    this.cameraPitchQuaternion.setFromAxisAngle(X_AXIS, pitch);
-    this.dependencies.cameraRig.quaternion
-      .copy(this.cameraBaseQuaternion)
-      .multiply(this.cameraYawQuaternion)
-      .multiply(this.cameraPitchQuaternion);
+    this.cameraLook.apply(yaw, pitch);
   }
 
   private captureCamera(): void {
-    this.cameraBasePosition.copy(this.dependencies.cameraRig.position);
-    this.cameraBaseQuaternion.copy(this.dependencies.cameraRig.quaternion);
-    this.cameraCaptured = true;
+    this.cameraLook.capture();
   }
 
   private restoreCameraPose(): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.quaternion.copy(this.cameraBaseQuaternion);
+    this.cameraLook.apply(0, 0);
   }
 
   private restoreCamera(): void {
-    if (!this.cameraCaptured) return;
-    this.restoreCameraPose();
-    this.cameraCaptured = false;
+    this.cameraLook.restore();
   }
 
   private buildIsland(): void {

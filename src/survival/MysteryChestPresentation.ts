@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  PerspectiveCamera,
   Vector3,
 } from 'three';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../ocean/WaveField';
 import { disposeResourceSets } from '../world/SceneResources';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 const BASE = Object.freeze({ x: -2.15, y: 0.38, z: -4.15 });
 
@@ -24,6 +26,7 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly target = new Vector3();
+  private readonly cameraLook: StationaryEventCamera;
   private readonly wave: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -34,9 +37,10 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
   constructor(
     model: Object3D,
     private readonly deckTarget: Object3D,
-    private readonly cameraRig: Group,
+    camera: PerspectiveCamera,
   ) {
     super('mystery-chest-presentation');
+    this.cameraLook = new StationaryEventCamera(camera);
     this.subject.add(model);
     this.lid = model.getObjectByName('Chest_Top') ?? null;
     const toothGeometry = new ConeGeometry(0.055, 0.18, 5);
@@ -58,12 +62,18 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
     this.subject.add(this.teeth);
   }
 
+  stage(): void {
+    this.cameraLook.restore();
+    this.cameraLook.capture();
+    super.stage();
+  }
+
   protected reset(): void {
     this.subject.position.set(BASE.x, BASE.y, BASE.z);
     this.subject.rotation.set(0.04, -0.14, -0.04);
     if (this.lid) this.lid.rotation.x = 0;
     this.teeth.visible = false;
-    this.cameraRig.rotation.z = 0;
+    this.cameraLook.apply(0, 0);
   }
 
   protected applyIdle(time: number): void {
@@ -101,7 +111,8 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
       const snap = Math.sin(Math.min(1, progress * 2.4) * Math.PI);
       if (this.lid) this.lid.rotation.x = -1.15 * Math.min(1, progress * 3);
       this.subject.position.y += snap * 0.22;
-      this.cameraRig.rotation.z = Math.sin(progress * Math.PI * 10) * (1 - progress) * 0.035;
+      const kick = Math.sin(progress * Math.PI * 10) * (1 - progress);
+      this.cameraLook.apply(0, kick * -0.045);
     } else if (kind === 'mystery-chest.leave') {
       this.float(time, 0);
       this.subject.position.y -= eased * 1.2;
@@ -110,18 +121,18 @@ export class MysteryChestPresentation extends KeyedEventPresentation {
   }
 
   protected finishAnimation(kind: string): void {
-    this.cameraRig.rotation.z = 0;
+    this.cameraLook.apply(0, 0);
     if (kind === 'mystery-chest.leave') this.root.visible = false;
   }
 
   protected disposeOwned(): void {
-    this.cameraRig.rotation.z = 0;
+    this.cameraLook.restore();
     disposeResourceSets(this.geometries, this.materials);
   }
 
   clear(): void {
     super.clear();
-    this.cameraRig.rotation.z = 0;
+    this.cameraLook.restore();
   }
 
   private float(time: number, zOffset: number): void {

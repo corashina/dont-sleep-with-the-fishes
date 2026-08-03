@@ -32,6 +32,7 @@ import type {
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { StationaryEventCamera } from '../StationaryEventCamera';
 import {
   DEATH_STARE_ITEM_DURATION,
   DEATH_STARE_REACTION_DURATION,
@@ -142,6 +143,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   });
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly cameraLook: StationaryEventCamera | null;
   private readonly dominantEye: Mesh;
   private readonly recessedEye: Mesh;
   private readonly jawInterior: Mesh;
@@ -177,6 +179,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
+    this.cameraLook = environment.camera === undefined
+      ? null
+      : new StationaryEventCamera(environment.camera);
     this.worldRoot.name = 'death-stare-world';
     this.boatRoot.name = 'death-stare-boat';
     this.angler.name = 'death-stare-angler';
@@ -319,6 +324,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== 'death-stare') return;
     this.clear();
+    this.cameraLook?.capture();
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
@@ -606,6 +612,11 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
 
   private applyCameraEffect(): void {
     const effectsRoot = this.environment.cameraEffectsRoot;
+    if (this.cameraLook !== null) {
+      effectsRoot?.rotation.set(0, 0, 0);
+      this.cameraLook.apply(0, this.sample.cameraPitch);
+      return;
+    }
     if (effectsRoot === undefined) return;
     effectsRoot.rotation.x = this.sample.cameraPitch;
     effectsRoot.rotation.y = 0;
@@ -614,6 +625,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
 
   private resetCameraEffect(): void {
     this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
+    this.cameraLook?.restore();
   }
 
   private applyReactionBorrowedPose(): void {

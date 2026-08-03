@@ -846,12 +846,15 @@ describe('BoatWorld helpers', () => {
 
   it('reapplies the held Handyman Touch camera after each base reset', async () => {
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
     );
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const basePosition = camera.position.toArray();
+    const baseQuaternion = camera.quaternion.toArray();
     world.stageEvent('handyman');
     const choice = world.playEventChoice('handyman', {
       choiceId: 'touch',
@@ -879,19 +882,23 @@ describe('BoatWorld helpers', () => {
     });
     world.update(2, 2);
     await reaction;
-    const heldPosition = cameraRig.position.toArray();
-    const heldQuaternion = cameraRig.quaternion.toArray();
-    expect(heldPosition).not.toEqual([0, 0, 0]);
+    const heldPosition = camera.position.toArray();
+    const heldQuaternion = camera.quaternion.toArray();
+    expect(heldPosition).toEqual(basePosition);
+    expect(heldQuaternion).not.toEqual(baseQuaternion);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(
       world.scene.getObjectByName('focused-event:handyman')?.userData.state,
     ).toBe('held-touch');
 
     world.update(3, 1 / 60);
-    expect(cameraRig.position.toArray()).toEqual(heldPosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(heldQuaternion);
+    expect(camera.position.toArray()).toEqual(heldPosition);
+    expect(camera.quaternion.toArray()).toEqual(heldQuaternion);
 
     world.clearEvent();
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
     world.dispose();
     propModels.dispose();
   });
@@ -1124,16 +1131,23 @@ describe('BoatWorld helpers', () => {
 
   it('applies the Bad Sleep reveal to the camera and supplies', async () => {
     const cameraRig = new Group();
+    const camera = new PerspectiveCamera();
+    const basePosition = camera.position.toArray();
+    const baseQuaternion = camera.quaternion.toArray();
     const supplies = new FakeBoatSupplyDisplay();
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      undefined,
+      camera,
     );
 
     const reveal = animator.reveal('bad-sleep');
     animator.update(1.7, 1.7);
 
-    expect(cameraRig.position.y).not.toBe(0);
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(supplies.ambientRoll).not.toBe(0);
 
     animator.clear();
@@ -1170,10 +1184,15 @@ describe('BoatWorld helpers', () => {
     'moves only the camera for %s item use and result',
     async (eventId, choiceId, instanceId) => {
       const cameraRig = new Group();
+      const camera = new PerspectiveCamera();
+      const basePosition = camera.position.toArray();
+      const baseQuaternion = camera.quaternion.toArray();
       const supplies = new FakeBoatSupplyDisplay();
       const animator = new WeatherEventAnimator(
         cameraRig,
         supplies as unknown as BoatSupplyDisplay,
+        undefined,
+        camera,
       );
 
       const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
@@ -1181,9 +1200,9 @@ describe('BoatWorld helpers', () => {
 
       expect(supplies.poses.size).toBe(0);
       expect(supplies.pinCalls).toHaveLength(0);
-      expect(
-        Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.position.z),
-      ).toBeGreaterThan(0.01);
+      expect(camera.position.toArray()).toEqual(basePosition);
+      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
 
       animator.update(2, 2);
       await itemUse;
@@ -1205,10 +1224,9 @@ describe('BoatWorld helpers', () => {
 
       expect(supplies.poses.size).toBe(0);
       expect(supplies.pinCalls).toHaveLength(0);
-      expect(
-        Math.abs(cameraRig.position.x) + Math.abs(cameraRig.position.y)
-        + Math.abs(cameraRig.rotation.y) + Math.abs(cameraRig.rotation.z),
-      ).toBeGreaterThan(0.01);
+      expect(camera.position.toArray()).toEqual(basePosition);
+      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
 
       animator.update(2, 2);
       await result;
@@ -1250,10 +1268,14 @@ describe('BoatWorld helpers', () => {
 
   it('keeps Thunderstorm lightning off the lost item', () => {
     const cameraRig = new Group();
+    const camera = new PerspectiveCamera();
+    const baseQuaternion = camera.quaternion.toArray();
     const supplies = new FakeBoatSupplyDisplay();
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      undefined,
+      camera,
     );
 
     void animator.react(
@@ -1277,7 +1299,8 @@ describe('BoatWorld helpers', () => {
     ).toBe(true);
     expect(supplies.pinCalls).toHaveLength(0);
     expect(supplies.poses.size).toBe(0);
-    expect(Math.abs(cameraRig.rotation.z)).toBeGreaterThan(0.05);
+    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     animator.dispose();
   });
 
@@ -1291,16 +1314,24 @@ describe('BoatWorld helpers', () => {
       cameraRig.rotation.y,
       cameraRig.rotation.z,
     ] as const;
+    const camera = new PerspectiveCamera();
+    camera.position.set(0, 0.88, 1.72);
+    camera.rotation.set(-0.2, 0.08, 0);
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
     const supplies = new FakeBoatSupplyDisplay();
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
+      undefined,
+      camera,
     );
 
     void animator.reveal('windy-night');
     animator.update(0.9, 0.9);
     expect(supplies.ambientRoll).toBe(0);
-    expect(Math.abs(cameraRig.rotation.y)).toBeGreaterThan(0.01);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
 
     animator.clear();
 
@@ -1308,6 +1339,8 @@ describe('BoatWorld helpers', () => {
     cameraRig.rotation.toArray().slice(0, 3).forEach((value, index) => {
       expect(value).toBeCloseTo(baseRotation[index]!);
     });
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
     expect(supplies.poses.size).toBe(0);
     expect(supplies.ambientRoll).toBe(0);
     expect(supplies.ambientLift).toBe(0);
@@ -1365,6 +1398,69 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     propModels.dispose();
   });
+
+  it.each([
+    ['dangerous-waters', 1.2, 2.4, 'left'],
+    ['windy-night', 1.2, 3.6, 'left'],
+    ['thunderstorm', 2, 4, 'down'],
+    ['restless-waves', 1.9, 3.8, 'down'],
+    ['man-in-the-fog', 2.6, 5.2, 'left'],
+    ['bad-sleep', 1.7, 3.4, 'down'],
+    ['ghosts', 2, 4, 'changed'],
+    ['eerie-melody', 2.2, 4.4, 'left'],
+    ['check-the-back', 0.425, 0.85, 'left'],
+    ['other-people', 1.7, 3.4, 'left'],
+  ] as const)(
+    'keeps the %s reveal camera stationary while looking at its cue',
+    async (eventId, sampleTime, duration, direction) => {
+      const propModels = createTestPropModels();
+      const camera = new PerspectiveCamera();
+      const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+      const basePosition = camera.position.toArray();
+      const baseQuaternion = camera.quaternion.toArray();
+      const baseDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
+      world.stageEvent(eventId);
+      const reveal = world.revealEvent(eventId);
+      world.update(sampleTime, sampleTime);
+
+      expect(camera.position.toArray()).toEqual(basePosition);
+      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+      const cueAngle = camera.quaternion.angleTo(
+        new Quaternion().fromArray(baseQuaternion),
+      );
+      for (const rigName of [
+        'boat-cue-camera-rig',
+        'boat-featured-event-camera-rig',
+        'dedicated-event-camera-effects',
+        'boat-camera-rig',
+      ]) {
+        const rig = world.scene.getObjectByName(rigName)!;
+        expect(rig.position.toArray()).toEqual([0, 0, 0]);
+        expect(rig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      }
+      const viewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      if (direction === 'left') {
+        expect(viewDirection.x).toBeLessThan(baseDirection.x - 0.02);
+      } else if (direction === 'down') {
+        expect(viewDirection.y).toBeLessThan(baseDirection.y - 0.02);
+      }
+
+      const returnTime = duration * 0.94;
+      world.update(returnTime, returnTime - sampleTime);
+      const returnAngle = camera.quaternion.angleTo(
+        new Quaternion().fromArray(baseQuaternion),
+      );
+      expect(returnAngle).toBeLessThan(cueAngle);
+
+      world.update(duration + 1, duration + 1 - returnTime);
+      await reveal;
+      expect(camera.position.toArray()).toEqual(basePosition);
+      expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+      world.dispose();
+      propModels.dispose();
+    },
+  );
 
   it('keeps Shower Night item and reaction camera poses stationary', async () => {
     const bucket = savedItem('bucket');
@@ -1430,8 +1526,9 @@ describe('BoatWorld helpers', () => {
   it('presents Dangerous Waters through its authored scene and Map motion', async () => {
     const map = savedItem('map');
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
       [map],
@@ -1441,6 +1538,8 @@ describe('BoatWorld helpers', () => {
     const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
     const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
     const cueCameraRig = world.scene.getObjectByName('boat-cue-camera-rig')!;
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
 
     world.stageEvent('dangerous-waters');
     expect(presentation.visible).toBe(true);
@@ -1448,7 +1547,9 @@ describe('BoatWorld helpers', () => {
     const reveal = world.revealEvent('dangerous-waters');
     world.update(1.2, 1.2);
     expect(Math.abs(motionRig.position.x - baseMotionX)).toBeGreaterThan(0.2);
-    expect(Math.abs(cueCameraRig.rotation.y)).toBeGreaterThan(0.04);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    expect(cueCameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     world.update(2.4, 1.2);
     await reveal;
 
@@ -1514,12 +1615,15 @@ describe('BoatWorld helpers', () => {
   it('keeps the generic impact cue visible during an event-specific reaction', async () => {
     const anchor = savedItem('anchor');
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
       [anchor],
     );
+    const basePosition = camera.position.toArray();
+    const baseQuaternion = camera.quaternion.toArray();
     world.syncInventory(snapshot([anchor]));
 
     const impact = world.play('impact');
@@ -1541,7 +1645,9 @@ describe('BoatWorld helpers', () => {
     world.update(0.4, 0.4);
     const cueCameraRig = world.scene.getObjectByName('boat-cue-camera-rig');
     expect(cueCameraRig).toBeDefined();
-    expect(cueCameraRig!.position.z).toBeLessThan(-0.05);
+    expect(cueCameraRig!.position.toArray()).toEqual([0, 0, 0]);
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
 
     world.skipSequence();
     world.clearEvent();
@@ -2081,6 +2187,8 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
 
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
@@ -2108,7 +2216,9 @@ describe('BoatWorld helpers', () => {
     });
     world.update(5.45, 0.55);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0);
-    expect(cameraRig.position.y).toBeLessThan(0);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     world.update(6, 0.55);
     await energyReaction;
 
@@ -2116,6 +2226,8 @@ describe('BoatWorld helpers', () => {
     world.clearEvent();
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
     expect(cameraRig.position.y).toBe(0);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
 
     world.dispose();
     propModels.dispose();
@@ -2229,12 +2341,15 @@ describe('BoatWorld helpers', () => {
 
   it('restores the camera before replacement animators stage after Moon Energy loss', async () => {
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      camera,
       propModels,
       createTestMoonTexture(),
     );
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
 
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
@@ -2249,22 +2364,24 @@ describe('BoatWorld helpers', () => {
     });
     world.update(4.9, 1.1);
     await reaction;
-    expect(cameraRig.position.y).toBeLessThan(0);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
 
     const originalStage = SupernaturalEventAnimator.prototype.stage;
-    let cameraYWhenStaged = Number.NaN;
+    let cameraQuaternionWhenStaged: number[] = [];
     const stage = vi.spyOn(SupernaturalEventAnimator.prototype, 'stage')
       .mockImplementation(function stageReplacement(
         this: SupernaturalEventAnimator,
         eventId: string,
       ) {
-        cameraYWhenStaged = cameraRig.position.y;
+        cameraQuaternionWhenStaged = camera.quaternion.toArray();
         return originalStage.call(this, eventId);
       });
 
     world.stageEvent('ghosts');
 
-    expect(cameraYWhenStaged).toBe(0);
+    expect(cameraQuaternionWhenStaged).toEqual(baseCameraQuaternion);
     expect(cameraRig.position.y).toBe(0);
     stage.mockRestore();
     world.dispose();
@@ -2274,12 +2391,15 @@ describe('BoatWorld helpers', () => {
   it('keeps Restless Waves supplies fixed while the camera shows hull impacts', async () => {
     const ring = savedItem('swimRing');
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
       [ring],
     );
+    const baseCameraPosition = camera.position.toArray();
+    const baseCameraQuaternion = camera.quaternion.toArray();
     world.syncInventory(snapshot([ring]));
     const ringRoot = world.scene.getObjectByName('boat-supply:swimRing')!;
     const baseX = ringRoot.position.x;
@@ -2321,7 +2441,9 @@ describe('BoatWorld helpers', () => {
     );
     world.update(0.62, 0.2);
     const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    expect(cameraRig.position.x).toBeGreaterThan(0.1);
+    expect(camera.position.toArray()).toEqual(baseCameraPosition);
+    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(ringRoot.scale.x).toBe(baseScaleX);
     expect(ringRoot.rotation.y).toBe(baseYaw);
 

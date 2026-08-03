@@ -9,7 +9,6 @@ import {
   MeshStandardMaterial,
   Object3D,
   PointLight,
-  Quaternion,
   SphereGeometry,
   SpotLight,
   TorusGeometry,
@@ -40,6 +39,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 type OtherPeopleAnimationKind =
   | 'reveal'
@@ -66,8 +66,6 @@ const SHIP_APPROACH = new Vector3(-3.8, 0.8, -21);
 const SHIP_EXIT = new Vector3(11, 0.68, -45.4);
 const FLARE_START = new Vector3(1.4, 1.8, -1.8);
 const FLARE_END = new Vector3(-2.4, 19, -23);
-const X_AXIS = new Vector3(1, 0, 0);
-const Y_AXIS = new Vector3(0, 1, 0);
 const HORIZON_LIGHT_INTENSITY = 0.82;
 const CRUISE_SPEED = 0.7;
 const RED_WASH_COLOR = 0xff3b2f;
@@ -169,10 +167,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly shipStartPosition = new Vector3();
-  private readonly cameraBasePosition = new Vector3();
-  private readonly cameraBaseQuaternion = new Quaternion();
-  private readonly cameraYawQuaternion = new Quaternion();
-  private readonly cameraPitchQuaternion = new Quaternion();
+  private readonly cameraLook: StationaryEventCamera;
   private readonly supplyPose: MutableSupplyPose = {
     x: 0,
     y: 0,
@@ -189,7 +184,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private shipStartYaw = SHIP_YAW;
   private rescueLifeboatWashStart = 0;
   private rescueShipWashStart = 0;
-  private cameraCaptured = false;
   private supplyPinned = false;
   private portRevealed = false;
   private starboardRevealed = false;
@@ -202,6 +196,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
+    this.cameraLook = new StationaryEventCamera(dependencies.camera);
     this.root.name = 'focused-event:other-people';
     this.root.visible = false;
     this.root.userData.motionSource = 'steady-authored-path';
@@ -567,6 +562,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyReveal(progress: number): void {
+    const cameraReturn = 1 - smoothstep((progress - 0.72) / 0.28);
     if (progress > 0) {
       this.portBeacon.visible = true;
       this.portBeaconLight.intensity = HORIZON_LIGHT_INTENSITY
@@ -592,7 +588,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.ship.position.copy(SHIP_HIDDEN);
       this.ship.rotation.y = SHIP_YAW;
       this.updateBeaconPose();
-      this.applyCameraPose(-0.025 * smoothstep(progress / 0.24), 0);
+      this.applyCameraPose(
+        0.04 * smoothstep(progress / 0.24) * cameraReturn,
+        0,
+      );
       this.updateOpenWaterDistance();
       return;
     }
@@ -606,7 +605,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.rotation.y = SHIP_YAW;
     this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
     this.updateBeaconPose();
-    this.applyCameraPose(-0.08 * smoothstep(progress), -0.012);
+    this.applyCameraPose(
+      0.17 * smoothstep(progress) * cameraReturn,
+      -0.012 * cameraReturn,
+    );
     this.updateOpenWaterDistance();
   }
 
@@ -690,7 +692,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.updateBeaconPose();
     this.updateLightTargetPose();
     this.applyCameraPose(
-      -0.08 - smoothstep(progress) * 0.055,
+      0.17 + smoothstep(progress) * 0.01,
       -0.012,
     );
     this.updateOpenWaterDistance();
@@ -710,7 +712,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.setBeaconIntensity(light);
     this.setPlayerSignalsDark();
     this.updateBeaconPose();
-    this.applyCameraPose(-0.08 * (1 - travel), -0.012 * (1 - travel));
+    this.applyCameraPose(0.17 - 0.41 * travel, -0.012 * (1 - travel));
     this.updateOpenWaterDistance();
   }
 
@@ -826,27 +828,15 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyCameraPose(yaw: number, pitch: number): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.cameraYawQuaternion.setFromAxisAngle(Y_AXIS, yaw);
-    this.cameraPitchQuaternion.setFromAxisAngle(X_AXIS, pitch);
-    this.dependencies.cameraRig.quaternion
-      .copy(this.cameraBaseQuaternion)
-      .multiply(this.cameraYawQuaternion)
-      .multiply(this.cameraPitchQuaternion);
+    this.cameraLook.apply(yaw, pitch);
   }
 
   private captureCamera(): void {
-    this.cameraBasePosition.copy(this.dependencies.cameraRig.position);
-    this.cameraBaseQuaternion.copy(this.dependencies.cameraRig.quaternion);
-    this.cameraCaptured = true;
+    this.cameraLook.capture();
   }
 
   private restoreCamera(): void {
-    if (!this.cameraCaptured) return;
-    this.dependencies.cameraRig.position.copy(this.cameraBasePosition);
-    this.dependencies.cameraRig.quaternion.copy(this.cameraBaseQuaternion);
-    this.cameraCaptured = false;
+    this.cameraLook.restore();
   }
 
   private resetActors(): void {

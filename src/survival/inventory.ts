@@ -129,7 +129,7 @@ export class SurvivalInventoryState {
     random: RandomSource,
     excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
   ): ItemInstanceId[] {
-    return this.mutateRandom(
+    const selected = this.selectRandom(
       quantity,
       random,
       (item) => (
@@ -137,7 +137,23 @@ export class SurvivalInventoryState {
         && ITEM_DEFINITIONS[item.type]?.breakable === true
         && !excludedInstanceIds.has(item.instanceId)
       ),
-      (instanceId) => this.break(instanceId),
+    );
+    return selected.filter((instanceId) => this.break(instanceId));
+  }
+
+  selectRandomBreakable(
+    quantity: number,
+    random: RandomSource,
+    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
+  ): ItemInstanceId[] {
+    return this.selectRandom(
+      quantity,
+      random,
+      (item) => (
+        item.condition === 'usable'
+        && ITEM_DEFINITIONS[item.type]?.breakable === true
+        && !excludedInstanceIds.has(item.instanceId)
+      ),
     );
   }
 
@@ -178,6 +194,15 @@ export class SurvivalInventoryState {
     predicate: (item: SurvivalItemState) => boolean,
     mutate: (instanceId: ItemInstanceId) => boolean,
   ): ItemInstanceId[] {
+    return this.selectRandom(quantity, random, predicate)
+      .filter((instanceId) => mutate(instanceId));
+  }
+
+  private selectRandom(
+    quantity: number,
+    random: RandomSource,
+    predicate: (item: SurvivalItemState) => boolean,
+  ): ItemInstanceId[] {
     const candidates = this.candidates(predicate);
     const selected: ItemInstanceId[] = [];
     const limit = this.quantity(quantity, candidates.length);
@@ -187,7 +212,7 @@ export class SurvivalInventoryState {
         ? Math.min(candidates.length - 1, Math.max(0, Math.floor(roll * candidates.length)))
         : 0;
       const [instanceId] = candidates.splice(index, 1);
-      if (instanceId !== undefined && mutate(instanceId)) selected.push(instanceId);
+      if (instanceId !== undefined) selected.push(instanceId);
     }
     return selected;
   }
