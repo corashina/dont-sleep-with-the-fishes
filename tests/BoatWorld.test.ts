@@ -1131,6 +1131,52 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('stages the Drifting Bottle on its seeded side with shared-wave particles', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('drifting-bottle', null, 8);
+    world.update(1, 1);
+    const left = world.scene.getObjectByName('event-prop:drifting-bottle')!;
+    expect(left.position.x).toBeLessThan(-2.5);
+    expect(left.userData.motionSource).toBe('shared-wave-field');
+
+    world.clearEvent();
+    world.stageEvent('drifting-bottle', null, 9);
+    world.update(2, 1);
+    const right = world.scene.getObjectByName('event-prop:drifting-bottle')!;
+    expect(right.position.x).toBeGreaterThan(2.5);
+    expect(world.scene.getObjectByName('drifting-bottle:wake')).toBeUndefined();
+    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the Flowers field fixed in place and removes its world interaction', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('flowers');
+    const flowers = world.scene.getObjectByName('event-prop:flowers')!;
+    expect(flowers.children.length).toBeGreaterThanOrEqual(28);
+    const before = flowers.children.map(({ position }) => [position.x, position.z]);
+    world.update(2, 2);
+    expect(flowers.children.map(({ position }) => [position.x, position.z])).toEqual(before);
+    expect(world.projectEventInteractionBounds('flowers', 800, 600)).toBeNull();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('keeps the Bad Sleep reveal camera and supplies stationary', async () => {
     const cameraRig = new Group();
     const camera = new PerspectiveCamera();
