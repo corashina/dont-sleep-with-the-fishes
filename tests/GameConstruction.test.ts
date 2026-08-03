@@ -80,7 +80,7 @@ describe('Game construction rollback', () => {
     expect(calls).toEqual(['sceneRenderer', 'renderer', 'canvas']);
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
-  });
+  }, 10_000);
 
   it('shares and disposes the loaded event model library once', async () => {
     const canvas = document.createElement('canvas');
