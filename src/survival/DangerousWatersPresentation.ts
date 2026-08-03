@@ -67,14 +67,6 @@ interface PoolMember {
   readonly travel: Vector3;
 }
 
-interface RockWaveMember {
-  readonly root: Group;
-  readonly base: Vector3;
-  readonly baseRotation: Vector3;
-  readonly phaseX: number;
-  readonly phaseZ: number;
-}
-
 interface DangerousWatersMaterials {
   readonly stone: MeshStandardMaterial;
   readonly stoneLight: MeshStandardMaterial;
@@ -93,12 +85,27 @@ const REACTION_DURATION = 0.9;
 const FOAM_COUNT = 12;
 const FRAGMENT_COUNT = 8;
 
-function keyedTravel(progress: number): number {
-  const value = clamp01(progress);
-  if (value < 0.16) return -0.045 * Math.sin((value / 0.16) * Math.PI);
-  if (value < 0.82) return smoothstep((value - 0.16) / 0.66) * 1.045;
-  return 1.045 + (1 - 1.045) * smoothstep((value - 0.82) / 0.18);
-}
+const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
+  name: string;
+  position: VectorTuple;
+  scale: VectorTuple;
+  turn: number;
+}>[] = Object.freeze([
+  { name: 'distant-01', position: [-13.8, -0.88, -20.5], scale: [1.35, 0.88, 1.1], turn: 0.28 },
+  { name: 'distant-02', position: [-10.9, -0.92, -24.8], scale: [0.95, 0.72, 0.82], turn: -0.36 },
+  { name: 'distant-03', position: [-8.4, -0.86, -19.1], scale: [1.5, 1.02, 1.18], turn: 0.12 },
+  { name: 'distant-04', position: [-6.3, -0.94, -28.6], scale: [0.82, 0.58, 0.75], turn: 0.42 },
+  { name: 'distant-05', position: [-4.1, -0.9, -22.9], scale: [1.08, 0.76, 0.92], turn: -0.2 },
+  { name: 'distant-06', position: [-1.8, -0.96, -31.2], scale: [0.72, 0.5, 0.66], turn: 0.34 },
+  { name: 'distant-07', position: [0.3, -0.88, -20.8], scale: [1.32, 0.9, 1.05], turn: -0.08 },
+  { name: 'distant-08', position: [2.9, -0.94, -26.7], scale: [0.88, 0.62, 0.78], turn: 0.46 },
+  { name: 'distant-09', position: [5.4, -0.9, -21.7], scale: [1.18, 0.82, 0.96], turn: -0.3 },
+  { name: 'distant-10', position: [7.8, -0.96, -30.4], scale: [0.76, 0.54, 0.7], turn: 0.18 },
+  { name: 'distant-11', position: [9.6, -0.87, -18.8], scale: [1.42, 0.96, 1.12], turn: 0.38 },
+  { name: 'distant-12', position: [12.2, -0.92, -24.1], scale: [1.02, 0.7, 0.86], turn: -0.16 },
+  { name: 'distant-13', position: [14.8, -0.86, -20.2], scale: [1.3, 0.9, 1.04], turn: 0.24 },
+  { name: 'distant-14', position: [16.4, -0.97, -32.5], scale: [0.68, 0.48, 0.62], turn: -0.4 },
+]);
 
 function createMaterials(): DangerousWatersMaterials {
   return {
@@ -328,8 +335,6 @@ export class DangerousWatersPresentation {
   private readonly ownedMaterials = new Set<Material>();
   private readonly foamMembers: PoolMember[] = [];
   private readonly fragmentMembers: PoolMember[] = [];
-  private readonly rockWaveMembers: RockWaveMember[];
-  private readonly passageBase = new Vector3();
   private readonly itemPose: DangerousWatersItemPose = {
     x: 0, y: 0, z: 0,
     yaw: 0, pitch: 0, roll: 0,
@@ -388,15 +393,56 @@ export class DangerousWatersPresentation {
       this.materials,
       0.18,
     );
+    const portFarRock = createRockGroup(
+      'dangerous-waters-rock:port-far',
+      [-7.1, -0.7, -13.4],
+      [1.8, 1.35, 1.4],
+      this.materials,
+      0.31,
+    );
+    const starboardNearRock = createRockGroup(
+      'dangerous-waters-rock:starboard-near',
+      [3.45, -0.76, -5.8],
+      [1.45, 0.92, 1.2],
+      this.materials,
+      -0.24,
+    );
+    const channelRock = createRockGroup(
+      'dangerous-waters-rock:channel',
+      [0.7, -0.86, -12.8],
+      [1.2, 0.78, 1.05],
+      this.materials,
+      0.12,
+    );
+    const horizonRock = createRockGroup(
+      'dangerous-waters-rock:horizon',
+      [-2.2, -0.82, -16.2],
+      [1.6, 1.1, 1.25],
+      this.materials,
+      -0.18,
+    );
+    const distantRocks = DISTANT_ROCK_PLACEMENTS.map((placement) => (
+      createRockGroup(
+        `dangerous-waters-rock:${placement.name}`,
+        placement.position,
+        placement.scale,
+        this.materials,
+        placement.turn,
+      )
+    ));
     this.lurker = createLurker(this.materials);
-    this.passage.add(this.foregroundRock, portRock, starboardRock, this.lurker);
+    this.passage.add(
+      this.foregroundRock,
+      portRock,
+      starboardRock,
+      portFarRock,
+      starboardNearRock,
+      channelRock,
+      horizonRock,
+      ...distantRocks,
+      this.lurker,
+    );
     this.root.add(this.passage, this.foam, this.fragments);
-    this.rockWaveMembers = [
-      this.createRockWaveMember(this.foregroundRock, 0.16, -0.11),
-      this.createRockWaveMember(portRock, -0.09, 0.14),
-      this.createRockWaveMember(starboardRock, 0.12, 0.07),
-    ];
-    this.passageBase.copy(this.passage.position);
     this.buildFoamPool();
     this.buildFragmentPool();
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
@@ -654,7 +700,7 @@ export class DangerousWatersPresentation {
   }
 
   private resetPose(): void {
-    this.passage.position.copy(this.passageBase);
+    this.passage.position.set(0, 0, 0);
     this.lurker.scale.set(1, 1, 1);
     this.materials.foam.opacity = 0.18;
     this.itemPose.x = 0;
@@ -675,14 +721,6 @@ export class DangerousWatersPresentation {
     this.boatReaction.lightScale = 1;
     this.boatReaction.supplyRoll = 0;
     this.boatReaction.supplyLift = 0;
-    for (const rock of this.rockWaveMembers) {
-      rock.root.position.copy(rock.base);
-      rock.root.rotation.set(
-        rock.baseRotation.x,
-        rock.baseRotation.y,
-        rock.baseRotation.z,
-      );
-    }
     for (const fragment of this.fragmentMembers) {
       fragment.mesh.visible = false;
       fragment.mesh.position.copy(fragment.base);
@@ -695,14 +733,12 @@ export class DangerousWatersPresentation {
   }
 
   private applyRevealPose(progress: number): void {
-    const travel = keyedTravel(progress);
     const peek = smoothstep((progress - 0.42) / 0.2);
     const sink = smoothstep((progress - 0.82) / 0.16);
-    this.passage.position.x += (1 - travel) * 3.2;
     this.lurker.scale.y = peek * (1 - sink);
     this.materials.foam.opacity = 0.12 + smoothstep(progress) * 0.32;
-    this.boatReaction.driftX = Math.sin(Math.PI * progress) * -0.34;
-    this.boatReaction.cameraYaw = smoothstep(progress) * -0.09;
+    this.boatReaction.driftX = -0.34 * Math.sin(Math.PI * progress)
+      + smoothstep(progress) * -0.16;
     this.boatReaction.yaw = Math.sin(Math.PI * progress) * 0.035;
     this.boatReaction.roll = Math.sin(Math.PI * progress) * -0.018;
   }
@@ -714,7 +750,6 @@ export class DangerousWatersPresentation {
     const pulse = progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     const lift = smoothstep(Math.min(1, progress / 0.55));
     if (choiceId === 'map') {
-      this.passage.position.x -= pulse * 0.9 + lift * 0.28;
       this.itemPose.y = lift * 0.56;
       this.itemPose.z = -lift * 0.2;
       this.itemPose.pitch = -lift * 0.32;
@@ -724,7 +759,6 @@ export class DangerousWatersPresentation {
       this.itemPose.scaleZ = 1 + lift * 0.2;
       this.boatReaction.yaw -= pulse * 0.025 + lift * 0.02;
     } else if (choiceId === 'compass') {
-      this.passage.position.x -= pulse * 0.45 + lift * 0.18;
       this.itemPose.y = lift * 0.48;
       this.itemPose.z = -lift * 0.18;
       this.itemPose.pitch = -lift * 0.18;
@@ -737,7 +771,6 @@ export class DangerousWatersPresentation {
       this.itemPose.scaleZ = 1 + lift * 0.16;
       this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
     } else if (choiceId === 'sleep') {
-      this.passage.position.z += pulse * 0.8 + lift * 0.32;
       this.boatReaction.driftX -= lift * 0.12;
       this.boatReaction.lightScale -= pulse * 0.36 + lift * 0.22;
       this.boatReaction.pitch += pulse * 0.025 + lift * 0.012;
@@ -747,15 +780,14 @@ export class DangerousWatersPresentation {
 
   private applySafePose(progress: number): void {
     const eased = smoothstep(progress);
-    this.passage.position.x -= eased * 2.2;
     this.materials.foam.opacity *= 1 - eased;
+    this.boatReaction.driftX -= eased * 0.48;
     this.boatReaction.yaw -= Math.sin(Math.PI * progress) * 0.028;
   }
 
   private applyDamagePose(progress: number, severity: number): void {
     const impact = Math.sin(Math.PI * progress);
     const hold = smoothstep((progress - 0.55) / 0.45);
-    this.foregroundRock.position.x += (impact * 0.08 + hold * 0.04) * severity;
     this.materials.foam.opacity += impact * 0.48;
     this.boatReaction.pitch += (impact * 0.07 + hold * 0.018) * severity;
     this.boatReaction.roll += (impact * -0.045 + hold * -0.035) * severity;
@@ -766,10 +798,7 @@ export class DangerousWatersPresentation {
 
   private applySeverePose(progress: number): void {
     const impact = Math.sin(Math.PI * progress);
-    const hold = smoothstep((progress - 0.55) / 0.45);
     this.applyDamagePose(progress, 1.65);
-    this.foregroundRock.position.x += impact * 0.01 + hold * 0.01;
-    this.foregroundRock.position.z += hold * 0.11;
     this.materials.foam.opacity += impact * 0.09;
     const fragmentTravel = smoothstep((progress - 0.24) / 0.5);
     for (const fragment of this.fragmentMembers) {
@@ -785,19 +814,6 @@ export class DangerousWatersPresentation {
   }
 
   private applyWaterline(time: number, progress: number): void {
-    for (const rock of this.rockWaveMembers) {
-      sampleWaveFieldInto(
-        this.waveSample,
-        DEFAULT_WAVES,
-        time,
-        rock.base.x + rock.phaseX,
-        rock.base.z + rock.phaseZ,
-        1,
-      );
-      rock.root.position.y += this.waveSample.height * 0.08;
-      rock.root.rotation.x += this.waveSample.normal.z * 0.025;
-      rock.root.rotation.z -= this.waveSample.normal.x * 0.025;
-    }
     for (let index = 0; index < this.foamMembers.length; index += 1) {
       const foam = this.foamMembers[index]!;
       sampleWaveFieldInto(
@@ -829,19 +845,5 @@ export class DangerousWatersPresentation {
     const motion = this.activeMotion;
     this.activeMotion = null;
     motion?.resolve();
-  }
-
-  private createRockWaveMember(
-    root: Group,
-    phaseX: number,
-    phaseZ: number,
-  ): RockWaveMember {
-    return {
-      root,
-      base: root.position.clone(),
-      baseRotation: new Vector3(root.rotation.x, root.rotation.y, root.rotation.z),
-      phaseX,
-      phaseZ,
-    };
   }
 }

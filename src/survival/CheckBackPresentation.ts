@@ -5,10 +5,12 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  PerspectiveCamera,
   TorusGeometry,
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
+import { StationaryEventCamera } from './StationaryEventCamera';
 
 export class CheckBackPresentation extends KeyedEventPresentation {
   private static readonly REVEAL_TURN = Math.PI * 0.78;
@@ -16,9 +18,11 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   private readonly wake: Mesh;
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
+  private readonly cameraLook: StationaryEventCamera;
 
-  constructor(fish: Object3D, private readonly cameraRig: Group) {
+  constructor(fish: Object3D, camera: PerspectiveCamera) {
     super('check-back-presentation');
+    this.cameraLook = new StationaryEventCamera(camera);
     this.fish = fish;
     this.fish.name = 'check-back:fish';
     const wakeGeometry = new TorusGeometry(0.72, 0.035, 5, 18, Math.PI * 1.55);
@@ -39,6 +43,12 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.subject.add(this.fish, this.wake);
   }
 
+  stage(): void {
+    this.cameraLook.restore();
+    this.cameraLook.capture();
+    super.stage();
+  }
+
   protected reset(): void {
     this.subject.position.set(0, 0.55, 5.5);
     this.subject.rotation.set(0, 0, 0);
@@ -47,22 +57,22 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.fish.scale.setScalar(1);
     this.fish.visible = false;
     this.wake.visible = true;
-    this.cameraRig.rotation.set(0, 0, 0);
+    this.cameraLook.apply(0, 0);
   }
 
   protected applyIdle(_time: number): void {
     if (this.settledKind === 'check-the-back.fish') {
-      this.cameraRig.rotation.y = Math.PI;
+      this.cameraLook.apply(Math.PI, 0);
       this.fish.visible = true;
       this.fish.rotation.z = -0.12;
     } else if (this.settledKind === 'check-the-back.face') {
-      this.cameraRig.rotation.y = Math.PI;
+      this.cameraLook.apply(Math.PI, 0);
       this.showFace();
     } else if (this.settledKind === 'check-the-back.empty') {
-      this.cameraRig.rotation.y = Math.PI;
+      this.cameraLook.apply(Math.PI, 0);
       this.fish.visible = false;
     } else if (this.settledKind === 'check-the-back.ignore') {
-      this.cameraRig.rotation.y = 0;
+      this.cameraLook.apply(0, 0);
     }
   }
 
@@ -74,16 +84,27 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   protected applyAnimation(kind: string, _time: number, progress: number): void {
     const eased = progress * progress * (3 - 2 * progress);
     if (kind === 'reveal') {
-      this.cameraRig.rotation.y = eased * CheckBackPresentation.REVEAL_TURN;
+      const turnIn = Math.min(1, progress / 0.55);
+      const turnInEased = turnIn * turnIn * (3 - 2 * turnIn);
+      const returnProgress = Math.max(0, (progress - 0.72) / 0.28);
+      const returnEased = returnProgress * returnProgress
+        * (3 - 2 * returnProgress);
+      this.cameraLook.apply(
+        turnInEased * (1 - returnEased) * CheckBackPresentation.REVEAL_TURN,
+        0,
+      );
       this.wake.rotation.z = Math.sin(progress * Math.PI * 2) * 0.08;
       return;
     }
     if (kind === 'check-the-back.ignore') {
-      this.cameraRig.rotation.y = (1 - eased) * CheckBackPresentation.REVEAL_TURN;
+      this.cameraLook.apply((1 - eased) * CheckBackPresentation.REVEAL_TURN, 0);
       return;
     }
-    this.cameraRig.rotation.y = CheckBackPresentation.REVEAL_TURN
-      + eased * (Math.PI - CheckBackPresentation.REVEAL_TURN);
+    this.cameraLook.apply(
+      CheckBackPresentation.REVEAL_TURN
+        + eased * (Math.PI - CheckBackPresentation.REVEAL_TURN),
+      0,
+    );
     if (kind === 'check-the-back.fish') {
       this.fish.rotation.z = Math.sin(progress * Math.PI * 5) * (1 - progress) * 0.7;
       this.fish.position.y = 0.28 + Math.sin(progress * Math.PI) * 0.26;
@@ -97,13 +118,13 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   protected disposeOwned(): void {
-    this.cameraRig.rotation.set(0, 0, 0);
+    this.cameraLook.restore();
     disposeResourceSets(this.geometries, this.materials);
   }
 
   clear(): void {
     super.clear();
-    this.cameraRig.rotation.set(0, 0, 0);
+    this.cameraLook.restore();
   }
 
   private showFace(): void {

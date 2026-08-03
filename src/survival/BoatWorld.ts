@@ -830,6 +830,7 @@ export class BoatWorld {
             sampleWorldWaveInto: this.sampleWorldWaveInto,
             cameraEffectsRoot: this.cameraEffectsRoot,
             boatEffectsRoot: this.boatEffectsRoot,
+            camera: this.camera,
           });
     } catch (error) {
       try {
@@ -867,6 +868,7 @@ export class BoatWorld {
       this.cameraRig,
       this.supplyDisplay,
       this.eventModels,
+      this.camera,
     );
     this.boat.add(this.weatherEventAnimator.boatRoot);
 
@@ -930,13 +932,14 @@ export class BoatWorld {
       propModels,
       waves: DEFAULT_WAVES,
       cameraRig: this.cameraRig,
+      camera: this.camera,
       boatMotionRoot: this.motionRig,
       supplyDisplay: this.supplyDisplay,
       chestDisplay: this.chestDisplay,
     }, resolvedFocusedFactories);
     this.featuredEvents = new FeaturedEventPresentations(
       resolvedEventModels,
-      this.featuredEventCameraRig,
+      this.camera,
       this.driftingLootSternRest,
     );
     this.ocean = new OceanRenderer(
@@ -1034,6 +1037,10 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
+    if (instanceId === 'event:mystery-chest') {
+      this.toolHoverOutline.setTarget(null);
+      return;
+    }
     const focusedRoot = instanceId === null
       ? null
       : this.eventPresentation.interactionRoot(instanceId);
@@ -1177,31 +1184,35 @@ export class BoatWorld {
 
   async revealEvent(eventId: string): Promise<void> {
     if (this.disposed) return;
-    this.weatherEventOperation += 1;
+    const operation = ++this.weatherEventOperation;
     if (this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.reveal();
-      return;
-    }
-    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+    } else if (FOCUSED_EVENT_ID_SET.has(eventId)) {
       await Promise.all([
         this.eventPresentation.reveal(eventId),
         this.weatherEventAnimator.reveal(eventId),
       ]);
-      return;
-    }
-    if (isFeaturedEventId(eventId)) {
+    } else if (isFeaturedEventId(eventId)) {
       await Promise.all([
         this.featuredEvents.reveal(eventId),
         this.weatherEventAnimator.reveal(eventId),
       ]);
-      return;
+    } else {
+      await Promise.all([
+        this.eventPresentation.reveal(eventId),
+        this.weatherEventAnimator.reveal(eventId),
+        this.supernaturalEventAnimator.reveal(eventId),
+        this.revealMoonEvent(eventId),
+      ]);
     }
-    await Promise.all([
-      this.eventPresentation.reveal(eventId),
-      this.weatherEventAnimator.reveal(eventId),
-      this.supernaturalEventAnimator.reveal(eventId),
-      this.revealMoonEvent(eventId),
-    ]);
+    if (!this.disposed && operation === this.weatherEventOperation) {
+      this.restoreEventCameraFront();
+    }
+  }
+
+  private restoreEventCameraFront(): void {
+    this.camera.position.copy(this.baseCameraPosition);
+    this.camera.quaternion.copy(this.baseCameraQuaternion);
   }
 
   retrieveDriftingLoot(): Promise<void> {
@@ -1967,8 +1978,8 @@ export class BoatWorld {
       this.motionRig.rotation.x += reaction.pitch;
       this.motionRig.rotation.y += reaction.yaw;
       this.motionRig.rotation.z += reaction.roll;
-      this.cueCameraRig.rotation.y += reaction.cameraYaw;
-      this.cueCameraRig.position.z += reaction.cameraZ;
+      this.camera.rotateY(reaction.cameraYaw);
+      this.camera.rotateX(reaction.cameraZ * 0.9);
       this.ambient.intensity *= reaction.lightScale;
       this.key.intensity *= reaction.lightScale;
       this.supplyDisplay.applyEventAmbientPose(
@@ -2362,7 +2373,7 @@ export class BoatWorld {
         break;
       case 'impact':
         this.motionRig.rotation.x += pulse * 0.075;
-        this.cueCameraRig.position.z -= pulse * 0.08;
+        this.camera.rotateX(-pulse * 0.045);
         break;
       case 'darkness':
         this.ambient.intensity *= 1 - eased * 0.68;
@@ -2427,7 +2438,8 @@ export class BoatWorld {
     this.moonEventStaged = eventId === 'face-on-the-moon';
     this.resetMoonValues();
     this.sky.resetTransient();
-    this.cameraRig.position.y = 0;
+    this.camera.position.copy(this.baseCameraPosition);
+    this.camera.quaternion.copy(this.baseCameraQuaternion);
   }
 
   private revealMoonEvent(eventId: string): Promise<void> {
@@ -2605,7 +2617,8 @@ export class BoatWorld {
     this.moonEventStaged = false;
     this.resetMoonValues();
     this.sky.resetTransient();
-    this.cameraRig.position.y = 0;
+    this.camera.position.copy(this.baseCameraPosition);
+    this.camera.quaternion.copy(this.baseCameraQuaternion);
   }
 
   private resetMoonValues(): void {
@@ -2629,7 +2642,7 @@ export class BoatWorld {
     this.moonFaceDisplay.dim = this.moonFace.dim;
     this.moonFaceDisplay.scale = this.moonFace.scale;
     this.sky.setMoonFace(this.moonFaceDisplay);
-    this.cameraRig.position.y -= this.moonCameraLower;
+    this.camera.rotateX(this.moonCameraLower);
   }
 
   private cancelMoonAnimation(): void {
