@@ -763,7 +763,7 @@ export class SupernaturalEventAnimator {
   private showFlare(amount: number): void {
     this.flareFlash.visible = amount > 0.015;
     this.flareMaterial.opacity = Math.min(0.72, amount * 0.7);
-    this.flareFlash.scale.setScalar(0.72 + amount * 0.42);
+    this.flareFlash.scale.setScalar(0.72 + amount * 0.36);
   }
 
   private setFogOpacity(amount: number): void {

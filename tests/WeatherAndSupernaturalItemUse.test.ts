@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   Group,
   Mesh,
@@ -19,6 +20,7 @@ import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
+import { supernaturalItemUseDuration } from '../src/survival/supernaturalEventChoreography';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 
@@ -184,6 +186,34 @@ describe('weather and supernatural shared item use', () => {
       animator.dispose();
       harness.adapter.dispose();
     }
+  });
+
+  it('bounds the Ghosts flare at its exact choreography peak', async () => {
+    const harness = createHarness('flareGun');
+    const animator = new SupernaturalEventAnimator(
+      new Group(),
+      harness.supplies,
+      harness.adapter,
+      createEventModels(),
+      harness.camera,
+    );
+    harness.scene.add(animator.worldRoot);
+    animator.stage('ghosts');
+    const itemUse = animator.playItemUse('ghosts', 'flareGun', harness.instanceId);
+    const duration = supernaturalItemUseDuration('ghosts', 'flareGun')!;
+    const peakTime = duration * 0.47;
+
+    animator.update(peakTime, peakTime);
+
+    const flare = animator.worldRoot.getObjectByName('supernatural-flare-flash')!;
+    const size = new Box3().setFromObject(flare).getSize(new Vector3());
+    expect(flare.visible).toBe(true);
+    expect(Math.max(size.x, size.y)).toBeLessThanOrEqual(1.6);
+
+    animator.update(duration, duration - peakTime);
+    await itemUse;
+    animator.dispose();
+    harness.adapter.dispose();
   });
 
   it('uses shared map motion for Dangerous Waters and releases its actor', async () => {
