@@ -60,6 +60,10 @@ import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
+import {
+  eventItemUseDuration,
+  type EventItemUseContext,
+} from '../src/survival/eventItemUseChoreography';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import {
   GHOST_FLIGHT_PATHS,
@@ -2429,6 +2433,119 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('cancels every shared item effect family at forty percent', async () => {
+    const cases: readonly [
+      context: EventItemUseContext,
+      eventId: string,
+      choiceId: string,
+      itemId: ItemId,
+    ][] = [
+      ['throw-target', 'flowers', 'energyBar', 'energyBar'],
+      ['tape-stretch', 'flowers', 'ductTape', 'ductTape'],
+      ['compass-search', 'flowers', 'compass', 'compass'],
+      ['map-read', 'flowers', 'map', 'map'],
+      ['binocular-look', 'flowers', 'spyglass', 'spyglass'],
+      ['net-throw', 'flowers', 'fishingNet', 'fishingNet'],
+      ['bucket-scoop', 'leak', 'bucket', 'bucket'],
+      ['bucket-cover', 'eerie-melody', 'bucket', 'bucket'],
+      ['flare-target', 'ghosts', 'flareGun', 'flareGun'],
+      ['flare-sky', 'other-people', 'flareGun', 'flareGun'],
+      ['anchor-drop', 'whirlpool', 'anchor', 'anchor'],
+      ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella'],
+      ['umbrella-shield', 'death-stare', 'umbrella', 'umbrella'],
+      ['flashlight-flash', 'flowers', 'flashlight', 'flashlight'],
+      ['harpoon-shot', 'flowers', 'harpoonGun', 'harpoonGun'],
+    ];
+    const savedItems = [...new Set(cases.map(([, , , itemId]) => itemId))]
+      .map((itemId) => savedItem(itemId));
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(63, 1.6, 0.1, 100);
+    camera.position.set(0.32, 1.08, -0.24);
+    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+    world.syncInventory(snapshot(savedItems));
+    const basePosition = camera.position.clone();
+    const baseFieldOfView = camera.fov;
+    const effects = world.scene.getObjectByName('event-item-effects')!;
+    let time = 0;
+
+    try {
+      for (const [context, eventId, choiceId, itemId] of cases) {
+        const item = savedItems.find(({ type }) => type === itemId)!;
+        const borrowCount = borrowActor.mock.results.length;
+        const use = world.playEventItemUse(eventId, choiceId, item.instanceId);
+        const resolved = vi.fn();
+        void use.then(resolved);
+        expect(borrowActor.mock.results.length).toBe(borrowCount + 1);
+        const actor = borrowActor.mock.results.at(-1)!.value as BorrowedSupplyActor;
+        const release = vi.spyOn(actor, 'release');
+        const delta = eventItemUseDuration(context) * 0.4;
+        time += delta;
+        world.update(time, delta);
+        expect(await remainsPending(use)).toBe(true);
+        expect(camera.position).toEqual(basePosition);
+
+        world.clearEvent();
+        world.clearEvent();
+        await use;
+        await Promise.resolve();
+
+        expect(resolved).toHaveBeenCalledOnce();
+        expect(release).toHaveBeenCalledOnce();
+        expect(camera.position).toEqual(basePosition);
+        expect(camera.fov).toBe(baseFieldOfView);
+        effects.children.forEach((effect) => expect(effect.visible).toBe(false));
+        effects.traverse((object) => {
+          if (object instanceof PointLight) expect(object.intensity).toBe(0);
+        });
+
+        const secondBorrowCount = borrowActor.mock.results.length;
+        const secondUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
+        expect(borrowActor.mock.results.length).toBe(secondBorrowCount + 1);
+        const secondActor = borrowActor.mock.results.at(-1)!.value as BorrowedSupplyActor;
+        const secondRelease = vi.spyOn(secondActor, 'release');
+        world.clearEvent();
+        await secondUse;
+        expect(secondRelease).toHaveBeenCalledOnce();
+      }
+    } finally {
+      world.dispose();
+      borrowActor.mockRestore();
+      propModels.dispose();
+    }
+  });
+
+  it('settles a shared item to a readable restored pose when hidden', async () => {
+    const item = savedItem('spyglass');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    world.syncInventory(snapshot([item]));
+    const root = world.scene.getObjectByName('boat-supply:spyglass')!;
+    const use = world.playEventItemUse('flowers', 'spyglass', item.instanceId);
+    world.update(0.68, 0.68);
+
+    world.setDocumentHidden(true);
+    await expect(use).resolves.toBeUndefined();
+
+    expect(root.visible).toBe(true);
+    expect(root.position.toArray()).toEqual([0, 0, 0]);
+    root.rotation.toArray().slice(0, 3)
+      .forEach((angle) => expect(angle).toBeCloseTo(0));
+    expect(root.scale.toArray()).toEqual([1, 1, 1]);
+    world.dispose();
+    propModels.dispose();
+  });
+
   it.each([
     ['cannedFood', 'food'],
     ['baitTin', 'bait'],
@@ -2912,7 +3029,12 @@ describe('BoatWorld helpers', () => {
     expect(weatherSupport.mock.invocationCallOrder[0]).toBeLessThan(
       supernaturalSupport.mock.invocationCallOrder[0]!,
     );
-    world.update(1, 1.2);
+    world.update(0.6, 0.6);
+    const flareFlash = world.scene.getObjectByName('supernatural-flare-flash')!;
+    expect(flareFlash.visible).toBe(true);
+    const flareSize = boundsRelativeTo(flareFlash).getSize(new Vector3());
+    expect(Math.max(flareSize.x, flareSize.y)).toBeLessThanOrEqual(1.6);
+    world.update(1.2, 0.6);
     await itemUse;
     const reaction = world.reactToEventOutcome(
       'ghosts',
@@ -3963,6 +4085,9 @@ describe('BoatWorld helpers', () => {
     expect(actor?.root.name).toBe(`boat-supply-event:${map.instanceId}`);
     expect(actor?.root.parent).toBe(parent);
     expect(parent.getObjectByName('boat-supply:map')?.visible).toBe(false);
+    const heldCopy = actor!.root.children.find((child) => child.visible)!;
+    expect(heldCopy.position.toArray()).toEqual([0, 0, 0]);
+    expect(heldCopy.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
 
     const mesh = firstMesh(actor!.root);
     const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
@@ -3979,6 +4104,7 @@ describe('BoatWorld helpers', () => {
       scaleY: 0.9,
       scaleZ: 1.2,
     });
+    expect(actor!.root.position.toArray()).toEqual([0.4, 0.2, -0.3]);
     display.update(0);
     expect(actor!.root.position.toArray()).toEqual([0.4, 0.2, -0.3]);
 

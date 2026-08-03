@@ -1,4 +1,4 @@
-import { Group, PerspectiveCamera, Vector3 } from 'three';
+import { Group, PerspectiveCamera, PointLight, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type {
@@ -7,7 +7,23 @@ import type {
 } from '../src/survival/BoatSupplyDisplay';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
-import { createEventItemUseSample } from '../src/survival/eventItemUseChoreography';
+import {
+  createEventItemUseSample,
+  type EventItemEffectKind,
+} from '../src/survival/eventItemUseChoreography';
+
+const EFFECT_KINDS: readonly EventItemEffectKind[] = [
+  'none',
+  'tape',
+  'binocular-mask',
+  'net',
+  'bucket-cover',
+  'flare',
+  'chain',
+  'umbrella',
+  'flashlight',
+  'harpoon',
+];
 
 function createActor(
   parent: Group,
@@ -133,5 +149,49 @@ describe('EventItemUseAdapter', () => {
     expect(camera.position).toEqual(cameraPosition);
     expect(release).not.toHaveBeenCalled();
     expect(updateProjectionMatrix).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(EFFECT_KINDS)('restores camera and actor state after clearing %s', (effectKind) => {
+    const cameraParent = new Group();
+    const camera = new PerspectiveCamera(67, 1.6, 0.1, 100);
+    camera.position.set(-0.45, 0.84, 0.31);
+    camera.rotation.set(-0.12, 0.28, 0.04, 'YXZ');
+    cameraParent.add(camera);
+    const actorParent = new Group();
+    const { actor, release } = createActor(
+      actorParent,
+      'flashlight-1' as ItemInstanceId,
+      new Vector3(0.34, -0.18, 0.62),
+    );
+    const effects = new EventItemEffects();
+    const adapter = new EventItemUseAdapter(camera, effects);
+    const sample = createEventItemUseSample();
+    sample.effectKind = effectKind;
+    sample.cameraSpaceBlend = 1;
+    sample.cameraYaw = 0.24;
+    sample.cameraPitch = -0.16;
+    sample.fovScale = 0.74;
+    sample.primaryEffect = 0.8;
+    sample.secondaryEffect = 0.6;
+    const basePosition = camera.position.clone();
+    const baseQuaternion = camera.quaternion.clone();
+
+    adapter.begin(actor);
+    adapter.apply(sample);
+    adapter.clear();
+
+    expect(camera.position).toEqual(basePosition);
+    expect(camera.quaternion.angleTo(baseQuaternion)).toBeCloseTo(0);
+    expect(camera.fov).toBe(67);
+    expect(actor.root.position).toEqual(new Vector3(0.34, -0.18, 0.62));
+    expect(actor.root.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    expect(actor.root.scale.toArray()).toEqual([1, 1, 1]);
+    effects.root.children.forEach((effect) => expect(effect.visible).toBe(false));
+    effects.root.traverse((object) => {
+      if (object instanceof PointLight) expect(object.intensity).toBe(0);
+    });
+    expect(release).not.toHaveBeenCalled();
+
+    adapter.dispose();
   });
 });

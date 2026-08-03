@@ -207,8 +207,8 @@ function createFlareBurstGeometry(): BufferGeometry {
     const angle = Math.PI * 2 * index / FLARE_RADII.length;
     const radius = FLARE_RADII[index]!;
     positions.push(
-      Math.cos(angle) * radius * 2.35,
-      Math.sin(angle) * radius * 3.05,
+      Math.cos(angle) * radius * 0.62,
+      Math.sin(angle) * radius * 0.78,
       0,
     );
     const edge = index % 2 === 0 ? 0.28 : 0.14;
@@ -243,7 +243,7 @@ function createSeaMist(materials: readonly ShaderMaterial[]): Group {
 function createFlareFlash(material: Material): Mesh {
   const flash = new Mesh(createFlareBurstGeometry(), material);
   flash.name = 'supernatural-flare-flash';
-  flash.position.set(0, 2.2, -4.5);
+  flash.position.set(2.2, 2.4, -7.2);
   flash.visible = false;
   return flash;
 }
