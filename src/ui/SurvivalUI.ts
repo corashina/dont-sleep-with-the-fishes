@@ -108,6 +108,17 @@ const WHISKERS_ACTIONS = [
   'treatWhiskers',
 ] as const satisfies readonly DayActionId[];
 
+function compactWhiskersActionReason(
+  action: (typeof WHISKERS_ACTIONS)[number],
+  reason: string,
+): string {
+  if (action === 'petWhiskers') return 'PETTED';
+  if (action === 'feedWhiskers') {
+    return reason.includes('satiated') ? 'FULL' : 'NO FOOD';
+  }
+  return reason.includes('no treatment') ? 'HEALTHY' : 'NO KIT';
+}
+
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
 
 function spokenEnergyCost(cost: number): string | null {
@@ -508,30 +519,25 @@ export class SurvivalUI {
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
       <section class="whiskers-card" data-whiskers-card aria-labelledby="whiskers-card-title" aria-hidden="true" hidden>
         <div class="whiskers-card__heading">
-          <div>
-            <p class="whiskers-card__eyebrow ui-role-context">CREWMATE STATUS</p>
-            <h2 class="ui-role-display" id="whiskers-card-title">CAPTAIN WHISKERS</h2>
-          </div>
-          <button type="button" class="whiskers-card__close ui-role-context" data-whiskers-close aria-label="Close Captain Whiskers status">CLOSE</button>
+          <span class="whiskers-card__cat" aria-hidden="true"><i></i></span>
+          <h2 class="ui-role-display" id="whiskers-card-title">CAPTAIN WHISKERS</h2>
+          <button type="button" class="whiskers-card__close ui-role-context" data-whiskers-close aria-label="Close Captain Whiskers status">&times;</button>
         </div>
         <div class="whiskers-card__statuses">
           <div class="whiskers-status" data-whiskers-hunger-row>
             <span class="whiskers-status__name ui-role-context">HUNGER</span>
+            <strong class="ui-role-context" data-whiskers-hunger-label></strong>
             <span class="whiskers-hunger" aria-hidden="true">
               ${Array.from({ length: 5 }, (_, index) => `<i data-whiskers-hunger-step="${index + 1}" data-filled="false"></i>`).join('')}
             </span>
-            <strong class="ui-role-context" data-whiskers-hunger-label></strong>
-            <span class="whiskers-status__danger ui-role-context" data-whiskers-hunger-danger hidden>! DANGER</span>
           </div>
           <div class="whiskers-status" data-whiskers-happiness-row>
-            <span class="whiskers-status__name ui-role-context">HAPPINESS</span>
+            <span class="whiskers-status__name ui-role-context">MOOD</span>
             <strong class="ui-role-context" data-whiskers-happiness></strong>
-            <span class="whiskers-status__danger ui-role-context" data-whiskers-happiness-danger hidden>! DANGER</span>
           </div>
           <div class="whiskers-status" data-whiskers-health-row>
             <span class="whiskers-status__name ui-role-context">HEALTH</span>
             <strong class="ui-role-context" data-whiskers-health></strong>
-            <span class="whiskers-status__danger ui-role-context" data-whiskers-health-danger hidden>! DANGER</span>
           </div>
         </div>
         <nav class="whiskers-care" aria-label="Captain Whiskers care">
@@ -541,7 +547,6 @@ export class SurvivalUI {
               <small class="ui-role-narrative" data-whiskers-action-reason hidden></small>
             </button>`).join('')}
         </nav>
-        <p class="whiskers-card__passive ui-role-narrative"><strong>SHIP'S CAT:</strong> Slightly improves fishing luck</p>
       </section>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
@@ -1762,17 +1767,14 @@ export class SurvivalUI {
       });
     this.setWhiskersDanger(
       '[data-whiskers-hunger-row]',
-      '[data-whiskers-hunger-danger]',
       status.hunger === 'Starving',
     );
     this.setWhiskersDanger(
       '[data-whiskers-happiness-row]',
-      '[data-whiskers-happiness-danger]',
       status.happiness === 'Depressed' || status.happiness === 'Miserable',
     );
     this.setWhiskersDanger(
       '[data-whiskers-health-row]',
-      '[data-whiskers-health-danger]',
       status.health === 'Sick' || status.health === 'Dying',
     );
     this.syncWhiskersActions();
@@ -1782,11 +1784,9 @@ export class SurvivalUI {
     if (!this.whiskersCard.hidden && anchor !== undefined) this.positionWhiskersCard(anchor);
   }
 
-  private setWhiskersDanger(rowSelector: string, labelSelector: string, danger: boolean): void {
+  private setWhiskersDanger(rowSelector: string, danger: boolean): void {
     const row = requireElement<HTMLElement>(this.whiskersCard, rowSelector);
-    const label = requireElement<HTMLElement>(this.whiskersCard, labelSelector);
     row.dataset.state = danger ? 'danger' : 'stable';
-    label.hidden = !danger;
   }
 
   private syncWhiskersActions(): void {
@@ -1810,7 +1810,9 @@ export class SurvivalUI {
       );
       const reasonNode = requireElement<HTMLElement>(button, '[data-whiskers-action-reason]');
       reasonNode.hidden = reason === null;
-      reasonNode.textContent = reason ?? '';
+      reasonNode.textContent = reason === null
+        ? ''
+        : compactWhiskersActionReason(action, reason);
     });
   }
 

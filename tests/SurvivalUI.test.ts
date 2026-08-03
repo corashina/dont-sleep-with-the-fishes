@@ -150,7 +150,7 @@ const captainWhiskersAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
-  it('opens the scene-linked Whiskers card with exact status and unavailable copy', () => {
+  it('opens the compact Whiskers card with status and short unavailable labels', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -184,18 +184,18 @@ describe('SurvivalUI', () => {
     expect(card.querySelectorAll('[data-whiskers-hunger-step][data-filled="true"]')).toHaveLength(4);
     expect(card.querySelector('[data-whiskers-happiness]')?.textContent).toBe('LONELY');
     expect(card.querySelector('[data-whiskers-health]')?.textContent).toBe('SICK');
-    expect(card.textContent).toContain("SHIP'S CAT: Slightly improves fishing luck");
-    expect(card.textContent).toContain('Captain Whiskers has already been petted today.');
-    expect(card.textContent).toContain('No food remains.');
-    expect(card.textContent).toContain('No medical kit remains.');
-    for (const [actionId, reason] of [
-      ['petWhiskers', 'Captain Whiskers has already been petted today.'],
-      ['feedWhiskers', 'No food remains.'],
-      ['treatWhiskers', 'No medical kit remains.'],
+    expect(card.textContent).not.toContain('CREWMATE STATUS');
+    expect(card.textContent).not.toContain("SHIP'S CAT");
+    expect(card.textContent).not.toContain('DANGER');
+    for (const [actionId, reason, shortReason] of [
+      ['petWhiskers', 'Captain Whiskers has already been petted today.', 'PETTED'],
+      ['feedWhiskers', 'No food remains.', 'NO FOOD'],
+      ['treatWhiskers', 'No medical kit remains.', 'NO KIT'],
     ] as const) {
       const button = card.querySelector<HTMLButtonElement>(`[data-action="${actionId}"]`)!;
       expect(button.getAttribute('aria-disabled')).toBe('true');
       expect(button.getAttribute('aria-description')).toBe(reason);
+      expect(button.querySelector('[data-whiskers-action-reason]')?.textContent).toBe(shortReason);
       button.click();
     }
     expect(action).not.toHaveBeenCalled();
