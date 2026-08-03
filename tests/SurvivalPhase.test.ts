@@ -56,7 +56,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
     rescueProgress: 0, chest: { state: 'none', acquiredDay: null }, eventFlags: [],
     weather: 'calm', actedToday: false,
-    journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
+    journalEntries: [], inventory: inventory(), savedItems: [], captainWhiskers: null, pendingEventId: null,
     pendingEventTargetId: null,
     pendingDriftingLootVariant: null,
     lastOutcome: null, seed: 8, ...overrides,

@@ -30,6 +30,15 @@ import {
 } from './chest';
 import { nightDamageMultiplier, pressureForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
+import {
+  advanceCaptainWhiskersDawn,
+  createCaptainWhiskersState,
+  feedCaptainWhiskers,
+  petCaptainWhiskers,
+  treatCaptainWhiskers,
+  type CaptainWhiskersSnapshot,
+  type CaptainWhiskersState,
+} from './CaptainWhiskersState';
 import type {
   ActionOutcome,
   BeginFishingResult,
@@ -76,6 +85,7 @@ export interface SurvivalSessionOptions {
   initialChest?: ChestSnapshot;
   initialEventFlags?: readonly string[];
   initialAppearanceCounts?: Readonly<Record<string, number>>;
+  initialCaptainWhiskers?: Partial<CaptainWhiskersSnapshot>;
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -113,6 +123,7 @@ export class SurvivalSession {
   private actedToday = false;
   private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
+  private readonly captainWhiskers: CaptainWhiskersState | null;
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
@@ -158,7 +169,13 @@ export class SurvivalSession {
       this.appearanceCounts.set(eventId, count);
     }
     this.pendingEventId = null;
-    this.savedItems = Object.freeze(savedItems.map((item) => Object.freeze({ ...item })));
+    const hasCaptainWhiskers = savedItems.some(({ type }) => type === 'captainWhiskers');
+    this.savedItems = Object.freeze(savedItems
+      .filter(({ type }) => type !== 'captainWhiskers')
+      .map((item) => Object.freeze({ ...item })));
+    this.captainWhiskers = hasCaptainWhiskers
+      ? createCaptainWhiskersState(options.initialCaptainWhiskers)
+      : null;
     this.inventory = new SurvivalInventoryState(this.savedItems);
     this.applyInitialConditions(options.initialConditions);
 
@@ -212,6 +229,9 @@ export class SurvivalSession {
       journalEntries: this.journalSnapshot(),
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
+      captainWhiskers: this.captainWhiskers === null
+        ? null
+        : Object.freeze({ ...this.captainWhiskers }),
       pendingEventId: this.pendingEventId,
       pendingDriftingLootVariant: this.pendingDriftingLootVariant,
       pendingEventTargetId: this.pendingEventTargetId,
@@ -239,6 +259,9 @@ export class SurvivalSession {
       case 'sendMessage': outcome = this.sendMessage(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'openChest': outcome = this.openChest(); break;
+      case 'petWhiskers': outcome = this.petWhiskers(); break;
+      case 'feedWhiskers': outcome = this.feedWhiskers(); break;
+      case 'treatWhiskers': outcome = this.treatWhiskers(); break;
       case 'endDay': return this.endDay();
     }
     this.actedToday = true;
@@ -576,6 +599,7 @@ export class SurvivalSession {
     this.clearPendingEvent();
     this.state = 'day';
     this.applyPendingDawnBreaks();
+    this.advanceCaptainWhiskersDawn();
 
     this.weather = 'calm';
 
@@ -722,6 +746,12 @@ export class SurvivalSession {
           return { code: 'not-enough-energy', message: 'Opening the chest requires three energy.' };
         }
         return null;
+      case 'petWhiskers':
+        return this.unavailableCaptainWhiskersCare('pet');
+      case 'feedWhiskers':
+        return this.unavailableCaptainWhiskersCare('feed');
+      case 'treatWhiskers':
+        return this.unavailableCaptainWhiskersCare('treat');
       case 'endDay':
         return null;
     }
@@ -736,6 +766,33 @@ export class SurvivalSession {
           ? option?.kind === 'itemRepair'
           : option === undefined;
     return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
+  }
+
+  private unavailableCaptainWhiskersCare(action: 'pet' | 'feed' | 'treat'): Rejection | null {
+    if (this.captainWhiskers === null) {
+      return { code: 'no-captain-whiskers', message: 'Captain Whiskers is not aboard.' };
+    }
+    if (!this.captainWhiskers.alive) {
+      return { code: 'captain-whiskers-dead', message: 'Captain Whiskers cannot respond.' };
+    }
+    if (action === 'pet' && this.captainWhiskers.pettedToday) {
+      return { code: 'already-petted', message: 'Captain Whiskers has already been petted today.' };
+    }
+    if (action === 'feed') {
+      if (this.captainWhiskers.hunger >= 5) {
+        return { code: 'whiskers-not-hungry', message: 'Captain Whiskers is already satiated.' };
+      }
+      if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
+    }
+    if (action === 'treat') {
+      if (this.captainWhiskers.sickness <= 0) {
+        return { code: 'whiskers-healthy', message: 'Captain Whiskers needs no treatment.' };
+      }
+      if (!this.inventory.hasUsable('medicalKit')) {
+        return { code: 'no-medical-kit', message: 'No medical kit remains.' };
+      }
+    }
+    return null;
   }
 
   private dive(): ActionOutcome {
@@ -820,6 +877,34 @@ export class SurvivalSession {
       { health: SURVIVAL_BALANCE.actions.treatmentHealth },
       'treat',
     );
+  }
+
+  private petWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !petCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers pet action was not available.');
+    }
+    const outcome = this.commit('whiskers-petted', 'You pet Captain Whiskers.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'pet' }));
+    return outcome;
+  }
+
+  private feedWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !feedCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers feed action was not available.');
+    }
+    const outcome = this.commit('whiskers-fed', 'You feed Captain Whiskers.', { food: -1 }, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'feed' }));
+    return outcome;
+  }
+
+  private treatWhiskers(): ActionOutcome {
+    if (this.captainWhiskers === null || !treatCaptainWhiskers(this.captainWhiskers)) {
+      throw new Error('Captain Whiskers treatment was not available.');
+    }
+    this.inventory.consume('medicalKit', 1);
+    const outcome = this.commit('whiskers-treated', 'You treat Captain Whiskers.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'treat' }));
+    return outcome;
   }
 
   private sendMessage(): ActionOutcome {
@@ -1298,6 +1383,25 @@ export class SurvivalSession {
       this.inventory.break(instanceId);
     }
     this.pendingDawnBreaks.clear();
+  }
+
+  private advanceCaptainWhiskersDawn(): void {
+    if (this.captainWhiskers === null) return;
+    advanceCaptainWhiskersDawn(this.captainWhiskers, this.random);
+    const entryIndex = this.journalEntries.findIndex((entry) => entry.day === this.day - 1);
+    if (entryIndex < 0) return;
+    const entry = this.journalEntries[entryIndex]!;
+    this.journalEntries[entryIndex] = {
+      ...entry,
+      actions: this.cloneJournalActions([
+        ...entry.actions,
+        Object.freeze({
+          kind: 'captainWhiskersDawn',
+          alive: this.captainWhiskers.alive,
+          deathCause: this.captainWhiskers.deathCause,
+        }),
+      ]),
+    };
   }
 
   private applyChestGain(fallbackFood: 1): boolean {

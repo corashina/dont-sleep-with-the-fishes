@@ -278,6 +278,7 @@ function snapshot(
     pendingEventId: null,
     pendingEventTargetId: null,
     pendingDriftingLootVariant: null,
+    captainWhiskers: null,
     lastOutcome: null,
     seed: 8,
     ...overrides,

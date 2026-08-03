@@ -9,6 +9,7 @@ import {
 } from '../src/game/ItemState';
 import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
 import { SurvivalInventoryState } from '../src/survival/inventory';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { mulberry32 } from '../src/survival/random';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import { sequenceRandom } from './helpers/random';
@@ -23,6 +24,13 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 };
 
 describe('survival foundations', () => {
+  it('keeps Captain Whiskers out of the session inventory', () => {
+    const session = new SurvivalSession(saved('captainWhiskers', 'cannedFood'), { seed: 1 });
+
+    expect(session.snapshot().inventory).not.toHaveProperty('captainWhiskers-1');
+    expect(session.snapshot().inventory).toHaveProperty('cannedFood-1');
+  });
+
   it('creates one usable record per saved physical instance', () => {
     const inventory = new SurvivalInventoryState(saved(
       'cannedFood', 'cannedFood', 'baitTin', 'compass', 'ductTape',

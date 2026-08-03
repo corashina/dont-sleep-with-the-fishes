@@ -1,13 +1,17 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
+import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 /** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
-  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay';
+  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay'
+  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers';
+export type CompanionActionId =
+  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers' | 'delegateWhiskers';
 export type DayActionOption =
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
@@ -208,6 +212,7 @@ export interface SurvivalSnapshot {
   readonly journalEntries: readonly JournalEntry[];
   inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
+  readonly captainWhiskers: Readonly<CaptainWhiskersSnapshot> | null;
   pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
   readonly pendingDriftingLootVariant: DriftingLootVariant | null;
