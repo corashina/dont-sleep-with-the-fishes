@@ -415,7 +415,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     actor.rotation.z = Math.sin(progress * Math.PI) * 0.18;
     const kickWindow = clamp01((progress - 0.48) / 0.34);
     const kick = Math.sin(kickWindow * Math.PI);
-    this.applyCameraVisitPose(-0.22, -0.12 - kick * 0.16, -3.6 + kick * 0.12);
+    this.applyCameraVisitPose(
+      0.22 * this.side,
+      -0.12 - kick * 0.16,
+      -3.6 + kick * 0.12,
+    );
     if (progress >= 0.5) this.root.userData.cameraKicks = 1;
   }
 
