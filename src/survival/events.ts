@@ -474,6 +474,12 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
       outcome(60, 'The other boat disappears into the dark.', {}, 'people-missed')),
+    contextualChoice('sleep', 'Let It Pass', outcome(
+      1,
+      'You let the other boat pass.',
+      {},
+      'people-pass',
+    )),
   ], undefined, { minimumRescueProgress: 15, maximumAppearances: 2 }),
 ]);
 

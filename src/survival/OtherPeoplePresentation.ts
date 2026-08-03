@@ -294,7 +294,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
           'choice-flashlight',
           FLASHLIGHT_DURATION,
         );
-      case 'pass':
+      case 'sleep':
         this.releaseSupply();
         this.setPlayerSignalsDark();
         this.root.userData.state = 'letting-pass';

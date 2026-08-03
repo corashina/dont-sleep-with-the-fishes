@@ -921,6 +921,34 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('plays Other People Sleep as letting the boat pass', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.stageEvent('other-people');
+    const choice = world.playEventChoice('other-people', {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    });
+
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.userData.state,
+    ).toBe('letting-pass');
+    world.update(0.32, 0.32);
+    await choice;
+    expect(
+      world.scene.getObjectByName('focused-event:other-people')?.userData.state,
+    ).toBe('choice-pass');
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it.each([
     {
       label: 'a missing event result',

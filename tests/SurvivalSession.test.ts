@@ -506,6 +506,34 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it.each([
+    ['without a signal item', []],
+    ['with a Flashlight', ['flashlight']],
+    ['with a Flare Gun', ['flareGun']],
+  ] as const)('lets Other People pass through Endure %s', (_label, items) => {
+    const session = new SurvivalSession(saved(...items), {
+      seed: 1101,
+      random: sequenceRandom([0]),
+      initial: { day: 15, rescueProgress: 15 },
+      initialEventId: 'other-people',
+    });
+
+    expect(session.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: true,
+      code: 'event-resolved',
+      message: 'You let the other boat pass.',
+      eventResult: {
+        eventId: 'other-people',
+        choiceId: 'sleep',
+        resultId: 'people-pass',
+      },
+    });
+    expect(session.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      pendingEventId: null,
+    });
+  });
+
+  it.each([
     ['food', ['cannedFood'], 'ductTape', { food: -1 }],
     ['bait', ['baitTin'], 'energyBar', { bait: -1 }],
     ['map', ['map'], 'compass', {}],
@@ -914,7 +942,7 @@ describe('SurvivalSession daytime actions', () => {
   it('opens Drifting Loot from day 3 at the 25 percent dawn boundary', () => {
     const opens = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.249, 0.499]),
+      random: sequenceRandom([0, 0.249, 0, 0.499]),
       initial: { day: 2 },
     });
     expect(opens.perform('endDay').accepted).toBe(true);
@@ -941,6 +969,23 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
+  it('draws Drifting Bottle from the eligible day event pool at dawn', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 201,
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { day: 2 },
+    });
+
+    expect(session.perform('endDay')).toMatchObject({ accepted: true });
+    expect(session.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
+    expect(session.snapshot()).toMatchObject({
+      day: 3,
+      state: 'dayEvent',
+      pendingEventId: 'drifting-bottle',
+      pendingDriftingLootVariant: null,
+    });
+  });
+
   it('does not roll Drifting Loot before day 3', () => {
     const next = vi.fn(() => 0);
     const session = new SurvivalSession(saved(), {
@@ -958,7 +1003,7 @@ describe('SurvivalSession daytime actions', () => {
   it('selects crate at the 50 percent variant boundary', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0.5]),
+      random: sequenceRandom([0, 0, 0, 0.5]),
       initial: { day: 2 },
     });
     session.perform('endDay');

@@ -945,6 +945,56 @@ describe('SurvivalPhase orchestration', () => {
     expect(realSession.snapshot()).toMatchObject({ state: 'day', day: 3 });
   });
 
+  it('draws and reveals Drifting Bottle through a normal dawn', async () => {
+    const session = new SurvivalSession([], {
+      seed: 203,
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { day: 2 },
+    });
+    const stageEvent = vi.fn();
+    const revealEvent = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent,
+        revealEvent,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        holdSleep: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    await flushPromises();
+
+    expect(session.snapshot()).toMatchObject({
+      state: 'dayEvent',
+      day: 3,
+      pendingEventId: 'drifting-bottle',
+    });
+    expect(stageEvent).toHaveBeenCalledWith(
+      'drifting-bottle',
+      null,
+      expect.any(Number),
+    );
+    expect(revealEvent).toHaveBeenCalledWith('drifting-bottle');
+    phase.dispose();
+  });
+
   it('lets Drifting Loot recede without a result and resumes the same day', async () => {
     let current = snapshot({
       state: 'dayEvent',
@@ -5291,6 +5341,75 @@ describe('SurvivalPhase orchestration', () => {
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(setEventSelection).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
+  it('routes Other People Endure with a usable signal item', async () => {
+    const session = new SurvivalSession(
+      [{ instanceId: 'flashlight-1', type: 'flashlight' }],
+      {
+        seed: 204,
+        random: sequenceRandom([0, 0.99, 0.99]),
+        initial: { day: 15, rescueProgress: 15 },
+        initialEventId: 'other-people',
+      },
+    );
+    const playEventChoice = vi.fn(() => Promise.resolve());
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice,
+        reactToEventOutcome,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        showFeedback: vi.fn(),
+        showEventOutcome: vi.fn(),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+
+    phase.handleEndure();
+    await flushPromises();
+    await flushPromises();
+
+    expect(playEventChoice).toHaveBeenCalledWith('other-people', {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    });
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'other-people',
+      expect.objectContaining({
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'sleep',
+          resultId: 'people-pass',
+        },
+      }),
+      expect.anything(),
+    );
+    expect(session.snapshot()).toMatchObject({
+      state: 'day',
+      pendingEventId: null,
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
     phase.dispose();
   });
 
