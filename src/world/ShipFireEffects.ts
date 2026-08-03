@@ -17,19 +17,24 @@ import type { DangerAnchor, FireAnchor } from './ShipDangerLayout';
 
 const SMOKE_CAPACITY = 64;
 const EMBER_CAPACITY = 36;
+const SPARK_CAPACITY = 12;
 
 export interface ShipFireEffectsSnapshot {
   fireCount: number;
   smokeCapacity: number;
   emberCapacity: number;
+  sparkSourceCount: number;
+  sparkCapacity: number;
   activeSmoke: number;
   activeEmbers: number;
+  activeSparks: number;
 }
 
 export class ShipFireEffects {
   readonly root = new Group();
   readonly smoke: Points<BufferGeometry, ShaderMaterial>;
   readonly embers: Points<BufferGeometry, ShaderMaterial>;
+  readonly sparks: Points<BufferGeometry, ShaderMaterial>;
 
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
@@ -44,15 +49,25 @@ export class ShipFireEffects {
   private readonly emberOpacities = new Float32Array(EMBER_CAPACITY);
   private readonly emberSizes = new Float32Array(EMBER_CAPACITY);
   private readonly emberPhases = new Float32Array(EMBER_CAPACITY);
+  private readonly sparkPositions = new Float32Array(SPARK_CAPACITY * 3);
+  private readonly sparkOpacities = new Float32Array(SPARK_CAPACITY);
+  private readonly sparkSizes = new Float32Array(SPARK_CAPACITY);
+  private readonly sparkPhases = new Float32Array(SPARK_CAPACITY);
   private readonly smokeSources: readonly DangerAnchor[];
   private readonly fireSources: readonly FireAnchor[];
+  private readonly sparkSources: readonly DangerAnchor[];
   private elapsed = 0;
   private disposed = false;
 
-  constructor(fires: readonly FireAnchor[], smokeOutlets: readonly DangerAnchor[]) {
+  constructor(
+    fires: readonly FireAnchor[],
+    smokeOutlets: readonly DangerAnchor[],
+    sparks: readonly DangerAnchor[],
+  ) {
     this.root.name = 'ship-danger-fire-effects';
     this.fireSources = fires;
     this.smokeSources = smokeOutlets;
+    this.sparkSources = sparks;
 
     const flameGeometry = this.ownGeometry(new CylinderGeometry(0.12, 0.42, 1, 7, 1, false));
     const yellow = this.ownMaterial(new MeshStandardMaterial({ color: 0xffce54, emissive: 0xff9d20, emissiveIntensity: 1.5, roughness: 0.66 }));
@@ -87,9 +102,11 @@ export class ShipFireEffects {
 
     this.smoke = this.createParticlePool('ship-danger-smoke', this.smokePositions, this.smokeOpacities, this.smokeSizes, 0x303236, 0.82, 1.2);
     this.embers = this.createParticlePool('ship-danger-embers', this.emberPositions, this.emberOpacities, this.emberSizes, 0xff8527, 0.95, 0.28);
-    this.root.add(this.smoke, this.embers);
+    this.sparks = this.createParticlePool('ship-danger-wheelhouse-sparks', this.sparkPositions, this.sparkOpacities, this.sparkSizes, 0xffd36a, 1, 0.2);
+    this.root.add(this.smoke, this.embers, this.sparks);
     this.primeSmoke();
     this.primeEmbers();
+    this.primeSparks();
   }
 
   update(delta: number, state: Readonly<ShipDangerState>): void {
@@ -99,6 +116,7 @@ export class ShipFireEffects {
     this.updateFlames(state.fireIntensity);
     this.updateSmoke(step, state.smokeDensity);
     this.updateEmbers(step, state.fireIntensity);
+    this.updateSparks(step, state.fireIntensity);
   }
 
   snapshotForTest(): ShipFireEffectsSnapshot {
@@ -106,8 +124,11 @@ export class ShipFireEffects {
       fireCount: this.lights.length,
       smokeCapacity: SMOKE_CAPACITY,
       emberCapacity: EMBER_CAPACITY,
+      sparkSourceCount: this.sparkSources.length,
+      sparkCapacity: SPARK_CAPACITY,
       activeSmoke: SMOKE_CAPACITY,
       activeEmbers: EMBER_CAPACITY,
+      activeSparks: SPARK_CAPACITY,
     };
   }
 
@@ -163,6 +184,16 @@ export class ShipFireEffects {
     }
   }
 
+  private primeSparks(): void {
+    for (let index = 0; index < SPARK_CAPACITY; index += 1) {
+      const phase = (index % 7) / 7;
+      this.sparkPhases[index] = phase;
+      this.writeSparkPosition(index, phase);
+      this.sparkOpacities[index] = 0.55 + (1 - phase) * 0.45;
+      this.sparkSizes[index] = 0.07 + (index % 3) * 0.025;
+    }
+  }
+
   private updateFlames(intensity: number): void {
     for (let index = 0; index < this.flames.length; index += 1) {
       const flicker = 0.9 + Math.sin(this.elapsed * 13 + index * 1.73) * 0.1;
@@ -202,12 +233,33 @@ export class ShipFireEffects {
     this.embers.geometry.getAttribute('aOpacity').needsUpdate = true;
   }
 
+  private updateSparks(step: number, intensity: number): void {
+    for (let index = 0; index < SPARK_CAPACITY; index += 1) {
+      const phase = (this.sparkPhases[index]! + (0.38 + (index % 4) * 0.035) * step) % 1;
+      this.sparkPhases[index] = phase;
+      this.writeSparkPosition(index, phase);
+      this.sparkOpacities[index] = (0.55 + (1 - phase) * 0.45) * intensity;
+    }
+    this.sparks.geometry.getAttribute('position').needsUpdate = true;
+    this.sparks.geometry.getAttribute('aOpacity').needsUpdate = true;
+  }
+
   private writeEmberPosition(index: number, phase: number): void {
     const source = this.fireSources[index % this.fireSources.length]!;
     const offset = index * 3;
     this.emberPositions[offset] = source.position[0] + Math.sin(index * 1.618034 + phase * 6.283185) * 0.34 * source.scale;
     this.emberPositions[offset + 1] = source.position[1] + 0.28 + phase * 1.25 * source.scale;
     this.emberPositions[offset + 2] = source.position[2] + Math.cos(index * 2.399963 + phase * 6.283185) * 0.26 * source.scale;
+  }
+
+  private writeSparkPosition(index: number, phase: number): void {
+    const source = this.sparkSources[index % this.sparkSources.length]!;
+    const offset = index * 3;
+    this.sparkPositions[offset] = source.position[0]
+      + Math.sin(index * 2.399963 + phase * 8.1) * 0.32;
+    this.sparkPositions[offset + 1] = source.position[1] + phase * 0.68;
+    this.sparkPositions[offset + 2] = source.position[2]
+      + Math.cos(index * 1.618034 + phase * 7.3) * 0.28;
   }
 
   private ownGeometry<T extends BufferGeometry>(geometry: T): T { this.geometries.add(geometry); return geometry; }

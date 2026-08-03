@@ -34,7 +34,12 @@ import {
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
 import { scavengeSpeedMultiplier } from '../game/scavengeMovement';
-import { getShipDangerState } from '../game/shipDanger';
+import {
+  createShipAlarmPhase,
+  createShipDangerState,
+  resetShipAlarmPhase,
+  sampleShipDangerStateInto,
+} from '../game/shipDanger';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
 import { CarryController } from '../interaction/CarryController';
@@ -109,6 +114,8 @@ export class ScavengePhase implements GamePhase {
   private disposed = false;
   private completionReported = false;
   private elapsed = 0;
+  private readonly dangerState = createShipDangerState();
+  private readonly alarmPhase = createShipAlarmPhase();
   private presentation: ScavengePresentation = 'title';
   private introElapsed = 0;
   private introPaused = false;
@@ -337,14 +344,19 @@ export class ScavengePhase implements GamePhase {
     const simulatePhysics = this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
       && next.status === 'running';
-    const danger = getShipDangerState(this.elapsed, SCAVENGE_DURATION_SECONDS);
+    sampleShipDangerStateInto(
+      this.dangerState,
+      this.elapsed,
+      SCAVENGE_DURATION_SECONDS,
+      this.alarmPhase.elapsedAt(this.elapsed),
+    );
     this.world.update(
       this.worldTime,
       worldDeltaSeconds,
       sinking,
       this.context.camera.position,
       simulatePhysics,
-      danger,
+      this.dangerState,
     );
     if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
       this.player.placeCamera();
@@ -634,6 +646,7 @@ export class ScavengePhase implements GamePhase {
     this.presentation = 'playing';
     this.ui.setPresentation('playing');
     this.session.start();
+    resetShipAlarmPhase(this.alarmPhase, this.elapsed);
     this.audio.beginRun();
     if (resumeRequired) {
       this.pausedIntroExitCarry = true;

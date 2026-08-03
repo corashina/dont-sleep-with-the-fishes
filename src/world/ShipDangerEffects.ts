@@ -53,6 +53,7 @@ export class ShipDangerEffects {
       this.fire = new ShipFireEffects(
         SHIP_DANGER_LAYOUT.fires,
         SHIP_DANGER_LAYOUT.smokeOutlets,
+        SHIP_DANGER_LAYOUT.sparks,
       );
       cleanup.push(() => this.fire.dispose());
       options.onResource?.(this.fire);

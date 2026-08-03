@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type Material, Mesh, PointLight, Vector3 } from 'three';
-import { getShipDangerState } from '../src/game/shipDanger';
+import {
+  createShipDangerState,
+  sampleShipDangerStateInto,
+} from '../src/game/shipDanger';
 import { ShipAlarmLights } from '../src/world/ShipAlarmLights';
 import { ShipDamageDetails } from '../src/world/ShipDamageDetails';
 import { ShipFireEffects } from '../src/world/ShipFireEffects';
@@ -13,6 +16,12 @@ import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
 import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
 
 describe('ship danger effects', () => {
+  function dangerAt(elapsed: number, duration = 60) {
+    const state = createShipDangerState();
+    sampleShipDangerStateInto(state, elapsed, duration, elapsed);
+    return state;
+  }
+
   it('constructs every focused system below one ship root', () => {
     const effects = new ShipDangerEffects();
     expect(effects.root.name).toBe('ship-danger-effects');
@@ -71,7 +80,7 @@ describe('ship danger effects', () => {
 
   it('pulses three caged room lamps from one danger sample', () => {
     const alarms = new ShipAlarmLights(SHIP_DANGER_LAYOUT.alarms);
-    alarms.update(getShipDangerState(0, 60));
+    alarms.update(dangerAt(0));
     expect(alarms.snapshotForTest()).toMatchObject({ lampCount: 3, pulse: 1 });
     const lights: PointLight[] = [];
     alarms.root.traverse((node) => { if (node instanceof PointLight) lights.push(node); });
@@ -95,6 +104,7 @@ describe('ship danger effects', () => {
     const effects = new ShipFireEffects(
       SHIP_DANGER_LAYOUT.fires,
       SHIP_DANGER_LAYOUT.smokeOutlets,
+      SHIP_DANGER_LAYOUT.sparks,
     );
     expect(effects.snapshotForTest()).toMatchObject({
       fireCount: 3,
@@ -103,6 +113,33 @@ describe('ship danger effects', () => {
     });
     expect(effects.snapshotForTest().activeSmoke).toBeGreaterThan(0);
     expect(effects.snapshotForTest().activeEmbers).toBeGreaterThan(0);
+    effects.dispose();
+  });
+
+  it('primes a fixed wheelhouse-control spark pool away from fire anchors', () => {
+    const effects = new ShipFireEffects(
+      SHIP_DANGER_LAYOUT.fires,
+      SHIP_DANGER_LAYOUT.smokeOutlets,
+      SHIP_DANGER_LAYOUT.sparks,
+    );
+    const snapshot = effects.snapshotForTest();
+    expect(snapshot).toMatchObject({ sparkSourceCount: 1, sparkCapacity: 12, activeSparks: 12 });
+    const source = SHIP_DANGER_LAYOUT.sparks[0]!.position;
+    const positions = effects.sparks.geometry.getAttribute('position');
+    const opacities = effects.sparks.geometry.getAttribute('aOpacity');
+    for (let index = 0; index < positions.count; index += 1) {
+      expect(positions.getX(index)).toBeGreaterThan(source[0] - 0.5);
+      expect(positions.getX(index)).toBeLessThan(source[0] + 0.5);
+      expect(positions.getY(index)).toBeGreaterThan(source[1] - 1e-5);
+      expect(positions.getY(index)).toBeLessThan(source[1] + 0.8);
+      expect(positions.getZ(index)).toBeGreaterThan(source[2] - 0.5);
+      expect(positions.getZ(index)).toBeLessThan(source[2] + 0.5);
+      expect(opacities.getX(index)).toBeGreaterThan(0);
+    }
+    SHIP_DANGER_LAYOUT.fires.forEach((fire) => {
+      expect(Math.hypot(source[0] - fire.position[0], source[2] - fire.position[2]))
+        .toBeGreaterThan(1);
+    });
     effects.dispose();
   });
 
@@ -153,10 +190,10 @@ describe('ship danger effects', () => {
   });
 
   it('raises fire, smoke, and water strength without changing pool capacity', () => {
-    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets);
+    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets, SHIP_DANGER_LAYOUT.sparks);
     const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
-    fire.update(1 / 60, getShipDangerState(60, 60));
-    flood.update(1 / 60, getShipDangerState(60, 60));
+    fire.update(1 / 60, dangerAt(60));
+    flood.update(1 / 60, dangerAt(60));
     expect(fire.snapshotForTest()).toMatchObject({ smokeCapacity: 64, emberCapacity: 36 });
     expect(flood.snapshotForTest()).toMatchObject({ sprayCapacity: 48, activeSpray: 48 });
     expect(flood.snapshotForTest().flowScale).toBeCloseTo(1.3);
@@ -165,7 +202,7 @@ describe('ship danger effects', () => {
   });
 
   it('disposes fire and flood resources once and ignores later updates', () => {
-    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets);
+    const fire = new ShipFireEffects(SHIP_DANGER_LAYOUT.fires, SHIP_DANGER_LAYOUT.smokeOutlets, SHIP_DANGER_LAYOUT.sparks);
     const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
     const fireMesh = fire.root.getObjectByName('ship-danger-flame:wheelhouse-roof:1') as Mesh;
     const floodMesh = flood.root.getObjectByName('ship-danger-leak:crew-starboard') as Mesh;
@@ -181,8 +218,8 @@ describe('ship danger effects', () => {
     fire.dispose();
     flood.dispose();
     expect(() => {
-      fire.update(1 / 60, getShipDangerState(60, 60));
-      flood.update(1 / 60, getShipDangerState(60, 60));
+      fire.update(1 / 60, dangerAt(60));
+      flood.update(1 / 60, dangerAt(60));
     }).not.toThrow();
     [
       fireGeometryDispose, fireMaterialDispose, firePointsDispose,

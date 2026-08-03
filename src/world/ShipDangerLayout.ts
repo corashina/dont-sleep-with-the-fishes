@@ -22,6 +22,13 @@ export interface FireAnchor extends DangerAnchor {
   readonly unreachable: true;
 }
 
+export type SmokeClosure = 'roof' | 'storageSide' | 'machinery' | 'hull';
+
+export interface SmokeAnchor extends DangerAnchor {
+  readonly closure: SmokeClosure;
+  readonly unreachable: true;
+}
+
 export interface LeakAnchor extends DangerAnchor {
   readonly length: number;
   readonly width: number;
@@ -35,7 +42,8 @@ export interface FootprintAnchor extends DangerAnchor {
 export interface ShipDangerLayout {
   readonly alarms: readonly DangerAnchor[];
   readonly fires: readonly FireAnchor[];
-  readonly smokeOutlets: readonly DangerAnchor[];
+  readonly smokeOutlets: readonly SmokeAnchor[];
+  readonly sparks: readonly DangerAnchor[];
   readonly leaks: readonly LeakAnchor[];
   readonly puddles: readonly FootprintAnchor[];
   readonly streams: readonly FootprintAnchor[];
@@ -57,11 +65,14 @@ export const SHIP_DANGER_LAYOUT: ShipDangerLayout = Object.freeze({
     { id: 'machinery-starboard', zoneId: 'cargoDeck', position: [2.85, 4.22, -20.9], rotation: [0, 0, 0], scale: 1.2, unreachable: true },
     { id: 'starboard-hull', zoneId: 'outerHull', position: [8.18, 2.8, -5.8], rotation: [0, 0, -Math.PI / 2], scale: 0.9, unreachable: true },
   ]),
-  smokeOutlets: Object.freeze<DangerAnchor[]>([
-    { id: 'wheelhouse-roof', zoneId: 'wheelhouse', position: [2.4, 6.1, 20.5], rotation: [0, 0, 0] },
-    { id: 'storage-roof', zoneId: 'storageWorkroom', position: [-3.7, 5.85, -12.1], rotation: [0, 0, 0] },
-    { id: 'machinery-starboard', zoneId: 'cargoDeck', position: [2.85, 4.65, -20.9], rotation: [0, 0, 0] },
-    { id: 'starboard-hull', zoneId: 'outerHull', position: [8.28, 3.15, -5.8], rotation: [0, 0, 0] },
+  smokeOutlets: Object.freeze<SmokeAnchor[]>([
+    { id: 'wheelhouse-roof', zoneId: 'wheelhouse', position: [2.4, 6.1, 20.5], rotation: [0, 0, 0], closure: 'roof', unreachable: true },
+    { id: 'storage-starboard-side', zoneId: 'storageWorkroom', position: [5.88, 5.18, -12.1], rotation: [0, 0, 0], closure: 'storageSide', unreachable: true },
+    { id: 'machinery-starboard', zoneId: 'cargoDeck', position: [2.85, 4.65, -20.9], rotation: [0, 0, 0], closure: 'machinery', unreachable: true },
+    { id: 'starboard-hull', zoneId: 'outerHull', position: [8.28, 3.15, -5.8], rotation: [0, 0, 0], closure: 'hull', unreachable: true },
+  ]),
+  sparks: Object.freeze<DangerAnchor[]>([
+    { id: 'wheelhouse-controls', zoneId: 'wheelhouse', position: [-1.5, 3.08, 19.3], rotation: [0, 0, 0] },
   ]),
   leaks: Object.freeze<LeakAnchor[]>([
     { id: 'crew-starboard', zoneId: 'crewCabin', position: [5.63, 3.5, 11.3], rotation: [0, 0, Math.PI / 2], length: 2.1, width: 0.07, unreachable: false },
@@ -142,9 +153,39 @@ export function validateShipDangerLayout(
   danger.fires.forEach((fire) => {
     if (!fire.unreachable) throw new Error(`${fire.id} fire must remain unreachable`);
   });
+  danger.smokeOutlets.forEach((smoke) => {
+    if (!smoke.unreachable) throw new Error(`${smoke.id} heavy smoke must remain unreachable`);
+    const zone = ship.zones.find(({ id }) => id === smoke.zoneId);
+    if (smoke.closure === 'roof') {
+      if (!zone || smoke.position[1] <= ROOM_CEILING_Y) {
+        throw new Error(`${smoke.id} roof smoke must stay above a room roof`);
+      }
+      if (ship.balconies.some(({ zoneId }) => zoneId === smoke.zoneId)) {
+        throw new Error(`${smoke.id} uses a reachable roof`);
+      }
+    } else if (smoke.closure === 'storageSide') {
+      const storage = ship.zones.find(({ id }) => id === 'storageWorkroom');
+      const outsideSide = storage !== undefined
+        && (smoke.position[0] < storage.bounds.minX || smoke.position[0] > storage.bounds.maxX)
+        && smoke.position[2] >= storage.bounds.minZ
+        && smoke.position[2] <= storage.bounds.maxZ
+        && smoke.position[1] > FLOOR_Y + 2.4
+        && smoke.position[1] < ROOM_CEILING_Y;
+      if (smoke.zoneId !== 'storageWorkroom' || !outsideSide) {
+        throw new Error(`${smoke.id} must stay on the unreachable storage side`);
+      }
+    } else if (smoke.closure === 'machinery') {
+      if (smoke.zoneId !== 'cargoDeck'
+        || !containsRect(ship.machineryClosure, smoke.position[0], smoke.position[2])) {
+        throw new Error(`${smoke.id} must stay in the machinery closure`);
+      }
+    } else if (smoke.closure === 'hull' && smoke.zoneId !== 'outerHull') {
+      throw new Error(`${smoke.id} must stay on the outer hull`);
+    }
+  });
 
   const groups: ReadonlyArray<readonly DangerAnchor[]> = [
-    danger.alarms, danger.fires, danger.smokeOutlets, danger.leaks,
+    danger.alarms, danger.fires, danger.smokeOutlets, danger.sparks, danger.leaks,
     danger.puddles, danger.streams, danger.brokenPlanks, danger.wetStreaks,
   ];
   for (const group of groups) {
@@ -157,7 +198,11 @@ export function validateShipDangerLayout(
       }
       if (anchor.zoneId === 'outerHull') continue;
       const zone = ship.zones.find(({ id }) => id === anchor.zoneId);
-      if (!zone || !pointInPolygon(anchor.position[0], anchor.position[2], zone.polygon)) {
+      const storageSideSmoke = danger.smokeOutlets.some((smoke) => (
+        smoke === anchor && smoke.closure === 'storageSide'
+      ));
+      if (!zone || (!storageSideSmoke
+        && !pointInPolygon(anchor.position[0], anchor.position[2], zone.polygon))) {
         throw new Error(`${anchor.id} is outside ${anchor.zoneId}`);
       }
       const blocksDoor = ship.doors.some((door) => door.zoneId === anchor.zoneId
