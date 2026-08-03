@@ -26,6 +26,7 @@ import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { scavengeSpeedMultiplier } from '../src/game/scavengeMovement';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
+import { getShipDangerState } from '../src/game/shipDanger';
 import { getSinkingState } from '../src/game/sinking';
 import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import type { ContextAction } from '../src/interaction/InteractionSystem';
@@ -382,6 +383,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.objectContaining({ progress: 0 }),
       camera.position,
       false,
+      getShipDangerState(0, SCAVENGE_DURATION_SECONDS),
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
     phase.dispose();
@@ -500,6 +502,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
   });
 
@@ -528,6 +531,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(order).toEqual(['world', 'camera']);
 
@@ -544,6 +548,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -632,6 +637,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(updateWorld).toHaveBeenNthCalledWith(
       2,
@@ -640,6 +646,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(order).toEqual(['world', 'camera', 'world', 'camera']);
 
@@ -662,6 +669,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
   });
 
@@ -818,6 +826,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.anything(),
         expect.any(Vector3),
         false,
+        expect.any(Object),
       );
     } finally {
       Object.defineProperty(document, 'hidden', { configurable: true, value: false });
@@ -925,6 +934,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
     expect(updatePlayer).toHaveBeenCalledWith(0.25, input, 1);
 
@@ -939,6 +949,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(tick).not.toHaveBeenCalled();
 
@@ -950,6 +961,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
     expect(tick).toHaveBeenCalledWith(0.25, true);
     expect(updatePlayer).not.toHaveBeenCalled();
@@ -1023,6 +1035,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.any(Object),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
     expect(session.snapshot().remainingSeconds).toBe(SCAVENGE_DURATION_SECONDS);
     expect(input.clearLook).toHaveBeenCalledOnce();
@@ -1074,6 +1087,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       true,
+      expect.any(Object),
     );
 
     input.pointerLocked = false;
@@ -1084,6 +1098,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -1249,6 +1264,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.anything(),
         expect.any(Vector3),
         false,
+        expect.any(Object),
       );
     } finally {
       hidden.mockRestore();
@@ -1270,6 +1286,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      expect.any(Object),
     );
   });
 
@@ -1348,6 +1365,7 @@ describe('ScavengePhase lifecycle integration', () => {
         expect.any(Object),
         expect.any(Vector3),
         false,
+        getShipDangerState(SCAVENGE_DURATION_SECONDS, SCAVENGE_DURATION_SECONDS),
       );
     } finally {
       if (originalExitPointerLock) {
@@ -1377,6 +1395,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect.anything(),
       expect.any(Vector3),
       false,
+      getShipDangerState(SCAVENGE_DURATION_SECONDS, SCAVENGE_DURATION_SECONDS),
     );
   });
 
