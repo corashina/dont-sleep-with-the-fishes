@@ -18,7 +18,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
-import { getShipDangerState, type ShipDangerState } from '../game/shipDanger';
+import { createShipDangerState, type ShipDangerState } from '../game/shipDanger';
 import type { SinkingState } from '../game/sinking';
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import {
@@ -189,6 +189,7 @@ export class World {
   );
   private readonly shipBuild: ShipBuild;
   private readonly shipDangerEffects!: ShipDangerEffects;
+  private readonly defaultDangerState = createShipDangerState();
   private readonly boatAnchor: Vector3;
   private readonly shipItemScales = new Map<ItemInstanceId, number>();
   private readonly animatedItemPresentations = new Map<ItemInstanceId, PropPresentation>();
@@ -533,7 +534,7 @@ export class World {
     sinking: SinkingState,
     cameraPosition: Vector3,
     simulatePhysics: boolean,
-    danger: ShipDangerState = getShipDangerState(0, 60),
+    danger: ShipDangerState = this.defaultDangerState,
   ): void {
     if (this.disposed) return;
     const weatherWaveScale = sinking.waveAmplitudeScale
