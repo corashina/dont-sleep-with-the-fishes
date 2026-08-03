@@ -78,18 +78,40 @@ export class CaptainWhiskersPresentation {
     this.interactionRoot.name = 'captain-whiskers-interaction';
     this.interactionRoot.userData.companionId = 'captainWhiskers';
     this.modelPresentation = propModels.createPresentation(CAPTAIN_WHISKERS_INSTANCE);
-    this.modelPresentation.root.name = 'captain-whiskers-model';
-    this.headPoseRoot.add(this.modelPresentation.root);
-    this.poseRoot.add(this.headPoseRoot);
-    this.interactionRoot.add(this.poseRoot);
-    this.root.add(this.interactionRoot);
+    try {
+      collectMeshResources(
+        this.modelPresentation.root,
+        this.ownedGeometries,
+        this.ownedMaterials,
+      );
+      this.modelPresentation.root.name = 'captain-whiskers-model';
+      this.headPoseRoot.add(this.modelPresentation.root);
+      this.poseRoot.add(this.headPoseRoot);
+      this.interactionRoot.add(this.poseRoot);
+      this.root.add(this.interactionRoot);
 
-    this.hand = createPettingHand();
-    this.food = createFoodProp();
-    this.root.add(this.hand, this.food);
-    collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
-    this.setLiving(false);
-    this.applyPose();
+      this.hand = createPettingHand();
+      collectMeshResources(this.hand, this.ownedGeometries, this.ownedMaterials);
+      this.food = createFoodProp();
+      collectMeshResources(this.food, this.ownedGeometries, this.ownedMaterials);
+      this.root.add(this.hand, this.food);
+      this.setLiving(false);
+      this.applyPose();
+    } catch (error) {
+      try {
+        runCleanupSteps([
+          () => this.modelPresentation.dispose(),
+          () => this.root.removeFromParent(),
+          () => disposeResourceSets(
+            this.ownedGeometries,
+            this.ownedMaterials,
+          ),
+        ]);
+      } catch {
+        // Preserve the construction error after each owned resource runs.
+      }
+      throw error;
+    }
   }
 
   sync(snapshot: CaptainWhiskersSnapshot | null): void {

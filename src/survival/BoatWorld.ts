@@ -812,22 +812,28 @@ export class BoatWorld {
     this.lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
     this.boat.add(this.lantern.root);
 
-    this.captainWhiskers = new CaptainWhiskersPresentation(propModels);
-    this.boat.add(this.captainWhiskers.root);
-
-    this.supplyDisplay = new BoatSupplyDisplay(
-      propModels,
-      build.storageRoot,
-      savedItems,
-    );
-    this.chestDisplay = new ChestDisplay(
-      featuredEventModels === undefined
-        ? propModels.createEventModel('chestClosed')?.root ?? null
-        : resolvedEventModels.clone('mysteryChest'),
-    );
-    this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
-    this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
+    let captainWhiskers: CaptainWhiskersPresentation | null = null;
+    let supplyDisplay: BoatSupplyDisplay | null = null;
+    let chestDisplay: ChestDisplay | null = null;
     try {
+      captainWhiskers = new CaptainWhiskersPresentation(propModels);
+      this.captainWhiskers = captainWhiskers;
+      this.boat.add(captainWhiskers.root);
+
+      supplyDisplay = new BoatSupplyDisplay(
+        propModels,
+        build.storageRoot,
+        savedItems,
+      );
+      this.supplyDisplay = supplyDisplay;
+      chestDisplay = new ChestDisplay(
+        featuredEventModels === undefined
+          ? propModels.createEventModel('chestClosed')?.root ?? null
+          : resolvedEventModels.clone('mysteryChest'),
+      );
+      this.chestDisplay = chestDisplay;
+      this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
+      this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
       this.dedicatedEvents = dedicatedEventModels === undefined
         ? null
         : createDedicatedEventCoordinator({
@@ -842,9 +848,9 @@ export class BoatWorld {
     } catch (error) {
       try {
         runCleanupSteps([
-          () => this.supplyDisplay.dispose(),
-          () => this.captainWhiskers.dispose(),
-          () => this.chestDisplay.dispose(),
+          () => chestDisplay?.dispose(),
+          () => supplyDisplay?.dispose(),
+          () => captainWhiskers?.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => this.lantern.dispose(),
           () => this.weatherEffects.dispose(),
