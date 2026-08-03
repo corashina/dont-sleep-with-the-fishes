@@ -16,19 +16,14 @@ describe('ship danger state', () => {
   it('shows every hazard at full baseline strength when the run starts', () => {
     expect(sample(0)).toMatchObject({
       progress: 0,
-      smokeDensity: 1,
-      waterFlow: 1,
       alarmRate: 0.7,
     });
     expect(sample(0).alarmPulse).toBe(1);
   });
 
-  it('raises presentation strength only near the deadline', () => {
-    expect(sample(30).smokeDensity).toBe(1);
+  it('raises alarm speed only near the deadline', () => {
     expect(sample(60)).toMatchObject({
       progress: 1,
-      smokeDensity: 1.35,
-      waterFlow: 1.3,
       alarmRate: 2,
     });
   });

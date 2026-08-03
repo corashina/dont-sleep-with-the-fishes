@@ -5,8 +5,7 @@ import {
   sampleShipDangerStateInto,
 } from '../src/game/shipDanger';
 import { ShipAlarmLights } from '../src/world/ShipAlarmLights';
-import { ShipSmokeEffects } from '../src/world/ShipSmokeEffects';
-import { ShipFloodEffects } from '../src/world/ShipFloodEffects';
+import { ShipPuddleEffects } from '../src/world/ShipPuddleEffects';
 import {
   ShipDangerEffects,
   type ShipDangerOwnedResource,
@@ -21,18 +20,18 @@ describe('ship danger effects', () => {
     return state;
   }
 
-  it('constructs every remaining system below one ship root', () => {
+  it('constructs only alarms and puddles below one ship root', () => {
     const effects = new ShipDangerEffects();
     expect(effects.root.name).toBe('ship-danger-effects');
-    expect(effects.snapshotForTest()).toMatchObject({
-      alarms: 3,
-      smokeOutlets: 4,
-      leaks: 6,
-    });
+    expect(effects.snapshotForTest()).toEqual({ alarms: 3, puddles: 5 });
+    expect(effects.root.getObjectByName('ship-danger-smoke')).toBeUndefined();
+    expect(effects.root.getObjectByName('ship-danger-leak:crew-starboard')).toBeUndefined();
+    expect(effects.root.getObjectByName('ship-danger-stream:crew-runoff')).toBeUndefined();
+    expect(effects.root.getObjectByName('ship-danger-spray')).toBeUndefined();
     effects.dispose();
   });
 
-  it.each(['alarms', 'smoke', 'flood'] as const)(
+  it.each(['alarms', 'puddles'] as const)(
     'cleans completed danger resources after %s construction failure',
     (stage) => {
       const disposals: ReturnType<typeof vi.spyOn>[] = [];
@@ -44,9 +43,7 @@ describe('ship danger effects', () => {
           if (current === stage) throw new Error(`fail after ${stage}`);
         },
       })).toThrow(`fail after ${stage}`);
-      expect(disposals).toHaveLength(
-        ['alarms', 'smoke', 'flood'].indexOf(stage) + 1,
-      );
+      expect(disposals).toHaveLength(['alarms', 'puddles'].indexOf(stage) + 1);
       disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
     },
   );
@@ -58,7 +55,7 @@ describe('ship danger effects', () => {
     });
     effects.dispose();
     effects.dispose();
-    expect(disposals).toHaveLength(3);
+    expect(disposals).toHaveLength(2);
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
     expect(effects.root.children).toHaveLength(0);
   });
@@ -85,94 +82,36 @@ describe('ship danger effects', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
   });
 
-  it('shows only primed fixed smoke immediately', () => {
-    const smoke = new ShipSmokeEffects(SHIP_DANGER_LAYOUT.smokeOutlets);
-    expect(smoke.snapshotForTest()).toMatchObject({
-      sourceCount: 4,
-      smokeCapacity: 64,
-      activeSmoke: 64,
-    });
-    const names: string[] = [];
-    smoke.root.traverse(({ name }) => names.push(name));
-    expect(names.some((name) => /fire|ember|spark/.test(name))).toBe(false);
-    smoke.dispose();
-  });
-
-  it('shows every leak, stream, puddle, and fixed spray particle at start', () => {
-    const effects = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
-    expect(effects.snapshotForTest()).toMatchObject({
-      leakCount: 6,
-      streamCount: 3,
-      puddleCount: 5,
-      sprayCapacity: 48,
-      activeSpray: 48,
-    });
-    effects.dispose();
-  });
-
-  it('derives flood snapshot counts from its supplied layout', () => {
-    const effects = new ShipFloodEffects({
-      ...SHIP_DANGER_LAYOUT,
-      leaks: SHIP_DANGER_LAYOUT.leaks.slice(0, 2),
-      streams: SHIP_DANGER_LAYOUT.streams.slice(0, 1),
-      puddles: SHIP_DANGER_LAYOUT.puddles.slice(0, 2),
-    });
-    expect(effects.snapshotForTest()).toMatchObject({
-      leakCount: 2,
-      streamCount: 1,
-      puddleCount: 2,
-    });
-    effects.dispose();
-  });
-
-  it('keeps every puddle and stream vertex at floor height', () => {
-    const effects = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
+  it('shows every puddle immediately at floor height', () => {
+    const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
+    expect(puddles.snapshotForTest()).toEqual({ puddleCount: 5 });
     const vertex = new Vector3();
-    effects.root.updateWorldMatrix(true, true);
-    effects.root.traverse((object) => {
+    puddles.root.updateWorldMatrix(true, true);
+    puddles.root.traverse((object) => {
       if (!(object instanceof Mesh)) return;
-      if (!object.name.startsWith('ship-danger-puddle:') && !object.name.startsWith('ship-danger-stream:')) return;
       const positions = object.geometry.getAttribute('position');
       for (let index = 0; index < positions.count; index += 1) {
         vertex.fromBufferAttribute(positions, index).applyMatrix4(object.matrixWorld);
         expect(vertex.y).toBeLessThanOrEqual(FREIGHTER_DIMENSIONS.deckY + 0.025);
       }
     });
-    effects.dispose();
+    puddles.dispose();
   });
 
-  it('raises smoke and water strength without changing pool capacity', () => {
-    const smoke = new ShipSmokeEffects(SHIP_DANGER_LAYOUT.smokeOutlets);
-    const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
-    smoke.update(1 / 60, dangerAt(60));
-    flood.update(1 / 60, dangerAt(60));
-    expect(smoke.snapshotForTest()).toMatchObject({ smokeCapacity: 64, activeSmoke: 64 });
-    expect(flood.snapshotForTest()).toMatchObject({ sprayCapacity: 48, activeSpray: 48 });
-    expect(flood.snapshotForTest().flowScale).toBeCloseTo(1.3);
-    smoke.dispose();
-    flood.dispose();
+  it('derives its puddle count from supplied anchors', () => {
+    const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles.slice(0, 2));
+    expect(puddles.snapshotForTest()).toEqual({ puddleCount: 2 });
+    puddles.dispose();
   });
 
-  it('disposes smoke and flood resources once and ignores later updates', () => {
-    const smoke = new ShipSmokeEffects(SHIP_DANGER_LAYOUT.smokeOutlets);
-    const flood = new ShipFloodEffects(SHIP_DANGER_LAYOUT);
-    const floodMesh = flood.root.getObjectByName('ship-danger-leak:crew-starboard') as Mesh;
-    const smokeGeometryDispose = vi.spyOn(smoke.smoke.geometry, 'dispose');
-    const smokeMaterialDispose = vi.spyOn(smoke.smoke.material, 'dispose');
-    const floodGeometryDispose = vi.spyOn(floodMesh.geometry, 'dispose');
-    const floodMaterialDispose = vi.spyOn(floodMesh.material as Material, 'dispose');
-    const floodPointsDispose = vi.spyOn(flood.spray.geometry, 'dispose');
-    smoke.dispose();
-    flood.dispose();
-    smoke.dispose();
-    flood.dispose();
-    expect(() => {
-      smoke.update(1 / 60, dangerAt(60));
-      flood.update(1 / 60, dangerAt(60));
-    }).not.toThrow();
-    [
-      smokeGeometryDispose, smokeMaterialDispose,
-      floodGeometryDispose, floodMaterialDispose, floodPointsDispose,
-    ].forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+  it('disposes shared puddle resources once', () => {
+    const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
+    const mesh = puddles.root.getObjectByName('ship-danger-puddle:crew-aft') as Mesh;
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+    const materialDispose = vi.spyOn(mesh.material as Material, 'dispose');
+    puddles.dispose();
+    puddles.dispose();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
   });
 });

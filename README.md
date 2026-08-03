@@ -25,7 +25,7 @@ The scavenging phase takes place on a furnished single-level coastal freighter. 
 
 Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 18 scavenging item types and 21 physical pickups: Food appears three times, Bait twice, and every other item type once.
 
-The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Smoke appears on unreachable roofs, machinery, and hull areas. Cosmetic wall leaks feed streams and puddles without changing movement. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
+The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Static puddles add tension without changing movement. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
 
 ## Dorothy supplies
 
@@ -188,7 +188,7 @@ and cleanup.
 
 ## Architecture
 
-`src/world/ShipDangerEffects` owns fixed smoke, room alarms, leaks, streams, and puddles.
+`src/world/ShipDangerEffects` owns room alarms and static puddles.
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
