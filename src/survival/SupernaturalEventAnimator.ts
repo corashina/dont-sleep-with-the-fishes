@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   DoubleSide,
   Euler,
@@ -68,9 +69,9 @@ const SIREN_ROCK_X = -4.3;
 const SIREN_ROCK_Z = -9.2;
 const MAX_PRESENTATION_WAVE_SCALE = 1.7;
 const SIREN_MINIMUM_WAVE_CLEARANCE = 0.18;
-const SIREN_ROCK_Y = DEFAULT_WAVES.reduce(
+const SIREN_MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
   (height, wave) => height + wave.amplitude * MAX_PRESENTATION_WAVE_SCALE,
-  SIREN_MINIMUM_WAVE_CLEARANCE,
+  0,
 );
 const FOG_OPACITY_WEIGHTS = [0.72, 1, 0.58] as const;
 const FLARE_RADII = [
@@ -310,6 +311,7 @@ export class SupernaturalEventAnimator {
   private readonly flareFlash: Mesh;
   private readonly sirenBaseRotation: Euler;
   private readonly sirenBasePosition: Vector3;
+  private readonly sirenTableauBaseY: number;
   private readonly sirenHead: Object3D | null;
   private readonly sirenHeadBaseRotation = new Euler();
   private active: ActiveSupernaturalAnimation | null = null;
@@ -350,10 +352,21 @@ export class SupernaturalEventAnimator {
     this.sirenRock.name = 'event-siren-rock';
     replaceMaterials(this.sirenRock, this.rockMaterial);
     this.sirenRock.position.set(0, 0, 0);
+    const rockBounds = new Box3().setFromObject(this.sirenRock);
+    const rockMinimumY = Number.isFinite(rockBounds.min.y) ? rockBounds.min.y : 0;
+    this.sirenTableauBaseY = SIREN_MAXIMUM_WAVE_CREST
+      + SIREN_MINIMUM_WAVE_CLEARANCE
+      - rockMinimumY;
 
     this.sirenTableau.name = 'siren-tableau';
-    this.sirenTableau.position.set(SIREN_ROCK_X, SIREN_ROCK_Y, SIREN_ROCK_Z);
-    this.sirenTableau.userData.minimumWaveClearance = SIREN_MINIMUM_WAVE_CLEARANCE;
+    this.sirenTableau.position.set(
+      SIREN_ROCK_X,
+      this.sirenTableauBaseY,
+      SIREN_ROCK_Z,
+    );
+    this.sirenTableau.userData.minimumWaveClearance = this.sirenTableauBaseY
+      + rockMinimumY
+      - SIREN_MAXIMUM_WAVE_CREST;
     this.sirenTableau.userData.fogLayerCount = 3;
     this.sirenTableau.userData.subjectValueSeparation = 1;
     this.sirenTableau.add(this.sirenRock, this.siren);
@@ -684,7 +697,11 @@ export class SupernaturalEventAnimator {
 
   private restoreStage(): void {
     this.hideAll();
-    this.sirenTableau.position.set(SIREN_ROCK_X, SIREN_ROCK_Y, SIREN_ROCK_Z);
+    this.sirenTableau.position.set(
+      SIREN_ROCK_X,
+      this.sirenTableauBaseY,
+      SIREN_ROCK_Z,
+    );
     this.sirenTableau.rotation.set(0, 0, 0);
     this.siren.position.copy(this.sirenBasePosition);
     this.siren.rotation.copy(this.sirenBaseRotation);
