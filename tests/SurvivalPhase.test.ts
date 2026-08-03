@@ -2778,7 +2778,6 @@ describe('SurvivalPhase orchestration', () => {
         anchorId: 'drifting-loot',
         energyCost: 3,
       },
-      { id: 'delegate-whiskers', label: 'Send Whiskers', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -3587,7 +3586,6 @@ describe('SurvivalPhase orchestration', () => {
         anchorId: 'drifting-loot',
         energyCost: 3,
       },
-      { id: 'delegate-whiskers', label: 'Send Whiskers', unavailableReason: null },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
   });
@@ -5187,6 +5185,178 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(delegateDriftingLoot).not.toHaveBeenCalled();
+    phase.dispose();
+  });
+
+  it.each([
+    ['Sleep Normally', 'sleep', [0, 0, 0.99, 0.99, 0.99]],
+    ['Watch at the exact 0.85 boundary', 'watch', [0.85, 0, 0.99, 0.99, 0.99]],
+  ] as const)(
+    'reveals and resolves the Guarded Sleep follow-up before day two for %s',
+    async (_label, choiceId, rolls) => {
+      const session = new SurvivalSession([{
+        instanceId: 'captainWhiskers-1',
+        type: 'captainWhiskers',
+      }], {
+        seed: 91,
+        random: sequenceRandom(rolls),
+        initial: { day: 1 },
+        initialEventId: 'guarded-sleep',
+      });
+      const beginDawn = vi.spyOn(session, 'beginDawn');
+      const calls: string[] = [];
+      const setEventSelection = vi.fn(() => {
+        calls.push(`select:${session.snapshot().pendingEventId}`);
+      });
+      const ui: Partial<SurvivalUI> = {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn((covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+          return Promise.resolve();
+        }),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        setAnchors: vi.fn(),
+        restoreCommandFocus: vi.fn(),
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session,
+        world: {
+          syncInventory: vi.fn(),
+          projectInteractionAnchors: vi.fn(() => []),
+          setPhase: vi.fn(),
+          stageEvent: vi.fn((context: string | { eventId: string }) => {
+            calls.push(`stage:${typeof context === 'string' ? context : context.eventId}`);
+          }),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          playEventChoice: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => Promise.resolve()),
+          play: vi.fn(() => Promise.resolve()),
+          clearEvent: vi.fn(() => calls.push('clear-world')),
+          setEventSelectedItem: vi.fn(),
+          setEventEligibleItems: vi.fn(),
+          dispose: vi.fn(),
+        },
+        ui,
+      });
+
+      phase.start();
+      await flushPromises();
+      calls.length = 0;
+
+      ui.onEventChoice?.(choiceId);
+      await flushPromises();
+      await flushPromises();
+
+      expect(beginDawn).not.toHaveBeenCalled();
+      expect(session.snapshot()).toMatchObject({
+        state: 'nightEvent',
+        day: 1,
+        pendingEventId: 'night-calm-fallback',
+      });
+      expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:night-calm-fallback'));
+      expect(calls.indexOf('stage:night-calm-fallback')).toBeLessThan(calls.indexOf('uncover'));
+      expect(calls).toContain('select:night-calm-fallback');
+
+      ui.onEventChoice?.('sleep');
+      await flushPromises();
+      await flushPromises();
+
+      expect(beginDawn).toHaveBeenCalledOnce();
+      expect(session.snapshot()).toMatchObject({ state: 'day', day: 2, pendingEventId: null });
+      phase.dispose();
+    },
+  );
+
+  it.each([
+    {
+      label: 'absent',
+      savedItems: [] as ItemInstance[],
+      state: {},
+      expected: null,
+    },
+    {
+      label: 'dead',
+      savedItems: [{ instanceId: 'captainWhiskers-1', type: 'captainWhiskers' }] as ItemInstance[],
+      state: { alive: false, deathCause: 'sea-watcher' as const },
+      expected: null,
+    },
+    {
+      label: 'Hungry',
+      savedItems: [{ instanceId: 'captainWhiskers-1', type: 'captainWhiskers' }] as ItemInstance[],
+      state: { hunger: 3 },
+      expected: 'Captain Whiskers is Hungry and cannot retrieve the loot.',
+    },
+    {
+      label: 'Sick',
+      savedItems: [{ instanceId: 'captainWhiskers-1', type: 'captainWhiskers' }] as ItemInstance[],
+      state: { hunger: 5, sickness: 2 },
+      expected: 'Captain Whiskers is Sick and cannot retrieve the loot.',
+    },
+    {
+      label: 'Lonely',
+      savedItems: [{ instanceId: 'captainWhiskers-1', type: 'captainWhiskers' }] as ItemInstance[],
+      state: { hunger: 5, unhappiness: 5 },
+      expected: 'Captain Whiskers is Lonely and cannot retrieve the loot.',
+    },
+    {
+      label: 'wellness four',
+      savedItems: [{ instanceId: 'captainWhiskers-1', type: 'captainWhiskers' }] as ItemInstance[],
+      state: { hunger: 4 },
+      expected: undefined,
+    },
+  ])('maps session-owned Drifting Loot availability for $label', async ({
+    savedItems,
+    state,
+    expected,
+  }) => {
+    const session = new SurvivalSession(savedItems, {
+      seed: 92,
+      initialCaptainWhiskers: state,
+      initialEventId: 'drifting-loot',
+    });
+    const setEventSelection = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        syncInventory: vi.fn(),
+        projectInteractionAnchors: vi.fn(() => []),
+        setPhase: vi.fn(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        setEventSelectedItem: vi.fn(),
+        setEventEligibleItems: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        setAnchors: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+
+    const choices = setEventSelection.mock.calls.at(-1)?.[1] ?? [];
+    const delegate = choices.find(({ id }: { id: string }) => id === 'delegate-whiskers');
+    if (expected === null) expect(delegate).toBeUndefined();
+    else expect(delegate?.unavailableReason).toBe(expected ?? null);
     phase.dispose();
   });
 

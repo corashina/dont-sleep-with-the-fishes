@@ -293,7 +293,7 @@ describe('survival events', () => {
     expect(event('guarded-sleep').choices.map(({ id }) => id))
       .toEqual(['watch', 'sleep']);
     expect(event('sick-companion').choices.find(({ id }) => id === 'ductTape')
-      ?.outcomes.map(({ weight }) => weight)).toEqual([80, 20]);
+      ?.outcomes.map(({ weight }) => weight)).toEqual([80, 10]);
 
     const delegate = event('drifting-loot').choices.find(({ id }) => id === 'delegate-whiskers');
     expect(delegate).toMatchObject({

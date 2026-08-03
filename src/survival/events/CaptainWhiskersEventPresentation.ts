@@ -133,7 +133,7 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
 
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
-    this.clear();
+    if (this.staged) this.clear();
     this.captureBasePose();
     this.cameraLook?.capture();
     this.staged = true;

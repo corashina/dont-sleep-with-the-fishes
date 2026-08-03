@@ -1524,6 +1524,14 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
+    if (
+      eventState === 'nightEvent'
+      && terminal.state === 'nightEvent'
+      && terminal.pendingEventId !== null
+    ) {
+      await this.runPendingEventReveal(terminal, generation, true);
+      return;
+    }
     const snapshot = eventState === 'nightEvent'
       ? await this.runDawn(generation)
       : this.renderSnapshot(false, false);
@@ -1801,7 +1809,13 @@ export class SurvivalPhase implements GamePhase {
   ): EventContextChoice[] {
     return event.choices
       .filter((choice) => choice.itemId === undefined)
-      .map((choice) => {
+      .flatMap((choice): EventContextChoice[] => {
+        const companionAvailability = choice.companionAction === undefined
+          ? undefined
+          : this.session.companionEventActionAvailability?.(choice.companionAction);
+        if (choice.companionAction !== undefined && companionAvailability?.visible !== true) {
+          return [];
+        }
         const anchorId = this.contextualEventAnchorId(event.id, choice.id);
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
@@ -1816,8 +1830,12 @@ export class SurvivalPhase implements GamePhase {
           ...(chestUnavailable
             ? [`Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`]
             : []),
+          ...(companionAvailability?.unavailableReason === null
+            || companionAvailability?.unavailableReason === undefined
+            ? []
+            : [companionAvailability.unavailableReason]),
         ];
-        return {
+        return [{
           id: choice.id,
           label: choice.label,
           unavailableReason: unavailableReasons.length === 0 ? null : unavailableReasons.join(' '),
@@ -1831,7 +1849,7 @@ export class SurvivalPhase implements GamePhase {
                 )?.minimum ?? 0,
               }
             : {}),
-        };
+        }];
       });
   }
 

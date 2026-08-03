@@ -167,9 +167,10 @@ describe('SurvivalSession Captain Whiskers events', () => {
       inventory: { 'energyBar-1': { condition: 'consumed' } },
     });
 
+    const ductTapeBoundary = 80 / 90;
     const tapeWorsens = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
       seed: 1,
-      random: sequenceRandom([0.799999]),
+      random: sequenceRandom([ductTapeBoundary - 0.000001]),
       initialCaptainWhiskers: { sickness: 2 },
       initialEventId: 'sick-companion',
     });
@@ -178,7 +179,7 @@ describe('SurvivalSession Captain Whiskers events', () => {
 
     const tapeHolds = new SurvivalSession(saved('captainWhiskers', 'ductTape'), {
       seed: 1,
-      random: sequenceRandom([0.8]),
+      random: sequenceRandom([ductTapeBoundary]),
       initialCaptainWhiskers: { sickness: 2 },
       initialEventId: 'sick-companion',
     });
@@ -338,6 +339,72 @@ describe('SurvivalSession Captain Whiskers events', () => {
     expect(outcome.message).toContain('Hungry');
     expect(outcome.message).not.toMatch(/\b[0-9]+\b/);
     expect(session.snapshot().pendingEventId).toBe('drifting-loot');
+  });
+
+  it.each([
+    {
+      label: 'absent',
+      items: [] as ItemId[],
+      state: {},
+      expected: {
+        visible: false,
+        unavailableReason: 'Captain Whiskers is not aboard.',
+      },
+    },
+    {
+      label: 'dead',
+      items: ['captainWhiskers'] as ItemId[],
+      state: { alive: false, deathCause: 'sea-watcher' as const },
+      expected: {
+        visible: false,
+        unavailableReason: 'Captain Whiskers cannot retrieve the loot.',
+      },
+    },
+    {
+      label: 'Hungry',
+      items: ['captainWhiskers'] as ItemId[],
+      state: { hunger: 3 },
+      expected: {
+        visible: true,
+        unavailableReason: 'Captain Whiskers is Hungry and cannot retrieve the loot.',
+      },
+    },
+    {
+      label: 'Sick',
+      items: ['captainWhiskers'] as ItemId[],
+      state: { hunger: 5, sickness: 2 },
+      expected: {
+        visible: true,
+        unavailableReason: 'Captain Whiskers is Sick and cannot retrieve the loot.',
+      },
+    },
+    {
+      label: 'Lonely',
+      items: ['captainWhiskers'] as ItemId[],
+      state: { hunger: 5, unhappiness: 5 },
+      expected: {
+        visible: true,
+        unavailableReason: 'Captain Whiskers is Lonely and cannot retrieve the loot.',
+      },
+    },
+    {
+      label: 'wellness four',
+      items: ['captainWhiskers'] as ItemId[],
+      state: { hunger: 4 },
+      expected: { visible: true, unavailableReason: null },
+    },
+  ])('owns exact Drifting Loot delegation availability for $label', ({
+    items,
+    state,
+    expected,
+  }) => {
+    const session = new SurvivalSession(saved(...items), {
+      seed: 1,
+      initialCaptainWhiskers: state,
+      initialEventId: 'drifting-loot',
+    });
+
+    expect(session.companionEventActionAvailability('delegateWhiskers')).toEqual(expected);
   });
 });
 
