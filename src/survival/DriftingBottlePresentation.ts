@@ -35,6 +35,7 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
   };
   private side: EventSide = -1;
   private particleCooldown = 0;
+  private particleEmissionActive = false;
 
   constructor(model: Object3D, private readonly deckTarget: Object3D) {
     super('drifting-bottle-presentation');
@@ -76,13 +77,14 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
     this.side = eventSideFromSeed(variantSeed);
     this.particles.reset();
     this.particleCooldown = 0;
+    this.particleEmissionActive = true;
     super.stage();
   }
 
   update(time: number, delta: number): void {
     super.update(time, delta);
     this.particles.update(delta);
-    if (!this.root.visible || this.settledKind !== 'staged') return;
+    if (!this.root.visible || !this.particleEmissionActive) return;
     const dt = Math.min(0.1, Math.max(0, delta));
     this.particleCooldown = Math.max(0, this.particleCooldown - dt);
     if (this.particleCooldown > 0) return;
@@ -96,6 +98,7 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
     super.clear();
     this.particles.reset();
     this.particleCooldown = 0;
+    this.particleEmissionActive = false;
   }
 
   protected reset(): void {
@@ -116,6 +119,7 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
   }
 
   protected prepareAnimation(kind: string): void {
+    this.particleEmissionActive = kind === 'reveal';
     if (kind === 'drifting-bottle.retrieve') this.paper.visible = true;
   }
 
