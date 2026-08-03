@@ -2068,7 +2068,7 @@ describe('BoatWorld helpers', () => {
     expectFixedRocks();
     expect(Math.abs(motionRig.position.x - baseMotionX)).toBeGreaterThan(0.2);
     expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
+    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
     expect(cueCameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     world.update(2.4, 1.2);
     await reveal;

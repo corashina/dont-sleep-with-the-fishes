@@ -85,13 +85,6 @@ const REACTION_DURATION = 0.9;
 const FOAM_COUNT = 12;
 const FRAGMENT_COUNT = 8;
 
-function keyedTravel(progress: number): number {
-  const value = clamp01(progress);
-  if (value < 0.16) return -0.045 * Math.sin((value / 0.16) * Math.PI);
-  if (value < 0.82) return smoothstep((value - 0.16) / 0.66) * 1.045;
-  return 1.045 + (1 - 1.045) * smoothstep((value - 0.82) / 0.18);
-}
-
 const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
   name: string;
   position: VectorTuple;
@@ -740,13 +733,12 @@ export class DangerousWatersPresentation {
   }
 
   private applyRevealPose(progress: number): void {
-    const travel = keyedTravel(progress);
     const peek = smoothstep((progress - 0.42) / 0.2);
     const sink = smoothstep((progress - 0.82) / 0.16);
-    this.passage.position.x += (1 - travel) * 3.2;
     this.lurker.scale.y = peek * (1 - sink);
     this.materials.foam.opacity = 0.12 + smoothstep(progress) * 0.32;
-    this.boatReaction.driftX = Math.sin(Math.PI * progress) * -0.34;
+    this.boatReaction.driftX = -0.34 * Math.sin(Math.PI * progress)
+      + smoothstep(progress) * -0.16;
     this.boatReaction.yaw = Math.sin(Math.PI * progress) * 0.035;
     this.boatReaction.roll = Math.sin(Math.PI * progress) * -0.018;
   }
