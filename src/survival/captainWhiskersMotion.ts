@@ -46,6 +46,7 @@ export function captainWhiskersPoseState(
   if (snapshot.sickness > 0) return 'sick';
   if (snapshot.hunger <= 1) return 'starving';
   if (snapshot.unhappiness >= 3) return 'unhappy';
+  if (snapshot.hunger <= 3) return 'hungry';
   return 'healthy';
 }
 

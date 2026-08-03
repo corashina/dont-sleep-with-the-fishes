@@ -49,7 +49,7 @@ describe('Captain Whiskers motion', () => {
     expect(pose.handReach).toBeGreaterThan(0);
   });
 
-  it('selects sick, starving, unhappy, then healthy state priority', () => {
+  it('selects sick, starving, unhappy, hungry, then healthy state priority', () => {
     expect(captainWhiskersPoseState(snapshot({
       sickness: 1,
       hunger: 0,
@@ -59,7 +59,11 @@ describe('Captain Whiskers motion', () => {
       hunger: 1,
       unhappiness: 9,
     }))).toBe('starving');
-    expect(captainWhiskersPoseState(snapshot({ unhappiness: 3 }))).toBe('unhappy');
+    expect(captainWhiskersPoseState(snapshot({
+      hunger: 3,
+      unhappiness: 3,
+    }))).toBe('unhappy');
+    expect(captainWhiskersPoseState(snapshot({ hunger: 3 }))).toBe('hungry');
     expect(captainWhiskersPoseState(snapshot())).toBe('healthy');
   });
 
