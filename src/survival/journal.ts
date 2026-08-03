@@ -61,7 +61,16 @@ export interface JournalCaptainWhiskersCareRecord {
 
 export interface JournalCaptainWhiskersDawnRecord {
   readonly kind: 'captainWhiskersDawn';
+  readonly before: JournalCaptainWhiskersDawnState;
+  readonly after: JournalCaptainWhiskersDawnState;
+}
+
+export interface JournalCaptainWhiskersDawnState {
   readonly alive: boolean;
+  readonly hunger: number;
+  readonly sickness: number;
+  readonly unhappiness: number;
+  readonly pettedToday: boolean;
   readonly deathCause: CaptainWhiskersDeathCause | null;
 }
 
@@ -178,8 +187,21 @@ function formatCaptainWhiskers(record: JournalCaptainWhiskersCareRecord | Journa
     if (record.action === 'feed') return 'I fed Captain Whiskers.';
     return 'I treated Captain Whiskers.';
   }
-  if (!record.alive) return 'Captain Whiskers died during the night.';
-  return 'Captain Whiskers greeted the dawn.';
+  if (record.before.alive && !record.after.alive) {
+    return 'Captain Whiskers died during the night.';
+  }
+  const changes: string[] = [];
+  if (record.before.hunger !== record.after.hunger) {
+    changes.push(`hunger ${record.before.hunger} to ${record.after.hunger}`);
+  }
+  if (record.before.sickness !== record.after.sickness) {
+    changes.push(`sickness ${record.before.sickness} to ${record.after.sickness}`);
+  }
+  if (record.before.unhappiness !== record.after.unhappiness) {
+    changes.push(`unhappiness ${record.before.unhappiness} to ${record.after.unhappiness}`);
+  }
+  if (changes.length > 0) return `Captain Whiskers: ${changes.join('; ')}.`;
+  return 'Captain Whiskers changed during the night.';
 }
 
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {

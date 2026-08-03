@@ -18,6 +18,7 @@ import type {
   JournalDaytimeRecord,
   JournalEntry,
   JournalEventRecord,
+  JournalCaptainWhiskersDawnRecord,
   JournalNightRecord,
   JournalInventoryMutation,
   JournalResolution,
@@ -1387,7 +1388,10 @@ export class SurvivalSession {
 
   private advanceCaptainWhiskersDawn(): void {
     if (this.captainWhiskers === null) return;
+    const before = this.captainWhiskersDawnState();
     advanceCaptainWhiskersDawn(this.captainWhiskers, this.random);
+    const after = this.captainWhiskersDawnState();
+    if (!this.captainWhiskersDawnChanged(before, after)) return;
     const entryIndex = this.journalEntries.findIndex((entry) => entry.day === this.day - 1);
     if (entryIndex < 0) return;
     const entry = this.journalEntries[entryIndex]!;
@@ -1397,11 +1401,34 @@ export class SurvivalSession {
         ...entry.actions,
         Object.freeze({
           kind: 'captainWhiskersDawn',
-          alive: this.captainWhiskers.alive,
-          deathCause: this.captainWhiskers.deathCause,
+          before,
+          after,
         }),
       ]),
     };
+  }
+
+  private captainWhiskersDawnState(): JournalCaptainWhiskersDawnRecord['before'] {
+    if (this.captainWhiskers === null) throw new Error('Captain Whiskers is not aboard.');
+    return Object.freeze({
+      alive: this.captainWhiskers.alive,
+      hunger: this.captainWhiskers.hunger,
+      sickness: this.captainWhiskers.sickness,
+      unhappiness: this.captainWhiskers.unhappiness,
+      pettedToday: this.captainWhiskers.pettedToday,
+      deathCause: this.captainWhiskers.deathCause,
+    });
+  }
+
+  private captainWhiskersDawnChanged(
+    before: JournalCaptainWhiskersDawnRecord['before'],
+    after: JournalCaptainWhiskersDawnRecord['after'],
+  ): boolean {
+    return before.hunger !== after.hunger
+      || before.sickness !== after.sickness
+      || before.unhappiness !== after.unhappiness
+      || before.alive !== after.alive
+      || before.deathCause !== after.deathCause;
   }
 
   private applyChestGain(fallbackFood: 1): boolean {
