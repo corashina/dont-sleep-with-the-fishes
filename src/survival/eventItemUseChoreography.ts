@@ -31,10 +31,18 @@ export interface EventItemUseSample {
   effectKind: EventItemEffectKind;
 }
 
-const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set(['leak', 'school-of-fish']);
-const BUCKET_COVER_EVENTS: ReadonlySet<string> = new Set(['eerie-melody']);
-const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set(['shower-night']);
-const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set(['death-stare']);
+const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
+  'leak', 'school-of-fish', 'shower-night', 'thunderstorm',
+]);
+const BUCKET_COVER_EVENTS: ReadonlySet<string> = new Set([
+  'bad-sleep', 'eerie-melody',
+]);
+const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
+  'shower-night', 'windy-night', 'thunderstorm',
+]);
+const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
+  'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
+]);
 const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people']);
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts']);
 
@@ -79,7 +87,15 @@ export function resolveEventItemUseContext(
     if (FLARE_TARGET_EVENTS.has(eventId)) return 'flare-target';
     return null;
   }
-  if (itemId === 'anchor' && choiceId === 'anchor' && eventId === 'whirlpool') {
+  if (
+    itemId === 'anchor'
+    && choiceId === 'anchor'
+    && (
+      eventId === 'whirlpool'
+      || eventId === 'thunderstorm'
+      || eventId === 'restless-waves'
+    )
+  ) {
     return 'anchor-drop';
   }
 

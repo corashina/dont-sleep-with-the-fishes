@@ -40,8 +40,8 @@ import {
 import {
   DangerousWatersPresentation,
   type DangerousWatersBoatReaction,
-  type DangerousWatersItemPose,
 } from './DangerousWatersPresentation';
+import type { ItemInstanceId } from '../game/ItemState';
 import type { ActionOutcome } from './survivalTypes';
 import { ChestAttackPresentation } from './ChestAttackPresentation';
 import {
@@ -295,7 +295,7 @@ function createTableau(
 
 export class EventPresentationLayer {
   readonly root = new Group();
-  private readonly dangerousWaters = new DangerousWatersPresentation();
+  private readonly dangerousWaters: DangerousWatersPresentation;
   private readonly tableaus = new Map<string, EventTableau>();
   private readonly focused = new Map<string, FocusedEventPresentation>();
   private readonly ownedFocused = new Set<FocusedEventPresentation>();
@@ -326,6 +326,7 @@ export class EventPresentationLayer {
     focusedFactories: FocusedEventPresentationFactories = {},
   ) {
     this.root.name = 'event-presentation-layer';
+    this.dangerousWaters = new DangerousWatersPresentation(dependencies);
     const materials = createMaterials();
     const tableaus = [
       createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
@@ -482,6 +483,15 @@ export class EventPresentationLayer {
     return this.activeFocused?.playChoice(choice) ?? Promise.resolve();
   }
 
+  playDangerousWatersItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+  ): Promise<boolean> {
+    if (this.disposed) return Promise.resolve(false);
+    if (this.stagedEventId !== 'dangerous-waters') this.stage('dangerous-waters');
+    return this.dangerousWaters.playItemUse(choiceId, instanceId);
+  }
+
   react(eventId: string, outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const focused = this.focused.get(eventId) ?? null;
@@ -552,10 +562,6 @@ export class EventPresentationLayer {
     target: DangerousWatersBoatReaction,
   ): boolean {
     return this.dangerousWaters.copyBoatReaction(target);
-  }
-
-  copyDangerousWatersItemPose(target: DangerousWatersItemPose): boolean {
-    return this.dangerousWaters.copyItemPose(target);
   }
 
   update(time: number, delta: number): void {
