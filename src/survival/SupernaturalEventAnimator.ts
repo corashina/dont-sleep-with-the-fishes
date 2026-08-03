@@ -1,6 +1,7 @@
 import {
   Box3,
   BufferGeometry,
+  Color,
   DoubleSide,
   Euler,
   Float32BufferAttribute,
@@ -10,11 +11,13 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
+  PlaneGeometry,
+  PointLight,
+  ShaderMaterial,
   Texture,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
-import { DEFAULT_WAVES } from '../ocean/WaveField';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventModelLibrary } from './EventModelLibrary';
@@ -67,13 +70,19 @@ type ActiveSupernaturalAnimation =
 const REACTION_DURATION = 0.84;
 const SIREN_ROCK_X = -4.3;
 const SIREN_ROCK_Z = -9.2;
-const MAX_PRESENTATION_WAVE_SCALE = 1.7;
-const SIREN_MINIMUM_WAVE_CLEARANCE = 0.18;
-const SIREN_MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
-  (height, wave) => height + wave.amplitude * MAX_PRESENTATION_WAVE_SCALE,
-  0,
-);
-const FOG_OPACITY_WEIGHTS = [0.72, 1, 0.58] as const;
+const SIREN_WATERLINE_Y = 0;
+const SIREN_ROCK_SUBMERGENCE = 0.28;
+const SIREN_ROCK_VERTICAL_SCALE = 2.2;
+const SIREN_MODEL_FORWARD_YAW = Math.PI / 2;
+const SIREN_HEAD_PLAYER_TURN = 0.82;
+const FOG_OPACITY_WEIGHTS = [0.72, 0.9, 0.64, 0.78, 0.58] as const;
+const SEA_MIST_LAYERS = Object.freeze([
+  Object.freeze({ x: -4.4, y: 0.38, z: -7.5, width: 8.6, height: 0.9, rotation: -0.08 }),
+  Object.freeze({ x: -0.8, y: 0.46, z: -9.9, width: 11.4, height: 1.1, rotation: 0.12 }),
+  Object.freeze({ x: -8.1, y: 0.5, z: -12.2, width: 12.8, height: 1.2, rotation: -0.16 }),
+  Object.freeze({ x: 2.2, y: 0.42, z: -14.4, width: 10.8, height: 1, rotation: 0.07 }),
+  Object.freeze({ x: -9.4, y: 0.55, z: -17, width: 14.6, height: 1.3, rotation: 0.18 }),
+] as const);
 const FLARE_RADII = [
   1, 0.68, 0.94, 0.62, 1.08, 0.7,
   0.88, 0.6, 1.02, 0.66, 0.9, 0.64,
@@ -97,42 +106,72 @@ function replaceMaterials(root: Group, material: Material): void {
   disposeResourceSets(replacedTextures, replacedMaterials);
 }
 
-function createFogStripGeometry(width: number, height: number, variant: number): BufferGeometry {
-  const geometry = new BufferGeometry();
-  const xOffsets = [-0.5, -0.28, -0.04, 0.25, 0.5] as const;
-  const upperOffsets = [
-    [0.28, 0.47, 0.39, 0.52, 0.31],
-    [0.35, 0.5, 0.32, 0.46, 0.27],
-    [0.3, 0.42, 0.51, 0.34, 0.25],
-  ] as const;
-  const lowerOffsets = [
-    [-0.34, -0.49, -0.38, -0.53, -0.3],
-    [-0.28, -0.46, -0.35, -0.5, -0.25],
-    [-0.32, -0.43, -0.52, -0.36, -0.27],
-  ] as const;
-  const positions: number[] = [];
-  for (let index = 0; index < xOffsets.length; index += 1) {
-    positions.push(
-      xOffsets[index]! * width,
-      upperOffsets[variant]![index]! * height,
-      0,
-    );
+function createSeaMistMaterial(color: number, seed: number): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      uColor: { value: new Color(color) },
+      uOpacity: { value: 0 },
+      uSeed: { value: seed },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uSeed;
+      varying vec2 vUv;
+      void main() {
+        float sideFade = smoothstep(0.0, 0.18, vUv.x)
+          * (1.0 - smoothstep(0.82, 1.0, vUv.x));
+        float broadNoise = sin((vUv.x + uSeed) * 13.0)
+          * sin((vUv.y - uSeed) * 9.0);
+        float fineNoise = sin((vUv.x * 31.0 + vUv.y * 23.0) + uSeed * 17.0);
+        float upperEdge = 0.58 + broadNoise * 0.12 + fineNoise * 0.04;
+        float lowerFade = smoothstep(0.0, 0.16, vUv.y);
+        float upperFade = 1.0 - smoothstep(upperEdge - 0.12, upperEdge + 0.2, vUv.y);
+        float density = clamp(
+          sideFade * lowerFade * upperFade * (0.82 + broadNoise * 0.1),
+          0.0,
+          1.0
+        );
+        gl_FragColor = vec4(uColor, density * uOpacity);
+      }
+    `,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+}
+
+function tuneReadableMaterials(root: Group, emissiveScale: number): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (!(material instanceof MeshStandardMaterial)) return;
+      material.emissive.copy(material.color).multiplyScalar(emissiveScale);
+      material.emissiveIntensity = 0.72;
+      material.roughness = Math.max(0.68, material.roughness);
+      material.needsUpdate = true;
+    });
+  });
+}
+
+function collectMaterialTextures(
+  materials: Iterable<Material>,
+  textures: Set<Texture>,
+): void {
+  for (const material of materials) {
+    for (const value of Object.values(material)) {
+      if (value instanceof Texture) textures.add(value);
+    }
   }
-  for (let index = 0; index < xOffsets.length; index += 1) {
-    positions.push(
-      xOffsets[index]! * width,
-      lowerOffsets[variant]![index]! * height,
-      0,
-    );
-  }
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setIndex([
-    0, 5, 1, 1, 5, 6,
-    1, 6, 2, 2, 6, 7,
-    2, 7, 3, 3, 7, 8,
-    3, 8, 4, 4, 8, 9,
-  ]);
-  return geometry;
 }
 
 function createFlareBurstGeometry(): BufferGeometry {
@@ -158,22 +197,19 @@ function createFlareBurstGeometry(): BufferGeometry {
   return geometry;
 }
 
-function createFogCurtain(materials: readonly Material[]): Group {
+function createSeaMist(materials: readonly ShaderMaterial[]): Group {
   const root = new Group();
-  root.name = 'supernatural-fog-curtain';
-  root.position.x = SIREN_ROCK_X - 0.25;
-  for (let index = 0; index < 3; index += 1) {
+  root.name = 'supernatural-sea-mist';
+  for (let index = 0; index < SEA_MIST_LAYERS.length; index += 1) {
+    const layer = SEA_MIST_LAYERS[index]!;
     const strip = new Mesh(
-      createFogStripGeometry(7.2 - index * 0.7, 2.4 + index * 0.25, index),
+      new PlaneGeometry(layer.width, layer.height),
       materials[index]!,
     );
-    strip.name = `supernatural-fog-strip-${index + 1}`;
-    strip.position.set(
-      -1.2 + index * 1.1,
-      1.1 + index * 0.25,
-      -7.6 - index * 1.25,
-    );
-    strip.rotation.y = -0.08 + index * 0.06;
+    strip.name = `supernatural-sea-mist-layer-${index + 1}`;
+    strip.position.set(layer.x, layer.y, layer.z);
+    strip.rotation.set(0, layer.rotation, 0);
+    strip.renderOrder = 2 + index;
     root.add(strip);
   }
   root.visible = false;
@@ -193,6 +229,7 @@ export class SupernaturalEventAnimator {
 
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly ownedTextures = new Set<Texture>();
   private readonly cameraLook: StationaryEventCamera | null;
   private readonly revealSample: SupernaturalRevealSample = {
     cameraX: 0,
@@ -260,40 +297,12 @@ export class SupernaturalEventAnimator {
     opacity: 0.42,
     depthWrite: false,
   });
-  private readonly sirenMaterial = new MeshStandardMaterial({
-    color: 0xd2c8d0,
-    emissive: 0x718696,
-    emissiveIntensity: 0.58,
-    roughness: 0.9,
-    flatShading: true,
-  });
-  private readonly rockMaterial = new MeshStandardMaterial({
-    color: 0x303b40,
-    roughness: 1,
-    flatShading: true,
-  });
   private readonly fogMaterials = [
-    new MeshBasicMaterial({
-      color: 0x395158,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    }),
-    new MeshBasicMaterial({
-      color: 0x465e63,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    }),
-    new MeshBasicMaterial({
-      color: 0x2d454d,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    }),
+    createSeaMistMaterial(0x789298, 0.17),
+    createSeaMistMaterial(0x68868d, 0.39),
+    createSeaMistMaterial(0x56777f, 0.61),
+    createSeaMistMaterial(0x6f8b91, 0.83),
+    createSeaMistMaterial(0x496b73, 1.07),
   ] as const;
   private readonly flareMaterial = new MeshBasicMaterial({
     color: 0xffffff,
@@ -307,6 +316,9 @@ export class SupernaturalEventAnimator {
   private readonly siren: Group;
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
+  private readonly sirenFacingAnchor = new Group();
+  private readonly sirenKeyLight = new PointLight(0xf2c78f, 4.8, 20, 1.3);
+  private readonly sirenFillLight = new PointLight(0x82b8c4, 3.2, 24, 1.15);
   private readonly fogCurtain: Group;
   private readonly flareFlash: Mesh;
   private readonly sirenBaseRotation: Euler;
@@ -340,9 +352,9 @@ export class SupernaturalEventAnimator {
     });
     this.siren = eventModels.create('siren');
     this.siren.name = 'event-siren';
-    replaceMaterials(this.siren, this.sirenMaterial);
-    this.siren.position.set(-0.12, 0.18, 0.02);
-    this.siren.rotation.set(0, 0.28, 0);
+    tuneReadableMaterials(this.siren, 0.2);
+    this.siren.position.set(0, 0, 0);
+    this.siren.rotation.set(0, 0, 0);
     this.sirenBasePosition = this.siren.position.clone();
     this.sirenBaseRotation = this.siren.rotation.clone();
     this.sirenHead = this.siren.getObjectByName('Formad_Head') ?? null;
@@ -350,13 +362,35 @@ export class SupernaturalEventAnimator {
 
     this.sirenRock = eventModels.create('sirenRock');
     this.sirenRock.name = 'event-siren-rock';
-    replaceMaterials(this.sirenRock, this.rockMaterial);
+    tuneReadableMaterials(this.sirenRock, 0.08);
     this.sirenRock.position.set(0, 0, 0);
+    this.sirenRock.scale.y *= SIREN_ROCK_VERTICAL_SCALE;
     const rockBounds = new Box3().setFromObject(this.sirenRock);
     const rockMinimumY = Number.isFinite(rockBounds.min.y) ? rockBounds.min.y : 0;
-    this.sirenTableauBaseY = SIREN_MAXIMUM_WAVE_CREST
-      + SIREN_MINIMUM_WAVE_CLEARANCE
-      - rockMinimumY;
+    const rockMaximumY = Number.isFinite(rockBounds.max.y) ? rockBounds.max.y : 0;
+    this.sirenTableauBaseY = SIREN_WATERLINE_Y
+      - rockMinimumY
+      - SIREN_ROCK_SUBMERGENCE;
+
+    this.sirenFacingAnchor.name = 'siren-facing-anchor';
+    const sirenBounds = new Box3().setFromObject(this.siren);
+    const sirenMinimumY = Number.isFinite(sirenBounds.min.y) ? sirenBounds.min.y : 0;
+    this.sirenFacingAnchor.position.set(
+      -0.12,
+      rockMaximumY - sirenMinimumY + 0.03,
+      0.02,
+    );
+    this.sirenFacingAnchor.rotation.y = Math.atan2(-SIREN_ROCK_X, -SIREN_ROCK_Z)
+      - SIREN_MODEL_FORWARD_YAW;
+    this.sirenFacingAnchor.userData.modelForwardAxis = 'positive-x';
+    this.sirenFacingAnchor.userData.facesPlayer = true;
+    this.sirenFacingAnchor.add(this.siren);
+    this.sirenKeyLight.name = 'siren-tableau-key-light';
+    this.sirenKeyLight.position.set(2.8, 4.2, 4.6);
+    this.sirenKeyLight.castShadow = false;
+    this.sirenFillLight.name = 'siren-tableau-fill-light';
+    this.sirenFillLight.position.set(-4.4, 2.6, 1.8);
+    this.sirenFillLight.castShadow = false;
 
     this.sirenTableau.name = 'siren-tableau';
     this.sirenTableau.position.set(
@@ -364,14 +398,18 @@ export class SupernaturalEventAnimator {
       this.sirenTableauBaseY,
       SIREN_ROCK_Z,
     );
-    this.sirenTableau.userData.minimumWaveClearance = this.sirenTableauBaseY
-      + rockMinimumY
-      - SIREN_MAXIMUM_WAVE_CREST;
-    this.sirenTableau.userData.fogLayerCount = 3;
-    this.sirenTableau.userData.subjectValueSeparation = 1;
-    this.sirenTableau.add(this.sirenRock, this.siren);
+    this.sirenTableau.userData.waterlineY = SIREN_WATERLINE_Y;
+    this.sirenTableau.userData.followsWaves = false;
+    this.sirenTableau.userData.fogLayerCount = SEA_MIST_LAYERS.length;
+    this.sirenTableau.userData.subjectValueSeparation = 2;
+    this.sirenTableau.add(
+      this.sirenRock,
+      this.sirenFacingAnchor,
+      this.sirenKeyLight,
+      this.sirenFillLight,
+    );
     this.sirenTableau.visible = false;
-    this.fogCurtain = createFogCurtain(this.fogMaterials);
+    this.fogCurtain = createSeaMist(this.fogMaterials);
     this.flareFlash = createFlareFlash(this.flareMaterial);
     this.worldRoot.add(
       ...this.ghosts,
@@ -380,6 +418,7 @@ export class SupernaturalEventAnimator {
       this.flareFlash,
     );
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
+    collectMaterialTextures(this.ownedMaterials, this.ownedTextures);
     this.rememberCameraBase();
   }
 
@@ -524,7 +563,7 @@ export class SupernaturalEventAnimator {
     this.clear();
     this.disposed = true;
     this.worldRoot.removeFromParent();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures);
   }
 
   private updateReveal(eventId: string, progress: number): void {
@@ -564,8 +603,8 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.visible = sample.melodyClarity > 0.015;
     this.fogCurtain.visible = sample.fogCurtain > 0.015;
     this.setFogOpacity(Math.min(
-      0.28,
-      sample.fogCurtain * (0.2 + sample.melodyClarity * 0.08),
+      0.42,
+      sample.fogCurtain * (0.3 + sample.melodyClarity * 0.12),
     ));
     this.turnSirenHead(sample.sirenHeadTurn);
     this.siren.position.z = this.sirenBasePosition.z + sample.sirenLunge;
@@ -660,7 +699,7 @@ export class SupernaturalEventAnimator {
   private turnSirenHead(amount: number): void {
     if (this.sirenHead !== null) {
       this.sirenHead.rotation.copy(this.sirenHeadBaseRotation);
-      this.sirenHead.rotation.y += amount * 0.62;
+      this.sirenHead.rotation.y += SIREN_HEAD_PLAYER_TURN + amount * 0.18;
       return;
     }
     this.siren.rotation.copy(this.sirenBaseRotation);
@@ -691,7 +730,9 @@ export class SupernaturalEventAnimator {
 
   private setFogOpacity(amount: number): void {
     for (let index = 0; index < this.fogMaterials.length; index += 1) {
-      this.fogMaterials[index]!.opacity = amount * FOG_OPACITY_WEIGHTS[index]!;
+      const opacity = amount * FOG_OPACITY_WEIGHTS[index]!;
+      this.fogMaterials[index]!.uniforms.uOpacity!.value = opacity;
+      this.fogMaterials[index]!.opacity = opacity;
     }
   }
 
