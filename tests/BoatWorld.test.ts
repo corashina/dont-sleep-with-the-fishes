@@ -817,7 +817,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('stages Midnight Tour on deterministic distant sides', () => {
+  it('stages Midnight Tour deep in the water on deterministic distant sides', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -826,17 +826,26 @@ describe('BoatWorld helpers', () => {
     );
 
     world.stageEvent('midnight-tour', null, 8);
+    const leftReveal = world.revealEvent('midnight-tour');
+    world.setDocumentHidden(true);
+    await leftReveal;
+    world.setDocumentHidden(false);
     const leftIsland = world.scene.getObjectByName('midnight-tour-island')!;
     const leftX = leftIsland.position.x;
+    const leftY = leftIsland.position.y;
+    const leftZ = leftIsland.position.z;
     world.clearEvent();
     world.stageEvent('midnight-tour', null, 9);
     const rightX = world.scene.getObjectByName('midnight-tour-island')!.position.x;
 
     expect(leftX).toBeLessThan(0);
     expect(rightX).toBeGreaterThan(0);
-    expect(Math.abs(leftX)).toBeGreaterThan(9);
-    expect(Math.abs(rightX)).toBeGreaterThan(9);
+    expect(Math.abs(leftX)).toBeGreaterThan(11);
+    expect(Math.abs(rightX)).toBeGreaterThan(11);
+    expect(leftY).toBeLessThanOrEqual(-1.5);
+    expect(leftZ).toBeLessThanOrEqual(-27);
     expect(leftIsland.userData.greenTopWaveClearance).toBeGreaterThan(0);
+    expect(leftIsland.userData.disableHoverOutline).toBe(true);
 
     world.dispose();
     propModels.dispose();
@@ -3133,7 +3142,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects and outlines focused event subjects as physical choices', async () => {
+  it('projects focused subjects and skips the Midnight Tour island outline', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
@@ -3154,7 +3163,7 @@ describe('BoatWorld helpers', () => {
     ]));
     world.setHighlightedItem('midnight-tour:island');
     expect(world.scene.getObjectByName('midnight-tour-island')
-      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
 
     world.clearEvent();
     world.syncInventory(snapshot([], {

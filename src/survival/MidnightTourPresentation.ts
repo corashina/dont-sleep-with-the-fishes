@@ -54,9 +54,9 @@ const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
 const VISIT_DURATION = 1.5;
 const RESULT_DURATION = 1.05;
-const ISLAND_DISTANCE = 10.4;
-const ISLAND_BASE_Y = -1.1;
-const ISLAND_Z = -20;
+const ISLAND_DISTANCE = 11.8;
+const ISLAND_BASE_Y = -1.55;
+const ISLAND_Z = -28;
 const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
   (height, wave) => height + wave.amplitude,
   0,
@@ -124,6 +124,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.island.name = 'midnight-tour-island';
     this.island.position.copy(this.islandBase);
     this.island.userData.motionSource = 'fixed';
+    this.island.userData.disableHoverOutline = true;
     this.buildIsland();
     this.root.add(this.island);
 
@@ -538,8 +539,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.islandBase.set(islandX, ISLAND_BASE_Y, ISLAND_Z);
     this.islandHidden.set(islandX, ISLAND_BASE_Y - 3.2, ISLAND_Z);
     this.islandBehind.set(-4.6 * this.side, -0.72, 10.5);
-    this.actorStart.set(islandX + 1.3 * this.side, 4.35, -19.5);
-    this.creatureEnd.set(islandX + 0.4 * this.side, -0.1, -19.25);
+    this.actorStart.set(islandX + 1.3 * this.side, 4.35, ISLAND_Z + 0.5);
+    this.creatureEnd.set(islandX + 0.4 * this.side, -0.1, ISLAND_Z + 0.75);
   }
 
   private updateGreenTopClearance(): void {
