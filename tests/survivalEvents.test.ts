@@ -331,6 +331,7 @@ describe('survival events', () => {
     expect(resultIds('handyman', 'sleep')).toEqual(['handyman-sleep']);
     expect(resultIds('other-people', 'flareGun')).toEqual(['people-rescue']);
     expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
+    expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
   });
 

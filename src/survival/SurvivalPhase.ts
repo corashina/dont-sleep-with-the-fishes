@@ -545,7 +545,11 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleEndure(): void {
-    if (this.eventPresentation !== 'choosing' || this.eventEligibility.size !== 0) return;
+    if (this.eventPresentation !== 'choosing') return;
+    if (
+      this.eventEligibility.size !== 0
+      && this.session.snapshot().pendingEventId !== 'other-people'
+    ) return;
     void this.resolveEndure(this.lifecycleGeneration);
   }
 
@@ -1365,6 +1369,10 @@ export class SurvivalPhase implements GamePhase {
       instanceId: null,
       condition: null,
     };
+    if (eventId === 'other-people') {
+      await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.session.resolveEvent?.({ kind: 'endure' });
     if (outcome === undefined || !this.isContinuationActive(generation)) {
@@ -1518,7 +1526,9 @@ export class SurvivalPhase implements GamePhase {
     snapshot: SurvivalSnapshot,
     generation: number,
   ): Promise<boolean> {
-    if (snapshot.pendingEventId !== 'drifting-loot') return false;
+    if (snapshot.state !== 'dayEvent' || snapshot.pendingEventId === null) {
+      return false;
+    }
     this.ui.beginEventPresentation?.();
     await this.runPendingEventReveal(snapshot, generation, true);
     return this.isContinuationActive(generation);
