@@ -484,7 +484,7 @@ describe('player movement helpers', () => {
         point(-2.7, 9.6), point(-2.7, 6), point(2.7, 6), point(2.7, 9.6), crewMiddle,
       ], ship.colliders);
       followPath(crewMiddle, [
-        point(-1.9, 9.6), point(-1.9, 12.8), point(1.9, 12.8), point(1.9, 9.6), crewMiddle,
+        point(-1.9, 9.6), point(-1.9, 11.6), point(1.9, 11.6), point(1.9, 9.6), crewMiddle,
       ], ship.colliders);
 
       const wheelhousePort = laneCenter('wheelhouse-loop-port');
@@ -493,7 +493,7 @@ describe('player movement helpers', () => {
         point(0.35, 17.9), point(3, 17.9), point(0.35, 17.9), wheelhousePort,
       ], ship.colliders);
       followPath(wheelhousePort, [
-        point(0.35, 21.1), point(4.3, 21.1), wheelhouseStarboard,
+        point(0.35, 21.1), point(1.4, 21.1), wheelhouseStarboard,
       ], ship.colliders);
 
       const workroomMiddle = point(0, -13.8);
@@ -564,6 +564,8 @@ describe('player movement helpers', () => {
             - PLAYER_LAYOUT_RADIUS,
         ),
         laneCenter('stern-port-approach'),
+        new Vector3(-6.25, PLAYER_Y, -24.1),
+        new Vector3(-6.25, PLAYER_Y, -25.2),
         layoutTarget('stern-port'),
         layoutTarget('stern-center'),
         layoutTarget('stern-starboard'),
