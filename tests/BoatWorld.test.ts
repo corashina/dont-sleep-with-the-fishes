@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
+  Bone,
   Box3,
   BoxGeometry,
   BufferAttribute,
@@ -22,6 +23,8 @@ import {
   Points,
   Quaternion,
   ShaderMaterial,
+  Skeleton,
+  SkinnedMesh,
   Texture,
   Vector3,
   Vector4,
@@ -91,6 +94,44 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
   type,
 });
+
+const HANDYMAN_FINGER_CHAINS = [
+  ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
+  ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
+  ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
+  ['RingF_lower', 'RingF_middle', 'RingF_tip'],
+  ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
+] as const;
+
+function testRiggedHand(): Group {
+  const root = new Group();
+  const bones: Bone[] = [];
+  for (const chain of HANDYMAN_FINGER_CHAINS) {
+    let parent: Bone | null = null;
+    for (const name of chain) {
+      const bone = new Bone();
+      bone.name = name;
+      if (parent === null) root.add(bone);
+      else parent.add(bone);
+      bones.push(bone);
+      parent = bone;
+    }
+  }
+  const geometry = new BoxGeometry(1, 0.25, 1.5);
+  const vertexCount = geometry.getAttribute('position').count;
+  const indices = new Uint16Array(vertexCount * 4);
+  const weights = new Float32Array(vertexCount * 4);
+  for (let index = 0; index < vertexCount; index += 1) {
+    weights[index * 4] = 1;
+  }
+  geometry.setAttribute('skinIndex', new BufferAttribute(indices, 4));
+  geometry.setAttribute('skinWeight', new BufferAttribute(weights, 4));
+  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
+  mesh.name = 'handyman-imported-palm-surface';
+  mesh.bind(new Skeleton(bones));
+  root.add(mesh);
+  return root;
+}
 
 class FakeBoatSupplyDisplay {
   readonly pinCalls: ItemInstanceId[] = [];
@@ -693,25 +734,82 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('stages the Handyman palm as a large restrained player-facing pose', () => {
+  it('stages the procedural Handyman palm facing the player with bounded idle motion', async () => {
     const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
     const world = new BoatWorld(
-      new PerspectiveCamera(),
+      camera,
       propModels,
       createTestMoonTexture(),
     );
 
     world.stageEvent('handyman');
     const palm = world.scene.getObjectByName('handyman-palm')!;
+    const baseQuaternion = palm.quaternion.clone();
     expect(palm.userData.facesPlayer).toBe(true);
     expect(palm.userData.outsideHull).toBe(true);
     expect(palm.scale.x).toBeGreaterThan(1.25);
 
-    const before = palm.quaternion.clone();
-    world.update(1.3, 1.3);
-    expect(palm.quaternion.angleTo(before)).toBeGreaterThan(0);
+    const reveal = world.revealEvent('handyman');
+    world.update(1.5, 1.5);
+    await reveal;
+    world.scene.updateMatrixWorld(true);
+    const palmSurface = world.scene.getObjectByName(
+      'handyman-procedural-palm',
+    )!;
+    const faceNormal = new Vector3(0, 1, 0)
+      .transformDirection(palmSurface.matrixWorld);
+    const toPlayer = camera.getWorldPosition(new Vector3())
+      .sub(palmSurface.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
+    expect(palm.quaternion.angleTo(baseQuaternion)).toBeGreaterThan(0);
     expect(palm.userData.idleMotion).toBe('restrained');
+    expect(Math.abs(palm.userData.wristDrift as number)).toBeLessThan(0.04);
+    expect(palm.userData.fingerBend).toBeGreaterThan(0);
+    expect(palm.userData.fingerBend).toBeLessThan(0.12);
 
+    world.clearEvent();
+    expect(palm.quaternion.angleTo(baseQuaternion)).toBeCloseTo(0);
+    expect(palm.userData.wristDrift).toBe(0);
+    expect(palm.userData.fingerTension).toBe(0);
+    expect(palm.userData.fingerBend).toBe(0);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('stages the imported Handyman palm face toward the player', async () => {
+    const propModels = createTestPropModels();
+    const createEventModel = propModels.createEventModel.bind(propModels);
+    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => (
+      id === 'riggedHand'
+        ? { root: testRiggedHand(), animations: [] }
+        : createEventModel(id)
+    ));
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.stageEvent('handyman');
+    const reveal = world.revealEvent('handyman');
+    world.update(1.5, 1.5);
+    await reveal;
+    world.scene.updateMatrixWorld(true);
+    const palm = world.scene.getObjectByName('handyman-palm')!;
+    const palmSurface = world.scene.getObjectByName(
+      'handyman-imported-palm-surface',
+    )!;
+    const faceNormal = new Vector3(0, 1, 0)
+      .transformDirection(palmSurface.matrixWorld);
+    const toPlayer = camera.getWorldPosition(new Vector3())
+      .sub(palmSurface.getWorldPosition(new Vector3()))
+      .normalize();
+
+    expect(palm.userData.modelKind).toBe('imported');
+    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
     world.dispose();
     propModels.dispose();
   });
@@ -1031,6 +1129,62 @@ describe('BoatWorld helpers', () => {
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(camera.position.toArray()).toEqual(basePosition);
     expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('restores Handyman supply and chest trade actors on clear', async () => {
+    const bucket = savedItem('bucket');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket],
+    );
+    world.syncInventory(snapshot([bucket], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    const supply = world.scene.getObjectByName('boat-supply:bucket')!;
+    const chest = world.scene.getObjectByName('persistent-chest')!;
+    const supplyBasePosition = supply.position.toArray();
+    const supplyBaseQuaternion = supply.quaternion.toArray();
+    const supplyBaseScale = supply.scale.toArray();
+    const chestBasePosition = chest.position.toArray();
+    const chestBaseQuaternion = chest.quaternion.toArray();
+    const chestBaseScale = chest.scale.toArray();
+
+    world.stageEvent('handyman');
+    const supplyTrade = world.playEventChoice('handyman', {
+      choiceId: 'bucket',
+      instanceId: bucket.instanceId,
+      condition: 'usable',
+    });
+    world.update(1.2, 1.2);
+    await supplyTrade;
+    expect(supply.position.toArray()).not.toEqual(supplyBasePosition);
+
+    world.clearEvent();
+    expect(supply.position.toArray()).toEqual(supplyBasePosition);
+    expect(supply.quaternion.toArray()).toEqual(supplyBaseQuaternion);
+    expect(supply.scale.toArray()).toEqual(supplyBaseScale);
+
+    world.stageEvent('handyman');
+    const chestTrade = world.playEventChoice('handyman', {
+      choiceId: 'chest',
+      instanceId: null,
+      condition: null,
+    });
+    world.update(2.4, 1.2);
+    await chestTrade;
+    expect(chest.position.toArray()).not.toEqual(chestBasePosition);
+
+    world.clearEvent();
+    expect(chest.position.toArray()).toEqual(chestBasePosition);
+    expect(chest.quaternion.toArray()).toEqual(chestBaseQuaternion);
+    expect(chest.scale.toArray()).toEqual(chestBaseScale);
+    expect(chest.visible).toBe(true);
+
     world.dispose();
     propModels.dispose();
   });

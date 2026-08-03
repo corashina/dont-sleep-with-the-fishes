@@ -82,13 +82,14 @@ const TOUCH_HELD_CAMERA_PITCH = -0.2;
 const TOUCH_HELD_CAMERA_X = -0.16;
 const TOUCH_HELD_CAMERA_Z = -2.05;
 const X_AXIS = new Vector3(1, 0, 0);
+const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
 const PALM_SCALE = 1.34;
 const PALM_FACING_DIRECTION = new Vector3(0, 0.88, 1.72)
   .sub(WRIST_BASE)
   .normalize();
 const PALM_BASE_QUATERNION = new Quaternion().setFromUnitVectors(
-  Z_AXIS,
+  Y_AXIS,
   PALM_FACING_DIRECTION,
 );
 
@@ -1024,7 +1025,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     ) {
       selected.name = 'event-model:riggedHand';
       selected.scale.setScalar(1.7);
-      selected.rotation.set(0.08, -0.32, 0.04);
+      selected.rotation.set(0, -0.32, 0);
       selected.traverse((object) => {
         if (!(object instanceof Mesh)) return;
         const materials = Array.isArray(object.material)
@@ -1064,7 +1065,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
     );
     palm.name = 'handyman-procedural-palm';
     palm.position.set(0, 0.18, 0);
-    palm.rotation.z = 0.035;
+    palm.rotation.y = 0.035;
     this.handVisual.add(palm);
     const cuffMesh = new Mesh(
       new CylinderGeometry(0.55, 0.68, 0.78, 8),
