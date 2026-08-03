@@ -16,7 +16,7 @@ export type CaptainWhiskersSnapshot = Readonly<CaptainWhiskersState>;
 
 export interface CaptainWhiskersStatus {
   readonly hunger: 'Satiated' | 'Peckish' | 'Hungry' | 'Starving';
-  readonly health: 'Healthy' | 'Unwell' | 'Sick' | 'Dying';
+  readonly health: 'Healthy' | 'Unwell' | 'Sick' | 'Dying' | 'Dead';
   readonly happiness: 'Happy' | 'Bored' | 'Lonely' | 'Depressed' | 'Miserable';
 }
 
@@ -148,7 +148,8 @@ function healthStatus(sickness: number): CaptainWhiskersStatus['health'] {
   if (sickness <= 0) return 'Healthy';
   if (sickness === 1) return 'Unwell';
   if (sickness <= 3) return 'Sick';
-  return 'Dying';
+  if (sickness === 4) return 'Dying';
+  return 'Dead';
 }
 
 function happinessStatus(unhappiness: number): CaptainWhiskersStatus['happiness'] {

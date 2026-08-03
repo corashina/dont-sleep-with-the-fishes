@@ -29,7 +29,7 @@ describe('Captain Whiskers state', () => {
     })).toEqual({ hunger: 'Starving', health: 'Dying', happiness: 'Lonely' });
     expect(captainWhiskersStatus({
       ...createCaptainWhiskersState(), hunger: 0, sickness: 5, unhappiness: 8,
-    })).toEqual({ hunger: 'Starving', health: 'Dying', happiness: 'Miserable' });
+    })).toEqual({ hunger: 'Starving', health: 'Dead', happiness: 'Miserable' });
   });
 
   it('pets once and removes four unhappiness', () => {
@@ -78,6 +78,10 @@ describe('Captain Whiskers state', () => {
   });
 
   it('uses exclusive sickness decline and recovery boundaries', () => {
+    const successfulDecline = { ...createCaptainWhiskersState(), sickness: 1, pettedToday: true };
+    advanceCaptainWhiskersDawn(successfulDecline, sequence(0.5, 0.019999, 0.09));
+    expect(successfulDecline.sickness).toBe(2);
+
     const decline = { ...createCaptainWhiskersState(), sickness: 1, pettedToday: true };
     advanceCaptainWhiskersDawn(decline, sequence(0.5, 0.02, 0.119999));
     expect(decline.sickness).toBe(0);
