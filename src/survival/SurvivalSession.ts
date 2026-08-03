@@ -294,6 +294,7 @@ export class SurvivalSession {
       day: this.day,
       capturedBait,
       activeItemIds,
+      ...(this.captainWhiskers?.alive ? { fishWeightMultiplier: 1.01 } : {}),
       random: this.random,
     });
     const outcome = this.commit(

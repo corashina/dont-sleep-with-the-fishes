@@ -46,6 +46,7 @@ export interface FishingSessionOptions {
   readonly day: number;
   readonly capturedBait: boolean;
   readonly activeItemIds?: ReadonlySet<ItemId>;
+  readonly fishWeightMultiplier?: number;
   readonly random: RandomSource;
 }
 
@@ -81,6 +82,7 @@ export class FishingSession {
       options.capturedBait,
       catchRoll,
       options.activeItemIds,
+      options.fishWeightMultiplier,
     );
     const session = this;
     this.liveView = Object.freeze({

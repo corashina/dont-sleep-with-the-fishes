@@ -221,15 +221,35 @@ function baitWeight(catchDefinition: FishingCatchDefinition, capturedBait: boole
   return catchDefinition.size === 'small' ? catchDefinition.baseWeight * 2 : catchDefinition.baseWeight * 3;
 }
 
+function catchWeight(
+  catchDefinition: FishingCatchDefinition,
+  capturedBait: boolean,
+  fishWeightMultiplier: number,
+): number {
+  const baited = baitWeight(catchDefinition, capturedBait);
+  return catchDefinition.kind === 'fish' ? baited * fishWeightMultiplier : baited;
+}
+
+function validateFishWeightMultiplier(fishWeightMultiplier: number): void {
+  if (!Number.isFinite(fishWeightMultiplier) || fishWeightMultiplier <= 0) {
+    throw new RangeError('Fish weight multiplier must be finite and greater than zero.');
+  }
+}
+
 export function eligibleFishingCatches(
   day: number,
   capturedBait: boolean,
   activeItemIds: ReadonlySet<ItemId> = new Set(),
+  fishWeightMultiplier: number = 1,
 ): readonly WeightedFishingCatch[] {
+  validateFishWeightMultiplier(fishWeightMultiplier);
   return FISHING_CATCHES
     .filter((catchDefinition) => catchDefinition.minimumDay <= day)
     .filter((catchDefinition) => !isBlockedUniqueReward(catchDefinition, activeItemIds))
-    .map((catchDefinition) => Object.freeze({ catch: catchDefinition, weight: baitWeight(catchDefinition, capturedBait) }));
+    .map((catchDefinition) => Object.freeze({
+      catch: catchDefinition,
+      weight: catchWeight(catchDefinition, capturedBait, fishWeightMultiplier),
+    }));
 }
 
 export function selectFishingCatch(
@@ -237,9 +257,10 @@ export function selectFishingCatch(
   capturedBait: boolean,
   roll: number,
   activeItemIds: ReadonlySet<ItemId> = new Set(),
+  fishWeightMultiplier: number = 1,
 ): FishingCatchDefinition {
   if (!Number.isFinite(roll) || roll < 0 || roll >= 1) throw new RangeError('Fishing roll must be finite and in [0, 1).');
-  const eligible = eligibleFishingCatches(day, capturedBait, activeItemIds);
+  const eligible = eligibleFishingCatches(day, capturedBait, activeItemIds, fishWeightMultiplier);
   const totalWeight = eligible.reduce((sum, entry) => sum + entry.weight, 0);
   let threshold = roll * totalWeight;
   for (const entry of eligible) {
