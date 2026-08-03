@@ -2641,7 +2641,11 @@ export class BoatWorld {
       + Math.sin(this.moonPulseElapsed * 3.17 + 1.1) * 0.025
     );
     this.moonFaceDisplay.reveal = this.moonFace.reveal;
-    this.moonFaceDisplay.grin = clamp(this.moonFace.grin + pulse, 0, 1);
+    this.moonFaceDisplay.grin = clamp(
+      this.moonFace.grin + pulse,
+      0,
+      MOON_FACE_PRESSURE_GRIN,
+    );
     this.moonFaceDisplay.starScale = this.moonFace.starScale;
     this.moonFaceDisplay.dim = this.moonFace.dim;
     this.moonFaceDisplay.scale = this.moonFace.scale;
