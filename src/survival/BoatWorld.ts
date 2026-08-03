@@ -1049,7 +1049,9 @@ export class BoatWorld {
           : instanceId === 'persistent-chest'
             ? this.chestDisplay.root
           : focusedRoot !== null
-            ? focusedRoot
+            ? focusedRoot.userData.disableHoverOutline === true
+              ? null
+              : focusedRoot
           : instanceId === 'drifting-loot' || instanceId?.startsWith('event:') === true
             ? this.activeFeaturedEventId === null
               ? null
