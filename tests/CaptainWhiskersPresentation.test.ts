@@ -1,5 +1,12 @@
 // Importance: 4/5. Protects companion pose, ownership, and action restoration.
-import { Mesh, type Object3D } from 'three';
+import {
+  BoxGeometry,
+  BufferGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  type Material,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCaptainWhiskersPose,
@@ -23,15 +30,6 @@ function snapshot(
     deathCause: null,
     ...overrides,
   };
-}
-
-function firstMesh(root: Object3D): Mesh {
-  let result: Mesh | null = null;
-  root.traverse((object) => {
-    if (result === null && object instanceof Mesh) result = object;
-  });
-  if (result === null) throw new Error('Expected a companion mesh.');
-  return result;
 }
 
 describe('Captain Whiskers motion', () => {
@@ -148,25 +146,63 @@ describe('CaptainWhiskersPresentation', () => {
     propModels.dispose();
   });
 
-  it('disposes every owned resource and model presentation once', () => {
+  it('rolls back model ownership when construction fails after model creation', () => {
+    const failure = new Error('companion model attachment failed');
+    const geometry = new BoxGeometry();
+    const material = new MeshStandardMaterial();
+    const modelRoot = new Group();
+    modelRoot.add(new Mesh(geometry, material));
+    modelRoot.removeFromParent = (): Group => {
+      throw failure;
+    };
+    const modelDispose = vi.fn();
+    const geometryDispose = vi.spyOn(geometry, 'dispose');
+    const materialDispose = vi.spyOn(material, 'dispose');
+
+    expect(() => new CaptainWhiskersPresentation({
+      createPresentation: () => ({
+        root: modelRoot,
+        animation: null,
+        update: vi.fn(),
+        dispose: modelDispose,
+      }),
+    })).toThrow(failure);
+
+    expect(modelDispose).toHaveBeenCalledOnce();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('disposes every model, hand, and food geometry and material once', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'createPresentation');
     const companion = new CaptainWhiskersPresentation(propModels);
     const modelPresentation = create.mock.results[0]!.value;
     const modelDispose = vi.spyOn(modelPresentation, 'dispose');
-    const modelMesh = firstMesh(modelPresentation.root);
-    const geometryDispose = vi.spyOn(modelMesh.geometry, 'dispose');
-    const material = Array.isArray(modelMesh.material)
-      ? modelMesh.material[0]!
-      : modelMesh.material;
-    const materialDispose = vi.spyOn(material, 'dispose');
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    companion.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      geometries.add(object.geometry);
+      const entries = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of entries) materials.add(material);
+    });
+    const geometryDisposals = [...geometries].map((geometry) => (
+      vi.spyOn(geometry, 'dispose')
+    ));
+    const materialDisposals = [...materials].map((material) => (
+      vi.spyOn(material, 'dispose')
+    ));
+
+    expect(companion.root.getObjectByName('captain-whiskers-hand:palm')).toBeDefined();
+    expect(companion.root.getObjectByName('captain-whiskers-food:bowl')).toBeDefined();
 
     companion.dispose();
     companion.dispose();
 
     expect(modelDispose).toHaveBeenCalledOnce();
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
+    for (const dispose of geometryDisposals) expect(dispose).toHaveBeenCalledOnce();
+    for (const dispose of materialDisposals) expect(dispose).toHaveBeenCalledOnce();
     expect(companion.root.parent).toBeNull();
     propModels.dispose();
   });

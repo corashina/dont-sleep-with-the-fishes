@@ -3320,6 +3320,12 @@ describe('BoatWorld helpers', () => {
     ))).toHaveLength(1);
     expect(world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1'))
       .toBeUndefined();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'captain-whiskers')).toBeUndefined();
+
+    world.syncInventory(snapshot([], { captainWhiskers: null }));
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'captain-whiskers')).toBeUndefined();
 
     world.syncInventory(snapshot([], {
       captainWhiskers: {
@@ -3723,6 +3729,58 @@ describe('BoatWorld helpers', () => {
 
     disposeSupplies.mockRestore();
     disposeCompanion.mockRestore();
+    propModels.dispose();
+  });
+
+  it('rolls back the companion and earlier owners when supply construction fails', () => {
+    const propModels = createTestPropModels();
+    const failure = new Error('supply construction failed');
+    const originalCreate = propModels.createPresentation.bind(propModels);
+    const create = vi.spyOn(propModels, 'createPresentation').mockImplementation((instance) => {
+      if (instance.type !== 'captainWhiskers') throw failure;
+      return originalCreate(instance);
+    });
+    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
+    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
+
+    expect(() => new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    )).toThrow(failure);
+    expect(disposeCompanion).toHaveBeenCalledOnce();
+    expect(disposeParticles).toHaveBeenCalledOnce();
+
+    create.mockRestore();
+    disposeCompanion.mockRestore();
+    disposeParticles.mockRestore();
+    propModels.dispose();
+  });
+
+  it('rolls back supplies, the companion, and earlier owners when chest construction fails', () => {
+    const propModels = createTestPropModels();
+    const failure = new Error('chest construction failed');
+    const createEventModel = vi.spyOn(propModels, 'createEventModel')
+      .mockImplementation(() => {
+        throw failure;
+      });
+    const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
+    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
+    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
+
+    expect(() => new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    )).toThrow(failure);
+    expect(disposeSupplies).toHaveBeenCalledOnce();
+    expect(disposeCompanion).toHaveBeenCalledOnce();
+    expect(disposeParticles).toHaveBeenCalledOnce();
+
+    createEventModel.mockRestore();
+    disposeSupplies.mockRestore();
+    disposeCompanion.mockRestore();
+    disposeParticles.mockRestore();
     propModels.dispose();
   });
 
