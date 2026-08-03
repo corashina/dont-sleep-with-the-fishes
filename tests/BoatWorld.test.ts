@@ -1129,7 +1129,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('applies the Bad Sleep reveal to the camera and supplies', async () => {
+  it('keeps the Bad Sleep reveal camera and supplies stationary', async () => {
     const cameraRig = new Group();
     const camera = new PerspectiveCamera();
     const basePosition = camera.position.toArray();
@@ -1146,9 +1146,10 @@ describe('BoatWorld helpers', () => {
     animator.update(1.7, 1.7);
 
     expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(supplies.ambientRoll).not.toBe(0);
+    expect(supplies.ambientRoll).toBe(0);
+    expect(supplies.ambientLift).toBe(0);
 
     animator.clear();
     await reveal;
@@ -1405,10 +1406,8 @@ describe('BoatWorld helpers', () => {
     ['thunderstorm', 2, 4, 'down'],
     ['restless-waves', 1.9, 3.8, 'down'],
     ['man-in-the-fog', 2.6, 5.2, 'left'],
-    ['bad-sleep', 1.7, 3.4, 'down'],
     ['ghosts', 2, 4, 'changed'],
     ['eerie-melody', 2.2, 4.4, 'left'],
-    ['check-the-back', 0.425, 0.85, 'left'],
     ['other-people', 1.7, 3.4, 'left'],
   ] as const)(
     'keeps the %s reveal camera stationary while looking at its cue',
@@ -1461,6 +1460,35 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     },
   );
+
+  it('keeps Check the Back front-facing until its result turns astern', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const baseQuaternion = camera.quaternion.toArray();
+
+    world.stageEvent('check-the-back');
+    const reveal = world.revealEvent('check-the-back');
+    world.update(2, 2);
+    await reveal;
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+
+    const fish = world.reactToEventOutcome('check-the-back', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'A fish has landed aboard.',
+      deltas: { food: 1 },
+      cue: 'none',
+      eventPresentationKey: 'check-the-back.fish',
+    });
+    world.update(4, 2);
+    await fish;
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
 
   it('keeps Shower Night item and reaction camera poses stationary', async () => {
     const bucket = savedItem('bucket');
