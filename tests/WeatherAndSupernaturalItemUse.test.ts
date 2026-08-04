@@ -128,14 +128,12 @@ describe('weather and supernatural shared item use', () => {
         ? new SupernaturalEventAnimator(
             cameraRig,
             harness.supplies,
-            harness.adapter,
             createEventModels(),
             harness.camera,
           )
         : new WeatherEventAnimator(
             cameraRig,
             harness.supplies,
-            harness.adapter,
             createEventModels(),
             harness.camera,
           );
@@ -150,9 +148,8 @@ describe('weather and supernatural shared item use', () => {
         : weatherItemUseDuration(eventId, choiceId)!;
       const sampleTime = duration * 0.5;
       animator.update(sampleTime, sampleTime);
-      expect(harness.applySharedPose).toHaveBeenCalled();
+      expect(harness.applySharedPose).not.toHaveBeenCalled();
       expect(harness.camera.position.toArray()).toEqual(cameraBase);
-      if (expectedContext === 'binocular-look') expect(harness.camera.fov).toBeLessThan(62);
 
       animator.update(duration, duration - sampleTime);
       await expect(itemUse).resolves.toBe(true);
@@ -165,10 +162,10 @@ describe('weather and supernatural shared item use', () => {
     },
   );
 
-  it('clears shared flare and flashlight effects after item completion', async () => {
-    for (const [eventId, choiceId, itemId, effectName] of [
-      ['ghosts', 'flareGun', 'flareGun', 'event-item-flare'],
-      ['man-in-the-fog', 'flashlight', 'flashlight', 'event-item-flashlight-beam'],
+  it('keeps shared item effects out of scene-only animation', async () => {
+    for (const [eventId, choiceId, itemId] of [
+      ['ghosts', 'flareGun', 'flareGun'],
+      ['man-in-the-fog', 'flashlight', 'flashlight'],
     ] as const) {
       const harness = createHarness(itemId);
       const cameraRig = new Group();
@@ -176,14 +173,12 @@ describe('weather and supernatural shared item use', () => {
         ? new SupernaturalEventAnimator(
             cameraRig,
             harness.supplies,
-            harness.adapter,
             createEventModels(),
             harness.camera,
           )
         : new WeatherEventAnimator(
             cameraRig,
             harness.supplies,
-            harness.adapter,
             createEventModels(),
             harness.camera,
       );
@@ -194,11 +189,11 @@ describe('weather and supernatural shared item use', () => {
         : weatherItemUseDuration(eventId, choiceId)!;
       const sampleTime = duration * 0.5;
       animator.update(sampleTime, sampleTime);
-      expect(harness.effects.root.getObjectByName(effectName)?.visible).toBe(true);
+      expect(harness.applySharedPose).not.toHaveBeenCalled();
 
       animator.update(duration, duration - sampleTime);
       await itemUse;
-      expect(harness.effects.root.getObjectByName(effectName)?.visible).toBe(false);
+      expect(harness.effects.root.children.every(({ visible }) => !visible)).toBe(true);
 
       animator.dispose();
       harness.adapter.dispose();
@@ -210,7 +205,6 @@ describe('weather and supernatural shared item use', () => {
     const animator = new SupernaturalEventAnimator(
       new Group(),
       harness.supplies,
-      harness.adapter,
       createEventModels(),
       harness.camera,
     );
@@ -233,19 +227,16 @@ describe('weather and supernatural shared item use', () => {
     harness.adapter.dispose();
   });
 
-  it('uses shared map motion for Dangerous Waters and releases its actor', async () => {
+  it('keeps Dangerous Waters item animation scene-only', async () => {
     const harness = createHarness('map');
     expect(resolveEventItemUseContext('dangerous-waters', 'map', 'map')).toBe('map-read');
-    const presentation = new DangerousWatersPresentation({
-      supplyDisplay: harness.supplies,
-      itemUseAdapter: harness.adapter,
-    });
+    const presentation = new DangerousWatersPresentation();
     presentation.stage();
     const cameraBase = harness.camera.position.toArray();
 
     const itemUse = presentation.playItemUse('map', harness.instanceId);
     presentation.update(0.5, 0.5);
-    expect(harness.applySharedPose).toHaveBeenCalled();
+    expect(harness.applySharedPose).not.toHaveBeenCalled();
     expect(harness.camera.position.toArray()).toEqual(cameraBase);
 
     presentation.update(
@@ -253,7 +244,7 @@ describe('weather and supernatural shared item use', () => {
       DANGEROUS_WATERS_ITEM_DURATION - 0.5,
     );
     await itemUse;
-    expect(harness.release).toHaveBeenCalledOnce();
+    expect(harness.release).not.toHaveBeenCalled();
     expect(harness.camera.position.toArray()).toEqual(cameraBase);
 
     presentation.dispose();

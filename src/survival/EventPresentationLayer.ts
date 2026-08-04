@@ -326,7 +326,7 @@ export class EventPresentationLayer {
     focusedFactories: FocusedEventPresentationFactories = {},
   ) {
     this.root.name = 'event-presentation-layer';
-    this.dangerousWaters = new DangerousWatersPresentation(dependencies);
+    this.dangerousWaters = new DangerousWatersPresentation();
     const materials = createMaterials();
     const tableaus = [
       createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
@@ -425,6 +425,18 @@ export class EventPresentationLayer {
 
   hasFocused(eventId: string): boolean {
     return this.focused.has(eventId);
+  }
+
+  itemAimTarget(eventId: string): Object3D | null {
+    if (this.disposed) return null;
+    if (eventId === 'dangerous-waters' && this.stagedEventId === eventId) {
+      return this.dangerousWaters.itemAimTarget;
+    }
+    if (this.activeFocused !== null && this.activeFocused === this.focused.get(eventId)) {
+      return this.activeFocused.itemAimTarget?.() ?? this.activeFocused.root;
+    }
+    if (this.stagedEventId !== eventId) return null;
+    return this.tableaus.get(eventId)?.root ?? null;
   }
 
   stage(eventId: string, variantSeed?: number): void {

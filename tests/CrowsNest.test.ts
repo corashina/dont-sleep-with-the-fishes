@@ -45,20 +45,20 @@ describe('mainmast crow\'s nest', () => {
       expect(build.root.name).toBe('crows-nest:mainmast-lookout');
       expect(build.climbZone.id).toBe('mainmast-ladder');
       expect(build.climbZone.bottomEyeY).toBe(FREIGHTER_DIMENSIONS.deckY + 1.5);
-      expect(build.climbZone.topEyeY).toBe(FREIGHTER_DIMENSIONS.deckY + 12.07);
+      expect(build.climbZone.topEyeY).toBe(FREIGHTER_DIMENSIONS.deckY + 16.07);
       expect(build.climbZone.bottomDismount).toEqual([0, -1.3]);
       expect(build.climbZone.topDismount).toEqual([0.73, -0.02]);
       expect(build.introAnchors.seatedPosition).toEqual([
-        0.69, FREIGHTER_DIMENSIONS.deckY + 11.52, 0.48,
+        0.69, FREIGHTER_DIMENSIONS.deckY + 15.52, 0.48,
       ]);
       expect(build.introAnchors.standingPosition).toEqual([
-        0.73, FREIGHTER_DIMENSIONS.deckY + 12.07, 0.14,
+        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, 0.14,
       ]);
       expect(build.introAnchors.ladderApproachPosition).toEqual([
-        0.73, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.975,
+        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, -0.975,
       ]);
       expect(build.introAnchors.ladderTopPosition).toEqual([
-        0, FREIGHTER_DIMENSIONS.deckY + 12.07, -0.975,
+        0, FREIGHTER_DIMENSIONS.deckY + 16.07, -0.975,
       ]);
       expect(build.introAnchors.ladderBottomPosition).toEqual([
         0, FREIGHTER_DIMENSIONS.deckY + 1.5, -0.975,
@@ -128,7 +128,7 @@ describe('mainmast crow\'s nest', () => {
         maxZ: 1.88,
       });
 
-      const floorSurfaceY = FREIGHTER_DIMENSIONS.deckY + 10.57;
+      const floorSurfaceY = FREIGHTER_DIMENSIONS.deckY + 14.57;
       expect(portGuard.position.y - portGuard.geometry.parameters.height / 2)
         .toBe(floorSurfaceY);
       expect(build.root.getObjectByName('crows-nest:bracket:1')).toBeUndefined();
@@ -234,7 +234,7 @@ describe('mainmast crow\'s nest', () => {
 
     try {
       input.movement = { x: 0, z: -1 };
-      for (let frame = 0; frame < 120 && controller.localPosition.y < zone.topEyeY; frame += 1) {
+      for (let frame = 0; frame < 240 && controller.localPosition.y < zone.topEyeY; frame += 1) {
         controller.update(0.05, input.asControllerInput());
       }
       expect(controller.localPosition.toArray()).toEqual([
@@ -260,7 +260,7 @@ describe('mainmast crow\'s nest', () => {
       expect(controller.localPosition.y).toBe(zone.topEyeY);
 
       input.movement = { x: 0, z: 1 };
-      for (let frame = 0; frame < 130 && controller.localPosition.y > zone.bottomEyeY; frame += 1) {
+      for (let frame = 0; frame < 240 && controller.localPosition.y > zone.bottomEyeY; frame += 1) {
         controller.update(0.05, input.asControllerInput());
       }
       expect(controller.localPosition.toArray()).toEqual([

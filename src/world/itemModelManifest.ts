@@ -35,6 +35,7 @@ export type GeneratedItemModelMetadata = GeneratedRuntimeModelMetadata;
 export type ItemModelSpec = RuntimeModelSpec;
 
 export const ITEM_MODEL_MAX_TOTAL_TRIANGLES = 40_000;
+export const CAPTAIN_WHISKERS_SUPPORT_LIFT = 0.26;
 
 export type RuntimeModelPresentation = Pick<
   RuntimeModelSpec,
@@ -58,10 +59,10 @@ const presentation = {
   umbrella: { targetLongestDimension: 0.90, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
   swimRing: { targetLongestDimension: 0.70, rotation: [0, 0, 0], offset: [0, 0, 0] },
   flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  harpoonGun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
+  shotgun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
   energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
   captainWhiskers: {
-    targetLongestDimension: 0.93,
+    targetLongestDimension: 0.87,
     rotation: [0, 0, 0],
     offset: [0, 0.23, 0],
   },
@@ -72,6 +73,7 @@ const generatedMetadata = generatedMetadataJson as unknown as Readonly<
 >;
 const modelTriangleLimits: Readonly<Partial<Record<ItemId, number>>> = Object.freeze({
   fishingNet: 9_000,
+  captainWhiskers: 8_000,
 });
 function generatedNormalization(id: string, authored: RuntimeModelPresentation) {
   const metadata = generatedMetadata[id];

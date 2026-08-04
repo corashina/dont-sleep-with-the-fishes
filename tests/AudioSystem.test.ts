@@ -136,7 +136,7 @@ describe('AudioSystem', () => {
 
     audio.eventItem('ductTape');
     audio.eventItem('flareGun');
-    audio.eventItem('harpoonGun');
+    audio.eventItem('shotgun');
     audio.eventItem('flashlight');
     audio.eventItem('anchor');
     audio.eventItem('umbrella');
@@ -145,7 +145,7 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual([
       'tapeRepair',
       'flareGun',
-      'harpoonGun',
+      'shotgun',
       'flashlight',
       'anchorChain',
       'umbrella',

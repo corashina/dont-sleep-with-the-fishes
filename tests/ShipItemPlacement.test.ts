@@ -152,6 +152,51 @@ describe('ship item placement', () => {
       .toBe('workbench-starboard:top-left');
   });
 
+  it('rests the scavenging umbrella at 45 degrees on its surface', () => {
+    const umbrella = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'umbrella-1',
+    )!;
+    const restingSurface = surface('umbrella-rest', 0);
+    const transform = assignShipItems([umbrella], [restingSurface])
+      .get(umbrella.instanceId)!;
+    const bounds = shipItemTransformBounds(umbrella.type, transform);
+
+    expect(transform.rotation.z).toBeCloseTo(-Math.PI / 4);
+    expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+  });
+
+  it('rests the scavenging anchor flat on its surface', () => {
+    const anchor = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'anchor-1',
+    )!;
+    const restingSurface = surface('anchor-rest', 0);
+    const transform = assignShipItems([anchor], [restingSurface])
+      .get(anchor.instanceId)!;
+    const bounds = shipItemTransformBounds(anchor.type, transform);
+    const size = bounds.getSize(new Vector3());
+
+    expect(transform.rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    expect(size.y).toBeLessThan(size.x);
+    expect(size.y).toBeLessThan(size.z);
+  });
+
+  it('rests the scavenging duct tape flat on its surface', () => {
+    const ductTape = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'ductTape-1',
+    )!;
+    const restingSurface = surface('duct-tape-rest', 0);
+    const transform = assignShipItems([ductTape], [restingSurface])
+      .get(ductTape.instanceId)!;
+    const bounds = shipItemTransformBounds(ductTape.type, transform);
+    const size = bounds.getSize(new Vector3());
+
+    expect(transform.rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    expect(size.y).toBeLessThan(size.x);
+    expect(size.y).toBeLessThan(size.z);
+  });
+
   it.each([
     ['cannedFood-1', 'bow'],
     ['compass-1', 'storageWorkroom'],
@@ -257,6 +302,13 @@ describe('ship item placement', () => {
       expect([...assignments.values()].every(
         ({ placementSource }) => placementSource === 'fallback',
       )).toBe(true);
+      const whiskers = assignments.get('captainWhiskers-1')!;
+      const whiskersSurface = ship.itemSurfaces.find(
+        ({ id }) => id === whiskers.surfaceId,
+      )!;
+      expect(whiskers.scale).toBeGreaterThan(0.95);
+      expect(whiskers.rotation.y).toBeCloseTo(Math.PI / 2);
+      expect(whiskers.position.y - whiskersSurface.position.y).toBeGreaterThan(0.23);
       for (const instance of instances) {
         expect(assignments.get(instance.instanceId)?.surfaceId).toBe(
           SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE[
@@ -382,7 +434,7 @@ describe('ship item placement', () => {
           `${instanceId}:${filtered.get(instanceId)!.surfaceId}`
         )).sort().join('|'));
       }
-      expect(fullSignatures.size).toBe(3);
+      expect(fullSignatures.size).toBe(7);
       expect(filteredSignatures).toEqual(fullSignatures);
     } finally {
       ship.dispose();
@@ -547,7 +599,7 @@ describe('ship item placement', () => {
         expect(baseline.seconds).toBeLessThanOrEqual(60);
       }
       expect(generatedCount).toBe(1_000);
-      expect(signatures.size).toBe(3);
+      expect(signatures.size).toBe(7);
       for (let seed = 0; seed < 64; seed += 1) {
         const assignments = assignShipItems(
           instances,
@@ -562,7 +614,7 @@ describe('ship item placement', () => {
         expect(signature).toBe(signaturesBySeed[seed]);
       }
       expect(new Set([...surfacesByType.values()].flatMap((values) => [...values])).size)
-        .toBe(21);
+        .toBe(22);
       for (const itemType of ['cannedFood', 'baitTin', 'ductTape']) {
         expect(surfacesByType.get(itemType)?.size, itemType).toBeGreaterThanOrEqual(2);
       }

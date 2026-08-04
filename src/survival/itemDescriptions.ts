@@ -18,7 +18,7 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   umbrella: 'Provides cover from rain, sun, and strange sights.',
   swimRing: 'Provides emergency flotation.',
   flashlight: 'Improves visibility in darkness and while diving.',
-  harpoonGun: 'Provides one defensive harpoon shot.',
+  shotgun: 'Provides one defensive shotgun blast.',
   energyBar: `Restores energy to ${SURVIVAL_BALANCE.actions.maximumEnergy} once.`,
   captainWhiskers: 'A warm, watchful scrap of company in a very large sea.',
 };

@@ -14,6 +14,7 @@ function fakePresentation(eventId: DedicatedEventId) {
     eventId,
     worldRoot: new Group(),
     boatRoot: new Group(),
+    itemAimTarget: new Group(),
     stage: vi.fn<(context: EventSceneContext) => void>(),
     reveal: vi.fn<() => Promise<void>>().mockResolvedValue(),
     skip: vi.fn<() => void>(),
@@ -79,6 +80,17 @@ describe('EventPresentationCoordinator', () => {
     expect(leak.clear).toHaveBeenCalledOnce();
     expect(snatcher.stage).toHaveBeenCalledExactlyOnceWith(snatcherContext);
     expect(snatcher.clear).not.toHaveBeenCalled();
+  });
+
+  it('returns the stable aim target from the active route', () => {
+    const leak = fakePresentation('leak');
+    const coordinator = new EventPresentationCoordinator([leak]);
+
+    expect(coordinator.itemAimTarget()).toBeNull();
+    coordinator.stage(context('leak'));
+    expect(coordinator.itemAimTarget()).toBe(leak.itemAimTarget);
+    coordinator.clear();
+    expect(coordinator.itemAimTarget()).toBeNull();
   });
 
   it('keeps the active route when an unknown event reaches stage', () => {

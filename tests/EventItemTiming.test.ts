@@ -17,19 +17,19 @@ import { supernaturalItemUseDuration } from '../src/survival/supernaturalEventCh
 import { weatherItemUseDuration } from '../src/survival/weatherEventChoreography';
 
 describe('event item timing', () => {
-  it('applies the same two-times duration to every item animation system', () => {
-    expect(EVENT_ITEM_DURATION_MULTIPLIER).toBe(2);
-    expect(scaleEventItemDuration(1)).toBe(2);
-    expect(GENERIC_EVENT_ITEM_USE_DURATION).toBe(1.3);
-    expect(DANGEROUS_WATERS_ITEM_DURATION).toBe(2.2);
-    expect(eventItemUseDuration('throw-target')).toBe(2.7);
-    expect(weatherItemUseDuration('shower-night', 'umbrella')).toBe(3);
-    expect(supernaturalItemUseDuration('ghosts', 'flareGun')).toBe(2.4);
-    expect(LEAK_ITEM_DURATION).toBe(2.2);
-    expect(SCHOOL_ITEM_DURATION).toBe(2.5);
-    expect(SNATCHER_ITEM_DURATION).toBe(2.3);
-    expect(DEATH_STARE_ITEM_DURATION).toBe(2.5);
-    expect(SWARM_ITEM_DURATION).toBe(2.4);
-    expect(WHIRLPOOL_ITEM_DURATION).toBe(2.5);
+  it('applies the same four-times duration to every item animation system', () => {
+    expect(EVENT_ITEM_DURATION_MULTIPLIER).toBe(4);
+    expect(scaleEventItemDuration(1)).toBe(4);
+    expect(GENERIC_EVENT_ITEM_USE_DURATION).toBe(2.6);
+    expect(DANGEROUS_WATERS_ITEM_DURATION).toBe(4.4);
+    expect(eventItemUseDuration('throw-target')).toBe(5.4);
+    expect(weatherItemUseDuration('shower-night', 'umbrella')).toBe(6);
+    expect(supernaturalItemUseDuration('ghosts', 'flareGun')).toBe(4.8);
+    expect(LEAK_ITEM_DURATION).toBe(4.4);
+    expect(SCHOOL_ITEM_DURATION).toBe(5);
+    expect(SNATCHER_ITEM_DURATION).toBe(4.6);
+    expect(DEATH_STARE_ITEM_DURATION).toBe(5);
+    expect(SWARM_ITEM_DURATION).toBe(4.8);
+    expect(WHIRLPOOL_ITEM_DURATION).toBe(5);
   });
 });

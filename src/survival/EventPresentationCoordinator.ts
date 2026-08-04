@@ -1,4 +1,5 @@
 import { Group } from 'three';
+import type { Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
 import type {
@@ -62,6 +63,10 @@ export class EventPresentationCoordinator {
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
     return this.activePresentation?.playItemUse(choiceId, instanceId)
       ?? Promise.resolve(false);
+  }
+
+  itemAimTarget(): Object3D | null {
+    return this.activePresentation?.itemAimTarget ?? null;
   }
 
   react(result: EventOutcomePresentation): Promise<void> {

@@ -116,7 +116,7 @@ System Tuning stores master volume and mute in local storage.
 | Anchor chain | Heavy chain loads against metal | [Thick Chain on Metal](https://freesound.org/people/kyles/sounds/452577/) |
 | Flashlight | Old mechanical switch | [Small Flashlight Click](https://freesound.org/people/Rudmer_Rotteveel/sounds/457458/) |
 | Flare gun | Sharp launch with burning tail | [Firework Rocket Ignition](https://freesound.org/people/derplayer/sounds/587173/) |
-| Harpoon gun | Heavy spring release | [Crossbow Shot](https://freesound.org/people/Lunevix/sounds/246015/) |
+| Shotgun | Single shotgun blast | [Shotgun Fire](https://freesound.org/people/hyperix6/sounds/660299/) |
 
 ## Events, time, and endings
 

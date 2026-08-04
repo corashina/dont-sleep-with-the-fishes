@@ -255,7 +255,7 @@
     },
     "animations": []
   },
-  "harpoonGun": {
+  "shotgun": {
     "triangles": 1534,
     "rawBounds": {
       "min": [
@@ -288,24 +288,24 @@
     "animations": []
   },
   "captainWhiskers": {
-    "triangles": 608,
+    "triangles": 7620,
     "rawBounds": {
       "min": [
-        -1.063504695892334,
-        0,
-        -4.594756126403809
+        -0.962393581867218,
+        -1.7617899179458618,
+        -2.0305023193359375
       ],
       "max": [
-        1.063504695892334,
-        4.525124549865723,
-        4.594756126403809
+        0.9623966813087463,
+        1.857461929321289,
+        5.25173282623291
       ]
     },
     "animations": [
       {
-        "name": "CaptainWhiskersIdle",
-        "duration": 4.800000190734863,
-        "channels": 3
+        "name": "SittingIdle",
+        "duration": 2,
+        "channels": 92
       }
     ]
   },

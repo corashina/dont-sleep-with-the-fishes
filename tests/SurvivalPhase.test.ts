@@ -3614,7 +3614,9 @@ describe('SurvivalPhase orchestration', () => {
     });
     const restoreCommandFocus = vi.fn(() => calls.push('focus'));
     const setEventSelection = vi.fn(() => calls.push('selection'));
+    let sleepCovered = false;
     const setSleepCovered = vi.fn((covered: boolean) => {
+      sleepCovered = covered;
       calls.push(covered ? 'cover' : 'uncover');
       return Promise.resolve();
     });
@@ -3632,6 +3634,10 @@ describe('SurvivalPhase orchestration', () => {
       },
       world: {
         scene: new Scene(),
+        setPhase: vi.fn((phase) => {
+          if (phase === 'day') expect(sleepCovered).toBe(true);
+          calls.push(`phase:${phase}`);
+        }),
         stageEvent: vi.fn(() => calls.push('stage')),
         revealEvent: vi.fn(() => {
           calls.push('reveal');
@@ -3679,6 +3685,8 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFeedback).not.toHaveBeenCalled();
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('dawn'));
+    expect(calls.indexOf('dawn')).toBeLessThan(calls.lastIndexOf('phase:day'));
+    expect(calls.lastIndexOf('phase:day')).toBeLessThan(calls.lastIndexOf('uncover'));
     expect(calls.indexOf('dawn')).toBeLessThan(calls.lastIndexOf('uncover'));
     expect(calls.at(-1)).toBe('focus');
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
@@ -4177,6 +4185,7 @@ describe('SurvivalPhase orchestration', () => {
       'flowers',
       expect.objectContaining({ eventPresentationKey: 'flowers.collect' }),
       expect.anything(),
+      expect.anything(),
     );
     expect(showEventResult).not.toHaveBeenCalled();
     phase.dispose();
@@ -4507,6 +4516,59 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('defers the shotgun sound until its keyed action cue', async () => {
+    const current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'death-stare',
+      inventory: inventory({
+        'shotgun-1': {
+          instanceId: 'shotgun-1', type: 'shotgun', condition: 'usable',
+        },
+      }),
+    });
+    const itemUse = deferred();
+    let actionCue: (() => void) | undefined;
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn((
+          _eventId: string,
+          _choiceId: string,
+          _instanceId: ItemInstanceId,
+          onAction?: () => void,
+        ) => {
+          actionCue = onAction;
+          return itemUse.promise;
+        }),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    const eventItem = vi.spyOn(audio, 'eventItem');
+
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('shotgun', 'shotgun-1');
+
+    expect(eventItem).not.toHaveBeenCalled();
+    expect(actionCue).toEqual(expect.any(Function));
+    actionCue!();
+    expect(eventItem).toHaveBeenCalledExactlyOnceWith('shotgun');
+
+    itemUse.resolve();
+    await flushPromises();
+    phase.dispose();
+  });
+
   it('derives the selected item before random changed actors without an early inventory sync', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     const cue = deferred();
@@ -4598,6 +4660,7 @@ describe('SurvivalPhase orchestration', () => {
           { instanceId: 'map-1', condition: 'broken' },
         ],
       },
+      expect.anything(),
     );
   });
 
@@ -4672,6 +4735,7 @@ describe('SurvivalPhase orchestration', () => {
           { instanceId: 'umbrella-1', condition: 'broken' },
         ],
       },
+      expect.anything(),
     );
   });
 
@@ -4733,6 +4797,7 @@ describe('SurvivalPhase orchestration', () => {
         choiceId: 'sleep',
         actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
       },
+      expect.anything(),
     );
   });
 
@@ -5863,6 +5928,7 @@ describe('SurvivalPhase orchestration', () => {
         },
       }),
       expect.anything(),
+      expect.anything(),
     );
     expect(session.snapshot()).toMatchObject({
       state: 'day',
@@ -5930,6 +5996,7 @@ describe('SurvivalPhase orchestration', () => {
           resultId: 'people-rescue',
         },
       }),
+      expect.anything(),
       expect.anything(),
     );
     expect(session.snapshot()).toMatchObject({

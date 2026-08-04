@@ -1,7 +1,7 @@
 export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
-  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
+  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'captainWhiskers',
 ] as const;
 
@@ -54,7 +54,7 @@ const rawDefinitions = {
   umbrella: define('UMBRELLA', 2, 1, null, true, true, null),
   swimRing: define('SWIM RING', 2, 1, null, true, true, null),
   flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null),
-  harpoonGun: define('HARPOON GUN', 2, 1, 1, false, false, null),
+  shotgun: define('SHOTGUN', 2, 1, 1, false, false, null),
   energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar'),
   captainWhiskers: define(
     'CAPTAIN WHISKERS', 2, 1, null, true, false, null,
@@ -85,7 +85,7 @@ const APPROVED_SPAWN_COUNTS = {
   umbrella: 1,
   swimRing: 1,
   flashlight: 1,
-  harpoonGun: 1,
+  shotgun: 1,
   energyBar: 1,
   captainWhiskers: 1,
 } as const satisfies Record<ItemId, number>;

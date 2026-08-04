@@ -64,8 +64,10 @@ import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
+import { EventItemUseController } from '../src/survival/EventItemUseController';
 import {
   createEventItemUseSample,
+  eventItemOutcomeDuration,
   eventItemUseDuration,
   sampleEventItemUse,
   type EventItemUseContext,
@@ -100,6 +102,7 @@ import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
+import { SURVIVAL_EVENTS } from '../src/survival/events';
 import type {
   ActionOutcome,
   SurvivalSnapshot,
@@ -1716,7 +1719,6 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
-      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -1743,7 +1745,6 @@ describe('BoatWorld helpers', () => {
       const animator = new WeatherEventAnimator(
         cameraRig,
         supplies as unknown as BoatSupplyDisplay,
-        createTestItemUseAdapter(),
       );
       const instanceId = `${choiceId}-1` as ItemInstanceId;
 
@@ -1773,7 +1774,6 @@ describe('BoatWorld helpers', () => {
       const animator = new WeatherEventAnimator(
         cameraRig,
         supplies as unknown as BoatSupplyDisplay,
-        createTestItemUseAdapter(camera),
         undefined,
         camera,
       );
@@ -1781,7 +1781,7 @@ describe('BoatWorld helpers', () => {
       const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
       animator.update(0.6, 0.6);
 
-      expect(supplies.poses.size).toBe(1);
+      expect(supplies.poses.size).toBe(0);
       expect(supplies.pinCalls).toHaveLength(0);
       expect(camera.position.toArray()).toEqual(basePosition);
       expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
@@ -1824,7 +1824,6 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
-      createTestItemUseAdapter(),
     );
 
     const result = animator.react(
@@ -1859,7 +1858,6 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
-      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -1909,7 +1907,6 @@ describe('BoatWorld helpers', () => {
     const animator = new WeatherEventAnimator(
       cameraRig,
       supplies as unknown as BoatSupplyDisplay,
-      createTestItemUseAdapter(camera),
       undefined,
       camera,
     );
@@ -2108,7 +2105,10 @@ describe('BoatWorld helpers', () => {
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
     expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
     expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
-    const showerDuration = weatherItemUseDuration('shower-night', 'bucket')!;
+    const showerDuration = Math.max(
+      weatherItemUseDuration('shower-night', 'bucket')!,
+      eventItemUseDuration('bucket-scoop'),
+    );
     world.update(showerDuration, showerDuration - 0.66);
     await showerUse;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
@@ -2198,11 +2198,13 @@ describe('BoatWorld helpers', () => {
     expectFixedRocks();
     expect(mapRoot.visible).toBe(false);
     expect(mapActor.scale.x).toBeGreaterThan(baseScale.x);
-    world.update(
-      2.4 + DANGEROUS_WATERS_ITEM_DURATION,
-      DANGEROUS_WATERS_ITEM_DURATION - 0.55,
+    const itemDuration = Math.max(
+      DANGEROUS_WATERS_ITEM_DURATION,
+      eventItemUseDuration('map-read'),
     );
+    world.update(2.4 + itemDuration, itemDuration - 0.55);
     expectFixedRocks();
+    world.update(8, 5);
     await itemUse;
 
     world.clearEvent();
@@ -2259,9 +2261,9 @@ describe('BoatWorld helpers', () => {
     expect(Math.abs(motionRig.rotation.z)).toBeGreaterThan(0.005);
 
     world.clearEvent();
-    expect(supplyRoot.rotation.toArray().slice(0, 3)).toEqual(
-      baseSupplyRotation.toArray().slice(0, 3),
-    );
+    expect(supplyRoot.rotation.x).toBeCloseTo(baseSupplyRotation.x);
+    expect(supplyRoot.rotation.y).toBeCloseTo(baseSupplyRotation.y);
+    expect(supplyRoot.rotation.z).toBeCloseTo(baseSupplyRotation.z);
     world.dispose();
     propModels.dispose();
   });
@@ -2336,6 +2338,7 @@ describe('BoatWorld helpers', () => {
     world.update(1.2, 0.2);
     expect(await remainsPending(itemUse)).toBe(true);
     world.clearEvent();
+    await Promise.resolve();
     await Promise.resolve();
     expect(await remainsPending(itemUse)).toBe(false);
 
@@ -2462,11 +2465,15 @@ describe('BoatWorld helpers', () => {
       const elapsedUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
       world.update(0.6, 0.6);
       expect(await remainsPending(elapsedUse)).toBe(true);
-      const duration = eventId === 'death-stare'
+      const sceneDuration = eventId === 'death-stare'
         ? DEATH_STARE_ITEM_DURATION
         : eventId === 'swarm-of-anglerfish'
           ? SWARM_ITEM_DURATION
           : WHIRLPOOL_ITEM_DURATION;
+      const context = eventId === 'whirlpool'
+        ? 'throw-target'
+        : 'flashlight-flash';
+      const duration = Math.max(sceneDuration, eventItemUseDuration(context));
       world.update(duration, duration - 0.6);
       await expect(elapsedUse).resolves.toBeUndefined();
 
@@ -2531,7 +2538,7 @@ describe('BoatWorld helpers', () => {
       ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella', weatherItemUseDuration('shower-night', 'umbrella')!],
       ['umbrella-shield', 'death-stare', 'umbrella', 'umbrella', DEATH_STARE_ITEM_DURATION],
       ['flashlight-flash', 'flowers', 'flashlight', 'flashlight', eventItemUseDuration('flashlight-flash')],
-      ['harpoon-shot', 'flowers', 'harpoonGun', 'harpoonGun', eventItemUseDuration('harpoon-shot')],
+      ['shotgun-fire', 'flowers', 'shotgun', 'shotgun', eventItemUseDuration('shotgun-fire')],
     ];
     const savedItems = [...new Set(cases.map(([, , , itemId]) => itemId))]
       .map((itemId) => savedItem(itemId));
@@ -2600,6 +2607,37 @@ describe('BoatWorld helpers', () => {
     }
   });
 
+  it('fires the shotgun action callback at the keyed shot frame', async () => {
+    const shotgun = savedItem('shotgun');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [shotgun],
+    );
+    world.syncInventory(snapshot([shotgun]));
+    const onAction = vi.fn();
+    const duration = eventItemUseDuration('shotgun-fire');
+    const use = world.playEventItemUse(
+      'flowers',
+      'shotgun',
+      shotgun.instanceId,
+      onAction,
+    );
+
+    world.update(duration * 0.45, duration * 0.45);
+    expect(onAction).not.toHaveBeenCalled();
+    world.update(duration * 0.47, duration * 0.02);
+    expect(onAction).toHaveBeenCalledOnce();
+    world.update(duration + 1, duration);
+    await use;
+    expect(onAction).toHaveBeenCalledOnce();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('settles a shared item to a readable restored pose when hidden', async () => {
     const item = savedItem('spyglass');
     const propModels = createTestPropModels();
@@ -2655,10 +2693,10 @@ describe('BoatWorld helpers', () => {
 
       const use = world.playEventItemUse('flowers', choiceId, item.instanceId);
       const active = (world as unknown as {
-        activeSharedEventItemUse: { context: string } | null;
-      }).activeSharedEventItemUse;
+        itemUseController: { held: { request: { context: string } } | null };
+      }).itemUseController.held;
 
-      expect(active?.context).toBe('throw-target');
+      expect(active?.request.context).toBe('throw-target');
       expect(supplyItem).not.toHaveBeenCalled();
 
       const duration = eventItemUseDuration('throw-target');
@@ -2670,10 +2708,65 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps the old fallback when no shared item context exists', async () => {
+  it('routes every catalog item choice into shared ownership exactly once', async () => {
+    const itemIds = [...new Set(SURVIVAL_EVENTS.flatMap(({ choices }) => (
+      choices.flatMap(({ itemId }) => itemId === undefined ? [] : [itemId])
+    )))];
+    const items = itemIds.map((itemId) => savedItem(itemId));
+    const itemById = new Map(items.map((item) => [item.type, item]));
+    const propModels = createTestPropModels();
+    const controllerPlay = vi.spyOn(EventItemUseController.prototype, 'play');
+    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    const begin = vi.spyOn(EventItemUseAdapter.prototype, 'begin');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      items,
+    );
+    world.syncInventory(snapshot(items, { food: 99, bait: 99 }));
+
+    for (const event of SURVIVAL_EVENTS) {
+      for (const choice of event.choices) {
+        if (choice.itemId === undefined) continue;
+        const item = itemById.get(choice.itemId)!;
+        world.stageEvent(event.id);
+        const playCount = controllerPlay.mock.calls.length;
+        const borrowCount = borrowActor.mock.calls.length;
+        const beginCount = begin.mock.calls.length;
+        const use = world.playEventItemUse(
+          event.id,
+          choice.id,
+          item.instanceId,
+        );
+
+        expect(controllerPlay).toHaveBeenCalledTimes(playCount + 1);
+        expect(borrowActor).toHaveBeenCalledTimes(borrowCount + 1);
+        expect(begin).toHaveBeenCalledTimes(beginCount + 1);
+        expect(controllerPlay.mock.calls.at(-1)?.[0]).toMatchObject({
+          eventId: event.id,
+          choiceId: choice.id,
+          instanceId: item.instanceId,
+          itemId: choice.itemId,
+        });
+
+        world.clearEvent();
+        await use;
+      }
+    }
+
+    world.dispose();
+    begin.mockRestore();
+    borrowActor.mockRestore();
+    controllerPlay.mockRestore();
+    propModels.dispose();
+  });
+
+  it('routes the Flowers Bucket through the neutral shared context', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
     const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -2684,12 +2777,95 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('flowers');
 
     const use = world.playEventItemUse('flowers', 'bucket', bucket.instanceId);
+    const active = (world as unknown as {
+      itemUseController: { held: { request: { context: string } } | null };
+    }).itemUseController.held;
 
-    expect(supplyItem).toHaveBeenCalledWith(bucket.instanceId);
-    world.update(1.5, 1.5);
+    expect(active?.request.context).toBe('base');
+    expect(supplyItem).not.toHaveBeenCalled();
+    const duration = eventItemUseDuration('base');
+    world.update(duration, duration);
     await use;
+    const actor = borrowActor.mock.results[0]!.value as BorrowedSupplyActor;
+    const release = vi.spyOn(actor, 'release');
+    expect(actor.root.parent).not.toBeNull();
+
+    const choice = world.playEventChoice('flowers', {
+      choiceId: 'bucket',
+      instanceId: bucket.instanceId,
+      condition: 'usable',
+    });
+    world.update(4, 4);
+    await choice;
+    expect(actor.root.parent).not.toBeNull();
+    expect(release).not.toHaveBeenCalled();
+
+    const outcome = {
+      accepted: true,
+      code: 'event-resolved' as const,
+      message: 'The flowers are collected.',
+      deltas: {},
+      cue: 'none' as const,
+    };
+    const reaction = world.reactToEventOutcome(
+      'flowers',
+      outcome,
+      {
+        choiceId: 'bucket',
+        actors: [{ instanceId: bucket.instanceId, condition: 'usable' }],
+      },
+      {
+        outcome,
+        resourceDeltas: {},
+        brokenInstanceIds: [],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: bucket.instanceId,
+        selectedCondition: 'usable',
+        targetInstanceId: null,
+      },
+    );
+    world.update(8, 4);
+    await reaction;
+    expect(release).toHaveBeenCalledOnce();
+    expect(actor.root.parent).toBeNull();
+
+    world.dispose();
+    borrowActor.mockRestore();
+    supplyItem.mockRestore();
+    propModels.dispose();
+  });
+
+  it('uses the fallback bounce only when generic actor borrowing fails', async () => {
+    const item = savedItem('flashlight');
+    const propModels = createTestPropModels();
+    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor')
+      .mockReturnValueOnce(null);
+    const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    world.syncInventory(snapshot([item]));
+    world.stageEvent('flowers');
+
+    const use = world.playEventItemUse('flowers', 'flashlight', item.instanceId);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(borrowActor).toHaveBeenCalledWith(item.instanceId);
+    expect(supplyItem).toHaveBeenCalledWith(item.instanceId);
+    world.update(
+      GENERIC_EVENT_ITEM_USE_DURATION,
+      GENERIC_EVENT_ITEM_USE_DURATION,
+    );
+    await use;
+
     world.dispose();
     supplyItem.mockRestore();
+    borrowActor.mockRestore();
     propModels.dispose();
   });
 
@@ -2732,6 +2908,374 @@ describe('BoatWorld helpers', () => {
     },
   );
 
+  it.each([
+    ['pickup', 0],
+    ['held', eventItemUseDuration('flashlight-flash')],
+    ['recovery', 0.16],
+    ['stow', eventItemOutcomeDuration('flashlight', 'recover') - 0.01],
+  ] as const)(
+    'cancels a night item at the %s stage once and restores camera state',
+    async (_stage, elapsed) => {
+      const item = savedItem('flashlight');
+      const propModels = createTestPropModels();
+      const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
+      camera.position.set(0.31, 1.18, -0.27);
+      camera.rotation.set(-0.13, 0.22, -0.04, 'YXZ');
+      const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+      const world = new BoatWorld(
+        camera,
+        propModels,
+        createTestMoonTexture(),
+        [item],
+      );
+      const basePosition = camera.position.clone();
+      const baseQuaternion = camera.quaternion.clone();
+      const baseFieldOfView = camera.fov;
+      world.syncInventory(snapshot([item]));
+      world.setPhase('night');
+      world.stageEvent('flowers');
+
+      const use = world.playEventItemUse('flowers', 'flashlight', item.instanceId);
+      const actor = borrowActor.mock.results.at(-1)!.value as BorrowedSupplyActor;
+      const release = vi.spyOn(actor, 'release');
+      let useResolutions = 0;
+      void use.then(() => { useResolutions += 1; });
+      let reaction: Promise<void> | null = null;
+      let reactionResolutions = 0;
+
+      if (_stage === 'held') {
+        world.update(elapsed, elapsed);
+        await use;
+      } else if (_stage === 'recovery' || _stage === 'stow') {
+        world.update(eventItemUseDuration('flashlight-flash'), eventItemUseDuration('flashlight-flash'));
+        await use;
+        const outcome = {
+          accepted: true,
+          code: 'event-resolved' as const,
+          message: 'The event settles.',
+          deltas: {},
+          cue: 'none' as const,
+        };
+        reaction = world.reactToEventOutcome(
+          'flowers',
+          outcome,
+          { choiceId: 'flashlight', instanceId: item.instanceId, condition: 'usable' },
+          {
+            outcome,
+            resourceDeltas: {},
+            brokenInstanceIds: [],
+            lostInstanceIds: [],
+            consumedInstanceIds: [],
+            selectedInstanceId: item.instanceId,
+            selectedCondition: 'usable',
+            targetInstanceId: null,
+          },
+        );
+        void reaction.then(() => { reactionResolutions += 1; });
+        world.update(elapsed, elapsed);
+      }
+
+      world.clearEvent();
+      await use;
+      await reaction;
+      await Promise.resolve();
+
+      expect(useResolutions).toBe(1);
+      expect(reactionResolutions).toBe(reaction === null ? 0 : 1);
+      expect(camera.position).toEqual(basePosition);
+      expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+      expect(camera.fov).toBe(baseFieldOfView);
+      expect(release).toHaveBeenCalledOnce();
+      expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(false);
+
+      world.dispose();
+      world.dispose();
+      expect(release).toHaveBeenCalledOnce();
+
+      borrowActor.mockRestore();
+      propModels.dispose();
+    },
+  );
+
+  it('releases a completed night item only on the covered dawn transition', async () => {
+    const item = savedItem('flashlight');
+    const propModels = createTestPropModels();
+    const releaseDayStowedItems = vi.spyOn(
+      BoatSupplyDisplay.prototype,
+      'releaseDayStowedItems',
+    );
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    const outcome = {
+      accepted: true,
+      code: 'event-resolved' as const,
+      message: 'The event settles.',
+      deltas: {},
+      cue: 'none' as const,
+    };
+    world.syncInventory(snapshot([item]));
+    world.setPhase('night');
+    world.stageEvent('flowers');
+    const use = world.playEventItemUse('flowers', 'flashlight', item.instanceId);
+    const useDuration = eventItemUseDuration('flashlight-flash');
+    world.update(useDuration, useDuration);
+    await use;
+    const reaction = world.reactToEventOutcome(
+      'flowers',
+      outcome,
+      { choiceId: 'flashlight', instanceId: item.instanceId, condition: 'usable' },
+      {
+        outcome,
+        resourceDeltas: {},
+        brokenInstanceIds: [],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: item.instanceId,
+        selectedCondition: 'usable',
+        targetInstanceId: null,
+      },
+    );
+    const recoveryDuration = eventItemOutcomeDuration('flashlight', 'recover');
+    world.update(useDuration + recoveryDuration, recoveryDuration);
+    await reaction;
+
+    world.clearEvent();
+    expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(false);
+    world.setPhase('night');
+    expect(releaseDayStowedItems).not.toHaveBeenCalled();
+
+    world.setPhase('day');
+    world.syncInventory(snapshot([item]));
+    expect(releaseDayStowedItems).toHaveBeenCalledOnce();
+    expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(true);
+    world.setPhase('day');
+    expect(releaseDayStowedItems).toHaveBeenCalledOnce();
+
+    world.dispose();
+    releaseDayStowedItems.mockRestore();
+    propModels.dispose();
+  });
+
+  it('returns an unfinished day item after clear without stowing it', async () => {
+    const item = savedItem('flashlight');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    world.syncInventory(snapshot([item]));
+    world.stageEvent('flowers');
+
+    const use = world.playEventItemUse('flowers', 'flashlight', item.instanceId);
+    world.clearEvent();
+    await use;
+
+    expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(true);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('returns a completed day item after its outcome motion and event clear', async () => {
+    const item = savedItem('flashlight');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [item],
+    );
+    const outcome = {
+      accepted: true,
+      code: 'event-resolved' as const,
+      message: 'The event settles.',
+      deltas: {},
+      cue: 'none' as const,
+    };
+    world.syncInventory(snapshot([item]));
+    world.stageEvent('flowers');
+
+    const use = world.playEventItemUse('flowers', 'flashlight', item.instanceId);
+    const useDuration = eventItemUseDuration('flashlight-flash');
+    world.update(useDuration, useDuration);
+    await use;
+    const reaction = world.reactToEventOutcome(
+      'flowers',
+      outcome,
+      { choiceId: 'flashlight', instanceId: item.instanceId, condition: 'usable' },
+      {
+        outcome,
+        resourceDeltas: {},
+        brokenInstanceIds: [],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: item.instanceId,
+        selectedCondition: 'usable',
+        targetInstanceId: null,
+      },
+    );
+    const recoveryDuration = eventItemOutcomeDuration('flashlight', 'recover');
+    world.update(useDuration + recoveryDuration, recoveryDuration);
+    await reaction;
+
+    expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(false);
+    world.clearEvent();
+    expect(world.scene.getObjectByName('boat-supply:flashlight')?.visible).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it.each([
+    ['leak', 'bucket', 'bucket', 'dedicated-event-boat', 'bucket-scoop', LEAK_ITEM_DURATION, 0.5],
+    [
+      'shower-night',
+      'umbrella',
+      'umbrella',
+      'weather-event-world',
+      'umbrella-overhead',
+      weatherItemUseDuration('shower-night', 'umbrella')!,
+      0.5,
+    ],
+    [
+      'ghosts',
+      'flareGun',
+      'flareGun',
+      'supernatural-flare-flash',
+      'flare-target',
+      supernaturalItemUseDuration('ghosts', 'flareGun')!,
+      0.47,
+    ],
+    [
+      'dangerous-waters',
+      'map',
+      'map',
+      'dangerous-waters-passage',
+      'map-read',
+      DANGEROUS_WATERS_ITEM_DURATION,
+      0.5,
+    ],
+  ] as const)(
+    'keeps one controller-owned selected actor through %s scene use',
+    async (
+      eventId,
+      choiceId,
+      itemId,
+      sceneProbe,
+      context,
+      sceneDuration,
+      sceneProbeProgress,
+    ) => {
+      const item = savedItem(itemId);
+      const propModels = createTestPropModels();
+      const eventModels = eventId === 'leak'
+        ? createTestEventModels()
+        : undefined;
+      const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+      const begin = vi.spyOn(EventItemUseAdapter.prototype, 'begin');
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+        [item],
+        undefined,
+        undefined,
+        'high',
+        eventModels,
+      );
+      world.syncInventory(snapshot([item]));
+      if (eventId === 'leak') {
+        world.stageEvent({ eventId, targetInstanceId: null, variantSeed: 11 });
+      } else {
+        world.stageEvent(eventId);
+      }
+
+      const use = world.playEventItemUse(eventId, choiceId, item.instanceId);
+      const sceneDelta = sceneDuration * sceneProbeProgress;
+      world.update(sceneDelta, sceneDelta);
+      expect(world.scene.getObjectByName(sceneProbe)?.visible).toBe(true);
+      expect(borrow).toHaveBeenCalledTimes(1);
+      expect(begin).toHaveBeenCalledTimes(1);
+
+      const useDuration = Math.max(sceneDuration, eventItemUseDuration(context));
+      world.update(useDuration, useDuration - sceneDelta);
+      await use;
+      const actor = borrow.mock.results[0]!.value as BorrowedSupplyActor;
+      const release = vi.spyOn(actor, 'release');
+      expect(actor.root.parent).not.toBeNull();
+      expect(release).not.toHaveBeenCalled();
+
+      const outcome = {
+        accepted: true,
+        code: 'event-resolved' as const,
+        message: 'The event settles.',
+        deltas: {},
+        cue: 'none' as const,
+      };
+      const presentation = {
+        outcome,
+        resourceDeltas: {},
+        brokenInstanceIds: [],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: item.instanceId,
+        selectedCondition: 'usable' as const,
+        targetInstanceId: null,
+      };
+      const reaction = world.reactToEventOutcome(
+        eventId,
+        outcome,
+        { choiceId, instanceId: item.instanceId, condition: 'usable' },
+        presentation,
+      );
+      world.update(8, 4);
+      await reaction;
+      expect(release).toHaveBeenCalledOnce();
+
+      world.dispose();
+      begin.mockRestore();
+      borrow.mockRestore();
+      propModels.dispose();
+    },
+  );
+
+  it('keeps controller motion when a weather scene declines item animation', async () => {
+    const umbrella = savedItem('umbrella');
+    const propModels = createTestPropModels();
+    const sceneUse = vi.spyOn(WeatherEventAnimator.prototype, 'playItemUse')
+      .mockResolvedValue(false);
+    const begin = vi.spyOn(EventItemUseAdapter.prototype, 'begin');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [umbrella],
+    );
+    world.syncInventory(snapshot([umbrella]));
+    world.stageEvent('shower-night');
+
+    const use = world.playEventItemUse('shower-night', 'umbrella', umbrella.instanceId);
+    world.update(0.7, 0.7);
+    expect(begin).toHaveBeenCalledOnce();
+    const active = (world as unknown as {
+      itemUseController: { held: { request: { instanceId: ItemInstanceId } } | null };
+    }).itemUseController.held;
+    expect(active?.request.instanceId).toBe(umbrella.instanceId);
+    const duration = eventItemUseDuration('umbrella-overhead');
+    world.update(duration, duration - 0.7);
+    await use;
+
+    world.dispose();
+    begin.mockRestore();
+    sceneUse.mockRestore();
+    propModels.dispose();
+  });
+
   it('applies the canonical supply restore and event pose once per frame', () => {
     const propModels = createTestPropModels();
     const updateSupply = vi.spyOn(BoatSupplyDisplay.prototype, 'update');
@@ -2765,19 +3309,25 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
     world.setEventSelectedItem(maps[1].instanceId);
     const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
-    const base = mapRoot.position.clone();
 
     const use = world.playEventItemUse(
       'windy-night',
       'map',
       maps[1].instanceId,
     );
-    const mapUseDuration = weatherItemUseDuration('windy-night', 'map')!;
+    const mapUseDuration = Math.max(
+      weatherItemUseDuration('windy-night', 'map')!,
+      eventItemUseDuration('map-read'),
+    );
     world.update(mapUseDuration, mapUseDuration);
     await use;
+    const mapActor = world.scene.getObjectByName(
+      `boat-supply-event:${maps[1].instanceId}`,
+    )!;
     inventory.lose(maps[1].instanceId);
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
-    expect(mapRoot.visible).toBe(true);
+    expect(mapRoot.visible).toBe(false);
+    expect(mapActor.visible).toBe(true);
 
     const reaction = world.reactToEventOutcome(
       'windy-night',
@@ -2789,19 +3339,31 @@ describe('BoatWorld helpers', () => {
         cue: 'none',
       },
       { choiceId: 'map', actors: [{ instanceId: maps[1].instanceId, condition: 'lost' }] },
+      {
+        outcome: {
+          accepted: true,
+          code: 'event-resolved',
+          message: 'The map is lost.',
+          deltas: {},
+          cue: 'none',
+        },
+        resourceDeltas: {},
+        brokenInstanceIds: [],
+        lostInstanceIds: [maps[1].instanceId],
+        consumedInstanceIds: [],
+        selectedInstanceId: maps[1].instanceId,
+        selectedCondition: 'lost',
+        targetInstanceId: null,
+      },
     );
-    world.update(2, 0.5);
-    expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.toArray()).toEqual(base.toArray());
-
-    world.update(3, 1.23);
+    const lossDuration = eventItemOutcomeDuration('map', 'depart');
+    const lossMidpoint = lossDuration * 0.5;
+    world.update(lossMidpoint, lossMidpoint);
+    world.update(lossDuration, lossDuration - lossMidpoint);
     await reaction;
-    expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.toArray()).toEqual(base.toArray());
+    expect(mapActor.parent).toBeNull();
 
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
-    expect(mapRoot.visible).toBe(true);
-    expect(mapRoot.position.toArray()).toEqual(base.toArray());
     world.dispose();
     propModels.dispose();
   });
@@ -3118,7 +3680,11 @@ describe('BoatWorld helpers', () => {
     const flareSize = boundsRelativeTo(flareFlash).getSize(new Vector3());
     expect(Math.max(flareSize.x, flareSize.y)).toBeLessThanOrEqual(1.6);
     const flareDuration = supernaturalItemUseDuration('ghosts', 'flareGun')!;
-    world.update(flareDuration, flareDuration - flarePeak);
+    const useDuration = Math.max(
+      flareDuration,
+      eventItemUseDuration('flare-target'),
+    );
+    world.update(useDuration, useDuration - flarePeak);
     await itemUse;
     const reaction = world.reactToEventOutcome(
       'ghosts',
@@ -3368,7 +3934,7 @@ describe('BoatWorld helpers', () => {
 
     expect(borrowActor).toHaveBeenNthCalledWith(1, umbrella.instanceId);
     expect(borrowActor).toHaveBeenNthCalledWith(2, telescope.instanceId);
-    expect(camera.fov).toBe(65);
+    expect(camera.fov).toBeLessThan(65);
     world.dispose();
     propModels.dispose();
     borrowActor.mockRestore();
@@ -3640,13 +4206,13 @@ describe('BoatWorld helpers', () => {
         },
       }));
       const companion = world.scene.getObjectByName('captain-whiskers-companion')!;
-      const animatedRoot = companion.getObjectByName('CaptainWhiskers')!;
-      const before = animatedRoot.quaternion.clone();
+      const animatedTail = companion.getObjectByName('TailTip_8')!;
+      const before = animatedTail.quaternion.clone();
 
       world.updateAmbient(0.5, 0.5);
 
       expect(companion.visible).toBe(true);
-      expect(animatedRoot.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
+      expect(animatedTail.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
     } finally {
       world.dispose();
       propModels.dispose();
@@ -4447,7 +5013,7 @@ describe('BoatWorld helpers', () => {
     expect(weatherClear).toHaveBeenCalled();
     expect(weatherItem).not.toHaveBeenCalled();
     expect(weatherReact).not.toHaveBeenCalled();
-    expect(supplyItem).not.toHaveBeenCalled();
+    expect(supplyItem).toHaveBeenCalledWith('bucket-1');
 
     world.stageEvent('windy-night');
     expect(genericStage).toHaveBeenCalledWith('windy-night');
@@ -4560,7 +5126,7 @@ describe('BoatWorld helpers', () => {
       new EventItemEffects(),
     );
     const progressZero = createEventItemUseSample();
-    adapter.begin(actor!);
+    adapter.begin(actor!, 'map', null);
     sampleEventItemUse('map-read', 0, progressZero);
     adapter.apply(progressZero);
     parent.updateMatrixWorld(true);

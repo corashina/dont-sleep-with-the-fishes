@@ -11,7 +11,7 @@ const ORBIT_SPEED_SCALE = 0.5;
 export type SwarmItemEffectKind =
   | 'none'
   | 'net-pull'
-  | 'harpoon-opening'
+  | 'shotgun-opening'
   | 'flashlight-sweep'
   | 'bait-diversion';
 
@@ -225,7 +225,7 @@ export function sampleSwarmItemUse(
   resetSample(output);
   if (
     choiceId !== 'fishingNet'
-    && choiceId !== 'harpoonGun'
+    && choiceId !== 'shotgun'
     && choiceId !== 'flashlight'
     && choiceId !== 'baitTin'
   ) {
@@ -252,7 +252,7 @@ export function sampleSwarmItemUse(
     output.scaleZ = 1 + action * 0.22;
     output.splash = action;
     output.effectKind = 'net-pull';
-  } else if (choiceId === 'harpoonGun') {
+  } else if (choiceId === 'shotgun') {
     output.opening = action;
     output.x = 0.66 * lift - 0.18 * action;
     output.y = 0.46 * lift + 0.1 * action;
@@ -261,7 +261,7 @@ export function sampleSwarmItemUse(
     output.pitch = -0.28 * lift + 0.22 * action;
     output.roll = action * 0.1;
     output.splash = action * 0.48;
-    output.effectKind = 'harpoon-opening';
+    output.effectKind = 'shotgun-opening';
   } else if (choiceId === 'flashlight') {
     output.flashlightSweep = action;
     output.x = 0.34 * lift;

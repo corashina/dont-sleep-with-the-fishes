@@ -266,6 +266,7 @@ export class BoatSupplyDisplay {
   private readonly borrowedCountByGroup = new Map<BoatSupplyGroupId, number>();
   private readonly releaseBorrowedOnSync = new Set<ItemInstanceId>();
   private readonly presentationHiddenItemIds = new Set<ItemInstanceId>();
+  private readonly eventStowedUntilDay = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
@@ -381,6 +382,18 @@ export class BoatSupplyDisplay {
     if (this.disposed) return;
     if (hidden) this.presentationHiddenItemIds.add(instanceId);
     else this.presentationHiddenItemIds.delete(instanceId);
+    if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
+  }
+
+  stowEventItemUntilDay(instanceId: ItemInstanceId): void {
+    if (this.disposed) return;
+    this.eventStowedUntilDay.add(instanceId);
+    if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
+  }
+
+  releaseDayStowedItems(): void {
+    if (this.disposed || this.eventStowedUntilDay.size === 0) return;
+    this.eventStowedUntilDay.clear();
     if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
   }
 
@@ -694,6 +707,7 @@ export class BoatSupplyDisplay {
     this.clearEventMotion();
     this.cancelActiveAnimation();
     this.presentationHiddenItemIds.clear();
+    this.eventStowedUntilDay.clear();
     this.disposed = true;
     for (const copies of this.copiesById.values()) {
       for (const copy of copies) copy.presentation?.dispose();
@@ -771,7 +785,10 @@ export class BoatSupplyDisplay {
           ? 'usable'
           : 'lost');
       copy.root.visible = copy.instanceId === null
-        || !this.presentationHiddenItemIds.has(copy.instanceId);
+        || (
+          !this.presentationHiddenItemIds.has(copy.instanceId)
+          && !this.eventStowedUntilDay.has(copy.instanceId)
+        );
       this.applyCopyMaterials(groupId, copy);
     }
     record.root.visible = copies.some((copy) => copy.root.visible);

@@ -40,9 +40,9 @@ import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreog
 const choices = {
   leak: ['ductTape', 'bucket', 'map'],
   'school-of-fish': ['fishingNet', 'bucket', 'spyglass'],
-  snatcher: ['spyglass', 'swimRing', 'fishingNet', 'harpoonGun'],
-  'death-stare': ['flashlight', 'umbrella', 'food', 'harpoonGun', 'fishingNet'],
-  'swarm-of-anglerfish': ['fishingNet', 'harpoonGun', 'flashlight', 'bait'],
+  snatcher: ['spyglass', 'swimRing', 'fishingNet', 'shotgun'],
+  'death-stare': ['flashlight', 'umbrella', 'food', 'shotgun', 'fishingNet'],
+  'swarm-of-anglerfish': ['fishingNet', 'shotgun', 'flashlight', 'bait'],
   whirlpool: ['anchor', 'swimRing'],
 } as const;
 type ItemAnimationEventId = keyof typeof choices;
@@ -54,7 +54,7 @@ const itemTypes = {
   fishingNet: 'fishingNet',
   spyglass: 'spyglass',
   swimRing: 'swimRing',
-  harpoonGun: 'harpoonGun',
+  shotgun: 'shotgun',
   flashlight: 'flashlight',
   umbrella: 'umbrella',
   food: 'cannedFood',
@@ -150,7 +150,7 @@ describe('dedicated event item use', () => {
     ItemAnimationEventId,
     readonly string[],
   ])[])(
-    'rejects a mismatched %s item before borrowing an actor',
+    'runs a %s scene without borrowing the selected actor',
     async (eventId, eventChoices) => {
       const choiceId = eventChoices[0]!;
       const instanceId = 'compass-1' as ItemInstanceId;
@@ -173,13 +173,13 @@ describe('dedicated event item use', () => {
         sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
         readWorldWaveAmplitudeScale: () => 1,
         camera,
-        itemUseAdapter: adapter,
-        itemEffects: effects,
       };
       const presentation = factories[eventId](environment);
       presentation.stage({ eventId, targetInstanceId: null, variantSeed: 41 });
 
-      await expect(presentation.playItemUse(choiceId, instanceId)).resolves.toBe(false);
+      const itemUse = presentation.playItemUse(choiceId, instanceId);
+      presentation.update(1, itemDurations[eventId]);
+      await expect(itemUse).resolves.toBe(true);
       expect(borrowEventActor).not.toHaveBeenCalled();
       expect(release).not.toHaveBeenCalled();
 
@@ -219,18 +219,11 @@ describe('dedicated event item use', () => {
         sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
         readWorldWaveAmplitudeScale: () => 1,
         camera,
-        itemUseAdapter: adapter,
-        itemEffects: effects,
       };
       const presentation = factories[eventId](environment);
       scene.add(presentation.worldRoot, presentation.boatRoot, effects.root);
       presentation.stage({ eventId, targetInstanceId: null, variantSeed: 41 });
       scene.updateMatrixWorld(true);
-      const baseDistance = actor.root.getWorldPosition(new Vector3())
-        .distanceTo(camera.getWorldPosition(new Vector3()));
-
-      const context = resolveEventItemUseContext(eventId, choiceId, itemId);
-      expect(context).not.toBeNull();
       const itemUse = presentation.playItemUse(choiceId, instanceId);
       const resolved = vi.fn();
       void itemUse.then(resolved);
@@ -240,11 +233,7 @@ describe('dedicated event item use', () => {
       expect(eventProbe).toBeDefined();
 
       presentation.update(0.1, duration * 0.1);
-      scene.updateMatrixWorld(true);
-      expect(actor.root.getWorldPosition(new Vector3()).distanceTo(
-        camera.getWorldPosition(new Vector3()),
-      )).toBeLessThan(baseDistance);
-      expect(applySharedPose).toHaveBeenCalledTimes(2);
+      expect(applySharedPose).not.toHaveBeenCalled();
       expect(eventProbe!.visible).toBe(true);
 
       presentation.update(0.3, duration * 0.2);
@@ -259,7 +248,7 @@ describe('dedicated event item use', () => {
       expect(resolved).toHaveBeenCalledTimes(1);
       presentation.update(1.2, 0.2);
       expect(resolved).toHaveBeenCalledTimes(1);
-      expect(borrowEventActor).toHaveBeenCalledExactlyOnceWith(instanceId);
+      expect(borrowEventActor).not.toHaveBeenCalled();
 
       presentation.dispose();
       expect(disposeEffects).not.toHaveBeenCalled();

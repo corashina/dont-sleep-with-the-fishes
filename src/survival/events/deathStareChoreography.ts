@@ -10,7 +10,7 @@ export type DeathStareItemEffectKind =
   | 'flashlight-beam'
   | 'umbrella-shield'
   | 'food-toss'
-  | 'harpoon-shot'
+  | 'shotgun-fire'
   | 'net-cast';
 
 export interface DeathStareReactionState {
@@ -157,7 +157,7 @@ export function sampleDeathStareItemUse(
     choiceId !== 'flashlight'
     && choiceId !== 'umbrella'
     && choiceId !== 'cannedFood'
-    && choiceId !== 'harpoonGun'
+    && choiceId !== 'shotgun'
     && choiceId !== 'fishingNet'
   ) {
     return false;
@@ -211,7 +211,7 @@ export function sampleDeathStareItemUse(
       output.jawOpen += toss * 0.32;
       break;
     }
-    case 'harpoonGun':
+    case 'shotgun':
       output.itemX = 0.68 * lift - action * 0.3;
       output.itemY = 0.5 * lift + action * 0.08;
       output.itemZ = -0.24 * lift;
@@ -219,7 +219,7 @@ export function sampleDeathStareItemUse(
       output.itemPitch = -0.24 * lift + action * 0.28;
       output.itemRoll = action * 0.12;
       output.effectStrength = action;
-      output.effectKind = 'harpoon-shot';
+      output.effectKind = 'shotgun-fire';
       output.fishZ = -action * 0.08;
       break;
     case 'fishingNet': {

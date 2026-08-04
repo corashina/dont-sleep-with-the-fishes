@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,
+  eventItemOutcomeDuration,
   eventItemUseDuration,
   resolveEventItemUseContext,
+  sampleEventItemOutcome,
   sampleEventItemUse,
+  type EventItemDisposition,
   type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
+import { eventItemMotionProfile } from '../src/survival/eventItemMotionProfile';
 import type { ItemId } from '../src/game/ItemState';
 
 const sampleAt = (context: EventItemUseContext, progress: number) => {
@@ -24,7 +28,63 @@ const sampleItemAt = (
   return sample;
 };
 
+const sampleOutcomeAt = (
+  context: EventItemUseContext,
+  itemId: ItemId,
+  disposition: EventItemDisposition,
+  progress: number,
+) => {
+  const sample = createEventItemUseSample();
+  sampleEventItemOutcome(context, itemId, disposition, progress, sample);
+  return sample;
+};
+
 describe('event item use choreography', () => {
+  it('maps item profiles to their authored hold zones and aim directions', () => {
+    expect(eventItemMotionProfile('flashlight')).toMatchObject({
+      holdZone: 'one-hand',
+      view: [0.32, -0.38, -0.68],
+      aim: 'entity',
+      forward: [0, 0, -1],
+    });
+    expect(eventItemMotionProfile('shotgun')).toMatchObject({
+      holdZone: 'large',
+      view: [0.08, -0.42, -0.85],
+      aim: 'entity',
+      forward: [0, 0, -1],
+    });
+    expect(eventItemMotionProfile('map')).toMatchObject({
+      holdZone: 'reading',
+      view: [0, -0.32, -0.72],
+      aim: 'none',
+    });
+  });
+
+  it('holds the use pose, then stows or departs it continuously', () => {
+    const start = sampleItemAt('flashlight-flash', 'flashlight', 0);
+    const held = sampleItemAt('flashlight-flash', 'flashlight', 1);
+    expect(start.cameraSpaceBlend).toBe(0);
+    expect(held.cameraSpaceBlend).toBe(1);
+    expect(held.viewY).toBeLessThan(-0.25);
+    expect(held.scaleX).toBe(1);
+    expect(held.scaleY).toBe(1);
+    expect(held.scaleZ).toBe(1);
+    expect(held.aimBlend).toBeGreaterThan(0.95);
+
+    const stowed = sampleOutcomeAt(
+      'flashlight-flash', 'flashlight', 'recover', 1,
+    );
+    expect(stowed.viewY).toBeLessThan(-1.1);
+    expect(stowed.itemVisible).toBe(false);
+
+    const departed = sampleOutcomeAt(
+      'throw-target', 'cannedFood', 'depart', 1,
+    );
+    expect(departed.targetBlend).toBe(1);
+    expect(departed.itemVisible).toBe(false);
+    expect(eventItemOutcomeDuration('cannedFood', 'depart')).toBeGreaterThan(0);
+  });
+
   it('resolves each approved item to its base use context', () => {
     const cases = [
       ['cannedFood', 'food', 'throw-target'],
@@ -39,7 +99,7 @@ describe('event item use choreography', () => {
       ['spyglass', 'spyglass', 'binocular-look'],
       ['fishingNet', 'fishingNet', 'net-throw'],
       ['flashlight', 'flashlight', 'flashlight-flash'],
-      ['harpoonGun', 'harpoonGun', 'harpoon-shot'],
+      ['shotgun', 'shotgun', 'shotgun-fire'],
     ] as const;
 
     for (const [itemId, choiceId, expected] of cases) {
@@ -70,12 +130,28 @@ describe('event item use choreography', () => {
       .toBe('throw-target');
   });
 
+  it('uses the neutral context for catalog choices without a use effect', () => {
+    const cases = [
+      ['flowers', 'bucket', 'bucket'],
+      ['night-trader', 'umbrella', 'umbrella'],
+      ['shadow-figure', 'flareGun', 'flareGun'],
+      ['handyman', 'flareGun', 'flareGun'],
+      ['handyman', 'scubaSet', 'scubaSet'],
+      ['handyman', 'bucket', 'bucket'],
+      ['handyman', 'anchor', 'anchor'],
+    ] as const;
+
+    for (const [eventId, choiceId, itemId] of cases) {
+      expect(resolveEventItemUseContext(eventId, choiceId, itemId)).toBe('base');
+    }
+  });
+
   it('keeps the item in camera space through the shared pickup and hold stages', () => {
     const contexts: readonly EventItemUseContext[] = [
-      'throw-target', 'tape-stretch', 'compass-search', 'map-read',
+      'base', 'throw-target', 'tape-stretch', 'compass-search', 'map-read',
       'binocular-look', 'net-throw', 'bucket-scoop', 'bucket-cover',
       'flare-target', 'flare-sky', 'anchor-drop', 'umbrella-overhead',
-      'umbrella-shield', 'flashlight-flash', 'harpoon-shot',
+      'umbrella-shield', 'flashlight-flash', 'shotgun-fire',
     ];
 
     for (const context of contexts) {
@@ -89,7 +165,8 @@ describe('event item use choreography', () => {
       expect(lift.cameraSpaceBlend).toBeGreaterThan(0);
       expect(lift.viewZ).toBeLessThanOrEqual(-0.6);
       expect(hold.cameraSpaceBlend).toBeGreaterThan(0.9);
-      expect(hold.viewZ).toBeLessThan(0);
+      expect(hold.viewZ).toBeGreaterThanOrEqual(-0.85);
+      expect(hold.viewZ).toBeLessThan(-0.6);
       expect(Number.isFinite(action.yaw)).toBe(true);
       expect(Number.isFinite(end.yaw)).toBe(true);
       expect(eventItemUseDuration(context)).toBeGreaterThan(0);
@@ -108,5 +185,28 @@ describe('event item use choreography', () => {
 
     expect(rigid).not.toBe(soft);
     expect(soft).not.toBe(ring);
+  });
+
+  it('keeps thrown and cast items in front of the camera during use', () => {
+    expect(sampleItemAt('throw-target', 'cannedFood', 0.7).viewZ)
+      .toBeLessThan(-0.35);
+    expect(sampleItemAt('net-throw', 'fishingNet', 0.7).viewZ)
+      .toBeLessThan(-0.5);
+  });
+
+  it('carries the anchor over starboard before lowering it', () => {
+    const rail = sampleItemAt('anchor-drop', 'anchor', 0.56);
+    const lowered = sampleItemAt('anchor-drop', 'anchor', 0.72);
+
+    expect(rail.viewX).toBeGreaterThan(1);
+    expect(lowered.viewX).toBeGreaterThan(1);
+    expect(lowered.viewY).toBeLessThan(rail.viewY - 0.6);
+    expect(lowered.scaleY).toBe(1);
+  });
+
+  it('uses a brief shotgun smoke pulse', () => {
+    expect(sampleAt('shotgun-fire', 0.4).effectKind).toBe('none');
+    expect(sampleAt('shotgun-fire', 0.52).effectKind).toBe('shotgun-smoke');
+    expect(sampleAt('shotgun-fire', 0.7).effectKind).toBe('none');
   });
 });

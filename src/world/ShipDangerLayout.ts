@@ -26,6 +26,12 @@ export interface ShipDangerLayout {
   readonly puddles: readonly FootprintAnchor[];
 }
 
+export const SHIP_PUDDLE_OUTLINE = Object.freeze([
+  [0.49, 0.04], [0.78, 0.26], [0.94, 0.58], [0.69, 0.86],
+  [0.23, 0.98], [-0.24, 0.87], [-0.7, 0.72], [-0.96, 0.31],
+  [-0.82, -0.2], [-0.41, -0.61], [0.14, -0.73],
+] as const);
+
 const FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const ROOM_CEILING_Y = FLOOR_Y + SHIP_ROOM_WALL_HEIGHT;
 
@@ -54,11 +60,22 @@ export const SHIP_DANGER_LAYOUT: ShipDangerLayout = Object.freeze({
     centeredCeilingAlarm('storage-workroom', 'storageWorkroom'),
   ]),
   puddles: Object.freeze<FootprintAnchor[]>([
-    { id: 'crew-aft', zoneId: 'crewCabin', position: [3.9, 2.228, 5.35], rotation: [-Math.PI / 2, 0, 0], size: [1.4, 0.85] },
-    { id: 'crew-forward', zoneId: 'crewCabin', position: [-2.1, 2.228, 12.25], rotation: [-Math.PI / 2, 0, 0], size: [1.1, 0.7] },
-    { id: 'storage-port', zoneId: 'storageWorkroom', position: [-4.2, 2.228, -15.85], rotation: [-Math.PI / 2, 0, 0], size: [1.45, 0.9] },
-    { id: 'storage-starboard', zoneId: 'storageWorkroom', position: [4.15, 2.228, -11.8], rotation: [-Math.PI / 2, 0, 0], size: [1.3, 0.75] },
-    { id: 'cargo-port', zoneId: 'cargoDeck', position: [-5.25, 2.228, -4.2], rotation: [-Math.PI / 2, 0, 0], size: [1.6, 0.8] },
+    { id: 'crew-aft', zoneId: 'crewCabin', position: [3.7, 2.228, 5.85], rotation: [-Math.PI / 2, 0, -0.08], size: [1.9, 1.15] },
+    { id: 'crew-forward', zoneId: 'crewCabin', position: [-2.1, 2.228, 12.25], rotation: [-Math.PI / 2, 0, 0.14], size: [1.65, 1] },
+    { id: 'crew-center', zoneId: 'crewCabin', position: [2.2, 2.228, 11.35], rotation: [-Math.PI / 2, 0, -0.2], size: [1.5, 0.9] },
+    { id: 'wheelhouse-center', zoneId: 'wheelhouse', position: [0, 2.228, 20.2], rotation: [-Math.PI / 2, 0, 0.1], size: [1.9, 1.05] },
+    { id: 'wheelhouse-starboard', zoneId: 'wheelhouse', position: [3.15, 2.228, 18.25], rotation: [-Math.PI / 2, 0, -0.18], size: [1.45, 0.9] },
+    { id: 'storage-port', zoneId: 'storageWorkroom', position: [-3.75, 2.228, -15.85], rotation: [-Math.PI / 2, 0, 0.12], size: [1.95, 1.2] },
+    { id: 'storage-center', zoneId: 'storageWorkroom', position: [0.15, 2.228, -14.1], rotation: [-Math.PI / 2, 0, -0.06], size: [1.65, 0.95] },
+    { id: 'storage-starboard', zoneId: 'storageWorkroom', position: [3.85, 2.228, -11.8], rotation: [-Math.PI / 2, 0, -0.16], size: [1.85, 1.1] },
+    { id: 'cargo-port', zoneId: 'cargoDeck', position: [-5.25, 2.228, -4.2], rotation: [-Math.PI / 2, 0, 0.2], size: [2.2, 1.2] },
+    { id: 'cargo-starboard-wash', zoneId: 'cargoDeck', position: [5.5, 2.228, -7.2], rotation: [-Math.PI / 2, 0, -0.12], size: [2.15, 1.1] },
+    { id: 'cargo-port-forward', zoneId: 'cargoDeck', position: [-5.3, 2.228, 15.5], rotation: [-Math.PI / 2, 0, 0.08], size: [2.25, 1.15] },
+    { id: 'cargo-starboard-forward', zoneId: 'cargoDeck', position: [5.2, 2.228, 9.8], rotation: [-Math.PI / 2, 0, -0.15], size: [2.35, 1.25] },
+    { id: 'cargo-port-midship', zoneId: 'cargoDeck', position: [-5.5, 2.228, 2.2], rotation: [-Math.PI / 2, 0, -0.09], size: [2.1, 1.05] },
+    { id: 'cargo-starboard-midship', zoneId: 'cargoDeck', position: [5.5, 2.228, 3.7], rotation: [-Math.PI / 2, 0, 0.16], size: [2.2, 1.1] },
+    { id: 'cargo-port-aft', zoneId: 'cargoDeck', position: [-5.3, 2.228, -20.4], rotation: [-Math.PI / 2, 0, -0.18], size: [2.3, 1.2] },
+    { id: 'cargo-starboard-aft', zoneId: 'cargoDeck', position: [4.3, 2.228, -22.6], rotation: [-Math.PI / 2, 0, 0.11], size: [2.4, 1.3] },
   ]),
 });
 
@@ -138,8 +155,25 @@ export function validateShipDangerLayout(
     }
   }
 
-  danger.puddles.forEach(({ id, size }) => {
+  danger.puddles.forEach((puddle) => {
+    const { id, size } = puddle;
     assertPositive(id, size[0]);
     assertPositive(id, size[1]);
+    const zone = ship.zones.find(({ id: zoneId }) => zoneId === puddle.zoneId);
+    if (zone === undefined) throw new Error(`Missing ${puddle.zoneId} zone`);
+    const cosine = Math.cos(puddle.rotation[2]);
+    const sine = Math.sin(puddle.rotation[2]);
+    const crossesBoundary = SHIP_PUDDLE_OUTLINE.some(([outlineX, outlineZ]) => {
+      const scaledX = outlineX * size[0];
+      const scaledZ = outlineZ * size[1];
+      const worldX = puddle.position[0] + scaledX * cosine - scaledZ * sine;
+      const worldZ = puddle.position[2] - scaledX * sine - scaledZ * cosine;
+      return !pointInPolygon(worldX, worldZ, zone.polygon);
+    });
+    if (!crossesBoundary) return;
+    if (puddle.zoneId === 'cargoDeck') {
+      throw new Error(`${id} puddle crosses the cargo rail`);
+    }
+    throw new Error(`${id} puddle crosses the ${puddle.zoneId} walls`);
   });
 }

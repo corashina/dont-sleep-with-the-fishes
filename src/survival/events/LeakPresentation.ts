@@ -10,7 +10,7 @@ import {
   ShapeGeometry,
   Vector3,
 } from 'three';
-import type { ItemId, ItemInstanceId } from '../../game/ItemState';
+import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
 import { FishingBiteParticles } from '../FishingBiteParticles';
 import {
@@ -19,12 +19,6 @@ import {
 } from '../../world/SceneResources';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
-import {
-  createEventItemUseSample,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
-} from '../eventItemUseChoreography';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
@@ -113,6 +107,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
   readonly eventId = 'leak' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
+  readonly itemAimTarget = new Group();
 
   private readonly holeMaterial = new MeshStandardMaterial({
     color: 0x10171a,
@@ -133,7 +128,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private readonly sprayOrigin = new Vector3();
   private readonly interiorWater: Mesh;
   private readonly sample: LeakSample = identityLeakSample();
-  private readonly itemUseSample = createEventItemUseSample();
   private readonly reactionState: {
     safe: boolean;
     brokenItem: boolean;
@@ -154,9 +148,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
     normal: { x: 0, y: 1, z: 0 },
   };
   private active: DedicatedEventAnimation<{
-    readonly instanceId: ItemInstanceId;
-    readonly itemId: ItemId;
-    readonly itemUseContext: EventItemUseContext;
   }> | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private sprayElapsed = 0;
@@ -215,6 +206,8 @@ export class LeakPresentation implements DedicatedEventPresentation {
     }
     this.holes = holes;
     this.streams = streams;
+    this.itemAimTarget.name = 'leak-item-aim-target';
+    this.holes[0]!.add(this.itemAimTarget);
 
     this.spray.points.name = 'leak-spray-particles';
     this.spray.points.renderOrder = 3;
@@ -260,7 +253,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     });
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (
       this.disposed
       || !this.staged
@@ -268,24 +261,13 @@ export class LeakPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    const itemId = this.environment.supplies.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
-    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
-    if (!this.borrowActor(instanceId)) return Promise.resolve(false);
-    this.environment.itemUseAdapter.begin(this.borrowedActor!);
     sampleLeakItemUse(choiceId, 0, this.sample);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
-    this.environment.itemUseAdapter.apply(this.itemUseSample);
     this.applyHeldLeak(0);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
-        instanceId,
-        itemId,
-        itemUseContext,
         elapsed: 0,
         duration: LEAK_ITEM_DURATION,
         resolve,
@@ -305,9 +287,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     const lost = result.lostInstanceIds[0] ?? null;
     const hullDamage = (result.resourceDeltas.hull ?? 0) < 0;
 
-    if (lost !== null) this.borrowActor(lost);
-    else if (selectedBroken && selected !== null) this.borrowActor(selected);
-    else if (selectedConsumed && selected !== null) this.borrowActor(selected);
+    if (lost !== null && lost !== selected) this.borrowActor(lost);
 
     this.reactionState.brokenItem = selectedBroken;
     this.reactionState.consumedItem = selectedConsumed;
@@ -346,10 +326,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
         break;
       case 'item':
         sampleLeakItemUse(active.choiceId, progress, this.sample);
-        sampleEventItemUse(
-          active.itemUseContext, active.itemId, progress, this.itemUseSample,
-        );
-        this.environment.itemUseAdapter.apply(this.itemUseSample);
         break;
       case 'reaction':
         sampleLeakReaction(this.reactionState, progress, this.sample);
@@ -370,10 +346,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
         break;
       case 'item':
         sampleLeakItemUse(this.active.choiceId, 1, this.sample);
-        sampleEventItemUse(
-          this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
-        );
-        this.environment.itemUseAdapter.apply(this.itemUseSample);
         break;
       case 'reaction':
         sampleLeakReaction(this.reactionState, 1, this.sample);
@@ -403,7 +375,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
@@ -435,12 +406,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.active = null;
     if (active.kind === 'item') {
       sampleLeakItemUse(active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        active.itemUseContext, active.itemId, 1, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
       this.applyHeldLeak(time);
-      this.environment.itemUseAdapter.clear();
       active.resolve(true);
       return;
     }
@@ -450,7 +416,6 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 

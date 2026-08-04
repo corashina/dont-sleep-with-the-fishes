@@ -1,4 +1,4 @@
-import { Group, PerspectiveCamera, PointLight, Vector3 } from 'three';
+import { Group, PerspectiveCamera, PointLight, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type {
@@ -22,7 +22,7 @@ const EFFECT_KINDS: readonly EventItemEffectKind[] = [
   'chain',
   'umbrella',
   'flashlight',
-  'harpoon',
+  'shotgun-smoke',
 ];
 
 function createActor(
@@ -60,6 +60,49 @@ function expectVectorCloseTo(actual: Vector3, expected: Vector3): void {
 }
 
 describe('EventItemUseAdapter', () => {
+  it('aims at moving targets and moves the action origin to a target', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0.3, 2.1, 0.4);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'flashlight-1' as ItemInstanceId,
+      new Vector3(0.2, -0.1, 0.5),
+    );
+    const aimTarget = new Group();
+    aimTarget.position.set(2.4, 1.1, -4.8);
+    scene.add(aimTarget);
+    const effects = new EventItemEffects();
+    const adapter = new EventItemUseAdapter(camera, effects);
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    sample.viewY = -0.45;
+    sample.viewZ = -1.1;
+    sample.aimBlend = 1;
+
+    adapter.begin(actor, 'flashlight', aimTarget);
+    adapter.apply(sample);
+    expect(actor.root.getWorldPosition(new Vector3()).y)
+      .toBeLessThan(camera.getWorldPosition(new Vector3()).y);
+    expectAimAccuracy(actor, aimTarget);
+
+    aimTarget.position.set(-1.8, 0.8, -3.6);
+    adapter.apply(sample);
+    expectAimAccuracy(actor, aimTarget);
+
+    sample.targetBlend = 1;
+    adapter.apply(sample);
+    expectVectorCloseTo(
+      actor.root.getWorldPosition(new Vector3()),
+      aimTarget.getWorldPosition(new Vector3()),
+    );
+
+    adapter.dispose();
+  });
+
   it('holds actors at one camera-local point from distinct stored poses', () => {
     const scene = new Group();
     const cameraParent = new Group();
@@ -96,7 +139,7 @@ describe('EventItemUseAdapter', () => {
     sample.cameraPitch = -0.09;
 
     const cameraPosition = camera.position.clone();
-    adapter.begin(first.actor);
+    adapter.begin(first.actor, 'flashlight', null);
     adapter.apply(sample);
     const heldPoint = camera.localToWorld(new Vector3(
       sample.viewX,
@@ -107,7 +150,7 @@ describe('EventItemUseAdapter', () => {
     expect(camera.position).toEqual(cameraPosition);
 
     adapter.clear();
-    adapter.begin(second.actor);
+    adapter.begin(second.actor, 'flashlight', null);
     adapter.apply(sample);
     expectVectorCloseTo(second.actor.root.getWorldPosition(new Vector3()), heldPoint);
     expect(camera.position).toEqual(cameraPosition);
@@ -135,7 +178,7 @@ describe('EventItemUseAdapter', () => {
     const updateProjectionMatrix = vi.spyOn(camera, 'updateProjectionMatrix');
     const cameraPosition = camera.position.clone();
 
-    adapter.begin(actor);
+    adapter.begin(actor, 'flashlight', null);
     adapter.apply(sample);
     expect(camera.fov).toBeCloseTo(46.08);
     expect(camera.position).toEqual(cameraPosition);
@@ -176,7 +219,7 @@ describe('EventItemUseAdapter', () => {
     const basePosition = camera.position.clone();
     const baseQuaternion = camera.quaternion.clone();
 
-    adapter.begin(actor);
+    adapter.begin(actor, 'flashlight', null);
     adapter.apply(sample);
     adapter.clear();
 
@@ -195,3 +238,12 @@ describe('EventItemUseAdapter', () => {
     adapter.dispose();
   });
 });
+
+function expectAimAccuracy(actor: BorrowedSupplyActor, aimTarget: Group): void {
+  const origin = actor.root.getWorldPosition(new Vector3());
+  const expected = aimTarget.getWorldPosition(new Vector3()).sub(origin).normalize();
+  const actual = new Vector3(0, 0, -1)
+    .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+    .normalize();
+  expect(actual.dot(expected)).toBeGreaterThan(0.995);
+}

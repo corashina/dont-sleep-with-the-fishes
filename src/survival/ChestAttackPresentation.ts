@@ -5,6 +5,7 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   TorusGeometry,
   Vector3,
 } from 'three';
@@ -107,6 +108,13 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.add(this.net);
     collectMeshResources(this.net, this.geometries, this.materials);
     this.resetActors();
+  }
+
+  itemAimTarget(): Object3D | null {
+    if (this.disposed || !this.staged || !this.dependencies.chestDisplay.root.visible) {
+      return null;
+    }
+    return this.dependencies.chestDisplay.root;
   }
 
   stage(): void {

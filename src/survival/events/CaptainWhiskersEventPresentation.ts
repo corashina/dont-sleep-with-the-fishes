@@ -6,6 +6,7 @@ import {
   MeshStandardMaterial,
   SphereGeometry,
 } from 'three';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample, type WaveSample } from '../../ocean/WaveField';
 import {
@@ -70,6 +71,7 @@ function isCaptainWhiskersEventId(id: DedicatedEventId): id is CaptainWhiskersEv
 export class CaptainWhiskersEventPresentation implements DedicatedEventPresentation {
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
+  readonly itemAimTarget = new Group();
 
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
@@ -116,10 +118,19 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
       if (eventId === 'sea-watcher') eyes = this.createSeaWatcherEyes(hooks);
       this.falseCat = falseCat;
       this.eyes = eyes;
+      this.itemAimTarget.name = `${eventId}-item-aim-target`;
+      if (eventId === 'shadow-figure' && this.falseCat !== null) {
+        this.falseCat.add(this.itemAimTarget);
+      } else if (eventId === 'sea-watcher' && this.eyes[0] !== undefined) {
+        this.eyes[0].mesh.add(this.itemAimTarget);
+      } else {
+        this.poseRoot.add(this.itemAimTarget);
+      }
       this.hideScene();
     } catch (error) {
       try {
         runCleanupSteps([
+          () => this.itemAimTarget.removeFromParent(),
           () => this.worldRoot.clear(),
           () => this.boatRoot.clear(),
           () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
@@ -212,6 +223,7 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
     runCleanupSteps([
       () => this.restoreBaseState(),
       () => this.hideScene(),
+      () => this.itemAimTarget.removeFromParent(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
       () => this.boatRoot.removeFromParent(),
@@ -355,7 +367,7 @@ export class CaptainWhiskersEventPresentation implements DedicatedEventPresentat
   }
 
   private createFalseCat(): Group {
-    const clone = this.environment.captainWhiskers.root.clone(true);
+    const clone = cloneSkeleton(this.environment.captainWhiskers.root) as Group;
     clone.name = 'shadow-figure:false-cat';
     clone.position.set(-1.45, -0.1, -1.15);
     clone.rotation.set(0, -0.58, 0.04);
