@@ -339,7 +339,7 @@ export class PostProcessingConsole {
     const select = document.createElement('select');
     select.ariaLabel = 'Event test scene';
     select.dataset.eventTestSelect = '';
-    for (const phase of ['day', 'night'] as const) {
+    for (const phase of ['lab', 'day', 'night'] as const) {
       const options = controls.options.filter((option) => option.phase === phase);
       if (options.length === 0) continue;
       const group = document.createElement('optgroup');

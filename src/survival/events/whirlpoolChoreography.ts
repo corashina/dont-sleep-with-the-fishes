@@ -1,7 +1,8 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
+import { scaleEventItemDuration } from '../eventItemTiming';
 
 export const WHIRLPOOL_REVEAL_DURATION = 3;
-export const WHIRLPOOL_ITEM_DURATION = 1.25;
+export const WHIRLPOOL_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const WHIRLPOOL_REACTION_DURATION = 1.4;
 
 export type WhirlpoolItemEffectKind =

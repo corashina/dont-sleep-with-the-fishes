@@ -11,7 +11,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import type { ItemInstanceId } from '../../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import { setFlatShading } from '../../rendering/modelPresentation';
 import {
@@ -24,6 +24,12 @@ import type {
   SupplyAdditivePose,
 } from '../BoatSupplyDisplay';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
+import {
+  createEventItemUseSample,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from '../eventItemUseChoreography';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
@@ -77,8 +83,13 @@ function isSupportedChoice(choiceId: string): boolean {
   return choiceId === 'flashlight'
     || choiceId === 'umbrella'
     || choiceId === 'cannedFood'
+    || choiceId === 'food'
     || choiceId === 'harpoonGun'
     || choiceId === 'fishingNet';
+}
+
+function sceneChoiceId(choiceId: string): string {
+  return choiceId === 'food' ? 'cannedFood' : choiceId;
 }
 
 export class DeathStarePresentation implements DedicatedEventPresentation {
@@ -153,6 +164,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly teeth: readonly Mesh[];
   private readonly waterStrands: readonly WaterStrand[];
   private readonly sample: DeathStareSample = identityDeathStareSample();
+  private readonly itemUseSample = createEventItemUseSample();
   private readonly itemPose: MutableSupplyPose = {
     x: 0,
     y: 0,
@@ -173,7 +185,10 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly mouthWorldPosition = new Vector3();
   private readonly mouthParentPosition = new Vector3();
   private readonly actorParentWorldInverse = new Matrix4();
-  private active: DedicatedEventAnimation | null = null;
+  private active: DedicatedEventAnimation<{
+    readonly itemId: ItemId;
+    readonly itemUseContext: EventItemUseContext;
+  }> | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -355,15 +370,23 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
+    const itemId = this.environment.supplies.itemType(instanceId);
+    if (itemId === null) return Promise.resolve(false);
+    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
+    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
     if (!this.borrowActor(instanceId)) return Promise.resolve(false);
-    sampleDeathStareItemUse(choiceId, 0, this.sample);
-    this.applyBorrowedPose();
+    this.environment.itemUseAdapter.begin(this.borrowedActor!);
+    sampleDeathStareItemUse(sceneChoiceId(choiceId), 0, this.sample);
+    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
     this.applySample(0);
+    this.environment.itemUseAdapter.apply(this.itemUseSample);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
+        itemId,
+        itemUseContext,
         elapsed: 0,
         duration: DEATH_STARE_ITEM_DURATION,
         resolve,
@@ -415,12 +438,17 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
       if (active.kind === 'reveal') {
         sampleDeathStareReveal(progress, this.sample);
       } else if (active.kind === 'item') {
-        sampleDeathStareItemUse(active.choiceId, progress, this.sample);
-        this.applyBorrowedPose();
+        sampleDeathStareItemUse(sceneChoiceId(active.choiceId), progress, this.sample);
+        sampleEventItemUse(
+          active.itemUseContext, active.itemId, progress, this.itemUseSample,
+        );
       } else {
         sampleDeathStareReaction(this.reactionState, progress, this.sample);
       }
       this.applySample(time);
+      if (active.kind === 'item') {
+        this.environment.itemUseAdapter.apply(this.itemUseSample);
+      }
       if (active.kind === 'reaction') this.applyReactionBorrowedPose();
       if (progress === 1) this.finishActive();
       return;
@@ -434,12 +462,17 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     if (this.active.kind === 'reveal') {
       sampleDeathStareReveal(1, this.sample);
     } else if (this.active.kind === 'item') {
-      sampleDeathStareItemUse(this.active.choiceId, 1, this.sample);
-      this.applyBorrowedPose();
+      sampleDeathStareItemUse(sceneChoiceId(this.active.choiceId), 1, this.sample);
+      sampleEventItemUse(
+        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
+      );
     } else {
       sampleDeathStareReaction(this.reactionState, 1, this.sample);
     }
     this.applySample(0);
+    if (this.active.kind === 'item') {
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
+    }
     if (this.active.kind === 'reaction') this.applyReactionBorrowedPose();
     this.finishActive();
   }
@@ -464,6 +497,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
@@ -517,8 +551,13 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     if (active === null) return;
     this.active = null;
     if (active.kind === 'item') {
-      sampleDeathStareItemUse(active.choiceId, 1, this.sample);
-      this.applyBorrowedPose();
+      sampleDeathStareItemUse(sceneChoiceId(active.choiceId), 1, this.sample);
+      sampleEventItemUse(
+        active.itemUseContext, active.itemId, 1, this.itemUseSample,
+      );
+      this.applySample(0);
+      this.environment.itemUseAdapter.apply(this.itemUseSample);
+      this.environment.itemUseAdapter.clear();
       this.applySample(0);
       active.resolve(true);
       return;
@@ -534,6 +573,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
+    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 

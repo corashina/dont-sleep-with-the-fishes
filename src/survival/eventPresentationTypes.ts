@@ -3,6 +3,8 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
+import type { EventItemEffects } from './EventItemEffects';
+import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type {
   ActionOutcome,
@@ -57,6 +59,8 @@ export interface DedicatedEventEnvironment {
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly readWorldWaveAmplitudeScale: () => number;
+  readonly itemUseAdapter: EventItemUseAdapter;
+  readonly itemEffects: EventItemEffects;
   readonly cameraEffectsRoot?: Group;
   readonly camera?: PerspectiveCamera;
   readonly boatEffectsRoot?: Group;

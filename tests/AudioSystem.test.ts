@@ -130,6 +130,29 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
   });
 
+  it('uses the exact sound for each event item', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventItem('ductTape');
+    audio.eventItem('flareGun');
+    audio.eventItem('harpoonGun');
+    audio.eventItem('flashlight');
+    audio.eventItem('anchor');
+    audio.eventItem('umbrella');
+    audio.eventItem('map');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'tapeRepair',
+      'flareGun',
+      'harpoonGun',
+      'flashlight',
+      'anchorChain',
+      'umbrella',
+      'itemHandling',
+    ]);
+  });
+
   it('applies master volume and mute without losing volume', () => {
     const backend = new FakeAudioBackend();
     const system = AudioSystem.forTest(backend);
