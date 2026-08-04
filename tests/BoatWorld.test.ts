@@ -48,8 +48,10 @@ import {
 } from '../src/survival/BoatWorld';
 import {
   BoatSupplyDisplay,
+  GENERIC_EVENT_ITEM_USE_DURATION,
   type BorrowedSupplyActor,
 } from '../src/survival/BoatSupplyDisplay';
+import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   FOCUSED_EVENT_IDS,
@@ -66,6 +68,7 @@ import {
   sampleEventItemUse,
   type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
+import { SWARM_ITEM_DURATION } from '../src/survival/events/anglerfishSwarmChoreography';
 import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
 import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
@@ -1730,7 +1733,8 @@ describe('BoatWorld helpers', () => {
       const instanceId = `${choiceId}-1` as ItemInstanceId;
 
       const itemUse = animator.playItemUse('bad-sleep', choiceId, instanceId);
-      animator.update(2, 2);
+      const duration = weatherItemUseDuration('bad-sleep', choiceId)!;
+      animator.update(duration, duration);
       await itemUse;
 
       expect(supplies.poses.size).toBe(0);
@@ -1768,7 +1772,8 @@ describe('BoatWorld helpers', () => {
       expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
       expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
 
-      animator.update(2, 2);
+      const itemDuration = weatherItemUseDuration(eventId, choiceId)!;
+      animator.update(itemDuration, itemDuration - 0.6);
       await itemUse;
       const result = animator.react(
         eventId,
@@ -2088,7 +2093,8 @@ describe('BoatWorld helpers', () => {
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
     expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
     expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
-    world.update(2, 2);
+    const showerDuration = weatherItemUseDuration('shower-night', 'bucket')!;
+    world.update(showerDuration, showerDuration - 0.66);
     await showerUse;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
 
@@ -2116,7 +2122,7 @@ describe('BoatWorld helpers', () => {
       bucket.instanceId,
     );
     await Promise.resolve();
-    world.update(3, 0.65);
+    world.update(3, GENERIC_EVENT_ITEM_USE_DURATION);
     await fallback;
     expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
 
@@ -2177,7 +2183,10 @@ describe('BoatWorld helpers', () => {
     expectFixedRocks();
     expect(mapRoot.visible).toBe(false);
     expect(mapActor.scale.x).toBeGreaterThan(baseScale.x);
-    world.update(3.5, 0.55);
+    world.update(
+      2.4 + DANGEROUS_WATERS_ITEM_DURATION,
+      DANGEROUS_WATERS_ITEM_DURATION - 0.55,
+    );
     expectFixedRocks();
     await itemUse;
 
@@ -2438,7 +2447,12 @@ describe('BoatWorld helpers', () => {
       const elapsedUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
       world.update(0.6, 0.6);
       expect(await remainsPending(elapsedUse)).toBe(true);
-      world.update(1.3, 0.7);
+      const duration = eventId === 'death-stare'
+        ? DEATH_STARE_ITEM_DURATION
+        : eventId === 'swarm-of-anglerfish'
+          ? SWARM_ITEM_DURATION
+          : WHIRLPOOL_ITEM_DURATION;
+      world.update(duration, duration - 0.6);
       await expect(elapsedUse).resolves.toBeUndefined();
 
       const hiddenUse = world.playEventItemUse(eventId, choiceId, item.instanceId);
@@ -2632,7 +2646,8 @@ describe('BoatWorld helpers', () => {
       expect(active?.context).toBe('throw-target');
       expect(supplyItem).not.toHaveBeenCalled();
 
-      world.update(1.5, 1.5);
+      const duration = eventItemUseDuration('throw-target');
+      world.update(duration, duration);
       await use;
       world.dispose();
       supplyItem.mockRestore();
@@ -2742,7 +2757,8 @@ describe('BoatWorld helpers', () => {
       'map',
       maps[1].instanceId,
     );
-    world.update(1, 1.45);
+    const mapUseDuration = weatherItemUseDuration('windy-night', 'map')!;
+    world.update(mapUseDuration, mapUseDuration);
     await use;
     inventory.lose(maps[1].instanceId);
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
@@ -3086,7 +3102,8 @@ describe('BoatWorld helpers', () => {
     expect(flareFlash.visible).toBe(true);
     const flareSize = boundsRelativeTo(flareFlash).getSize(new Vector3());
     expect(Math.max(flareSize.x, flareSize.y)).toBeLessThanOrEqual(1.6);
-    world.update(1.2, 1.2 - flarePeak);
+    const flareDuration = supernaturalItemUseDuration('ghosts', 'flareGun')!;
+    world.update(flareDuration, flareDuration - flarePeak);
     await itemUse;
     const reaction = world.reactToEventOutcome(
       'ghosts',
@@ -3318,7 +3335,8 @@ describe('BoatWorld helpers', () => {
       'umbrella',
       umbrella.instanceId,
     );
-    world.update(1.5, 1.5);
+    const umbrellaDuration = eventItemUseDuration('umbrella-shield');
+    world.update(umbrellaDuration, umbrellaDuration);
     await umbrellaMotion;
 
     const telescopeMotion = world.playEventItemUse(
@@ -3326,7 +3344,11 @@ describe('BoatWorld helpers', () => {
       'spyglass',
       telescope.instanceId,
     );
-    world.update(3.5, 2);
+    const telescopeDuration = eventItemUseDuration('binocular-look');
+    world.update(
+      umbrellaDuration + telescopeDuration,
+      telescopeDuration,
+    );
     await telescopeMotion;
 
     expect(borrowActor).toHaveBeenNthCalledWith(1, umbrella.instanceId);
@@ -3627,7 +3649,8 @@ describe('BoatWorld helpers', () => {
     );
     await Promise.resolve();
 
-    world.update(1.5, 1.5);
+    const duration = eventItemUseDuration('throw-target');
+    world.update(duration, duration);
     await pending;
 
     expect(group.position.toArray()).toEqual([0, 0, 0]);

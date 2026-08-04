@@ -38,6 +38,7 @@ import type {
   ItemCondition,
   SurvivalSnapshot,
 } from './survivalTypes';
+import { scaleEventItemDuration } from './eventItemTiming';
 import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 
 export interface BoatSupplyPresentationRecord {
@@ -149,7 +150,7 @@ interface BorrowedSupplyBinding {
   readonly pose: MutableSupplyPose;
 }
 
-const EVENT_ITEM_USE_DURATION = 0.65;
+export const GENERIC_EVENT_ITEM_USE_DURATION = scaleEventItemDuration(0.65);
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
 
 function createIdentitySupplyPose(): MutableSupplyPose {
@@ -480,7 +481,7 @@ export class BoatSupplyDisplay {
     if (groupId === undefined) return Promise.resolve();
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return Promise.resolve();
-    const duration = EVENT_ITEM_USE_DURATION;
+    const duration = GENERIC_EVENT_ITEM_USE_DURATION;
     return new Promise((resolve) => {
       this.activeAnimation = {
         root: record.root,

@@ -15,14 +15,22 @@ import type {
   SupplyAdditivePose,
 } from '../src/survival/BoatSupplyDisplay';
 import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
-import { DangerousWatersPresentation } from '../src/survival/DangerousWatersPresentation';
+import {
+  DANGEROUS_WATERS_ITEM_DURATION,
+  DangerousWatersPresentation,
+} from '../src/survival/DangerousWatersPresentation';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import { supernaturalItemUseDuration } from '../src/survival/supernaturalEventChoreography';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
-import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
+import {
+  eventItemUseDuration,
+  resolveEventItemUseContext,
+  type EventItemUseContext,
+} from '../src/survival/eventItemUseChoreography';
+import { weatherItemUseDuration } from '../src/survival/weatherEventChoreography';
 
 const CASES = [
   ['shower-night', 'umbrella', 'umbrella', 'umbrella-overhead'],
@@ -136,12 +144,17 @@ describe('weather and supernatural shared item use', () => {
       animator.stage(eventId);
 
       const itemUse = animator.playItemUse(eventId, choiceId, harness.instanceId);
-      animator.update(0.45, 0.45);
+      const duration = SUPERNATURAL_EVENTS.has(eventId)
+        ? supernaturalItemUseDuration(eventId, choiceId)
+          ?? eventItemUseDuration(expectedContext as EventItemUseContext)
+        : weatherItemUseDuration(eventId, choiceId)!;
+      const sampleTime = duration * 0.5;
+      animator.update(sampleTime, sampleTime);
       expect(harness.applySharedPose).toHaveBeenCalled();
       expect(harness.camera.position.toArray()).toEqual(cameraBase);
       if (expectedContext === 'binocular-look') expect(harness.camera.fov).toBeLessThan(62);
 
-      animator.update(3, 3);
+      animator.update(duration, duration - sampleTime);
       await expect(itemUse).resolves.toBe(true);
       expect(harness.camera.position.toArray()).toEqual(cameraBase);
       expect(harness.camera.fov).toBe(62);
@@ -173,13 +186,17 @@ describe('weather and supernatural shared item use', () => {
             harness.adapter,
             createEventModels(),
             harness.camera,
-          );
+      );
       animator.stage(eventId);
       const itemUse = animator.playItemUse(eventId, choiceId, harness.instanceId);
-      animator.update(0.62, 0.62);
+      const duration = eventId === 'ghosts'
+        ? supernaturalItemUseDuration(eventId, choiceId)!
+        : weatherItemUseDuration(eventId, choiceId)!;
+      const sampleTime = duration * 0.5;
+      animator.update(sampleTime, sampleTime);
       expect(harness.effects.root.getObjectByName(effectName)?.visible).toBe(true);
 
-      animator.update(3, 3);
+      animator.update(duration, duration - sampleTime);
       await itemUse;
       expect(harness.effects.root.getObjectByName(effectName)?.visible).toBe(false);
 
@@ -231,7 +248,10 @@ describe('weather and supernatural shared item use', () => {
     expect(harness.applySharedPose).toHaveBeenCalled();
     expect(harness.camera.position.toArray()).toEqual(cameraBase);
 
-    presentation.update(3, 3);
+    presentation.update(
+      DANGEROUS_WATERS_ITEM_DURATION,
+      DANGEROUS_WATERS_ITEM_DURATION - 0.5,
+    );
     await itemUse;
     expect(harness.release).toHaveBeenCalledOnce();
     expect(harness.camera.position.toArray()).toEqual(cameraBase);

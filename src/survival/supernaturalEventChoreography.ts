@@ -1,4 +1,5 @@
 import { clamp01, pulse, smoothstep } from './animationMath';
+import { scaleEventItemDuration } from './eventItemTiming';
 
 export type SupernaturalAnimationEventId = 'ghosts' | 'eerie-melody';
 
@@ -234,7 +235,8 @@ export function sampleSupernaturalReveal(
 }
 
 export function supernaturalItemUseDuration(eventId: string, choiceId: string): number | null {
-  return itemDuration(eventId, choiceId);
+  const duration = itemDuration(eventId, choiceId);
+  return duration === null ? null : scaleEventItemDuration(duration);
 }
 
 export function sampleSupernaturalItemUse(

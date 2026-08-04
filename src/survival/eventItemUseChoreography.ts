@@ -1,5 +1,6 @@
 import type { ItemId } from '../game/ItemState';
 import { clamp01, pulse, smoothstep } from './animationMath';
+import { scaleEventItemDuration } from './eventItemTiming';
 
 export type EventItemUseContext =
   | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
@@ -123,21 +124,21 @@ export function resolveEventItemUseContext(
 
 export function eventItemUseDuration(context: EventItemUseContext): number {
   switch (context) {
-    case 'throw-target': return 1.35;
-    case 'tape-stretch': return 1.45;
-    case 'compass-search': return 1.6;
-    case 'map-read': return 1.55;
-    case 'binocular-look': return 1.7;
-    case 'net-throw': return 1.5;
-    case 'bucket-scoop': return 1.45;
-    case 'bucket-cover': return 1.35;
-    case 'flare-target': return 1.5;
-    case 'flare-sky': return 1.65;
-    case 'anchor-drop': return 1.6;
-    case 'umbrella-overhead': return 1.45;
-    case 'umbrella-shield': return 1.35;
-    case 'flashlight-flash': return 1.35;
-    case 'harpoon-shot': return 1.4;
+    case 'throw-target': return scaleEventItemDuration(1.35);
+    case 'tape-stretch': return scaleEventItemDuration(1.45);
+    case 'compass-search': return scaleEventItemDuration(1.6);
+    case 'map-read': return scaleEventItemDuration(1.55);
+    case 'binocular-look': return scaleEventItemDuration(1.7);
+    case 'net-throw': return scaleEventItemDuration(1.5);
+    case 'bucket-scoop': return scaleEventItemDuration(1.45);
+    case 'bucket-cover': return scaleEventItemDuration(1.35);
+    case 'flare-target': return scaleEventItemDuration(1.5);
+    case 'flare-sky': return scaleEventItemDuration(1.65);
+    case 'anchor-drop': return scaleEventItemDuration(1.6);
+    case 'umbrella-overhead': return scaleEventItemDuration(1.45);
+    case 'umbrella-shield': return scaleEventItemDuration(1.35);
+    case 'flashlight-flash': return scaleEventItemDuration(1.35);
+    case 'harpoon-shot': return scaleEventItemDuration(1.4);
   }
 }
 

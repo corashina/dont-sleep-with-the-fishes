@@ -1,7 +1,8 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
+import { scaleEventItemDuration } from '../eventItemTiming';
 
 export const SCHOOL_REVEAL_DURATION = 2.6;
-export const SCHOOL_ITEM_DURATION = 1.25;
+export const SCHOOL_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const SCHOOL_REACTION_DURATION = 1.1;
 export const SCHOOL_CENTER_X = 0;
 export const SCHOOL_CENTER_Z = -4.2;

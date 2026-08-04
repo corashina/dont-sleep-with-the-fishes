@@ -40,6 +40,7 @@ import {
   sampleEventItemUse,
   type EventItemUseContext,
 } from './eventItemUseChoreography';
+import { scaleEventItemDuration } from './eventItemTiming';
 import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { ActionOutcome } from './survivalTypes';
 
@@ -90,6 +91,7 @@ interface DangerousWatersMaterials {
 
 const REVEAL_DURATION = 2.4;
 const CHOICE_DURATION = 1.1;
+export const DANGEROUS_WATERS_ITEM_DURATION = scaleEventItemDuration(CHOICE_DURATION);
 const REACTION_DURATION = 0.9;
 const FOAM_COUNT = 12;
 const FRAGMENT_COUNT = 8;
@@ -514,7 +516,7 @@ export class DangerousWatersPresentation {
       this.beginMotion(
         'choice',
         choiceId,
-        CHOICE_DURATION,
+        DANGEROUS_WATERS_ITEM_DURATION,
         true,
         () => resolve(true),
         () => resolve(false),
