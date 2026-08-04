@@ -6,7 +6,7 @@ import {
   Object3D,
 } from 'three';
 
-export const CAPTAIN_WHISKERS_IDLE_CLIP = 'CaptainWhiskersIdle';
+export const CAPTAIN_WHISKERS_SITTING_IDLE_CLIP = 'SittingIdle';
 
 function stablePhase(instanceId: string): number {
   let hash = 0x811c9dc5;

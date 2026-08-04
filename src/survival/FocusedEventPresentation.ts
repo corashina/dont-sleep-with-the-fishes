@@ -3,7 +3,6 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { ChestDisplay } from './ChestDisplay';
 import type {
   ActionOutcome,
@@ -39,6 +38,7 @@ export interface FocusedEventInteractionTarget {
 
 export interface FocusedEventPresentation {
   readonly root: Group;
+  itemAimTarget?(): Object3D | null;
   stage(variantSeed?: number): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;
@@ -60,7 +60,6 @@ export interface FocusedEventPresentationDependencies {
   readonly camera: PerspectiveCamera;
   readonly boatMotionRoot?: Group;
   readonly supplyDisplay: BoatSupplyDisplay;
-  readonly itemUseAdapter: EventItemUseAdapter;
   readonly chestDisplay: ChestDisplay;
 }
 

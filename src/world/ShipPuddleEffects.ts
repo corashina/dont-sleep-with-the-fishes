@@ -1,12 +1,16 @@
 import {
-  BufferAttribute,
   BufferGeometry,
   Group,
   Mesh,
   MeshStandardMaterial,
+  Shape,
+  ShapeGeometry,
 } from 'three';
 import { disposeResourceSets } from './SceneResources';
-import type { FootprintAnchor } from './ShipDangerLayout';
+import {
+  SHIP_PUDDLE_OUTLINE,
+  type FootprintAnchor,
+} from './ShipDangerLayout';
 
 export class ShipPuddleEffects {
   readonly root = new Group();
@@ -59,16 +63,19 @@ export class ShipPuddleEffects {
 }
 
 function createPuddleGeometry(): BufferGeometry {
-  const vertices = new Float32Array([
-    0, 0, 0, 0.49, 0.04, 0, 0.78, 0.26, 0, 0.94, 0.58, 0,
-    0.69, 0.86, 0, 0.23, 0.98, 0, -0.24, 0.87, 0, -0.7, 0.72, 0,
-    -0.96, 0.31, 0, -0.82, -0.2, 0, -0.41, -0.61, 0, 0.14, -0.73, 0,
-  ]);
-  const indices: number[] = [];
-  for (let index = 1; index < 11; index += 1) indices.push(0, index, index + 1);
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(vertices, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
+  const first = SHIP_PUDDLE_OUTLINE[0]!;
+  const last = SHIP_PUDDLE_OUTLINE[SHIP_PUDDLE_OUTLINE.length - 1]!;
+  const shape = new Shape();
+  shape.moveTo((last[0] + first[0]) / 2, (last[1] + first[1]) / 2);
+  SHIP_PUDDLE_OUTLINE.forEach((point, index) => {
+    const next = SHIP_PUDDLE_OUTLINE[(index + 1) % SHIP_PUDDLE_OUTLINE.length]!;
+    shape.quadraticCurveTo(
+      point[0],
+      point[1],
+      (point[0] + next[0]) / 2,
+      (point[1] + next[1]) / 2,
+    );
+  });
+  shape.closePath();
+  return new ShapeGeometry(shape, 4);
 }

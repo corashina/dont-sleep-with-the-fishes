@@ -9,22 +9,14 @@ import {
   MeshStandardMaterial,
   RingGeometry,
 } from 'three';
-import type { ItemId, ItemInstanceId } from '../../game/ItemState';
+import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import { setFlatShading } from '../../rendering/modelPresentation';
 import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
-import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
-import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
 import type { EventModelInstance } from '../EventModelLibrary';
-import {
-  createEventItemUseSample,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
-} from '../eventItemUseChoreography';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
@@ -106,6 +98,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   readonly eventId = 'school-of-fish' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
+  readonly itemAimTarget = new Group();
 
   private readonly fishActors: FishActor[] = [];
   private readonly surfaceFins: Mesh[] = [];
@@ -152,7 +145,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     side: DoubleSide,
   });
   private readonly sample: SchoolSample = identitySchoolSample();
-  private readonly itemUseSample = createEventItemUseSample();
   private readonly reactionState: {
     foodDelta: number;
     brokenItem: boolean;
@@ -161,11 +153,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     brokenItem: false,
   };
   private activeFish = MAX_FISH;
-  private active: DedicatedEventAnimation<{
-    readonly itemId: ItemId;
-    readonly itemUseContext: EventItemUseContext;
-  }> | null = null;
-  private borrowedActor: BorrowedSupplyActor | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private staged = false;
   private disposed = false;
 
@@ -204,6 +192,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         variant: DEFAULT_VARIANT,
       });
     }
+    this.itemAimTarget.name = 'school-of-fish-item-aim-target';
+    this.fishActors[0]!.root.add(this.itemAimTarget);
 
     const finGeometry = new ConeGeometry(0.055, 0.16, 3, 1, false);
     this.ownedGeometries.add(finGeometry);
@@ -285,7 +275,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     });
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (
       this.disposed
       || !this.staged
@@ -297,23 +287,13 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    const itemId = this.environment.supplies.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
-    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
-    if (!this.borrowActor(instanceId)) return Promise.resolve(false);
-    this.environment.itemUseAdapter.begin(this.borrowedActor!);
     sampleSchoolItemUse(choiceId, 0, this.sample);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
-    this.environment.itemUseAdapter.apply(this.itemUseSample);
     this.applySample(0);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
-        itemId,
-        itemUseContext,
         elapsed: 0,
         duration: SCHOOL_ITEM_DURATION,
         resolve,
@@ -327,15 +307,11 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     const selected = result.selectedInstanceId;
     const selectedBroken = selected !== null
       && result.brokenInstanceIds.includes(selected);
-    if (selected !== null && this.borrowedActor?.instanceId !== selected) {
-      this.borrowActor(selected);
-    }
     this.reactionState.foodDelta = result.resourceDeltas.food ?? 0;
     this.reactionState.brokenItem = selectedBroken;
     this.worldRoot.userData.foodDelta = this.reactionState.foodDelta;
     this.catchActor.userData.foodDelta = this.reactionState.foodDelta;
     sampleSchoolReaction(this.reactionState, 0, this.sample);
-    this.borrowedActor?.applyPose(this.sample);
     this.applySample(0);
     return new Promise((resolve) => {
       this.active = {
@@ -358,13 +334,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         sampleSchoolReveal(progress, this.sample);
       } else if (active.kind === 'item') {
         sampleSchoolItemUse(active.choiceId, progress, this.sample);
-        sampleEventItemUse(
-          active.itemUseContext, active.itemId, progress, this.itemUseSample,
-        );
-        this.environment.itemUseAdapter.apply(this.itemUseSample);
       } else {
         sampleSchoolReaction(this.reactionState, progress, this.sample);
-        this.borrowedActor?.applyPose(this.sample);
       }
       if (progress === 1) this.finishActive();
     }
@@ -378,13 +349,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       sampleSchoolReveal(1, this.sample);
     } else if (this.active.kind === 'item') {
       sampleSchoolItemUse(this.active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
     } else {
       sampleSchoolReaction(this.reactionState, 1, this.sample);
-      this.borrowedActor?.applyPose(this.sample);
     }
     this.applySample(0);
     this.finishActive();
@@ -397,7 +363,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();
-    this.releaseActor();
     this.staged = false;
     this.hideScene();
   }
@@ -406,14 +371,10 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.disposed = true;
     const active = this.active;
-    const actor = this.borrowedActor;
     this.active = null;
-    this.borrowedActor = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
 
     runCleanupSteps([
-      () => actor?.release(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
@@ -425,28 +386,12 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     ]);
   }
 
-  private borrowActor(instanceId: ItemInstanceId): boolean {
-    this.borrowedActor = borrowSupplyActor(
-      this.borrowedActor, this.environment.supplies, instanceId,
-    );
-    return this.borrowedActor !== null;
-  }
-
-  private releaseActor(): void {
-    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
-  }
-
   private finishActive(): void {
     const active = this.active;
     if (active === null) return;
     this.active = null;
     if (active.kind === 'item') {
       sampleSchoolItemUse(active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        active.itemUseContext, active.itemId, 1, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
-      this.environment.itemUseAdapter.clear();
       active.resolve(true);
       return;
     }
@@ -456,7 +401,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 

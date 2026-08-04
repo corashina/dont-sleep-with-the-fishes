@@ -189,6 +189,10 @@ export class DriftingLootPresentation {
       : this.roots[this.activeVariant];
   }
 
+  itemAimTarget(): Group | null {
+    return this.resultRoot();
+  }
+
   resultRoot(): Group | null {
     return this.disposed || this.activeVariant === null
       ? null

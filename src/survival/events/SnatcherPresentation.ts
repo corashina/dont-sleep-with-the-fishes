@@ -9,19 +9,13 @@ import {
   Vector3,
 } from 'three';
 import type { AnimationAction } from 'three';
-import type { ItemId, ItemInstanceId } from '../../game/ItemState';
+import type { ItemInstanceId } from '../../game/ItemState';
 import { disposeResourceSets, runCleanupSteps } from '../../world/SceneResources';
 import type {
   BorrowedSupplyActor,
   MutableSupplyPose,
 } from '../BoatSupplyDisplay';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
-import {
-  createEventItemUseSample,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
-} from '../eventItemUseChoreography';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
@@ -213,6 +207,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   readonly eventId = 'snatcher' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
+  readonly itemAimTarget = new Group();
   readonly targetOutline = new SnatcherTargetOutline();
 
   private readonly modelInstance;
@@ -220,7 +215,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private readonly idleAction: AnimationAction | null;
   private readonly tentacle = new Group();
   private readonly sample: SnatcherSample = identitySnatcherSample();
-  private readonly itemUseSample = createEventItemUseSample();
   private readonly itemPose: MutableSupplyPose = {
     x: 0,
     y: 0,
@@ -233,10 +227,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     scaleZ: 1,
   };
   private readonly reactionState = { targetLost: false };
-  private active: DedicatedEventAnimation<{
-    readonly itemId: ItemId;
-    readonly itemUseContext: EventItemUseContext;
-  }> | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private targetInstanceId: ItemInstanceId | null = null;
   private staged = false;
@@ -261,6 +252,9 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       ? null
       : this.mixer!.clipAction(idleClip);
     this.tentacle.add(this.modelInstance.root);
+    this.itemAimTarget.name = 'snatcher-item-aim-target';
+    this.itemAimTarget.position.set(0, 0.18, 0.44);
+    this.tentacle.add(this.itemAimTarget);
     this.boatRoot.add(this.tentacle);
     this.hideScene();
   }
@@ -294,7 +288,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     });
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (
       this.disposed
       || !this.staged
@@ -302,28 +296,18 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
         choiceId !== 'spyglass'
         && choiceId !== 'swimRing'
         && choiceId !== 'fishingNet'
-        && choiceId !== 'harpoonGun'
+        && choiceId !== 'shotgun'
       )
     ) {
       return Promise.resolve(false);
     }
-    const itemId = this.environment.supplies.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
-    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
-    if (!this.borrowActor(instanceId)) return Promise.resolve(false);
-    this.environment.itemUseAdapter.begin(this.borrowedActor!);
     sampleSnatcherItemUse(choiceId, 0, this.sample);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
-    this.environment.itemUseAdapter.apply(this.itemUseSample);
     this.applySample();
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
-        itemId,
-        itemUseContext,
         elapsed: 0,
         duration: SNATCHER_ITEM_DURATION,
         resolve,
@@ -365,10 +349,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       sampleSnatcherReveal(progress, this.sample);
     } else if (active.kind === 'item') {
       sampleSnatcherItemUse(active.choiceId, progress, this.sample);
-      sampleEventItemUse(
-        active.itemUseContext, active.itemId, progress, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
     } else {
       sampleSnatcherReaction(this.reactionState, progress, this.sample);
       this.applyBorrowedPose();
@@ -384,10 +364,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       sampleSnatcherReveal(1, this.sample);
     } else if (this.active.kind === 'item') {
       sampleSnatcherItemUse(this.active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
     } else {
       sampleSnatcherReaction(this.reactionState, 1, this.sample);
       this.applyBorrowedPose();
@@ -418,7 +394,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     const actor = this.borrowedActor;
     this.active = null;
     this.borrowedActor = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
     this.mixer?.stopAllAction();
     this.mixer?.uncacheRoot(this.modelInstance.root);
@@ -467,12 +442,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.active = null;
     if (active.kind === 'item') {
       sampleSnatcherItemUse(active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        active.itemUseContext, active.itemId, 1, this.itemUseSample,
-      );
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
       this.applySample();
-      this.environment.itemUseAdapter.clear();
       active.resolve(true);
       return;
     }
@@ -487,7 +457,6 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 

@@ -109,6 +109,15 @@ export class FeaturedEventPresentations {
       : this.presentations[eventId].interactionRoot();
   }
 
+  itemAimTarget(eventId: string): Object3D | null {
+    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) {
+      return null;
+    }
+    return eventId === 'drifting-loot'
+      ? this.driftingLoot.itemAimTarget()
+      : this.presentations[eventId].itemAimTarget();
+  }
+
   resultRoot(eventId: string): Object3D | null {
     if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) return null;
     return eventId === 'drifting-loot'

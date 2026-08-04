@@ -50,6 +50,10 @@ export class FlowersPresentation extends KeyedEventPresentation {
     });
   }
 
+  itemAimTarget(): Object3D | null {
+    return super.itemAimTarget() === null ? null : this.pads[0] ?? null;
+  }
+
   protected reset(): void {
     this.subject.position.set(0, 0, 0);
     this.pads.forEach((pad, index) => {

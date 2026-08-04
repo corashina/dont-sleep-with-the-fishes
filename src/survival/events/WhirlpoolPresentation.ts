@@ -9,21 +9,14 @@ import {
   MeshStandardMaterial,
   RingGeometry,
 } from 'three';
-import type { ItemId, ItemInstanceId } from '../../game/ItemState';
+import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
-import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
 import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
-import {
-  createEventItemUseSample,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
-} from '../eventItemUseChoreography';
 import { StationaryEventCamera } from '../StationaryEventCamera';
 import type {
   DedicatedEventEnvironment,
@@ -110,6 +103,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   readonly eventId = 'whirlpool' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
+  readonly itemAimTarget = new Group();
 
   private readonly streams: SpiralStreamActor[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -155,7 +149,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private readonly cameraLook: StationaryEventCamera | null;
   private readonly rimWave = waveSample();
   private readonly sample: WhirlpoolSample = createWhirlpoolSample();
-  private readonly itemUseSample = createEventItemUseSample();
   private readonly reactionState: {
     hullDamage: number;
     anchorBroken: boolean;
@@ -167,17 +160,12 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     ringBroken: false,
     lostItemCount: 0,
   };
-  private readonly itemPose: MutableSupplyPose = { ...IDENTITY_ITEM_POSE };
   private readonly lostPoses: MutableSupplyPose[] = [
     { ...IDENTITY_ITEM_POSE },
     { ...IDENTITY_ITEM_POSE },
   ];
   private readonly lostActors: Array<BorrowedSupplyActor | null> = [null, null];
-  private active: DedicatedEventAnimation<{
-    readonly itemId: ItemId;
-    readonly itemUseContext: EventItemUseContext;
-  }> | null = null;
-  private itemActor: BorrowedSupplyActor | null = null;
+  private active: DedicatedEventAnimation | null = null;
   private lastChoiceId = '';
   private staged = false;
   private disposed = false;
@@ -208,6 +196,9 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.funnel.visible = false;
     this.funnel.renderOrder = 1;
     this.worldRoot.add(this.funnel);
+    this.itemAimTarget.name = 'whirlpool-item-aim-target';
+    this.itemAimTarget.position.set(0, 1.45, 0);
+    this.funnel.add(this.itemAimTarget);
     const ringScales = [6.45, 9.75, 13.05] as const;
     for (let index = 0; index < ringScales.length; index += 1) {
       const ring = new Mesh(ringGeometry, this.ringMaterial);
@@ -263,28 +254,18 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     });
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (this.disposed || !this.staged || !supportedChoice(choiceId)) {
       return Promise.resolve(false);
     }
-    const itemId = this.environment.supplies.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(this.eventId, choiceId, itemId);
-    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
-    if (!this.borrowItemActor(instanceId)) return Promise.resolve(false);
-    this.environment.itemUseAdapter.begin(this.itemActor!);
     this.lastChoiceId = choiceId;
     sampleWhirlpoolItemUse(choiceId, 0, this.sample);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.itemUseSample);
     this.applySample(0);
-    this.environment.itemUseAdapter.apply(this.itemUseSample);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         choiceId,
-        itemId,
-        itemUseContext,
         elapsed: 0,
         duration: WHIRLPOOL_ITEM_DURATION,
         resolve,
@@ -306,18 +287,16 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.reactionState.lostItemCount = 0;
 
     if (result.lostInstanceIds.length > 0) {
-      this.releaseItemActor();
-      const lostLimit = Math.min(MAX_LOST_ACTORS, result.lostInstanceIds.length);
+      const lostIds = result.lostInstanceIds.filter((id) => id !== selectedId);
+      const lostLimit = Math.min(MAX_LOST_ACTORS, lostIds.length);
       for (let index = 0; index < lostLimit; index += 1) {
         const actor = this.environment.supplies.borrowEventActor(
-          result.lostInstanceIds[index]!,
+          lostIds[index]!,
         );
         if (actor === null) continue;
         this.lostActors[this.reactionState.lostItemCount] = actor;
         this.reactionState.lostItemCount += 1;
       }
-    } else if (selectedId !== null && this.itemActor?.instanceId !== selectedId) {
-      this.borrowItemActor(selectedId);
     }
 
     sampleWhirlpoolReaction(this.reactionState, 0, this.sample);
@@ -347,18 +326,12 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       } else if (active.kind === 'item') {
         this.cameraLook?.apply(0, 0);
         sampleWhirlpoolItemUse(active.choiceId, progress, this.sample);
-        sampleEventItemUse(
-          active.itemUseContext, active.itemId, progress, this.itemUseSample,
-        );
       } else {
         this.cameraLook?.apply(0, 0);
         sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
         this.applyReactionPoses();
       }
       this.applySample(time);
-      if (active.kind === 'item') {
-        this.environment.itemUseAdapter.apply(this.itemUseSample);
-      }
       if (progress === 1) this.finishActive();
       return;
     }
@@ -374,18 +347,12 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     } else if (this.active.kind === 'item') {
       this.cameraLook?.apply(0, 0);
       sampleWhirlpoolItemUse(this.active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        this.active.itemUseContext, this.active.itemId, 1, this.itemUseSample,
-      );
     } else {
       this.cameraLook?.apply(0, 0);
       sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
       this.applyReactionPoses();
     }
     this.applySample(0);
-    if (this.active.kind === 'item') {
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
-    }
     this.finishActive();
   }
 
@@ -396,7 +363,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   clear(): void {
     if (this.disposed) return;
     this.cancelActive();
-    this.releaseItemActor();
     this.releaseLostActors(false);
     this.resetPresentationState();
     this.cameraLook?.restore();
@@ -406,14 +372,10 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.disposed = true;
     const active = this.active;
-    const itemActor = this.itemActor;
     this.active = null;
-    this.itemActor = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     this.cameraLook?.restore();
     resolveCancelledEventAnimation(active);
     runCleanupSteps([
-      () => itemActor?.release(),
       () => this.releaseLostActors(false),
       () => this.resetPresentationState(),
       () => this.boatRoot.clear(),
@@ -422,17 +384,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       () => this.worldRoot.removeFromParent(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
-  }
-
-  private borrowItemActor(instanceId: ItemInstanceId): boolean {
-    this.itemActor = borrowSupplyActor(
-      this.itemActor, this.environment.supplies, instanceId,
-    );
-    return this.itemActor !== null;
-  }
-
-  private releaseItemActor(): void {
-    this.itemActor = releaseSupplyActor(this.itemActor);
   }
 
   private releaseLostActors(onNextSync: boolean): void {
@@ -450,12 +401,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.active = null;
     if (active.kind === 'item') {
       sampleWhirlpoolItemUse(active.choiceId, 1, this.sample);
-      sampleEventItemUse(
-        active.itemUseContext, active.itemId, 1, this.itemUseSample,
-      );
       this.applySample(0);
-      this.environment.itemUseAdapter.apply(this.itemUseSample);
-      this.environment.itemUseAdapter.clear();
       this.cameraLook?.apply(0, 0);
       this.applySample(0);
       active.resolve(true);
@@ -468,7 +414,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
-    if (active?.kind === 'item') this.environment.itemUseAdapter.clear();
     resolveCancelledEventAnimation(active);
   }
 
@@ -556,27 +501,8 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     }
   }
 
-  private applyItemPose(): void {
-    const actor = this.itemActor;
-    if (actor === null) return;
-    const pose = this.itemPose;
-    pose.x = this.sample.itemX;
-    pose.y = this.sample.itemY;
-    pose.z = this.sample.itemZ;
-    pose.yaw = this.sample.itemYaw;
-    pose.pitch = this.sample.itemPitch;
-    pose.roll = this.sample.itemRoll;
-    pose.scaleX = this.sample.itemScaleX;
-    pose.scaleY = this.sample.itemScaleY;
-    pose.scaleZ = this.sample.itemScaleZ;
-    actor.applyPose(pose);
-  }
-
   private applyReactionPoses(): void {
-    if (this.reactionState.lostItemCount === 0) {
-      this.applyItemPose();
-      return;
-    }
+    if (this.reactionState.lostItemCount === 0) return;
     for (let index = 0; index < this.reactionState.lostItemCount; index += 1) {
       const actor = this.lostActors[index];
       if (actor === null || actor === undefined) continue;

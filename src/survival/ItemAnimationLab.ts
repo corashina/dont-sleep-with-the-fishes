@@ -26,7 +26,7 @@ export const ITEM_ANIMATION_LAB_USES: Readonly<Record<ItemId, ItemAnimationLabUs
     umbrella: Object.freeze({ eventId: 'shower-night', choiceId: 'umbrella' }),
     swimRing: Object.freeze({ eventId: 'whirlpool', choiceId: 'swimRing' }),
     flashlight: Object.freeze({ eventId: 'death-stare', choiceId: 'flashlight' }),
-    harpoonGun: Object.freeze({ eventId: 'snatcher', choiceId: 'harpoonGun' }),
+    shotgun: Object.freeze({ eventId: 'snatcher', choiceId: 'shotgun' }),
     energyBar: Object.freeze({ eventId: 'flowers', choiceId: 'energyBar' }),
     captainWhiskers: Object.freeze({ eventId: 'flowers', choiceId: 'captainWhiskers' }),
   });

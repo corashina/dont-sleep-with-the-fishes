@@ -97,8 +97,8 @@ const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
   Object.freeze({
     spyglass: 'flashlight',
     flashlight: 'spyglass',
-    flareGun: 'harpoonGun',
-    harpoonGun: 'flareGun',
+    flareGun: 'shotgun',
+    shotgun: 'flareGun',
     scubaSet: 'medicalKit',
     medicalKit: 'scubaSet',
     fishingNet: 'bucket',

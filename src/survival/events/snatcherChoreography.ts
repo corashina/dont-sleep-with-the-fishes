@@ -10,7 +10,7 @@ export type SnatcherItemEffectKind =
   | 'telescope-club'
   | 'ring-throw'
   | 'late-net'
-  | 'harpoon-recoil';
+  | 'shotgun-recoil';
 
 export interface SnatcherReactionState {
   readonly targetLost: boolean;
@@ -147,7 +147,7 @@ export function sampleSnatcherItemUse(
     choiceId !== 'spyglass'
     && choiceId !== 'swimRing'
     && choiceId !== 'fishingNet'
-    && choiceId !== 'harpoonGun'
+    && choiceId !== 'shotgun'
   ) {
     return false;
   }
@@ -198,7 +198,7 @@ export function sampleSnatcherItemUse(
       output.effectKind = 'late-net';
       break;
     }
-    case 'harpoonGun':
+    case 'shotgun':
       output.recoilStrength = action;
       output.itemX = 0.84 * lift - action * 0.32;
       output.itemY = 0.64 * lift + action * 0.08;
@@ -207,7 +207,7 @@ export function sampleSnatcherItemUse(
       output.itemPitch = -0.18 * lift + action * 0.3;
       output.itemRoll = action * 0.15;
       output.effectStrength = action;
-      output.effectKind = 'harpoon-recoil';
+      output.effectKind = 'shotgun-recoil';
       output.creatureX = action * 0.16;
       output.creatureRoll -= action * 0.12;
       break;

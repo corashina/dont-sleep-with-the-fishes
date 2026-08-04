@@ -40,7 +40,7 @@ import { normalizeLongestDimensionTemplate } from './modelValidation';
 export { geometryTriangles } from './modelValidation';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import {
-  CAPTAIN_WHISKERS_IDLE_CLIP,
+  CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
   KeyedPropAnimation,
   type PropAnimation,
 } from './PropAnimation';
@@ -198,9 +198,12 @@ function validateAnimations(
   }
   if (
     id === 'captainWhiskers'
-    && !animations.some((clip) => clip.name === CAPTAIN_WHISKERS_IDLE_CLIP)
+    && !animations.some((clip) => clip.name === CAPTAIN_WHISKERS_SITTING_IDLE_CLIP)
   ) {
-    throw modelValidationError(id, `required ${CAPTAIN_WHISKERS_IDLE_CLIP} clip is missing`);
+    throw modelValidationError(
+      id,
+      `required ${CAPTAIN_WHISKERS_SITTING_IDLE_CLIP} clip is missing`,
+    );
   }
   return animations;
 }
@@ -346,7 +349,9 @@ export class PropModelLibrary {
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
     const root = this.createRoot(instance, template);
     const clip = instance.type === 'captainWhiskers'
-      ? template.animations.find((candidate) => candidate.name === CAPTAIN_WHISKERS_IDLE_CLIP)
+      ? template.animations.find(
+        (candidate) => candidate.name === CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
+      )
       : undefined;
     const animation = clip === undefined
       ? null

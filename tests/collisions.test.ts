@@ -447,6 +447,9 @@ describe('player movement helpers', () => {
         layoutTarget('wheelhouse-port-door-inside'),
         layoutTarget('wheelhouse-port-door-outside'),
       ], ship.colliders);
+      const workroomPortAft = laneCenter('workroom-loop-port-aft');
+      const workroomStarboardAft = laneCenter('workroom-loop-starboard-aft');
+      const workroomAftCross = laneCenter('workroom-loop-aft-cross');
       const end = followPath(start, [
         new Vector3(6.2, PLAYER_Y, 22),
         layoutTarget('bow-starboard'),
@@ -463,6 +466,9 @@ describe('player movement helpers', () => {
         layoutTarget('storage-port-door-outside'),
         layoutTarget('storage-port-door-inside'),
         layoutTarget('workroom-loop-port'),
+        workroomPortAft,
+        workroomAftCross,
+        workroomStarboardAft,
         layoutTarget('workroom-loop-starboard'),
         layoutTarget('storage-starboard-door-inside'),
         layoutTarget('storage-starboard-door-outside'),
@@ -493,17 +499,22 @@ describe('player movement helpers', () => {
         point(0.35, 17.9), point(3, 17.9), point(0.35, 17.9), wheelhousePort,
       ], ship.colliders);
       followPath(wheelhousePort, [
-        point(0.35, 21.1), point(1.4, 21.1), wheelhouseStarboard,
+        laneCenter('wheelhouse-loop-forward'), wheelhouseStarboard,
       ], ship.colliders);
 
-      const workroomMiddle = point(0, -13.8);
-      followPath(workroomMiddle, [
-        point(-0.7, -13.8), point(-0.7, -16.5), point(0.7, -16.5),
-        point(0.7, -13.8), workroomMiddle,
-      ], ship.colliders);
-      followPath(workroomMiddle, [
-        point(-0.7, -13.8), point(-0.7, -11.3), point(0.7, -11.3),
-        point(0.7, -13.8), workroomMiddle,
+      const workroomPortAft = laneCenter('workroom-loop-port-aft');
+      const workroomStarboardAft = laneCenter('workroom-loop-starboard-aft');
+      const workroomAftCross = laneCenter('workroom-loop-aft-cross');
+      const workroomPortForward = laneCenter('workroom-loop-port-forward');
+      const workroomStarboardForward = laneCenter('workroom-loop-starboard-forward');
+      const workroomForwardCross = laneCenter('workroom-loop-forward-cross');
+      followPath(workroomForwardCross, [
+        workroomPortForward,
+        workroomPortAft,
+        workroomAftCross,
+        workroomStarboardAft,
+        workroomStarboardForward,
+        workroomForwardCross,
       ], ship.colliders);
     } finally {
       ship.dispose();

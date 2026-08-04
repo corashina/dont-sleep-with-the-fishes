@@ -800,7 +800,7 @@ describe('launchGame', () => {
       () => Promise.resolve(models),
       {
         createGame: () => {
-          throw new ShipItemPlacementError('harpoonGun-1');
+          throw new ShipItemPlacementError('shotgun-1');
         },
       },
     ));
@@ -808,7 +808,7 @@ describe('launchGame', () => {
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('SHIP SETUP FAILED');
     expect(mount.textContent).toContain('Unable to prepare Dorothy');
-    expect(mount.textContent).toContain('Unable to place ship item: harpoonGun-1');
+    expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 

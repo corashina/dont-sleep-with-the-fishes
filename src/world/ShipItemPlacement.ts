@@ -1,4 +1,4 @@
-import { Box3, Euler, Vector3 } from 'three';
+import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
@@ -18,7 +18,10 @@ import {
   type ShipFurnitureKind,
   type ShipRouteMetric,
 } from './ShipLayout';
-import { ITEM_MODEL_SPECS } from './itemModelManifest';
+import {
+  CAPTAIN_WHISKERS_SUPPORT_LIFT,
+  ITEM_MODEL_SPECS,
+} from './itemModelManifest';
 
 export interface ShipItemSurface {
   readonly id: string;
@@ -95,9 +98,9 @@ const REGION_IDS = Object.freeze([...SCAVENGE_REGION_IDS]);
 export const SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE = Object.freeze({
   'cannedFood-1': 'cargo-crate-aft-port:top',
   'cannedFood-2': 'workroom-crate-center-starboard:top',
-  'cannedFood-3': 'stern-box-starboard-center:top',
+  'cannedFood-3': 'stern-crate-starboard:top',
   'baitTin-1': 'storage-shelf-forward:shelf-left',
-  'baitTin-2': 'bow-barrel-port-center:top',
+  'baitTin-2': 'chart-table-forward:top-left',
   'ductTape-1': 'stern-barrel-port-center:top',
   'compass-1': 'bow-box-starboard-center:top',
   'map-1': 'cabin-bunk-port:rest',
@@ -111,9 +114,9 @@ export const SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE = Object.freeze({
   'bottledPaper-1': 'chart-table-port:top-left',
   'umbrella-1': 'workbench-starboard:top-left',
   'swimRing-1': 'cabin-desk-starboard-aft:top-left',
-  'flashlight-1': 'bow-crate-port:top',
-  'harpoonGun-1': 'workroom-crate-center-port:top',
-  'captainWhiskers-1': 'cargo-rod-rack-port:rod',
+  'flashlight-1': 'chart-table-forward:top-far-right',
+  'shotgun-1': 'workroom-crate-center-port:top',
+  'captainWhiskers-1': 'cargo-crate-forward-port:top',
 } satisfies Record<ScavengeItemInstanceId, string>);
 
 const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
@@ -122,7 +125,7 @@ const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
   'cannedFood-3': 'stern-barrel-port-center:top',
   'baitTin-1': 'workroom-crate-center-starboard:top',
   'baitTin-2': 'bow-box-starboard-center:top',
-  'ductTape-1': 'stern-box-starboard-center:top',
+  'ductTape-1': 'stern-crate-port:top',
   'compass-1': 'chart-table-port:top-far-right',
   'map-1': 'cabin-bunk-port:rest',
   'medicalKit-1': 'cargo-crate-aft-starboard:top',
@@ -132,24 +135,24 @@ const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
   'flareGun-1': 'bow-crate-starboard:top',
   'scubaSet-1': 'cargo-crate-forward-starboard:top',
   'anchor-1': 'cargo-rack-port:top-left',
-  'bottledPaper-1': 'bow-crate-port:top',
+  'bottledPaper-1': 'chart-table-forward:top-left',
   'umbrella-1': 'workbench-starboard:top-left',
   'swimRing-1': 'cabin-desk-starboard-aft:top-left',
-  'flashlight-1': 'bow-barrel-port-center:top',
-  'harpoonGun-1': 'workroom-crate-center-port:top',
-  'captainWhiskers-1': 'cargo-rod-rack-port:rod',
+  'flashlight-1': 'chart-table-forward:top-far-right',
+  'shotgun-1': 'workroom-crate-center-port:top',
+  'captainWhiskers-1': 'cargo-crate-forward-port:top',
 } satisfies Record<ScavengeItemInstanceId, string>);
 
 const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
   {
-    'baitTin-2': 'bow-barrel-port-center:top',
+    'baitTin-2': 'chart-table-forward:top-left',
     'compass-1': 'bow-box-starboard-center:top',
     'spyglass-1': 'chart-table-port:top-far-right',
     'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'bow-crate-port:top',
+    'flashlight-1': 'chart-table-forward:top-far-right',
   },
   {
-    'cannedFood-3': 'stern-box-starboard-center:top',
+    'cannedFood-3': 'stern-crate-starboard:top',
     'ductTape-1': 'stern-barrel-port-center:top',
   },
   {
@@ -157,26 +160,26 @@ const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
     'baitTin-1': 'storage-shelf-forward:shelf-left',
   },
   {
-    'cannedFood-3': 'stern-box-starboard-center:top',
-    'baitTin-2': 'bow-barrel-port-center:top',
+    'cannedFood-3': 'stern-crate-starboard:top',
+    'baitTin-2': 'chart-table-forward:top-left',
     'ductTape-1': 'stern-barrel-port-center:top',
     'compass-1': 'bow-box-starboard-center:top',
     'spyglass-1': 'chart-table-port:top-far-right',
     'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'bow-crate-port:top',
+    'flashlight-1': 'chart-table-forward:top-far-right',
   },
   {
     'cannedFood-2': 'workroom-crate-center-starboard:top',
     'baitTin-1': 'storage-shelf-forward:shelf-left',
-    'baitTin-2': 'bow-barrel-port-center:top',
+    'baitTin-2': 'chart-table-forward:top-left',
     'compass-1': 'bow-box-starboard-center:top',
     'spyglass-1': 'chart-table-port:top-far-right',
     'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'bow-crate-port:top',
+    'flashlight-1': 'chart-table-forward:top-far-right',
   },
   {
     'cannedFood-2': 'workroom-crate-center-starboard:top',
-    'cannedFood-3': 'stern-box-starboard-center:top',
+    'cannedFood-3': 'stern-crate-starboard:top',
     'baitTin-1': 'storage-shelf-forward:shelf-left',
     'ductTape-1': 'stern-barrel-port-center:top',
   },
@@ -412,6 +415,7 @@ function shuffled<T>(values: readonly T[], random: () => number): T[] {
 interface SurfaceFit {
   readonly bounds: Box3;
   readonly position: Vector3;
+  readonly rotation: Euler;
   readonly scale: number;
 }
 
@@ -421,9 +425,27 @@ interface PlacementCandidate {
   readonly standingPoint: Vector3;
 }
 
+function scavengingRestingRotation(itemId: ItemId, surfaceRotation: Euler): Euler {
+  if (itemId === 'anchor' || itemId === 'ductTape') {
+    const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
+    const lyingOrientation = new Quaternion().setFromAxisAngle(
+      new Vector3(1, 0, 0),
+      Math.PI / 2,
+    );
+    return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
+  }
+  const rotation = surfaceRotation.clone();
+  if (itemId === 'umbrella') rotation.z -= Math.PI / 4;
+  return rotation;
+}
+
 function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | undefined {
-  const bounds = orientedItemBounds(itemId, surface.rotation);
-  const size = bounds.getSize(new Vector3());
+  const rotation = scavengingRestingRotation(itemId, surface.rotation);
+  const fitBounds = orientedItemBounds(
+    itemId,
+    itemId === 'anchor' || itemId === 'ductTape' ? rotation : surface.rotation,
+  );
+  const size = fitBounds.getSize(new Vector3());
   const measuredScale = Math.min(
     1,
     surface.footprint.width / size.x,
@@ -432,7 +454,14 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   );
   const scale = measuredScale >= 1 - EPSILON ? 1 : measuredScale;
   if (!Number.isFinite(scale) || scale < MIN_UNIFORM_SCALE - EPSILON) return undefined;
+  const bounds = orientedItemBounds(itemId, rotation);
   const position = surface.position.clone();
+  if (itemId === 'captainWhiskers') {
+    position.y += CAPTAIN_WHISKERS_SUPPORT_LIFT * scale;
+  }
+  if (itemId === 'umbrella' && surface.id === 'workbench-starboard:top-left') {
+    position.z += 0.08;
+  }
   position.y -= bounds.min.y * scale;
   const itemCenter = bounds.getCenter(new Vector3()).multiplyScalar(scale).add(position);
   if (!surface.standingPoints.some((point) => {
@@ -440,7 +469,7 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
     interactionPoint.y += STANDING_EYE_HEIGHT;
     return interactionPoint.distanceTo(itemCenter) <= MAX_INTERACTION_DISTANCE + EPSILON;
   })) return undefined;
-  return { bounds, position, scale };
+  return { bounds, position, rotation, scale };
 }
 
 function surfaceFitAvoidsBlockers(
@@ -451,7 +480,7 @@ function surfaceFitAvoidsBlockers(
 ): boolean {
   const itemBounds = shipItemTransformBounds(itemId, {
     position: fit.position,
-    rotation: surface.rotation,
+    rotation: fit.rotation,
     scale: fit.scale,
   });
   return blockers.every((blocker) => {
@@ -509,7 +538,7 @@ function transformFor(
     branch: candidate.surface.branch,
     standingPoint: candidate.standingPoint.clone(),
     position: candidate.fit.position.clone(),
-    rotation: candidate.surface.rotation.clone(),
+    rotation: candidate.fit.rotation.clone(),
     scale: candidate.fit.scale,
     placementSource,
   };
@@ -786,7 +815,8 @@ function fallbackAssignment(
     if (!surface) throw new Error(`Fallback surface does not exist: ${surfaceId}`);
     const fit = surfaceFit(surface, instance.type);
     if (!fit) {
-      const size = orientedItemBounds(instance.type, surface.rotation).getSize(new Vector3());
+      const rotation = scavengingRestingRotation(instance.type, surface.rotation);
+      const size = orientedItemBounds(instance.type, rotation).getSize(new Vector3());
       throw new Error(
         `Fallback surface does not physically fit ${instance.instanceId}: ${surfaceId}; item ${size.x},${size.y},${size.z}; surface ${surface.footprint.width},${surface.clearanceHeight},${surface.footprint.depth}`,
       );

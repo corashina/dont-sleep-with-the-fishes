@@ -25,7 +25,7 @@ $modelIds = @(
   'umbrella'
   'swimRing'
   'flashlight'
-  'harpoonGun'
+  'shotgun'
   'energyBar'
   'fishingRod'
   'lantern'

@@ -196,8 +196,8 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sha256: '4DFF38A60AA716D8E7EDD7828C5B3C4E4685DBC983B40E0D400399FBFEFB6C6E',
     sourceTriangles: 508, downloadedOn: '2026-07-26',
   }),
-  harpoonGun: source({
-    id: 'harpoonGun', publicId: 'neEjwx9bBJ',
+  shotgun: source({
+    id: 'shotgun', publicId: 'neEjwx9bBJ',
     resourceId: 'da83f4f9-7a4e-4739-9033-79d688aa3b5e',
     title: 'Rifle', creator: 'Quaternius', license: 'CC0 1.0',
     sha256: '44A923B9358CA07247F125521A85BCE03654AE802984F6333B876C75AE2D0507',

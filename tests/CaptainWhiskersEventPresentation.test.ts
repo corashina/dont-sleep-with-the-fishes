@@ -270,6 +270,21 @@ describe('CaptainWhiskersEventPresentation', () => {
     state.propModels.dispose();
   });
 
+  it.each(['sick-companion', 'guarded-sleep'] as const)(
+    'removes the shared-pose aim target when %s disposes',
+    (eventId) => {
+      const state = setup(eventId);
+
+      expect(state.presentation.itemAimTarget.parent).toBe(state.poseRoot);
+      state.presentation.dispose();
+
+      expect(state.presentation.itemAimTarget.parent).toBeNull();
+      expect(state.poseRoot.getObjectByName(`${eventId}-item-aim-target`)).toBeUndefined();
+      state.companion.dispose();
+      state.propModels.dispose();
+    },
+  );
+
   it.each(['shadow-figure', 'sea-watcher'] as const)(
     'captures the live sick pose before staging %s',
     (eventId) => {
@@ -371,5 +386,26 @@ describe('CaptainWhiskersEventPresentation', () => {
     materialDispose.mockRestore();
     companion.dispose();
     propModels.dispose();
+  });
+
+  it('removes a shared-pose aim target when construction fails after attachment', () => {
+    const root = new Group();
+    const poseRoot = new Group();
+    const headRoot = new Group();
+    poseRoot.name = 'captain-whiskers-pose';
+    headRoot.name = 'captain-whiskers-head-pose';
+    root.add(poseRoot, headRoot);
+    const failure = new Error('aim target attachment failed');
+    const add = poseRoot.add.bind(poseRoot);
+    poseRoot.add = (...objects) => {
+      add(...objects);
+      throw failure;
+    };
+
+    expect(() => new CaptainWhiskersEventPresentation('sick-companion', {
+      captainWhiskers: { root },
+    } as DedicatedEventEnvironment)).toThrow(failure);
+
+    expect(poseRoot.getObjectByName('sick-companion-item-aim-target')).toBeUndefined();
   });
 });

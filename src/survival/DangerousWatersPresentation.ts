@@ -26,22 +26,9 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import type { ItemId, ItemInstanceId } from '../game/ItemState';
+import type { ItemInstanceId } from '../game/ItemState';
 import { clamp01, smoothstep, type TimedAnimation } from './animationMath';
-import {
-  borrowSupplyActor,
-  releaseSupplyActor,
-  type BoatSupplyDisplay,
-  type BorrowedSupplyActor,
-} from './BoatSupplyDisplay';
-import {
-  createEventItemUseSample,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
-} from './eventItemUseChoreography';
 import { scaleEventItemDuration } from './eventItemTiming';
-import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { ActionOutcome } from './survivalTypes';
 
 export interface DangerousWatersBoatReaction {
@@ -54,11 +41,6 @@ export interface DangerousWatersBoatReaction {
   lightScale: number;
   supplyRoll: number;
   supplyLift: number;
-}
-
-export interface DangerousWatersPresentationDependencies {
-  readonly supplyDisplay: Pick<BoatSupplyDisplay, 'borrowEventActor' | 'itemType'>;
-  readonly itemUseAdapter: EventItemUseAdapter;
 }
 
 type DangerousWatersChoiceId = 'map' | 'compass' | 'sleep';
@@ -336,6 +318,7 @@ function createLurker(materials: DangerousWatersMaterials): Group {
 
 export class DangerousWatersPresentation {
   readonly root = new Group();
+  readonly itemAimTarget = new Group();
   private readonly passage = new Group();
   private readonly lurker: Group;
   private readonly foam = new Group();
@@ -346,7 +329,6 @@ export class DangerousWatersPresentation {
   private readonly ownedMaterials = new Set<Material>();
   private readonly foamMembers: PoolMember[] = [];
   private readonly fragmentMembers: PoolMember[] = [];
-  private readonly sharedItemSample = createEventItemUseSample();
   private readonly boatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -365,9 +347,6 @@ export class DangerousWatersPresentation {
     normal: { x: 0, y: 1, z: 0 },
   };
   private activeMotion: ActiveMotion | null = null;
-  private borrowedActor: BorrowedSupplyActor | null = null;
-  private itemId: ItemId | null = null;
-  private itemUseContext: EventItemUseContext | null = null;
   private heldKind: MotionKind = 'reveal';
   private heldProgress = 0;
   private heldChoiceId: DangerousWatersChoiceId | null = null;
@@ -375,7 +354,7 @@ export class DangerousWatersPresentation {
   private lastTime = 0;
   private disposed = false;
 
-  constructor(private readonly dependencies: DangerousWatersPresentationDependencies) {
+  constructor() {
     this.root.name = 'dangerous-waters-presentation';
     this.root.visible = false;
     this.passage.name = 'dangerous-waters-passage';
@@ -441,6 +420,9 @@ export class DangerousWatersPresentation {
       )
     ));
     this.lurker = createLurker(this.materials);
+    this.itemAimTarget.name = 'dangerous-waters-item-aim-target';
+    this.itemAimTarget.position.set(0, 0.32, 0.72);
+    this.lurker.add(this.itemAimTarget);
     this.passage.add(
       this.foregroundRock,
       portRock,
@@ -486,31 +468,12 @@ export class DangerousWatersPresentation {
     return this.startMotion('choice', choiceId, CHOICE_DURATION);
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (
       this.disposed
       || (choiceId !== 'map' && choiceId !== 'compass')
     ) return Promise.resolve(false);
     this.cancelActiveMotion();
-    const itemId = this.dependencies.supplyDisplay.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(
-      'dangerous-waters',
-      choiceId,
-      itemId,
-    );
-    if (itemUseContext === null) return Promise.resolve(false);
-    this.borrowedActor = borrowSupplyActor(
-      this.borrowedActor,
-      this.dependencies.supplyDisplay,
-      instanceId,
-    );
-    if (this.borrowedActor === null) return Promise.resolve(false);
-    this.itemId = itemId;
-    this.itemUseContext = itemUseContext;
-    this.dependencies.itemUseAdapter.begin(this.borrowedActor);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.sharedItemSample);
-    this.dependencies.itemUseAdapter.apply(this.sharedItemSample);
     this.resultBaseChoiceId = null;
     return new Promise((resolve) => {
       this.beginMotion(
@@ -580,7 +543,6 @@ export class DangerousWatersPresentation {
     this.heldKind = motion.kind === 'choice' ? 'reveal' : motion.kind;
     this.heldProgress = 1;
     this.applyPose(this.heldKind, 1, null, this.lastTime);
-    if (motion.itemUse) this.finishItemUse();
     motion.resolve();
   }
 
@@ -597,7 +559,6 @@ export class DangerousWatersPresentation {
     motion.elapsed = Math.min(motion.duration, motion.elapsed + Math.max(0, delta));
     const progress = motion.elapsed / motion.duration;
     this.applyPose(motion.kind, progress, motion.choiceId, time);
-    if (motion.itemUse) this.applyItemUse(progress);
     if (progress < 1) return;
 
     this.activeMotion = null;
@@ -605,7 +566,6 @@ export class DangerousWatersPresentation {
     this.heldProgress = 1;
     this.heldChoiceId = motion.kind === 'choice' ? motion.choiceId : null;
     this.applyPose(this.heldKind, 1, this.heldChoiceId, time);
-    if (motion.itemUse) this.finishItemUse();
     motion.resolve();
   }
 
@@ -863,25 +823,6 @@ export class DangerousWatersPresentation {
   private cancelActiveMotion(): void {
     const motion = this.activeMotion;
     this.activeMotion = null;
-    if (motion?.itemUse) this.finishItemUse();
     motion?.cancel();
-  }
-
-  private applyItemUse(progress: number): void {
-    if (this.itemId === null || this.itemUseContext === null) return;
-    sampleEventItemUse(
-      this.itemUseContext,
-      this.itemId,
-      progress,
-      this.sharedItemSample,
-    );
-    this.dependencies.itemUseAdapter.apply(this.sharedItemSample);
-  }
-
-  private finishItemUse(): void {
-    this.dependencies.itemUseAdapter.clear();
-    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
-    this.itemId = null;
-    this.itemUseContext = null;
   }
 }

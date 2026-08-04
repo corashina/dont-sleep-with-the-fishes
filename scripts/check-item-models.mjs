@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import {
-  CAPTAIN_WHISKERS_IDLE_CLIP,
+  CAPTAIN_WHISKERS_FLOOR_NODE,
+  CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
   CAPTAIN_WHISKERS_SOURCE,
 } from './captain-whiskers-model.mjs';
 import { POLY_PIZZA_MODEL_SOURCES } from './poly-pizza-models.mjs';
@@ -16,7 +17,7 @@ export const LIBRARY_LIMIT = 40_000;
 export const COLLECTIBLE_ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
-  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'harpoonGun',
+  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'captainWhiskers',
 ];
 export const EQUIPMENT_MODEL_IDS = ['fishingRod'];
@@ -29,6 +30,7 @@ export const MODEL_IDS = [
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function modelTriangleLimit(itemId) {
+  if (itemId === 'captainWhiskers') return CAPTAIN_WHISKERS_SOURCE.maxTriangles;
   return POLY_PIZZA_MODEL_SOURCES[itemId]?.maxTriangles ?? MODEL_LIMIT;
 }
 
@@ -168,6 +170,14 @@ async function inspectModel(filePath) {
   const bytes = await readFile(filePath);
   validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
   const document = await io.read(filePath);
+  if (
+    filePath.endsWith('captainWhiskers.glb')
+    && document.getRoot().listNodes().some(
+      (node) => node.getName() === CAPTAIN_WHISKERS_FLOOR_NODE,
+    )
+  ) {
+    throw new Error(`${filePath}: contains the Somali Cat display floor`);
+  }
   let triangles = 0;
   for (const mesh of document.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
@@ -216,17 +226,15 @@ function verifyLedgerRow(ledger, itemId, measurement) {
       CAPTAIN_WHISKERS_SOURCE.pageUrl,
       `\`${CAPTAIN_WHISKERS_SOURCE.sourceAssetId}\``,
       `[${CAPTAIN_WHISKERS_SOURCE.license}](${CAPTAIN_WHISKERS_SOURCE.licenseUrl})`,
-      String(measurement.triangles),
+      String(CAPTAIN_WHISKERS_SOURCE.sourceTriangles),
       String(measurement.triangles),
     ];
     const actual = parseLedgerRow(rows[0]);
     if (
       actual.length !== 10
       || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
-      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.archiveSha256)
-      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.modelSha256)
-      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.textureSha256)
-      || !actual[8].includes(CAPTAIN_WHISKERS_IDLE_CLIP)
+      || !actual[8].includes(CAPTAIN_WHISKERS_SOURCE.sourceSha256)
+      || !actual[8].includes(CAPTAIN_WHISKERS_SITTING_IDLE_CLIP)
       || actual[9] !== CAPTAIN_WHISKERS_SOURCE.downloadedOn
     ) {
       throw new Error('ATTRIBUTION.md: captainWhiskers row does not match the expected record');

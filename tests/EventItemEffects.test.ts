@@ -25,7 +25,7 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
   chain: 'event-item-chain',
   umbrella: 'event-item-umbrella',
   flashlight: 'event-item-flashlight-beam',
-  harpoon: 'event-item-harpoon',
+  'shotgun-smoke': 'event-item-shotgun-smoke',
 };
 
 const actionEffects = [
@@ -35,7 +35,7 @@ const actionEffects = [
   ['anchor-drop', 'event-item-chain'],
   ['umbrella-shield', 'event-item-umbrella'],
   ['flashlight-flash', 'event-item-flashlight-beam'],
-  ['harpoon-shot', 'event-item-harpoon'],
+  ['shotgun-fire', 'event-item-shotgun-smoke'],
 ] as const satisfies readonly (readonly [EventItemUseContext, string])[];
 
 function ownedResources(root: Group): readonly (BufferGeometry | Material)[] {
@@ -57,7 +57,12 @@ describe('EventItemEffects', () => {
     expect(effects.root.getObjectByName('event-item-net')).not.toBeNull();
     expect(effects.root.getObjectByName('event-item-flare')).not.toBeNull();
     expect(effects.root.getObjectByName('event-item-flashlight-beam')).not.toBeNull();
-    expect(effects.root.getObjectByName('event-item-harpoon')).not.toBeNull();
+    const smoke = effects.root.getObjectByName('event-item-shotgun-smoke') as Group;
+    expect(smoke).not.toBeNull();
+    expect(smoke.children).toHaveLength(6);
+    smoke.children.forEach((puff) => {
+      expect(puff.name).toMatch(/^event-item-shotgun-smoke-puff-/);
+    });
     expect(effects.root.getObjectByName('event-item-binocular-mask')).not.toBeNull();
 
     effects.dispose();
@@ -186,6 +191,24 @@ describe('EventItemEffects', () => {
 
     effects.clear();
     expect(fill.intensity).toBe(0);
+    effects.dispose();
+  });
+
+  it('keeps the anchor chain full length and above the anchor', () => {
+    const effects = new EventItemEffects();
+    const actor = new Group();
+    const sample = createEventItemUseSample();
+    sample.effectKind = 'chain';
+    sample.primaryEffect = 1;
+    sample.secondaryEffect = 1;
+
+    effects.apply(sample, actor);
+
+    const chain = effects.root.getObjectByName('event-item-chain')!;
+    const links = chain.children;
+    expect(chain.scale.toArray()).toEqual([1, 1, 1]);
+    expect(links).toHaveLength(10);
+    expect(links.at(-1)!.position.y).toBeGreaterThan(links[0]!.position.y);
     effects.dispose();
   });
 

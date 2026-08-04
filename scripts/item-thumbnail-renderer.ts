@@ -22,7 +22,7 @@ const THUMBNAIL_ROTATIONS: Readonly<Partial<Record<ItemId, readonly [number, num
   bottledPaper: [0, -0.3, 0],
   umbrella: [0, -0.45, 0],
   swimRing: [-0.25, 0.3, 0],
-  harpoonGun: [0, -0.35, 0],
+  shotgun: [0, -0.35, 0],
 };
 
 function disposeClone(root: Group): void {

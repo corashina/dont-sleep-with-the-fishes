@@ -47,7 +47,7 @@ const freesoundSources = [
   ['anchorChain', 'kyles', '452577'],
   ['flashlight', 'Rudmer_Rotteveel', '457458'],
   ['flareGun', 'derplayer', '587173'],
-  ['harpoonGun', 'Lunevix', '246015'],
+  ['shotgun', 'hyperix6', '660299'],
   ['goingToSleep', 'Froey_', '644490'],
   ['yawn', 'spookymodem', '202105'],
   ['nightfall', 'DeVern', '427533'],

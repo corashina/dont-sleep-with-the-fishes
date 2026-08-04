@@ -17,7 +17,6 @@ import {
   Shape,
   ShapeGeometry,
   SphereGeometry,
-  TorusGeometry,
   Vector2,
   Vector3,
 } from 'three';
@@ -31,7 +30,7 @@ const FLARE = 'event-item-flare';
 const CHAIN = 'event-item-chain';
 const UMBRELLA = 'event-item-umbrella';
 const FLASHLIGHT = 'event-item-flashlight-beam';
-const HARPOON = 'event-item-harpoon';
+const SHOTGUN_SMOKE = 'event-item-shotgun-smoke';
 const BINOCULAR_MASK = 'event-item-binocular-mask';
 
 function clampEffect(value: number): number {
@@ -56,7 +55,7 @@ export class EventItemEffects {
   private readonly chain: EffectRoot;
   private readonly umbrella: EffectRoot;
   private readonly flashlight: EffectRoot;
-  private readonly harpoon: EffectRoot;
+  private readonly shotgunSmoke: EffectRoot;
   private readonly binocularMask: EffectRoot;
   private effectOpacity = 0;
   private readonly applyEffectOpacity = (object: Object3D): void => {
@@ -77,7 +76,7 @@ export class EventItemEffects {
     this.chain = this.createChain();
     this.umbrella = this.createUmbrella();
     [this.flashlight, this.flashlightLight] = this.createFlashlight();
-    this.harpoon = this.createHarpoon();
+    this.shotgunSmoke = this.createShotgunSmoke();
     this.binocularMask = this.createBinocularMask();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
     this.heldFillLight.name = 'event-item-held-fill';
@@ -89,7 +88,7 @@ export class EventItemEffects {
       this.chain,
       this.umbrella,
       this.flashlight,
-      this.harpoon,
+      this.shotgunSmoke,
       this.binocularMask,
     ];
     this.root.add(...this.effects, this.heldFillLight);
@@ -131,10 +130,10 @@ export class EventItemEffects {
         this.flareLight.intensity = primary * (1.8 + primary * 5.4);
         break;
       case 'chain':
+        this.root.quaternion.identity();
         this.show(this.chain, primary);
-        this.chain.position.set(0.13, -0.18 - primary * 0.75, -0.36);
-        this.chain.rotation.z = 0.1 + primary * 0.22;
-        this.chain.scale.y = 0.58 + primary * 0.72;
+        this.chain.position.set(0.02, 0.12, 0.02);
+        this.chain.rotation.z = 0.025 * secondary;
         break;
       case 'umbrella':
         this.show(this.umbrella, primary);
@@ -150,11 +149,20 @@ export class EventItemEffects {
         this.flashlightLight.intensity = primary
           * (1.1 + primary * 3.2 + secondary * 2.5);
         break;
-      case 'harpoon':
-        this.show(this.harpoon, primary);
-        this.harpoon.position.set(0.08, 0.04, -0.42 - primary * 1.2);
-        this.harpoon.rotation.set(0.02, -0.08, -0.04);
-        this.harpoon.scale.setScalar(0.84 + primary * 0.24);
+      case 'shotgun-smoke':
+        this.show(this.shotgunSmoke, primary);
+        this.shotgunSmoke.position.set(0.015, 0.025, -0.54 - secondary * 0.14);
+        this.shotgunSmoke.rotation.set(0.02, -0.04, -0.04);
+        for (let index = 0; index < this.shotgunSmoke.children.length; index += 1) {
+          const puff = this.shotgunSmoke.children[index]!;
+          const side = index % 2 === 0 ? -1 : 1;
+          const spread = secondary * (0.035 + index * 0.012);
+          puff.position.x = side * 0.006;
+          puff.position.y = side * spread + secondary * (0.02 + index * 0.006);
+          puff.position.z = -index * 0.024 - secondary * (0.06 + index * 0.018);
+          puff.rotation.z = side * (0.12 + secondary * (0.22 + index * 0.04));
+          puff.scale.setScalar(0.72 + index * 0.13 + secondary * (0.8 + index * 0.12));
+        }
         break;
       case 'binocular-mask':
         this.show(this.binocularMask, primary);
@@ -298,13 +306,16 @@ export class EventItemEffects {
   private createChain(): EffectRoot {
     const chain = new Group();
     chain.name = CHAIN;
-    const linkGeometry = new TorusGeometry(0.075, 0.016, 4, 7);
+    const linkGeometry = new CylinderGeometry(0.014, 0.018, 0.14, 5);
     const iron = new MeshStandardMaterial({ color: 0x4d4a43, roughness: 0.76, metalness: 0.66 });
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       const link = this.mesh(linkGeometry, iron, `event-item-chain-link-${index}`);
-      link.position.y = -index * 0.14;
-      link.rotation.x = Math.PI / 2;
-      link.rotation.z = index % 2 === 0 ? 0 : Math.PI / 2;
+      link.position.set(
+        Math.sin(index * 1.7) * 0.018,
+        index * 0.125,
+        -index * 0.008,
+      );
+      link.rotation.z = index % 2 === 0 ? -0.04 : 0.04;
       chain.add(link);
     }
     return chain;
@@ -354,35 +365,29 @@ export class EventItemEffects {
     return [flashlight, light];
   }
 
-  private createHarpoon(): EffectRoot {
-    const harpoon = new Group();
-    harpoon.name = HARPOON;
-    const shaft = this.mesh(
-      new CylinderGeometry(0.025, 0.032, 1.12, 6),
-      new MeshStandardMaterial({ color: 0x6f513b, roughness: 0.86 }),
-      'event-item-harpoon-shaft',
-    );
-    shaft.rotation.x = Math.PI / 2;
-    shaft.position.z = -0.56;
-    const point = this.mesh(
-      new ConeGeometry(0.065, 0.22, 4),
-      new MeshStandardMaterial({ color: 0x8a8980, roughness: 0.48, metalness: 0.72 }),
-      'event-item-harpoon-point',
-    );
-    point.rotation.x = -Math.PI / 2;
-    point.position.z = -1.18;
+  private createShotgunSmoke(): EffectRoot {
     const smoke = new Group();
-    smoke.name = 'event-item-harpoon-smoke';
-    const smokeGeometry = new CircleGeometry(0.06, 6);
-    const smokeMaterial = new MeshBasicMaterial({ color: 0xc4c8c0, transparent: true, opacity: 0.38, depthWrite: false });
-    for (let index = 0; index < 4; index += 1) {
-      const puff = this.mesh(smokeGeometry, smokeMaterial, `event-item-harpoon-smoke-${index}`);
-      puff.position.set((index - 1.5) * 0.055, 0.03 + index * 0.045, -0.04 - index * 0.05);
-      puff.scale.setScalar(1 + index * 0.3);
+    smoke.name = SHOTGUN_SMOKE;
+    const smokeGeometry = new SphereGeometry(0.065, 7, 5);
+    const smokeMaterial = new MeshBasicMaterial({
+      color: 0xb8b9af,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      side: 2,
+    });
+    for (let index = 0; index < 6; index += 1) {
+      const puff = this.mesh(
+        smokeGeometry,
+        smokeMaterial,
+        `event-item-shotgun-smoke-puff-${index}`,
+      );
+      puff.position.set(index % 2 === 0 ? -0.006 : 0.006, 0, -index * 0.024);
+      puff.rotation.z = index % 2 === 0 ? -0.12 : 0.12;
+      puff.scale.setScalar(0.72 + index * 0.13);
       smoke.add(puff);
     }
-    harpoon.add(shaft, point, smoke);
-    return harpoon;
+    return smoke;
   }
 
   private createBinocularMask(): EffectRoot {

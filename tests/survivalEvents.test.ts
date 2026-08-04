@@ -144,20 +144,20 @@ const EXPECTED_CHOICES = {
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'You keep sight of the tentacle.', [], [item('break', 'spyglass')])),
     choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', [], [item('lose', 'swimRing')])),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', [], [target()])),
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'harpoonGun')])),
+    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'shotgun')])),
     choice('sleep', 'Sleep', undefined, outcome(1, 'The snatched item is lost.', [], [target()])),
   ],
   'death-stare': [
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(80, 'Nothing happens.'), outcome(35, 'The flashlight is lost.', [set('energy', 1)], [item('lose', 'flashlight')])),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(40, 'Nothing happens.'), outcome(50, 'The creature attacks.', [subtract('hull', { min: 44, max: 66 }), subtract('health', 60)], [item('break', 'umbrella')])),
     choice('cannedFood', 'Use Food', 'cannedFood', outcome(66, 'You lose two food.', [subtract('food', 2)]), outcome(33, 'The creature attacks.', [subtract('food', 1), subtract('hull', { min: 33, max: 55 }), subtract('health', 50)])),
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'The harpoon is used.', [], [item('consume', 'harpoonGun')])),
+    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'The shotgun is fired.', [], [item('consume', 'shotgun')])),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', [subtract('hull', { min: 55, max: 66 }), subtract('health', 70)], [item('break', 'fishingNet')])),
     choice('sleep', 'Sleep', undefined, outcome(5, 'Nothing happens.'), outcome(85, 'The creature attacks.', [subtract('hull', { min: 44, max: 66 }), subtract('health', 60)])),
   ],
   'swarm-of-anglerfish': [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net holds the swarm back.', [], [item('break', 'fishingNet')])),
-    choice('harpoonGun', 'Use Harpoon Gun', 'harpoonGun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'harpoonGun')])),
+    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'shotgun')])),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])),
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', [subtract('bait', 2)])),
     choice('sleep', 'Sleep', undefined, outcome(65, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)]), outcome(25, 'Nothing happens.')),
@@ -404,7 +404,7 @@ describe('survival events', () => {
       { id: 'umbrella', itemId: 'umbrella', label: 'Offer Umbrella' },
     ]);
     expect(resultIds('night-trader', 'sleep')).toEqual(['trader-refuse']);
-    expect(['spyglass', 'flashlight', 'flareGun', 'harpoonGun', 'scubaSet', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'anchor', 'chest']
+    expect(['spyglass', 'flashlight', 'flareGun', 'shotgun', 'scubaSet', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'anchor', 'chest']
       .every((choiceId) => resultIds('handyman', choiceId).every((resultId) => resultId === 'handyman-reward'))).toBe(true);
     expect(event('handyman').choices.find(({ id }) => id === 'chest')).toMatchObject({
       requiredChestState: 'closed',

@@ -17,22 +17,12 @@ import {
   Texture,
   Vector3,
 } from 'three';
-import type { ItemId, ItemInstanceId } from '../game/ItemState';
+import type { ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import {
-  borrowSupplyActor,
-  releaseSupplyActor,
-  type BoatSupplyDisplay,
-  type BorrowedSupplyActor,
-} from './BoatSupplyDisplay';
-import {
-  createEventItemUseSample,
   eventItemUseDuration,
-  resolveEventItemUseContext,
-  sampleEventItemUse,
-  type EventItemUseContext,
 } from './eventItemUseChoreography';
-import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { EventModelLibrary } from './EventModelLibrary';
 import {
   sampleEventPhysicalResponsePose,
@@ -65,9 +55,6 @@ type ActiveSupernaturalAnimation =
       readonly kind: 'item';
       readonly eventId: string;
       readonly choiceId: string;
-      readonly instanceId: ItemInstanceId;
-      readonly itemId: ItemId;
-      readonly itemUseContext: EventItemUseContext;
       elapsed: number;
       readonly duration: number;
       readonly resolve: (value: boolean) => void;
@@ -311,7 +298,6 @@ export class SupernaturalEventAnimator {
     scaleY: 1,
     scaleZ: 1,
   };
-  private readonly sharedItemSample = createEventItemUseSample();
   private readonly ghostMaterial = new MeshStandardMaterial({
     color: 0xb4c9c7,
     emissive: 0x526b72,
@@ -352,14 +338,12 @@ export class SupernaturalEventAnimator {
   private readonly sirenHead: Object3D | null;
   private readonly sirenHeadBaseRotation = new Euler();
   private active: ActiveSupernaturalAnimation | null = null;
-  private borrowedActor: BorrowedSupplyActor | null = null;
   private stagedEventId: string | null = null;
   private disposed = false;
 
   constructor(
     _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
-    private readonly itemUseAdapter: EventItemUseAdapter,
     eventModels: EventModelLibrary,
     viewCamera?: Object3D,
   ) {
@@ -461,6 +445,13 @@ export class SupernaturalEventAnimator {
     return itemDuration(eventId, choiceId) !== null;
   }
 
+  itemAimTarget(eventId: string): Object3D | null {
+    if (this.disposed || this.stagedEventId !== eventId) return null;
+    if (eventId === 'ghosts') return this.ghosts[0] ?? null;
+    if (eventId === 'eerie-melody') return this.sirenTableau;
+    return null;
+  }
+
   reveal(eventId: string): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const duration = supernaturalRevealDuration(eventId);
@@ -483,38 +474,22 @@ export class SupernaturalEventAnimator {
   playItemUse(
     eventId: string,
     choiceId: string,
-    instanceId: ItemInstanceId,
+    _instanceId: ItemInstanceId,
   ): Promise<boolean> {
     if (this.disposed) return Promise.resolve(false);
     const duration = itemDuration(eventId, choiceId);
     if (duration === null) return Promise.resolve(false);
-    const itemId = this.supplyDisplay.itemType(instanceId);
-    if (itemId === null) return Promise.resolve(false);
-    const itemUseContext = resolveEventItemUseContext(eventId, choiceId, itemId);
-    if (itemUseContext === null) return Promise.resolve(false);
     this.cancelActive();
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.restoreStage();
     if (eventId === 'ghosts') this.hideGhosts();
     sampleSupernaturalItemUse(eventId, choiceId, 0, this.itemSample);
-    this.borrowedActor = borrowSupplyActor(
-      this.borrowedActor,
-      this.supplyDisplay,
-      instanceId,
-    );
-    if (this.borrowedActor === null) return Promise.resolve(false);
-    this.itemUseAdapter.begin(this.borrowedActor);
-    sampleEventItemUse(itemUseContext, itemId, 0, this.sharedItemSample);
-    this.itemUseAdapter.apply(this.sharedItemSample);
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         eventId,
         choiceId,
-        instanceId,
-        itemId,
-        itemUseContext,
         elapsed: 0,
         duration,
         resolve,
@@ -526,29 +501,31 @@ export class SupernaturalEventAnimator {
     eventId: string,
     outcome: ActionOutcome,
     response: EventPhysicalResponsePresentation | null,
+    selectedInstanceId: ItemInstanceId | null = null,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (supernaturalRevealDuration(eventId) === null) return Promise.resolve();
     this.cancelActive();
     this.stagedEventId = eventId;
     this.rememberCameraBase();
-    this.supplyDisplay.clearEventPose();
     this.restoreStage();
     if (eventId === 'ghosts') this.hideGhosts();
-    const actor = response?.actors[0];
+    const sceneResponse = response === null
+      ? null
+      : {
+          choiceId: response.choiceId,
+          actors: response.actors.filter(({ instanceId }) => instanceId !== selectedInstanceId),
+        } satisfies EventPhysicalResponsePresentation;
+    const actor = sceneResponse?.actors[0];
     if (actor !== undefined) {
-      this.releaseBorrowedActor();
-      if (!this.supplyDisplay.pinEventActor(actor.instanceId)) {
-        this.supplyDisplay.clearEventMotion();
-        return Promise.resolve();
-      }
+      this.supplyDisplay.pinEventActor(actor.instanceId);
     }
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
         eventId,
         outcome,
-        response,
+        response: sceneResponse,
         elapsed: 0,
         duration: REACTION_DURATION,
         resolve,
@@ -588,6 +565,7 @@ export class SupernaturalEventAnimator {
     this.cancelActive();
     this.stagedEventId = null;
     this.hideAll();
+    this.supplyDisplay.clearEventPose();
   }
 
   settleForVisibilityChange(): void {
@@ -651,13 +629,6 @@ export class SupernaturalEventAnimator {
     active: Extract<ActiveSupernaturalAnimation, { readonly kind: 'item' }>,
     progress: number,
   ): void {
-    sampleEventItemUse(
-      active.itemUseContext,
-      active.itemId,
-      progress,
-      this.sharedItemSample,
-    );
-    this.itemUseAdapter.apply(this.sharedItemSample);
     if (!sampleSupernaturalItemUse(
       active.eventId,
       active.choiceId,
@@ -852,10 +823,8 @@ export class SupernaturalEventAnimator {
         active.resolve();
         break;
       case 'item':
-        this.itemUseAdapter.clear();
         if (active.eventId === 'ghosts') this.hideAll();
         else this.restoreStage();
-        if (active.eventId === 'face-on-the-moon') this.releaseBorrowedActor();
         active.resolve(true);
         break;
       case 'react':
@@ -898,10 +867,7 @@ export class SupernaturalEventAnimator {
     this.active = null;
     if (active !== null) {
       this.restoreCamera();
-      if (active.kind === 'item') this.itemUseAdapter.clear();
-      this.supplyDisplay.clearEventMotion();
     }
-    this.releaseBorrowedActor();
     this.hideAll();
     if (active?.kind === 'item') {
       active.resolve(false);
@@ -910,7 +876,4 @@ export class SupernaturalEventAnimator {
     }
   }
 
-  private releaseBorrowedActor(): void {
-    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
-  }
 }

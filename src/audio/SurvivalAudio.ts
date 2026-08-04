@@ -64,14 +64,14 @@ const TOOL_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
   anchor: 'anchorChain',
   flashlight: 'flashlight',
   flareGun: 'flareGun',
-  harpoonGun: 'harpoonGun',
+  shotgun: 'shotgun',
   scubaSet: 'diveEntry',
 });
 
 const EVENT_ITEM_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
   ductTape: 'tapeRepair',
   flareGun: 'flareGun',
-  harpoonGun: 'harpoonGun',
+  shotgun: 'shotgun',
   flashlight: 'flashlight',
   anchor: 'anchorChain',
   umbrella: 'umbrella',
@@ -252,8 +252,8 @@ export class SurvivalAudio {
       this.scope.play('tapeRepair');
     } else if (eventId === 'school-of-fish') {
       this.scope.play('fishCatch');
-    } else if (choiceId === 'harpoonGun') {
-      this.scope.play('harpoonGun');
+    } else if (choiceId === 'shotgun') {
+      this.scope.play('shotgun');
     } else if (eventId === 'whirlpool' && choiceId === 'anchor') {
       this.scope.play('anchorChain');
     } else {

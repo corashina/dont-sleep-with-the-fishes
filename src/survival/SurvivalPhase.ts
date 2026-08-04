@@ -5,6 +5,7 @@ import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
+  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -734,12 +735,13 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventSelectedItem?.(instanceId);
     this.setAutomaticWeather(presentationWeatherForEvent(use.eventId));
     this.world.stageEvent?.(use.eventId);
-    this.audio.eventItem(itemType);
 
     try {
-      await (
-        this.world.playEventItemUse?.(use.eventId, use.choiceId, instanceId)
-        ?? Promise.resolve()
+      await this.playEventItemUseWithSound(
+        use.eventId,
+        use.choiceId,
+        instanceId,
+        itemType,
       );
     } catch (error) {
       this.onInvariantError(
@@ -755,6 +757,28 @@ export class SurvivalPhase implements GamePhase {
       this.eventPresentation = 'choosing';
       this.setBusy(false);
     }
+  }
+
+  private playEventItemUseWithSound(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    itemType: ItemId | undefined,
+  ): Promise<void> {
+    if (itemType === 'shotgun') {
+      return this.world.playEventItemUse?.(
+        eventId,
+        choiceId,
+        instanceId,
+        () => this.audio.eventItem(itemType),
+      ) ?? Promise.resolve();
+    }
+    if (itemType !== undefined) this.audio.eventItem(itemType);
+    return this.world.playEventItemUse?.(
+      eventId,
+      choiceId,
+      instanceId,
+    ) ?? Promise.resolve();
   }
 
   private wireUI(): void {
@@ -1215,15 +1239,16 @@ export class SurvivalPhase implements GamePhase {
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     const itemType = pending.inventory[instanceId]?.type;
-    if (itemType !== undefined) this.audio.eventItem(itemType);
     const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);
     this.ui.setEventUsing?.(instanceId);
     this.world.setEventSelectedItem?.(instanceId);
-    await (
-      this.world.playEventItemUse?.(eventId, choiceId, instanceId)
-      ?? Promise.resolve()
+    await this.playEventItemUseWithSound(
+      eventId,
+      choiceId,
+      instanceId,
+      itemType,
     );
     if (!this.isContinuationActive(generation)) return;
     if (
@@ -1579,18 +1604,14 @@ export class SurvivalPhase implements GamePhase {
     }
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      (isDedicatedEventId(eventId)
-        ? this.world.reactToEventOutcome?.(
-            eventId,
-            outcome,
-            physicalResponse,
-            presentation,
-          )
-        : this.world.reactToEventOutcome?.(
-            eventId,
-            outcome,
-            focusedResult ? choice : physicalResponse,
-          ))
+      this.world.reactToEventOutcome?.(
+        eventId,
+        outcome,
+        isDedicatedEventId(eventId)
+          ? physicalResponse
+          : focusedResult ? choice : physicalResponse,
+        presentation,
+      )
         ?? Promise.resolve(),
     ]);
     this.audio.finishEventReaction(eventId);

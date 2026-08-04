@@ -12,7 +12,7 @@ import {
 describe('ship danger layout', () => {
   it('defines the approved fixed hazard counts', () => {
     expect(SHIP_DANGER_LAYOUT.alarms).toHaveLength(3);
-    expect(SHIP_DANGER_LAYOUT.puddles).toHaveLength(5);
+    expect(SHIP_DANGER_LAYOUT.puddles).toHaveLength(16);
   });
 
   it('uses one alarm in every enclosed room', () => {
@@ -33,5 +33,27 @@ describe('ship danger layout', () => {
 
   it('validates against current rooms, doors, and evacuation bounds', () => {
     expect(() => validateShipDangerLayout(SHIP_DANGER_LAYOUT, SHIP_LAYOUT)).not.toThrow();
+  });
+
+  it('rejects a cargo puddle that crosses the rail', () => {
+    const invalid = {
+      ...SHIP_DANGER_LAYOUT,
+      puddles: SHIP_DANGER_LAYOUT.puddles.map((puddle) => puddle.id === 'cargo-port'
+        ? { ...puddle, size: [8, puddle.size[1]] as const }
+        : puddle),
+    };
+    expect(() => validateShipDangerLayout(invalid, SHIP_LAYOUT))
+      .toThrow(/cargo-port puddle crosses the cargo rail/i);
+  });
+
+  it('rejects an indoor puddle that crosses a wall', () => {
+    const invalid = {
+      ...SHIP_DANGER_LAYOUT,
+      puddles: SHIP_DANGER_LAYOUT.puddles.map((puddle) => puddle.id === 'crew-aft'
+        ? { ...puddle, position: [puddle.position[0], puddle.position[1], 4.5] as const }
+        : puddle),
+    };
+    expect(() => validateShipDangerLayout(invalid, SHIP_LAYOUT))
+      .toThrow(/crew-aft puddle crosses the crewCabin walls/i);
   });
 });

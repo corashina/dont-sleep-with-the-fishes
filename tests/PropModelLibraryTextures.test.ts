@@ -17,7 +17,7 @@ import {
 } from 'three';
 import type { ItemId } from '../src/game/ItemState';
 import type { EventModelId } from '../src/world/eventModelManifest';
-import { CAPTAIN_WHISKERS_IDLE_CLIP } from '../src/world/PropAnimation';
+import { CAPTAIN_WHISKERS_SITTING_IDLE_CLIP } from '../src/world/PropAnimation';
 import {
   ItemModelLoadError,
   PropModelLibrary,
@@ -118,7 +118,7 @@ describe('PropModelLibrary texture ownership', () => {
           throw new Error('optional island missing');
         }
         const animations = url.includes('/items/captainWhiskers.glb')
-          ? [new AnimationClip(CAPTAIN_WHISKERS_IDLE_CLIP, 1, [
+          ? [new AnimationClip(CAPTAIN_WHISKERS_SITTING_IDLE_CLIP, 1, [
             new NumberKeyframeTrack('.rotation[x]', [0, 1], [0, 0.1]),
           ])]
           : [];

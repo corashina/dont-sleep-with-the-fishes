@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type Material, Mesh, PointLight, Vector3 } from 'three';
+import { type Material, Mesh, PointLight, ShapeGeometry, Vector3 } from 'three';
 import {
   createShipDangerState,
   sampleShipDangerStateInto,
@@ -23,7 +23,7 @@ describe('ship danger effects', () => {
   it('constructs only alarms and puddles below one ship root', () => {
     const effects = new ShipDangerEffects();
     expect(effects.root.name).toBe('ship-danger-effects');
-    expect(effects.snapshotForTest()).toEqual({ alarms: 3, puddles: 5 });
+    expect(effects.snapshotForTest()).toEqual({ alarms: 3, puddles: 16 });
     expect(effects.root.getObjectByName('ship-danger-smoke')).toBeUndefined();
     expect(effects.root.getObjectByName('ship-danger-leak:crew-starboard')).toBeUndefined();
     expect(effects.root.getObjectByName('ship-danger-stream:crew-runoff')).toBeUndefined();
@@ -84,7 +84,7 @@ describe('ship danger effects', () => {
 
   it('shows every puddle immediately at floor height', () => {
     const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
-    expect(puddles.snapshotForTest()).toEqual({ puddleCount: 5 });
+    expect(puddles.snapshotForTest()).toEqual({ puddleCount: 16 });
     const vertex = new Vector3();
     puddles.root.updateWorldMatrix(true, true);
     puddles.root.traverse((object) => {
@@ -104,14 +104,37 @@ describe('ship danger effects', () => {
     puddles.dispose();
   });
 
+  it('rounds the corners of the irregular puddle outline', () => {
+    const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles.slice(0, 1));
+    const puddle = puddles.root.children[0] as Mesh;
+    expect(puddle.geometry).toBeInstanceOf(ShapeGeometry);
+    expect(puddle.geometry.getAttribute('position').count).toBeGreaterThan(12);
+    puddles.dispose();
+  });
+
   it('disposes shared puddle resources once', () => {
     const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
-    const mesh = puddles.root.getObjectByName('ship-danger-puddle:crew-aft') as Mesh;
-    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
-    const materialDispose = vi.spyOn(mesh.material as Material, 'dispose');
+    const geometries = new Set<Mesh['geometry']>();
+    const materials = new Set<Material>();
+    puddles.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      geometries.add(object.geometry);
+      const meshMaterials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+      meshMaterials.forEach((material) => materials.add(material));
+    });
+    const geometryDisposals = [...geometries].map((geometry) => (
+      vi.spyOn(geometry, 'dispose')
+    ));
+    const materialDisposals = [...materials].map((material) => (
+      vi.spyOn(material, 'dispose')
+    ));
     puddles.dispose();
     puddles.dispose();
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(geometries.size).toBe(1);
+    expect(materials.size).toBe(1);
+    geometryDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    materialDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
   });
 });

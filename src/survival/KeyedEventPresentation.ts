@@ -35,6 +35,10 @@ export abstract class KeyedEventPresentation implements FeaturedEventPresentatio
     return this.start(key, this.reactionDuration(key));
   }
 
+  itemAimTarget(): Object3D | null {
+    return this.disposed || !this.root.visible ? null : this.subject;
+  }
+
   interactionRoot(): Object3D | null {
     return this.disposed || !this.root.visible ? null : this.subject;
   }
