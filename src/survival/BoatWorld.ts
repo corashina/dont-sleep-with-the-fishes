@@ -27,6 +27,7 @@ import {
 } from 'three';
 import {
   ITEM_DEFINITIONS,
+  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -78,16 +79,27 @@ import {
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
-import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import {
+  BoatSupplyDisplay,
+  GENERIC_EVENT_ITEM_USE_DURATION,
+  releaseSupplyActor,
+  type BorrowedSupplyActor,
+} from './BoatSupplyDisplay';
 import { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
-import type {
-  DangerousWatersBoatReaction,
-  DangerousWatersItemPose,
-} from './DangerousWatersPresentation';
+import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { EventPresentationLayer } from './EventPresentationLayer';
+import { EventItemEffects } from './EventItemEffects';
+import { EventItemUseAdapter } from './EventItemUseAdapter';
+import {
+  createEventItemUseSample,
+  eventItemUseDuration,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from './eventItemUseChoreography';
 import type {
   EventModelInstance,
   EventModelLibrary,
@@ -197,6 +209,17 @@ interface ActiveSequence {
   elapsed: number;
   duration: number;
   resolve: () => void;
+}
+
+interface ActiveSharedEventItemUse {
+  readonly eventId: string;
+  readonly choiceId: string;
+  readonly instanceId: ItemInstanceId;
+  readonly itemId: ItemId;
+  readonly context: EventItemUseContext;
+  elapsed: number;
+  readonly duration: number;
+  readonly resolve: () => void;
 }
 
 export interface FishingCastPoint {
@@ -578,24 +601,17 @@ export class BoatWorld {
   private readonly captainWhiskersDelegateBaseRotation = new Vector3();
   private activeCaptainWhiskersDelegation: ActiveCaptainWhiskersDelegation | null = null;
   private readonly chestDisplay: ChestDisplay;
+  private readonly itemEffects: EventItemEffects;
+  private readonly itemUseAdapter: EventItemUseAdapter;
+  private readonly sharedEventItemSample = createEventItemUseSample();
+  private activeSharedEventItemUse: ActiveSharedEventItemUse | null = null;
+  private sharedEventItemActor: BorrowedSupplyActor | null = null;
   private readonly dedicatedEvents: EventPresentationCoordinator | null;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
   private readonly weatherEventAnimator: WeatherEventAnimator;
   private readonly supernaturalEventAnimator: SupernaturalEventAnimator;
   private readonly eventPresentation: EventPresentationLayer;
-  private dangerousWatersItemId: ItemInstanceId | null = null;
-  private readonly dangerousWatersItemPose: DangerousWatersItemPose = {
-    x: 0,
-    y: 0,
-    z: 0,
-    yaw: 0,
-    pitch: 0,
-    roll: 0,
-    scaleX: 1,
-    scaleY: 1,
-    scaleZ: 1,
-  };
   private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -804,6 +820,7 @@ export class BoatWorld {
     let captainWhiskers: CaptainWhiskersPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
+    let itemUseAdapter: EventItemUseAdapter | null = null;
     let dedicatedEvents: EventPresentationCoordinator | null = null;
     let weatherEventAnimator: WeatherEventAnimator | null = null;
     let supernaturalEventAnimator: SupernaturalEventAnimator | null = null;
@@ -876,6 +893,9 @@ export class BoatWorld {
           : resolvedEventModels.clone('mysteryChest'),
       );
       this.chestDisplay = chestDisplay;
+      this.itemEffects = new EventItemEffects();
+      itemUseAdapter = new EventItemUseAdapter(this.camera, this.itemEffects);
+      this.itemUseAdapter = itemUseAdapter;
       this.cameraEffectsRoot.name = 'dedicated-event-camera-effects';
       this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
       dedicatedEvents = dedicatedEventModels === undefined
@@ -887,6 +907,8 @@ export class BoatWorld {
             vortexWave: this.vortexWave,
             sampleWorldWaveInto: this.sampleWorldWaveInto,
             readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
+            itemUseAdapter: this.itemUseAdapter,
+            itemEffects: this.itemEffects,
             cameraEffectsRoot: this.cameraEffectsRoot,
             boatEffectsRoot: this.boatEffectsRoot,
             camera: this.camera,
@@ -899,6 +921,7 @@ export class BoatWorld {
       weatherEventAnimator = new WeatherEventAnimator(
         this.cameraRig,
         this.supplyDisplay,
+        this.itemUseAdapter,
         this.eventModels,
         this.camera,
       );
@@ -906,6 +929,7 @@ export class BoatWorld {
       supernaturalEventAnimator = new SupernaturalEventAnimator(
         this.cameraRig,
         this.supplyDisplay,
+        this.itemUseAdapter,
         this.eventModels,
         this.camera,
       );
@@ -978,6 +1002,7 @@ export class BoatWorld {
         camera: this.camera,
         boatMotionRoot: this.motionRig,
         supplyDisplay: this.supplyDisplay,
+        itemUseAdapter: this.itemUseAdapter,
         chestDisplay: this.chestDisplay,
       }, resolvedFocusedFactories);
       this.eventPresentation = eventPresentation;
@@ -1010,6 +1035,7 @@ export class BoatWorld {
         this.eventPresentation.root,
         this.weatherEventAnimator.worldRoot,
         this.supernaturalEventAnimator.worldRoot,
+        this.itemEffects.root,
         ...(this.dedicatedEvents === null
           ? []
           : [this.dedicatedEvents.worldRoot]),
@@ -1041,6 +1067,7 @@ export class BoatWorld {
           () => supernaturalEventAnimator?.dispose(),
           () => weatherEventAnimator?.dispose(),
           () => dedicatedEvents?.dispose(),
+          () => itemUseAdapter?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
           () => captainWhiskers?.dispose(),
@@ -1173,20 +1200,23 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;
+    this.cancelSharedEventItemUse();
     if (
-      eventId === 'dangerous-waters'
-      && this.supplyDisplay.pinEventActor(instanceId)
+      eventId === 'flowers'
+      && choiceId === 'captainWhiskers'
+      && instanceId === 'captainWhiskers-1'
     ) {
-      this.dangerousWatersItemId = instanceId;
-      try {
-        await this.eventPresentation.playChoice(eventId, choiceId);
-      } finally {
-        if (!this.disposed && operation === this.weatherEventOperation) {
-          this.dangerousWatersItemId = null;
-          this.supplyDisplay.releaseEventActor();
-        }
-      }
+      await this.captainWhiskers.play('pet', GENERIC_EVENT_ITEM_USE_DURATION);
       return;
+    }
+    if (eventId === 'dangerous-waters') {
+      if (
+        await this.eventPresentation.playDangerousWatersItemUse(
+          choiceId,
+          instanceId,
+        )
+      ) return;
+      if (this.disposed || operation !== this.weatherEventOperation) return;
     }
     if (this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.playItemUse(choiceId, instanceId);
@@ -1204,6 +1234,14 @@ export class BoatWorld {
       }
       if (this.disposed || operation !== this.weatherEventOperation) return;
     }
+    const itemId = this.supplyDisplay.itemType(instanceId);
+    const context = itemId === null
+      ? null
+      : resolveEventItemUseContext(eventId, choiceId, itemId);
+    if (itemId !== null && context !== null) {
+      await this.playSharedEventItemUse(eventId, choiceId, instanceId, itemId, context);
+      return;
+    }
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
 
@@ -1213,6 +1251,7 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.weatherEventOperation += 1;
+    this.cancelSharedEventItemUse();
     if (this.dedicatedEvents?.handles(eventId)) {
       return this.dedicatedEvents.playChoice(
         typeof choice === 'string' ? choice : choice.choiceId,
@@ -1235,6 +1274,7 @@ export class BoatWorld {
     if (this.disposed) return;
     this.finishCaptainWhiskersDelegation();
     this.weatherEventOperation += 1;
+    this.cancelSharedEventItemUse();
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
       : eventOrContext.eventId;
@@ -1444,6 +1484,7 @@ export class BoatWorld {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
     this.finishCaptainWhiskersDelegation();
+    this.cancelSharedEventItemUse();
     this.dedicatedEvents?.clear();
     this.resetDedicatedEffects();
     this.eventPresentation.clear();
@@ -1451,7 +1492,6 @@ export class BoatWorld {
     this.activeFeaturedEventId = null;
     this.activeDriftingLootVariant = null;
     this.weatherEventAnimator.clear();
-    this.dangerousWatersItemId = null;
     this.supernaturalEventAnimator.clear();
     this.clearMoonEvent();
     this.supplyDisplay.clearEventMotion();
@@ -1462,18 +1502,81 @@ export class BoatWorld {
     if (this.disposed || !hidden) return;
     this.weatherEventOperation += 1;
     this.finishCaptainWhiskersDelegation();
+    this.cancelSharedEventItemUse();
     this.skipSequence();
     this.clearDivePresentation();
     this.eventPresentation.settleForVisibilityChange();
     this.featuredEvents.settleForVisibilityChange();
     this.weatherEventAnimator.settleForVisibilityChange();
-    this.dangerousWatersItemId = null;
     this.supernaturalEventAnimator.settleForVisibilityChange();
     this.settleMoonForVisibilityChange();
     this.dedicatedEvents?.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
     this.resetDedicatedEffects();
     Object.assign(this.vortexWave, createInactiveVortexWaveState());
+  }
+
+  private playSharedEventItemUse(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    itemId: ItemId,
+    context: EventItemUseContext,
+  ): Promise<void> {
+    const actor = this.supplyDisplay.borrowEventActor(instanceId);
+    if (actor === null) return Promise.resolve();
+    this.sharedEventItemActor = actor;
+    this.itemUseAdapter.begin(actor);
+    sampleEventItemUse(context, itemId, 0, this.sharedEventItemSample);
+    this.itemUseAdapter.apply(this.sharedEventItemSample);
+    return new Promise((resolve) => {
+      this.activeSharedEventItemUse = {
+        eventId,
+        choiceId,
+        instanceId,
+        itemId,
+        context,
+        elapsed: 0,
+        duration: eventItemUseDuration(context),
+        resolve,
+      };
+    });
+  }
+
+  private updateSharedEventItemUse(delta: number): void {
+    const active = this.activeSharedEventItemUse;
+    if (active === null) return;
+    active.elapsed = Math.min(
+      active.duration,
+      active.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
+    );
+    const progress = active.elapsed / active.duration;
+    sampleEventItemUse(
+      active.context,
+      active.itemId,
+      progress,
+      this.sharedEventItemSample,
+    );
+    this.itemUseAdapter.apply(this.sharedEventItemSample);
+    if (progress < 1) return;
+    this.finishSharedEventItemUse(active);
+  }
+
+  private finishSharedEventItemUse(active: ActiveSharedEventItemUse): void {
+    if (this.activeSharedEventItemUse !== active) return;
+    this.activeSharedEventItemUse = null;
+    this.itemUseAdapter.clear();
+    this.sharedEventItemActor = releaseSupplyActor(this.sharedEventItemActor);
+    active.resolve();
+  }
+
+  private cancelSharedEventItemUse(): void {
+    const active = this.activeSharedEventItemUse;
+    if (active === null && this.sharedEventItemActor === null) return;
+    this.activeSharedEventItemUse = null;
+    this.itemUseAdapter.clear();
+    this.sharedEventItemActor = releaseSupplyActor(this.sharedEventItemActor);
+    active?.resolve();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -2029,6 +2132,7 @@ export class BoatWorld {
       this.supernaturalEventAnimator.update(time, delta, amplitudeScale);
       this.updateMoonEvent(delta);
       this.dedicatedEvents?.update(time, delta);
+      this.updateSharedEventItemUse(delta);
       this.supplyDisplay.update(delta);
       this.updateFishingBiteParticles(delta);
     } else if (this.moonEventStaged) {
@@ -2078,7 +2182,9 @@ export class BoatWorld {
       () => this.cancelActiveSequence(),
       () => this.clearMoonEvent(),
       () => this.finishCaptainWhiskersDelegation(),
+      () => this.cancelSharedEventItemUse(),
       () => this.dedicatedEvents?.dispose(),
+      () => this.itemUseAdapter.dispose(),
       () => this.resetDedicatedEffects(),
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
       () => this.weatherEventAnimator.dispose(),
@@ -2104,6 +2210,7 @@ export class BoatWorld {
         this.ambient,
         this.key,
         this.key.target,
+        this.itemEffects.root,
         this.fishing.root,
         this.fishingBiteParticles.points,
       ),
@@ -2156,17 +2263,6 @@ export class BoatWorld {
       this.supplyDisplay.applyEventAmbientPose(
         reaction.supplyRoll,
         reaction.supplyLift,
-      );
-    }
-    if (
-      this.dangerousWatersItemId !== null
-      && this.eventPresentation.copyDangerousWatersItemPose(
-        this.dangerousWatersItemPose,
-      )
-    ) {
-      this.supplyDisplay.applyEventItemPose(
-        this.dangerousWatersItemId,
-        this.dangerousWatersItemPose,
       );
     }
   }

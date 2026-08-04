@@ -16,10 +16,22 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three';
-import type { ItemInstanceId } from '../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import { clamp01, pulse, smoothstep } from './animationMath';
-import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import {
+  borrowSupplyActor,
+  releaseSupplyActor,
+  type BoatSupplyDisplay,
+  type BorrowedSupplyActor,
+} from './BoatSupplyDisplay';
+import {
+  createEventItemUseSample,
+  resolveEventItemUseContext,
+  sampleEventItemUse,
+  type EventItemUseContext,
+} from './eventItemUseChoreography';
+import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
@@ -50,6 +62,8 @@ type ActiveWeatherAnimation =
       readonly eventId: string;
       readonly choiceId: string;
       readonly instanceId: ItemInstanceId;
+      readonly itemId: ItemId;
+      readonly itemUseContext: EventItemUseContext;
       elapsed: number;
       readonly duration: number;
       readonly resolve: (value: boolean) => void;
@@ -245,6 +259,7 @@ export class WeatherEventAnimator {
     cameraRoll: 0,
     effectKind: 'none',
   };
+  private readonly sharedItemSample = createEventItemUseSample();
   private readonly figureMaterial: MeshStandardMaterial;
   private readonly beamMaterial: MeshBasicMaterial;
   private readonly lightningMaterial: MeshBasicMaterial;
@@ -255,12 +270,14 @@ export class WeatherEventAnimator {
   private readonly lightningFlash: Group;
   private readonly windPaper: Mesh;
   private active: ActiveWeatherAnimation | null = null;
+  private borrowedActor: BorrowedSupplyActor | null = null;
   private selectedActorId: ItemInstanceId | null = null;
   private disposed = false;
 
   constructor(
     _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
+    private readonly itemUseAdapter: EventItemUseAdapter,
     eventModels?: EventModelLibrary,
     viewCamera?: Object3D,
   ) {
@@ -374,39 +391,31 @@ export class WeatherEventAnimator {
     this.cancelActive();
     const duration = weatherItemUseDuration(eventId, choiceId);
     if (duration === null) return Promise.resolve(false);
+    const itemId = this.supplyDisplay.itemType(instanceId);
+    if (itemId === null) return Promise.resolve(false);
+    const itemUseContext = resolveEventItemUseContext(eventId, choiceId, itemId);
+    if (itemUseContext === null) return Promise.resolve(false);
     this.rememberCameraBase();
     this.hideTransientEffects();
     resetItemSample(this.itemSample);
-    if (isCameraOnlyWeatherEvent(eventId)) {
-      this.supplyDisplay.clearEventMotion();
-      this.selectedActorId = null;
-      return new Promise((resolve) => {
-        this.active = {
-          kind: 'item',
-          eventId,
-          choiceId,
-          instanceId,
-          elapsed: 0,
-          duration,
-          resolve,
-        };
-      });
-    }
-    if (!this.supplyDisplay.pinEventActor(instanceId)) {
-      this.supplyDisplay.clearEventMotion();
-      return Promise.resolve(false);
-    }
-    if (!this.supplyDisplay.applyEventItemPose(instanceId, this.itemSample)) {
-      this.supplyDisplay.clearEventMotion();
-      return Promise.resolve(false);
-    }
-    this.selectedActorId = instanceId;
+    this.borrowedActor = borrowSupplyActor(
+      this.borrowedActor,
+      this.supplyDisplay,
+      instanceId,
+    );
+    if (this.borrowedActor === null) return Promise.resolve(false);
+    this.itemUseAdapter.begin(this.borrowedActor);
+    sampleEventItemUse(itemUseContext, itemId, 0, this.sharedItemSample);
+    this.itemUseAdapter.apply(this.sharedItemSample);
+    this.selectedActorId = isCameraOnlyWeatherEvent(eventId) ? null : instanceId;
     return new Promise((resolve) => {
       this.active = {
         kind: 'item',
         eventId,
         choiceId,
         instanceId,
+        itemId,
+        itemUseContext,
         elapsed: 0,
         duration,
         resolve,
@@ -434,6 +443,7 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.supplyDisplay.clearEventPose();
     this.hideTransientEffects();
+    this.releaseBorrowedActor();
     if (!isCameraOnlyWeatherEvent(eventId)) {
       for (const actor of actors) {
         this.supplyDisplay.pinEventActor(actor.instanceId);
@@ -471,7 +481,7 @@ export class WeatherEventAnimator {
         this.updateReveal(active.eventId, progress);
         break;
       case 'item':
-        this.updateItem(active.eventId, active.choiceId, active.instanceId, progress);
+        this.updateItem(active, progress);
         break;
       case 'react':
         this.updateReaction(active, progress);
@@ -527,28 +537,22 @@ export class WeatherEventAnimator {
   }
 
   private updateItem(
-    eventId: string,
-    choiceId: string,
-    instanceId: ItemInstanceId,
+    active: Extract<ActiveWeatherAnimation, { readonly kind: 'item' }>,
     progress: number,
   ): void {
-    if (!sampleWeatherItemUse(eventId, choiceId, progress, this.itemSample)) return;
-    if (isCameraOnlyWeatherEvent(eventId)) {
-      this.applyCameraPose(
-        0,
-        0,
-        -this.itemSample.cameraPush,
-        this.itemSample.cameraYaw,
-        0,
-        0,
-      );
-      return;
-    }
-    this.supplyDisplay.applyEventItemPose(instanceId, this.itemSample);
-    this.supplyDisplay.applyEventAmbientPose(this.itemSample.supplyRoll, 0);
-    if (this.itemSample.cameraYaw !== 0 || this.itemSample.cameraPush !== 0) {
-      this.applyCameraPose(0, 0, -this.itemSample.cameraPush, this.itemSample.cameraYaw, 0, 0);
-    }
+    sampleEventItemUse(
+      active.itemUseContext,
+      active.itemId,
+      progress,
+      this.sharedItemSample,
+    );
+    this.itemUseAdapter.apply(this.sharedItemSample);
+    if (!sampleWeatherItemUse(
+      active.eventId,
+      active.choiceId,
+      progress,
+      this.itemSample,
+    )) return;
     const effect = this.itemSample.effect;
     if (effect <= 0.01) return;
     switch (this.itemSample.effectKind) {
@@ -783,7 +787,8 @@ export class WeatherEventAnimator {
       case 'item':
         this.restoreCamera();
         this.hideTransientEffects();
-        this.supplyDisplay.clearEventPose();
+        this.itemUseAdapter.clear();
+        if (isCameraOnlyWeatherEvent(active.eventId)) this.releaseBorrowedActor();
         active.resolve(true);
         break;
       case 'react':
@@ -815,6 +820,8 @@ export class WeatherEventAnimator {
     const active = this.active;
     this.active = null;
     if (active !== null) this.restoreCamera();
+    if (active?.kind === 'item') this.itemUseAdapter.clear();
+    this.releaseBorrowedActor();
     this.supplyDisplay.clearEventMotion();
     this.hideTransientEffects();
     this.selectedActorId = null;
@@ -823,5 +830,9 @@ export class WeatherEventAnimator {
     } else if (active !== null) {
       active.resolve();
     }
+  }
+
+  private releaseBorrowedActor(): void {
+    this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 }

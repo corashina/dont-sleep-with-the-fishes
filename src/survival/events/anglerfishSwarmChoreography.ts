@@ -1,7 +1,8 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
+import { scaleEventItemDuration } from '../eventItemTiming';
 
 export const SWARM_REVEAL_DURATION = 2.9;
-export const SWARM_ITEM_DURATION = 1.2;
+export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
 export const SWARM_REACTION_DURATION = 1.15;
 export const SWARM_FISH_COUNT = 6;
 export const SWARM_CENTER_Z = 0;

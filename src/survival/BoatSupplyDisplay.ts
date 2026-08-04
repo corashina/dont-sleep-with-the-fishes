@@ -38,6 +38,7 @@ import type {
   ItemCondition,
   SurvivalSnapshot,
 } from './survivalTypes';
+import { scaleEventItemDuration } from './eventItemTiming';
 import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 
 export interface BoatSupplyPresentationRecord {
@@ -143,10 +144,13 @@ interface BorrowedSupplyBinding {
   readonly groupId: BoatSupplyGroupId;
   readonly motionIndex: number;
   readonly root: Group;
+  readonly copyPosition: Vector3;
+  readonly copyQuaternion: Quaternion;
+  readonly copyScale: Vector3;
   readonly pose: MutableSupplyPose;
 }
 
-const EVENT_ITEM_USE_DURATION = 0.65;
+export const GENERIC_EVENT_ITEM_USE_DURATION = scaleEventItemDuration(0.65);
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
 
 function createIdentitySupplyPose(): MutableSupplyPose {
@@ -255,6 +259,7 @@ export class BoatSupplyDisplay {
   private readonly ownedMaterials = new Set<Material>();
   private readonly basePositionById = new Map<BoatSupplyGroupId, Vector3>();
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
+  private readonly borrowedCopyOffset = new Vector3();
   private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
   private readonly borrowedBindings =
     new Map<ItemInstanceId, BorrowedSupplyBinding>();
@@ -367,6 +372,11 @@ export class BoatSupplyDisplay {
     return this.recordsById.get(id);
   }
 
+  itemType(instanceId: ItemInstanceId): ItemId | null {
+    const groupId = this.groupByInstanceId.get(instanceId);
+    return groupId === undefined || groupId === 'repairMaterial' ? null : groupId;
+  }
+
   setPresentationItemHidden(instanceId: ItemInstanceId, hidden: boolean): void {
     if (this.disposed) return;
     if (hidden) this.presentationHiddenItemIds.add(instanceId);
@@ -473,7 +483,7 @@ export class BoatSupplyDisplay {
     if (groupId === undefined) return Promise.resolve();
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return Promise.resolve();
-    const duration = EVENT_ITEM_USE_DURATION;
+    const duration = GENERIC_EVENT_ITEM_USE_DURATION;
     return new Promise((resolve) => {
       this.activeAnimation = {
         root: record.root,
@@ -536,6 +546,7 @@ export class BoatSupplyDisplay {
         target.scaleX = pose.scaleX;
         target.scaleY = pose.scaleY;
         target.scaleZ = pose.scaleZ;
+        this.applyBorrowedEventMotion(binding);
       },
       releaseOnNextSync: () => {
         if (this.borrowedBindings.get(instanceId) !== binding) return;
@@ -876,6 +887,18 @@ export class BoatSupplyDisplay {
     const root = cloneSkeleton(record.root) as Group;
     root.name = `boat-supply-event:${instanceId}`;
     root.userData.supplyInstanceId = instanceId;
+    const heldCopy = root.children[0];
+    if (heldCopy === undefined) {
+      this.eventSelectedItemId = previousSelectedItemId;
+      this.syncGroup(groupId, this.currentSnapshot);
+      return null;
+    }
+    const copyPosition = heldCopy.position.clone();
+    const copyQuaternion = heldCopy.quaternion.clone();
+    const copyScale = heldCopy.scale.clone();
+    heldCopy.position.set(0, 0, 0);
+    heldCopy.quaternion.identity();
+    heldCopy.scale.set(1, 1, 1);
     for (let index = 1; index < root.children.length; index += 1) {
       root.children[index]!.visible = false;
     }
@@ -888,6 +911,9 @@ export class BoatSupplyDisplay {
       groupId,
       motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
       root,
+      copyPosition,
+      copyQuaternion,
+      copyScale,
       pose: createIdentitySupplyPose(),
     };
     this.borrowedBindings.set(instanceId, binding);
@@ -896,6 +922,7 @@ export class BoatSupplyDisplay {
       (this.borrowedCountByGroup.get(groupId) ?? 0) + 1,
     );
     this.releaseBorrowedOnSync.delete(instanceId);
+    this.applyBorrowedEventMotion(binding);
     return binding;
   }
 
@@ -963,22 +990,33 @@ export class BoatSupplyDisplay {
       }
     }
     for (const binding of this.borrowedBindings.values()) {
-      const root = binding.root;
-      const pose = binding.pose;
-      root.visible = true;
-      root.position.copy(this.basePositionById.get(binding.groupId)!);
-      root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
-      root.scale.set(1, 1, 1);
-      root.position.y += this.eventAmbientLift;
-      root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
-      root.position.x += pose.x;
-      root.position.y += pose.y;
-      root.position.z += pose.z;
-      root.rotateY(pose.yaw);
-      root.rotateX(pose.pitch);
-      root.rotateZ(pose.roll);
-      root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+      this.applyBorrowedEventMotion(binding);
     }
+  }
+
+  private applyBorrowedEventMotion(binding: BorrowedSupplyBinding): void {
+    const root = binding.root;
+    const pose = binding.pose;
+    root.visible = true;
+    root.position.copy(this.basePositionById.get(binding.groupId)!);
+    root.quaternion.copy(this.baseQuaternionById.get(binding.groupId)!);
+    root.scale.set(1, 1, 1);
+    root.position.y += this.eventAmbientLift;
+    root.rotateZ(this.eventAmbientRoll * (1 + binding.motionIndex * 0.08));
+    this.borrowedCopyOffset.copy(binding.copyPosition).applyQuaternion(root.quaternion);
+    root.position.add(this.borrowedCopyOffset);
+    root.quaternion.multiply(binding.copyQuaternion);
+    root.position.x += pose.x;
+    root.position.y += pose.y;
+    root.position.z += pose.z;
+    root.rotateY(pose.yaw);
+    root.rotateX(pose.pitch);
+    root.rotateZ(pose.roll);
+    root.scale.set(
+      binding.copyScale.x * pose.scaleX,
+      binding.copyScale.y * pose.scaleY,
+      binding.copyScale.z * pose.scaleZ,
+    );
   }
 
   private restoreEventMotionBase(): void {

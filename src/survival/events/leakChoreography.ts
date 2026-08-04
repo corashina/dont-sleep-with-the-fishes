@@ -1,7 +1,8 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
+import { scaleEventItemDuration } from '../eventItemTiming';
 
 export const LEAK_REVEAL_DURATION = 2.4;
-export const LEAK_ITEM_DURATION = 1.1;
+export const LEAK_ITEM_DURATION = scaleEventItemDuration(1.1);
 export const LEAK_REACTION_DURATION = 1;
 
 export type LeakItemEffectKind =

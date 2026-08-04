@@ -1,7 +1,8 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
+import { scaleEventItemDuration } from '../eventItemTiming';
 
 export const SNATCHER_REVEAL_DURATION = 2.5;
-export const SNATCHER_ITEM_DURATION = 1.15;
+export const SNATCHER_ITEM_DURATION = scaleEventItemDuration(1.15);
 export const SNATCHER_REACTION_DURATION = 1.2;
 
 export type SnatcherItemEffectKind =

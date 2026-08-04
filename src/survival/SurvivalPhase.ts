@@ -55,6 +55,10 @@ import {
 } from './eventPresentationTypes';
 import { fishingCatchFood } from './fishingCatalog';
 import {
+  ITEM_ANIMATION_LAB_USES,
+  isItemAnimationLabId,
+} from './ItemAnimationLab';
+import {
   deriveEventPhysicalResponse,
   type EventPhysicalResponsePresentation,
 } from './EventPhysicalResponse';
@@ -91,6 +95,7 @@ export interface SurvivalPhaseTestDependencies {
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 const FOCUSED_EVENT_ID_SET = new Set<string>(FOCUSED_EVENT_IDS);
+const CAPTAIN_WHISKERS_LAB_INSTANCE_ID = 'captainWhiskers-1' as ItemInstanceId;
 
 type FishingPresentationState =
   | 'idle'
@@ -367,6 +372,7 @@ export class SurvivalPhase implements GamePhase {
   private cameraLook: SurvivalCameraLook | null = null;
   private audio!: SurvivalAudio;
   private onInvariantError: (error: Error) => void = reportInvariantError;
+  private itemAnimationLab = false;
 
   constructor(
     context: PhaseContext,
@@ -385,10 +391,15 @@ export class SurvivalPhase implements GamePhase {
     initialEventId: string | undefined,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
+    const itemAnimationLab = isItemAnimationLabId(initialEventId);
     if (testDependencies === undefined) {
       const session = new SurvivalSession(savedItems, {
         seed,
-        ...(initialEventId === undefined ? {} : { initialEventId }),
+        ...(
+          initialEventId === undefined || itemAnimationLab
+            ? {}
+            : { initialEventId }
+        ),
       });
       this.initialize(
         context,
@@ -407,6 +418,8 @@ export class SurvivalPhase implements GamePhase {
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
+        reportInvariantError,
+        itemAnimationLab,
       );
       this.cameraLook = new SurvivalCameraLook(context.mount, context.camera);
       return;
@@ -419,10 +432,14 @@ export class SurvivalPhase implements GamePhase {
       scavengeElapsedSeconds,
       testDependencies.onRestart ?? onRestart,
       testDependencies.onInvariantError,
+      itemAnimationLab,
     );
   }
 
-  static forTest(dependencies: SurvivalPhaseTestDependencies): SurvivalPhase {
+  static forTest(
+    dependencies: SurvivalPhaseTestDependencies,
+    initialEventId?: string,
+  ): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
       context: PhaseContext,
       savedItems: readonly ItemInstance[],
@@ -438,7 +455,7 @@ export class SurvivalPhase implements GamePhase {
       0,
       0,
       dependencies.onRestart ?? (() => undefined),
-      undefined,
+      initialEventId,
       dependencies,
     );
   }
@@ -449,7 +466,9 @@ export class SurvivalPhase implements GamePhase {
     this.audio.start();
     this.audio.setWeather(this.effectivePresentationWeather, 0);
     const snapshot = this.renderSnapshot(false);
-    if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
+    if (this.itemAnimationLab) {
+      this.enterItemAnimationLab(snapshot);
+    } else if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       void this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
     }
 
@@ -548,6 +567,10 @@ export class SurvivalPhase implements GamePhase {
       this.eventPresentation !== 'choosing'
       || this.eventEligibility.get(instanceId) !== choiceId
     ) return;
+    if (this.itemAnimationLab) {
+      void this.playItemAnimationLab(instanceId, this.lifecycleGeneration);
+      return;
+    }
     void this.resolveEventWithItem(choiceId, instanceId, this.lifecycleGeneration);
   }
 
@@ -642,6 +665,7 @@ export class SurvivalPhase implements GamePhase {
     scavengeElapsedSeconds: number,
     onRestart: () => void,
     onInvariantError: (error: Error) => void = reportInvariantError,
+    itemAnimationLab = false,
   ): void {
     this.context = context;
     this.session = session;
@@ -650,9 +674,87 @@ export class SurvivalPhase implements GamePhase {
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
     this.onInvariantError = onInvariantError;
+    this.itemAnimationLab = itemAnimationLab;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.wireUI();
+  }
+
+  private enterItemAnimationLab(snapshot: SurvivalSnapshot): void {
+    this.eventEligibility = this.itemAnimationLabEligibility(snapshot);
+    this.eventPresentation = 'choosing';
+    this.ui.beginEventPresentation?.();
+    this.ui.showItemAnimationLab?.();
+    this.world.setEventSelectedItem?.(null);
+    this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
+    this.ui.setEventSelection?.(this.eventEligibility);
+    this.setBusy(false);
+  }
+
+  private itemAnimationLabEligibility(
+    snapshot: SurvivalSnapshot,
+  ): Map<ItemInstanceId, EventResponseId> {
+    const eligibility = new Map<ItemInstanceId, EventResponseId>();
+    for (const item of Object.values(snapshot.inventory)) {
+      if (item === undefined || item.condition !== 'usable') continue;
+      eligibility.set(
+        item.instanceId,
+        ITEM_ANIMATION_LAB_USES[item.type].choiceId,
+      );
+    }
+    if (snapshot.captainWhiskers?.alive) {
+      eligibility.set(
+        CAPTAIN_WHISKERS_LAB_INSTANCE_ID,
+        ITEM_ANIMATION_LAB_USES.captainWhiskers.choiceId,
+      );
+    }
+    return eligibility;
+  }
+
+  private async playItemAnimationLab(
+    instanceId: ItemInstanceId,
+    generation: number,
+  ): Promise<void> {
+    const snapshot = this.session.snapshot();
+    const inventoryItem = snapshot.inventory[instanceId];
+    const captainWhiskers = instanceId === CAPTAIN_WHISKERS_LAB_INSTANCE_ID
+      && snapshot.captainWhiskers?.alive === true;
+    if (
+      (inventoryItem === undefined && !captainWhiskers)
+      || (inventoryItem !== undefined && inventoryItem.condition !== 'usable')
+      || this.eventPresentation !== 'choosing'
+      || !this.isContinuationActive(generation)
+    ) return;
+
+    const itemType = captainWhiskers ? 'captainWhiskers' : inventoryItem!.type;
+    const use = ITEM_ANIMATION_LAB_USES[itemType];
+    this.eventPresentation = 'using';
+    this.setBusy(true);
+    this.ui.setEventUsing?.(instanceId);
+    this.world.setEventSelectedItem?.(instanceId);
+    this.setAutomaticWeather(presentationWeatherForEvent(use.eventId));
+    this.world.stageEvent?.(use.eventId);
+    this.audio.eventItem(itemType);
+
+    try {
+      await (
+        this.world.playEventItemUse?.(use.eventId, use.choiceId, instanceId)
+        ?? Promise.resolve()
+      );
+    } catch (error) {
+      this.onInvariantError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    } finally {
+      if (!this.isContinuationActive(generation)) return;
+      this.world.clearEvent?.();
+      this.setAutomaticWeather(null);
+      this.world.setEventSelectedItem?.(null);
+      this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
+      this.ui.setEventSelection?.(this.eventEligibility);
+      this.eventPresentation = 'choosing';
+      this.setBusy(false);
+    }
   }
 
   private wireUI(): void {
@@ -1113,8 +1215,7 @@ export class SurvivalPhase implements GamePhase {
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     const itemType = pending.inventory[instanceId]?.type;
-    if (isDedicatedEventId(eventId)) this.audio.eventAction(eventId, choiceId);
-    else if (itemType !== undefined) this.audio.tool(itemType);
+    if (itemType !== undefined) this.audio.eventItem(itemType);
     const eventState = pending.state;
     this.eventPresentation = 'using';
     this.setBusy(true);

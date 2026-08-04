@@ -68,6 +68,15 @@ const TOOL_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
   scubaSet: 'diveEntry',
 });
 
+const EVENT_ITEM_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
+  ductTape: 'tapeRepair',
+  flareGun: 'flareGun',
+  harpoonGun: 'harpoonGun',
+  flashlight: 'flashlight',
+  anchor: 'anchorChain',
+  umbrella: 'umbrella',
+});
+
 const ROUGH_WEATHER = new Set<PresentationWeatherId>([
   'squall',
   'thunderstorm',
@@ -173,6 +182,11 @@ export class SurvivalAudio {
   tool(item: ItemId): void {
     if (this.disposed) return;
     this.scope.play(TOOL_SOUNDS[item] ?? 'confirm');
+  }
+
+  eventItem(itemId: ItemId): void {
+    if (this.disposed) return;
+    this.scope.play(EVENT_ITEM_SOUNDS[itemId] ?? 'itemHandling');
   }
 
   sleep(): void {

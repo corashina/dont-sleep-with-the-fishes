@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { EVENT_TEST_OPTIONS } from '../src/app/EventTest';
 import { survivalEventById } from '../src/survival/events';
+import { ITEM_ANIMATION_LAB_ID } from '../src/survival/ItemAnimationLab';
 
 describe('event test menu', () => {
+  it('offers the item animation lab before real events', () => {
+    expect(EVENT_TEST_OPTIONS[0]).toEqual({
+      id: ITEM_ANIMATION_LAB_ID,
+      title: 'Item Animation Lab',
+      phase: 'lab',
+    });
+  });
+
   it('groups night events by presentation type without changing their labels', () => {
     const nightOptions = EVENT_TEST_OPTIONS.filter(({ phase }) => phase === 'night');
     const typeOrder = ['storm', 'impact', 'fish', 'darkness', 'sighting', 'repair'];

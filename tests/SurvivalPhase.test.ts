@@ -4446,6 +4446,67 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
+  it('plays the item sound once when an event item use begins', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'other-people',
+      inventory: inventory({
+        'flareGun-1': {
+          instanceId: 'flareGun-1', type: 'flareGun', condition: 'usable',
+        },
+      }),
+    });
+    const itemUse = deferred();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({ state: 'nightEvent', pendingEventId: null });
+          return accepted({
+            code: 'event-resolved',
+            eventResult: {
+              eventId: 'other-people',
+              choiceId: 'flareGun',
+              resultId: 'people-rescue',
+            },
+          });
+        }),
+      },
+      world: {
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => itemUse.promise),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        play: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setEventUsing: vi.fn(),
+        setBusy: vi.fn(),
+        showFeedback: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    const eventItem = vi.spyOn(audio, 'eventItem');
+    const eventAction = vi.spyOn(audio, 'eventAction');
+    const tool = vi.spyOn(audio, 'tool');
+
+    phase.start();
+    await flushPromises();
+    phase.handleEventItem('flareGun', 'flareGun-1');
+
+    expect(eventItem).toHaveBeenCalledExactlyOnceWith('flareGun');
+    expect(eventAction).not.toHaveBeenCalled();
+    expect(tool).not.toHaveBeenCalled();
+
+    itemUse.resolve();
+    await flushPromises();
+    phase.dispose();
+  });
+
   it('derives the selected item before random changed actors without an early inventory sync', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     const cue = deferred();

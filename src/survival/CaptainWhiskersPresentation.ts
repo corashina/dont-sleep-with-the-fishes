@@ -40,6 +40,7 @@ const ACTION_DURATION = 0.8;
 
 interface ActiveAction {
   readonly id: CaptainWhiskersAction;
+  readonly duration: number;
   elapsed: number;
   readonly resolve: () => void;
 }
@@ -141,11 +142,16 @@ export class CaptainWhiskersPresentation {
     this.applyPose();
   }
 
-  play(action: CaptainWhiskersAction): Promise<void> {
+  play(action: CaptainWhiskersAction, duration = ACTION_DURATION): Promise<void> {
     if (this.disposed || !this.living) return Promise.resolve();
     this.finishAction();
     return new Promise((resolve) => {
-      this.activeAction = { id: action, elapsed: 0, resolve };
+      this.activeAction = {
+        id: action,
+        duration: Math.max(0, duration),
+        elapsed: 0,
+        resolve,
+      };
       this.samplePose();
       this.applyPose();
     });
@@ -157,12 +163,12 @@ export class CaptainWhiskersPresentation {
     const action = this.activeAction;
     if (action === null) return;
     action.elapsed = Math.min(
-      ACTION_DURATION,
+      action.duration,
       action.elapsed + Math.max(0, deltaSeconds),
     );
     this.samplePose();
     this.applyPose();
-    if (action.elapsed < ACTION_DURATION) return;
+    if (action.elapsed < action.duration) return;
     this.activeAction = null;
     action.resolve();
   }
@@ -206,6 +212,7 @@ export class CaptainWhiskersPresentation {
     this.poseSample.status = this.status;
     this.poseSample.action = action?.id ?? null;
     this.poseSample.elapsed = action?.elapsed ?? 0;
+    this.poseSample.duration = action?.duration ?? ACTION_DURATION;
     sampleCaptainWhiskersPoseInto(this.pose, this.poseSample);
   }
 

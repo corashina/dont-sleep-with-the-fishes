@@ -1,4 +1,5 @@
 import { clamp01, pulse, smoothstep, smootherstep } from './animationMath';
+import { scaleEventItemDuration } from './eventItemTiming';
 
 export type WeatherAnimationEventId =
   | 'shower-night'
@@ -325,7 +326,8 @@ export function sampleWeatherReveal(
 }
 
 export function weatherItemUseDuration(eventId: string, choiceId: string): number | null {
-  return itemChoreography(eventId, choiceId)?.duration ?? null;
+  const duration = itemChoreography(eventId, choiceId)?.duration;
+  return duration === undefined ? null : scaleEventItemDuration(duration);
 }
 
 export function sampleWeatherItemUse(

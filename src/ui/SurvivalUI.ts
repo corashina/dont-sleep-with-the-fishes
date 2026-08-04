@@ -848,6 +848,33 @@ export class SurvivalUI {
     this.syncCommandState();
   }
 
+  showItemAnimationLab(): void {
+    if (this.disposed) return;
+    this.updateText('event:title', this.eventTitle, 'ITEM ANIMATION LAB');
+    this.updateText(
+      'event:detail',
+      this.eventDetail,
+      'SELECT AN ITEM. EACH ITEM RETURNS AFTER ITS ANIMATION.',
+    );
+    this.eventOutcomeResult.textContent = '';
+    this.eventOutcomeResult.hidden = true;
+    this.eventCaption.dataset.eventId = 'item-animation-lab';
+    delete this.eventCaption.dataset.danger;
+    delete this.eventCaption.dataset.result;
+    this.eventPresentationActive = true;
+    this.eventCaption.setAttribute(
+      'aria-label',
+      'Item Animation Lab. Select an item. Each item returns after its animation.',
+    );
+    this.eventCaption.classList.add('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.clearEventResult();
+    this.syncCommandState();
+    this.publishAnnouncement(
+      'Item Animation Lab. Select an item. Each item returns after its animation.',
+    );
+  }
+
   showEventReveal(
     event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
   ): Promise<void> {
@@ -1643,6 +1670,9 @@ export class SurvivalUI {
     const anchoredChoice = this.eventPresentationActive
       ? this.eventChoiceForAnchor(anchor.id, anchor)
       : undefined;
+    const eventItemEligible = this.eventPresentationActive
+      && backingInstanceId !== null
+      && this.eventEligibility?.has(backingInstanceId) === true;
     const toolCopy = lanternSleep === undefined
       ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
       : {
@@ -1659,10 +1689,15 @@ export class SurvivalUI {
         ? 'Recovered timber, fasteners, and rope for hull repairs.'
         : toolCopy?.description ?? 'Permanent lifeboat equipment.'
       : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType]);
-    const action = lanternSleep !== undefined || anchoredChoice !== undefined || anchor.action === null
+    const action = lanternSleep !== undefined
+      || anchoredChoice !== undefined
+      || eventItemEligible
+      || anchor.action === null
       ? null
       : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = anchoredChoice !== undefined
+    const reason = eventItemEligible
+      ? null
+      : anchoredChoice !== undefined
       ? anchoredChoice.unavailableReason
       : lanternSleep === undefined
         ? this.anchorUnavailableReason(anchor)
@@ -1691,7 +1726,9 @@ export class SurvivalUI {
           : anchor.toolId === 'repairTools'
             ? 'REPAIR'
             : itemLabel);
-    const energyCost = anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
+    const energyCost = eventItemEligible
+      ? 0
+      : anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
     const energyIndicator = anchoredChoice === undefined
       ? '⚡'.repeat(energyCost)
       : energyCost <= 0
@@ -2022,8 +2059,10 @@ export class SurvivalUI {
       });
     this.eventChoices.replaceChildren(...choices);
     this.eventChoices.hidden = choices.length === 0;
-    this.eventCaption.classList.toggle('is-visible', choices.length > 0);
-    this.eventCaption.setAttribute('aria-hidden', choices.length > 0 ? 'false' : 'true');
+    const showCaption = choices.length > 0
+      || this.eventCaption.dataset.eventId === 'item-animation-lab';
+    this.eventCaption.classList.toggle('is-visible', showCaption);
+    this.eventCaption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
   }
 
   private eventLanternChoice(): EventContextChoice | undefined {
