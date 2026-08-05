@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase } from '../src/app/GamePhase';
 import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
+import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -17,6 +18,9 @@ type PhaseAssetContextIsRequired = Assert<
 >;
 const phaseAssetContextIsRequired: PhaseAssetContextIsRequired = true;
 const physicsRuntime = await testPhysicsRuntime();
+const EMPTY_MENU_MODELS = {
+  dispose: () => undefined,
+} as unknown as MenuModelLibrary;
 
 function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   return {
@@ -32,11 +36,12 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
 function testOptions(
   overrides: Omit<
     GameTestOptions,
-    'propModels' | 'shipFurniture' | 'skyAssets' | 'physicsRuntime'
+    'propModels' | 'menuModels' | 'shipFurniture' | 'skyAssets' | 'physicsRuntime'
   > = {},
 ): GameTestOptions {
   return {
     propModels: createTestPropModels(),
+    menuModels: EMPTY_MENU_MODELS,
     shipFurniture: createTestShipFurniture(),
     skyAssets: createTestSkyAssets(),
     physicsRuntime,
@@ -306,7 +311,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createScavenge: () => active,
       createSurvival: () => phase(),
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+    }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
     const renderer = (game as unknown as {
       renderer: { dispose: () => void; domElement: HTMLCanvasElement };
     }).renderer;
@@ -365,6 +370,7 @@ describe('Game director', () => {
       createSurvival: () => phase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,

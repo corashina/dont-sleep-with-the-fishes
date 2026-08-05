@@ -11,6 +11,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
+import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { ScavengeAudio } from '../src/audio/ScavengeAudio';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { Game } from '../src/Game';
@@ -53,6 +54,9 @@ import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
 const physicsRuntime = await testPhysicsRuntime();
+const EMPTY_MENU_MODELS = {
+  dispose: () => undefined,
+} as unknown as MenuModelLibrary;
 
 function dangerAt(elapsed: number, alarmElapsed = elapsed) {
   const state = createShipDangerState();
@@ -1472,7 +1476,7 @@ describe('ScavengePhase lifecycle integration', () => {
         return phase;
       },
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+    }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
 
     try {
       const firstWorld = (phases[0] as unknown as { world: World }).world;
@@ -1525,6 +1529,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1681,6 +1686,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => survival,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1755,6 +1761,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1830,6 +1837,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1875,6 +1883,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => failedPhase,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1915,7 +1924,14 @@ describe('ScavengePhase lifecycle integration', () => {
         contexts.push(context);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime, sceneRenderer });
+    }, {
+      propModels,
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      sceneRenderer,
+    });
 
     complete({ savedItems: [], elapsedSeconds: 2 });
 
@@ -1951,6 +1967,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1982,6 +1999,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -2009,6 +2027,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -2043,6 +2062,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createScavenge: () => gamePhase(), createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,
@@ -2094,6 +2114,7 @@ describe('ScavengePhase lifecycle integration', () => {
       },
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       eventModels: sharedEventModels,
@@ -2138,7 +2159,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const game = Game.forTest({
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+    }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
 
     game.dispose();
     game.dispose();
@@ -2193,6 +2214,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,
@@ -2272,6 +2294,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,

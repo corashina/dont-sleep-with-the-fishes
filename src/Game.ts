@@ -53,6 +53,7 @@ import type { PresentationWeatherId } from './weather/presentationWeather';
 import { AudioSystem } from './audio/AudioSystem';
 import type { EventModelLibrary } from './survival/EventModelLibrary';
 import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
+import type { MenuModelLibrary } from './menu/MenuModelLibrary';
 
 export interface GameFactories {
   createScavenge(
@@ -87,6 +88,14 @@ const PRODUCTION_FACTORIES: GameFactories = {
 
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
+const disposedMenuModelLibraries = new WeakSet<MenuModelLibrary>();
+
+export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
+  if (disposedMenuModelLibraries.has(menuModels)) return;
+  disposedMenuModelLibraries.add(menuModels);
+  menuModels.dispose();
+}
+
 export const GAME_CAMERA = Object.freeze({
   fov: 65,
   near: 0.08,
@@ -95,6 +104,7 @@ export const GAME_CAMERA = Object.freeze({
 
 export interface GameTestOptions {
   propModels: PropModelLibrary;
+  menuModels: MenuModelLibrary;
   supernaturalEventModels?: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
@@ -130,6 +140,7 @@ export class Game {
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private propModels!: PropModelLibrary;
+  private menuModels!: MenuModelLibrary;
   private supernaturalEventModels!: EventModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
@@ -162,6 +173,7 @@ export class Game {
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
+    menuModels: MenuModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
@@ -207,6 +219,7 @@ export class Game {
         lifeboatAssets,
         shipAssets,
         eventModels,
+        menuModels,
         physicsRuntime,
         physicsMode,
         audioSystem,
@@ -287,6 +300,7 @@ export class Game {
         animations: () => [],
         dispose: () => undefined,
       } as unknown as EventModelLibrary,
+      options.menuModels,
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
@@ -324,6 +338,7 @@ export class Game {
     this.postProcessingConsole = null;
     runCleanupSteps([
       () => outgoing?.dispose(),
+      () => disposeMenuModelLibrary(this.menuModels),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
@@ -354,6 +369,7 @@ export class Game {
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
+    menuModels: MenuModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
@@ -373,6 +389,7 @@ export class Game {
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
     this.eventModels = eventModels;
+    this.menuModels = menuModels;
     this.audio = audioSystem;
     this.ownedFeaturedEventModels = ownedFeaturedEventModels;
     this.factories = factories;
@@ -401,6 +418,7 @@ export class Game {
         lifeboatAssets,
         shipAssets,
         eventModels,
+        menuModels,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
@@ -488,6 +506,7 @@ export class Game {
         if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
       },
       () => activePhase?.dispose(),
+      () => disposeMenuModelLibrary(this.menuModels),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.sceneRenderer.dispose(),

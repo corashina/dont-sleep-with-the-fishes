@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
+import {
+  MenuModelLoadError,
+  type MenuModelLibrary,
+} from '../src/menu/MenuModelLibrary';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -76,12 +80,17 @@ function eventModels(): EventModelLibrary {
   return createTestEventModels();
 }
 
+function menuModels(): MenuModelLibrary {
+  return { dispose: vi.fn() } as unknown as MenuModelLibrary;
+}
+
 function dependencies(
   loadModels: LaunchDependencies['loadModels'],
   overrides: Partial<LaunchDependencies> = {},
 ): LaunchDependencies {
   return {
     loadModels,
+    loadMenuModels: () => Promise.resolve(menuModels()),
     loadShipFurniture: () => Promise.resolve(createTestShipFurniture()),
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
     loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
@@ -128,6 +137,7 @@ describe('launchGame', () => {
     const shipAssets = createTestShipAssets();
     const shipFurniture = createTestShipFurniture();
     const loadedEventModels = eventModels();
+    const loadedMenuModels = menuModels();
     const loadEventModels = vi.fn(() => Promise.resolve(loadedEventModels));
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
@@ -139,6 +149,7 @@ describe('launchGame', () => {
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
         loadEventModels,
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -160,9 +171,67 @@ describe('launchGame', () => {
       'enabled',
       expect.any(AudioSystem),
       undefined,
+      loadedMenuModels,
     );
     expect(loadEventModels).toHaveBeenCalledOnce();
     expect(game.start).toHaveBeenCalledOnce();
+  });
+
+  it('preloads required menu models before constructing the game', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const loadedMenuModels = menuModels();
+    const loadMenuModels = vi.fn().mockResolvedValue(loadedMenuModels);
+    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { loadMenuModels, createGame },
+    ));
+
+    await handle.completion;
+    expect(loadMenuModels).toHaveBeenCalledOnce();
+    expect(createGame.mock.calls[0]?.at(-1)).toBe(loadedMenuModels);
+  });
+
+  it('reports the required menu model that could not load', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      {
+        loadMenuModels: () => Promise.reject(
+          new MenuModelLoadError('shark', 'local file is missing'),
+        ),
+        createGame,
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('MENU MODEL UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare shark');
+    expect(mount.textContent).toContain('local file is missing');
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('disposes fulfilled menu models once after cancellation', async () => {
+    const pending = deferred<PropModelLibrary>();
+    const mount = connectedMount();
+    const loadedMenuModels = menuModels();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => pending.promise,
+      {
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
+        createGame,
+      },
+    ));
+
+    handle.cancel();
+    pending.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary);
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(loadedMenuModels.dispose).toHaveBeenCalledOnce();
+    expect(createGame).not.toHaveBeenCalled();
   });
 
   it('carries Captain Whiskers through the launched survival lifecycle', async () => {
@@ -173,6 +242,7 @@ describe('launchGame', () => {
     const lifeboatAssets = createTestLifeboatAssets();
     const shipAssets = createTestShipAssets();
     const loadedEventModels = eventModels();
+    const loadedMenuModels = menuModels();
     const savedItems = [
       { instanceId: 'captainWhiskers-1' as ItemInstanceId, type: 'captainWhiskers' },
       { instanceId: 'cannedFood-1' as ItemInstanceId, type: 'cannedFood' },
@@ -263,6 +333,7 @@ describe('launchGame', () => {
       lifeboatAssets,
       shipAssets,
       eventModels: loadedEventModels,
+      menuModels: loadedMenuModels,
       physicsRuntime,
       physicsMode: 'off',
       createSeed: () => 7,
@@ -276,6 +347,7 @@ describe('launchGame', () => {
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
         loadEventModels: () => Promise.resolve(loadedEventModels),
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -494,6 +566,7 @@ describe('launchGame', () => {
       'enabled',
       expect.any(AudioSystem),
       undefined,
+      expect.anything(),
     );
   });
 
@@ -524,6 +597,7 @@ describe('launchGame', () => {
       'off',
       expect.any(AudioSystem),
       undefined,
+      expect.anything(),
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
@@ -823,6 +897,7 @@ describe('launchGame', () => {
     const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
     const skyAssets = createTestSkyAssets();
     const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
+    const loadedMenuModels = menuModels();
     const renderer = {
       domElement: canvas,
       capabilities: { getMaxAnisotropy: () => 1 },
@@ -840,6 +915,10 @@ describe('launchGame', () => {
       loadedShipAssets: ShipAssets,
       loadedEventModels: EventModelLibrary,
       loadedPhysicsRuntime: typeof physicsRuntime,
+      _physicsMode: unknown,
+      _audioSystem: AudioSystem,
+      _featuredEventModels: unknown,
+      receivedMenuModels: MenuModelLibrary,
     ) => Game.forTest({
       createScavenge: () => ({
         start: vi.fn(),
@@ -857,6 +936,7 @@ describe('launchGame', () => {
       lifeboatAssets: loadedLifeboatAssets,
       shipAssets: loadedShipAssets,
       eventModels: loadedEventModels,
+      menuModels: receivedMenuModels,
       physicsRuntime: loadedPhysicsRuntime,
       mount: gameMount,
       renderer,
@@ -867,6 +947,7 @@ describe('launchGame', () => {
       {
         loadShipFurniture: () => Promise.resolve(shipFurniture),
         loadSkyAssets: () => Promise.resolve(skyAssets),
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -879,6 +960,7 @@ describe('launchGame', () => {
     expect(disposeModels).toHaveBeenCalledOnce();
     expect(disposeShipFurniture).toHaveBeenCalledOnce();
     expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(loadedMenuModels.dispose).toHaveBeenCalledOnce();
     expect(canvas.parentElement).toBeNull();
   });
 
