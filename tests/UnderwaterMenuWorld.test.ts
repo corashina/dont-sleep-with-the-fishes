@@ -1,7 +1,9 @@
 import {
   AnimationClip,
+  Box3,
   Group,
   InstancedMesh,
+  Mesh,
   NumberKeyframeTrack,
   PerspectiveCamera,
   Points,
@@ -42,6 +44,11 @@ it('creates the approved fixed composition once', () => {
   expect(created.filter((id) => id === 'seaweed')).toHaveLength(3);
   expect(camera.userData.menuCameraFixed).toBe(true);
   expect(camera.position.toArray()).toEqual([0, 1.35, 7.8]);
+  const seabed = world.root.getObjectByName('menu:seabed') as Mesh;
+  const caustics = world.root.getObjectByName('menu:caustic-overlay') as Mesh;
+  world.root.updateMatrixWorld(true);
+  expect(new Box3().setFromObject(seabed).max.z).toBeGreaterThan(camera.position.z);
+  expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
   expect(world.root.getObjectByName('menu:boat')).toBeDefined();
   expect(world.root.getObjectByName('menu:seated-skeleton')).toBeDefined();
   expect(world.actors.sharks[0].clip.name).toBe('Armature|Swim');

@@ -81,4 +81,6 @@ it('uses the viewport height for the title and start layout', () => {
   expect(mainStyles).toMatch(/\.underwater-menu-screen\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)/s);
   expect(mainStyles).toMatch(/\.underwater-menu-screen__content\s*\{[^}]*height:\s*100%/s);
   expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*justify-self:\s*center/s);
+  expect(mainStyles).toMatch(/@media \(max-height: 760px\) and \(min-width: 821px\)\s*\{[\s\S]*?\.how-to-play-board\s*\{[^}]*padding:\s*12px 24px/s);
+  expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*min-height:\s*44px/s);
 });

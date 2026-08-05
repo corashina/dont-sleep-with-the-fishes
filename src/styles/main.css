@@ -2624,8 +2624,31 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   .journal-page__story section + section { margin-top: 14px; }
 }
 @media (max-height: 760px) and (min-width: 821px) {
-  .how-to-play-board { gap: 12px; padding-block: 22px; }
-  .how-to-play-step { padding-block: 10px; }
+  .how-to-play-board { gap: 8px; padding: 12px 24px; }
+  .how-to-play-board__header { gap: 3px; }
+  .how-to-play-board h2 { font-size: 2.75rem; }
+  .how-to-play-board .lead { margin: 0; }
+  .how-to-play-step {
+    grid-template-columns: 42px 1fr;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: .88rem;
+  }
+  .how-to-play-step__number { width: 38px; height: 38px; font-size: 1.05rem; }
+  .how-to-play-step p { margin: 3px 0 4px; line-height: 1.2; }
+  .how-to-play-step ul { gap: 1px; line-height: 1.2; }
+  .how-to-play-controls { gap: 4px; }
+  .how-to-play-controls__grid { padding: 5px 8px 6px; }
+  .how-to-play-controls__grid div { gap: 3px; padding: 3px; }
+  .how-to-play-controls__grid .control-keys { min-height: 22px; }
+  .how-to-play-controls__grid .control-keys kbd { padding-block: 4px; }
+  .how-to-play-controls__grid .control-keys--move {
+    grid-template-rows: repeat(2, 18px);
+  }
+  .how-to-play-board [data-menu-guide-close] {
+    min-height: 44px;
+    padding-block: 10px;
+  }
 }
 @media (max-width: 820px) {
   .weight-circles__row { gap: clamp(7px, 1.25vw, 10px); }
