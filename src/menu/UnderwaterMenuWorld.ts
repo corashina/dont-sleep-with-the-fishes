@@ -24,29 +24,30 @@ import {
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
-import {
-  createSeatedSkeleton,
-  disposeSeatedSkeleton,
-} from './SkeletonAssembly';
+import { DistantSeabed } from './DistantSeabed';
+import type { MenuSceneComponent } from './MenuSceneComponent';
+import { MenuTitleSign } from './MenuTitleSign';
+import { SunkenDorothyWreck } from './SunkenDorothyWreck';
 import {
   type MenuSharkActor,
   type UnderwaterMenuActors,
 } from './UnderwaterMenuAnimator';
 import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
-import { disposeResourceSets, runCleanupSteps } from '../world/SceneResources';
+import {
+  disposeResourceSets,
+  ignoreCleanupError,
+  runCleanupSteps,
+} from '../world/SceneResources';
 
 export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
-export const MENU_CAMERA_TARGET = [0, 1.15, -4.8] as const;
+export const MENU_CAMERA_TARGET = [0, 2.0, -4.8] as const;
 
 export const MENU_PLACEMENT = {
   boat: { position: [0, 0.42, -4.8], rotation: [0.05, -0.12, -0.09] },
-  skeleton: { position: [0.08, 0.82, -4.45], rotation: [0, Math.PI, 0] },
   rockA: { position: [-5.4, -0.1, -5.8], rotation: [0, 0.4, 0] },
   rockB: { position: [4.8, -0.15, -3.2], rotation: [0, -0.7, 0] },
   rockC: { position: [6.4, -0.2, -9.5], rotation: [0, 0.2, 0] },
-  fishBone: { position: [-1.8, 0.14, -3.5], rotation: [0.1, 0.8, -0.2] },
-  largeBone: { position: [1.65, 0.18, -4.0], rotation: [0.05, -0.4, 0.22] },
 } as const;
 
 const SEAWEED_POSITIONS = [
@@ -79,6 +80,18 @@ const CAUSTIC_FRAGMENT_SHADER = `
 
 type ModelFactory = Pick<MenuModelLibrary, 'create'>;
 
+export interface UnderwaterMenuComponentFactories {
+  createTitleSign(): MenuSceneComponent;
+  createDorothyWreck(): MenuSceneComponent;
+  createDistantSeabed(): MenuSceneComponent;
+}
+
+const DEFAULT_COMPONENT_FACTORIES: UnderwaterMenuComponentFactories = {
+  createTitleSign: () => new MenuTitleSign(),
+  createDorothyWreck: () => new SunkenDorothyWreck(),
+  createDistantSeabed: () => new DistantSeabed(),
+};
+
 export class UnderwaterMenuWorld {
   readonly root = new Group();
   readonly plants: UnderwaterPlantField;
@@ -88,9 +101,9 @@ export class UnderwaterMenuWorld {
   readonly actors: UnderwaterMenuActors;
 
   private readonly modelInstances: MenuModelInstance[] = [];
+  private readonly components: MenuSceneComponent[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly seatedSkeleton: Group;
   private readonly causticMaterial: ShaderMaterial;
   private readonly menuBackground = new Color(0x071b24);
   private readonly menuFog = new FogExp2(0x0b3440, 0.055);
@@ -106,6 +119,7 @@ export class UnderwaterMenuWorld {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     models: ModelFactory,
+    components: UnderwaterMenuComponentFactories = DEFAULT_COMPONENT_FACTORIES,
   ) {
     this.root.name = 'menu:underwater-world';
 
@@ -113,20 +127,19 @@ export class UnderwaterMenuWorld {
     let rockA: MenuModelInstance;
     let rockB: MenuModelInstance;
     let rockC: MenuModelInstance;
-    let fishBone: MenuModelInstance;
     let skull: MenuModelInstance;
-    let largeBone: MenuModelInstance;
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
     let fishSchools: readonly [Group, Group];
+    let titleSign: MenuSceneComponent;
+    let dorothy: MenuSceneComponent;
+    let distantSeabed: MenuSceneComponent;
     try {
       boat = this.createModel(models, 'boat');
       rockA = this.createModel(models, 'rockA');
       rockB = this.createModel(models, 'rockB');
       rockC = this.createModel(models, 'rockC');
-      fishBone = this.createModel(models, 'fishBone');
       skull = this.createModel(models, 'skull');
-      largeBone = this.createModel(models, 'largeBone');
       sharkOne = this.createModel(models, 'shark');
       sharkTwo = this.createModel(models, 'shark');
       fishSchools = [
@@ -134,8 +147,14 @@ export class UnderwaterMenuWorld {
         this.createFishSchool(models, 1),
       ];
       this.createStaticSeaweed(models);
+      titleSign = components.createTitleSign();
+      this.components.push(titleSign);
+      dorothy = components.createDorothyWreck();
+      this.components.push(dorothy);
+      distantSeabed = components.createDistantSeabed();
+      this.components.push(distantSeabed);
     } catch (error) {
-      runCleanupSteps(this.modelInstances.map((instance) => () => instance.dispose()));
+      this.rollbackConstruction();
       throw error;
     }
 
@@ -143,20 +162,16 @@ export class UnderwaterMenuWorld {
     this.placeModel(rockA.root, 'rockA', MENU_PLACEMENT.rockA);
     this.placeModel(rockB.root, 'rockB', MENU_PLACEMENT.rockB);
     this.placeModel(rockC.root, 'rockC', MENU_PLACEMENT.rockC);
-    this.placeModel(fishBone.root, 'fish-bone', MENU_PLACEMENT.fishBone);
-    this.placeModel(largeBone.root, 'large-bone', MENU_PLACEMENT.largeBone);
-
-    this.seatedSkeleton = createSeatedSkeleton(skull.root);
-    this.seatedSkeleton.position.set(...MENU_PLACEMENT.skeleton.position);
-    this.seatedSkeleton.rotation.set(...MENU_PLACEMENT.skeleton.rotation);
+    skull.root.name = 'menu:skull';
+    skull.root.position.set(0.12, 1.32, -4.35);
+    skull.root.rotation.set(0.3, 0.45, -0.22);
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';
     const sharkOneClip = sharkOne.animations.find(({ name }) => name === 'Armature|Swim');
     const sharkTwoClip = sharkTwo.animations.find(({ name }) => name === 'Armature|Swim');
     if (!sharkOneClip || !sharkTwoClip) {
-      disposeSeatedSkeleton(this.seatedSkeleton);
-      runCleanupSteps(this.modelInstances.map((instance) => () => instance.dispose()));
+      this.rollbackConstruction();
       throw new Error('Menu sharks require the Armature|Swim clip');
     }
     this.sharks = [
@@ -185,9 +200,10 @@ export class UnderwaterMenuWorld {
       rockA.root,
       rockB.root,
       rockC.root,
-      fishBone.root,
-      largeBone.root,
-      this.seatedSkeleton,
+      skull.root,
+      titleSign.root,
+      dorothy.root,
+      distantSeabed.root,
       ...this.rootSeaweed(),
       sharkOne.root,
       sharkTwo.root,
@@ -228,7 +244,11 @@ export class UnderwaterMenuWorld {
     scene.background = this.menuBackground;
     scene.fog = this.menuFog;
     camera.position.set(...MENU_CAMERA_POSITION);
-    camera.lookAt(new Vector3(...MENU_CAMERA_TARGET));
+    camera.lookAt(
+      MENU_CAMERA_TARGET[0],
+      MENU_CAMERA_TARGET[1],
+      MENU_CAMERA_TARGET[2],
+    );
     camera.userData.menuCameraFixed = true;
     scene.add(this.root);
   }
@@ -239,12 +259,16 @@ export class UnderwaterMenuWorld {
     const cleanupSteps: Array<() => void> = [
       () => this.root.removeFromParent(),
       ...this.modelInstances.map((instance) => () => instance.dispose()),
-      () => disposeSeatedSkeleton(this.seatedSkeleton),
+    ];
+    for (let index = this.components.length - 1; index >= 0; index -= 1) {
+      cleanupSteps.push(() => this.components[index]!.dispose());
+    }
+    cleanupSteps.push(
       () => this.plants.dispose(),
       () => this.particles.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
       () => this.restoreSceneState(),
-    ];
+    );
     runCleanupSteps(cleanupSteps);
   }
 
@@ -252,6 +276,15 @@ export class UnderwaterMenuWorld {
     const instance = models.create(id);
     this.modelInstances.push(instance);
     return instance;
+  }
+
+  private rollbackConstruction(): void {
+    for (let index = this.components.length - 1; index >= 0; index -= 1) {
+      ignoreCleanupError(() => this.components[index]!.dispose());
+    }
+    for (const instance of this.modelInstances) {
+      ignoreCleanupError(() => instance.dispose());
+    }
   }
 
   private createFishSchool(models: ModelFactory, schoolIndex: number): Group {
