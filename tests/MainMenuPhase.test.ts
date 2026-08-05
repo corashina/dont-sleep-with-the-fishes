@@ -26,7 +26,7 @@ function createRig(
   const camera = new PerspectiveCamera();
   const dependencies = {
     createUI: vi.fn(() => ui),
-    createWorld: vi.fn(() => world),
+    createWorld: vi.fn((_scene: Scene) => world),
     createAnimator: vi.fn(() => animator),
     requestPointerLock,
   };
@@ -236,6 +236,88 @@ describe('MainMenuPhase', () => {
     expect(ui.dispose).toHaveBeenCalledOnce();
     expect(onComplete).not.toHaveBeenCalled();
     expect(ui.showPointerLockError).not.toHaveBeenCalled();
+  });
+
+  it('runs all disposal steps and preserves the first disposal error', () => {
+    const firstError = new Error('animator disposal failed');
+    const secondError = new Error('world disposal failed');
+    const { animator, camera, dependencies, phase, ui, world } = createRig();
+    const menuScene = dependencies.createWorld.mock.calls[0]![0] as Scene;
+    menuScene.add(new PerspectiveCamera());
+    animator.dispose.mockImplementation(() => {
+      throw firstError;
+    });
+    world.dispose.mockImplementation(() => {
+      throw secondError;
+    });
+
+    expect(() => phase.dispose()).toThrow(firstError);
+
+    expect(animator.dispose).toHaveBeenCalledOnce();
+    expect(world.dispose).toHaveBeenCalledOnce();
+    expect(ui.dispose).toHaveBeenCalledOnce();
+    expect(menuScene.children).not.toContain(camera);
+    expect(menuScene.children).toHaveLength(0);
+  });
+
+  it('releases pointer lock acquired after disposal', async () => {
+    const originalExitPointerLock = Object.getOwnPropertyDescriptor(
+      document,
+      'exitPointerLock',
+    );
+    const originalPointerLockElement = Object.getOwnPropertyDescriptor(
+      document,
+      'pointerLockElement',
+    );
+    let resolvePointerLock!: () => void;
+    const requestPointerLock = vi.fn(() => new Promise<void>((resolve) => {
+      resolvePointerLock = resolve;
+    }));
+    const exitPointerLock = vi.fn();
+    const { canvas, phase, ui } = createRig(requestPointerLock);
+
+    try {
+      Object.defineProperty(document, 'exitPointerLock', {
+        configurable: true,
+        value: exitPointerLock,
+      });
+      Object.defineProperty(document, 'pointerLockElement', {
+        configurable: true,
+        value: null,
+      });
+      phase.start();
+      ui.onStart();
+      phase.dispose();
+      Object.defineProperty(document, 'pointerLockElement', {
+        configurable: true,
+        value: canvas,
+      });
+
+      resolvePointerLock();
+      await Promise.resolve();
+
+      expect(exitPointerLock).toHaveBeenCalledOnce();
+    } finally {
+      if (originalExitPointerLock) {
+        Object.defineProperty(
+          document,
+          'exitPointerLock',
+          originalExitPointerLock,
+        );
+      } else {
+        delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+      }
+      if (originalPointerLockElement) {
+        Object.defineProperty(
+          document,
+          'pointerLockElement',
+          originalPointerLockElement,
+        );
+      } else {
+        delete (document as { pointerLockElement?: Element | null })
+          .pointerLockElement;
+      }
+    }
   });
 
   it('cleans completed construction steps when animator creation fails', () => {

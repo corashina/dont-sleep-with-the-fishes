@@ -486,6 +486,50 @@ describe('Game menu lifecycle', () => {
     }
   });
 
+  it('reports scavenge disposal failure and still activates the fresh menu', () => {
+    const disposalError = new Error('scavenge disposal failed');
+    const menus = [gamePhase(), gamePhase()];
+    const scavenge = gamePhase();
+    scavenge.dispose = vi.fn(() => {
+      throw disposalError;
+    });
+    const onFatalError = vi.fn();
+    let completeMenu: () => void = () => undefined;
+    let returnToMenu: () => void = () => undefined;
+    const createMenu = vi.fn((_context, onComplete) => {
+      completeMenu = onComplete;
+      return menus[createMenu.mock.calls.length - 1]!;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: (_context, _onComplete, onReturnToMenu) => {
+        returnToMenu = onReturnToMenu;
+        return scavenge;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      onFatalError,
+    });
+
+    try {
+      game.start();
+      completeMenu();
+
+      expect(returnToMenu).not.toThrow();
+      expect(onFatalError).toHaveBeenCalledOnce();
+      expect(onFatalError).toHaveBeenCalledWith(disposalError);
+      expect(createMenu).toHaveBeenCalledTimes(2);
+      expect(menus[1]!.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+    }
+  });
+
   it('starts scavenging directly when survival requests a restart', () => {
     const menu = gamePhase();
     const scavenges = [gamePhase(), gamePhase()];

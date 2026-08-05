@@ -5,7 +5,10 @@ import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
 import type { MenuVisualState } from '../rendering/SceneRenderer';
-import { ignoreCleanupError as attemptCleanup } from '../world/SceneResources';
+import {
+  ignoreCleanupError as attemptCleanup,
+  runCleanupSteps,
+} from '../world/SceneResources';
 
 const FADE_DURATION_SECONDS = 0.7;
 const NOOP = (): void => undefined;
@@ -166,19 +169,22 @@ export class MainMenuPhase implements GamePhase {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    if (this.pointerLockListenerRegistered) {
-      document.removeEventListener(
-        'pointerlockchange',
-        this.handlePointerLockChange,
-      );
-      this.pointerLockListenerRegistered = false;
-    }
-    this.ui.onStart = NOOP;
-    this.scene.remove(this.context.camera);
-    this.animator.dispose();
-    this.world.dispose();
-    this.ui.dispose();
-    this.scene.clear();
+    runCleanupSteps([
+      () => {
+        if (!this.pointerLockListenerRegistered) return;
+        this.pointerLockListenerRegistered = false;
+        document.removeEventListener(
+          'pointerlockchange',
+          this.handlePointerLockChange,
+        );
+      },
+      () => { this.ui.onStart = NOOP; },
+      () => this.scene.remove(this.context.camera),
+      () => this.animator.dispose(),
+      () => this.world.dispose(),
+      () => this.ui.dispose(),
+      () => this.scene.clear(),
+    ]);
   }
 
   private async requestStart(): Promise<void> {
@@ -197,7 +203,13 @@ export class MainMenuPhase implements GamePhase {
       return;
     }
     this.pointerLockPending = false;
-    if (this.disposed || this.transitioning) return;
+    if (this.disposed) {
+      if (document.pointerLockElement === this.context.renderer.domElement) {
+        document.exitPointerLock();
+      }
+      return;
+    }
+    if (this.transitioning) return;
     this.ui.clearPointerLockError();
     this.transitioning = true;
     this.fadeElapsed = 0;
