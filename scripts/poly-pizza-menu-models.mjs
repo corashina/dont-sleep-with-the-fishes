@@ -1,0 +1,103 @@
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  buildPolyPizzaModels,
+  createPolyPizzaSource,
+} from './poly-pizza-models.mjs';
+
+const source = (options) => createPolyPizzaSource({
+  ...options,
+  downloadedOn: '2026-08-05',
+});
+
+export const POLY_PIZZA_MENU_MODEL_SOURCES = Object.freeze({
+  boat: source({
+    id: 'boat', publicId: 'YwdXrwbN3o',
+    resourceId: '66ae3fa9-d6de-45dc-86c0-659786b865e1',
+    title: 'Boat', creator: 'Pixel', license: 'CC-BY 3.0',
+    sha256: 'FEE1EE45E5457D146857D064982922A378D909794E34A2FC89572BB946BA8464',
+    sourceTriangles: 412, maxTriangles: 500,
+  }),
+  rockA: source({
+    id: 'rockA', publicId: 'd2VWOdthtR',
+    resourceId: 'd7bc2b98-2c73-4e78-b0bd-e5e24d65734a',
+    title: 'Rock Large', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '76F1F4BABFEFED5FF852C97978065AC6FF1EEC5B6930BAE9E62EA095BFAE0FB5',
+    sourceTriangles: 448, maxTriangles: 500,
+  }),
+  rockB: source({
+    id: 'rockB', publicId: '54jZKTAt5p',
+    resourceId: 'c14651f6-9ef8-41e8-8aca-cafed61d9ca2',
+    title: 'Rock Large', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: 'C4E9F04C04419E67E919C4533DFD6044ABC5F0640AFA9D0E174CF474285D380C',
+    sourceTriangles: 222, maxTriangles: 300,
+  }),
+  rockC: source({
+    id: 'rockC', publicId: 'li0YBlBEMz',
+    resourceId: 'a50f220b-3c4c-4226-ae97-0458ed615cd2',
+    title: 'Rock Large', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: 'AFF6F5DF4CB5309400C9E85790D8FBAAB5EBE281402A54E7BA4308038DEFC9F3',
+    sourceTriangles: 432, maxTriangles: 500,
+  }),
+  fishBone: source({
+    id: 'fishBone', publicId: 'bU5RLZnq6v',
+    resourceId: 'ed285a5f-7c35-47b0-a12d-60006f5eb74c',
+    title: 'Fish Bone', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: 'D15FC15F86F84BA38B3A0CF18E5B23651F7541433B59D045233793B2A54FB51E',
+    sourceTriangles: 588, maxTriangles: 700,
+  }),
+  skull: source({
+    id: 'skull', publicId: 'VGtSTNRf2O',
+    resourceId: '2a686e08-5456-405f-a6ef-03274e080b2f',
+    title: 'Skull', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '3A05AC7A8FE56832E988285D24F755F2D22DB51CC0E70F2BD559077F6324349B',
+    sourceTriangles: 3132, maxTriangles: 3_500,
+  }),
+  largeBone: source({
+    id: 'largeBone', publicId: 'A67un3x9nV',
+    resourceId: 'dc066333-7257-425b-bbc0-7d93403d019d',
+    title: 'Large Bone', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: 'AD3442D1998FE6AAA27EFC585EBA2C651C80ED2BB9467A6082DC6507509F3AF9',
+    sourceTriangles: 1680, maxTriangles: 1_800,
+  }),
+  shark: source({
+    id: 'shark', publicId: 'AyHTK3zUSG',
+    resourceId: 'd2d374ea-eb1d-4659-8cc7-816a83b82470',
+    title: 'Shark', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '6D5CF3CD7EA749583B622A306CFCAE4DE85432EFCC74A1EC6F52E5430CF13AFF',
+    sourceTriangles: 644, maxTriangles: 700,
+  }),
+});
+
+export const POLY_PIZZA_MENU_MODEL_IDS = Object.freeze(
+  Object.keys(POLY_PIZZA_MENU_MODEL_SOURCES),
+);
+
+export function buildPolyPizzaMenuModels({ sourceRoot, outputRoot, verifySource = true }) {
+  return buildPolyPizzaModels({
+    sourceRoot,
+    outputRoot,
+    sources: POLY_PIZZA_MENU_MODEL_SOURCES,
+    verifySource,
+  });
+}
+
+async function runCli(args) {
+  if (args.length === 1 && args[0] === '--sources') {
+    console.log(JSON.stringify(POLY_PIZZA_MENU_MODEL_SOURCES));
+    return;
+  }
+  if (args.length !== 2) {
+    throw new Error(
+      'Usage: node scripts/poly-pizza-menu-models.mjs --sources | <sourceRoot> <outputRoot>',
+    );
+  }
+  await buildPolyPizzaMenuModels({ sourceRoot: args[0], outputRoot: args[1] });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  runCli(process.argv.slice(2)).catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
