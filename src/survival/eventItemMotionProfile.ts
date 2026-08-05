@@ -1,7 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 
 export type EventItemHoldZone = 'one-hand' | 'large' | 'reading';
-export type EventItemAimMode = 'none' | 'entity';
+export type EventItemAimMode = 'none' | 'entity' | 'horizontal-entity';
 export type EventItemMass = 'light' | 'medium' | 'heavy';
 
 export interface EventItemMotionProfile {
@@ -69,8 +69,17 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   bottledPaper: createProfile('one-hand', 'bottledPaper'),
   umbrella: createProfile('large', 'umbrella'),
   swimRing: createProfile('large', 'swimRing'),
-  flashlight: createProfile('one-hand', 'flashlight'),
-  shotgun: createProfile('large', 'shotgun'),
+  flashlight: Object.freeze({
+    ...createProfile('one-hand', 'flashlight'),
+    view: [0.3, -0.3, -0.78] as const,
+    aim: 'horizontal-entity' as const,
+    forward: [-1, 0, 0] as const,
+  }),
+  shotgun: Object.freeze({
+    ...createProfile('large', 'shotgun'),
+    view: [0.18, -0.32, -0.78] as const,
+    aim: 'horizontal-entity' as const,
+  }),
   energyBar: createProfile('one-hand', 'energyBar'),
   captainWhiskers: createProfile('one-hand', 'captainWhiskers'),
 });

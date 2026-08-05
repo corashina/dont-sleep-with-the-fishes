@@ -1,10 +1,17 @@
+// Importance: 4/5. Protects event effect ownership, visibility, geometry, and cleanup.
 import {
+  Bone,
   BufferGeometry,
+  Float32BufferAttribute,
   Group,
   LineSegments,
   Material,
   Mesh,
+  MeshStandardMaterial,
   PointLight,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
@@ -47,6 +54,45 @@ function ownedResources(root: Group): readonly (BufferGeometry | Material)[] {
       .forEach((material) => resources.add(material));
   });
   return [...resources];
+}
+
+function riggedHand(): { root: Group; skeleton: Skeleton } {
+  const root = new Group();
+  const bones: Bone[] = [];
+  for (const chain of [
+    ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
+    ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
+    ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
+    ['RingF_lower', 'RingF_middle', 'RingF_tip'],
+    ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
+  ]) {
+    let parent: Bone | null = null;
+    for (const name of chain) {
+      const bone = new Bone();
+      bone.name = name;
+      if (parent === null) root.add(bone);
+      else parent.add(bone);
+      bones.push(bone);
+      parent = bone;
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([
+    -0.2, -0.1, 0,
+    0.2, -0.1, 0,
+    0, 0.2, 0,
+  ], 3));
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute(new Uint16Array(12), 4));
+  const weights = new Float32Array(12);
+  weights[0] = 1;
+  weights[4] = 1;
+  weights[8] = 1;
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute(weights, 4));
+  const skeleton = new Skeleton(bones);
+  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
+  mesh.bind(skeleton);
+  root.add(mesh);
+  return { root, skeleton };
 }
 
 describe('EventItemEffects', () => {
@@ -191,6 +237,25 @@ describe('EventItemEffects', () => {
 
     effects.clear();
     expect(fill.intensity).toBe(0);
+    effects.dispose();
+  });
+
+  it('shows a curled hand only while the flashlight is held', () => {
+    const hand = riggedHand();
+    const effects = new EventItemEffects(hand.root);
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    effects.setHeldItem('flashlight');
+
+    effects.apply(sample, new Group());
+    expect(effects.root.getObjectByName('event-item-flashlight-hand')!.visible)
+      .toBe(true);
+    expect(hand.root.getObjectByName('IndexF_lower')!.rotation.x)
+      .toBeGreaterThan(0);
+
+    effects.setHeldItem(null);
+    expect(effects.root.getObjectByName('event-item-flashlight-hand')!.visible)
+      .toBe(false);
     effects.dispose();
   });
 

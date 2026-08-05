@@ -743,6 +743,7 @@ export class SurvivalPhase implements GamePhase {
         instanceId,
         itemType,
       );
+      await this.world.returnEventItemUse?.();
     } catch (error) {
       this.onInvariantError(
         error instanceof Error ? error : new Error(String(error)),

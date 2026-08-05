@@ -18,6 +18,9 @@ export type EventItemDisposition = 'recover' | 'broken' | 'depart';
 
 const MOTION_PROFILE = Symbol('event-item-motion-profile');
 const ANTICIPATE = Symbol('event-item-anticipate');
+const ITEM_LIFT_START = 0.08;
+const MAP_LIFT_COMPLETION = 0.34;
+const MAP_LOOK_COMPLETION = 0.44;
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
   [ANTICIPATE]?: number;
@@ -42,6 +45,8 @@ export interface EventItemUseSample {
   effectKind: EventItemEffectKind;
   aimBlend: number;
   targetBlend: number;
+  ballisticFlight: boolean;
+  flightArc: number;
   itemVisible: boolean;
 }
 
@@ -83,6 +88,8 @@ export function createEventItemUseSample(): EventItemUseSample {
     effectKind: 'none',
     aimBlend: 0,
     targetBlend: 0,
+    ballisticFlight: false,
+    flightArc: 0,
     itemVisible: true,
   };
 }
@@ -187,6 +194,8 @@ function resetSample(output: EventItemUseSample): void {
   output.effectKind = 'none';
   output.aimBlend = 0;
   output.targetBlend = 0;
+  output.ballisticFlight = false;
+  output.flightArc = 0;
   output.itemVisible = true;
 }
 
@@ -204,29 +213,36 @@ function samplePickupAndHold(
   output.viewZ = -0.64 + (profile.view[2] + 0.64) * pickup;
   output.pitch = -0.08 * anticipate;
   output.roll = -0.04 * anticipate;
-  output.aimBlend = profile.aim === 'entity' ? hold : 0;
+  output.aimBlend = profile.aim === 'none' ? 0 : hold;
 }
 
 function sampleThrowTarget(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
-  action: number,
+  progress: number,
   itemId: ItemId | undefined,
 ): void {
   samplePickupAndHold(output, pickup, hold);
+  const windUp = smoothstep((progress - 0.58) / 0.12);
+  const flight = clamp01((progress - 0.7) / 0.3);
   let throwRoll = -0.36;
   if (itemId === 'baitTin' || itemId === 'energyBar') throwRoll = 0.22;
   if (itemId === 'swimRing') throwRoll = 0.68;
-  output.viewX += 0.58 * action;
-  output.viewY += 0.12 * action;
-  output.viewZ += 0.28 * action;
-  output.yaw = -0.34 * action;
-  output.pitch += 0.28 * action;
-  output.roll += throwRoll * action;
-  output.scaleX = 1 - 0.08 * action;
-  output.scaleY = 1 - 0.08 * action;
-  output.scaleZ = 1 - 0.08 * action;
+  output.viewX += 0.24 * windUp;
+  output.viewY += 0.1 * windUp;
+  output.viewZ += 0.12 * windUp;
+  output.yaw = -0.3 * windUp;
+  output.pitch += 0.22 * windUp;
+  output.roll += throwRoll * windUp;
+  output.cameraYaw = -0.035 * windUp;
+  output.targetBlend = flight;
+  output.ballisticFlight = flight > 0;
+  output.flightArc = 4 * flight * (1 - flight);
+  const spinDirection = itemId === 'baitTin' || itemId === 'energyBar' ? 1 : -1;
+  output.pitch += spinDirection * flight * Math.PI * 2;
+  output.roll += flight * Math.PI * (itemId === 'swimRing' ? 2 : 3);
+  output.itemVisible = flight < 1;
 }
 
 function sampleTapeStretch(
@@ -254,16 +270,25 @@ function sampleCompassSearch(
 }
 
 function sampleMapRead(
-  output: EventItemUseSample, pickup: number, hold: number, action: number,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.viewX = -0.04 * pickup;
-  output.viewY += 0.11 * hold;
-  output.yaw = -0.16 * hold;
-  output.pitch = 0.44 * hold;
-  output.roll = -0.08 * action;
-  output.scaleX = 1 + 0.1 * hold;
-  output.scaleY = 1 + 0.1 * hold;
+  output.viewX = -0.03 * pickup;
+  output.viewY += 0.12 * hold;
+  output.viewZ += 0.14 * hold;
+  output.pitch = hold > 0 ? -0.08 * hold : 0;
+  output.scaleX = 1 + 0.5 * hold;
+  output.scaleY = 1 + 0.5 * hold;
+  output.scaleZ = 1 + 0.5 * hold;
+
+  const lookLeft = pulse(progress, 0.5, 0.61, 0.72);
+  const lookRight = pulse(progress, 0.7, 0.81, 0.92);
+  output.cameraYaw = 0.055 * (lookLeft - lookRight);
+  output.cameraPitch = 0;
+  output.roll = 0;
 }
 
 function sampleBinocularLook(
@@ -378,9 +403,8 @@ function sampleFlashlightFlash(
 ): void {
   samplePickupAndHold(output, pickup, hold);
   output.effectKind = action > 0 ? 'flashlight' : 'none';
-  output.viewX += 0.22 * action;
+  output.viewX += 0.08 * action;
   output.yaw = -0.18 * action;
-  output.pitch = 0.14 * action;
   output.primaryEffect = action;
   output.secondaryEffect = pulse(action, 0.12, 0.58, 0.96);
 }
@@ -432,7 +456,7 @@ export function sampleEventItemUse(
   const liftCompletion = liftCompletionForMass(
     eventItemMotionProfile(itemId ?? 'cannedFood').mass,
   );
-  const pickup = smoothstep((t - 0.08) / (liftCompletion - 0.08));
+  const pickup = smoothstep((t - ITEM_LIFT_START) / (liftCompletion - ITEM_LIFT_START));
   const hold = Math.min(pickup, 1);
   const settle = pulse(t, 0.32, 0.42, 0.52);
   const action = pulse(t, 0.48, 0.7, 0.9);
@@ -442,10 +466,10 @@ export function sampleEventItemUse(
 
   switch (context) {
     case 'base': samplePickupAndHold(output, pickup, hold); break;
-    case 'throw-target': sampleThrowTarget(output, pickup, hold, action, itemId); break;
+    case 'throw-target': sampleThrowTarget(output, pickup, hold, t, itemId); break;
     case 'tape-stretch': sampleTapeStretch(output, pickup, hold, action); break;
     case 'compass-search': sampleCompassSearch(output, pickup, hold, action); break;
-    case 'map-read': sampleMapRead(output, pickup, hold, action); break;
+    case 'map-read': sampleMapRead(output, pickup, hold, t); break;
     case 'binocular-look': sampleBinocularLook(output, pickup, hold, action); break;
     case 'net-throw': sampleNetThrow(output, pickup, hold, action); break;
     case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, action); break;
@@ -468,12 +492,12 @@ export function sampleEventItemUse(
       break;
   }
 
-  output.roll += 0.03 * settle;
+  if (context !== 'map-read') output.roll += 0.03 * settle;
 }
 
 function liftCompletionForMass(mass: EventItemMass): number {
   switch (mass) {
-    case 'light': return 0.34;
+    case 'light': return MAP_LIFT_COMPLETION;
     case 'medium': return 0.38;
     case 'heavy': return 0.44;
   }
@@ -496,9 +520,40 @@ export function sampleEventItemOutcome(
   const t = clamp01(progress);
   const profile = eventItemMotionProfile(itemId);
 
+  if (context === 'throw-target') {
+    output.itemVisible = false;
+    return;
+  }
+
+  if (context === 'shotgun-fire') {
+    resetSample(output);
+    const pickup = 1 - smoothstep(t);
+    samplePickupAndHold(output, pickup, pickup);
+    output.itemVisible = t < 1;
+    return;
+  }
+
   if (disposition === 'depart') {
     output.targetBlend = t;
-    output.aimBlend = profile.aim === 'entity' ? 1 - t : 0;
+    output.aimBlend = profile.aim === 'none' ? 0 : 1 - t;
+    output.itemVisible = t < 1;
+    return;
+  }
+
+  if (context === 'map-read') {
+    sampleEventItemUse(
+      context,
+      itemId,
+      MAP_LOOK_COMPLETION * (1 - t),
+      output,
+    );
+    return;
+  }
+
+  if (context === 'flashlight-flash') {
+    resetSample(output);
+    const pickup = 1 - smoothstep(t);
+    sampleFlashlightFlash(output, pickup, pickup, 0);
     output.itemVisible = t < 1;
     return;
   }
@@ -522,6 +577,19 @@ export function eventItemOutcomeDuration(
   itemId: ItemId,
   disposition: EventItemDisposition,
 ): number {
+  if (itemId === 'map' && disposition !== 'depart') {
+    return eventItemUseDuration('map-read') * MAP_LOOK_COMPLETION;
+  }
+  if (itemId === 'shotgun') {
+    const liftWindow = liftCompletionForMass(
+      eventItemMotionProfile(itemId).mass,
+    ) - ITEM_LIFT_START;
+    return eventItemUseDuration('shotgun-fire') * liftWindow;
+  }
+  if (itemId === 'flashlight' && disposition !== 'depart') {
+    return eventItemUseDuration('flashlight-flash')
+      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+  }
   const mass = eventItemMotionProfile(itemId).mass;
   const base = disposition === 'depart' ? 0.5 : 0.7;
   const massOffset = mass === 'heavy' ? 0.18 : mass === 'medium' ? 0.09 : 0;

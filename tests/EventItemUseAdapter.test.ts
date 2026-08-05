@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects event actor borrowing, aiming, restoration, and camera state.
 import { Group, PerspectiveCamera, PointLight, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -103,6 +104,54 @@ describe('EventItemUseAdapter', () => {
     adapter.dispose();
   });
 
+  it('aims the shotgun sideways without aiming up or down', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0, 1.8, 0);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'shotgun-1' as ItemInstanceId,
+      new Vector3(),
+    );
+    const aimTarget = new Group();
+    aimTarget.position.set(4, 8, -5);
+    scene.add(aimTarget);
+    const effects = new EventItemEffects();
+    const adapter = new EventItemUseAdapter(camera, effects);
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    sample.viewX = 0.18;
+    sample.viewY = -0.32;
+    sample.viewZ = -0.78;
+    sample.aimBlend = 1;
+
+    adapter.begin(actor, 'shotgun', aimTarget);
+    adapter.apply(sample);
+
+    const origin = actor.root.getWorldPosition(new Vector3());
+    const expected = aimTarget.getWorldPosition(new Vector3()).sub(origin);
+    expected.y = 0;
+    expected.normalize();
+    const actual = new Vector3(0, 0, -1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    expect(actual.y).toBeCloseTo(0);
+    expect(actual.dot(expected)).toBeGreaterThan(0.995);
+
+    aimTarget.position.set(-3, -6, -4);
+    adapter.apply(sample);
+    const moved = new Vector3(0, 0, -1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    expect(moved.y).toBeCloseTo(0);
+    expect(moved.x).toBeLessThan(0);
+
+    adapter.dispose();
+  });
+
   it('holds actors at one camera-local point from distinct stored poses', () => {
     const scene = new Group();
     const cameraParent = new Group();
@@ -154,6 +203,40 @@ describe('EventItemUseAdapter', () => {
     adapter.apply(sample);
     expectVectorCloseTo(second.actor.root.getWorldPosition(new Vector3()), heldPoint);
     expect(camera.position).toEqual(cameraPosition);
+
+    adapter.dispose();
+  });
+
+  it('faces a lifted map directly toward the camera', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0.4, 1.7, 0.8);
+    camera.rotation.set(-0.24, 0.38, 0.08, 'YXZ');
+    scene.add(camera);
+    const actorParent = new Group();
+    actorParent.rotation.set(0.12, -0.3, 0.18);
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'map-1' as ItemInstanceId,
+      new Vector3(-0.3, 0.2, -0.5),
+    );
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    sample.viewY = -0.2;
+    sample.viewZ = -0.58;
+
+    adapter.begin(actor, 'map', null);
+    adapter.apply(sample);
+
+    const mapNormal = new Vector3(0, 1, 0)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    const directionToCamera = camera.getWorldPosition(new Vector3())
+      .sub(actor.root.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(mapNormal.dot(directionToCamera)).toBeGreaterThan(0.999);
 
     adapter.dispose();
   });
@@ -241,9 +324,12 @@ describe('EventItemUseAdapter', () => {
 
 function expectAimAccuracy(actor: BorrowedSupplyActor, aimTarget: Group): void {
   const origin = actor.root.getWorldPosition(new Vector3());
-  const expected = aimTarget.getWorldPosition(new Vector3()).sub(origin).normalize();
-  const actual = new Vector3(0, 0, -1)
+  const expected = aimTarget.getWorldPosition(new Vector3()).sub(origin);
+  expected.y = 0;
+  expected.normalize();
+  const actual = new Vector3(-1, 0, 0)
     .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
     .normalize();
   expect(actual.dot(expected)).toBeGreaterThan(0.995);
+  expect(actual.y).toBeCloseTo(0);
 }

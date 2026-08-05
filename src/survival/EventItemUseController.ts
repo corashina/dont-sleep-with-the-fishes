@@ -105,7 +105,35 @@ export class EventItemUseController {
     const active = this.activeUse;
     this.activeUse = null;
     active?.resolve(true);
-    const disposition = dispositionFor(held.request, result);
+    if (held.request.context === 'throw-target') {
+      sampleEventItemUse(
+        held.request.context,
+        held.request.itemId,
+        1,
+        this.sample,
+      );
+      this.adapter.apply(this.sample);
+      this.release(held.actor, held.request, true);
+      this.held = null;
+      return Promise.resolve();
+    }
+    return this.startReaction(held, dispositionFor(held.request, result));
+  }
+
+  recover(): Promise<void> {
+    if (this.disposed || this.activeReaction !== null) return Promise.resolve();
+    const held = this.held;
+    if (held === null) return Promise.resolve();
+    const active = this.activeUse;
+    this.activeUse = null;
+    active?.resolve(true);
+    return this.startReaction(held, 'recover');
+  }
+
+  private startReaction(
+    held: HeldItem,
+    disposition: EventItemDisposition,
+  ): Promise<void> {
     sampleEventItemOutcome(
       held.request.context,
       held.request.itemId,

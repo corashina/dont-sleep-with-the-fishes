@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects the event item use state machine and cancellation cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import { Group, Object3D, PerspectiveCamera, Vector3 } from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -94,7 +95,9 @@ describe('EventItemUseController', () => {
       .mock.calls.at(-2)![0];
 
     expect(actor.root.visible).toBe(false);
-    expect(stowedPose.y).toBeLessThan(-1.1);
+    expect(stowedPose.x).toBeCloseTo(0);
+    expect(stowedPose.y).toBeCloseTo(0);
+    expect(stowedPose.z).toBeCloseTo(0);
     expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
     expect(clear).toHaveBeenCalledBefore(actor.release as ReturnType<typeof vi.fn>);
     expect(actor.release).toHaveBeenCalledOnce();
@@ -108,7 +111,7 @@ describe('EventItemUseController', () => {
     const use = controller.play(request(actor.instanceId, target));
     controller.update(10);
     await use;
-    const initialForward = new Vector3(0, 0, -1)
+    const initialForward = new Vector3(-1, 0, 0)
       .applyQuaternion(actor.root.quaternion)
       .normalize();
 
@@ -118,11 +121,13 @@ describe('EventItemUseController', () => {
     const actorPosition = actor.root.getWorldPosition(new Vector3());
     const expectedDirection = target.position.clone()
       .sub(actorPosition)
-      .normalize();
-    const heldForward = new Vector3(0, 0, -1)
+    expectedDirection.y = 0;
+    expectedDirection.normalize();
+    const heldForward = new Vector3(-1, 0, 0)
       .applyQuaternion(actor.root.quaternion)
       .normalize();
     expect(heldForward.angleTo(expectedDirection)).toBeLessThan(1e-6);
+    expect(heldForward.y).toBeCloseTo(0);
     expect(heldForward.angleTo(initialForward)).toBeGreaterThan(0.1);
 
     controller.clear('day');

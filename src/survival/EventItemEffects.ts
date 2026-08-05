@@ -16,10 +16,21 @@ import {
   RingGeometry,
   Shape,
   ShapeGeometry,
+  type Skeleton,
   SphereGeometry,
   Vector2,
   Vector3,
 } from 'three';
+import type { ItemId } from '../game/ItemState';
+import {
+  applyHandJointCurl,
+  findImportedHandRig,
+} from '../rendering/RiggedHandRig';
+import {
+  collectOwnedSkeletons,
+  disposeSkeletons,
+} from '../rendering/modelPresentation';
+import { collectMeshResources } from '../world/SceneResources';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 
 type EffectRoot = Group;
@@ -44,6 +55,7 @@ export class EventItemEffects {
   private readonly effects: readonly EffectRoot[];
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
+  private readonly skeletons = new Set<Skeleton>();
   private readonly baseOpacities = new Map<Material, number>();
   private readonly actorPosition = new Vector3();
   private readonly flareLight: PointLight;
@@ -55,9 +67,12 @@ export class EventItemEffects {
   private readonly chain: EffectRoot;
   private readonly umbrella: EffectRoot;
   private readonly flashlight: EffectRoot;
+  private readonly flashlightHand: Group;
+  private readonly flashlightHandAvailable: boolean;
   private readonly shotgunSmoke: EffectRoot;
   private readonly binocularMask: EffectRoot;
   private effectOpacity = 0;
+  private heldItemId: ItemId | null = null;
   private readonly applyEffectOpacity = (object: Object3D): void => {
     if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
     if (Array.isArray(object.material)) {
@@ -68,7 +83,7 @@ export class EventItemEffects {
   };
   private disposed = false;
 
-  constructor() {
+  constructor(heldHand: Group | null = null) {
     this.root.name = 'event-item-effects';
     this.tape = this.createTape();
     this.net = this.createNet();
@@ -76,6 +91,8 @@ export class EventItemEffects {
     this.chain = this.createChain();
     this.umbrella = this.createUmbrella();
     [this.flashlight, this.flashlightLight] = this.createFlashlight();
+    [this.flashlightHand, this.flashlightHandAvailable] =
+      this.createFlashlightHand(heldHand);
     this.shotgunSmoke = this.createShotgunSmoke();
     this.binocularMask = this.createBinocularMask();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
@@ -91,8 +108,14 @@ export class EventItemEffects {
       this.shotgunSmoke,
       this.binocularMask,
     ];
-    this.root.add(...this.effects, this.heldFillLight);
+    this.root.add(...this.effects, this.flashlightHand, this.heldFillLight);
     this.clear();
+  }
+
+  setHeldItem(itemId: ItemId | null): void {
+    if (this.disposed) return;
+    this.heldItemId = itemId;
+    if (itemId !== 'flashlight') this.flashlightHand.visible = false;
   }
 
   apply(sample: Readonly<EventItemUseSample>, actor: Object3D): void {
@@ -103,6 +126,10 @@ export class EventItemEffects {
     actor.getWorldPosition(this.actorPosition);
     this.root.position.copy(this.actorPosition);
     actor.getWorldQuaternion(this.root.quaternion);
+    this.flashlightHand.visible = this.flashlightHandAvailable
+      && this.heldItemId === 'flashlight'
+      && sample.itemVisible
+      && sample.cameraSpaceBlend > 0.02;
     this.heldFillLight.visible = sample.cameraSpaceBlend > 0;
     this.heldFillLight.intensity = clampEffect(sample.cameraSpaceBlend) * 3.4;
 
@@ -143,8 +170,8 @@ export class EventItemEffects {
         break;
       case 'flashlight':
         this.show(this.flashlight, primary);
-        this.flashlight.position.set(0.18, -0.02, -0.38);
-        this.flashlight.rotation.set(0.02, -0.14, 0);
+        this.flashlight.position.set(0, 0, 0);
+        this.flashlight.rotation.set(0, 0, 0);
         this.flashlight.scale.setScalar(0.8 + primary * 0.28);
         this.flashlightLight.intensity = primary
           * (1.1 + primary * 3.2 + secondary * 2.5);
@@ -189,6 +216,7 @@ export class EventItemEffects {
       this.heldFillLight.visible = false;
       this.heldFillLight.intensity = 0;
     }
+    if (this.flashlightHand) this.flashlightHand.visible = false;
   }
 
   dispose(): void {
@@ -198,6 +226,7 @@ export class EventItemEffects {
     this.flareLight.shadow.dispose();
     this.flashlightLight.shadow.dispose();
     this.heldFillLight.shadow.dispose();
+    disposeSkeletons(this.skeletons);
     this.geometries.forEach((geometry) => geometry.dispose());
     this.materials.forEach((material) => material.dispose());
     this.geometries.clear();
@@ -352,17 +381,55 @@ export class EventItemEffects {
     const flashlight = new Group();
     flashlight.name = FLASHLIGHT;
     const beam = this.mesh(
-      new ConeGeometry(0.24, 1.6, 8, 1, true),
-      new MeshBasicMaterial({ color: 0xf2e4b3, transparent: true, opacity: 0.18, depthWrite: false, side: 2 }),
+      new ConeGeometry(0.34, 2.4, 10, 1, true),
+      new MeshBasicMaterial({ color: 0xffefb8, transparent: true, opacity: 0.28, depthWrite: false, side: 2 }),
       'event-item-flashlight-cone',
     );
-    beam.rotation.x = -Math.PI / 2;
-    beam.position.z = -0.8;
+    beam.rotation.z = -Math.PI / 2;
+    beam.position.x = -1.2;
     const light = new PointLight(0xffedb5, 0, 4.8, 2);
     light.name = 'event-item-flashlight-light';
-    light.position.z = -0.16;
+    light.position.x = -0.16;
     flashlight.add(beam, light);
     return [flashlight, light];
+  }
+
+  private createFlashlightHand(model: Group | null): [Group, boolean] {
+    const hand = new Group();
+    hand.name = 'event-item-flashlight-hand';
+    hand.visible = false;
+    if (model === null) return [hand, false];
+
+    collectMeshResources(model, this.geometries, this.materials);
+    collectOwnedSkeletons(model, this.skeletons);
+    const rig = findImportedHandRig(model);
+    if (rig === null) return [hand, false];
+
+    model.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      object.castShadow = false;
+      object.receiveShadow = false;
+      object.frustumCulled = false;
+      const materials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+      for (const material of materials) {
+        if (!(material instanceof MeshStandardMaterial)) continue;
+        material.color.multiplyScalar(0.82);
+        material.roughness = Math.max(material.roughness, 0.92);
+        material.metalness = 0;
+        material.emissive.setHex(0x241812);
+        material.emissiveIntensity = 0.2;
+        material.flatShading = true;
+        material.needsUpdate = true;
+      }
+    });
+    applyHandJointCurl(rig.joints, 0.86);
+    hand.position.set(0.24, -0.06, 0.02);
+    hand.rotation.set(Math.PI / 2, 0, -Math.PI / 2);
+    hand.scale.setScalar(0.24);
+    hand.add(model);
+    return [hand, true];
   }
 
   private createShotgunSmoke(): EffectRoot {
