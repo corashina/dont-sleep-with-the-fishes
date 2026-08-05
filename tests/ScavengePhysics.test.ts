@@ -100,6 +100,31 @@ function pushingConfig(objectZ = -1.2) {
   };
 }
 
+function pushingWithUnrelatedObjectsConfig() {
+  const base = config();
+  return {
+    ...base,
+    colliders: [],
+    objects: [
+      {
+        ...base.objects[2]!,
+        id: 'push-box',
+        spawn: { x: 0, y: 2.75, z: -1.2 },
+      },
+      {
+        ...base.objects[0]!,
+        id: 'moving-sphere',
+        spawn: { x: 4, y: 2.82, z: 3 },
+      },
+      {
+        ...base.objects[1]!,
+        id: 'recovering-cylinder',
+        spawn: { x: -4, y: 2.78, z: 3 },
+      },
+    ],
+  };
+}
+
 function drivePlayerIntoObject(
   physics: ScavengePhysics,
   step: number,
@@ -246,6 +271,73 @@ describe('ScavengePhysics', () => {
     expect(desired.z).toBeGreaterThan(-1);
     physics.update(identityPose(), 1 / 60, true);
     expect(physics.objectLocalPositionsForTest[0]!.z).toBeLessThan(-1.2);
+    physics.dispose();
+  });
+
+  it('preserves unrelated motion and pending recovery during first contact', () => {
+    const physics = new ScavengePhysics(runtime, pushingWithUnrelatedObjectsConfig());
+    const movingRotation = {
+      x: 0,
+      y: Math.sin(0.3 / 2),
+      z: 0,
+      w: Math.cos(0.3 / 2),
+    };
+    physics.setObjectPoseForTest({
+      translation: { x: 4.5, y: 3.1, z: 2.5 },
+      rotation: movingRotation,
+    }, 1);
+    physics.setObjectVelocityForTest({ x: 0.6, y: 0.2, z: -0.4 }, 1);
+    physics.setObjectPoseForTest({
+      translation: { x: 20, y: 3, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    }, 2);
+    physics.setObjectVelocityForTest({ x: 1, y: 2, z: 3 }, 2);
+    const bodies = (physics as unknown as {
+      objectBodies: Array<{
+        translation(): { x: number; y: number; z: number };
+        rotation(): { x: number; y: number; z: number; w: number };
+        linvel(): { x: number; y: number; z: number };
+        angvel(): { x: number; y: number; z: number };
+      }>;
+    }).objectBodies;
+    const movingBody = bodies[1]!;
+    const recoveringBody = bodies[2]!;
+    const movingBefore = {
+      translation: { ...movingBody.translation() },
+      rotation: { ...movingBody.rotation() },
+      linvel: { ...movingBody.linvel() },
+      angvel: { ...movingBody.angvel() },
+    };
+    const recoveringBefore = {
+      translation: { ...recoveringBody.translation() },
+      rotation: { ...recoveringBody.rotation() },
+      linvel: { ...recoveringBody.linvel() },
+      angvel: { ...recoveringBody.angvel() },
+    };
+    const current = { x: 0, y: 3.72, z: 0 };
+    const desired = { x: 0, y: 3.72, z: -1 };
+
+    physics.resolvePlayerMovement(current, desired);
+
+    expect(desired.z).toBeGreaterThan(-1);
+    expect({
+      translation: movingBody.translation(),
+      rotation: movingBody.rotation(),
+      linvel: movingBody.linvel(),
+      angvel: movingBody.angvel(),
+    }).toEqual(movingBefore);
+    expect({
+      translation: recoveringBody.translation(),
+      rotation: recoveringBody.rotation(),
+      linvel: recoveringBody.linvel(),
+      angvel: recoveringBody.angvel(),
+    }).toEqual(recoveringBefore);
+    expect(physics.recoveryCountForTest).toBe(0);
+
+    physics.update(identityPose(), 1 / 60, true);
+
+    expect(physics.recoveryCountForTest).toBe(1);
+    expect(physics.objectLocalPositionsForTest[2]).toEqual({ x: -4, y: 2.78, z: 3 });
     physics.dispose();
   });
 

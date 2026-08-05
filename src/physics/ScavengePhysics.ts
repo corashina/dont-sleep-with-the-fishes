@@ -36,6 +36,16 @@ interface MutablePhysicsPose {
   rotation: MutablePhysicsQuaternion;
 }
 
+interface MutableRigidBodyState {
+  translation: MutablePhysicsVector3;
+  rotation: MutablePhysicsQuaternion;
+  linearVelocity: MutablePhysicsVector3;
+  angularVelocity: MutablePhysicsVector3;
+  force: MutablePhysicsVector3;
+  torque: MutablePhysicsVector3;
+  sleeping: boolean;
+}
+
 export interface PhysicsQuaternion {
   readonly x: number;
   readonly y: number;
@@ -328,6 +338,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
   private readonly playerCollider: RAPIER.Collider;
   private readonly playerController: RAPIER.KinematicCharacterController;
   private readonly objectBodies: readonly RAPIER.RigidBody[];
+  private readonly objectSceneQuerySnapshots: readonly MutableRigidBodyState[];
   private readonly objectHorizontalRadii: readonly number[];
   private readonly dynamicColliderHandles = new Set<number>();
   private readonly objectSpawns: readonly MutablePhysicsVector3[];
@@ -448,6 +459,15 @@ export class ScavengePhysics implements ScavengePhysicsController {
       rotation: { x: 0, y: 0, z: 0, w: 1 },
     }));
     this.objectLocalPositionsForTest = config.objects.map(() => ({ x: 0, y: 0, z: 0 }));
+    this.objectSceneQuerySnapshots = config.objects.map(() => ({
+      translation: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      linearVelocity: { x: 0, y: 0, z: 0 },
+      angularVelocity: { x: 0, y: 0, z: 0 },
+      force: { x: 0, y: 0, z: 0 },
+      torque: { x: 0, y: 0, z: 0 },
+      sleeping: false,
+    }));
     this.objectBodies = config.objects.map(({ profile }, index) => {
       const spawn = this.objectSpawns[index]!;
       const spawnWorld = this.objectSpawnWorlds[index]!;
@@ -561,18 +581,39 @@ export class ScavengePhysics implements ScavengePhysicsController {
   }
 
   private initializeSceneQueries(): void {
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      const snapshot = this.objectSceneQuerySnapshots[index]!;
+      copyVector(snapshot.translation, body.translation());
+      copyVector(snapshot.linearVelocity, body.linvel());
+      copyVector(snapshot.angularVelocity, body.angvel());
+      copyVector(snapshot.force, body.userForce());
+      copyVector(snapshot.torque, body.userTorque());
+      const rotation = body.rotation();
+      snapshot.rotation.x = rotation.x;
+      snapshot.rotation.y = rotation.y;
+      snapshot.rotation.z = rotation.z;
+      snapshot.rotation.w = rotation.w;
+      snapshot.sleeping = body.isSleeping();
+    }
     this.world.timestep = PHYSICS_STEP_SECONDS;
     this.world.step();
     this.sceneQueriesInitialized = true;
     for (let index = 0; index < this.objectBodies.length; index += 1) {
       const body = this.objectBodies[index]!;
-      body.setTranslation(this.objectSpawnWorlds[index]!, true);
-      body.setRotation(this.objectSpawnWorldRotations[index]!, true);
-      body.setLinvel(this.zeroVelocity, true);
-      body.setAngvel(this.zeroVelocity, true);
+      const snapshot = this.objectSceneQuerySnapshots[index]!;
+      body.setTranslation(snapshot.translation, false);
+      body.setRotation(snapshot.rotation, false);
+      body.setLinvel(snapshot.linearVelocity, false);
+      body.setAngvel(snapshot.angularVelocity, false);
+      body.resetForces(false);
+      body.resetTorques(false);
+      body.addForce(snapshot.force, false);
+      body.addTorque(snapshot.torque, false);
+      if (snapshot.sleeping) body.sleep();
+      else body.wakeUp();
     }
     this.world.propagateModifiedBodyPositionsToColliders();
-    this.validateAndCopyObjects();
   }
 
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void {
