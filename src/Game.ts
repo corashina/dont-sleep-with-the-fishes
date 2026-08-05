@@ -619,10 +619,16 @@ export class Game {
   private returnToMenuFromScavenge(generation: number): void {
     if (!this.ownsGeneration(generation)) return;
     const scavenge = this.detachActivePhase();
-    this.exitPointerLock();
-    scavenge?.dispose();
-    this.resetCamera();
-    this.activateMenu(true);
+    try {
+      runCleanupSteps([
+        () => this.exitPointerLock(),
+        () => scavenge?.dispose(),
+        () => this.resetCamera(),
+        () => this.activateMenu(true),
+      ]);
+    } catch (error) {
+      this.reportFatalError(error);
+    }
   }
 
   private completeScavenge(
