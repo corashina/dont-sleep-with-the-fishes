@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { Mesh } from 'three';
+import { BoxGeometry, Mesh } from 'three';
 import { expect, it, vi } from 'vitest';
 import {
   MENU_SIGN_TITLE,
@@ -32,4 +32,18 @@ it('builds the left foreground title sign and owns its texture once', () => {
   sign.dispose();
   sign.dispose();
   expect(textureDispose).toHaveBeenCalledTimes(1);
+});
+
+it('keeps both support posts behind the painted title surface', () => {
+  const sign = new MenuTitleSign(fakeSurface);
+  const board = sign.root.getObjectByName('menu:title-sign-board') as Mesh;
+  const boardFront = board.position.z + 0.5 * (board.geometry as BoxGeometry).parameters.depth;
+
+  for (const name of ['menu:title-sign-post-left', 'menu:title-sign-post-right']) {
+    const post = sign.root.getObjectByName(name) as Mesh;
+    const postFront = post.position.z + 0.5 * (post.geometry as BoxGeometry).parameters.depth;
+    expect(postFront).toBeLessThan(boardFront);
+  }
+
+  sign.dispose();
 });

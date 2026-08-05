@@ -52,7 +52,10 @@ bun install
 bun run dev
 ```
 
-Open the local URL printed by Vite. The underwater menu appears after loading.
+Open the local URL printed by Vite.
+
+The main menu uses a fixed underwater camera. A skull rests in a small sunken boat in the foreground. The title is painted onto a planted wooden sign on the left. Sand ridges, sparse debris, and a large tilted wreck of Dorothy create the distant depth layers. Sharks, fish, kelp, bubbles, suspended matter, and caustics animate while the camera stays fixed.
+
 Select **START** to fade into the existing scavenging intro. The scavenging
 phase uses pointer lock; the survival phase releases it for a fixed seated view
 and mouse-accessible controls.
@@ -208,6 +211,9 @@ and cleanup.
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
 - `src/menu` — underwater menu models, composition, animation, particles, and UI.
+- `src/menu/MenuTitleSign` — the owned title canvas texture and wooden sign geometry.
+- `src/menu/SunkenDorothyWreck` — the simplified static Dorothy silhouette.
+- `src/menu/DistantSeabed` — the static ridge, rock, plant, and debris depth layers.
 - `src/phases/MainMenuPhase` — menu lifecycle, pointer lock, fade, and scavenging handoff.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
 - `src/game` — scavenging timer, item state, score, and sinking progression.
