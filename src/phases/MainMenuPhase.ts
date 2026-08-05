@@ -5,6 +5,7 @@ import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
 import type { MenuVisualState } from '../rendering/SceneRenderer';
+import { ignoreCleanupError as attemptCleanup } from '../world/SceneResources';
 
 const FADE_DURATION_SECONDS = 0.7;
 const NOOP = (): void => undefined;
@@ -31,6 +32,43 @@ const PRODUCTION_MAIN_MENU_DEPENDENCIES: MainMenuPhaseDependencies = {
   requestPointerLock: (canvas) => canvas.requestPointerLock(),
 };
 
+interface MainMenuResources {
+  readonly ui: MenuUI;
+  readonly world: UnderwaterMenuWorld;
+  readonly animator: UnderwaterMenuAnimator;
+}
+
+function createMainMenuResources(
+  context: PhaseContext & { menuModels: MenuModelLibrary },
+  scene: Scene,
+  dependencies: MainMenuPhaseDependencies,
+): MainMenuResources {
+  scene.add(context.camera);
+  let ui: MenuUI | undefined;
+  let world: UnderwaterMenuWorld | undefined;
+  try {
+    ui = dependencies.createUI(context.mount);
+    world = dependencies.createWorld(
+      scene,
+      context.camera,
+      context.menuModels,
+    );
+    const animator = dependencies.createAnimator(world.actors);
+    return { ui, world, animator };
+  } catch (error) {
+    scene.remove(context.camera);
+    const ownedWorld = world;
+    if (ownedWorld) attemptCleanup(() => ownedWorld.dispose());
+    const ownedUI = ui;
+    if (ownedUI) {
+      ownedUI.onStart = NOOP;
+      attemptCleanup(() => ownedUI.dispose());
+    }
+    scene.clear();
+    throw error;
+  }
+}
+
 export class MainMenuPhase implements GamePhase {
   private readonly scene = new Scene();
   private readonly ui: MenuUI;
@@ -43,6 +81,7 @@ export class MainMenuPhase implements GamePhase {
   private elapsed = 0;
   private fadeElapsed = 0;
   private transitioning = false;
+  private pointerLockPending = false;
   private completed = false;
   private started = false;
   private disposed = false;
@@ -53,14 +92,14 @@ export class MainMenuPhase implements GamePhase {
     private readonly dependencies: MainMenuPhaseDependencies =
       PRODUCTION_MAIN_MENU_DEPENDENCIES,
   ) {
-    this.scene.add(context.camera);
-    this.ui = dependencies.createUI(context.mount);
-    this.world = dependencies.createWorld(
+    const resources = createMainMenuResources(
+      context,
       this.scene,
-      context.camera,
-      context.menuModels,
+      dependencies,
     );
-    this.animator = dependencies.createAnimator(this.world.actors);
+    this.ui = resources.ui;
+    this.world = resources.world;
+    this.animator = resources.animator;
     this.ui.onStart = () => {
       void this.requestStart();
     };
@@ -118,19 +157,23 @@ export class MainMenuPhase implements GamePhase {
   }
 
   private async requestStart(): Promise<void> {
-    if (this.disposed || this.transitioning) return;
+    if (this.disposed || this.transitioning || this.pointerLockPending) return;
+    this.pointerLockPending = true;
     this.ui.clearPointerLockError();
     try {
       await this.dependencies.requestPointerLock(
         this.context.renderer.domElement,
       );
     } catch {
+      this.pointerLockPending = false;
       if (!this.disposed && !this.transitioning) {
         this.ui.showPointerLockError();
       }
       return;
     }
+    this.pointerLockPending = false;
     if (this.disposed || this.transitioning) return;
+    this.ui.clearPointerLockError();
     this.transitioning = true;
     this.fadeElapsed = 0;
     this.ui.setTransitioning(true);
