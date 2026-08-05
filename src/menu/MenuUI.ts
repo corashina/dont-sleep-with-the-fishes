@@ -28,7 +28,7 @@ export class MenuUI {
         <button type="button" data-menu-guide-open aria-haspopup="dialog"
           aria-controls="menu-how-to-play-dialog">HOW TO PLAY</button>
         <div class="underwater-menu-screen__content">
-          <h1 class="ui-role-display">DON'T SLEEP WITH THE FISHES</h1>
+          <h1 class="menu-title-accessible">DON'T SLEEP WITH THE FISHES</h1>
           <button type="button" class="primary-action salvage-action ui-role-context"
             data-menu-start>START</button>
           <p class="input-error illustrated-warning ui-role-narrative"
