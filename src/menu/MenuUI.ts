@@ -52,7 +52,7 @@ export class MenuUI {
               <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">1</span>
               <div>
                 <h3 class="ui-role-context">SEARCH THE SHIP</h3>
-                <p class="ui-role-narrative">You have two minutes before Dorothy sinks.</p>
+                <p class="ui-role-narrative">You have 60 seconds before Dorothy sinks.</p>
                 <ul class="ui-role-narrative">
                   <li>Find food, tools, and emergency supplies.</li>
                   <li>Carry up to three weight at one time.</li>

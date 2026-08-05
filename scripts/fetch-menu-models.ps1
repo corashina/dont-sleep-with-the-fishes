@@ -63,7 +63,7 @@ try {
 
   Push-Location $repositoryRoot
   try {
-    & node scripts/check-menu-models.mjs --assets-only --models-dir $stagedRoot
+    & node scripts/check-menu-models.mjs --models-dir $stagedRoot
     if ($LASTEXITCODE -ne 0) { throw 'Staged menu model validation failed' }
   } finally {
     Pop-Location

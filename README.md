@@ -11,7 +11,7 @@ keyed animation keep the physical world dominant. Selective ambient occlusion
 and restrained print treatment add cohesion without substituting for geometry,
 materials, lighting, or composition.
 
-See the [visual style guide](docs/VISUAL_STYLE_GUIDE.md) for the durable
+See the [visual style guide](VISUAL_STYLE_GUIDE.md) for the durable
 direction and the [current visual audit](docs/VISUAL_AUDIT.md) for prioritized
 recommendations.
 

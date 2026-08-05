@@ -8,7 +8,9 @@ export interface MenuModelSource {
   readonly title: string;
   readonly creator: string;
   readonly license: 'CC0 1.0' | 'CC-BY 3.0';
+  readonly licenseUrl: string;
   readonly sha256: string;
+  readonly committedSha256: string;
   readonly sourceTriangles: number;
   readonly downloadedOn: string;
   readonly maxTriangles: number;

@@ -19,6 +19,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
   ignoreCleanupError as attemptCleanup,
+  runCleanupSteps,
 } from '../world/SceneResources';
 import { normalizeLongestDimensionTemplate } from '../world/modelValidation';
 
@@ -169,6 +170,8 @@ export class MenuModelLibrary {
     const template = this.templates.get(id);
     if (!template) throw new Error(`Missing menu model template: ${id}`);
     const root = cloneSkeleton(template.root) as Group;
+    const skeletons = new Set<Skeleton>();
+    collectSkeletons(root, skeletons);
     const animations = Object.freeze(template.animations.map((clip) => clip.clone()));
     let disposed = false;
     return {
@@ -177,7 +180,10 @@ export class MenuModelLibrary {
       dispose(): void {
         if (disposed) return;
         disposed = true;
-        root.removeFromParent();
+        runCleanupSteps([
+          () => root.removeFromParent(),
+          ...[...skeletons].map((skeleton) => () => skeleton.dispose()),
+        ]);
       },
     };
   }

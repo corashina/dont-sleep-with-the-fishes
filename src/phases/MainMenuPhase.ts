@@ -85,6 +85,22 @@ export class MainMenuPhase implements GamePhase {
   private completed = false;
   private started = false;
   private disposed = false;
+  private pointerLockListenerRegistered = false;
+  private readonly handlePointerLockChange = (): void => {
+    if (
+      this.disposed
+      || !this.transitioning
+      || this.completed
+      || document.pointerLockElement === this.context.renderer.domElement
+    ) {
+      return;
+    }
+    this.transitioning = false;
+    this.fadeElapsed = 0;
+    this.ui.setTransitioning(false);
+    this.ui.setFadeProgress(0);
+    this.ui.showPointerLockError();
+  };
 
   constructor(
     private readonly context: PhaseContext,
@@ -108,6 +124,8 @@ export class MainMenuPhase implements GamePhase {
   start(): void {
     if (this.disposed || this.started) return;
     this.started = true;
+    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    this.pointerLockListenerRegistered = true;
     this.ui.setTransitioning(false);
     this.ui.setFadeProgress(0);
   }
@@ -148,6 +166,13 @@ export class MainMenuPhase implements GamePhase {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.pointerLockListenerRegistered) {
+      document.removeEventListener(
+        'pointerlockchange',
+        this.handlePointerLockChange,
+      );
+      this.pointerLockListenerRegistered = false;
+    }
     this.ui.onStart = NOOP;
     this.scene.remove(this.context.camera);
     this.animator.dispose();

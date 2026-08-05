@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +44,11 @@ function sectionRows(ledger) {
     .filter((line) => line.startsWith('| '));
 }
 
-function validateAttribution(ledger, measurements) {
+function rowCells(row) {
+  return row.split('|').slice(1, -1).map((cell) => cell.trim());
+}
+
+export function validateMenuAttribution(ledger, measurements) {
   const rows = sectionRows(ledger);
   if (rows.length !== POLY_PIZZA_MENU_MODEL_IDS.length + 1) {
     throw new Error(`ATTRIBUTION.md: expected ${POLY_PIZZA_MENU_MODEL_IDS.length} menu rows`);
@@ -55,16 +60,40 @@ function validateAttribution(ledger, measurements) {
     }
     const source = POLY_PIZZA_MENU_MODEL_SOURCES[modelId];
     const row = matches[0];
-    for (const expected of [
-      `\`${modelId}.glb\``, source.title, source.creator, source.pageUrl,
-      source.resourceId, source.sha256, String(source.sourceTriangles),
-      String(measurements[modelId].triangles), source.downloadedOn,
-    ]) {
-      if (!row.includes(expected)) {
+    const cells = rowCells(row);
+    const exactCells = [
+      [1, `\`${modelId}.glb\``],
+      [2, `${source.title} / ${source.creator}`],
+      [3, source.pageUrl],
+      [4, `\`${source.sourceAssetId}\``],
+      [5, `[${source.license}](${source.licenseUrl})`],
+      [6, String(source.sourceTriangles)],
+      [7, String(measurements[modelId].triangles)],
+      [9, source.downloadedOn],
+    ];
+    for (const [index, expected] of exactCells) {
+      if (cells[index] !== expected) {
+        throw new Error(`ATTRIBUTION.md: menu ${modelId} row is missing ${expected}`);
+      }
+    }
+    for (const expected of [source.sha256, source.committedSha256]) {
+      if (!cells[8]?.includes(expected)) {
         throw new Error(`ATTRIBUTION.md: menu ${modelId} row is missing ${expected}`);
       }
     }
   }
+}
+
+export function validateCommittedMenuModel(modelId, bytes) {
+  const source = POLY_PIZZA_MENU_MODEL_SOURCES[modelId];
+  if (!source) throw new Error(`unknown menu model: ${modelId}`);
+  const actualHash = createHash('sha256').update(bytes).digest('hex').toUpperCase();
+  if (actualHash !== source.committedSha256) {
+    throw new Error(
+      `${modelId}: committed GLB SHA-256 does not match ${source.committedSha256}; received ${actualHash}`,
+    );
+  }
+  return actualHash;
 }
 
 async function main() {
@@ -111,6 +140,7 @@ async function main() {
     try {
       await access(filePath);
       const bytes = await readFile(filePath);
+      validateCommittedMenuModel(modelId, bytes);
       validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
       const measurement = inspectEventModel(modelId, await io.read(filePath));
       measurements[modelId] = measurement;
@@ -134,6 +164,9 @@ async function main() {
       if (!/^[A-F0-9]{64}$/.test(source.sha256)) {
         throw new Error(`${modelId}: pinned source SHA-256 is invalid`);
       }
+      if (!/^[A-F0-9]{64}$/.test(source.committedSha256)) {
+        throw new Error(`${modelId}: pinned committed SHA-256 is invalid`);
+      }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
@@ -155,7 +188,7 @@ async function main() {
 
   if (!assetsOnly) {
     try {
-      validateAttribution(await readFile(ledgerPath, 'utf8'), measurements);
+      validateMenuAttribution(await readFile(ledgerPath, 'utf8'), measurements);
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }

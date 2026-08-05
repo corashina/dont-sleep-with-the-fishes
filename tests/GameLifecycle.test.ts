@@ -414,6 +414,41 @@ describe('Game menu lifecycle', () => {
     }
   });
 
+  it('reports phase construction failure before releasing the active menu', () => {
+    const menu = gamePhase();
+    const constructionError = new Error('scavenge construction failed');
+    const onFatalError = vi.fn();
+    let completeMenu: () => void = () => undefined;
+    const game = Game.forTest({
+      createMenu: (_context, onComplete) => {
+        completeMenu = onComplete;
+        return menu;
+      },
+      createScavenge: () => {
+        throw constructionError;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      onFatalError,
+    });
+
+    try {
+      game.start();
+
+      expect(completeMenu).not.toThrow();
+      expect(onFatalError).toHaveBeenCalledOnce();
+      expect(onFatalError).toHaveBeenCalledWith(constructionError);
+      expect(menu.dispose).not.toHaveBeenCalled();
+    } finally {
+      game.dispose();
+    }
+  });
+
   it('creates a fresh menu when scavenging returns from its ending', () => {
     const menus = [gamePhase(), gamePhase()];
     const scavenge = gamePhase();
