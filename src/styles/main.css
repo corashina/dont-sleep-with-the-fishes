@@ -1783,14 +1783,21 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   overflow: hidden;
   text-align: center;
 }
-.underwater-menu-screen h1 {
-  width: max-content;
-  max-width: none;
-  margin-inline: auto;
-  font-size: clamp(1rem, 3.8vw, 4.2rem);
-  line-height: .9;
-  text-align: center;
+.menu-title-accessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+  border: 0;
+}
+.underwater-menu-screen__content::before {
+  grid-row: 1;
+  min-height: clamp(88px, 14vh, 150px);
+  content: '';
 }
 .underwater-menu-screen [data-menu-start] {
   grid-row: 3;

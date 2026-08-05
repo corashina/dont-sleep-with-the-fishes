@@ -12,7 +12,11 @@ it('exposes the approved title actions', () => {
   document.body.append(mount);
   const ui = new MenuUI(mount);
 
-  expect(mount.querySelector('h1')?.textContent).toBe("DON'T SLEEP WITH THE FISHES");
+  const title = mount.querySelector<HTMLHeadingElement>('h1')!;
+  expect(title.textContent).toBe("DON'T SLEEP WITH THE FISHES");
+  expect(title.classList).toContain('menu-title-accessible');
+  expect(mainStyles).toMatch(/\.menu-title-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
+  expect(mainStyles).toMatch(/\.underwater-menu-screen__content::before\s*\{[^}]*grid-row:\s*1/s);
   expect(mount.querySelector('[data-menu-start]')?.textContent).toContain('START');
   expect(mount.querySelector('[data-menu-guide-open]')?.textContent).toContain('HOW TO PLAY');
   ui.dispose();
@@ -93,4 +97,6 @@ it('uses the viewport height for the title and start layout', () => {
   expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*justify-self:\s*center/s);
   expect(mainStyles).toMatch(/@media \(max-height: 760px\) and \(min-width: 821px\)\s*\{[\s\S]*?\.how-to-play-board\s*\{[^}]*padding:\s*12px 24px/s);
   expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*min-height:\s*44px/s);
+  expect(mainStyles).toMatch(/\.menu-title-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
+  expect(mainStyles).toMatch(/\.underwater-menu-screen__content::before\s*\{[^}]*grid-row:\s*1/s);
 });
