@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { MenuUI } from '../src/menu/MenuUI';
 
 afterEach(() => { document.body.innerHTML = ''; });
+
+const mainStyles = readFileSync('src/styles/main.css', 'utf8');
 
 it('exposes the approved title actions', () => {
   const mount = document.createElement('main');
@@ -72,4 +75,10 @@ it('clamps the fade progress and removes its controls on disposal', () => {
   start.click();
   expect(onStart).not.toHaveBeenCalled();
   expect(mount.children).toHaveLength(0);
+});
+
+it('uses the viewport height for the title and start layout', () => {
+  expect(mainStyles).toMatch(/\.underwater-menu-screen\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)/s);
+  expect(mainStyles).toMatch(/\.underwater-menu-screen__content\s*\{[^}]*height:\s*100%/s);
+  expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*justify-self:\s*center/s);
 });
