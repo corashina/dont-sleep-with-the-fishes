@@ -1476,7 +1476,8 @@ describe('BoatWorld helpers', () => {
       world.stageEvent(eventId);
       expect(doubles.get(eventId)!.stage).toHaveBeenCalledOnce();
     }
-    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 1);
+    expect(createEventModel).toHaveBeenCalledWith('riggedHand');
+    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 2);
 
     world.dispose();
     propModels.dispose();

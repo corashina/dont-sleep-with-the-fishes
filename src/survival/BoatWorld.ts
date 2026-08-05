@@ -879,7 +879,9 @@ export class BoatWorld {
           : resolvedEventModels.clone('mysteryChest'),
       );
       this.chestDisplay = chestDisplay;
-      this.itemEffects = new EventItemEffects();
+      this.itemEffects = new EventItemEffects(
+        propModels.createEventModel('riggedHand')?.root ?? null,
+      );
       itemUseAdapter = new EventItemUseAdapter(this.camera, this.itemEffects);
       this.itemUseAdapter = itemUseAdapter;
       itemUseController = new EventItemUseController(
@@ -1232,6 +1234,11 @@ export class BoatWorld {
     ) return;
     if (this.disposed || operation !== this.weatherEventOperation) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
+  }
+
+  returnEventItemUse(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    return this.itemUseController.recover();
   }
 
   private playEventSceneItemUse(

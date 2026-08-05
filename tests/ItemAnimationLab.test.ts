@@ -52,6 +52,7 @@ describe('Item Animation Lab', () => {
     const playEventItemUse = vi.fn(() => itemUse.promise);
     const stageEvent = vi.fn();
     const clearEvent = vi.fn();
+    const returnEventItemUse = vi.fn(() => Promise.resolve());
     const setEventSelection = vi.fn();
     const setEventEligibleItems = vi.fn();
     const resolveEvent = vi.fn();
@@ -61,6 +62,7 @@ describe('Item Animation Lab', () => {
         stageEvent,
         clearEvent,
         playEventItemUse,
+        returnEventItemUse,
         setEventEligibleItems,
         setEventSelectedItem: vi.fn(),
         syncInventory: vi.fn(),
@@ -96,6 +98,7 @@ describe('Item Animation Lab', () => {
     itemUse.resolve();
     await flushPromises();
 
+    expect(returnEventItemUse).toHaveBeenCalledOnce();
     expect(clearEvent).toHaveBeenCalledOnce();
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(
