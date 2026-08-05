@@ -41,6 +41,7 @@ import {
   TITLE_CAMERA_POSITION,
   TITLE_CAMERA_TARGET,
 } from '../src/phases/ScavengePhase';
+import { GameUI } from '../src/ui/GameUI';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
@@ -406,6 +407,42 @@ describe('ScavengePhase lifecycle integration', () => {
       dangerAt(0),
     );
     expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
+    phase.dispose();
+    context.audio.dispose();
+    propModels.dispose();
+    shipFurniture.dispose();
+    skyAssets.dispose();
+  });
+
+  it('reveals physics objects before it requests pointer lock', () => {
+    const propModels = createTestPropModels();
+    const shipFurniture = createTestShipFurniture();
+    const skyAssets = createTestSkyAssets();
+    const context = {
+      mount: document.createElement('main'),
+      camera: new PerspectiveCamera(70, 1, 0.1, 100),
+      renderer: { domElement: document.createElement('canvas') },
+      propModels,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      maxTextureAnisotropy: 1,
+      audio: AudioSystem.silent(),
+    } as unknown as PhaseContext;
+    const revealPhysicsObjects = vi.fn();
+    const requestPointerLock = vi.fn().mockResolvedValue(true);
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const internals = phase as unknown as { ui: GameUI; world: World };
+    vi.spyOn(internals.world, 'revealPhysicsObjects').mockImplementation(revealPhysicsObjects);
+    vi.spyOn(phase as unknown as { requestPointerLock(): Promise<boolean> }, 'requestPointerLock')
+      .mockImplementation(requestPointerLock);
+
+    internals.ui.onStart();
+
+    expect(revealPhysicsObjects).toHaveBeenCalledOnce();
+    expect(requestPointerLock).toHaveBeenCalledOnce();
+    expect(revealPhysicsObjects.mock.invocationCallOrder[0])
+      .toBeLessThan(requestPointerLock.mock.invocationCallOrder[0]!);
     phase.dispose();
     context.audio.dispose();
     propModels.dispose();

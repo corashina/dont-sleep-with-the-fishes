@@ -387,6 +387,8 @@ describe('world builders', () => {
     expect(world.ship.getObjectByName('detail:cargoBox-1')).toBeUndefined();
     expect(world.ship.getObjectByName('furniture:bow-box-starboard-center')).toBeUndefined();
     expect(scene.getObjectByName('physics-objects')).toBeDefined();
+    expect(world.physicsObjects.every(({ visible }) => !visible)).toBe(true);
+    expect(scene.getObjectByName('physics-objects')?.visible).toBe(false);
     const internals = world as unknown as {
       scavengePhysics: ScavengePhysics;
     };
@@ -396,6 +398,12 @@ describe('world builders', () => {
       expect(physics.objectPoses[index]!.translation.y - object.position.y)
         .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
     });
+
+    world.revealPhysicsObjects();
+    world.revealPhysicsObjects();
+
+    expect(world.physicsObjects.every(({ visible }) => visible)).toBe(true);
+    expect(scene.getObjectByName('physics-objects')?.visible).toBe(true);
 
     world.dispose();
     propModels.dispose();
@@ -421,10 +429,14 @@ describe('world builders', () => {
     expect(world.physicsMode).toBe('off');
     expect(internals.scavengePhysics).toBeNull();
     expect(internals.physicsDebugView).toBeNull();
+    expect(world.physicsObjects.every(({ visible }) => !visible)).toBe(true);
+    expect(world.ship.getObjectByName('physics-objects')?.visible).toBe(false);
     world.physicsObjects.forEach((object) => {
       expect(object.parent?.name).toBe('physics-objects');
       expect(world.ship.getObjectByName(object.name)).toBe(object);
     });
+    world.revealPhysicsObjects();
+    const before = world.physicsObjects.map((object) => object.position.clone());
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
     expect(world.ship.getObjectByName('physics-debug-static')).toBeUndefined();
     expect(() => world.update(
@@ -434,6 +446,9 @@ describe('world builders', () => {
       new Vector3(),
       true,
     )).not.toThrow();
+    expect(world.physicsObjects.every(({ visible }) => visible)).toBe(true);
+    expect(world.ship.getObjectByName('physics-objects')?.visible).toBe(true);
+    world.physicsObjects.forEach((object, index) => expect(object.position).toEqual(before[index]));
 
     world.dispose();
     propModels.dispose();
@@ -453,11 +468,16 @@ describe('world builders', () => {
     );
 
     expect(world.physicsMode).toBe('debug');
-    expect(scene.getObjectByName('physics-debug-dynamic')).toBeDefined();
-    expect(world.ship.getObjectByName('physics-debug-static')).toBeDefined();
+    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(false);
+    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(false);
     SCAVENGE_PHYSICS_OBJECT_SPECS.forEach(({ id }) => {
       expect(scene.getObjectByName(`physics-debug-object:${id}`)).toBeDefined();
     });
+
+    world.revealPhysicsObjects();
+
+    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(true);
+    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(true);
 
     world.dispose();
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
