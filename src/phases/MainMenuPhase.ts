@@ -39,7 +39,7 @@ interface MainMenuResources {
 }
 
 function createMainMenuResources(
-  context: PhaseContext & { menuModels: MenuModelLibrary },
+  context: PhaseContext,
   scene: Scene,
   dependencies: MainMenuPhaseDependencies,
 ): MainMenuResources {
@@ -87,7 +87,7 @@ export class MainMenuPhase implements GamePhase {
   private disposed = false;
 
   constructor(
-    private readonly context: PhaseContext & { menuModels: MenuModelLibrary },
+    private readonly context: PhaseContext,
     private readonly onComplete: () => void,
     private readonly dependencies: MainMenuPhaseDependencies =
       PRODUCTION_MAIN_MENU_DEPENDENCIES,

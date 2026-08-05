@@ -1,4 +1,4 @@
-import { Game } from '../Game';
+import { disposeMenuModelLibrary, Game } from '../Game';
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
@@ -41,6 +41,10 @@ import {
   EventModelLibrary,
   EventModelLoadError,
 } from '../survival/EventModelLibrary';
+import {
+  MenuModelLibrary,
+  MenuModelLoadError,
+} from '../menu/MenuModelLibrary';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -49,6 +53,7 @@ export interface LaunchHandle {
 
 export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
+  loadMenuModels(): Promise<MenuModelLibrary>;
   loadSupernaturalEventModels?(): Promise<EventModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
@@ -69,12 +74,14 @@ export interface LaunchDependencies {
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audio: AudioSystem,
-    featuredEventModels?: SurvivalEventModelLibrary,
+    featuredEventModels: SurvivalEventModelLibrary | undefined,
+    menuModels: MenuModelLibrary,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
+  loadMenuModels: () => MenuModelLibrary.load(),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
@@ -95,6 +102,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     physicsMode,
     audio,
     featuredEventModels,
+    menuModels,
   ) => (
     new Game(
       mount,
@@ -104,6 +112,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       lifeboatAssets,
       shipAssets,
       eventModels,
+      menuModels,
       physicsRuntime,
       physicsMode,
       audio,
@@ -114,6 +123,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
 
 interface LoadedGameAssets {
   models: PropModelLibrary;
+  menuModels: MenuModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
@@ -144,6 +154,7 @@ async function loadGameAssets(
     physicsRuntime,
     audio,
     featuredEventModels,
+    menuModels,
   ] =
     await Promise.allSettled([
       dependencies.loadModels(),
@@ -155,6 +166,7 @@ async function loadGameAssets(
       physicsRuntimePromise,
       dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
       dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null),
+      dependencies.loadMenuModels(),
     ]);
   const assetResults = [
     models,
@@ -165,6 +177,7 @@ async function loadGameAssets(
     featuredEventModels,
     audio,
     eventModels,
+    menuModels,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
   const firstFailure = results.find(
@@ -174,7 +187,11 @@ async function loadGameAssets(
     for (const result of assetResults) {
       if (result.status !== 'fulfilled') continue;
       try {
-        result.value?.dispose();
+        if (result === menuModels) {
+          disposeMenuModelLibrary(result.value);
+        } else {
+          result.value?.dispose();
+        }
       } catch {
         // Preserve deterministic dependency failure precedence while cleaning every sibling.
       }
@@ -191,11 +208,13 @@ async function loadGameAssets(
     || physicsRuntime.status !== 'fulfilled'
     || audio.status !== 'fulfilled'
     || eventModels.status !== 'fulfilled'
+    || menuModels.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
   return {
     models: models.value,
+    menuModels: menuModels.value,
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
@@ -217,6 +236,7 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
     () => assets.eventModels.dispose(),
     () => assets.audio.dispose(),
     () => assets.featuredEventModels?.dispose(),
+    () => disposeMenuModelLibrary(assets.menuModels),
   ]);
 }
 
@@ -266,6 +286,17 @@ function renderShipPlacementFailure(
 }
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
+  if (error instanceof MenuModelLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'MENU MODEL UNAVAILABLE',
+      title: 'Unable to prepare ' + error.menuModelId,
+      lead: 'A required underwater menu model could not be loaded.',
+      detail: error.message,
+    });
+    return;
+  }
+
   if (error instanceof PhysicsLoadError) {
     renderSystemScreen(mount, {
       kind: 'error',
@@ -429,6 +460,7 @@ export function launchGame(
         physicsMode,
         unownedAssets.audio,
         unownedAssets.featuredEventModels ?? undefined,
+        unownedAssets.menuModels,
       );
       game = createdGame;
       unownedAssets = null;
