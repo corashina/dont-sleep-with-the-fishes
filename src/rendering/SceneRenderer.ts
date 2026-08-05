@@ -9,6 +9,11 @@ export interface ScavengeVisualState {
   sinkingProgress: number;
 }
 
+export interface MenuVisualState {
+  kind: 'menu';
+  elapsedSeconds: number;
+}
+
 export interface SurvivalVisualState {
   kind: 'survival';
   elapsedSeconds: number;
@@ -16,7 +21,10 @@ export interface SurvivalVisualState {
   weather: WeatherId;
 }
 
-export type SceneVisualState = ScavengeVisualState | SurvivalVisualState;
+export type SceneVisualState =
+  | MenuVisualState
+  | ScavengeVisualState
+  | SurvivalVisualState;
 
 export interface SceneRenderer {
   readonly postProcessingControls?: PostProcessingControls;
