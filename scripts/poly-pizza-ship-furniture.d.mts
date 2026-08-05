@@ -6,7 +6,8 @@ export const POLY_PIZZA_SHIP_FURNITURE_SOURCES: Readonly<
     | 'crewNightStand' | 'crewDesk' | 'crewCabinet' | 'crewCeilingLight'
     | 'crewWallPainting' | 'crewWallArt' | 'crewTable'
     | 'wheelhouseCorkboard'
-    | 'workroomCardboardBox' | 'workroomStorageShelf' | 'workroomPallet',
+    | 'workroomCardboardBox' | 'workroomStorageShelf' | 'workroomPallet'
+    | 'pumpkin' | 'propaneTank' | 'redCan' | 'shippingBox' | 'package',
     PolyPizzaModelSource
   >
 >;
