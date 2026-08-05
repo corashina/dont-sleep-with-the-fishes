@@ -31,6 +31,7 @@ export interface CrowsNestBuild {
 
 const LADDER_RUNG_DEPTH = 0.11;
 const LADDER_CLIMB_MARGIN = 0.03;
+const LADDER_DECK_EMBED = 0.04;
 
 function boxCollider(
   position: readonly [number, number, number],
@@ -142,7 +143,7 @@ export function createCrowsNest(
     mast.position[0], floorY - floorThickness / 2 - 0.09, mast.position[2] + 0.42,
   ], materials.timber);
 
-  const ladderBaseY = mast.position[1] + 0.2;
+  const ladderBaseY = mast.position[1] - LADDER_DECK_EMBED;
   const ladderHeight = floorY - ladderBaseY + 0.1;
   ([-spec.ladder.width / 2, spec.ladder.width / 2] as const).forEach((x, index) => {
     addBox(`${spec.ladder.id}:rail:${index}`, [0.09, ladderHeight, 0.09], [
@@ -178,10 +179,20 @@ export function createCrowsNest(
       minZ: minZ + sideGuardThickness,
       maxZ: maxZ - sideGuardThickness,
     },
-    bottomEntry: { minX: -0.4, maxX: 0.4, minZ: -1.35, maxZ: climbZ - 0.05 },
-    topEntry: { minX: 0.63, maxX: 0.83, minZ: -0.12, maxZ: 0.08 },
-    bottomDismount: [0, -1.3],
-    topDismount: [0.73, -0.02],
+    bottomEntry: {
+      minX: mast.position[0] - 0.4,
+      maxX: mast.position[0] + 0.4,
+      minZ: mast.position[2] - 1.35,
+      maxZ: climbZ - 0.05,
+    },
+    topEntry: {
+      minX: mast.position[0] + 0.63,
+      maxX: mast.position[0] + 0.83,
+      minZ: mast.position[2] - 0.12,
+      maxZ: mast.position[2] + 0.08,
+    },
+    bottomDismount: [mast.position[0], mast.position[2] - 1.3],
+    topDismount: [mast.position[0] + 0.73, mast.position[2] - 0.02],
   };
   const introAnchors: ScavengeIntroAnchors = {
     seatedPosition: [mast.position[0] + 0.69, floorSurfaceY + 0.95, mast.position[2] + 0.48],

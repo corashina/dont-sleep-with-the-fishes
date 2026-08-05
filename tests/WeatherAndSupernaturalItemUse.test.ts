@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects shared weather and supernatural item use integration.
 import {
   Box3,
   BoxGeometry,

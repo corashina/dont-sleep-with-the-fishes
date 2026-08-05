@@ -11,28 +11,32 @@ export function pointInWaterExclusion(
   const local = point.clone().applyMatrix4(region.worldToLocal);
   const minimumLocalY = region.minimumLocalY ?? UNBOUNDED_MINIMUM_LOCAL_Y;
   if (local.y < minimumLocalY || local.y > region.upperLocalY) return false;
-  const upperHalfWidth = Math.max(Math.abs(region.bounds.x), Math.abs(region.bounds.y));
-  const upperHalfLength = Math.max(Math.abs(region.bounds.z), Math.abs(region.bounds.w));
-  const lowerHalfWidth = region.lowerHalfWidth ?? upperHalfWidth;
-  const lowerHalfLength = region.lowerHalfLength ?? upperHalfLength;
-  const lowerTaperStart = region.lowerTaperStart ?? region.taperStart;
   const upperLocalY = region.upperLocalY ?? minimumLocalY;
   const heightSpan = Math.max(upperLocalY - minimumLocalY, 1e-4);
   const profileProgress = Math.min(1, Math.max(0, (local.y - minimumLocalY) / heightSpan));
-  const halfWidth = lowerHalfWidth
-    + (upperHalfWidth - lowerHalfWidth)
-      * profileProgress;
-  const halfLength = lowerHalfLength
-    + (upperHalfLength - lowerHalfLength)
-      * profileProgress;
-  const taperStart = lowerTaperStart
-    + (region.taperStart - lowerTaperStart) * profileProgress;
-  const localAbsZ = Math.abs(local.z);
-  if (localAbsZ > halfLength) return false;
-  const taperSpan = Math.max(0, halfLength - taperStart);
-  const taperProgress = taperSpan === 0
-    ? 0
-    : Math.min(1, Math.max(0, (localAbsZ - taperStart) / taperSpan));
+  const mix = (lower: number, upper: number): number =>
+    lower + (upper - lower) * profileProgress;
+  const minX = mix(region.lowerBounds.x, region.bounds.x);
+  const maxX = mix(region.lowerBounds.y, region.bounds.y);
+  const minZ = mix(region.lowerBounds.z, region.bounds.z);
+  const maxZ = mix(region.lowerBounds.w, region.bounds.w);
+  if (local.z < minZ || local.z > maxZ) return false;
+  const taperStartMinZ = mix(region.lowerTaperStarts.x, region.taperStarts.x);
+  const taperStartMaxZ = mix(region.lowerTaperStarts.y, region.taperStarts.y);
+  let taperProgress = 0;
+  if (local.z < taperStartMinZ) {
+    const taperSpan = Math.max(0, taperStartMinZ - minZ);
+    taperProgress = taperSpan === 0
+      ? 0
+      : Math.min(1, Math.max(0, (taperStartMinZ - local.z) / taperSpan));
+  } else if (local.z > taperStartMaxZ) {
+    const taperSpan = Math.max(0, maxZ - taperStartMaxZ);
+    taperProgress = taperSpan === 0
+      ? 0
+      : Math.min(1, Math.max(0, (local.z - taperStartMaxZ) / taperSpan));
+  }
+  const halfWidth = (maxX - minX) / 2;
+  const centerX = (minX + maxX) / 2;
   const localHalfWidth = halfWidth * Math.sqrt(Math.max(0, 1 - taperProgress ** 2));
-  return Math.abs(local.x) <= localHalfWidth;
+  return Math.abs(local.x - centerX) <= localHalfWidth;
 }

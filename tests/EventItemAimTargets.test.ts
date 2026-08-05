@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects stable event targeting across moving and competing entities.
 import {
   BoxGeometry,
   Group,
@@ -353,7 +354,7 @@ describe('event item aim targets', () => {
     const directionalChoices = SURVIVAL_EVENTS.flatMap((event) => (
       event.choices.flatMap((choice) => (
         choice.itemId !== undefined
-        && eventItemMotionProfile(choice.itemId).aim === 'entity'
+        && eventItemMotionProfile(choice.itemId).aim !== 'none'
           ? [{ eventId: event.id, choiceId: choice.id }]
           : []
       ))

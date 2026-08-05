@@ -4,12 +4,6 @@ import {
   ITEM_IDS,
   type ItemId,
 } from '../game/itemCatalog';
-import {
-  planBaselineScavengeRoute,
-  planExpertScavengeRoute,
-  type ScavengeRouteAssignment,
-} from '../game/ScavengeRoutePlanner';
-import type { ScavengeItemInstanceId } from '../game/scavengeCatalog';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { CollisionBox } from '../player/collisions';
 import {
@@ -53,15 +47,12 @@ export interface ShipItemTransform {
   readonly position: Vector3;
   readonly rotation: Euler;
   readonly scale: number;
-  readonly placementSource: 'generated' | 'fallback';
+  readonly placementSource: 'random';
 }
 
 export interface ShipPlacementContext {
   readonly routeMetric: ShipRouteMetric;
-  readonly start: readonly [number, number];
   readonly deposit: readonly [number, number];
-  readonly evacuation: readonly [number, number];
-  readonly maxAttempts?: number;
 }
 
 export class ShipItemPlacementError extends Error {
@@ -77,140 +68,14 @@ const STANDING_EYE_HEIGHT = 1.5;
 const STRUCTURE_CLEARANCE = 0.1;
 const MIN_ITEM_SEPARATION = 1.25;
 const MAX_BACKTRACK_NODES_PER_ATTEMPT = 256;
+const RANDOM_PLACEMENT_ATTEMPTS = 64;
 const EPSILON = 1e-6;
 
-export const SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS = 64;
-
-const REGION_LIMITS: Readonly<Record<
-  ScavengeRegionId,
-  { readonly minimum: number; readonly maximum: number }
->> = Object.freeze({
-  crewCabin: Object.freeze({ minimum: 3, maximum: 4 }),
-  wheelhouse: Object.freeze({ minimum: 5, maximum: 6 }),
-  centralCargo: Object.freeze({ minimum: 6, maximum: 7 }),
-  storageWorkroom: Object.freeze({ minimum: 3, maximum: 4 }),
-  bow: Object.freeze({ minimum: 1, maximum: 1 }),
-  stern: Object.freeze({ minimum: 2, maximum: 3 }),
-});
-
-const REGION_IDS = Object.freeze([...SCAVENGE_REGION_IDS]);
-
-export const SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE = Object.freeze({
-  'cannedFood-1': 'cargo-crate-aft-port:top',
-  'cannedFood-2': 'workroom-crate-center-starboard:top',
-  'cannedFood-3': 'stern-crate-starboard:top',
-  'baitTin-1': 'storage-shelf-forward:shelf-left',
-  'baitTin-2': 'chart-table-forward:top-left',
-  'ductTape-1': 'stern-barrel-port-center:top',
-  'compass-1': 'bow-box-starboard-center:top',
-  'map-1': 'cabin-bunk-port:rest',
-  'medicalKit-1': 'cargo-crate-aft-starboard:top',
-  'spyglass-1': 'chart-table-port:top-far-right',
-  'fishingNet-1': 'cargo-rack-starboard:top-left',
-  'bucket-1': 'cabin-cabinet-port-forward:top',
-  'flareGun-1': 'bow-crate-starboard:top',
-  'scubaSet-1': 'cargo-crate-forward-starboard:top',
-  'anchor-1': 'cargo-rack-port:top-left',
-  'bottledPaper-1': 'chart-table-port:top-left',
-  'umbrella-1': 'workbench-starboard:top-left',
-  'swimRing-1': 'cabin-desk-starboard-aft:top-left',
-  'flashlight-1': 'chart-table-forward:top-far-right',
-  'shotgun-1': 'workroom-crate-center-port:top',
-  'captainWhiskers-1': 'cargo-crate-forward-port:top',
-} satisfies Record<ScavengeItemInstanceId, string>);
-
-const SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE = Object.freeze({
-  'cannedFood-1': 'cargo-crate-aft-port:top',
-  'cannedFood-2': 'storage-shelf-forward:shelf-left',
-  'cannedFood-3': 'stern-barrel-port-center:top',
-  'baitTin-1': 'workroom-crate-center-starboard:top',
-  'baitTin-2': 'bow-box-starboard-center:top',
-  'ductTape-1': 'stern-crate-port:top',
-  'compass-1': 'chart-table-port:top-far-right',
-  'map-1': 'cabin-bunk-port:rest',
-  'medicalKit-1': 'cargo-crate-aft-starboard:top',
-  'spyglass-1': 'chart-table-port:top-left',
-  'fishingNet-1': 'cargo-rack-starboard:top-left',
-  'bucket-1': 'cabin-cabinet-port-forward:top',
-  'flareGun-1': 'bow-crate-starboard:top',
-  'scubaSet-1': 'cargo-crate-forward-starboard:top',
-  'anchor-1': 'cargo-rack-port:top-left',
-  'bottledPaper-1': 'chart-table-forward:top-left',
-  'umbrella-1': 'workbench-starboard:top-left',
-  'swimRing-1': 'cabin-desk-starboard-aft:top-left',
-  'flashlight-1': 'chart-table-forward:top-far-right',
-  'shotgun-1': 'workroom-crate-center-port:top',
-  'captainWhiskers-1': 'cargo-crate-forward-port:top',
-} satisfies Record<ScavengeItemInstanceId, string>);
-
-const SCAVENGE_GENERATED_LAYOUT_OVERRIDES = Object.freeze([
-  {
-    'baitTin-2': 'chart-table-forward:top-left',
-    'compass-1': 'bow-box-starboard-center:top',
-    'spyglass-1': 'chart-table-port:top-far-right',
-    'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'chart-table-forward:top-far-right',
-  },
-  {
-    'cannedFood-3': 'stern-crate-starboard:top',
-    'ductTape-1': 'stern-barrel-port-center:top',
-  },
-  {
-    'cannedFood-2': 'workroom-crate-center-starboard:top',
-    'baitTin-1': 'storage-shelf-forward:shelf-left',
-  },
-  {
-    'cannedFood-3': 'stern-crate-starboard:top',
-    'baitTin-2': 'chart-table-forward:top-left',
-    'ductTape-1': 'stern-barrel-port-center:top',
-    'compass-1': 'bow-box-starboard-center:top',
-    'spyglass-1': 'chart-table-port:top-far-right',
-    'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'chart-table-forward:top-far-right',
-  },
-  {
-    'cannedFood-2': 'workroom-crate-center-starboard:top',
-    'baitTin-1': 'storage-shelf-forward:shelf-left',
-    'baitTin-2': 'chart-table-forward:top-left',
-    'compass-1': 'bow-box-starboard-center:top',
-    'spyglass-1': 'chart-table-port:top-far-right',
-    'bottledPaper-1': 'chart-table-port:top-left',
-    'flashlight-1': 'chart-table-forward:top-far-right',
-  },
-  {
-    'cannedFood-2': 'workroom-crate-center-starboard:top',
-    'cannedFood-3': 'stern-crate-starboard:top',
-    'baitTin-1': 'storage-shelf-forward:shelf-left',
-    'ductTape-1': 'stern-barrel-port-center:top',
-  },
-] satisfies readonly Partial<Record<ScavengeItemInstanceId, string>>[]);
-
-const SCAVENGE_GENERATED_SURFACE_MAPS: readonly Readonly<
-  Record<ScavengeItemInstanceId, string>
->[] = Object.freeze([
-  SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE,
-  ...SCAVENGE_GENERATED_LAYOUT_OVERRIDES.map((overrides) => Object.freeze({
-    ...SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE,
-    ...overrides,
-  })),
-]);
-
-const PRODUCTION_INSTANCE_IDS = Object.freeze(
-  Object.keys(SCAVENGE_GENERATED_BASE_SURFACE_BY_INSTANCE).sort(),
-);
+export const MAX_HEAVY_ITEM_DEPOSIT_DISTANCE = 14;
 
 const validatedSurfaceInputs = new WeakMap<
   readonly ShipItemSurface[],
   WeakSet<readonly CollisionBox[]>
->();
-
-const generatedTemplateCache = new WeakMap<
-  ShipPlacementContext,
-  {
-    readonly surfaces: readonly ShipItemSurface[];
-    readonly blockers: readonly CollisionBox[];
-    readonly templates: readonly ReadonlyMap<ItemInstanceId, ShipItemTransform>[];
-  }
 >();
 
 export const SHIP_ITEM_PROFILES = Object.freeze(Object.fromEntries(
@@ -368,6 +233,7 @@ export function validateShipItemSurfaces(
     }
     if (surface.furnitureModelId !== 'bookcaseOpen'
       && surface.furnitureModelId !== 'workroomStorageShelf'
+      && surface.furnitureModelId !== 'bedBunk'
       && owner.maxY > surface.position.y + EPSILON) {
       throw new Error(`Ship item surface ${surface.id} is blocked above owner ${surface.furnitureId}`);
     }
@@ -425,7 +291,8 @@ interface PlacementCandidate {
   readonly standingPoint: Vector3;
 }
 
-function scavengingRestingRotation(itemId: ItemId, surfaceRotation: Euler): Euler {
+function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Euler {
+  const surfaceRotation = surface.rotation;
   if (itemId === 'anchor' || itemId === 'ductTape') {
     const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
     const lyingOrientation = new Quaternion().setFromAxisAngle(
@@ -435,15 +302,21 @@ function scavengingRestingRotation(itemId: ItemId, surfaceRotation: Euler): Eule
     return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
   }
   const rotation = surfaceRotation.clone();
-  if (itemId === 'umbrella') rotation.z -= Math.PI / 4;
+  if (itemId === 'umbrella') {
+    rotation.y -= Math.PI / 4;
+  } else if (itemId === 'captainWhiskers') {
+    rotation.y = Math.atan2(surface.position.x, surface.position.z);
+  }
   return rotation;
 }
 
 function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | undefined {
-  const rotation = scavengingRestingRotation(itemId, surface.rotation);
+  const rotation = scavengingRestingRotation(itemId, surface);
   const fitBounds = orientedItemBounds(
     itemId,
-    itemId === 'anchor' || itemId === 'ductTape' ? rotation : surface.rotation,
+    itemId === 'anchor' || itemId === 'ductTape' || itemId === 'captainWhiskers'
+      ? rotation
+      : surface.rotation,
   );
   const size = fitBounds.getSize(new Vector3());
   const measuredScale = Math.min(
@@ -458,9 +331,6 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   const position = surface.position.clone();
   if (itemId === 'captainWhiskers') {
     position.y += CAPTAIN_WHISKERS_SUPPORT_LIFT * scale;
-  }
-  if (itemId === 'umbrella' && surface.id === 'workbench-starboard:top-left') {
-    position.z += 0.08;
   }
   position.y -= bounds.min.y * scale;
   const itemCenter = bounds.getCenter(new Vector3()).multiplyScalar(scale).add(position);
@@ -520,16 +390,17 @@ function candidateFor(
   const standing = chosenStandingPoint(surface, context);
   if (!standing) return undefined;
   const weight = ITEM_DEFINITIONS[instance.type].weight;
+  if (weight === 3
+    && (surface.regionId === 'storageWorkroom' || surface.regionId === 'crewCabin')) {
+    return undefined;
+  }
   if (standing.depositDistance !== undefined
-    && ((weight === 3 && standing.depositDistance > 14 + EPSILON)
-      || (weight === 2 && standing.depositDistance > 22 + EPSILON))) return undefined;
+    && weight === 3
+    && standing.depositDistance > MAX_HEAVY_ITEM_DEPOSIT_DISTANCE + EPSILON) return undefined;
   return { surface, fit, standingPoint: standing.point };
 }
 
-function transformFor(
-  candidate: PlacementCandidate,
-  placementSource: ShipItemTransform['placementSource'],
-): ShipItemTransform {
+function transformFor(candidate: PlacementCandidate): ShipItemTransform {
   return {
     surfaceId: candidate.surface.id,
     physicalSlotId: candidate.surface.physicalSlotId,
@@ -540,51 +411,8 @@ function transformFor(
     position: candidate.fit.position.clone(),
     rotation: candidate.fit.rotation.clone(),
     scale: candidate.fit.scale,
-    placementSource,
+    placementSource: 'random',
   };
-}
-
-function isProductionCatalog(instances: readonly ItemInstance[]): boolean {
-  if (instances.length !== PRODUCTION_INSTANCE_IDS.length) return false;
-  const ids = instances.map(({ instanceId }) => instanceId).sort();
-  return ids.every((id, index) => id === PRODUCTION_INSTANCE_IDS[index]);
-}
-
-function routeAssignments(
-  instances: readonly ItemInstance[],
-  assignments: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-): readonly ScavengeRouteAssignment[] {
-  return instances.map((instance) => {
-    const transform = assignments.get(instance.instanceId)!;
-    return {
-      instanceId: instance.instanceId,
-      weight: ITEM_DEFINITIONS[instance.type].weight,
-      position: [transform.standingPoint.x, transform.standingPoint.z] as const,
-      branch: transform.branch,
-    };
-  });
-}
-
-function routeChecksPass(
-  instances: readonly ItemInstance[],
-  assignments: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-  context: ShipPlacementContext,
-): boolean {
-  const input = {
-    assignments: routeAssignments(instances, assignments),
-    start: context.start,
-    deposit: context.deposit,
-    evacuation: context.evacuation,
-    metric: context.routeMetric,
-  };
-  const expert = planExpertScavengeRoute(input);
-  if (!expert || expert.seconds < 54 - EPSILON || expert.seconds > 60 + EPSILON) return false;
-  const baseline = planBaselineScavengeRoute(input);
-  return baseline.savedCount >= 15
-    && baseline.savedCount <= 17
-    && baseline.evacuated
-    && baseline.seconds <= 60 + EPSILON
-    && baseline.actions.at(-1)?.type === 'evacuate';
 }
 
 function separatedFromAssignments(
@@ -599,131 +427,13 @@ function separatedFromAssignments(
   return true;
 }
 
-function cloneGeneratedTemplate(
-  template: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-): Map<ItemInstanceId, ShipItemTransform> {
-  return new Map([...template].map(([instanceId, transform]) => [instanceId, {
-    ...transform,
-    standingPoint: transform.standingPoint.clone(),
-    position: transform.position.clone(),
-    rotation: transform.rotation.clone(),
-    placementSource: 'generated' as const,
-  }]));
-}
-
-function generatedSpatialTemplates(
-  instances: readonly ItemInstance[],
-  surfaces: readonly ShipItemSurface[],
-  blockers: readonly CollisionBox[],
-  context: ShipPlacementContext,
-): readonly ReadonlyMap<ItemInstanceId, ShipItemTransform>[] {
-  const useCache = context.routeMetric.stable === true;
-  const cached = useCache ? generatedTemplateCache.get(context) : undefined;
-  if (cached?.surfaces === surfaces && cached.blockers === blockers) return cached.templates;
-
-  const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));
-  const templates: ReadonlyMap<ItemInstanceId, ShipItemTransform>[] = [];
-  for (const surfaceMap of SCAVENGE_GENERATED_SURFACE_MAPS) {
-    const assignment = new Map<ItemInstanceId, ShipItemTransform>();
-    const usedSlots = new Set<string>();
-    let valid = true;
-    for (const instance of instances) {
-      const surfaceId = surfaceMap[instance.instanceId as ScavengeItemInstanceId];
-      const surface = surfaceId ? surfaceById.get(surfaceId) : undefined;
-      const candidate = surface
-        ? candidateFor(instance, surface, blockers, context)
-        : undefined;
-      if (!candidate
-        || usedSlots.has(candidate.surface.physicalSlotId)
-        || !separatedFromAssignments(candidate, assignment)) {
-        valid = false;
-        break;
-      }
-      usedSlots.add(candidate.surface.physicalSlotId);
-      assignment.set(instance.instanceId, transformFor(candidate, 'generated'));
-    }
-    if (valid
-      && assignment.size === instances.length
-      && productionCountsPass(assignment)
-      && routeChecksPass(instances, assignment, context)) {
-      templates.push(assignment);
-    }
-  }
-  if (useCache) {
-    generatedTemplateCache.set(context, { surfaces, blockers, templates });
-  }
-  return templates;
-}
-
-function selectRegionTargets(random: () => number): Record<ScavengeRegionId, number> {
-  const targets = Object.fromEntries(REGION_IDS.map((regionId) => [
-    regionId,
-    REGION_LIMITS[regionId].minimum,
-  ])) as Record<ScavengeRegionId, number>;
-  const available = [...REGION_IDS];
-  for (let index = 0; index < 3; index += 1) {
-    const selectedIndex = Math.floor(randomUnit(random) * available.length);
-    const regionId = available.splice(selectedIndex, 1)[0]!;
-    targets[regionId] += 1;
-  }
-  return targets;
-}
-
-function simpleAssignment(
+function randomAssignment(
   instances: readonly ItemInstance[],
   surfaces: readonly ShipItemSurface[],
   random: () => number,
   blockers: readonly CollisionBox[],
+  context?: ShipPlacementContext,
 ): Map<ItemInstanceId, ShipItemTransform> | undefined {
-  const eligible = new Map<ItemInstanceId, PlacementCandidate[]>();
-  for (const instance of instances) {
-    eligible.set(instance.instanceId, shuffled(
-      surfaces.flatMap((surface) => {
-        const candidate = candidateFor(instance, surface, blockers);
-        return candidate ? [candidate] : [];
-      }),
-      random,
-    ));
-  }
-  if (instances.length > surfaces.length) return undefined;
-  const sorted = [...instances].sort((left, right) =>
-    eligible.get(left.instanceId)!.length - eligible.get(right.instanceId)!.length
-    || ITEM_DEFINITIONS[right.type].weight - ITEM_DEFINITIONS[left.type].weight
-    || left.instanceId.localeCompare(right.instanceId)
-  );
-  const assignments = new Map<ItemInstanceId, ShipItemTransform>();
-  const usedSlots = new Set<string>();
-  const place = (index: number): boolean => {
-    if (index === sorted.length) return true;
-    const instance = sorted[index]!;
-    for (const candidate of eligible.get(instance.instanceId)!) {
-      if (usedSlots.has(candidate.surface.physicalSlotId)) continue;
-      usedSlots.add(candidate.surface.physicalSlotId);
-      assignments.set(instance.instanceId, transformFor(candidate, 'generated'));
-      if (place(index + 1)) return true;
-      assignments.delete(instance.instanceId);
-      usedSlots.delete(candidate.surface.physicalSlotId);
-    }
-    return false;
-  };
-  return place(0) ? assignments : undefined;
-}
-
-function generatedProductionAssignment(
-  instances: readonly ItemInstance[],
-  surfaces: readonly ShipItemSurface[],
-  random: () => number,
-  blockers: readonly CollisionBox[],
-  context: ShipPlacementContext,
-): Map<ItemInstanceId, ShipItemTransform> | undefined {
-  const templates = generatedSpatialTemplates(instances, surfaces, blockers, context);
-  if (templates.length > 0) {
-    const selected = templates[Math.floor(randomUnit(random) * templates.length)]!;
-    return cloneGeneratedTemplate(selected);
-  }
-
-  const regionTargets = selectRegionTargets(random);
-  const branchTarget = 4 + Math.floor(randomUnit(random) * 3);
   const eligible = new Map<ItemInstanceId, PlacementCandidate[]>();
   for (const instance of instances) {
     eligible.set(instance.instanceId, shuffled(
@@ -734,139 +444,34 @@ function generatedProductionAssignment(
       random,
     ));
   }
-  const sorted = [...instances].sort((left, right) =>
-    eligible.get(left.instanceId)!.length - eligible.get(right.instanceId)!.length
-    || ITEM_DEFINITIONS[right.type].weight - ITEM_DEFINITIONS[left.type].weight
-    || left.instanceId.localeCompare(right.instanceId)
+  if (instances.some((instance) => eligible.get(instance.instanceId)!.length === 0)
+    || instances.length > new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size) {
+    return undefined;
+  }
+  const sorted = shuffled(instances, random).sort((left, right) =>
+    Number(ITEM_DEFINITIONS[right.type].weight === 3)
+      - Number(ITEM_DEFINITIONS[left.type].weight === 3)
   );
   const assignments = new Map<ItemInstanceId, ShipItemTransform>();
   const usedSlots = new Set<string>();
-  const regionCounts = Object.fromEntries(
-    REGION_IDS.map((regionId) => [regionId, 0]),
-  ) as Record<ScavengeRegionId, number>;
-  let branchCount = 0;
-  let completeChecked = false;
   let visitedNodes = 0;
-
   const place = (index: number): boolean => {
     if (visitedNodes >= MAX_BACKTRACK_NODES_PER_ATTEMPT) return false;
     visitedNodes += 1;
-    if (index === sorted.length) {
-      completeChecked = true;
-      return branchCount === branchTarget
-        && routeChecksPass(instances, assignments, context);
-    }
+    if (index === sorted.length) return true;
     const instance = sorted[index]!;
     for (const candidate of eligible.get(instance.instanceId)!) {
-      if (completeChecked) return false;
-      const { surface } = candidate;
-      if (usedSlots.has(surface.physicalSlotId)
-        || regionCounts[surface.regionId] >= regionTargets[surface.regionId]
-        || (surface.branch && branchCount >= branchTarget)
+      if (usedSlots.has(candidate.surface.physicalSlotId)
         || !separatedFromAssignments(candidate, assignments)) continue;
-      usedSlots.add(surface.physicalSlotId);
-      regionCounts[surface.regionId] += 1;
-      if (surface.branch) branchCount += 1;
-      assignments.set(instance.instanceId, transformFor(candidate, 'generated'));
-      const remaining = sorted.length - index - 1;
-      if (branchCount <= branchTarget
-        && branchCount + remaining >= branchTarget
-        && place(index + 1)) return true;
+      usedSlots.add(candidate.surface.physicalSlotId);
+      assignments.set(instance.instanceId, transformFor(candidate));
+      if (place(index + 1)) return true;
       assignments.delete(instance.instanceId);
-      if (surface.branch) branchCount -= 1;
-      regionCounts[surface.regionId] -= 1;
-      usedSlots.delete(surface.physicalSlotId);
+      usedSlots.delete(candidate.surface.physicalSlotId);
     }
     return false;
   };
   return place(0) ? assignments : undefined;
-}
-
-function productionCountsPass(
-  assignments: ReadonlyMap<ItemInstanceId, ShipItemTransform>,
-): boolean {
-  const counts = Object.fromEntries(REGION_IDS.map((regionId) => [
-    regionId,
-    [...assignments.values()].filter((value) => value.regionId === regionId).length,
-  ])) as Record<ScavengeRegionId, number>;
-  if (REGION_IDS.some((regionId) => counts[regionId] < REGION_LIMITS[regionId].minimum
-    || counts[regionId] > REGION_LIMITS[regionId].maximum)) return false;
-  const branchCount = [...assignments.values()].filter(({ branch }) => branch).length;
-  return branchCount >= 4 && branchCount <= 6;
-}
-
-function fallbackAssignment(
-  instances: readonly ItemInstance[],
-  surfaces: readonly ShipItemSurface[],
-  blockers: readonly CollisionBox[],
-  context: ShipPlacementContext,
-): Map<ItemInstanceId, ShipItemTransform> | undefined {
-  const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));
-  const assignments = new Map<ItemInstanceId, ShipItemTransform>();
-  const usedSlots = new Set<string>();
-  for (const instance of instances) {
-    const surfaceId = (SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE as Readonly<
-      Record<ScavengeItemInstanceId, string>
-    >)[
-      instance.instanceId as ScavengeItemInstanceId
-    ];
-    if (!surfaceId) throw new Error(`Fallback has no surface for ${instance.instanceId}`);
-    const surface = surfaceById.get(surfaceId);
-    if (!surface) throw new Error(`Fallback surface does not exist: ${surfaceId}`);
-    const fit = surfaceFit(surface, instance.type);
-    if (!fit) {
-      const rotation = scavengingRestingRotation(instance.type, surface.rotation);
-      const size = orientedItemBounds(instance.type, rotation).getSize(new Vector3());
-      throw new Error(
-        `Fallback surface does not physically fit ${instance.instanceId}: ${surfaceId}; item ${size.x},${size.y},${size.z}; surface ${surface.footprint.width},${surface.clearanceHeight},${surface.footprint.depth}`,
-      );
-    }
-    if (!surfaceFitAvoidsBlockers(surface, instance.type, fit, blockers)) {
-      throw new Error(`Fallback surface blocker check fails ${instance.instanceId}: ${surfaceId}`);
-    }
-    const standing = chosenStandingPoint(surface, context);
-    if (!standing) throw new Error(`Fallback standing route fails ${instance.instanceId}: ${surfaceId}`);
-    const weight = ITEM_DEFINITIONS[instance.type].weight;
-    if (standing.depositDistance !== undefined
-      && ((weight === 3 && standing.depositDistance > 14 + EPSILON)
-        || (weight === 2 && standing.depositDistance > 22 + EPSILON))) {
-      throw new Error(`Fallback weight route fails ${instance.instanceId}: ${surfaceId}`);
-    }
-    const candidate = { surface, fit, standingPoint: standing.point };
-    if (usedSlots.has(surface.physicalSlotId)) {
-      throw new Error(`Fallback reuses physical slot: ${surface.physicalSlotId}`);
-    }
-    if (!separatedFromAssignments(candidate, assignments)) {
-      const conflict = [...assignments.entries()].map(([id, transform]) => ({
-        id,
-        distance: Math.hypot(
-          candidate.fit.position.x - transform.position.x,
-          candidate.fit.position.z - transform.position.z,
-        ),
-      })).sort((left, right) => left.distance - right.distance)[0];
-      throw new Error(
-        `Fallback separation fails at ${instance.instanceId}: ${surfaceId}; nearest ${conflict?.id} at ${conflict?.distance}`,
-      );
-    }
-    usedSlots.add(surface.physicalSlotId);
-    assignments.set(instance.instanceId, transformFor(candidate, 'fallback'));
-  }
-  if (!productionCountsPass(assignments)) throw new Error('Fallback region or branch counts fail');
-  if (!routeChecksPass(instances, assignments, context)) {
-    const input = {
-      assignments: routeAssignments(instances, assignments),
-      start: context.start,
-      deposit: context.deposit,
-      evacuation: context.evacuation,
-      metric: context.routeMetric,
-    };
-    const expert = planExpertScavengeRoute(input);
-    const baseline = planBaselineScavengeRoute(input);
-    throw new Error(
-      `Fallback route checks fail: expert ${expert?.seconds ?? 'null'}, baseline ${baseline.savedCount}, evacuated ${baseline.evacuated}`,
-    );
-  }
-  return assignments;
 }
 
 export function assignShipItems(
@@ -897,28 +502,9 @@ export function assignShipItems(
     validatedBlockers.add(blockers);
   }
 
-  const production = isProductionCatalog(instances);
-  if (!production) {
-    const assignment = simpleAssignment(instances, surfaces, random, blockers);
-    if (assignment) return assignment;
-    const failure = instances[0];
-    if (failure) throw new ShipItemPlacementError(failure.instanceId);
-    return new Map();
-  }
-  if (!placementContext) {
-    throw new Error('The production scavenging catalog requires a ship placement context');
-  }
-
-  const requestedAttempts = placementContext.maxAttempts
-    ?? SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS;
-  const attempts = Number.isFinite(requestedAttempts)
-    ? Math.min(
-      SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS,
-      Math.max(0, Math.floor(requestedAttempts)),
-    )
-    : 0;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const assignment = generatedProductionAssignment(
+  if (instances.length === 0) return new Map();
+  for (let attempt = 0; attempt < RANDOM_PLACEMENT_ATTEMPTS; attempt += 1) {
+    const assignment = randomAssignment(
       instances,
       surfaces,
       random,
@@ -927,7 +513,5 @@ export function assignShipItems(
     );
     if (assignment) return assignment;
   }
-  const fallback = fallbackAssignment(instances, surfaces, blockers, placementContext);
-  if (fallback) return fallback;
   throw new ShipItemPlacementError(instances[0]!.instanceId);
 }

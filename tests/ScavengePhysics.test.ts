@@ -21,7 +21,7 @@ import {
 } from '../src/physics/ScavengePhysics';
 import type { PhysicsRuntime } from '../src/physics/PhysicsRuntime';
 import { createShipGeometry } from '../src/world/ShipGeometry';
-import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
+import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { testPhysicsRuntime } from './helpers/physics';
 
@@ -42,8 +42,7 @@ const config = () => ({
   arcColliders: [],
   safeBounds: { minX: -9, maxX: 9, minZ: -12, maxZ: 12 },
   deckY: 2.22,
-  shipWidth: 20,
-  shipLength: 25,
+  deckBounds: { minX: -10, maxX: 10, minZ: -12.5, maxZ: 12.5 },
   initialShipPose: identityPose(),
   barrelSpawns: [
     { x: -2.5, y: 2.795, z: 3.2 },
@@ -97,6 +96,20 @@ describe('ScavengePhysics', () => {
     expect(cuboids.slice(1)).toEqual(testRailColliders.map(collisionBoxToCuboid));
   });
 
+  it('aligns the floor cuboid with asymmetric deck bounds', () => {
+    const floor = createScavengeStaticCuboids({
+      ...config(),
+      deckBounds: { minX: -8.125, maxX: 8.125, minZ: -19.525, maxZ: 27.1 },
+    })[0]!;
+
+    expect(floor.center.x).toBe(0);
+    expect(floor.center.y).toBeCloseTo(2.12);
+    expect(floor.center.z).toBeCloseTo(3.7875);
+    expect(floor.halfExtents.x).toBeCloseTo(8.125);
+    expect(floor.halfExtents.y).toBeCloseTo(0.1);
+    expect(floor.halfExtents.z).toBeCloseTo(23.3125);
+  });
+
   it('converts a curved end rail into eight rotated physics segments', () => {
     const cuboids = collisionArcToCuboids({
       centerX: 0,
@@ -141,7 +154,7 @@ describe('ScavengePhysics', () => {
     const create = () => new ScavengePhysics(runtime, {
       ...config(),
       safeBounds: { minX: -9, maxX: 9, minZ: -26, maxZ: 26 },
-      shipLength: 55,
+      deckBounds: { minX: -10, maxX: 10, minZ: -27.5, maxZ: 27.5 },
     });
     const left = create();
     const right = create();
@@ -211,13 +224,13 @@ describe('ScavengePhysics', () => {
       minZ: -26.7,
       maxZ: 26.7,
     };
+    const deckBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
     const physics = new ScavengePhysics(runtime, {
       colliders: ship.shellColliders,
       arcColliders: ship.arcColliders,
       safeBounds,
       deckY: FREIGHTER_DIMENSIONS.deckY,
-      shipWidth: FREIGHTER_DIMENSIONS.width,
-      shipLength: FREIGHTER_DIMENSIONS.length,
+      deckBounds,
       initialShipPose: pose,
       barrelSpawns: config().barrelSpawns,
     });

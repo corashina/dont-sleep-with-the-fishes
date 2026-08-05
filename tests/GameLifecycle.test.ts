@@ -92,7 +92,7 @@ vi.mock('../src/world/ShipItemPlacement', async (importOriginal) => {
         position: new Vector3(index, 1, 0),
         rotation: new Euler(),
         scale: 1,
-        placementSource: 'generated' as const,
+        placementSource: 'random' as const,
       }],
     )),
   };

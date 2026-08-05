@@ -1,5 +1,5 @@
 // Importance: 4/5. Protects vessel water exclusion math.
-import { Group, Matrix4, Vector3, Vector4 } from 'three';
+import { Group, Matrix4, Vector2, Vector3, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
@@ -60,6 +60,31 @@ describe('water exclusions', () => {
     expect(pointInWaterExclusion(new Vector3(0.4, 0, 2.95), region)).toBe(true);
     expect(pointInWaterExclusion(new Vector3(1.3, 0, 2.4), region)).toBe(false);
     expect(pointInWaterExclusion(new Vector3(-1.3, 0, -2.4), region)).toBe(false);
+  });
+
+  it('keeps a flat stern while tapering the bow', () => {
+    const region = createWaterExclusion(
+      new Group(),
+      2,
+      4,
+      3,
+      undefined,
+      undefined,
+      {
+        minZ: -1,
+        maxZ: 4,
+        taperStartMinZ: -1,
+        taperStartMaxZ: 2,
+        lowerMinZ: -1,
+        lowerMaxZ: 4,
+        lowerTaperStartMinZ: -1,
+        lowerTaperStartMaxZ: 2,
+      },
+    );
+
+    expect(pointInWaterExclusion(new Vector3(1.9, 0, -0.95), region)).toBe(true);
+    expect(pointInWaterExclusion(new Vector3(0, 0, -1.05), region)).toBe(false);
+    expect(pointInWaterExclusion(new Vector3(1.9, 0, 3), region)).toBe(false);
   });
 
   it('preserves trough water below a local height gate while excluding crests above it', () => {
@@ -151,8 +176,14 @@ describe('water exclusions', () => {
       new Vector4(),
       new Vector4(),
     ]);
-    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
-    expect(ocean.material.uniforms.uExclusionLowerTaperStarts!.value).toEqual([0, 0]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([
+      new Vector2(),
+      new Vector2(),
+    ]);
+    expect(ocean.material.uniforms.uExclusionLowerTaperStarts!.value).toEqual([
+      new Vector2(),
+      new Vector2(),
+    ]);
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y]);
     expect(ocean.material.uniforms.uExclusionUpperLocalYs!.value)
@@ -189,12 +220,18 @@ describe('water exclusions', () => {
       firstRegion.bounds,
       secondRegion.bounds,
     ]);
-    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([2, 10.2]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([
+      firstRegion.taperStarts,
+      secondRegion.taperStarts,
+    ]);
     const lowerBounds = ocean.material.uniforms.uExclusionLowerBounds!.value as Vector4[];
-    const lowerTaperStarts = ocean.material.uniforms.uExclusionLowerTaperStarts!.value as number[];
+    const lowerTaperStarts = ocean.material.uniforms.uExclusionLowerTaperStarts!.value as Vector2[];
     const upperLocalYs = ocean.material.uniforms.uExclusionUpperLocalYs!.value as number[];
     expect(lowerBounds[0]!.toArray()).toEqual([-1, 1, -2, 2]);
-    expect(lowerTaperStarts).toEqual([2, 10.2]);
+    expect(lowerTaperStarts).toEqual([
+      firstRegion.lowerTaperStarts,
+      secondRegion.lowerTaperStarts,
+    ]);
     expect(upperLocalYs).toEqual([1, UNBOUNDED_MAXIMUM_LOCAL_Y]);
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([-0.38, UNBOUNDED_MINIMUM_LOCAL_Y]);
@@ -219,7 +256,10 @@ describe('water exclusions', () => {
       new Vector4(),
       new Vector4(),
     ]);
-    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([0, 0]);
+    expect(ocean.material.uniforms.uExclusionTaperStarts!.value).toEqual([
+      new Vector2(),
+      new Vector2(),
+    ]);
     expect(ocean.material.uniforms.uExclusionMinimumLocalYs!.value)
       .toEqual([UNBOUNDED_MINIMUM_LOCAL_Y, UNBOUNDED_MINIMUM_LOCAL_Y]);
     expect(ocean.material.uniforms.uExclusionUpperLocalYs!.value)

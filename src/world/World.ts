@@ -315,13 +315,13 @@ export class World {
         this.shipPhysicsTranslation,
         this.shipPhysicsRotation,
       );
+      const deckBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
       const physicsConfig = {
         colliders: this.colliders,
         arcColliders: this.shipBuild.arcColliders,
         safeBounds: this.playerNavigationBounds.safe,
         deckY: this.deckY,
-        shipWidth: FREIGHTER_DIMENSIONS.width,
-        shipLength: FREIGHTER_DIMENSIONS.length,
+        deckBounds,
         initialShipPose: this.shipPhysicsPose,
         barrelSpawns: barrelSpecs.map(({ position }) => ({
           x: position[0],
@@ -387,12 +387,7 @@ export class World {
         this.shipBuild.colliders,
         {
           routeMetric,
-          start: [this.shipBuild.playerStart.x, this.shipBuild.playerStart.z],
           deposit: [this.boatDepositTarget.position.x, this.boatDepositTarget.position.z],
-          evacuation: [
-            this.shipBuild.evacuationPoint.x,
-            this.shipBuild.evacuationPoint.z,
-          ],
         },
       );
       instances.forEach((instance) => {
@@ -620,6 +615,7 @@ export class World {
         this.shipBuild.waterExclusion.taperStart,
         this.shipBuild.waterExclusion.minimumLocalY,
         this.shipBuild.waterExclusion.heightProfile,
+        this.shipBuild.waterExclusion.longitudinalProfile,
       ),
       createWaterExclusion(
         this.lifeboat,

@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects persisted audio settings and failure recovery.
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAudioPreference,

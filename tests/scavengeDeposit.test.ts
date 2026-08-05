@@ -6,7 +6,7 @@ import { CarryController } from '../src/interaction/CarryController';
 import { commitBoatDeposit } from '../src/phases/scavengeDeposit';
 
 describe('commitBoatDeposit', () => {
-  it('commits the full session bundle before releasing and storing its visuals', () => {
+  it('commits the full session bundle before releasing its inventory items', () => {
     const session = new ScavengeSession();
     session.start();
     const scene = new Scene();
@@ -31,7 +31,7 @@ describe('commitBoatDeposit', () => {
     expect(session.snapshot()).toMatchObject({ carriedWeight: 0, savedCount: 2 });
   });
 
-  it('keeps carried state and visuals when the session rejects the deposit', () => {
+  it('keeps carried state when the session rejects the deposit', () => {
     const session = new ScavengeSession();
     session.start();
     const scene = new Scene();
@@ -52,6 +52,6 @@ describe('commitBoatDeposit', () => {
     expect(session.snapshot()).toEqual(before);
     expect(carry.activeInstance).toEqual(instance);
     expect(carry.flightActive).toBe(false);
-    expect(object.parent).toBe(camera);
+    expect(object.parent).toBeNull();
   });
 });

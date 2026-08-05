@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects deterministic danger timing, alarm phase, and allocation reuse.
 import { describe, expect, it } from 'vitest';
 import {
   createShipAlarmPhase,

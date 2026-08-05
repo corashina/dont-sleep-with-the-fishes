@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects climbable mast geometry and full player traversal.
 import { describe, expect, it } from 'vitest';
 import { BoxGeometry, Mesh, Object3D, PerspectiveCamera, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
@@ -30,9 +31,20 @@ class TestInput {
   }
 }
 
+const MAINMAST = SHIP_LAYOUT.rigging.masts[0]!;
 const NEST_BOUNDS: PlayerNavigationBounds = {
-  safe: { minX: -2, maxX: 2, minZ: -2, maxZ: 2 },
-  fall: { minX: -3, maxX: 3, minZ: -3, maxZ: 3 },
+  safe: {
+    minX: -2,
+    maxX: 2,
+    minZ: MAINMAST.position[2] - 2,
+    maxZ: MAINMAST.position[2] + 2,
+  },
+  fall: {
+    minX: -3,
+    maxX: 3,
+    minZ: MAINMAST.position[2] - 3,
+    maxZ: MAINMAST.position[2] + 3,
+  },
 };
 
 describe('mainmast crow\'s nest', () => {
@@ -46,24 +58,26 @@ describe('mainmast crow\'s nest', () => {
       expect(build.climbZone.id).toBe('mainmast-ladder');
       expect(build.climbZone.bottomEyeY).toBe(FREIGHTER_DIMENSIONS.deckY + 1.5);
       expect(build.climbZone.topEyeY).toBe(FREIGHTER_DIMENSIONS.deckY + 16.07);
-      expect(build.climbZone.bottomDismount).toEqual([0, -1.3]);
-      expect(build.climbZone.topDismount).toEqual([0.73, -0.02]);
+      expect(build.climbZone.bottomDismount).toEqual([0, mast.position[2] - 1.3]);
+      expect(build.climbZone.topDismount).toEqual([0.73, mast.position[2] - 0.02]);
       expect(build.introAnchors.seatedPosition).toEqual([
-        0.69, FREIGHTER_DIMENSIONS.deckY + 15.52, 0.48,
+        0.69, FREIGHTER_DIMENSIONS.deckY + 15.52, mast.position[2] + 0.48,
       ]);
       expect(build.introAnchors.standingPosition).toEqual([
-        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, 0.14,
+        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, mast.position[2] + 0.14,
       ]);
       expect(build.introAnchors.ladderApproachPosition).toEqual([
-        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, -0.975,
+        0.73, FREIGHTER_DIMENSIONS.deckY + 16.07, mast.position[2] - 0.975,
       ]);
       expect(build.introAnchors.ladderTopPosition).toEqual([
-        0, FREIGHTER_DIMENSIONS.deckY + 16.07, -0.975,
+        0, FREIGHTER_DIMENSIONS.deckY + 16.07, mast.position[2] - 0.975,
       ]);
       expect(build.introAnchors.ladderBottomPosition).toEqual([
-        0, FREIGHTER_DIMENSIONS.deckY + 1.5, -0.975,
+        0, FREIGHTER_DIMENSIONS.deckY + 1.5, mast.position[2] - 0.975,
       ]);
-      expect(build.introAnchors.exitPosition).toEqual([0, FREIGHTER_DIMENSIONS.deckY + 1.5, -1.3]);
+      expect(build.introAnchors.exitPosition).toEqual([
+        0, FREIGHTER_DIMENSIONS.deckY + 1.5, mast.position[2] - 1.3,
+      ]);
       expect(build.root.getObjectByName('crows-nest-seat')).toBeUndefined();
       expect(build.root.getObjectByName('crows-nest-seat-support')).toBeUndefined();
       expect(build.root.getObjectByName('crows-nest-seat-back')).toBeUndefined();
@@ -71,6 +85,13 @@ describe('mainmast crow\'s nest', () => {
         'mainmast-ladder:rung:0',
       ) as Mesh<BoxGeometry>;
       expect(firstRung).toBeDefined();
+      [0, 1].forEach((index) => {
+        const rail = build.root.getObjectByName(
+          `mainmast-ladder:rail:${index}`,
+        ) as Mesh<BoxGeometry>;
+        expect(rail.position.y - rail.geometry.parameters.height / 2)
+          .toBeLessThan(FREIGHTER_DIMENSIONS.deckY);
+      });
       expect(firstRung.position.z - build.climbZone.climbZ).toBeCloseTo(
         PLAYER_LAYOUT_RADIUS + firstRung.geometry.parameters.depth / 2 + 0.03,
       );
@@ -80,8 +101,8 @@ describe('mainmast crow\'s nest', () => {
       expect(opening.maxZ - opening.minZ).toBeCloseTo(0.9);
       expect(opening.minX).toBeCloseTo(-0.45);
       expect(opening.maxX).toBeCloseTo(0.45);
-      expect(opening.minZ).toBeCloseTo(-0.99);
-      expect(opening.maxZ).toBeCloseTo(-0.09);
+      expect(opening.minZ).toBeCloseTo(mast.position[2] - 0.99);
+      expect(opening.maxZ).toBeCloseTo(mast.position[2] - 0.09);
       const floor = (name: string): Mesh<BoxGeometry> =>
         build.root.getObjectByName(`crows-nest:floor:${name}`) as Mesh<BoxGeometry>;
       const floors = ['forward', 'aft', 'port', 'starboard'].map(floor);
@@ -118,14 +139,14 @@ describe('mainmast crow\'s nest', () => {
       const aftGuard = guard('aft');
       expect(aftGuard.geometry.parameters.width).toBe(4);
       expect(aftGuard.position.x).toBe(0);
-      expect(aftGuard.position.z).toBe(-1.94);
+      expect(aftGuard.position.z).toBe(mast.position[2] - 1.94);
       expect(build.root.getObjectByName('crows-nest:guard:aft-port')).toBeUndefined();
       expect(build.root.getObjectByName('crows-nest:guard:aft-starboard')).toBeUndefined();
       expect(build.climbZone.topFloor).toEqual({
         minX: -1.88,
         maxX: 1.88,
-        minZ: -1.88,
-        maxZ: 1.88,
+        minZ: mast.position[2] - 1.88,
+        maxZ: mast.position[2] + 1.88,
       });
 
       const floorSurfaceY = FREIGHTER_DIMENSIONS.deckY + 14.57;
@@ -142,8 +163,8 @@ describe('mainmast crow\'s nest', () => {
         maxX: mast.baseDiameter / 2,
         minY: mast.position[1],
         maxY: mast.position[1] + mast.height,
-        minZ: -mast.baseDiameter / 2,
-        maxZ: mast.baseDiameter / 2,
+        minZ: mast.position[2] - mast.baseDiameter / 2,
+        maxZ: mast.position[2] + mast.baseDiameter / 2,
       };
       expect(build.introAnchors.ladderApproachPosition[0] - mastCollider.maxX)
         .toBeGreaterThan(PLAYER_LAYOUT_RADIUS);

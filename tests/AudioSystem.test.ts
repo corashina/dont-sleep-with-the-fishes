@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects audio scope ownership, routing, pause behavior, and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AudioBackend,

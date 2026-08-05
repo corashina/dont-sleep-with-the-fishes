@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects route feasibility, capacity, timing, and deterministic choices.
 import { describe, expect, it } from 'vitest';
 import {
   SCAVENGE_DEPOSIT_ACTION_SECONDS,

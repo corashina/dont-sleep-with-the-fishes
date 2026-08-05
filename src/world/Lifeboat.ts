@@ -209,7 +209,7 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     bench.position.z = z;
     return bench;
   };
-  [0.78, 1.48, 2.14].forEach((z, index) => {
+  [0.78, 1.48].forEach((z, index) => {
     benches.add(createBench(
       `survival-bench-${index}`,
       `survival-bench-seat-${index}`,

@@ -2,6 +2,7 @@ import {
   FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
   SHIP_ROOM_WALL_HEIGHT,
+  SHIP_ROOM_WALL_THICKNESS,
   type Rect2,
   type ShipLayoutSpec,
 } from './ShipLayout';
@@ -34,6 +35,7 @@ export const SHIP_PUDDLE_OUTLINE = Object.freeze([
 
 const FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const ROOM_CEILING_Y = FLOOR_Y + SHIP_ROOM_WALL_HEIGHT;
+const PUDDLE_WALL_CLEARANCE = SHIP_ROOM_WALL_THICKNESS / 2 + 0.03;
 
 function centeredCeilingAlarm(
   id: string,
@@ -65,17 +67,17 @@ export const SHIP_DANGER_LAYOUT: ShipDangerLayout = Object.freeze({
     { id: 'crew-center', zoneId: 'crewCabin', position: [2.2, 2.228, 11.35], rotation: [-Math.PI / 2, 0, -0.2], size: [1.5, 0.9] },
     { id: 'wheelhouse-center', zoneId: 'wheelhouse', position: [0, 2.228, 20.2], rotation: [-Math.PI / 2, 0, 0.1], size: [1.9, 1.05] },
     { id: 'wheelhouse-starboard', zoneId: 'wheelhouse', position: [3.15, 2.228, 18.25], rotation: [-Math.PI / 2, 0, -0.18], size: [1.45, 0.9] },
-    { id: 'storage-port', zoneId: 'storageWorkroom', position: [-3.75, 2.228, -15.85], rotation: [-Math.PI / 2, 0, 0.12], size: [1.95, 1.2] },
+    { id: 'storage-port', zoneId: 'storageWorkroom', position: [-3.6, 2.228, -15.85], rotation: [-Math.PI / 2, 0, 0.12], size: [1.95, 1.2] },
     { id: 'storage-center', zoneId: 'storageWorkroom', position: [0.15, 2.228, -14.1], rotation: [-Math.PI / 2, 0, -0.06], size: [1.65, 0.95] },
-    { id: 'storage-starboard', zoneId: 'storageWorkroom', position: [3.85, 2.228, -11.8], rotation: [-Math.PI / 2, 0, -0.16], size: [1.85, 1.1] },
+    { id: 'storage-starboard', zoneId: 'storageWorkroom', position: [3.65, 2.228, -11.8], rotation: [-Math.PI / 2, 0, -0.16], size: [1.85, 1.1] },
     { id: 'cargo-port', zoneId: 'cargoDeck', position: [-5.25, 2.228, -4.2], rotation: [-Math.PI / 2, 0, 0.2], size: [2.2, 1.2] },
     { id: 'cargo-starboard-wash', zoneId: 'cargoDeck', position: [5.5, 2.228, -7.2], rotation: [-Math.PI / 2, 0, -0.12], size: [2.15, 1.1] },
     { id: 'cargo-port-forward', zoneId: 'cargoDeck', position: [-5.3, 2.228, 15.5], rotation: [-Math.PI / 2, 0, 0.08], size: [2.25, 1.15] },
-    { id: 'cargo-starboard-forward', zoneId: 'cargoDeck', position: [5.2, 2.228, 9.8], rotation: [-Math.PI / 2, 0, -0.15], size: [2.35, 1.25] },
+    { id: 'cargo-starboard-forward', zoneId: 'cargoDeck', position: [6.7, 2.228, 9.8], rotation: [-Math.PI / 2, 0, 0], size: [0.8, 1.25] },
     { id: 'cargo-port-midship', zoneId: 'cargoDeck', position: [-5.5, 2.228, 2.2], rotation: [-Math.PI / 2, 0, -0.09], size: [2.1, 1.05] },
-    { id: 'cargo-starboard-midship', zoneId: 'cargoDeck', position: [5.5, 2.228, 3.7], rotation: [-Math.PI / 2, 0, 0.16], size: [2.2, 1.1] },
-    { id: 'cargo-port-aft', zoneId: 'cargoDeck', position: [-5.3, 2.228, -20.4], rotation: [-Math.PI / 2, 0, -0.18], size: [2.3, 1.2] },
-    { id: 'cargo-starboard-aft', zoneId: 'cargoDeck', position: [4.3, 2.228, -22.6], rotation: [-Math.PI / 2, 0, 0.11], size: [2.4, 1.3] },
+    { id: 'cargo-starboard-midship', zoneId: 'cargoDeck', position: [5.5, 2.228, 2.5], rotation: [-Math.PI / 2, 0, 0.16], size: [2.2, 1.1] },
+    { id: 'cargo-port-aft', zoneId: 'cargoDeck', position: [-6.65, 2.228, -18.2], rotation: [-Math.PI / 2, 0, 0], size: [0.75, 0.55] },
+    { id: 'cargo-starboard-aft', zoneId: 'cargoDeck', position: [6.65, 2.228, -18.2], rotation: [-Math.PI / 2, 0, 0], size: [0.75, 0.55] },
   ]),
 });
 
@@ -109,6 +111,93 @@ function pointInPolygon(
     if (crosses) inside = !inside;
   }
   return inside;
+}
+
+type Point2 = readonly [number, number];
+
+function pointToSegmentDistance(
+  point: Point2,
+  start: Point2,
+  end: Point2,
+): number {
+  const segmentX = end[0] - start[0];
+  const segmentZ = end[1] - start[1];
+  const segmentLengthSquared = segmentX ** 2 + segmentZ ** 2;
+  if (segmentLengthSquared === 0) {
+    return Math.hypot(point[0] - start[0], point[1] - start[1]);
+  }
+  const progress = Math.max(0, Math.min(1, (
+    (point[0] - start[0]) * segmentX + (point[1] - start[1]) * segmentZ
+  ) / segmentLengthSquared));
+  return Math.hypot(
+    point[0] - (start[0] + segmentX * progress),
+    point[1] - (start[1] + segmentZ * progress),
+  );
+}
+
+function orientation(a: Point2, b: Point2, c: Point2): number {
+  return (b[0] - a[0]) * (c[1] - a[1])
+    - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function pointOnSegment(point: Point2, start: Point2, end: Point2): boolean {
+  return Math.abs(orientation(start, end, point)) <= 1e-8
+    && point[0] >= Math.min(start[0], end[0]) - 1e-8
+    && point[0] <= Math.max(start[0], end[0]) + 1e-8
+    && point[1] >= Math.min(start[1], end[1]) - 1e-8
+    && point[1] <= Math.max(start[1], end[1]) + 1e-8;
+}
+
+function segmentsIntersect(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
+  const first = orientation(a, b, c);
+  const second = orientation(a, b, d);
+  const third = orientation(c, d, a);
+  const fourth = orientation(c, d, b);
+  if (first * second < 0 && third * fourth < 0) return true;
+  return pointOnSegment(c, a, b) || pointOnSegment(d, a, b)
+    || pointOnSegment(a, c, d) || pointOnSegment(b, c, d);
+}
+
+function segmentDistance(a: Point2, b: Point2, c: Point2, d: Point2): number {
+  if (segmentsIntersect(a, b, c, d)) return 0;
+  return Math.min(
+    pointToSegmentDistance(a, c, d),
+    pointToSegmentDistance(b, c, d),
+    pointToSegmentDistance(c, a, b),
+    pointToSegmentDistance(d, a, b),
+  );
+}
+
+function polygonBoundaryDistance(
+  first: readonly Point2[],
+  second: readonly Point2[],
+): number {
+  if (first.some(([x, z]) => pointInPolygon(x, z, second))
+    || second.some(([x, z]) => pointInPolygon(x, z, first))) {
+    return 0;
+  }
+  let distance = Number.POSITIVE_INFINITY;
+  first.forEach((start, index) => {
+    const end = first[(index + 1) % first.length]!;
+    second.forEach((otherStart, otherIndex) => {
+      const otherEnd = second[(otherIndex + 1) % second.length]!;
+      distance = Math.min(distance, segmentDistance(start, end, otherStart, otherEnd));
+    });
+  });
+  return distance;
+}
+
+function puddleOutline(puddle: FootprintAnchor): readonly Point2[] {
+  const cosine = Math.cos(puddle.rotation[2]);
+  const sine = Math.sin(puddle.rotation[2]);
+  return SHIP_PUDDLE_OUTLINE.map(([outlineX, outlineZ]) => {
+    const scaledX = outlineX * puddle.size[0];
+    const scaledZ = outlineZ * puddle.size[1];
+    return [
+      puddle.position[0] + scaledX * cosine - scaledZ * sine,
+      puddle.position[2] - scaledX * sine - scaledZ * cosine,
+    ] as const;
+  });
 }
 
 export function validateShipDangerLayout(
@@ -161,19 +250,27 @@ export function validateShipDangerLayout(
     assertPositive(id, size[1]);
     const zone = ship.zones.find(({ id: zoneId }) => zoneId === puddle.zoneId);
     if (zone === undefined) throw new Error(`Missing ${puddle.zoneId} zone`);
-    const cosine = Math.cos(puddle.rotation[2]);
-    const sine = Math.sin(puddle.rotation[2]);
-    const crossesBoundary = SHIP_PUDDLE_OUTLINE.some(([outlineX, outlineZ]) => {
-      const scaledX = outlineX * size[0];
-      const scaledZ = outlineZ * size[1];
-      const worldX = puddle.position[0] + scaledX * cosine - scaledZ * sine;
-      const worldZ = puddle.position[2] - scaledX * sine - scaledZ * cosine;
-      return !pointInPolygon(worldX, worldZ, zone.polygon);
-    });
-    if (!crossesBoundary) return;
-    if (puddle.zoneId === 'cargoDeck') {
-      throw new Error(`${id} puddle crosses the cargo rail`);
+    const outline = puddleOutline(puddle);
+    if (outline.some(([x, z]) => !pointInPolygon(x, z, zone.polygon))) {
+      if (puddle.zoneId === 'cargoDeck') {
+        throw new Error(`${id} puddle crosses the cargo rail`);
+      }
+      throw new Error(`${id} puddle crosses the ${puddle.zoneId} walls`);
     }
-    throw new Error(`${id} puddle crosses the ${puddle.zoneId} walls`);
+    if (zone.enclosed) {
+      const wallDistance = Math.min(...outline.flatMap((point) =>
+        zone.polygon.map((edgeStart, index) => pointToSegmentDistance(
+          point,
+          edgeStart,
+          zone.polygon[(index + 1) % zone.polygon.length]!,
+        ))));
+      if (wallDistance < PUDDLE_WALL_CLEARANCE) {
+        throw new Error(`${id} puddle crosses the ${puddle.zoneId} walls`);
+      }
+      return;
+    }
+    const crossedRoom = ship.zones.find((room) => room.enclosed
+      && polygonBoundaryDistance(outline, room.polygon) < PUDDLE_WALL_CLEARANCE);
+    if (crossedRoom) throw new Error(`${id} puddle crosses the ${crossedRoom.id} walls`);
   });
 }

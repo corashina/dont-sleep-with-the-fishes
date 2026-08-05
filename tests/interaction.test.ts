@@ -7,7 +7,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
-  Quaternion,
   Scene,
   Vector3,
 } from 'three';
@@ -469,12 +468,10 @@ describe('CarryController', () => {
     const instance = item('flashlight-1', 'flashlight');
 
     carry.pickUp(instance, carriedObject);
-    const heldWorldPosition = carriedObject.getWorldPosition(new Vector3());
+    expect(carriedObject.parent).toBeNull();
 
     expect(carry.releaseActive()).toEqual(instance);
-    expect(carriedObject.parent).toBe(scene);
-    expect(carriedObject.getWorldPosition(new Vector3()).distanceTo(heldWorldPosition))
-      .toBeLessThan(1e-10);
+    expect(carriedObject.parent).toBeNull();
     expect(carry.flightActive).toBe(false);
     expect(carry.busy).toBe(false);
   });
@@ -499,10 +496,10 @@ describe('CarryController', () => {
     expect(carry.activeInstance).toBeNull();
     expect(carry.busy).toBe(false);
     expect(carry.flightActive).toBe(false);
-    expect(objects.every(({ parent }) => parent === camera)).toBe(true);
+    expect(objects.every(({ parent }) => parent === null)).toBe(true);
   });
 
-  it('attaches three light instances as a visible bundle and releases LIFO', () => {
+  it('stores three light instances outside the scene and releases LIFO', () => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     scene.add(camera);
@@ -519,12 +516,7 @@ describe('CarryController', () => {
       expect(carry.pickUp(instance, objects[index]!)).toBe(true);
     });
     expect(carry.busy).toBe(true);
-    expect(objects.every(({ parent }) => parent === camera)).toBe(true);
-    expect(objects.map(({ position }) => position.toArray())).toEqual([
-      [0.56, -0.48, -1.12],
-      [0.18, -0.54, -1.02],
-      [-0.24, -0.5, -1.08],
-    ]);
+    expect(objects.every(({ parent }) => parent === null)).toBe(true);
     expect(carry.drop()).toBe('flashlight-1');
     expect(carry.activeInstance?.instanceId).toBe('ductTape-1');
     expect(carry.flightActive).toBe(true);
@@ -544,12 +536,12 @@ describe('CarryController', () => {
     expect(outcomes).toEqual(['lost:flashlight-1']);
     expect(carry.flightActive).toBe(false);
     expect(carry.activeInstance?.instanceId).toBe('ductTape-1');
-    expect(objects.slice(0, 2).every(({ parent }) => parent === camera)).toBe(true);
+    expect(objects.slice(0, 2).every(({ parent }) => parent === null)).toBe(true);
     carry.reset();
     expect(objects.slice(0, 2).every(({ parent }) => parent === scene)).toBe(true);
   });
 
-  it('preserves the held world transform at release from a transformed camera parent', () => {
+  it('keeps inventory items detached before launching from the camera', () => {
     const scene = new Scene();
     const cameraRig = new Group();
     cameraRig.position.set(3, 4, -2);
@@ -563,15 +555,14 @@ describe('CarryController', () => {
     scene.add(item);
     const carry = new CarryController(scene, camera);
     carry.pickUp({ instanceId: 'baitTin-1', type: 'baitTin' }, item);
-    const beforePosition = item.getWorldPosition(new Vector3());
-    const beforeQuaternion = item.getWorldQuaternion(new Quaternion());
-    const beforeScale = item.getWorldScale(new Vector3());
+    expect(item.parent).toBeNull();
 
     carry.drop();
 
-    expect(item.getWorldPosition(new Vector3()).distanceTo(beforePosition)).toBeLessThan(1e-10);
-    expect(item.getWorldQuaternion(new Quaternion()).angleTo(beforeQuaternion)).toBeLessThan(1e-10);
-    expect(item.getWorldScale(new Vector3()).distanceTo(beforeScale)).toBeLessThan(1e-10);
+    expect(item.parent).toBe(scene);
+    expect(item.getWorldPosition(new Vector3()).distanceTo(
+      camera.getWorldPosition(new Vector3()),
+    )).toBeLessThan(2);
   });
 
   it('detects a lifeboat hit across a large delta and reports it once', () => {
@@ -660,8 +651,8 @@ describe('CarryController', () => {
     };
 
     carry.pickUp(instance, prop);
-    expect(prop.parent).toBe(camera);
-    expect(prop.scale.toArray()).toEqual([0.72, 0.72, 0.72]);
+    expect(prop.parent).toBeNull();
+    expect(prop.scale.toArray()).toEqual([1, 1, 1]);
     expectNormalizationPreserved();
     carry.drop();
     expect(prop.parent).toBe(scene);

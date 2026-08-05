@@ -19,13 +19,21 @@ import {
   type CollisionBox,
 } from '../player/collisions';
 import type { LadderClimbZone, LadderEntryArea } from '../player/LadderTraversal';
-import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
+import type {
+  WaterExclusionHeightProfile,
+  WaterExclusionLongitudinalProfile,
+} from '../ocean/WaterExclusion';
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
   SHIP_LAYOUT,
+  SHIP_ROOF_ENGINE,
+  SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
+  SHIP_STERN_CHAMFER,
+  SHIP_STERN_Z,
+  SHIP_TRANSVERSE_PORTHOLE_CENTER_X,
   SHIP_WHEELHOUSE_CHAMFER_SIZE,
 } from './ShipLayout';
 import type {
@@ -53,6 +61,7 @@ export interface ShipGeometryBuild {
     taperStart: number;
     minimumLocalY: number;
     heightProfile: WaterExclusionHeightProfile;
+    longitudinalProfile: WaterExclusionLongitudinalProfile;
   };
   stackOutlets: readonly [Vector3, Vector3];
   climbZones: readonly LadderClimbZone[];
@@ -67,6 +76,7 @@ const DECK_WIDTH = FREIGHTER_DIMENSIONS.width - 0.5;
 const DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 0.8;
 const DECK_HALF_WIDTH = DECK_WIDTH / 2;
 const END_CAP_DEPTH = 5.2;
+const BOW_DEPTH = 8.5;
 const HULL_HEIGHT = 4.6;
 const HULL_TOP_Y = 1.98;
 const HULL_BOTTOM_TAPER = {
@@ -108,10 +118,8 @@ const PORTHOLE_FRAME_OUTER_RADIUS = 0.66;
 const PORTHOLE_BOLT_RADIUS = 0.045;
 const PORTHOLE_BOLT_ORBIT = 0.575;
 const PORTHOLE_SEGMENTS = 24;
-const MACHINERY_VISUAL_HEIGHT = 1.15;
-const ROOM_ROOF_THICKNESS = 0.24;
 const STACK_X = 1.35;
-const STACK_OUTLET_Y = 7.1;
+const STACK_SHAFT_HEIGHT = 3.5;
 const STACK_RADIUS = 0.58;
 const STACK_COLLAR_RADIUS = 0.72;
 const STACK_COLLAR_HEIGHT = 0.22;
@@ -132,8 +140,9 @@ const RAIL_COLLIDER_THICKNESS = 0.25;
 const RAIL_TOP_THICKNESS = 0.14;
 const RAIL_POST_WIDTH = 0.12;
 const RAIL_POST_SPACING = 2.4;
-const RAIL_END_DEPTH = END_CAP_DEPTH + RAIL_COLLIDER_THICKNESS / 2;
 const RAIL_END_SEGMENTS = 12;
+const BOW_NOSE_CONTROL_WIDTH_SCALE = 0.5;
+const BOW_SHOULDER_CONTROL_DEPTH_SCALE = 0.38;
 
 interface BlockOptions {
   name: string;
@@ -288,15 +297,71 @@ function addRotatedBlock(
   return mesh;
 }
 
-function roundedPlanShape(width: number, length: number): Shape {
+function appendRoundedBow(
+  shape: Shape,
+  halfWidth: number,
+  shoulderZ: number,
+  tipZ: number,
+): void {
+  const bowDepth = tipZ - shoulderZ;
+  const shoulderControlZ = shoulderZ + bowDepth * BOW_SHOULDER_CONTROL_DEPTH_SCALE;
+  const noseControlX = halfWidth * BOW_NOSE_CONTROL_WIDTH_SCALE;
+  shape.bezierCurveTo(halfWidth, shoulderControlZ, noseControlX, tipZ, 0, tipZ);
+  shape.bezierCurveTo(-noseControlX, tipZ, -halfWidth, shoulderControlZ, -halfWidth, shoulderZ);
+}
+
+function roundedBowPoint(
+  halfWidth: number,
+  shoulderZ: number,
+  tipZ: number,
+  progress: number,
+): { x: number; z: number } {
+  const firstSide = progress <= 0.5;
+  const t = firstSide ? progress * 2 : (progress - 0.5) * 2;
+  const inverseT = 1 - t;
+  const bowDepth = tipZ - shoulderZ;
+  const startX = firstSide ? halfWidth : 0;
+  const startZ = firstSide ? shoulderZ : tipZ;
+  const firstControlX = firstSide
+    ? halfWidth
+    : -halfWidth * BOW_NOSE_CONTROL_WIDTH_SCALE;
+  const firstControlZ = firstSide
+    ? shoulderZ + bowDepth * BOW_SHOULDER_CONTROL_DEPTH_SCALE
+    : tipZ;
+  const secondControlX = firstSide
+    ? halfWidth * BOW_NOSE_CONTROL_WIDTH_SCALE
+    : -halfWidth;
+  const secondControlZ = firstSide
+    ? tipZ
+    : shoulderZ + bowDepth * BOW_SHOULDER_CONTROL_DEPTH_SCALE;
+  const endX = firstSide ? 0 : -halfWidth;
+  const endZ = firstSide ? tipZ : shoulderZ;
+  return {
+    x: inverseT ** 3 * startX
+      + 3 * inverseT ** 2 * t * firstControlX
+      + 3 * inverseT * t ** 2 * secondControlX
+      + t ** 3 * endX,
+    z: inverseT ** 3 * startZ
+      + 3 * inverseT ** 2 * t * firstControlZ
+      + 3 * inverseT * t ** 2 * secondControlZ
+      + t ** 3 * endZ,
+  };
+}
+
+function shipPlanShape(width: number, length: number): Shape {
   const radius = width / 2;
-  const capDepth = Math.min(END_CAP_DEPTH, length / 2);
-  const straightHalfLength = length / 2 - capDepth;
+  const sternOverhang = Math.max(0, (length - DECK_LENGTH) / 2);
+  const sternZ = SHIP_STERN_Z - sternOverhang;
+  const sternChamfer = Math.min(SHIP_STERN_CHAMFER, radius);
+  const bowDepth = Math.min(BOW_DEPTH, length / 2);
+  const bowShoulderZ = length / 2 - bowDepth;
   const shape = new Shape();
-  shape.moveTo(-radius, -straightHalfLength);
-  shape.absellipse(0, -straightHalfLength, radius, capDepth, Math.PI, Math.PI * 2, false, 0);
-  shape.lineTo(radius, straightHalfLength);
-  shape.absellipse(0, straightHalfLength, radius, capDepth, 0, Math.PI, false, 0);
+  shape.moveTo(-radius + sternChamfer, sternZ);
+  shape.lineTo(radius - sternChamfer, sternZ);
+  shape.lineTo(radius, sternZ + sternChamfer);
+  shape.lineTo(radius, bowShoulderZ);
+  appendRoundedBow(shape, radius, bowShoulderZ, length / 2);
+  shape.lineTo(-radius, sternZ + sternChamfer);
   shape.closePath();
   return shape;
 }
@@ -343,17 +408,20 @@ function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
 
 function cargoFloorShape(layout: ShipLayoutSpec): Shape {
   const station = requiredZone(layout, 'lifeboatStation').bounds;
+  const cargo = requiredZone(layout, 'cargoDeck').bounds;
   const radius = DECK_HALF_WIDTH;
-  const straightHalfLength = DECK_LENGTH / 2 - END_CAP_DEPTH;
+  const bowShoulderZ = DECK_LENGTH / 2 - BOW_DEPTH;
   const shape = new Shape();
-  shape.moveTo(-radius, -straightHalfLength);
-  shape.absellipse(0, -straightHalfLength, radius, END_CAP_DEPTH, Math.PI, Math.PI * 2, false, 0);
-  shape.lineTo(radius, -station.maxZ);
-  shape.lineTo(station.minX, -station.maxZ);
-  shape.lineTo(station.minX, -station.minZ);
+  shape.moveTo(-radius + SHIP_STERN_CHAMFER, -cargo.minZ);
+  shape.lineTo(radius - SHIP_STERN_CHAMFER, -cargo.minZ);
+  shape.lineTo(radius, -(cargo.minZ + SHIP_STERN_CHAMFER));
   shape.lineTo(radius, -station.minZ);
-  shape.lineTo(radius, straightHalfLength);
-  shape.absellipse(0, straightHalfLength, radius, END_CAP_DEPTH, 0, Math.PI, false, 0);
+  shape.lineTo(station.minX, -station.minZ);
+  shape.lineTo(station.minX, -station.maxZ);
+  shape.lineTo(radius, -station.maxZ);
+  shape.lineTo(radius, -bowShoulderZ);
+  appendRoundedBow(shape, radius, -bowShoulderZ, -DECK_LENGTH / 2);
+  shape.lineTo(-radius, -(cargo.minZ + SHIP_STERN_CHAMFER));
   shape.closePath();
   const crew = requiredZone(layout, 'crewCabin').bounds;
   const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
@@ -493,7 +561,7 @@ function addRoundedPrism(
     };
   },
 ): Mesh {
-  const geometry = new ExtrudeGeometry(roundedPlanShape(width, length), {
+  const geometry = new ExtrudeGeometry(shipPlanShape(width, length), {
     depth: height,
     bevelEnabled: false,
     curveSegments: 24,
@@ -572,14 +640,14 @@ interface PortholeSpec {
 }
 
 const PORTHOLE_SPECS: readonly PortholeSpec[] = [
-  { zoneId: 'crewCabin', edge: 'aft', index: 1, centerX: -2.2 },
-  { zoneId: 'crewCabin', edge: 'aft', index: 2, centerX: 2.2 },
-  { zoneId: 'crewCabin', edge: 'forward', index: 1, centerX: -2.2 },
-  { zoneId: 'crewCabin', edge: 'forward', index: 2, centerX: 2.2 },
-  { zoneId: 'storageWorkroom', edge: 'aft', index: 1, centerX: -2.2 },
-  { zoneId: 'storageWorkroom', edge: 'aft', index: 2, centerX: 2.2 },
-  { zoneId: 'storageWorkroom', edge: 'forward', index: 1, centerX: -2.2 },
-  { zoneId: 'storageWorkroom', edge: 'forward', index: 2, centerX: 2.2 },
+  { zoneId: 'crewCabin', edge: 'aft', index: 1, centerX: -SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'crewCabin', edge: 'aft', index: 2, centerX: SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'crewCabin', edge: 'forward', index: 1, centerX: -SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'crewCabin', edge: 'forward', index: 2, centerX: SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'storageWorkroom', edge: 'aft', index: 1, centerX: -SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'storageWorkroom', edge: 'aft', index: 2, centerX: SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'storageWorkroom', edge: 'forward', index: 1, centerX: -SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
+  { zoneId: 'storageWorkroom', edge: 'forward', index: 2, centerX: SHIP_TRANSVERSE_PORTHOLE_CENTER_X },
 ];
 
 function subtractDoorIntervals(
@@ -1253,7 +1321,7 @@ function addRoomRoofs(
       );
       shape.closePath();
       const geometry = new ExtrudeGeometry(shape, {
-        depth: ROOM_ROOF_THICKNESS,
+        depth: SHIP_ROOM_ROOF_THICKNESS,
         bevelEnabled: false,
         steps: 1,
       });
@@ -1261,7 +1329,7 @@ function addRoomRoofs(
       applyRoofPlanarUvs(geometry, 0, 0);
       const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
       roof.name = 'wheelhouse-roof';
-      roof.position.y = wallTopY + ROOM_ROOF_THICKNESS;
+      roof.position.y = wallTopY + SHIP_ROOM_ROOF_THICKNESS;
       roof.castShadow = true;
       roof.receiveShadow = true;
       root.add(roof);
@@ -1270,13 +1338,13 @@ function addRoomRoofs(
     }
     const centerX = (zone.bounds.minX + zone.bounds.maxX) / 2;
     const centerZ = (zone.bounds.minZ + zone.bounds.maxZ) / 2;
-    const geometry = new BoxGeometry(width, ROOM_ROOF_THICKNESS, length);
+    const geometry = new BoxGeometry(width, SHIP_ROOM_ROOF_THICKNESS, length);
     applyRoofPlanarUvs(geometry, centerX, centerZ);
     const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
     roof.name = `${zone.id}-roof`;
     roof.position.set(
       centerX,
-      wallTopY + ROOM_ROOF_THICKNESS / 2,
+      wallTopY + SHIP_ROOM_ROOF_THICKNESS / 2,
       centerZ,
     );
     roof.castShadow = true;
@@ -1296,7 +1364,7 @@ interface BalconyRun {
 function balconyDeckTopY(zoneId: ShipZoneId): number {
   return FREIGHTER_DIMENSIONS.deckY
     + roomWallHeight(zoneId)
-    + ROOM_ROOF_THICKNESS;
+    + SHIP_ROOM_ROOF_THICKNESS;
 }
 
 function balconyRuns(
@@ -1531,8 +1599,7 @@ function addExteriorConstructionDetails(
   layout: ShipLayoutSpec,
 ): void {
   const cargo = requiredZone(layout, 'cargoDeck').bounds;
-  const bowCenterZ = cargo.maxZ - END_CAP_DEPTH;
-  const sternCenterZ = cargo.minZ + END_CAP_DEPTH;
+  const bowShoulderZ = cargo.maxZ - BOW_DEPTH;
 
   const stemHeight = 1.4;
   const stemGeometry = new CylinderGeometry(0.2, 0.46, stemHeight, 4);
@@ -1586,10 +1653,8 @@ function addExteriorConstructionDetails(
 
   const hawseGeometry = new RingGeometry(0.24, 0.38, 16);
   geometries.add(hawseGeometry);
-  const hawseX = (cargo.maxX - cargo.minX) * 0.26;
-  const hawseZ = bowCenterZ + END_CAP_DEPTH * Math.sqrt(
-    1 - (hawseX / ((cargo.maxX - cargo.minX) / 2)) ** 2,
-  ) - 0.08;
+  const hawseX = (cargo.maxX - cargo.minX) * 0.18;
+  const hawseZ = bowShoulderZ + BOW_DEPTH * 0.9 - 0.08;
   ([
     ['port', -hawseX],
     ['starboard', hawseX],
@@ -1624,36 +1689,66 @@ function addCylinder(
   return mesh;
 }
 
-function addMachineryAndStacks(
+function addRoofEngine(
   root: Group,
   geometries: Set<BufferGeometry>,
   shellColliders: CollisionBox[],
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): readonly [Vector3, Vector3] {
-  const closure = layout.machineryClosure;
-  const machineryWidth = closure.maxX - closure.minX;
-  const machineryLength = closure.maxZ - closure.minZ;
-  const machineryZ = (closure.minZ + closure.maxZ) / 2;
-  const machineryX = (closure.minX + closure.maxX) / 2;
+  const storage = requiredZone(layout, 'storageWorkroom');
+  const engineZ = (storage.bounds.minZ + storage.bounds.maxZ) / 2;
+  const roofY = balconyDeckTopY(storage.id);
+  const engineCenterY = roofY + SHIP_ROOF_ENGINE.height / 2;
+  const engineTopY = roofY + SHIP_ROOF_ENGINE.height;
+  const engineFrontZ = engineZ + SHIP_ROOF_ENGINE.depth / 2;
   addBlock(root, geometries, shellColliders, {
-    name: 'machinery-island',
-    size: [machineryWidth, MACHINERY_VISUAL_HEIGHT, machineryLength],
-    position: [machineryX, FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT / 2, machineryZ],
+    name: 'roof-engine-body',
+    size: [SHIP_ROOF_ENGINE.width, SHIP_ROOF_ENGINE.height, SHIP_ROOF_ENGINE.depth],
+    position: [SHIP_ROOF_ENGINE.centerX, engineCenterY, engineZ],
     material: materials.paintedSteel,
-    collider: true,
   });
-  const stackBaseY = FREIGHTER_DIMENSIONS.deckY + MACHINERY_VISUAL_HEIGHT;
+  addBlock(root, geometries, shellColliders, {
+    name: 'roof-engine-service-panel',
+    size: [4.8, 1.08, 0.06],
+    position: [SHIP_ROOF_ENGINE.centerX, engineCenterY, engineFrontZ + 0.03],
+    material: materials.darkMetal,
+  });
+  [-0.34, 0, 0.34].forEach((offsetY, index) => {
+    addBlock(root, geometries, shellColliders, {
+      name: `roof-engine-vent-${index + 1}`,
+      size: [3.8, 0.08, 0.07],
+      position: [
+        SHIP_ROOF_ENGINE.centerX,
+        engineCenterY + offsetY,
+        engineFrontZ + 0.07,
+      ],
+      material: materials.exposedMetal,
+    });
+  });
+  const crank = addCylinder(
+    root,
+    geometries,
+    'roof-engine-crank',
+    0.42,
+    0.14,
+    [SHIP_ROOF_ENGINE.centerX, engineCenterY, engineFrontZ + 0.14],
+    materials.exposedMetal,
+  );
+  crank.rotation.x = Math.PI / 2;
+
+  const stackZ = engineZ;
+  const stackBaseY = engineTopY;
   const stackShaftBaseY = stackBaseY + STACK_COLLAR_HEIGHT;
-  const stackHeight = STACK_OUTLET_Y - stackShaftBaseY;
-  const stackCenterY = stackShaftBaseY + stackHeight / 2;
+  const stackOutletY = stackShaftBaseY + STACK_SHAFT_HEIGHT;
+  const stackCenterY = stackShaftBaseY + STACK_SHAFT_HEIGHT / 2;
   const stackOutlets = [
-    new Vector3(-STACK_X, STACK_OUTLET_Y, machineryZ),
-    new Vector3(STACK_X, STACK_OUTLET_Y, machineryZ),
+    new Vector3(-STACK_X, stackOutletY, stackZ),
+    new Vector3(STACK_X, stackOutletY, stackZ),
   ] as const;
   stackOutlets.forEach((outlet, index) => {
     const side = index === 0 ? 'port' : 'starboard';
-    addCylinder(root, geometries, `smokestack-${side}`, STACK_RADIUS, stackHeight, [
+    addCylinder(root, geometries, `smokestack-${side}`, STACK_RADIUS, STACK_SHAFT_HEIGHT, [
       outlet.x,
       stackCenterY,
       outlet.z,
@@ -1705,26 +1800,79 @@ function addRailSegment(
   ));
 }
 
-function addCurvedEndRail(
+function addChamferedSternRail(
   root: Group,
   geometries: Set<BufferGeometry>,
   shellColliders: CollisionBox[],
-  arcColliders: CollisionArc[],
   materials: ShipMaterials,
-  end: 'bow' | 'stern',
-  z: number,
+  sternZ: number,
   layout: ShipLayoutSpec,
 ): void {
   const railTopY = FREIGHTER_DIMENSIONS.deckY + layout.rail.height;
   const railX = layout.rail.innerFaceX + RAIL_COLLIDER_THICKNESS / 2;
-  const direction = end === 'bow' ? 1 : -1;
-  const pointAt = (index: number): { x: number; z: number } => {
-    const angle = (Math.PI * index) / RAIL_END_SEGMENTS;
-    return {
-      x: railX * Math.cos(angle),
-      z: z + direction * RAIL_END_DEPTH * Math.sin(angle),
-    };
-  };
+  const rearHalfWidth = railX - SHIP_STERN_CHAMFER;
+  addBlock(root, geometries, shellColliders, {
+    name: 'rail-stern-top',
+    size: [rearHalfWidth * 2, RAIL_TOP_THICKNESS, RAIL_THICKNESS],
+    position: [0, railTopY - RAIL_TOP_THICKNESS / 2, sternZ],
+    material: materials.darkMetal,
+  });
+  ([
+    ['port', -rearHalfWidth, -railX],
+    ['starboard', rearHalfWidth, railX],
+  ] as const).forEach(([side, rearX, sideX]) => {
+    const deltaX = sideX - rearX;
+    const deltaZ = SHIP_STERN_CHAMFER;
+    const length = Math.hypot(deltaX, deltaZ);
+    const position = [
+      (rearX + sideX) / 2,
+      railTopY - RAIL_TOP_THICKNESS / 2,
+      sternZ + SHIP_STERN_CHAMFER / 2,
+    ] as const;
+    const rotationY = Math.atan2(deltaX, deltaZ);
+    addRotatedBlock(root, geometries, shellColliders, {
+      name: `rail-stern-chamfer-${side}`,
+      size: [RAIL_THICKNESS, RAIL_TOP_THICKNESS, length],
+      position,
+      material: materials.darkMetal,
+    }, rotationY);
+    shellColliders.push(toOrientedCollisionBox(
+      [position[0], FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, position[2]],
+      [RAIL_COLLIDER_THICKNESS, layout.rail.height, length],
+      rotationY,
+    ));
+  });
+  ([-rearHalfWidth, rearHalfWidth] as const).forEach((x, index) => {
+    addBlock(root, geometries, shellColliders, {
+      name: `rail-stern-post-${index}`,
+      size: [RAIL_POST_WIDTH, layout.rail.height, RAIL_POST_WIDTH],
+      position: [x, FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, sternZ],
+      material: materials.darkMetal,
+    });
+  });
+  shellColliders.push(toCollisionBox(
+    [0, FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, sternZ],
+    [rearHalfWidth * 2, layout.rail.height, RAIL_COLLIDER_THICKNESS],
+  ));
+}
+
+function addRoundedBowRail(
+  root: Group,
+  geometries: Set<BufferGeometry>,
+  shellColliders: CollisionBox[],
+  materials: ShipMaterials,
+  shoulderZ: number,
+  layout: ShipLayoutSpec,
+): void {
+  const railTopY = FREIGHTER_DIMENSIONS.deckY + layout.rail.height;
+  const railX = layout.rail.innerFaceX + RAIL_COLLIDER_THICKNESS / 2;
+  const tipZ = shoulderZ + BOW_DEPTH + RAIL_COLLIDER_THICKNESS / 2;
+  const pointAt = (index: number): { x: number; z: number } => roundedBowPoint(
+    railX,
+    shoulderZ,
+    tipZ,
+    index / RAIL_END_SEGMENTS,
+  );
   for (let index = 0; index < RAIL_END_SEGMENTS; index += 1) {
     const start = pointAt(index);
     const finish = pointAt(index + 1);
@@ -1738,52 +1886,53 @@ function addCurvedEndRail(
     ] as const;
     const rotationY = Math.atan2(deltaX, deltaZ);
     addRotatedBlock(root, geometries, shellColliders, {
-      name: `rail-${end}-top-${index}`,
+      name: `rail-bow-top-${index}`,
       size: [RAIL_THICKNESS, RAIL_TOP_THICKNESS, chordLength],
       position,
       material: materials.darkMetal,
     }, rotationY);
+    shellColliders.push(toOrientedCollisionBox(
+      [position[0], FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, position[2]],
+      [RAIL_COLLIDER_THICKNESS, layout.rail.height, chordLength],
+      rotationY,
+    ));
   }
   for (let index = 0; index <= RAIL_END_SEGMENTS; index += 1) {
     const point = pointAt(index);
     addBlock(root, geometries, shellColliders, {
-      name: `rail-${end}-post-${index}`,
+      name: `rail-bow-post-${index}`,
       size: [RAIL_POST_WIDTH, layout.rail.height, RAIL_POST_WIDTH],
       position: [point.x, FREIGHTER_DIMENSIONS.deckY + layout.rail.height / 2, point.z],
       material: materials.darkMetal,
     });
   }
-  arcColliders.push({
-    centerX: 0,
-    centerZ: z,
-    radiusX: railX,
-    radiusZ: RAIL_END_DEPTH,
-    end,
-    thickness: RAIL_COLLIDER_THICKNESS,
-    minY: FREIGHTER_DIMENSIONS.deckY,
-    maxY: railTopY,
-  });
 }
 
 function addRails(
   root: Group,
   geometries: Set<BufferGeometry>,
   shellColliders: CollisionBox[],
-  arcColliders: CollisionArc[],
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
   const cargo = requiredZone(layout, 'cargoDeck').bounds;
-  const minZ = cargo.minZ + END_CAP_DEPTH;
-  const maxZ = cargo.maxZ - END_CAP_DEPTH;
+  const minZ = cargo.minZ + SHIP_STERN_CHAMFER;
+  const maxZ = cargo.maxZ - BOW_DEPTH;
   const opening = layout.rail.starboardOpening;
   const gapMinZ = opening.centerZ - opening.width / 2;
   const gapMaxZ = opening.centerZ + opening.width / 2;
   addRailSegment(root, geometries, shellColliders, materials, 'port', minZ, maxZ, layout);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', minZ, gapMinZ, layout);
   addRailSegment(root, geometries, shellColliders, materials, 'starboard', gapMaxZ, maxZ, layout);
-  addCurvedEndRail(root, geometries, shellColliders, arcColliders, materials, 'bow', maxZ, layout);
-  addCurvedEndRail(root, geometries, shellColliders, arcColliders, materials, 'stern', minZ, layout);
+  addRoundedBowRail(root, geometries, shellColliders, materials, maxZ, layout);
+  addChamferedSternRail(
+    root,
+    geometries,
+    shellColliders,
+    materials,
+    cargo.minZ,
+    layout,
+  );
 }
 
 export function createShipGeometry(
@@ -1857,8 +2006,8 @@ export function createShipGeometry(
   const climbZones = addLadders(root, geometries, materials, layout);
   addExteriorConstructionDetails(root, geometries, shellColliders, materials, layout);
 
-  const stackOutlets = addMachineryAndStacks(root, geometries, shellColliders, materials, layout);
-  addRails(root, geometries, shellColliders, arcColliders, materials, layout);
+  const stackOutlets = addRoofEngine(root, geometries, shellColliders, materials, layout);
+  addRails(root, geometries, shellColliders, materials, layout);
 
   const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
     zone.id,
@@ -1890,6 +2039,26 @@ export function createShipGeometry(
           (DECK_LENGTH / 2 - END_CAP_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         upperLocalY: HULL_TOP_Y,
+      },
+      longitudinalProfile: {
+        minZ: SHIP_STERN_Z,
+        maxZ: DECK_LENGTH / 2,
+        taperStartMinZ: SHIP_STERN_Z,
+        taperStartMaxZ: DECK_LENGTH / 2 - BOW_DEPTH,
+        lowerMinZ: Math.round(
+          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - DECK_LENGTH) / 2)
+            * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+        ) / 1000,
+        lowerMaxZ: Math.round(
+          HALF_LENGTH * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+        ) / 1000,
+        lowerTaperStartMinZ: Math.round(
+          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - DECK_LENGTH) / 2)
+            * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+        ) / 1000,
+        lowerTaperStartMaxZ: Math.round(
+          (HALF_LENGTH - BOW_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+        ) / 1000,
       },
     },
     stackOutlets,

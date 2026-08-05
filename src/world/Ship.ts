@@ -1,5 +1,8 @@
 import { Group, Vector3 } from 'three';
-import type { WaterExclusionHeightProfile } from '../ocean/WaterExclusion';
+import type {
+  WaterExclusionHeightProfile,
+  WaterExclusionLongitudinalProfile,
+} from '../ocean/WaterExclusion';
 import {
   circleOverlapsCollisionFootprint,
   segmentBoxInterval,
@@ -15,7 +18,12 @@ import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT, validateShipLayout } from './ShipLayout';
+import {
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  SHIP_STERN_Z,
+  validateShipLayout,
+} from './ShipLayout';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
@@ -41,6 +49,7 @@ export interface ShipBuild {
     taperStart: number;
     minimumLocalY: number;
     heightProfile: WaterExclusionHeightProfile;
+    longitudinalProfile: WaterExclusionLongitudinalProfile;
   };
   updateEffects(delta: number, sinkingProgress: number): void;
   dispose(): void;
@@ -52,12 +61,14 @@ function nearlyEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= SURFACE_EPSILON;
 }
 
-function matchesAuthoredOpenShelfSurface(surface: ShipItemSurface): boolean {
+function matchesAuthoredApertureSurface(surface: ShipItemSurface): boolean {
   const owner = SHIP_LAYOUT.furniture.find(({ id }) => id === surface.furnitureId);
-  if (!owner || owner.modelId !== 'bookcaseOpen'
+  if (!owner
+    || (owner.modelId !== 'bookcaseOpen' && owner.modelId !== 'bedBunk')
     || surface.furnitureModelId !== owner.modelId) return false;
   const authored = owner.surfaces.find(({ id }) => id === surface.id);
   if (!authored) return false;
+  const quarterTurn = Math.abs(Math.sin(owner.rotationY)) > 0.5;
   const cosine = Math.cos(owner.rotationY);
   const sine = Math.sin(owner.rotationY);
   const localX = authored.localPosition[0] * owner.scale[0];
@@ -70,8 +81,16 @@ function matchesAuthoredOpenShelfSurface(surface: ShipItemSurface): boolean {
   );
   return surface.position.distanceTo(expectedPosition) <= SURFACE_EPSILON
     && surface.physicalSlotId === authored.physicalSlotId
-    && nearlyEqual(surface.footprint.width, authored.footprint.width * owner.scale[0])
-    && nearlyEqual(surface.footprint.depth, authored.footprint.depth * owner.scale[2])
+    && nearlyEqual(
+      surface.footprint.width,
+      (quarterTurn ? authored.footprint.depth : authored.footprint.width)
+        * (quarterTurn ? owner.scale[2] : owner.scale[0]),
+    )
+    && nearlyEqual(
+      surface.footprint.depth,
+      (quarterTurn ? authored.footprint.width : authored.footprint.depth)
+        * (quarterTurn ? owner.scale[0] : owner.scale[2]),
+    )
     && nearlyEqual(surface.clearanceHeight, authored.clearanceHeight * owner.scale[1])
     && nearlyEqual(surface.rotation.x, authored.localRotation[0])
     && nearlyEqual(surface.rotation.y, authored.localRotation[1] + owner.rotationY)
@@ -84,9 +103,10 @@ function ownerApertureAllowsRay(
   target: Vector3,
   collider: CollisionBox,
 ): boolean {
-  const authoredOpenShelf = surface.furnitureModelId === 'bookcaseOpen'
-    && matchesAuthoredOpenShelfSurface(surface);
-  if (surface.furnitureModelId === 'bookcaseOpen' && !authoredOpenShelf) return false;
+  const usesOwnerAperture = surface.furnitureModelId === 'bookcaseOpen'
+    || surface.furnitureModelId === 'bedBunk';
+  const authoredAperture = usesOwnerAperture && matchesAuthoredApertureSurface(surface);
+  if (usesOwnerAperture && !authoredAperture) return false;
   const aboveSurface = {
     ...collider,
     minY: Math.max(collider.minY, surface.position.y + 1e-6),
@@ -94,7 +114,7 @@ function ownerApertureAllowsRay(
   if (aboveSurface.minY >= aboveSurface.maxY - 1e-6) return true;
   const interval = segmentBoxInterval(eye, target, aboveSurface);
   if (!interval) return true;
-  if (!authoredOpenShelf) return false;
+  if (!authoredAperture) return false;
   const entryY = eye.y + (target.y - eye.y) * interval.minimum;
   const exitY = eye.y + (target.y - eye.y) * interval.maximum;
   const apertureTop = surface.position.y + surface.clearanceHeight;
@@ -234,13 +254,13 @@ export function createShip(
       safe: {
         minX: -halfWidth + 0.35,
         maxX: halfWidth - 0.35,
-        minZ: -halfLength + 0.8,
+        minZ: SHIP_STERN_Z + 0.35,
         maxZ: halfLength - 0.8,
       },
       fall: {
         minX: -halfWidth - 0.8,
         maxX: halfWidth + 0.8,
-        minZ: -halfLength - 0.8,
+        minZ: SHIP_STERN_Z - 0.8,
         maxZ: halfLength + 0.8,
       },
     },

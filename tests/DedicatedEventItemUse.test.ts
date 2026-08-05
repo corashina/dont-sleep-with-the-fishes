@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects dedicated event item routing and integrated use flows.
 import {
   BoxGeometry,
   Group,
