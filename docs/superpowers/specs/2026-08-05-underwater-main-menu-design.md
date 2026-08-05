@@ -64,18 +64,18 @@ The `HOW TO PLAY` action remains in the upper-right corner.
 
 Use the supplied Poly Pizza models as local pinned GLB assets.
 
-- Boat: `https://poly.pizza/m/YwdXrwbN3o`
-- Rock: `https://poly.pizza/m/d2VWOdthtR`
-- Rock: `https://poly.pizza/m/54jZKTAt5p`
-- Rock: `https://poly.pizza/m/li0YBlBEMz`
-- Bone model: `https://poly.pizza/m/bU5RLZnq6v`
-- Bone model: `https://poly.pizza/m/VGtSTNRf2O`
-- Large bone: `https://poly.pizza/m/A67un3x9nV`
-- Animated shark: `https://poly.pizza/m/AyHTK3zUSG`
+- Boat by Pixel: `https://poly.pizza/m/YwdXrwbN3o`
+- Rock Large A by Quaternius: `https://poly.pizza/m/d2VWOdthtR`
+- Rock Large B by Quaternius: `https://poly.pizza/m/54jZKTAt5p`
+- Rock Large C by Quaternius: `https://poly.pizza/m/li0YBlBEMz`
+- Fish Bone by Quaternius: `https://poly.pizza/m/bU5RLZnq6v`
+- Skull by Quaternius: `https://poly.pizza/m/VGtSTNRf2O`
+- Large Bone by Quaternius: `https://poly.pizza/m/A67un3x9nV`
+- Animated Shark by Quaternius: `https://poly.pizza/m/AyHTK3zUSG`
 
-Use the most complete bone model for the seated figure.
+Build the seated figure from the Skull model and authored low-poly bone geometry.
 
-Use the remaining bone models as loose remains.
+Use the Fish Bone and Large Bone models as loose remains.
 
 Use every supplied rock model once before repeating any rock.
 
