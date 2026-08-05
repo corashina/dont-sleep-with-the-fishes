@@ -24,11 +24,7 @@ export interface FlightResultHandlers {
   onLanded: (instance: ItemInstance) => void;
 }
 
-const CARRY_OFFSETS = [
-  new Vector3(0.56, -0.48, -1.12),
-  new Vector3(0.18, -0.54, -1.02),
-  new Vector3(-0.24, -0.50, -1.08),
-] as const;
+const THROW_OFFSET = new Vector3(0.56, -0.48, -1.12);
 
 function capturePlacement(object: Object3D): OriginalPlacement {
   return {
@@ -66,8 +62,7 @@ export class CarryController {
   pickUp(instance: ItemInstance, object: Object3D): boolean {
     if (this.flight !== null) return false;
     this.carried.push({ instance, object, original: capturePlacement(object) });
-    this.camera.add(object);
-    this.reflowCarried();
+    object.removeFromParent();
     return true;
   }
 
@@ -80,8 +75,6 @@ export class CarryController {
     if (this.flight !== null) return null;
     const released = this.carried.pop();
     if (!released) return null;
-    this.scene.attach(released.object);
-    this.reflowCarried();
     return released.instance;
   }
 
@@ -149,26 +142,21 @@ export class CarryController {
     this.flight = null;
   }
 
-  private reflowCarried(): void {
-    this.carried.forEach(({ object }, index) => {
-      object.position.copy(CARRY_OFFSETS[index] ?? CARRY_OFFSETS[2]);
-      object.rotation.set(-0.15, 0.45 - index * 0.2, 0.08);
-      object.scale.setScalar(0.72);
-    });
-  }
-
   private launch(speed: number): ItemInstanceId | null {
     if (this.flight !== null) return null;
     const released = this.carried.pop();
     if (!released) return null;
     const { instance, object } = released;
+    this.camera.add(object);
+    object.position.copy(THROW_OFFSET);
+    object.rotation.set(-0.15, 0.05, 0.08);
+    object.scale.setScalar(0.72);
     this.scene.attach(object);
     this.camera.getWorldDirection(this.direction);
     this.flight = {
       ...released,
       velocity: this.direction.multiplyScalar(speed).add(new Vector3(0, 1.5, 0)),
     };
-    this.reflowCarried();
     return instance.instanceId;
   }
 }

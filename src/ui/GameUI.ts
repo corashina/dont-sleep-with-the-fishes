@@ -67,12 +67,14 @@ export class GameUI {
         </div>
         <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
-        <div class="carried" data-carried>
-          <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
-        </div>
-        <div class="timer-block pocket-watch">
-          ${uiArtwork('watch', 'pocket-watch__art')}
-          <strong class="ui-role-numeral" data-timer>${formatDuration(SCAVENGE_DURATION_SECONDS)}</strong>
+        <div class="scavenge-status" data-scavenge-status>
+          <div class="carried" data-carried>
+            <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
+          </div>
+          <div class="timer-block pocket-watch">
+            ${uiArtwork('watch', 'pocket-watch__art')}
+            <strong class="ui-role-numeral" data-timer>${formatDuration(SCAVENGE_DURATION_SECONDS)}</strong>
+          </div>
         </div>
       </div>
       <div class="intro-skip brush-label ui-role-context" data-intro-skip hidden>

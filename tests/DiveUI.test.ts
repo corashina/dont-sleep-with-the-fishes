@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 4/5. Protects dive transition promises, confirmation flow, and disposal.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SurvivalUI } from '../src/ui/SurvivalUI';

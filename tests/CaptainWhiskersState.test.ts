@@ -1,3 +1,4 @@
+// Importance: 5/5. Protects companion rules, state boundaries, and dawn processing.
 import { describe, expect, it } from 'vitest';
 import {
   advanceCaptainWhiskersDawn,

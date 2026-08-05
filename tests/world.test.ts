@@ -47,7 +47,13 @@ import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
+import {
+  FREIGHTER_DIMENSIONS,
+  SHIP_LAYOUT,
+  SHIP_ROOF_ENGINE,
+  SHIP_ROOM_ROOF_THICKNESS,
+  SHIP_ROOM_WALL_HEIGHT,
+} from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 import { skyPaletteFor } from '../src/world/skyPalette';
@@ -157,6 +163,99 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('uses a compact chamfered stern and a roof engine beneath the stacks', () => {
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
+    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
+    const sternRailTops: Mesh[] = [];
+    const sternRailChamfers: Mesh[] = [];
+    const sternRailPosts: Mesh[] = [];
+    ship.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      if (object.name === 'rail-stern-top') sternRailTops.push(object);
+      if (object.name.startsWith('rail-stern-chamfer-')) sternRailChamfers.push(object);
+      if (object.name.startsWith('rail-stern-post-')) sternRailPosts.push(object);
+    });
+
+    try {
+      expect(ship.root.getObjectByName('machinery-island')).toBeUndefined();
+      const engine = ship.root.getObjectByName('roof-engine-body') as Mesh;
+      expect(engine).toBeDefined();
+      expect(engine.position.toArray()).toEqual([
+        SHIP_ROOF_ENGINE.centerX,
+        FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT
+          + SHIP_ROOM_ROOF_THICKNESS + SHIP_ROOF_ENGINE.height / 2,
+        SHIP_ROOF_ENGINE.centerZ,
+      ]);
+      expect(engine.scale.toArray()).toEqual([
+        SHIP_ROOF_ENGINE.width,
+        SHIP_ROOF_ENGINE.height,
+        SHIP_ROOF_ENGINE.depth,
+      ]);
+      expect(ship.root.getObjectByName('roof-engine-service-panel')).toBeDefined();
+      expect(ship.root.getObjectByName('roof-engine-crank')).toBeDefined();
+      expect([1, 2, 3].every((index) =>
+        ship.root.getObjectByName(`roof-engine-vent-${index}`))).toBe(true);
+      expect(ship.root.getObjectByName('balcony:storage-balcony:coaming:port:0'))
+        .toBeUndefined();
+      expect(ship.root.getObjectByName('ladder:storage-ladder')).toBeUndefined();
+      expect(ship.climbZones.map(({ id }) => id)).toEqual(['crew-ladder']);
+      expect(ship.stackOutlets.map(({ x, z }) => [x, z])).toEqual([
+        [-1.35, (storage.minZ + storage.maxZ) / 2],
+        [1.35, (storage.minZ + storage.maxZ) / 2],
+      ]);
+      ship.stackOutlets.forEach(({ y }) => {
+        expect(y).toBe(
+          FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT
+            + SHIP_ROOM_ROOF_THICKNESS + SHIP_ROOF_ENGINE.height
+            + 0.22 + 3.5,
+        );
+      });
+      const sternZ = SHIP_LAYOUT.zones.find(
+        ({ id }) => id === 'cargoDeck',
+      )!.bounds.minZ;
+      expect(ship.waterExclusion.longitudinalProfile.minZ).toBe(sternZ);
+      expect(ship.waterExclusion.longitudinalProfile.taperStartMinZ).toBe(sternZ);
+      const timberDeck = ship.root.getObjectByName('timber-deck') as Mesh;
+      timberDeck.geometry.computeBoundingBox();
+      expect(timberDeck.geometry.boundingBox!.min.z).toBeCloseTo(sternZ);
+      expect(sternRailTops).toHaveLength(1);
+      expect(sternRailTops[0]!.position.z).toBe(sternZ);
+      expect(sternRailChamfers).toHaveLength(2);
+      sternRailChamfers.forEach(({ rotation }) => {
+        expect(Math.abs(rotation.y)).toBeCloseTo(Math.PI / 4);
+      });
+      expect(sternRailPosts).toHaveLength(2);
+      expect(sternRailPosts.map(({ position }) => position.z)).toEqual([sternZ, sternZ]);
+      expect(ship.shellColliders.filter((collider) =>
+        collider.minY === FREIGHTER_DIMENSIONS.deckY
+        && collider.minZ < sternZ + 0.35
+      )).toHaveLength(3);
+    } finally {
+      ship.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
+  it('aligns the finished cargo floor with the rounded bow', () => {
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
+    const floor = ship.root.getObjectByName('floor-cargoDeck') as Mesh;
+    const positions = floor.geometry.getAttribute('position');
+    const deckZ = Array.from({ length: positions.count }, (_, index) =>
+      positions.getZ(index));
+
+    try {
+      expect(Math.max(...deckZ)).toBeCloseTo(27.1);
+      expect(Math.min(...deckZ)).toBeCloseTo(
+        SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds.minZ,
+      );
+    } finally {
+      ship.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('uses the scavenging roster and stable placement metadata by default', () => {
     const firstScene = new Scene();
     const firstModels = createTestPropModels();
@@ -176,14 +275,11 @@ describe('world builders', () => {
     try {
       expect(first.itemObjects.size).toBe(createScavengeItemInstances().length);
       expect(first.itemObjects.has('energyBar-1')).toBe(false);
-      expect(new Set([...first.itemObjects.values()].map(
-        (item) => item.userData.shipRegionId,
-      )).size).toBe(6);
       first.itemObjects.forEach((item) => {
         expect(item.userData.shipSurfaceId).toEqual(expect.any(String));
         expect(item.userData.shipRegionId).toEqual(expect.any(String));
         expect(item.userData.shipBranch).toEqual(expect.any(Boolean));
-        expect(['generated', 'fallback']).toContain(item.userData.shipPlacementSource);
+        expect(item.userData.shipPlacementSource).toBe('random');
         expect(item.userData.placementSource).toBe(item.userData.shipPlacementSource);
       });
     } finally {
@@ -464,6 +560,10 @@ describe('world builders', () => {
     expect(world.physicsMode).toBe('debug');
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeDefined();
     expect(world.ship.getObjectByName('physics-debug-static')).toBeDefined();
+    const floor = world.ship.getObjectByName('physics-debug-cuboid:0') as Mesh;
+    const deckBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
+    expect(floor.position.z - floor.scale.z / 2).toBeCloseTo(deckBounds.minZ);
+    expect(floor.position.z + floor.scale.z / 2).toBeCloseTo(deckBounds.maxZ);
     expect(scene.getObjectByName('physics-debug-barrel:1')).toBeDefined();
     expect(scene.getObjectByName('physics-debug-barrel:2')).toBeDefined();
 

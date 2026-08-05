@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects stable event change summaries and presentation seeds.
 import { describe, expect, it } from 'vitest';
 import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
 import {

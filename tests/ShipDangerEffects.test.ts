@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects alarm and puddle ownership, pooling, timing, and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import { type Material, Mesh, PointLight, ShapeGeometry, Vector3 } from 'three';
 import {

@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects dive world transitions, pooled effects, restoration, and cleanup.
 import {
   BoxGeometry,
   Group,

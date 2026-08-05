@@ -1,34 +1,28 @@
-// Importance: 4/5. Protects valid deterministic item placement.
-import { performance } from 'node:perf_hooks';
+// Importance: 4/5. Protects valid randomized item placement.
 import { Box3, Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,
   createItemInstances,
 } from '../src/game/ItemState';
-import {
-  planBaselineScavengeRoute,
-  planExpertScavengeRoute,
-} from '../src/game/ScavengeRoutePlanner';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { createShip } from '../src/world/Ship';
 import {
-  SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE,
-  SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS,
+  MAX_HEAVY_ITEM_DEPOSIT_DISTANCE,
   SHIP_ITEM_PROFILES,
   assignShipItems,
   shipItemTransformBounds,
   validateShipItemSurfaces,
   type ShipItemSurface,
-  type ShipItemTransform,
   type ShipPlacementContext,
 } from '../src/world/ShipItemPlacement';
 import {
   createShipRouteMetric,
+  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
-  type ScavengeRegionId,
 } from '../src/world/ShipLayout';
 import { createTestShipFurniture } from './helpers/shipFurniture';
+import { loadProductionPropModels } from './helpers/productionPropModels';
 
 function surface(
   id: string,
@@ -62,97 +56,19 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function placementContext(
-  ship: ReturnType<typeof createShip>,
-  maxAttempts?: number,
-): ShipPlacementContext {
+function placementContext(ship: ReturnType<typeof createShip>): ShipPlacementContext {
   const station = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!;
   return {
     routeMetric: createShipRouteMetric(SHIP_LAYOUT),
-    start: [ship.playerStart.x, ship.playerStart.z],
     deposit: [
       (station.bounds.minX + station.bounds.maxX) / 2,
       (station.bounds.minZ + station.bounds.maxZ) / 2,
     ],
-    evacuation: [ship.evacuationPoint.x, ship.evacuationPoint.z],
-    maxAttempts,
   };
-}
-
-const REGION_LIMITS: Readonly<Record<
-  ScavengeRegionId,
-  readonly [number, number]
->> = {
-  crewCabin: [3, 4],
-  wheelhouse: [5, 6],
-  centralCargo: [6, 7],
-  storageWorkroom: [3, 4],
-  bow: [1, 1],
-  stern: [2, 3],
-};
-
-function expectProductionConstraints(
-  assignments: ReadonlyMap<string, ShipItemTransform>,
-  context: ShipPlacementContext,
-): void {
-  for (const [regionId, [minimum, maximum]] of Object.entries(REGION_LIMITS)) {
-    const count = [...assignments.values()].filter(
-      (value) => value.regionId === regionId,
-    ).length;
-    expect(count, regionId).toBeGreaterThanOrEqual(minimum);
-    expect(count, regionId).toBeLessThanOrEqual(maximum);
-  }
-  const branches = [...assignments.values()].filter(({ branch }) => branch).length;
-  expect(branches).toBeGreaterThanOrEqual(4);
-  expect(branches).toBeLessThanOrEqual(6);
-
-  const values = [...assignments.values()];
-  values.forEach((left, index) => values.slice(index + 1).forEach((right) => {
-    expect(
-      Math.hypot(left.position.x - right.position.x, left.position.z - right.position.z),
-    ).toBeGreaterThanOrEqual(1.25 - 1e-6);
-  }));
-  for (const instance of createScavengeItemInstances()) {
-    const value = assignments.get(instance.instanceId)!;
-    const weight = ITEM_DEFINITIONS[instance.type].weight;
-    const distance = context.routeMetric.distance(
-      [value.standingPoint.x, value.standingPoint.z],
-      context.deposit,
-    );
-    expect(distance).not.toBeNull();
-    if (weight === 3) expect(distance!).toBeLessThanOrEqual(14 + 1e-6);
-    if (weight === 2) expect(distance!).toBeLessThanOrEqual(22 + 1e-6);
-  }
-  const routeInput = {
-    assignments: createScavengeItemInstances().map((instance) => {
-      const value = assignments.get(instance.instanceId)!;
-      return {
-        instanceId: instance.instanceId,
-        weight: ITEM_DEFINITIONS[instance.type].weight,
-        position: [value.standingPoint.x, value.standingPoint.z] as const,
-        branch: value.branch,
-      };
-    }),
-    start: context.start,
-    deposit: context.deposit,
-    evacuation: context.evacuation,
-    metric: context.routeMetric,
-  };
-  const baseline = planBaselineScavengeRoute(routeInput);
-  expect(baseline.savedCount).toBeGreaterThanOrEqual(15);
-  expect(baseline.savedCount).toBeLessThanOrEqual(17);
-  expect(baseline.evacuated).toBe(true);
-  expect(baseline.actions.at(-1)?.type).toBe('evacuate');
-  expect(baseline.seconds).toBeLessThanOrEqual(60);
 }
 
 describe('ship item placement', () => {
-  it('keeps the umbrella clear of the starboard workbench box', () => {
-    expect(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE['umbrella-1'])
-      .toBe('workbench-starboard:top-left');
-  });
-
-  it('rests the scavenging umbrella at 45 degrees on its surface', () => {
+  it('rests the complete scavenging umbrella diagonally across its surface', () => {
     const umbrella = createScavengeItemInstances().find(
       ({ instanceId }) => instanceId === 'umbrella-1',
     )!;
@@ -161,8 +77,31 @@ describe('ship item placement', () => {
       .get(umbrella.instanceId)!;
     const bounds = shipItemTransformBounds(umbrella.type, transform);
 
-    expect(transform.rotation.z).toBeCloseTo(-Math.PI / 4);
+    expect(transform.rotation.x).toBeCloseTo(0);
+    expect(transform.rotation.y).toBeCloseTo(-Math.PI / 4);
+    expect(transform.rotation.z).toBeCloseTo(0);
     expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+  });
+
+  it('rests the loaded umbrella mesh on its scavenging surface', async () => {
+    const umbrella = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'umbrella-1',
+    )!;
+    const restingSurface = surface('loaded-umbrella-rest', 0);
+    const transform = assignShipItems([umbrella], [restingSurface])
+      .get(umbrella.instanceId)!;
+    const models = await loadProductionPropModels();
+    try {
+      const prop = models.create(umbrella);
+      prop.position.copy(transform.position);
+      prop.rotation.copy(transform.rotation);
+      prop.scale.setScalar(transform.scale);
+      const bounds = new Box3().setFromObject(prop);
+
+      expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    } finally {
+      models.dispose();
+    }
   });
 
   it('rests the scavenging anchor flat on its surface', () => {
@@ -197,6 +136,21 @@ describe('ship item placement', () => {
     expect(size.y).toBeLessThan(size.z);
   });
 
+  it('faces Captain Whiskers toward the ship center during scavenging', () => {
+    const captain = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'captainWhiskers-1',
+    )!;
+    const restingSurface = surface('captain-rest', -4, {
+      position: new Vector3(-4, 3, -3),
+    });
+    const transform = assignShipItems([captain], [restingSurface])
+      .get(captain.instanceId)!;
+    const forward = new Vector3(0, 0, -1).applyEuler(transform.rotation).normalize();
+    const towardCenter = transform.position.clone().setY(0).negate().normalize();
+
+    expect(forward.dot(towardCenter)).toBeCloseTo(1);
+  });
+
   it.each([
     ['cannedFood-1', 'bow'],
     ['compass-1', 'storageWorkroom'],
@@ -210,6 +164,23 @@ describe('ship item placement', () => {
       item,
     ], [surface('wide', 0, { regionId })]).get(instanceId);
     expect(assignment?.regionId).toBe(regionId);
+  });
+
+  it('uses every lower cabin bunk as a visible placement', () => {
+    const library = createTestShipFurniture();
+    const ship = createShip(library, 8);
+    try {
+      const bunkSurfaces = ship.itemSurfaces.filter(
+        ({ furnitureModelId }) => furnitureModelId === 'bedBunk',
+      );
+      expect(bunkSurfaces).toHaveLength(5);
+      bunkSurfaces.forEach(({ position }) => {
+        expect(position.y).toBeCloseTo(FREIGHTER_DIMENSIONS.deckY + 0.49);
+      });
+    } finally {
+      ship.dispose();
+      library.dispose();
+    }
   });
 
   it('uses injected random values for context-free physical assignment', () => {
@@ -265,223 +236,84 @@ describe('ship item placement', () => {
       .toThrow(/wall clearance.*0\.1/i);
   });
 
-  it('requires route context for the production twenty-one item catalog', () => {
+  it('places heavy items close and outside the two far rooms', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
+    const context = placementContext(ship);
     try {
-      expect(() => assignShipItems(
-        createScavengeItemInstances(),
-        ship.itemSurfaces,
-        mulberry32(1),
-        ship.colliders,
-      )).toThrow(/requires.*placement context/i);
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
-  });
-
-  it('uses the complete checked fallback after zero generated attempts', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    const context = placementContext(ship, 0);
-    try {
-      const instances = createScavengeItemInstances();
-      expect(Object.keys(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE).sort())
-        .toEqual(instances.map(({ instanceId }) => instanceId).sort());
-      expect(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE).not.toHaveProperty('energyBar-1');
-      expect(Object.isFrozen(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE)).toBe(true);
-      const assignments = assignShipItems(
-        instances,
-        ship.itemSurfaces,
-        mulberry32(4),
-        ship.colliders,
-        context,
-      );
-      expect(assignments.size).toBe(21);
-      expect([...assignments.values()].every(
-        ({ placementSource }) => placementSource === 'fallback',
-      )).toBe(true);
-      const whiskers = assignments.get('captainWhiskers-1')!;
-      const whiskersSurface = ship.itemSurfaces.find(
-        ({ id }) => id === whiskers.surfaceId,
-      )!;
-      expect(whiskers.scale).toBeGreaterThan(0.95);
-      expect(whiskers.rotation.y).toBeCloseTo(Math.PI / 2);
-      expect(whiskers.position.y - whiskersSurface.position.y).toBeGreaterThan(0.23);
-      for (const instance of instances) {
-        expect(assignments.get(instance.instanceId)?.surfaceId).toBe(
-          SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE[
-            instance.instanceId as keyof typeof SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE
-          ],
+      for (let seed = 0; seed < 64; seed += 1) {
+        const instances = createScavengeItemInstances();
+        const assignments = assignShipItems(
+          instances,
+          ship.itemSurfaces,
+          mulberry32(seed),
+          ship.colliders,
+          context,
         );
+        for (const instance of instances) {
+          if (ITEM_DEFINITIONS[instance.type].weight !== 3) continue;
+          const assignment = assignments.get(instance.instanceId)!;
+          const distance = context.routeMetric.distance(
+            [assignment.standingPoint.x, assignment.standingPoint.z],
+            context.deposit,
+          );
+          expect(distance).not.toBeNull();
+          expect(distance!).toBeLessThanOrEqual(MAX_HEAVY_ITEM_DEPOSIT_DISTANCE);
+          expect(['storageWorkroom', 'crewCabin']).not.toContain(assignment.regionId);
+        }
       }
-      expectProductionConstraints(assignments, context);
     } finally {
       ship.dispose();
       library.dispose();
     }
   });
 
-  it('caps generated placement at sixty-four attempts', () => {
-    expect(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS).toBe(64);
-  });
-
-  it('selects a checked template on the first valid attempt', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    const instances = createScavengeItemInstances();
-    const fallbackSurfaceIds = new Set(Object.values(SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE));
-    const surfaces = ship.itemSurfaces.filter(({ id }) => fallbackSurfaceIds.has(id));
-    const run = (maxAttempts: number) => {
-      let randomCalls = 0;
-      const assignments = assignShipItems(
-        instances,
-        surfaces,
-        () => {
-          randomCalls += 1;
-          return 1 - Number.EPSILON;
-        },
-        ship.colliders,
-        placementContext(ship, maxAttempts),
-      );
-      expect([...assignments.values()].every(
-        ({ placementSource }) => placementSource === 'generated',
-      )).toBe(true);
-      return randomCalls;
+  it('keeps medium items unrestricted by the heavy route limit', () => {
+    const medicalKit = createItemInstances()
+      .filter(({ type }) => type === 'medicalKit')
+      .slice(0, 1);
+    const context: ShipPlacementContext = {
+      routeMetric: { distance: () => MAX_HEAVY_ITEM_DEPOSIT_DISTANCE + 10 },
+      deposit: [0, 0],
     };
-    try {
-      const oneAttemptCalls = run(1);
-      const fullAttemptCalls = run(SCAVENGE_GENERATED_PLACEMENT_ATTEMPTS);
-      expect(oneAttemptCalls).toBeGreaterThan(0);
-      expect(fullAttemptCalls).toBe(oneAttemptCalls);
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
+    expect(assignShipItems(
+      medicalKit,
+      [surface('far-medical-kit', 0)],
+      mulberry32(1),
+      [],
+      context,
+    ).get('medicalKit-1')?.surfaceId).toBe('far-medical-kit');
   });
 
-  it('keeps cold placement construction deterministic without a warm context cache', () => {
+  it('keeps one seed deterministic', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     const instances = createScavengeItemInstances();
+    const context = placementContext(ship);
     try {
-      const firstContext = placementContext(ship);
-      const secondContext = placementContext(ship);
       const first = assignShipItems(
         instances,
         ship.itemSurfaces,
         mulberry32(7),
         ship.colliders,
-        firstContext,
+        context,
       );
       const second = assignShipItems(
         instances,
         ship.itemSurfaces,
         mulberry32(7),
         ship.colliders,
-        secondContext,
+        context,
       );
       expect([...second].map(([id, value]) => [id, value.surfaceId]))
         .toEqual([...first].map(([id, value]) => [id, value.surfaceId]));
-      expectProductionConstraints(first, firstContext);
     } finally {
       ship.dispose();
       library.dispose();
     }
   });
 
-  it('generates without an unused optional surface', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    const context = placementContext(ship, 1);
-    const fallbackOnlySurface = 'cabin-night-stand-forward-starboard:top';
-    const surfaces = ship.itemSurfaces.filter(
-      ({ id }) => id !== fallbackOnlySurface,
-    );
-    try {
-      const instances = createScavengeItemInstances();
-      const fullSignatures = new Set<string>();
-      const filteredSignatures = new Set<string>();
-      for (let index = 0; index < 7; index += 1) {
-        const random = () => (index + 0.5) / 7;
-        const full = assignShipItems(
-          instances,
-          ship.itemSurfaces,
-          random,
-          ship.colliders,
-          context,
-        );
-        expect([...full.values()].some(
-          ({ surfaceId }) => surfaceId === fallbackOnlySurface,
-        )).toBe(false);
-        fullSignatures.add(instances.map(({ instanceId }) => (
-          `${instanceId}:${full.get(instanceId)!.surfaceId}`
-        )).sort().join('|'));
-
-        const filtered = assignShipItems(
-          instances,
-          surfaces,
-          random,
-          ship.colliders,
-          context,
-        );
-        expect(filtered.size).toBe(21);
-        expect([...filtered.values()].every(
-          ({ placementSource }) => placementSource === 'generated',
-        )).toBe(true);
-        filteredSignatures.add(instances.map(({ instanceId }) => (
-          `${instanceId}:${filtered.get(instanceId)!.surfaceId}`
-        )).sort().join('|'));
-      }
-      expect(fullSignatures.size).toBe(7);
-      expect(filteredSignatures).toEqual(fullSignatures);
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
-  });
-
-  it('revalidates generated templates for an unmarked mutable route metric', () => {
-    const library = createTestShipFurniture();
-    const ship = createShip(library, 8);
-    const base = placementContext(ship, 1);
-    const metricState = { blocked: false };
-    const context: ShipPlacementContext = {
-      ...base,
-      routeMetric: {
-        distance(from, to) {
-          return metricState.blocked ? null : base.routeMetric.distance(from, to);
-        },
-      },
-    };
-    try {
-      const first = assignShipItems(
-        createScavengeItemInstances(),
-        ship.itemSurfaces,
-        () => 0,
-        ship.colliders,
-        context,
-      );
-      expect([...first.values()].every(
-        ({ placementSource }) => placementSource === 'generated',
-      )).toBe(true);
-
-      metricState.blocked = true;
-      expect(() => assignShipItems(
-        createScavengeItemInstances(),
-        ship.itemSurfaces,
-        () => 0,
-        ship.colliders,
-        context,
-      )).toThrow(/fallback standing route fails/i);
-    } finally {
-      ship.dispose();
-      library.dispose();
-    }
-  });
-
-  it('places production items without blocker overlap', () => {
+  it('places production items without blocker overlap or slot reuse', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     const context = placementContext(ship);
@@ -498,7 +330,9 @@ describe('ship item placement', () => {
       expect(assignments.size).toBe(21);
       expect(new Set([...assignments.values()].map(({ physicalSlotId }) => physicalSlotId)).size)
         .toBe(21);
-      expectProductionConstraints(assignments, context);
+      expect([...assignments.values()].every(
+        ({ placementSource }) => placementSource === 'random',
+      )).toBe(true);
       for (const instance of instances) {
         const assignment = assignments.get(instance.instanceId)!;
         const assignedSurface = byId.get(assignment.surfaceId)!;
@@ -524,19 +358,15 @@ describe('ship item placement', () => {
     }
   }, 10_000);
 
-  it('accepts one thousand deterministic production seeds below fifteen seconds', () => {
+  it('randomizes all other items across predefined placements', () => {
     const library = createTestShipFurniture();
     const ship = createShip(library, 8);
     const context = placementContext(ship);
     const instances = createScavengeItemInstances();
-    const started = performance.now();
     try {
-      let generatedCount = 0;
-      const surfacesByType = new Map<string, Set<string>>();
-      const surfacesByRegion = new Map<string, Set<string>>();
+      const surfacesByInstance = new Map<string, Set<string>>();
       const signatures = new Set<string>();
-      const signaturesBySeed: string[] = [];
-      for (let seed = 0; seed < 1_000; seed += 1) {
+      for (let seed = 0; seed < 128; seed += 1) {
         const assignments = assignShipItems(
           instances,
           ship.itemSurfaces,
@@ -545,94 +375,26 @@ describe('ship item placement', () => {
           context,
         );
         expect(assignments.size).toBe(21);
-        if ([...assignments.values()].every(
-          ({ placementSource }) => placementSource === 'generated',
-        )) {
-          generatedCount += 1;
-        }
         const signature = instances.map(({ instanceId }) => (
           `${instanceId}:${assignments.get(instanceId)!.surfaceId}`
         )).sort().join('|');
         signatures.add(signature);
-        signaturesBySeed.push(signature);
-        const changedFromFallback = instances.filter(({ instanceId }) => (
-          assignments.get(instanceId)!.surfaceId
-          !== SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE[
-            instanceId as keyof typeof SCAVENGE_FALLBACK_SURFACE_BY_INSTANCE
-          ]
-        )).length;
-        expect(changedFromFallback).toBeGreaterThanOrEqual(2);
         for (const instance of instances) {
           const value = assignments.get(instance.instanceId)!;
-          const typeSurfaces = surfacesByType.get(instance.type) ?? new Set<string>();
-          typeSurfaces.add(value.surfaceId);
-          surfacesByType.set(instance.type, typeSurfaces);
-          const regionSurfaces = surfacesByRegion.get(value.regionId) ?? new Set<string>();
-          regionSurfaces.add(value.surfaceId);
-          surfacesByRegion.set(value.regionId, regionSurfaces);
+          const itemSurfaces = surfacesByInstance.get(instance.instanceId) ?? new Set<string>();
+          itemSurfaces.add(value.surfaceId);
+          surfacesByInstance.set(instance.instanceId, itemSurfaces);
         }
-        expectProductionConstraints(assignments, context);
-        const routeInput = {
-          assignments: instances.map((instance) => {
-            const value = assignments.get(instance.instanceId)!;
-            return {
-              instanceId: instance.instanceId,
-              weight: ITEM_DEFINITIONS[instance.type].weight,
-              position: [value.standingPoint.x, value.standingPoint.z] as const,
-              branch: value.branch,
-            };
-          }),
-          start: context.start,
-          deposit: context.deposit,
-          evacuation: context.evacuation,
-          metric: context.routeMetric,
-        };
-        const route = planExpertScavengeRoute(routeInput);
-        expect(route).not.toBeNull();
-        expect(route!.seconds).toBeGreaterThanOrEqual(54);
-        expect(route!.seconds).toBeLessThanOrEqual(60);
-        const baseline = planBaselineScavengeRoute(routeInput);
-        expect(baseline.savedCount).toBeGreaterThanOrEqual(15);
-        expect(baseline.savedCount).toBeLessThanOrEqual(17);
-        expect(baseline.evacuated).toBe(true);
-        expect(baseline.actions.at(-1)?.type).toBe('evacuate');
-        expect(baseline.seconds).toBeLessThanOrEqual(60);
       }
-      expect(generatedCount).toBe(1_000);
-      expect(signatures.size).toBe(7);
-      for (let seed = 0; seed < 64; seed += 1) {
-        const assignments = assignShipItems(
-          instances,
-          ship.itemSurfaces,
-          mulberry32(seed),
-          ship.colliders,
-          context,
-        );
-        const signature = instances.map(({ instanceId }) => (
-          `${instanceId}:${assignments.get(instanceId)!.surfaceId}`
-        )).sort().join('|');
-        expect(signature).toBe(signaturesBySeed[seed]);
+      expect(signatures.size).toBe(128);
+      for (const instance of instances) {
+        if (ITEM_DEFINITIONS[instance.type].weight === 3) continue;
+        expect(surfacesByInstance.get(instance.instanceId)?.size, instance.instanceId)
+          .toBeGreaterThanOrEqual(2);
       }
-      expect(new Set([...surfacesByType.values()].flatMap((values) => [...values])).size)
-        .toBe(22);
-      for (const itemType of ['cannedFood', 'baitTin', 'ductTape']) {
-        expect(surfacesByType.get(itemType)?.size, itemType).toBeGreaterThanOrEqual(2);
-      }
-      for (const [regionId, minimumSurfaceCount] of [
-        ['crewCabin', 3],
-        ['wheelhouse', 5],
-        ['centralCargo', 6],
-        ['storageWorkroom', 4],
-        ['bow', 1],
-        ['stern', 2],
-      ] as const) {
-        expect(surfacesByRegion.get(regionId)?.size, regionId)
-          .toBeGreaterThanOrEqual(minimumSurfaceCount);
-      }
-      expect(performance.now() - started).toBeLessThan(15_000);
     } finally {
       ship.dispose();
       library.dispose();
     }
-  }, 20_000);
+  }, 10_000);
 });

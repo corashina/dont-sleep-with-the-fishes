@@ -455,6 +455,9 @@ describe('player movement helpers', () => {
         layoutTarget('bow-starboard'),
         layoutTarget('bow-center'),
         layoutTarget('bow-port'),
+        laneCenter('bow-port-approach'),
+        new Vector3(-6.2, PLAYER_Y, 22),
+        new Vector3(-EXTERIOR_ROUTE_X, PLAYER_Y, 18),
         layoutTarget('port-loop-forward'),
         new Vector3(
           -EXTERIOR_ROUTE_X,
@@ -575,10 +578,17 @@ describe('player movement helpers', () => {
             - PLAYER_LAYOUT_RADIUS,
         ),
         laneCenter('stern-port-approach'),
-        new Vector3(-6.25, PLAYER_Y, -24.1),
-        new Vector3(-6.25, PLAYER_Y, -25.2),
         layoutTarget('stern-port'),
-        layoutTarget('stern-center'),
+      ], ship.colliders);
+      followPath(layoutTarget('starboard-loop-aft'), [
+        layoutTarget('storage-starboard-door-outside'),
+        new Vector3(
+          EXTERIOR_ROUTE_X,
+          PLAYER_Y,
+          SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds.minZ
+            - PLAYER_LAYOUT_RADIUS,
+        ),
+        laneCenter('stern-starboard-approach'),
         layoutTarget('stern-starboard'),
       ], ship.colliders);
     } finally {

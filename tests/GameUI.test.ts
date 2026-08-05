@@ -90,6 +90,12 @@ describe('GameUI scavenging clock', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
     const clock = mount.querySelector<HTMLElement>('.pocket-watch')!;
+    const status = mount.querySelector<HTMLElement>('[data-scavenge-status]')!;
+    const carried = mount.querySelector<HTMLElement>('[data-carried]')!;
+
+    expect([...status.children]).toEqual([carried, clock]);
+    expect(mainStyles).toMatch(/\.scavenge-status\s*\{[^}]*display:\s*flex/s);
+    expect(mainStyles).toMatch(/\.scavenge-status\s*\{[^}]*align-items:\s*center/s);
 
     ui.render({ ...snapshot, remainingSeconds: SCAVENGE_DURATION_SECONDS - 0.2 });
     expect(clock.dataset.tick).toBeUndefined();

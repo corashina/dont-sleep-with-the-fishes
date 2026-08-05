@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects spatial audio graphs, gain routing, and backend cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 

@@ -51,8 +51,12 @@ export interface ScavengePhysicsConfig {
   readonly arcColliders: readonly CollisionArc[];
   readonly safeBounds: PlayerNavigationBounds['safe'];
   readonly deckY: number;
-  readonly shipWidth: number;
-  readonly shipLength: number;
+  readonly deckBounds: {
+    readonly minX: number;
+    readonly maxX: number;
+    readonly minZ: number;
+    readonly maxZ: number;
+  };
   readonly initialShipPose: PhysicsPose;
   readonly barrelSpawns: readonly PhysicsVector3[];
 }
@@ -170,17 +174,21 @@ export function collisionArcToCuboids(arc: CollisionArc): readonly PhysicsCuboid
 export function createScavengeStaticCuboids(
   config: Pick<
     ScavengePhysicsConfig,
-    'colliders' | 'arcColliders' | 'deckY' | 'shipWidth' | 'shipLength'
+    'colliders' | 'arcColliders' | 'deckY' | 'deckBounds'
   >,
 ): readonly PhysicsCuboid[] {
-  const { deckY } = config;
+  const { deckBounds, deckY } = config;
   return [
     {
-      center: { x: 0, y: deckY - DECK_THICKNESS / 2, z: 0 },
+      center: {
+        x: (deckBounds.minX + deckBounds.maxX) / 2,
+        y: deckY - DECK_THICKNESS / 2,
+        z: (deckBounds.minZ + deckBounds.maxZ) / 2,
+      },
       halfExtents: {
-        x: config.shipWidth / 2,
+        x: (deckBounds.maxX - deckBounds.minX) / 2,
         y: DECK_THICKNESS / 2,
-        z: config.shipLength / 2,
+        z: (deckBounds.maxZ - deckBounds.minZ) / 2,
       },
     },
     ...config.colliders.map(collisionBoxToCuboid),

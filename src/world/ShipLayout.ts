@@ -7,11 +7,13 @@ export const PLAYER_LAYOUT_RADIUS = 0.35;
 export const FREIGHTER_DIMENSIONS = { width: 16.25, length: 55, deckY: 2.22 } as const;
 export const SHIP_ROOM_WALL_HEIGHT = 3.4;
 export const SHIP_ROOM_WALL_THICKNESS = 0.22;
+export const SHIP_ROOM_ROOF_THICKNESS = 0.24;
+export const SHIP_TRANSVERSE_PORTHOLE_CENTER_X = 2.2;
 
 export type ShipZoneId =
   | 'crewCabin' | 'wheelhouse' | 'cargoDeck'
   | 'storageWorkroom' | 'lifeboatStation';
-export type ShipBalconyZoneId = 'crewCabin' | 'storageWorkroom';
+export type ShipBalconyZoneId = 'crewCabin';
 export type ShipTransverseEdge = 'aft' | 'forward';
 export type ClearanceClass = 'primary' | 'secondary';
 export type ShipFurnitureKind = ShipFurnitureAssetId
@@ -203,16 +205,16 @@ export interface ShipNavigationTargetSpec {
 }
 
 export interface ShipBalconySpec {
-  readonly id: 'crew-balcony' | 'storage-balcony';
+  readonly id: 'crew-balcony';
   readonly zoneId: ShipBalconyZoneId;
-  readonly ladderId: 'crew-ladder' | 'storage-ladder';
+  readonly ladderId: 'crew-ladder';
   readonly edge: ShipTransverseEdge;
   readonly coamingHeight: number;
   readonly openingWidth: number;
 }
 
 export interface ShipLadderSpec {
-  readonly id: 'crew-ladder' | 'storage-ladder';
+  readonly id: 'crew-ladder';
   readonly zoneId: ShipBalconyZoneId;
   readonly edge: ShipTransverseEdge;
   readonly centerX: number;
@@ -241,7 +243,6 @@ export interface ShipLayoutSpec {
       readonly width: number;
     };
   };
-  readonly machineryClosure: Rect2;
   readonly evacuationRect: Rect2;
 }
 
@@ -291,12 +292,12 @@ const EXACT_FURNITURE_MODEL_BY_ID: Readonly<Record<string, ShipFurnitureKind>> =
   'storage-shelf-forward': 'bookcaseOpen',
   'workroom-storage-shelf-port-forward': 'workroomStorageShelf',
   'workroom-pallet-starboard-forward': 'workroomPallet',
-  'cargo-crate-forward-port': 'cargoCrate',
-  'cargo-crate-forward-starboard': 'cargoCrate',
-  'cargo-crate-aft-port': 'cargoCrate',
-  'cargo-crate-aft-starboard': 'cargoCrate',
-  'cargo-rack-port': 'cargoRack',
-  'cargo-rack-starboard': 'cargoRack',
+  'cargo-crate-crew-port': 'cargoCrate',
+  'cargo-barrel-crew-starboard': 'barrel',
+  'cargo-barrel-storage-port': 'barrel',
+  'cargo-crate-storage-starboard': 'cargoCrate',
+  'cargo-rack-mast-port': 'cargoRack',
+  'cargo-rack-mast-starboard': 'cargoRack',
   'cargo-rod-rack-port': 'cargoRack',
   'workroom-crate-center-port': 'cargoCrate',
   'workroom-crate-center-starboard': 'cargoCrate',
@@ -307,7 +308,6 @@ const EXACT_FURNITURE_MODEL_BY_ID: Readonly<Record<string, ShipFurnitureKind>> =
   'bow-box-starboard-center': 'cargoBox',
   'bow-crate-starboard': 'cargoCrate',
   'stern-crate-port': 'cargoCrate',
-  'stern-barrel-port-center': 'barrel',
   'stern-crate-starboard': 'cargoCrate',
 });
 
@@ -392,13 +392,40 @@ const wheelhousePolygon = [
   [wheelhouseBounds.minX, wheelhouseBounds.maxZ - SHIP_WHEELHOUSE_CHAMFER_SIZE],
 ] as const;
 const storageBounds = rect(-5.75, 5.75, -17.4, -10.65);
+const STERN_CRATE_CENTER_X = (
+  storageBounds.maxX + SHIP_TRANSVERSE_PORTHOLE_CENTER_X
+) / 2;
+const STERN_CRATE_STANDING_X = STERN_CRATE_CENTER_X + 1.2;
+export const SHIP_ROOF_ENGINE = {
+  centerX: 0,
+  centerZ: (storageBounds.minZ + storageBounds.maxZ) / 2,
+  width: 6.2,
+  height: 1.6,
+  depth: 4,
+  stayInset: 0.55,
+  stayHeightRatio: 0.72,
+} as const;
+export const SHIP_STERN_CHAMFER = 0.35;
+export const SHIP_STERN_DECK_DEPTH = CARGO_SIDE_X - storageBounds.maxX;
+export const SHIP_STERN_Z = storageBounds.minZ - SHIP_STERN_DECK_DEPTH;
+const INNER_LADDER_WALL_OFFSET = 0.18;
+const MAINMAST_Z = -3.075;
+const STORAGE_CRATE_SIZE = 1.05;
+const STORAGE_CRATE_JOIN_GAP = 0.001;
+const STORAGE_FORWARD_CARGO_Z = storageBounds.maxZ
+  - SHIP_ROOM_WALL_THICKNESS - STORAGE_CRATE_SIZE / 2;
+const STORAGE_STARBOARD_CRATE_X = storageBounds.maxX
+  - SHIP_ROOM_WALL_THICKNESS - STORAGE_CRATE_SIZE / 2;
+const FORWARD_WALL_CARGO_X = (
+  crewBounds.maxX + SHIP_TRANSVERSE_PORTHOLE_CENTER_X
+) / 2;
 const lifeboatBounds = rect(
   CARGO_SIDE_X - LIFEBOAT_STATION_WIDTH,
   CARGO_SIDE_X,
   -2,
   2,
 );
-const cargoBounds = rect(-CARGO_SIDE_X, CARGO_SIDE_X, -27.1, 27.1);
+const cargoBounds = rect(-CARGO_SIDE_X, CARGO_SIDE_X, SHIP_STERN_Z, 27.1);
 const evacuationBounds = rect(
   EVACUATION_X - 0.35,
   EVACUATION_X + 0.35,
@@ -410,6 +437,8 @@ const DECK_HATCH_DEPTH = 1.8;
 const DECK_HATCH_Z = -7;
 const deckHatchHalfWidthWithClearance = DECK_HATCH_WIDTH / 2 + PLAYER_LAYOUT_RADIUS;
 const deckHatchHalfDepthWithClearance = DECK_HATCH_DEPTH / 2 + PLAYER_LAYOUT_RADIUS;
+const CARGO_ROUTE_OUTER_X = FORWARD_WALL_CARGO_X - 2.1 / 2;
+const CARGO_ROUTE_INNER_X = DECK_HATCH_WIDTH / 2;
 const deckHatchBypassOuterX = deckHatchHalfWidthWithClearance + 2.5;
 
 const doors: readonly ShipDoorSpec[] = [
@@ -466,7 +495,7 @@ const detailTransforms: Readonly<Record<ShipDeckDetailKind, readonly DetailTrans
   ],
   cargoBox: [
     { position: [4.35, -5.5], rotationY: 0, scale: [0.9, 0.9, 0.9] },
-    { position: [5, -3.5], rotationY: 0, scale: [1, 1, 1] },
+    { position: [5.5, -3.5], rotationY: 0, scale: [1, 1, 1] },
     boxAgainstSideWall(storageBounds.minX, -1, -6, [0.82, 0.82, 0.82]),
   ],
 };
@@ -531,9 +560,14 @@ function deskSurfaces(
 function tableSurfaces(
   furnitureId: string,
   regionId: ScavengeRegionId,
-  slotCount: 2 | 3 | 4 = 2,
+  slotCount: 1 | 2 | 3 | 4 = 2,
+  branch = false,
 ): readonly ShipItemSurfaceSpec[] {
-  const slots = slotCount === 4
+  const slots = slotCount === 1
+    ? [
+        { x: 0, z: 0, width: 1.6, depth: 0.72, label: 'center' },
+      ] as const
+    : slotCount === 4
     ? [
         { x: -0.75, z: 0, width: 0.6, depth: 1, label: 'left' },
         { x: -0.1, z: -0.28, width: 0.4, depth: 0.42, label: 'right-aft' },
@@ -552,7 +586,7 @@ function tableSurfaces(
       ] as const;
   return slots.map(({ x, z, width, depth, label }) => itemSurface(
     furnitureId,
-    `top-${label}`,
+    slotCount === 1 ? 'top' : `top-${label}`,
     regionId,
     [x, 0.82, z],
     { width, depth },
@@ -565,9 +599,12 @@ function tableSurfaces(
         : [label === 'left' ? -1.75 : 1.75, 0, 0],
       [label === 'left' ? 1.75 : -1.75, 0, 0],
     ],
-    { localRotation: slotCount === 4 && label !== 'left'
-      ? [0, 0, 0]
-      : [0, PI_OVER_TWO, 0] },
+    {
+      localRotation: slotCount === 1 || (slotCount === 4 && label !== 'left')
+        ? [0, 0, 0]
+        : [0, PI_OVER_TWO, 0],
+      branch,
+    },
   ));
 }
 
@@ -665,7 +702,7 @@ function bunkRestSurface(furnitureId: string): readonly ShipItemSurfaceSpec[] {
     furnitureId,
     'rest',
     'crewCabin',
-    [0, 1.708, 0],
+    [0, 0.49, 0],
     { width: 0.82, depth: 1.5 },
     0.72,
     [[-1.05, 0, 0], [1.05, 0, 0]],
@@ -786,7 +823,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     { branch: true },
   )]),
   placement('cabin-table-starboard-center', 'crewTable', 'crewCabin', [-4.45, 2.22, 12.25], 0, [1.836937, 0.72, 1.836937], crewTableSurfaces('cabin-table-starboard-center')),
-  placement('chart-table-port', 'table', 'wheelhouse', [0, 2.22, 21.15], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', 'wheelhouse', 4)),
+  placement('chart-table-port', 'table', 'wheelhouse', [0, 2.22, 21.15], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', 'wheelhouse', 1)),
   placement(
     'chart-table-forward',
     'table',
@@ -794,11 +831,24 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     [-4.12, 2.22, 17.615],
     0,
     [2.112, 0.82, 1.123],
-    tableSurfaces('chart-table-forward', 'wheelhouse', 4),
+    tableSurfaces('chart-table-forward', 'wheelhouse', 1, true),
     [1, 1, 0.58],
   ),
-  placement('workbench-port', 'table', 'storageWorkroom', [-2.65, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-port', 'storageWorkroom')),
-  placement('workbench-starboard', 'table', 'storageWorkroom', [2.65, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', 'storageWorkroom')),
+  placement(
+    'workbench-port',
+    'table',
+    'storageWorkroom',
+    [
+      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS + 2.112 / 2 + 0.02,
+      FREIGHTER_DIMENSIONS.deckY,
+      storageBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 1.123 * 0.93 / 2 + 0.02,
+    ],
+    0,
+    [2.112, 0.82, 1.123],
+    tableSurfaces('workbench-port', 'storageWorkroom'),
+    [1, 1, 0.93],
+  ),
+  placement('workbench-starboard', 'table', 'storageWorkroom', [2.65, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', 'storageWorkroom', 1)),
   placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11.1], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', 'storageWorkroom', -1.3)),
   placement(
     'workroom-storage-shelf-port-forward',
@@ -810,8 +860,8 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     [1.317857, 1.8, 0.514286],
     workroomShelfSurfaces('workroom-storage-shelf-port-forward'),
   ),
-  placement('workroom-crate-stack-port-forward', 'cargoCrateStack', 'storageWorkroom', [-4.45, FREIGHTER_DIMENSIONS.deckY, -11.35], 0, [2.1, 2.1, 1.05], crateStackTopSurfaces('workroom-crate-stack-port-forward', 2.1)),
-  placement('workroom-crate-stack-starboard-forward', 'cargoCrateStack', 'storageWorkroom', [4.75, FREIGHTER_DIMENSIONS.deckY, -11.35], 0, [1.05, 2.1, 1.05], crateStackTopSurfaces('workroom-crate-stack-starboard-forward', 1.05)),
+  placement('workroom-crate-stack-port-forward', 'cargoCrateStack', 'storageWorkroom', [-4.45, FREIGHTER_DIMENSIONS.deckY, STORAGE_FORWARD_CARGO_Z], 0, [2.1, 2.1, 1.05], crateStackTopSurfaces('workroom-crate-stack-port-forward', 2.1)),
+  placement('workroom-crate-stack-starboard-forward', 'cargoCrateStack', 'storageWorkroom', [STORAGE_STARBOARD_CRATE_X, FREIGHTER_DIMENSIONS.deckY, STORAGE_FORWARD_CARGO_Z], 0, [STORAGE_CRATE_SIZE, 2.1, STORAGE_CRATE_SIZE], crateStackTopSurfaces('workroom-crate-stack-starboard-forward', STORAGE_CRATE_SIZE)),
   placement(
     'workroom-crate-center-port',
     'cargoCrate',
@@ -832,7 +882,11 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     'workroom-crate-center-starboard',
     'cargoCrate',
     'storageWorkroom',
-    [3.25, FREIGHTER_DIMENSIONS.deckY, -11.6],
+    [
+      STORAGE_STARBOARD_CRATE_X - STORAGE_CRATE_SIZE - STORAGE_CRATE_JOIN_GAP,
+      FREIGHTER_DIMENSIONS.deckY,
+      STORAGE_FORWARD_CARGO_Z,
+    ],
     0,
     [1.05, 1.05, 1.05],
     crateTopSurface('workroom-crate-center-starboard', 'storageWorkroom', [
@@ -840,48 +894,86 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
       [0, 0, -1.15],
     ]),
   ),
-  ...([
+  placement(
+    'cargo-crate-crew-port',
+    'cargoCrate',
+    'cargoDeck',
     [
-      'cargo-crate-forward-port',
       crewBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.35 / 2,
+      FREIGHTER_DIMENSIONS.deckY,
       crewBounds.minZ - 1.15 / 2,
     ],
-    [
-      'cargo-crate-forward-starboard',
-      crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.35 / 2,
-      crewBounds.minZ - 1.15 / 2,
-    ],
-    [
-      'cargo-crate-aft-port',
-      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.35 / 2,
-      storageBounds.maxZ + 1.15 / 2,
-    ],
-    [
-      'cargo-crate-aft-starboard',
-      storageBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.35 / 2,
-      storageBounds.maxZ + 1.15 / 2,
-    ],
-  ] as const).map(([id, x, z]) => placement(
-    id, 'cargoCrate', 'cargoDeck', [x, 2.22, z], 0, [1.35, 1.05, 1.15],
+    0,
+    [1.35, 1.05, 1.15],
     [itemSurface(
-      id,
+      'cargo-crate-crew-port',
       'top',
       'centralCargo',
-      [0, 1.05, id === 'cargo-crate-forward-port' ? -0.05 : 0],
-      id === 'cargo-crate-forward-port'
-        ? { width: 1.25, depth: 1.03 }
-        : { width: 1.05, depth: 0.85 },
+      [0, 1.05, 0],
+      { width: 1.05, depth: 0.85 },
       0.95,
-      id.startsWith('cargo-crate-forward')
-        ? [[x < 0 ? -1.15 : 1.15, 0, 0], [0, 0, 1.15]]
-        : [[0, 0, -1.15], [0, 0, 1.15], [x < 0 ? 1.15 : -1.15, 0, 0]],
-      id === 'cargo-crate-forward-port'
-        ? { localRotation: [0, PI_OVER_TWO, 0] }
-        : {},
+      [[0, 0, -1.15], [1.15, 0, 0]],
     )],
-  )),
-  placement('cargo-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-port')),
-  placement('cargo-rack-starboard', 'cargoRack', 'cargoDeck', [4.6, 2.22, 2.4], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-starboard')),
+  ),
+  placement(
+    'cargo-barrel-crew-starboard',
+    'barrel',
+    'cargoDeck',
+    [
+      crewBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.129507 / 2,
+      FREIGHTER_DIMENSIONS.deckY,
+      crewBounds.minZ - 1.129507 / 2,
+    ],
+    0,
+    [1.129507, 1.15, 1.129507],
+    raisedCargoSurface(
+      'cargo-barrel-crew-starboard',
+      'barrel',
+      'centralCargo',
+      [0, 0, -1.15],
+    ),
+  ),
+  placement(
+    'cargo-barrel-storage-port',
+    'barrel',
+    'cargoDeck',
+    [
+      storageBounds.minX + SHIP_ROOM_WALL_THICKNESS + 1.129507 / 2,
+      FREIGHTER_DIMENSIONS.deckY,
+      storageBounds.maxZ + 1.129507 / 2,
+    ],
+    0,
+    [1.129507, 1.15, 1.129507],
+    raisedCargoSurface(
+      'cargo-barrel-storage-port',
+      'barrel',
+      'centralCargo',
+      [1.15, 0, 0],
+    ),
+  ),
+  placement(
+    'cargo-crate-storage-starboard',
+    'cargoCrate',
+    'cargoDeck',
+    [
+      storageBounds.maxX - SHIP_ROOM_WALL_THICKNESS - 1.35 / 2,
+      FREIGHTER_DIMENSIONS.deckY,
+      storageBounds.maxZ + 1.15 / 2,
+    ],
+    0,
+    [1.35, 1.05, 1.15],
+    [itemSurface(
+      'cargo-crate-storage-starboard',
+      'top',
+      'centralCargo',
+      [0, 1.05, 0],
+      { width: 1.05, depth: 0.85 },
+      0.95,
+      [[0, 0, 1.15], [-1.15, 0, 0]],
+    )],
+  ),
+  placement('cargo-rack-mast-port', 'cargoRack', 'cargoDeck', [-FORWARD_WALL_CARGO_X, 2.22, MAINMAST_Z], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-mast-port')),
+  placement('cargo-rack-mast-starboard', 'cargoRack', 'cargoDeck', [FORWARD_WALL_CARGO_X, 2.22, MAINMAST_Z], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-mast-starboard')),
   placement('cargo-rod-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, -4.2], 0, [2.1, 0.55, 0.75], [itemSurface(
     'cargo-rod-rack-port', 'rod', 'centralCargo', [0, 0.55, 0],
     { width: 1.9, depth: 0.75 }, 0.82, [[-1.45, 0, 0], [1.45, 0, 0]],
@@ -892,16 +984,22 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     ['crew-wall-barrel-port', 'barrel', 'centralCargo', -4.7, 14.0647535, [1.25, 0, 0]],
     ['bow-box-starboard-center', 'cargoBox', 'wheelhouse', -3.2, 21.37, [1.1, 0, 0]],
     ['bow-crate-starboard', 'cargoCrate', 'bow', 0, 22.7, [0, 0, 1.2]],
-    ['stern-crate-port', 'cargoCrate', 'stern', -3, -23.025, [-1.2, 0, 0]],
     [
-      'stern-barrel-port-center',
-      'barrel',
+      'stern-crate-port',
+      'cargoCrate',
       'stern',
-      0,
-      storageBounds.minZ - 0.1 - 1.129507 / 2,
-      [1.4, 0, 0],
+      -STERN_CRATE_CENTER_X,
+      storageBounds.minZ - 0.02 - 1.05 / 2,
+      [-1.2, 0, 0],
     ],
-    ['stern-crate-starboard', 'cargoCrate', 'stern', 3, -23.025, [1.2, 0, 0]],
+    [
+      'stern-crate-starboard',
+      'cargoCrate',
+      'stern',
+      STERN_CRATE_CENTER_X,
+      storageBounds.minZ - 0.02 - 1.05 / 2,
+      [1.2, 0, 0],
+    ],
   ] as const).map(([id, modelId, regionId, x, z, standingPoint]) => {
     const colliderSize = modelId === 'cargoCrate'
       ? [1.05, 1.05, 1.05] as const
@@ -945,15 +1043,15 @@ const decorations: readonly ShipRoomDecorationSpec[] = [
     id: 'cabin-wall-painting-aft',
     modelId: 'crewWallPainting',
     zoneId: 'crewCabin',
-    position: [0, 4.2, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
+    position: [-0.75, 4.2, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
     rotation: [PI_OVER_TWO, 0, 0],
     scale: [1, 1, 1],
   },
   {
-    id: 'cabin-wall-art-aft-starboard',
+    id: 'cabin-wall-art-aft-center',
     modelId: 'crewWallArt',
     zoneId: 'crewCabin',
-    position: [2.2, 3.25, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
+    position: [0.75, 4.2, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
   },
@@ -964,30 +1062,6 @@ const decorations: readonly ShipRoomDecorationSpec[] = [
     position: [4.25, 3.45, storageBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-  },
-  {
-    id: 'workroom-box-pallet-a',
-    modelId: 'workroomCardboardBox',
-    zoneId: 'storageWorkroom',
-    position: [-3.25, 3.04, -16.82],
-    rotation: [0, 0.16, 0],
-    scale: [1, 1, 1],
-  },
-  {
-    id: 'workroom-box-pallet-b',
-    modelId: 'workroomCardboardBox',
-    zoneId: 'storageWorkroom',
-    position: [-2.7, 3.04, -16.58],
-    rotation: [0, -0.12, 0],
-    scale: [1, 1, 1],
-  },
-  {
-    id: 'workroom-box-workbench-edge',
-    modelId: 'workroomCardboardBox',
-    zoneId: 'storageWorkroom',
-    position: [3.05, 3.04, -16.7],
-    rotation: [0, 0.2, 0],
-    scale: [0.9, 0.9, 0.9],
   },
 ];
 
@@ -1054,19 +1128,17 @@ function navigationTargets(
     { id: 'workroom-loop-port', position: [-2.9, -13.75], kind: 'loop' },
     { id: 'workroom-loop-starboard', position: [2.5, -13.75], kind: 'loop' },
     { id: 'crew-ladder-route', position: [0, 5.1], kind: 'loop' },
-    { id: 'storage-ladder-route', position: [1.1, -11.75], kind: 'loop' },
     { id: 'deck-hatch-route', position: [-1.5, DECK_HATCH_Z], kind: 'loop' },
-    { id: 'mainmast-route', position: [0, -1.1], kind: 'loop' },
+    { id: 'mainmast-route', position: [0, MAINMAST_Z - 1.1], kind: 'loop' },
     { id: 'port-loop-forward', position: [-EXTERIOR_LANE_CENTER_X, 10.2], kind: 'loop' },
     { id: 'port-loop-aft', position: [-EXTERIOR_LANE_CENTER_X, -12.5], kind: 'loop' },
     { id: 'starboard-loop-forward', position: [EXTERIOR_LANE_CENTER_X, 10.2], kind: 'loop' },
     { id: 'starboard-loop-aft', position: [EXTERIOR_LANE_CENTER_X, -12.5], kind: 'loop' },
-    { id: 'bow-port', position: [-4.1, 25.8], kind: 'endDeck' },
+    { id: 'bow-port', position: [-2.75, 25.8], kind: 'endDeck' },
     { id: 'bow-center', position: [0, 25.8], kind: 'endDeck' },
-    { id: 'bow-starboard', position: [4.1, 25.8], kind: 'endDeck' },
-    { id: 'stern-port', position: [-4.1, -25.8], kind: 'endDeck' },
-    { id: 'stern-center', position: [0, -25.8], kind: 'endDeck' },
-    { id: 'stern-starboard', position: [4.1, -25.8], kind: 'endDeck' },
+    { id: 'bow-starboard', position: [2.75, 25.8], kind: 'endDeck' },
+    { id: 'stern-port', position: [-STERN_CRATE_STANDING_X, -18.7], kind: 'endDeck' },
+    { id: 'stern-starboard', position: [STERN_CRATE_STANDING_X, -18.7], kind: 'endDeck' },
   ];
   result.push(...doorNavigationTargets(doorSpecs));
   result.push(...surfaceNavigationTargets(furnitureSpecs));
@@ -1097,12 +1169,13 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       id: 'cargoDeck',
       bounds: cargoBounds,
       polygon: [
-        [-CARGO_SIDE_X, -21.9], [-HULL_END_SHOULDER_X, -25.58],
-        [0, -27.1],
-        [HULL_END_SHOULDER_X, -25.58], [CARGO_SIDE_X, -21.9],
+        [-CARGO_SIDE_X + SHIP_STERN_CHAMFER, cargoBounds.minZ],
+        [CARGO_SIDE_X - SHIP_STERN_CHAMFER, cargoBounds.minZ],
+        [CARGO_SIDE_X, cargoBounds.minZ + SHIP_STERN_CHAMFER],
         [CARGO_SIDE_X, 21.9], [HULL_END_SHOULDER_X, 25.58],
         [0, 27.1],
         [-HULL_END_SHOULDER_X, 25.58], [-CARGO_SIDE_X, 21.9],
+        [-CARGO_SIDE_X, cargoBounds.minZ + SHIP_STERN_CHAMFER],
       ],
       excludedZoneIds: ['crewCabin', 'wheelhouse', 'storageWorkroom', 'lifeboatStation'],
       enclosed: false,
@@ -1139,8 +1212,8 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       bounds: rect(
         -EXTERIOR_LANE_OUTER_X,
         -EXTERIOR_LANE_INNER_X,
-        -21.8,
-        21.8,
+        storageBounds.minZ,
+        18.1,
       ),
     },
     {
@@ -1150,8 +1223,8 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       bounds: rect(
         EXTERIOR_LANE_INNER_X,
         EXTERIOR_LANE_OUTER_X,
-        -21.8,
-        21.8,
+        storageBounds.minZ,
+        18.1,
       ),
     },
     { id: 'crew-loop-aft-cross', className: 'secondary', clearWidth: 1.4, bounds: rect(-2.8, 2.8, 5.15, 6.55) },
@@ -1176,23 +1249,19 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
     { id: 'crew-starboard-branch', className: 'secondary', clearWidth: 1.4, bounds: rect(3.2, 4.6, 11.3, 12.7) },
     { id: 'workroom-forward-branch', className: 'secondary', clearWidth: 1.4, bounds: rect(-0.7, 0.7, -12.9, -11.5) },
     { id: 'workroom-port-branch', className: 'secondary', clearWidth: 1.4, bounds: rect(-4.2, -2.8, -12.4, -11) },
-    { id: 'cargo-port-full-route', className: 'primary', clearWidth: 2.2, bounds: rect(-3.5, -1.3, -10.65, 4.5) },
-    { id: 'cargo-starboard-full-route', className: 'primary', clearWidth: 2.2, bounds: rect(1.3, 3.5, -10.65, 4.5) },
-    { id: 'cargo-forward-cross-route', className: 'primary', clearWidth: 2.2, bounds: rect(-3.5, 3.5, 2.1, 4.3) },
-    { id: 'cargo-aft-cross-route', className: 'primary', clearWidth: 2.2, bounds: rect(-3.5, 3.5, -5.4, -3.2) },
+    { id: 'cargo-port-full-route', className: 'primary', clearWidth: 2.2, bounds: rect(-CARGO_ROUTE_OUTER_X, -CARGO_ROUTE_INNER_X, -10.65, 4.5) },
+    { id: 'cargo-starboard-full-route', className: 'primary', clearWidth: 2.2, bounds: rect(CARGO_ROUTE_INNER_X, CARGO_ROUTE_OUTER_X, -10.65, 4.5) },
+    { id: 'cargo-forward-cross-route', className: 'primary', clearWidth: 2.2, bounds: rect(-2.9, 2.9, 2.1, 4.3) },
+    { id: 'cargo-aft-cross-route', className: 'primary', clearWidth: 2.2, bounds: rect(-2.7, 2.7, -5.7, -3.5) },
     { id: 'cargo-aft-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, -10.65, DECK_HATCH_Z - DECK_HATCH_DEPTH / 2) },
-    { id: 'cargo-aft-longitudinal-forward', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, DECK_HATCH_Z + DECK_HATCH_DEPTH / 2, -1.6) },
     { id: 'deck-hatch-port-bypass', className: 'primary', clearWidth: 2.5, bounds: rect(-deckHatchBypassOuterX, -deckHatchHalfWidthWithClearance, DECK_HATCH_Z - deckHatchHalfDepthWithClearance, DECK_HATCH_Z + deckHatchHalfDepthWithClearance) },
     { id: 'deck-hatch-starboard-bypass', className: 'primary', clearWidth: 2.5, bounds: rect(deckHatchHalfWidthWithClearance, deckHatchBypassOuterX, DECK_HATCH_Z - deckHatchHalfDepthWithClearance, DECK_HATCH_Z + deckHatchHalfDepthWithClearance) },
     { id: 'cargo-forward-longitudinal', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, 1.6, 4.5) },
-    { id: 'mainmast-port-bypass', className: 'primary', clearWidth: 2.2, bounds: rect(-2.7, -0.5, -1.6, 1.6) },
-    { id: 'mainmast-starboard-bypass', className: 'primary', clearWidth: 2.2, bounds: rect(0.5, 2.7, -1.6, 1.6) },
     { id: 'forward-room-passage', className: 'primary', clearWidth: 2.2, bounds: rect(-1.1, 1.1, 13.5, 17) },
     { id: 'bow-port-approach', className: 'primary', clearWidth: 2.2, bounds: rect(-6, -3.8, 22, 24.8) },
     { id: 'bow-starboard-approach', className: 'primary', clearWidth: 2.2, bounds: rect(3.8, 6, 22, 24.8) },
-    { id: 'stern-port-approach', className: 'primary', clearWidth: 2.2, bounds: rect(-6, -3.8, -23.5, -17.4) },
-    { id: 'stern-cross', className: 'primary', clearWidth: 2.2, bounds: rect(-3, 3, -25.8, -23.6) },
-    { id: 'stern-starboard-approach', className: 'primary', clearWidth: 2.2, bounds: rect(3.8, 6, -23.5, -17.4) },
+    { id: 'stern-port-approach', className: 'secondary', clearWidth: 1.4, bounds: rect(-6, -4.6, -18.8, storageBounds.minZ) },
+    { id: 'stern-starboard-approach', className: 'secondary', clearWidth: 1.4, bounds: rect(4.6, 6, -18.8, storageBounds.minZ) },
   ],
   furniture,
   decorations,
@@ -1213,14 +1282,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       coamingHeight: 0.12,
       openingWidth: 1.5,
     },
-    {
-      id: 'storage-balcony',
-      zoneId: 'storageWorkroom',
-      ladderId: 'storage-ladder',
-      edge: 'forward',
-      coamingHeight: 0.12,
-      openingWidth: 1.5,
-    },
   ],
   ladders: [
     {
@@ -1229,42 +1290,51 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       edge: 'aft',
       centerX: 0,
       width: 0.8,
-      wallOffset: 0.18,
-      rungSpacing: 0.32,
-    },
-    {
-      id: 'storage-ladder',
-      zoneId: 'storageWorkroom',
-      edge: 'forward',
-      centerX: 0,
-      width: 0.8,
-      wallOffset: 0.18,
+      wallOffset: INNER_LADDER_WALL_OFFSET,
       rungSpacing: 0.32,
     },
   ],
   rigging: {
     masts: [{
       id: 'mainmast',
-      position: [0, FREIGHTER_DIMENSIONS.deckY, 0],
+      position: [0, FREIGHTER_DIMENSIONS.deckY, MAINMAST_Z],
       height: 14.5,
       baseDiameter: 0.72,
       boomLength: 17.2,
       stays: [
         {
           id: 'fore-port',
-          anchor: [crewBounds.minX + 0.42, 3.72, crewBounds.minZ + 0.42],
+          anchor: [
+            crewBounds.minX + 0.42,
+            SHIP_ROOM_WALL_HEIGHT + SHIP_ROOM_ROOF_THICKNESS + 0.08,
+            (crewBounds.minZ + crewBounds.maxZ) / 2 - MAINMAST_Z,
+          ],
         },
         {
           id: 'fore-starboard',
-          anchor: [crewBounds.maxX - 0.42, 3.72, crewBounds.minZ + 0.42],
+          anchor: [
+            crewBounds.maxX - 0.42,
+            SHIP_ROOM_WALL_HEIGHT + SHIP_ROOM_ROOF_THICKNESS + 0.08,
+            (crewBounds.minZ + crewBounds.maxZ) / 2 - MAINMAST_Z,
+          ],
         },
         {
           id: 'aft-port',
-          anchor: [storageBounds.minX + 0.42, 3.72, storageBounds.maxZ - 0.42],
+          anchor: [
+            SHIP_ROOF_ENGINE.centerX - SHIP_ROOF_ENGINE.width / 2 + SHIP_ROOF_ENGINE.stayInset,
+            SHIP_ROOM_WALL_HEIGHT + SHIP_ROOM_ROOF_THICKNESS
+              + SHIP_ROOF_ENGINE.height * SHIP_ROOF_ENGINE.stayHeightRatio,
+            SHIP_ROOF_ENGINE.centerZ + SHIP_ROOF_ENGINE.depth / 2 - MAINMAST_Z,
+          ],
         },
         {
           id: 'aft-starboard',
-          anchor: [storageBounds.maxX - 0.42, 3.72, storageBounds.maxZ - 0.42],
+          anchor: [
+            SHIP_ROOF_ENGINE.centerX + SHIP_ROOF_ENGINE.width / 2 - SHIP_ROOF_ENGINE.stayInset,
+            SHIP_ROOM_WALL_HEIGHT + SHIP_ROOM_ROOF_THICKNESS
+              + SHIP_ROOF_ENGINE.height * SHIP_ROOF_ENGINE.stayHeightRatio,
+            SHIP_ROOF_ENGINE.centerZ + SHIP_ROOF_ENGINE.depth / 2 - MAINMAST_Z,
+          ],
         },
       ],
       sails: [
@@ -1274,7 +1344,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
           furled: true,
           rotationY: Math.PI / 2,
           topY: 14.1,
-          footY: 5.85,
+          footY: 10.5,
           clewZ: -8.6,
           billow: 0.85,
         },
@@ -1284,7 +1354,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
           furled: true,
           rotationY: Math.PI / 2,
           topY: 13.6,
-          footY: 5.85,
+          footY: 10.5,
           clewZ: 8.6,
           billow: 0.72,
         },
@@ -1312,7 +1382,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
     innerFaceX: RAIL_INNER_FACE_X,
     starboardOpening: { centerZ: 0, width: 4 },
   },
-  machineryClosure: rect(-3.6, 3.6, -22.5, -19.6),
   evacuationRect: evacuationBounds,
 };
 
@@ -1559,7 +1628,6 @@ function activeObstacles(layout: ShipLayoutSpec): Rect2[] {
     ...layout.details.map(detailVisualRect),
     deckHatchRect(layout.deckHatch),
     ...layout.rigging.masts.map(mastRect),
-    layout.machineryClosure,
     rect(-innerX - RAIL_THICKNESS, -innerX, hullBounds.minZ, hullBounds.maxZ),
     rect(innerX, innerX + RAIL_THICKNESS, hullBounds.minZ, openingMinZ),
     rect(innerX, innerX + RAIL_THICKNESS, openingMaxZ, hullBounds.maxZ),
@@ -1869,12 +1937,11 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
     throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
   }
-  if (layout.balconies.length !== 2 || layout.ladders.length !== 2) {
-    throw new Error('Layout must define exactly two balconies and two ladders');
+  if (layout.balconies.length !== 1 || layout.ladders.length !== 1) {
+    throw new Error('Layout must define exactly one crew balcony and ladder');
   }
   const balconyZoneEdges: Readonly<Record<ShipBalconyZoneId, ShipTransverseEdge>> = {
     crewCabin: 'aft',
-    storageWorkroom: 'forward',
   };
   layout.ladders.forEach((ladder) => {
     if (!Number.isFinite(ladder.centerX) || !positive(ladder.width)
@@ -1884,7 +1951,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     if (ladder.centerX !== 0) {
       throw new Error(`Ladder ${ladder.id} must be centered at x = 0`);
     }
-    if (ladder.zoneId !== 'crewCabin' && ladder.zoneId !== 'storageWorkroom') {
+    if (ladder.zoneId !== 'crewCabin') {
       throw new Error(`Ladder ${ladder.id} cannot be assigned to ${ladder.zoneId}`);
     }
     if (balconyZoneEdges[ladder.zoneId] !== ladder.edge) {
@@ -1896,7 +1963,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     if (!positive(balcony.coamingHeight) || !positive(balcony.openingWidth)) {
       throw new Error(`Balcony ${balcony.id} must have positive finite dimensions`);
     }
-    if (balcony.zoneId !== 'crewCabin' && balcony.zoneId !== 'storageWorkroom') {
+    if (balcony.zoneId !== 'crewCabin') {
       throw new Error(`Balcony ${balcony.id} cannot be assigned to ${balcony.zoneId}`);
     }
     if (balconyZoneEdges[balcony.zoneId] !== balcony.edge) {
@@ -1951,8 +2018,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     || layout.rail.starboardOpening.width < 3) {
     throw new Error(`Rail opening width ${layout.rail.starboardOpening.width} must be at least 3.0`);
   }
-  if (!validRect(layout.machineryClosure) || !validRect(layout.evacuationRect)) {
-    throw new Error('Machinery closure and evacuation rectangle must use finite coordinates');
+  if (!validRect(layout.evacuationRect)) {
+    throw new Error('Evacuation rectangle must use finite coordinates');
   }
   layout.targets.forEach((target) => {
     if (!finiteTuple(target.position)) throw new Error(`Target ${target.id} must use finite coordinates`);
@@ -2032,6 +2099,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     spec.stays.forEach(({ id, anchor }) => {
       const fore = id.startsWith('fore-');
       const port = id.endsWith('-port');
+      const worldAnchorX = spec.position[0] + anchor[0];
+      const worldAnchorZ = spec.position[2] + anchor[2];
       if (!finiteTuple(anchor) || anchor[1] < 0 || anchor[1] >= spec.height
         || (fore ? anchor[2] <= 0 : anchor[2] >= 0)
         || (port ? anchor[0] >= 0 : anchor[0] <= 0)) {
@@ -2039,13 +2108,11 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
       const roomBounds = fore ? crewCabin.bounds : storageWorkroom.bounds;
       const sideInset = port
-        ? anchor[0] - roomBounds.minX
-        : roomBounds.maxX - anchor[0];
-      const nearEdgeInset = fore
-        ? anchor[2] - roomBounds.minZ
-        : roomBounds.maxZ - anchor[2];
+        ? worldAnchorX - roomBounds.minX
+        : roomBounds.maxX - worldAnchorX;
+      const nearEdgeInset = worldAnchorZ - roomBounds.minZ;
       if (sideInset < 0.3 || nearEdgeInset < 0.3) {
-        throw new Error(`Mast ${spec.id} stay ${id} overlaps the roof railing`);
+        throw new Error(`Mast ${spec.id} stay ${id} is too close to a roof edge`);
       }
     });
     if (spec.sails.length !== 2
@@ -2236,9 +2303,6 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     });
     if (overlaps(obstacle.bounds, layout.evacuationRect)) {
       throw new Error(`${obstacle.id} overlaps evacuation rectangle`);
-    }
-    if (overlaps(obstacle.bounds, layout.machineryClosure)) {
-      throw new Error(`${obstacle.id} overlaps machinery closure`);
     }
     furnitureBounds.forEach((furnitureObstacle) => {
       if (overlaps(obstacle.bounds, furnitureObstacle.bounds)) {

@@ -1,3 +1,4 @@
+// Importance: 4/5. Protects hand skeleton validation, pose restoration, and joint control.
 import {
   Bone,
   BoxGeometry,
