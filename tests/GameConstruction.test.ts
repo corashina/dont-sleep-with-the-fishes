@@ -7,12 +7,26 @@ import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
 import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 import type { ShipAssets } from '../src/world/ShipAssets';
-import type { PhaseContext } from '../src/app/GamePhase';
+import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const physicsRuntime = await testPhysicsRuntime();
+
+function createImmediateMenu(
+  _context: PhaseContext,
+  onComplete: () => void,
+): GamePhase {
+  onComplete();
+  return {
+    start: vi.fn(),
+    update: vi.fn(),
+    resize: vi.fn(),
+    render: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
 
 const constructionMocks = vi.hoisted(() => ({
   WebGLRenderer: vi.fn(),
@@ -107,6 +121,7 @@ describe('Game construction rollback', () => {
     let phaseContext: PhaseContext | undefined;
     const { Game } = await import('../src/Game');
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context) => {
         phaseContext = context;
         return {

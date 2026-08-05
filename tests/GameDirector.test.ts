@@ -2,7 +2,7 @@
 // Importance: 5/5. Protects phase lifecycle and ownership.
 
 import { describe, expect, it, vi } from 'vitest';
-import type { GamePhase } from '../src/app/GamePhase';
+import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
@@ -33,6 +33,14 @@ function phase(overrides: Partial<GamePhase> = {}): GamePhase {
   };
 }
 
+function createImmediateMenu(
+  _context: PhaseContext,
+  onComplete: () => void,
+): GamePhase {
+  onComplete();
+  return phase();
+}
+
 function testOptions(
   overrides: Omit<
     GameTestOptions,
@@ -57,6 +65,7 @@ describe('Game director', () => {
     const startClock = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => phase(),
       createSurvival: () => phase(),
     }, testOptions({
@@ -75,6 +84,7 @@ describe('Game director', () => {
     const active = phase();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
     }, testOptions());
@@ -102,6 +112,7 @@ describe('Game director', () => {
       dispose: vi.fn(),
     } as unknown as GameTestOptions['renderer'];
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context) => {
         contextAnisotropy = context.maxTextureAnisotropy;
         return phase();
@@ -125,6 +136,7 @@ describe('Game director', () => {
     const sourceResult: ScavengeResult = { savedItems: sourceItems, elapsedSeconds: 8 };
     let receivedResult: Readonly<ScavengeResult> | undefined;
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
         return scavenge;
@@ -153,24 +165,25 @@ describe('Game director', () => {
     expect(Object.isFrozen(receivedResult?.savedItems[1])).toBe(true);
   });
 
-  it('ignores a stale scavenging restart callback after survival takes ownership', () => {
+  it('ignores a stale return-to-menu callback after survival takes ownership', () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
-    let restartScavenge!: () => void;
+    let returnToMenu!: () => void;
     const scavenge = phase();
     const survival = phase();
-    const createScavenge = vi.fn((_context, onComplete, onRestart) => {
+    const createScavenge = vi.fn((_context, onComplete, onReturnToMenu) => {
       complete = onComplete;
-      restartScavenge = onRestart;
+      returnToMenu = onReturnToMenu;
       return scavenge;
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: () => survival,
     }, testOptions());
     game.start();
     complete({ savedItems: [], elapsedSeconds: 4 });
 
-    restartScavenge();
+    returnToMenu();
 
     expect(createScavenge).toHaveBeenCalledOnce();
     expect(survival.dispose).not.toHaveBeenCalled();
@@ -188,6 +201,7 @@ describe('Game director', () => {
       return scavenges[createScavenge.mock.calls.length - 1]!;
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: (_context, _result, _seed, onRestart) => {
         onRestart();
@@ -225,6 +239,7 @@ describe('Game director', () => {
       }),
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: (_context, _result, _seed, onRestart) => {
         restartSurvival = onRestart;
@@ -267,6 +282,7 @@ describe('Game director', () => {
       .mockReturnValueOnce(11)
       .mockReturnValueOnce(22);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge,
       createSurvival,
     }, testOptions({
@@ -309,6 +325,7 @@ describe('Game director', () => {
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame');
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
     }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
@@ -366,6 +383,7 @@ describe('Game director', () => {
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
 
     expect(() => Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
     }, {
