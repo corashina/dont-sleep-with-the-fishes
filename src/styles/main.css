@@ -1860,6 +1860,73 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .illustrated-warning__art { width: 34px; flex: 0 0 auto; color: var(--ink-red-bright); }
 .illustrated-warning.is-visible,
 .poster-screen.has-compatibility-error .illustrated-warning { opacity: 1; visibility: visible; }
+.menu-ui { position: fixed; inset: 0; isolation: isolate; pointer-events: none; }
+.underwater-menu-screen {
+  align-content: stretch;
+  justify-items: center;
+  padding: clamp(22px, 3.5vw, 48px);
+  background: linear-gradient(180deg, #020303f2 0 10%, #0507089c 22%, transparent 35% 82%, #020303dc 100%);
+  text-align: center;
+}
+.underwater-menu-screen__content {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  align-content: stretch;
+  justify-items: center;
+  gap: 12px;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+.underwater-menu-screen h1 {
+  width: max-content;
+  max-width: none;
+  margin-inline: auto;
+  font-size: clamp(1rem, 3.8vw, 4.2rem);
+  line-height: .9;
+  text-align: center;
+  white-space: nowrap;
+}
+.underwater-menu-screen [data-menu-start] {
+  grid-row: 3;
+  min-width: 310px;
+  min-height: 74px;
+  padding: 18px 28px;
+  font-size: 1rem;
+}
+.underwater-menu-screen [data-menu-pointer-lock-error] {
+  grid-row: 4;
+  min-height: 1.2em;
+}
+.underwater-menu-screen [data-menu-guide-open] {
+  position: absolute;
+  top: clamp(18px, 2.8vw, 38px);
+  right: clamp(18px, 2.8vw, 38px);
+  z-index: 2;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 2px solid #80735e;
+  background: linear-gradient(155deg, #314246, #18272a 52%, #0b1416);
+  color: var(--ink-bone);
+  box-shadow: inset 0 0 0 2px #071012, 4px 6px 0 #020303b8;
+  font: 700 .72rem/1 var(--font-context);
+  letter-spacing: .1em;
+  text-shadow: 1px 2px 0 #130b08;
+  cursor: pointer;
+}
+.underwater-menu-screen [data-menu-guide-open]:focus-visible,
+.menu-ui [data-menu-guide-close]:focus-visible { outline: 3px solid var(--ink-yellow); outline-offset: 4px; }
+.menu-ui [data-menu-start]:disabled,
+.menu-ui [data-menu-guide-open]:disabled { cursor: not-allowed; opacity: .46; }
+.underwater-menu-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #000;
+  opacity: var(--menu-fade, 0);
+  pointer-events: none;
+}
 @keyframes watch-jolt { 50% { transform: translate(-50%, -50%) scale(1.06); } }
 @keyframes critical-vignette { 50% { opacity: .82; transform: scale(1.025); } }
 
