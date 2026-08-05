@@ -23,63 +23,13 @@ const snapshot: ScavengeSnapshot = {
   carriedItem: null,
 };
 
-describe('GameUI How to Play guide', () => {
-  it('moves controls from the title into an illustrated corner guide', () => {
+describe('GameUI ownership', () => {
+  it('contains no title or guide ownership', () => {
     const mount = document.createElement('main');
-    document.body.append(mount);
     const ui = new GameUI(mount);
-    const start = mount.querySelector<HTMLElement>('[data-start]')!;
-    const opener = start.querySelector<HTMLButtonElement>('[data-how-to-play-open]')!;
-
-    expect(start.querySelector('.controls')).toBeNull();
-    expect(opener.textContent).toContain('HOW TO PLAY');
-    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
-    expect(opener.querySelector('[data-ui-artwork="howToPlay"]')).not.toBeNull();
-    expect(mainStyles).toMatch(/\.start-screen h1\s*\{[^}]*width:\s*max-content/s);
-    expect(mainStyles).toMatch(/\.start-screen h1\s*\{[^}]*max-width:\s*none/s);
-    expect(mainStyles).toMatch(/\.how-to-play-marker\s*\{[^}]*aspect-ratio:\s*1/s);
-    expect(mainStyles).toMatch(/\.how-to-play-marker\s*\{[^}]*border-radius:\s*50%/s);
-
-    opener.click();
-
-    const guide = mount.querySelector<HTMLElement>('[data-how-to-play]')!;
-    const close = guide.querySelector<HTMLButtonElement>('[data-how-to-play-close]')!;
-    expect(guide.classList).toContain('is-visible');
-    expect(guide.getAttribute('aria-hidden')).toBe('false');
-    expect(guide.hasAttribute('inert')).toBe(false);
-    expect(start.hasAttribute('inert')).toBe(true);
-    expect(document.activeElement).toBe(close);
-    expect(guide.textContent).toContain('SEARCH THE SHIP');
-    expect(guide.textContent).toContain('SURVIVE THE SEA');
-    expect(guide.querySelectorAll('.how-to-play-controls__grid > div')).toHaveLength(6);
-
-    close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(guide.classList).not.toContain('is-visible');
-    expect(guide.getAttribute('aria-hidden')).toBe('true');
-    expect(start.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(opener);
-
-    opener.click();
-    close.click();
-    expect(guide.classList).not.toContain('is-visible');
-    expect(document.activeElement).toBe(opener);
-
-    ui.dispose();
-  });
-
-  it('keeps keyboard focus inside the open guide', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = new GameUI(mount);
-    const opener = mount.querySelector<HTMLButtonElement>('[data-how-to-play-open]')!;
-    const close = mount.querySelector<HTMLButtonElement>('[data-how-to-play-close]')!;
-    opener.click();
-
-    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    close.dispatchEvent(tab);
-
-    expect(tab.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(close);
+    expect(mount.querySelector('[data-start]')).toBeNull();
+    expect(mount.querySelector('[data-how-to-play]')).toBeNull();
+    expect(mount.querySelector('[data-hud]')).not.toBeNull();
 
     ui.dispose();
   });

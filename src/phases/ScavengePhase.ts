@@ -77,9 +77,6 @@ import type {
 import type { PlayerMotionSample } from '../player/PlayerController';
 import { SHIP_DANGER_LAYOUT } from '../world/ShipDangerLayout';
 
-export const TITLE_CAMERA_POSITION = [33, 11.5, -4] as const;
-export const TITLE_CAMERA_TARGET = [0, 5.5, 2] as const;
-const titleCameraTarget = new Vector3(...TITLE_CAMERA_TARGET);
 const ALARM_AUDIO_EMITTERS: readonly SpatialAudioEmitter[] = Object.freeze(
   SHIP_DANGER_LAYOUT.alarms.map(({ position }) => Object.freeze({ position })),
 );
@@ -125,7 +122,8 @@ export class ScavengePhase implements GamePhase {
   private elapsed = 0;
   private readonly dangerState = createShipDangerState();
   private readonly alarmPhase = createShipAlarmPhase();
-  private presentation: ScavengePresentation = 'title';
+  private presentation: ScavengePresentation = 'intro';
+  private introBegun = false;
   private introElapsed = 0;
   private introPaused = false;
   private pausedIntroExitCarry = false;
@@ -164,7 +162,7 @@ export class ScavengePhase implements GamePhase {
   constructor(
     private readonly context: PhaseContext,
     private readonly onComplete: (result: Readonly<ScavengeResult>) => void,
-    private readonly onRestart: () => void,
+    private readonly onReturnToMenu: () => void,
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
@@ -223,15 +221,11 @@ export class ScavengePhase implements GamePhase {
       ALARM_AUDIO_EMITTERS,
     );
 
-    this.ui.onStart = () => {
-      void this.requestPointerLock();
-    };
     this.ui.onResume = () => {
       void this.requestPointerLock();
     };
-    this.ui.onReplay = this.onRestart;
-    this.ui.setPresentation('title');
-    this.applyTitleCamera();
+    this.ui.onReturnToMenu = this.onReturnToMenu;
+    this.ui.setPresentation('intro');
   }
 
   start(): void {
@@ -242,6 +236,11 @@ export class ScavengePhase implements GamePhase {
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
     this.audio.start();
+    if (this.input.pointerLocked) {
+      this.beginIntro();
+    } else {
+      void this.requestPointerLock();
+    }
   }
 
   update(_time: number, deltaSeconds: number): void {
@@ -262,8 +261,7 @@ export class ScavengePhase implements GamePhase {
       (introFrameStarted && !introActive) || this.pausedIntroExitCarry
     ) ? 0 : deltaSeconds;
     if (
-      this.presentation === 'title'
-      || introActive
+      introActive
       || directControlActive
       || overlaySimulationActive
       || this.ending.stage === 'sinking'
@@ -627,12 +625,12 @@ export class ScavengePhase implements GamePhase {
   }
 
   private beginIntro(): void {
+    if (this.introBegun) return;
+    this.introBegun = true;
     this.input.consumeJump();
     this.presentation = 'intro';
     this.ui.setPresentation('intro');
     this.ui.clearPointerLockError();
-    this.ui.hideStart();
-    this.audio.setPaused(false);
     this.introPaused = false;
     sampleScavengeIntroFrameInto(
       this.introFrame,
@@ -703,6 +701,7 @@ export class ScavengePhase implements GamePhase {
 
   private handlePointerLockChange(locked: boolean): void {
     if (this.presentation === 'intro') {
+      if (locked && !this.introBegun) this.beginIntro();
       this.introPaused = !locked;
       this.escapeResumeArmed = false;
       this.ui.setPaused(!locked);
@@ -728,12 +727,6 @@ export class ScavengePhase implements GamePhase {
       this.hands.hideAndReset();
       this.audio.setPaused(true);
     }
-  }
-
-  private applyTitleCamera(): void {
-    this.context.camera.position.set(...TITLE_CAMERA_POSITION);
-    this.context.camera.lookAt(titleCameraTarget);
-    this.context.camera.updateMatrixWorld(true);
   }
 
   private readonly onPointerLockChange = (): void => {
@@ -796,6 +789,12 @@ export class ScavengePhase implements GamePhase {
     if (acquired || this.disposed) return;
     this.ui.showPointerLockError();
     this.audio.deny();
+    if (this.presentation === 'intro') {
+      this.introPaused = true;
+      this.ui.setPaused(true);
+      this.audio.setPaused(true);
+      return;
+    }
     if (
       !this.overlayActive
       && this.session.snapshot().status === 'running'

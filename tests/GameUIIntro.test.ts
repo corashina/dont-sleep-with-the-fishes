@@ -7,6 +7,9 @@ it('shows only the skip strip during the intro', () => {
   const mount = document.createElement('main');
   const ui = new GameUI(mount);
 
+  expect(mount.querySelector('[data-start]')).toBeNull();
+  expect(mount.querySelector('[data-how-to-play]')).toBeNull();
+
   ui.setPresentation('intro');
 
   expect(mount.querySelector('[data-intro-skip]')).toHaveProperty('hidden', false);

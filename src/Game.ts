@@ -54,12 +54,17 @@ import { AudioSystem } from './audio/AudioSystem';
 import type { EventModelLibrary } from './survival/EventModelLibrary';
 import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
 import type { MenuModelLibrary } from './menu/MenuModelLibrary';
+import { MainMenuPhase } from './phases/MainMenuPhase';
 
 export interface GameFactories {
+  createMenu(
+    context: PhaseContext,
+    onComplete: () => void,
+  ): GamePhase;
   createScavenge(
     context: PhaseContext,
     onComplete: (result: Readonly<ScavengeResult>) => void,
-    onRestart: () => void,
+    onReturnToMenu: () => void,
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
@@ -71,8 +76,11 @@ export interface GameFactories {
 }
 
 const PRODUCTION_FACTORIES: GameFactories = {
-  createScavenge: (context, onComplete, onRestart) => (
-    new ScavengePhase(context, onComplete, onRestart)
+  createMenu: (context, onComplete) => (
+    new MainMenuPhase(context, onComplete)
+  ),
+  createScavenge: (context, onComplete, onReturnToMenu) => (
+    new ScavengePhase(context, onComplete, onReturnToMenu)
   ),
   createSurvival: (context, result, seed, onRestart, initialEventId) => (
     new SurvivalPhase(
@@ -478,12 +486,11 @@ export class Game {
           },
         );
       }
-      this.seed = this.createSeed();
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
       window.addEventListener('resize', this.onResize);
       resizeListenerRegistered = true;
-      this.activateScavenge(false);
+      this.activateMenu(false);
       this.onResize();
     } catch (error) {
       try {
@@ -520,7 +527,7 @@ export class Game {
     const phase = this.factories.createScavenge(
       this.context,
       (result) => this.completeScavenge(generation, result),
-      () => this.restartFrom(generation),
+      () => this.returnToMenuFromScavenge(generation),
     );
     if (!this.ownsGeneration(generation)) {
       phase.dispose();
@@ -533,6 +540,44 @@ export class Game {
       phase.resize(window.innerWidth, window.innerHeight);
       phase.start();
     }
+  }
+
+  private activateMenu(start: boolean): void {
+    const generation = ++this.phaseGeneration;
+    const phase = this.factories.createMenu(
+      this.context,
+      () => this.startScavengeFromMenu(generation),
+    );
+    if (!this.ownsGeneration(generation)) {
+      phase.dispose();
+      return;
+    }
+    this.applyWeatherOverrideOrDispose(phase);
+    this.activePhase = phase;
+    this.synchronizeWeatherState();
+    if (start) {
+      phase.resize(window.innerWidth, window.innerHeight);
+      phase.start();
+    }
+  }
+
+  private startScavengeFromMenu(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    const menu = this.detachActivePhase();
+    menu?.dispose();
+    this.resetCamera();
+    this.elapsed = 0;
+    this.seed = this.createSeed();
+    this.activateScavenge(true);
+  }
+
+  private returnToMenuFromScavenge(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    const scavenge = this.detachActivePhase();
+    this.exitPointerLock();
+    scavenge?.dispose();
+    this.resetCamera();
+    this.activateMenu(true);
   }
 
   private completeScavenge(

@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
+import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import {
@@ -78,6 +79,20 @@ function createTestEventModels(): EventModelLibrary {
 
 function eventModels(): EventModelLibrary {
   return createTestEventModels();
+}
+
+function createImmediateMenu(
+  _context: PhaseContext,
+  onComplete: () => void,
+): GamePhase {
+  onComplete();
+  return {
+    start: vi.fn(),
+    update: vi.fn(),
+    resize: vi.fn(),
+    render: vi.fn(),
+    dispose: vi.fn(),
+  };
 }
 
 function menuModels(): MenuModelLibrary {
@@ -274,6 +289,7 @@ describe('launchGame', () => {
     const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
 
     const createGame = vi.fn((gameMount: HTMLElement) => Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => ({
         start: () => onComplete({ savedItems, elapsedSeconds: 12 }),
         update: vi.fn(),
@@ -920,6 +936,7 @@ describe('launchGame', () => {
       _featuredEventModels: unknown,
       receivedMenuModels: MenuModelLibrary,
     ) => Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => ({
         start: vi.fn(),
         update: vi.fn(),
