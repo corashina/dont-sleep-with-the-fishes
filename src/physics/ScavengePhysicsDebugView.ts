@@ -4,14 +4,14 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  SphereGeometry,
   type Scene,
 } from 'three';
 import {
-  SCAVENGE_BARREL_HALF_HEIGHT,
-  SCAVENGE_BARREL_RADIUS,
   type PhysicsCuboid,
   type PhysicsPose,
 } from './ScavengePhysics';
+import type { PhysicsObjectCollider } from './ScavengePhysicsObjectTypes';
 
 const DEBUG_RENDER_ORDER = 10_000;
 
@@ -32,17 +32,18 @@ export class ScavengePhysicsDebugView {
   readonly dynamicRoot = new Group();
 
   private readonly boxGeometry = new BoxGeometry(1, 1, 1);
-  private readonly barrelGeometry = new CylinderGeometry(1, 1, 2, 12, 1, true);
+  private readonly cylinderGeometry = new CylinderGeometry(1, 1, 2, 12, 1, true);
+  private readonly sphereGeometry = new SphereGeometry(1, 12, 8);
   private readonly staticMaterial = debugMaterial(0x5dd6c2);
   private readonly dynamicMaterial = debugMaterial(0xd98236);
-  private readonly barrelMeshes: readonly Mesh[];
+  private readonly objectMeshes: readonly Mesh[];
   private disposed = false;
 
   constructor(
     scene: Scene,
     ship: Group,
     staticCuboids: readonly PhysicsCuboid[],
-    barrelCount: number,
+    objects: readonly { readonly id: string; readonly collider: PhysicsObjectCollider }[],
   ) {
     this.staticRoot.name = 'physics-debug-static';
     this.dynamicRoot.name = 'physics-debug-dynamic';
@@ -55,14 +56,25 @@ export class ScavengePhysicsDebugView {
       mesh.renderOrder = DEBUG_RENDER_ORDER;
       this.staticRoot.add(mesh);
     });
-    this.barrelMeshes = Array.from({ length: barrelCount }, (_, index) => {
-      const mesh = new Mesh(this.barrelGeometry, this.dynamicMaterial);
-      mesh.name = `physics-debug-barrel:${index + 1}`;
-      mesh.scale.set(
-        SCAVENGE_BARREL_RADIUS,
-        SCAVENGE_BARREL_HALF_HEIGHT,
-        SCAVENGE_BARREL_RADIUS,
-      );
+    this.objectMeshes = objects.map(({ id, collider }) => {
+      const geometry = collider.kind === 'sphere'
+        ? this.sphereGeometry
+        : collider.kind === 'cylinder'
+          ? this.cylinderGeometry
+          : this.boxGeometry;
+      const mesh = new Mesh(geometry, this.dynamicMaterial);
+      mesh.name = `physics-debug-object:${id}`;
+      if (collider.kind === 'sphere') {
+        mesh.scale.setScalar(collider.radius);
+      } else if (collider.kind === 'cylinder') {
+        mesh.scale.set(collider.radius, collider.halfHeight, collider.radius);
+      } else {
+        mesh.scale.set(
+          collider.halfExtents.x * 2,
+          collider.halfExtents.y * 2,
+          collider.halfExtents.z * 2,
+        );
+      }
       mesh.renderOrder = DEBUG_RENDER_ORDER;
       this.dynamicRoot.add(mesh);
       return mesh;
@@ -71,10 +83,11 @@ export class ScavengePhysicsDebugView {
     scene.add(this.dynamicRoot);
   }
 
-  sync(barrelPoses: readonly PhysicsPose[]): void {
-    this.barrelMeshes.forEach((mesh, index) => {
-      const pose = barrelPoses[index];
-      if (!pose) return;
+  sync(objectPoses: readonly PhysicsPose[]): void {
+    for (let index = 0; index < this.objectMeshes.length; index += 1) {
+      const mesh = this.objectMeshes[index]!;
+      const pose = objectPoses[index];
+      if (!pose) continue;
       mesh.position.set(pose.translation.x, pose.translation.y, pose.translation.z);
       mesh.quaternion.set(
         pose.rotation.x,
@@ -82,7 +95,7 @@ export class ScavengePhysicsDebugView {
         pose.rotation.z,
         pose.rotation.w,
       );
-    });
+    }
   }
 
   dispose(): void {
@@ -91,7 +104,8 @@ export class ScavengePhysicsDebugView {
     this.staticRoot.removeFromParent();
     this.dynamicRoot.removeFromParent();
     this.boxGeometry.dispose();
-    this.barrelGeometry.dispose();
+    this.cylinderGeometry.dispose();
+    this.sphereGeometry.dispose();
     this.staticMaterial.dispose();
     this.dynamicMaterial.dispose();
   }

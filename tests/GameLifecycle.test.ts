@@ -172,10 +172,10 @@ function createUpdateHarness(
   };
   hands: ReturnType<typeof scavengeHandsStub>;
   updateWorld: ReturnType<typeof vi.fn>;
-  attachPhysicsBarrelsToShip: ReturnType<typeof vi.fn>;
+  attachPhysicsObjectsToShip: ReturnType<typeof vi.fn>;
 } {
   const updateWorld = vi.fn();
-  const attachPhysicsBarrelsToShip = vi.fn();
+  const attachPhysicsObjectsToShip = vi.fn();
   const hands = scavengeHandsStub();
   const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
   Object.assign(phase, {
@@ -192,7 +192,7 @@ function createUpdateHarness(
     hands,
     world: {
       update: updateWorld,
-      attachPhysicsBarrelsToShip,
+      attachPhysicsObjectsToShip,
       evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
     },
     player: {
@@ -223,7 +223,7 @@ function createUpdateHarness(
     updateInteraction: vi.fn(),
     updateFlight: vi.fn(),
   });
-  return { phase, input, hands, updateWorld, attachPhysicsBarrelsToShip };
+  return { phase, input, hands, updateWorld, attachPhysicsObjectsToShip };
 }
 
 function introHarness(elapsed = 0) {
@@ -1404,10 +1404,10 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
-  it('attaches paused barrels and disables their physics when failure starts', () => {
+  it('attaches paused physics objects and disables their physics when failure starts', () => {
     const session = new ScavengeSession();
     session.start();
-    const { phase, attachPhysicsBarrelsToShip, updateWorld } = createUpdateHarness(session);
+    const { phase, attachPhysicsObjectsToShip, updateWorld } = createUpdateHarness(session);
     const player = (phase as unknown as { player: { localPosition: Vector3 } }).player;
     player.localPosition.set(0, player.localPosition.y, 0);
     const originalExitPointerLock = Object.getOwnPropertyDescriptor(document, 'exitPointerLock');
@@ -1419,7 +1419,7 @@ describe('ScavengePhase lifecycle integration', () => {
     try {
       phase.update(0, SCAVENGE_DURATION_SECONDS);
 
-      expect(attachPhysicsBarrelsToShip).toHaveBeenCalledOnce();
+      expect(attachPhysicsObjectsToShip).toHaveBeenCalledOnce();
       expect(updateWorld).toHaveBeenLastCalledWith(
         expect.any(Number),
         expect.any(Number),
@@ -1479,8 +1479,8 @@ describe('ScavengePhase lifecycle integration', () => {
       const firstPhysics = (firstWorld as unknown as {
         scavengePhysics: ScavengePhysics;
       }).scavengePhysics;
-      const initialPoses = structuredClone(firstPhysics.barrelPoses);
-      const initialPositions = firstWorld.physicsBarrels.map((barrel) => barrel.position.clone());
+      const initialPoses = structuredClone(firstPhysics.objectPoses);
+      const initialPositions = firstWorld.physicsObjects.map((object) => object.position.clone());
       for (let step = 1; step <= 30; step += 1) {
         firstWorld.update(
           step / 60,
@@ -1490,8 +1490,8 @@ describe('ScavengePhase lifecycle integration', () => {
           true,
         );
       }
-      firstWorld.physicsBarrels.forEach((barrel, index) => {
-        expect(barrel.position.distanceTo(initialPositions[index]!)).toBeGreaterThan(1e-3);
+      firstWorld.physicsObjects.forEach((object, index) => {
+        expect(object.position.distanceTo(initialPositions[index]!)).toBeGreaterThan(1e-3);
       });
 
       game.restart();
@@ -1502,10 +1502,10 @@ describe('ScavengePhase lifecycle integration', () => {
       }).scavengePhysics;
       expect(secondWorld).not.toBe(firstWorld);
       expect(secondPhysics).not.toBe(firstPhysics);
-      expect(secondWorld.physicsBarrels[0]).not.toBe(firstWorld.physicsBarrels[0]);
-      firstWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBeNull());
-      secondWorld.physicsBarrels.forEach((barrel) => expect(barrel.parent).not.toBeNull());
-      expect(secondPhysics.barrelPoses).toEqual(initialPoses);
+      expect(secondWorld.physicsObjects[0]).not.toBe(firstWorld.physicsObjects[0]);
+      firstWorld.physicsObjects.forEach((object) => expect(object.parent?.parent).toBeNull());
+      secondWorld.physicsObjects.forEach((object) => expect(object.parent).not.toBeNull());
+      expect(secondPhysics.objectPoses).not.toEqual(initialPoses);
     } finally {
       game.dispose();
     }

@@ -42,12 +42,48 @@ const config = () => ({
   arcColliders: [],
   safeBounds: { minX: -9, maxX: 9, minZ: -12, maxZ: 12 },
   deckY: 2.22,
-  shipWidth: 20,
-  shipLength: 25,
+  deckBounds: { minX: -10, maxX: 10, minZ: -12.5, maxZ: 12.5 },
   initialShipPose: identityPose(),
-  barrelSpawns: [
-    { x: -2.5, y: 2.795, z: 3.2 },
-    { x: 2.6, y: 2.795, z: -9 },
+  objects: [
+    {
+      id: 'sphere',
+      spawn: { x: -2.5, y: 2.82, z: 3.2 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'sphere' as const, radius: 0.6 },
+        mass: 8,
+        friction: 0.22,
+        restitution: 0.08,
+        linearDamping: 0.06,
+        angularDamping: 0.025,
+      },
+    },
+    {
+      id: 'cylinder',
+      spawn: { x: 0, y: 2.78, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'cylinder' as const, halfHeight: 0.56, radius: 0.55 },
+        mass: 36,
+        friction: 0.30,
+        restitution: 0.03,
+        linearDamping: 0.08,
+        angularDamping: 0.06,
+      },
+    },
+    {
+      id: 'cuboid',
+      spawn: { x: 2.5, y: 2.75, z: -3.2 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'cuboid' as const, halfExtents: { x: 0.5, y: 0.53, z: 0.5 } },
+        mass: 7,
+        friction: 0.62,
+        restitution: 0.015,
+        linearDamping: 0.26,
+        angularDamping: 0.32,
+      },
+    },
   ],
 });
 
@@ -141,7 +177,7 @@ describe('ScavengePhysics', () => {
     const create = () => new ScavengePhysics(runtime, {
       ...config(),
       safeBounds: { minX: -9, maxX: 9, minZ: -26, maxZ: 26 },
-      shipLength: 55,
+      deckBounds: { minX: -10, maxX: 10, minZ: -27.5, maxZ: 27.5 },
     });
     const left = create();
     const right = create();
@@ -149,23 +185,26 @@ describe('ScavengePhysics', () => {
       left.update(identityPose(), 1 / 60, true);
       right.update(identityPose(), 1 / 60, true);
     }
-    expect(left.barrelPoses).toEqual(right.barrelPoses);
-    expect(left.barrelPoses).toHaveLength(2);
-    expect(left.barrelPoses[0]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
-    expect(left.barrelPoses[1]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
+    expect(left.objectPoses).toEqual(right.objectPoses);
+    expect(left.objectPoses).toHaveLength(3);
+    expect(left.objectPoses[0]!.translation.y).toBeCloseTo(2.22 + 0.6, 2);
+    expect(left.objectPoses[1]!.translation.y).toBeCloseTo(2.22 + 0.56, 2);
+    expect(left.objectPoses[2]!.translation.y).toBeCloseTo(2.22 + 0.53, 2);
     left.dispose();
     right.dispose();
   });
 
-  it('spawns both authored barrels without diagnostic objects', () => {
+  it('spawns all configured objects with their rotations', () => {
     const physics = new ScavengePhysics(runtime, config());
-    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
-    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
-    expect(physics.barrelPoses[1]!.translation.x).toBeCloseTo(2.6);
-    expect(physics.barrelPoses[1]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[1]!.translation.z).toBeCloseTo(-9);
-    expect(physics.barrelPoses[1]!.rotation).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+    const expected = config().objects.map(({ spawn }) => spawn);
+    physics.objectPoses.forEach(({ translation }, index) => {
+      expect(translation.x).toBeCloseTo(expected[index]!.x);
+      expect(translation.y).toBeCloseTo(expected[index]!.y);
+      expect(translation.z).toBeCloseTo(expected[index]!.z);
+    });
+    expect(physics.objectPoses.every(({ rotation }) => (
+      rotation.x === 0 && rotation.y === 0 && rotation.z === 0 && rotation.w === 1
+    ))).toBe(true);
     physics.dispose();
   });
 
@@ -178,9 +217,9 @@ describe('ScavengePhysics', () => {
     for (let frame = 0; frame < 300; frame += 1) {
       physics.update(tilted, 1 / 60, true);
     }
-    expect(physics.barrelPoses[0]!.translation.x).not.toBeCloseTo(-2.5);
-    expect(Math.abs(physics.barrelLocalPositionsForTest[0]!.x)).toBeLessThan(9);
-    expect(physics.barrelPoses[1]!.translation.x).not.toBeCloseTo(2.6);
+    expect(physics.objectPoses[0]!.translation.x).not.toBeCloseTo(-2.5);
+    expect(Math.abs(physics.objectLocalPositionsForTest[0]!.x)).toBeLessThan(9);
+    expect(physics.objectPoses[2]!.translation.x).not.toBeCloseTo(2.5);
     physics.dispose();
   });
 
@@ -216,10 +255,14 @@ describe('ScavengePhysics', () => {
       arcColliders: ship.arcColliders,
       safeBounds,
       deckY: FREIGHTER_DIMENSIONS.deckY,
-      shipWidth: FREIGHTER_DIMENSIONS.width,
-      shipLength: FREIGHTER_DIMENSIONS.length,
+      deckBounds: {
+        minX: -FREIGHTER_DIMENSIONS.width / 2,
+        maxX: FREIGHTER_DIMENSIONS.width / 2,
+        minZ: -FREIGHTER_DIMENSIONS.length / 2,
+        maxZ: FREIGHTER_DIMENSIONS.length / 2,
+      },
       initialShipPose: pose,
-      barrelSpawns: config().barrelSpawns,
+      objects: config().objects,
     });
     let minX = Infinity;
     let maxX = -Infinity;
@@ -239,7 +282,7 @@ describe('ScavengePhysics', () => {
       (pose.translation as { y: number }).y = current.y - 0.76;
       physics.update(pose, 1 / 60, true);
 
-      const local = physics.barrelLocalPositionsForTest[0]!;
+      const local = physics.objectLocalPositionsForTest[0]!;
       minX = Math.min(minX, local.x);
       maxX = Math.max(maxX, local.x);
       minY = Math.min(minY, local.y);
@@ -267,9 +310,9 @@ describe('ScavengePhysics', () => {
     const free = vi.spyOn(world, 'free');
     const createWorld = vi.spyOn(runtime, 'createWorld').mockReturnValueOnce(world);
     const physics = new ScavengePhysics(runtime, config());
-    const before = structuredClone(physics.barrelPoses);
+    const before = structuredClone(physics.objectPoses);
     physics.update(identityPose(), 1, false);
-    expect(physics.barrelPoses).toEqual(before);
+    expect(physics.objectPoses).toEqual(before);
     physics.dispose();
     expect(() => physics.dispose()).not.toThrow();
     expect(free).toHaveBeenCalledOnce();
@@ -279,14 +322,14 @@ describe('ScavengePhysics', () => {
   it('reads the Rapier pose once after all accepted substeps', () => {
     const physics = new ScavengePhysics(runtime, config());
     const internals = physics as unknown as {
-      barrelBodies: Array<{
+      objectBodies: Array<{
         translation(): { x: number; y: number; z: number };
         rotation(): { x: number; y: number; z: number; w: number };
       }>;
       world: { step(): void };
     };
-    const translations = internals.barrelBodies.map((body) => vi.spyOn(body, 'translation'));
-    const rotations = internals.barrelBodies.map((body) => vi.spyOn(body, 'rotation'));
+    const translations = internals.objectBodies.map((body) => vi.spyOn(body, 'translation'));
+    const rotations = internals.objectBodies.map((body) => vi.spyOn(body, 'rotation'));
     const step = vi.spyOn(internals.world, 'step');
     physics.update(identityPose(), 1 / 20, true);
     expect(step).toHaveBeenCalledTimes(3);
@@ -306,23 +349,23 @@ describe('ScavengePhysics', () => {
   it.each([
     ['escaped', { translation: { x: 20, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
     ['non-finite', { translation: { x: Number.NaN, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
-  ] as const)('recovers a %s barrel and clears velocity', (_label, pose) => {
+  ] as const)('recovers an %s object and clears velocity', (_label, pose) => {
     const physics = new ScavengePhysics(runtime, config());
-    physics.setBarrelVelocityForTest({ x: 4, y: 5, z: 6 });
-    physics.setBarrelPoseForTest(pose);
+    physics.setObjectVelocityForTest({ x: 4, y: 5, z: 6 });
+    physics.setObjectPoseForTest(pose);
     physics.update(identityPose(), 1 / 60, true);
-    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
-    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
+    expect(physics.objectPoses[0]!.translation.x).toBeCloseTo(-2.5);
+    expect(physics.objectPoses[0]!.translation.y).toBeCloseTo(2.82);
+    expect(physics.objectPoses[0]!.translation.z).toBeCloseTo(3.2);
     expect(physics.recoveryCountForTest).toBe(1);
-    const barrelBody = (physics as unknown as {
-      barrelBodies: Array<{
+    const objectBody = (physics as unknown as {
+      objectBodies: Array<{
         linvel(): { x: number; y: number; z: number };
         angvel(): { x: number; y: number; z: number };
       }>;
-    }).barrelBodies[0]!;
-    expect(barrelBody.linvel()).toEqual({ x: 0, y: 0, z: 0 });
-    expect(barrelBody.angvel()).toEqual({ x: 0, y: 0, z: 0 });
+    }).objectBodies[0]!;
+    expect(objectBody.linvel()).toEqual({ x: 0, y: 0, z: 0 });
+    expect(objectBody.angvel()).toEqual({ x: 0, y: 0, z: 0 });
     physics.dispose();
   });
 
@@ -331,18 +374,18 @@ describe('ScavengePhysics', () => {
     ['maxX', { x: 9 - 0.54, y: 2.22 + 0.55, z: 0 }, { x: 8, y: 0, z: 0 }],
     ['minZ', { x: 0, y: 2.22 + 0.55, z: -12 + 0.54 }, { x: 0, y: 0, z: -8 }],
     ['maxZ', { x: 0, y: 2.22 + 0.55, z: 12 - 0.54 }, { x: 0, y: 0, z: 8 }],
-  ] as const)('contains the barrel at %s', (boundary, translation, velocity) => {
+  ] as const)('contains the object at %s', (boundary, translation, velocity) => {
     const physics = new ScavengePhysics(runtime, config());
     const recoveryCount = physics.recoveryCountForTest;
     expect(recoveryCount).toBe(0);
-    physics.setBarrelPoseForTest({
+    physics.setObjectPoseForTest({
       translation,
       rotation: { x: 0, y: 0, z: 0, w: 1 },
     });
-    physics.setBarrelVelocityForTest(velocity);
+    physics.setObjectVelocityForTest(velocity);
     for (let frame = 0; frame < 120; frame += 1) {
       physics.update(identityPose(), 1 / 60, true);
-      const local = physics.barrelLocalPositionsForTest[0]!;
+      const local = physics.objectLocalPositionsForTest[0]!;
       if (boundary === 'minX') expect(local.x).toBeGreaterThanOrEqual(-9);
       if (boundary === 'maxX') expect(local.x).toBeLessThanOrEqual(9);
       if (boundary === 'minZ') expect(local.z).toBeGreaterThanOrEqual(-12);
