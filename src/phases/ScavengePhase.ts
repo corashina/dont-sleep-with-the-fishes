@@ -196,6 +196,7 @@ export class ScavengePhase implements GamePhase {
       this.world.colliders,
       this.world.playerNavigationBounds,
       () => this.session.penalize(5),
+      this.world.resolvePlayerMovement,
       this.world.arcColliders,
       this.world.climbZones,
     );

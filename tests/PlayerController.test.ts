@@ -2,9 +2,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
-import type { MovementAxes } from '../src/player/collisions';
+import type { LocalPlayerPosition, MovementAxes } from '../src/player/collisions';
 import type { LadderClimbZone } from '../src/player/LadderTraversal';
-import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
+import {
+  PlayerController,
+  type DynamicMovementResolver,
+  type PlayerNavigationBounds,
+} from '../src/player/PlayerController';
 import { SCAVENGE_SPRINT_SPEED, SCAVENGE_WALK_SPEED } from '../src/game/scavengeMovement';
 import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { createTestShip } from './helpers/shipFurniture';
@@ -13,6 +17,8 @@ const TEST_NAVIGATION_BOUNDS: PlayerNavigationBounds = {
   safe: { minX: -5.9, maxX: 5.9, minZ: -16, maxZ: 15.2 },
   fall: { minX: -7, maxX: 7, minZ: -18, maxZ: 18 },
 };
+
+const noDynamicMovement: DynamicMovementResolver = () => undefined;
 
 class TestInput {
   movement: MovementAxes = { x: 0, z: 0 };
@@ -83,7 +89,7 @@ describe('PlayerController', () => {
     const camera = new PerspectiveCamera();
     const start = new Vector3(1.25, 3.7, -2.5);
     const controller = new PlayerController(
-      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
 
     controller.update(0, new TestInput().asControllerInput());
@@ -110,6 +116,7 @@ describe('PlayerController', () => {
     const input = new TestInput();
     const controller = new PlayerController(
       camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
     input.queueLook(0, movementY);
 
@@ -134,6 +141,7 @@ describe('PlayerController', () => {
     const input = new TestInput();
     const controller = new PlayerController(
       camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
     input.queueLook(movementX, 0);
 
@@ -150,11 +158,11 @@ describe('PlayerController', () => {
     input.movement = { x: 0, z: -1 };
     const walking = new PlayerController(
       new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(),
+      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
     const sprinting = new PlayerController(
       new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(),
+      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
 
     walking.update(1, input.asControllerInput());
@@ -163,6 +171,35 @@ describe('PlayerController', () => {
 
     expect(walking.localPosition.z).toBeCloseTo(SCAVENGE_WALK_SPEED);
     expect(sprinting.localPosition.z).toBeCloseTo(SCAVENGE_SPRINT_SPEED);
+  });
+
+  it('resolves dynamic movement after static collision', () => {
+    let receivedDesiredZ = Number.NaN;
+    const resolveDynamicMovement = vi.fn((
+      _current: Readonly<LocalPlayerPosition>,
+      desired: LocalPlayerPosition,
+    ) => {
+      receivedDesiredZ = desired.z;
+      desired.z = Math.max(desired.z, -0.1);
+    });
+    const controller = new PlayerController(
+      new PerspectiveCamera(),
+      new Object3D(),
+      new Vector3(0, 3.72, 0),
+      [],
+      TEST_NAVIGATION_BOUNDS,
+      vi.fn(),
+      resolveDynamicMovement,
+    );
+    const input = new TestInput();
+    input.movement = { x: 0, z: 1 };
+
+    controller.update(1, input.asControllerInput());
+
+    expect(resolveDynamicMovement).toHaveBeenCalledOnce();
+    expect(resolveDynamicMovement.mock.calls[0]![0]).toEqual({ x: 0, y: 3.72, z: 0 });
+    expect(receivedDesiredZ).toBeCloseTo(-SCAVENGE_WALK_SPEED);
+    expect(controller.localPosition.z).toBe(-0.1);
   });
 
   it.each([
@@ -178,6 +215,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
     );
     input.movement = { x: 0, z: -1 };
 
@@ -191,11 +229,11 @@ describe('PlayerController', () => {
     const carriedInput = new TestInput();
     const fullSpeed = new PlayerController(
       new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.72, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(),
+      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
     const carried = new PlayerController(
       new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.72, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(),
+      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
     fullSpeedInput.queueJump();
     carriedInput.queueJump();
@@ -216,6 +254,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -243,6 +282,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -270,6 +310,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -302,6 +343,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -330,6 +372,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -365,6 +408,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -407,6 +451,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -424,6 +469,7 @@ describe('PlayerController', () => {
     const input = new TestInput();
     const controller = new PlayerController(
       new PerspectiveCamera(), new Object3D(), start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
 
     input.queueJump();
@@ -462,6 +508,7 @@ describe('PlayerController', () => {
       [support],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
     );
 
     input.movement = { x: 0, z: -1 };
@@ -504,6 +551,7 @@ describe('PlayerController', () => {
     const input = new TestInput();
     const controller = new PlayerController(
       camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
     input.queueLook(Math.PI / (2 * 0.0018), 0);
     controller.update(0, input.asControllerInput());
@@ -529,6 +577,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [{
         centerX: 0,
         centerZ: 14,
@@ -556,6 +605,7 @@ describe('PlayerController', () => {
       shipBuild.colliders,
       shipBuild.playerNavigationBounds,
       vi.fn(),
+      noDynamicMovement,
     );
 
     controller.update(0, input.asControllerInput());
@@ -579,6 +629,7 @@ describe('PlayerController', () => {
     const controller = new PlayerController(
       new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
       TEST_NAVIGATION_BOUNDS, onFall,
+      noDynamicMovement,
     );
 
     controller.update(0.5, input.asControllerInput());
@@ -601,6 +652,7 @@ describe('PlayerController', () => {
     const controller = new PlayerController(
       new PerspectiveCamera(), shipBuild.root, position, shipBuild.colliders,
       shipBuild.playerNavigationBounds, onFall,
+      noDynamicMovement,
     );
 
     controller.update(0, new TestInput().asControllerInput());
@@ -618,7 +670,7 @@ describe('PlayerController', () => {
     const camera = new PerspectiveCamera();
     const start = new Vector3(1, 3.7, 2);
     const controller = new PlayerController(
-      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
     const expectedPosition = ship.localToWorld(start.clone());
     const expectedForward = new Vector3(0, 0, 1).applyQuaternion(ship.quaternion);
@@ -638,6 +690,7 @@ describe('PlayerController', () => {
     const camera = new PerspectiveCamera();
     const controller = new PlayerController(
       camera, ship, new Vector3(0, 3.72, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
 
     controller.setScriptedPose({
@@ -662,6 +715,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
       [],
       [zone],
     );
@@ -688,6 +742,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
     );
     input.queueJump();
     jumper.update(0.1, input.asControllerInput());
@@ -702,7 +757,7 @@ describe('PlayerController', () => {
     const camera = new PerspectiveCamera();
     const start = new Vector3(1, 3.7, 2);
     const controller = new PlayerController(
-      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
     );
 
     controller.updatePassive(0);
@@ -723,6 +778,7 @@ describe('PlayerController', () => {
     input.queueLook(250, -400);
     const controller = new PlayerController(
       camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
+      noDynamicMovement,
     );
     controller.update(0.25, input.asControllerInput());
     const resetStart = new Vector3(2, 3.8, -1);
@@ -748,6 +804,7 @@ describe('PlayerController', () => {
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),
+      noDynamicMovement,
     );
     const resetStart = new Vector3(2, 4.2, -1);
 
