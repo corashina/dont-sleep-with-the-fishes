@@ -715,6 +715,7 @@ export class World {
     if (this.disposed || this.physicsObjectsAttachedToShip) return;
     this.ship.updateMatrixWorld(true);
     this.ship.attach(this.physicsObjectsRoot);
+    this.physicsDebugView?.attachDynamicToShip(this.ship);
     this.physicsObjectsAttachedToShip = true;
   }
 
