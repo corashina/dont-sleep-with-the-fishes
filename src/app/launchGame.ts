@@ -76,6 +76,7 @@ export interface LaunchDependencies {
     audio: AudioSystem,
     featuredEventModels: SurvivalEventModelLibrary | undefined,
     menuModels: MenuModelLibrary,
+    onFatalError: (error: unknown) => void,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -103,6 +104,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     audio,
     featuredEventModels,
     menuModels,
+    onFatalError,
   ) => (
     new Game(
       mount,
@@ -117,6 +119,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       physicsMode,
       audio,
       featuredEventModels,
+      onFatalError,
     )
   ),
 };
@@ -285,6 +288,14 @@ function renderShipPlacementFailure(
   });
 }
 
+function renderGameFailure(mount: HTMLElement, error: unknown): void {
+  if (error instanceof ShipItemPlacementError) {
+    renderShipPlacementFailure(mount, error);
+  } else {
+    renderWebGlFailure(mount, error);
+  }
+}
+
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof MenuModelLoadError) {
     renderSystemScreen(mount, {
@@ -421,14 +432,25 @@ export function launchGame(
   let unownedAssets: LoadedGameAssets | null = null;
   const disposeCurrentOwnership = (): void => {
     if (game !== null) {
-      game.dispose();
+      const ownedGame = game;
       game = null;
+      ownedGame.dispose();
       return;
     }
     if (unownedAssets !== null) {
-      disposeGameAssets(unownedAssets);
+      const ownedAssets = unownedAssets;
       unownedAssets = null;
+      disposeGameAssets(ownedAssets);
     }
+  };
+  const reportRuntimeError = (error: unknown): void => {
+    if (cancelled) return;
+    try {
+      disposeCurrentOwnership();
+    } catch {
+      // Preserve the runtime error that ended the game.
+    }
+    if (mount.isConnected) renderGameFailure(mount, error);
   };
 
   const loading = renderLoading(mount);
@@ -461,6 +483,7 @@ export function launchGame(
         unownedAssets.audio,
         unownedAssets.featuredEventModels ?? undefined,
         unownedAssets.menuModels,
+        reportRuntimeError,
       );
       game = createdGame;
       unownedAssets = null;
@@ -481,11 +504,7 @@ export function launchGame(
       disposeCurrentOwnership();
 
       if (!cancelled && mount.isConnected) {
-        if (error instanceof ShipItemPlacementError) {
-          renderShipPlacementFailure(mount, error);
-        } else {
-          renderWebGlFailure(mount, error);
-        }
+        renderGameFailure(mount, error);
       }
       return null;
     }

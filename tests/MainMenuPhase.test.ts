@@ -108,6 +108,60 @@ describe('MainMenuPhase', () => {
     phase.dispose();
   });
 
+  it('cancels the fade when pointer lock is lost and permits another attempt', async () => {
+    const originalPointerLockElement = Object.getOwnPropertyDescriptor(
+      document,
+      'pointerLockElement',
+    );
+    const { canvas, onComplete, phase, requestPointerLock, ui } = createRig();
+
+    try {
+      Object.defineProperty(document, 'pointerLockElement', {
+        configurable: true,
+        value: canvas,
+      });
+      phase.start();
+      ui.onStart();
+      await Promise.resolve();
+      phase.update(0, 0.4);
+
+      Object.defineProperty(document, 'pointerLockElement', {
+        configurable: true,
+        value: null,
+      });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      phase.update(0, 0.7);
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(ui.setTransitioning).toHaveBeenLastCalledWith(false);
+      expect(ui.setFadeProgress).toHaveBeenLastCalledWith(0);
+      expect(ui.showPointerLockError).toHaveBeenCalledOnce();
+
+      Object.defineProperty(document, 'pointerLockElement', {
+        configurable: true,
+        value: canvas,
+      });
+      ui.onStart();
+      await Promise.resolve();
+      phase.update(0, 0.7);
+
+      expect(requestPointerLock).toHaveBeenCalledTimes(2);
+      expect(onComplete).toHaveBeenCalledOnce();
+    } finally {
+      phase.dispose();
+      if (originalPointerLockElement) {
+        Object.defineProperty(
+          document,
+          'pointerLockElement',
+          originalPointerLockElement,
+        );
+      } else {
+        delete (document as { pointerLockElement?: Element | null })
+          .pointerLockElement;
+      }
+    }
+  });
+
   it('allows only one pointer-lock request before the request settles', async () => {
     let resolvePointerLock!: () => void;
     const requestPointerLock = vi.fn(() => new Promise<void>((resolve) => {

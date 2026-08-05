@@ -14,4 +14,4 @@ Do not use the Superpowers plugin unless I have explicitly requested it at least
 - Avoid allocations and repeated setup in per-frame update and render paths.
 
 Before changing player-facing UI, models, materials, lighting, composition,
-animation, or post-processing, read [`docs/VISUAL_STYLE_GUIDE.md`](docs/VISUAL_STYLE_GUIDE.md).
+animation, or post-processing, read [`VISUAL_STYLE_GUIDE.md`](VISUAL_STYLE_GUIDE.md).

@@ -187,6 +187,7 @@ describe('launchGame', () => {
       expect.any(AudioSystem),
       undefined,
       loadedMenuModels,
+      expect.any(Function),
     );
     expect(loadEventModels).toHaveBeenCalledOnce();
     expect(game.start).toHaveBeenCalledOnce();
@@ -205,7 +206,8 @@ describe('launchGame', () => {
 
     await handle.completion;
     expect(loadMenuModels).toHaveBeenCalledOnce();
-    expect(createGame.mock.calls[0]?.at(-1)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-2)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-1)).toEqual(expect.any(Function));
   });
 
   it('reports the required menu model that could not load', async () => {
@@ -583,6 +585,7 @@ describe('launchGame', () => {
       expect.any(AudioSystem),
       undefined,
       expect.anything(),
+      expect.any(Function),
     );
   });
 
@@ -614,6 +617,7 @@ describe('launchGame', () => {
       expect.any(AudioSystem),
       undefined,
       expect.anything(),
+      expect.any(Function),
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
@@ -900,6 +904,35 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('Unable to prepare Dorothy');
     expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
+  });
+
+  it('handles a ship placement failure reported after the game starts', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const game = { start: vi.fn(), dispose: vi.fn() };
+    let reportRuntimeError: ((error: unknown) => void) | undefined;
+    const createGame = vi.fn((...args: unknown[]) => {
+      reportRuntimeError = args[12] as ((error: unknown) => void) | undefined;
+      return game;
+    });
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { createGame },
+    ));
+
+    await expect(handle.completion).resolves.toBe(game as unknown as Game);
+    expect(reportRuntimeError).toEqual(expect.any(Function));
+
+    reportRuntimeError!(new ShipItemPlacementError('shotgun-1'));
+
+    expect(game.dispose).toHaveBeenCalledOnce();
+    expect(mount.textContent).toContain('SHIP SETUP FAILED');
+    expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
+    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
+
+    handle.cancel();
+    expect(game.dispose).toHaveBeenCalledOnce();
+    expect(models.dispose).not.toHaveBeenCalled();
   });
 
   it('disposes unowned models after Game rolls back a failed initial resize', async () => {

@@ -1,11 +1,16 @@
 import {
   AnimationClip,
+  Bone,
   BoxGeometry,
+  Float32BufferAttribute,
   Group,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
+  Skeleton,
+  SkinnedMesh,
   Texture,
+  Uint16BufferAttribute,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -118,5 +123,61 @@ describe('MenuModelLibrary', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(textureDispose).toHaveBeenCalledOnce();
     expect(() => library.create('boat')).toThrow('Menu model library is disposed');
+  });
+
+  it('disposes each cloned skeleton exactly once with its instance', async () => {
+    const loader: MenuModelLoader = {
+      load: async (url) => {
+        const value = root(url.includes('shark') ? 'shark' : url);
+        if (!url.includes('shark')) return value;
+        value.clear();
+        const bone = new Bone();
+        const geometry = new BoxGeometry();
+        const vertexCount = geometry.getAttribute('position').count;
+        const skinIndices = new Uint16Array(vertexCount * 4);
+        const skinWeights = new Float32Array(vertexCount * 4);
+        for (let index = 0; index < vertexCount; index += 1) {
+          skinWeights[index * 4] = 1;
+        }
+        geometry.setAttribute(
+          'skinIndex',
+          new Uint16BufferAttribute(skinIndices, 4),
+        );
+        geometry.setAttribute(
+          'skinWeight',
+          new Float32BufferAttribute(skinWeights, 4),
+        );
+        const mesh = new SkinnedMesh(
+          geometry,
+          new MeshBasicMaterial(),
+        );
+        mesh.add(bone);
+        mesh.bind(new Skeleton([bone]));
+        value.add(mesh);
+        return value;
+      },
+    };
+    const library = await MenuModelLibrary.load(loader);
+    const instance = library.create('shark');
+    const sibling = library.create('shark');
+    const mesh = instance.root.children[0] as SkinnedMesh;
+    const siblingMesh = sibling.root.children[0] as SkinnedMesh;
+    mesh.skeleton.computeBoneTexture();
+    siblingMesh.skeleton.computeBoneTexture();
+    const disposeSkeleton = vi.spyOn(mesh.skeleton, 'dispose');
+    const disposeSiblingSkeleton = vi.spyOn(siblingMesh.skeleton, 'dispose');
+    const boneTextureDispose = vi.fn();
+    mesh.skeleton.boneTexture!.addEventListener('dispose', boneTextureDispose);
+
+    instance.dispose();
+    instance.dispose();
+    expect(disposeSiblingSkeleton).not.toHaveBeenCalled();
+    sibling.dispose();
+    sibling.dispose();
+    library.dispose();
+
+    expect(disposeSkeleton).toHaveBeenCalledOnce();
+    expect(disposeSiblingSkeleton).toHaveBeenCalledOnce();
+    expect(boneTextureDispose).toHaveBeenCalledOnce();
   });
 });

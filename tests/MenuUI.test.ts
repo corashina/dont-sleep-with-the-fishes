@@ -18,6 +18,16 @@ it('exposes the approved title actions', () => {
   ui.dispose();
 });
 
+it('states the sixty-second ship search duration', () => {
+  const mount = document.createElement('main');
+  const ui = new MenuUI(mount);
+  const guide = mount.querySelector<HTMLElement>('[data-menu-guide]')!;
+
+  expect(guide.textContent).toContain('You have 60 seconds before Dorothy sinks.');
+  expect(guide.textContent).not.toContain('two minutes');
+  ui.dispose();
+});
+
 it('locks focus inside the guide and restores its opener', () => {
   const mount = document.createElement('main');
   document.body.append(mount);
