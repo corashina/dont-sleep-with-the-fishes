@@ -53,6 +53,7 @@ import { testPhysicsRuntime } from './helpers/physics';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
+const noDynamicMovement = (): void => undefined;
 const physicsRuntime = await testPhysicsRuntime();
 
 function dangerAt(elapsed: number, alarmElapsed = elapsed) {
@@ -765,6 +766,7 @@ describe('ScavengePhase lifecycle integration', () => {
         fall: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
       },
       vi.fn(),
+      noDynamicMovement,
     );
     internals.player = player;
     Object.assign(internals.input, {

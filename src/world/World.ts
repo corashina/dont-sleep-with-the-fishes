@@ -36,7 +36,11 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import type { CollisionArc, CollisionBox } from '../player/collisions';
+import type {
+  CollisionArc,
+  CollisionBox,
+  LocalPlayerPosition,
+} from '../player/collisions';
 import type { LadderClimbZone } from '../player/LadderTraversal';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import {
@@ -255,6 +259,13 @@ export class World {
     normal: { x: 0, y: 1, z: 0 },
   };
   private disposed = false;
+
+  readonly resolvePlayerMovement = (
+    current: Readonly<LocalPlayerPosition>,
+    desired: LocalPlayerPosition,
+  ): void => {
+    this.scavengePhysics?.resolvePlayerMovement(current, desired);
+  };
 
   constructor(
     private readonly scene: Scene,

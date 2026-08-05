@@ -87,6 +87,36 @@ const config = () => ({
   ],
 });
 
+function pushingConfig(objectZ = -1.2) {
+  const base = config();
+  return {
+    ...base,
+    colliders: [],
+    objects: [{
+      ...base.objects[2]!,
+      id: 'push-box',
+      spawn: { x: 0, y: 2.75, z: objectZ },
+    }],
+  };
+}
+
+function drivePlayerIntoObject(
+  physics: ScavengePhysics,
+  step: number,
+  frameCount: number,
+): number {
+  const current = { x: 0, y: 3.72, z: 0 };
+  const startZ = physics.objectLocalPositionsForTest[0]!.z;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    const desired = { x: current.x, y: current.y, z: current.z - step };
+    physics.resolvePlayerMovement(current, desired);
+    current.x = desired.x;
+    current.z = desired.z;
+    physics.update(identityPose(), 1 / 60, true);
+  }
+  return Math.abs(physics.objectLocalPositionsForTest[0]!.z - startZ);
+}
+
 describe('ScavengePhysics', () => {
   let runtime: PhysicsRuntime;
   beforeAll(async () => { runtime = await testPhysicsRuntime(); });
@@ -206,6 +236,38 @@ describe('ScavengePhysics', () => {
       rotation.x === 0 && rotation.y === 0 && rotation.z === 0 && rotation.w === 1
     ))).toBe(true);
     physics.dispose();
+  });
+
+  it('blocks player movement until the contacted object moves', () => {
+    const physics = new ScavengePhysics(runtime, pushingConfig());
+    const current = { x: 0, y: 3.72, z: 0 };
+    const desired = { x: 0, y: 3.72, z: -1 };
+    physics.resolvePlayerMovement(current, desired);
+    expect(desired.z).toBeGreaterThan(-1);
+    physics.update(identityPose(), 1 / 60, true);
+    expect(physics.objectLocalPositionsForTest[0]!.z).toBeLessThan(-1.2);
+    physics.dispose();
+  });
+
+  it('pushes on contact but not at a distance', () => {
+    const far = new ScavengePhysics(runtime, pushingConfig(-6));
+    expect(drivePlayerIntoObject(far, 0.04, 10)).toBeCloseTo(0, 5);
+    far.dispose();
+
+    const contact = new ScavengePhysics(runtime, pushingConfig());
+    expect(drivePlayerIntoObject(contact, 0.04, 60)).toBeGreaterThan(0.01);
+    contact.dispose();
+  });
+
+  it('pushes farther from sprint movement than walk movement', () => {
+    const walk = new ScavengePhysics(runtime, pushingConfig());
+    const sprint = new ScavengePhysics(runtime, pushingConfig());
+    const walkDistance = drivePlayerIntoObject(walk, 0.04, 60);
+    const sprintDistance = drivePlayerIntoObject(sprint, 0.08, 60);
+    expect(walkDistance).toBeLessThan(1.5);
+    expect(sprintDistance).toBeGreaterThan(walkDistance);
+    walk.dispose();
+    sprint.dispose();
   });
 
   it('moves under a controlled kinematic tilt and remains contained', () => {

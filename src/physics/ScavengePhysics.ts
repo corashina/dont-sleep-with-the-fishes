@@ -12,6 +12,11 @@ const PHYSICS_STEP_SECONDS = 1 / 60;
 const MAX_PHYSICS_SUBSTEPS = 3;
 const DECK_THICKNESS = 0.2;
 const ARC_COLLIDER_SEGMENTS = 8;
+const PLAYER_RADIUS = 0.35;
+const PLAYER_CAPSULE_HALF_HEIGHT = 0.4;
+const PLAYER_CAPSULE_CENTER_BELOW_EYE = 0.75;
+const PLAYER_CHARACTER_OFFSET = 0.01;
+const PLAYER_CHARACTER_MASS = 6;
 
 interface MutablePhysicsVector3 {
   x: number;
@@ -67,6 +72,10 @@ export interface ScavengePhysicsObjectConfig {
 
 export interface ScavengePhysicsController {
   readonly objectPoses: readonly PhysicsPose[];
+  resolvePlayerMovement(
+    currentLocal: PhysicsVector3,
+    desiredLocal: { x: number; y: number; z: number },
+  ): void;
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void;
   dispose(): void;
 }
@@ -316,7 +325,11 @@ export class ScavengePhysics implements ScavengePhysicsController {
   private readonly world: RAPIER.World;
   private readonly clock: FixedStepClock;
   private readonly shipBody: RAPIER.RigidBody;
+  private readonly playerCollider: RAPIER.Collider;
+  private readonly playerController: RAPIER.KinematicCharacterController;
   private readonly objectBodies: readonly RAPIER.RigidBody[];
+  private readonly objectHorizontalRadii: readonly number[];
+  private readonly dynamicColliderHandles = new Set<number>();
   private readonly objectSpawns: readonly MutablePhysicsVector3[];
   private readonly objectRotations: readonly MutablePhysicsQuaternion[];
   private readonly objectSpawnWorlds: readonly MutablePhysicsVector3[];
@@ -336,8 +349,20 @@ export class ScavengePhysics implements ScavengePhysicsController {
     rotation: { x: 0, y: 0, z: 0, w: 1 },
   };
   private readonly zeroVelocity: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerCurrentLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerCurrentWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredWorldDelta: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerResolvedWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerResolvedLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
   private recoveryCount = 0;
+  private sceneQueriesInitialized = false;
   private disposed = false;
+
+  private readonly dynamicColliderFilter = (collider: RAPIER.Collider): boolean => (
+    this.dynamicColliderHandles.has(collider.handle)
+  );
 
   private readonly stepPhysics = (
     stepSeconds: number,
@@ -361,6 +386,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
     this.shipBody.setNextKinematicRotation(this.currentShipPose.rotation);
     this.world.timestep = stepSeconds;
     this.world.step();
+    this.sceneQueriesInitialized = true;
   };
 
   constructor(runtime: PhysicsRuntime, config: ScavengePhysicsConfig) {
@@ -391,6 +417,19 @@ export class ScavengePhysics implements ScavengePhysicsController {
 
     staticCuboids.forEach((cuboid) => this.addCuboid(cuboid, runtime));
 
+    this.playerCollider = this.world.createCollider(
+      runtime.rapier.ColliderDesc.capsule(
+        PLAYER_CAPSULE_HALF_HEIGHT,
+        PLAYER_RADIUS,
+      ).setSensor(true),
+    );
+    this.playerController = this.world.createCharacterController(PLAYER_CHARACTER_OFFSET);
+    this.playerController.setApplyImpulsesToDynamicBodies(true);
+    this.playerController.setCharacterMass(PLAYER_CHARACTER_MASS);
+    this.playerController.setSlideEnabled(true);
+    this.playerController.disableAutostep();
+    this.playerController.disableSnapToGround();
+
     this.objectSpawns = config.objects.map(({ spawn }) => ({ ...spawn }));
     this.objectRotations = config.objects.map(({ rotation }) => {
       const copy = { x: 0, y: 0, z: 0, w: 1 };
@@ -399,6 +438,11 @@ export class ScavengePhysics implements ScavengePhysicsController {
     });
     this.objectSpawnWorlds = config.objects.map(() => ({ x: 0, y: 0, z: 0 }));
     this.objectSpawnWorldRotations = config.objects.map(() => ({ x: 0, y: 0, z: 0, w: 1 }));
+    this.objectHorizontalRadii = config.objects.map(({ profile }) => {
+      const { collider } = profile;
+      if (collider.kind === 'sphere' || collider.kind === 'cylinder') return collider.radius;
+      return Math.hypot(collider.halfExtents.x, collider.halfExtents.z);
+    });
     this.objectPoses = config.objects.map(() => ({
       translation: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0, w: 1 },
@@ -421,7 +465,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
           .setLinearDamping(profile.linearDamping)
           .setAngularDamping(profile.angularDamping),
       );
-      this.world.createCollider(
+      const collider = this.world.createCollider(
         createObjectColliderDesc(runtime.rapier, profile.collider)
         .setMass(profile.mass)
         .setFriction(profile.friction)
@@ -429,8 +473,105 @@ export class ScavengePhysics implements ScavengePhysicsController {
         .setRestitution(profile.restitution),
         body,
       );
+      this.dynamicColliderHandles.add(collider.handle);
       return body;
     });
+    this.validateAndCopyObjects();
+  }
+
+  resolvePlayerMovement(
+    currentLocal: PhysicsVector3,
+    desiredLocal: { x: number; y: number; z: number },
+  ): void {
+    if (this.disposed) return;
+    if (
+      !this.sceneQueriesInitialized
+      && this.playerMovementMayContactDynamic(currentLocal, desiredLocal)
+    ) {
+      this.initializeSceneQueries();
+    }
+    this.playerCurrentLocalCenter.x = currentLocal.x;
+    this.playerCurrentLocalCenter.y = currentLocal.y - PLAYER_CAPSULE_CENTER_BELOW_EYE;
+    this.playerCurrentLocalCenter.z = currentLocal.z;
+    this.playerDesiredLocalCenter.x = desiredLocal.x;
+    this.playerDesiredLocalCenter.y = desiredLocal.y - PLAYER_CAPSULE_CENTER_BELOW_EYE;
+    this.playerDesiredLocalCenter.z = desiredLocal.z;
+    localToWorld(
+      this.playerCurrentWorldCenter,
+      this.playerCurrentLocalCenter,
+      this.currentShipPose,
+    );
+    localToWorld(
+      this.playerDesiredWorldCenter,
+      this.playerDesiredLocalCenter,
+      this.currentShipPose,
+    );
+    this.playerCollider.setTranslation(this.playerCurrentWorldCenter);
+    this.playerDesiredWorldDelta.x = this.playerDesiredWorldCenter.x
+      - this.playerCurrentWorldCenter.x;
+    this.playerDesiredWorldDelta.y = this.playerDesiredWorldCenter.y
+      - this.playerCurrentWorldCenter.y;
+    this.playerDesiredWorldDelta.z = this.playerDesiredWorldCenter.z
+      - this.playerCurrentWorldCenter.z;
+    this.playerController.computeColliderMovement(
+      this.playerCollider,
+      this.playerDesiredWorldDelta,
+      undefined,
+      undefined,
+      this.dynamicColliderFilter,
+    );
+    const movement = this.playerController.computedMovement();
+    this.playerResolvedWorldCenter.x = this.playerCurrentWorldCenter.x + movement.x;
+    this.playerResolvedWorldCenter.y = this.playerCurrentWorldCenter.y + movement.y;
+    this.playerResolvedWorldCenter.z = this.playerCurrentWorldCenter.z + movement.z;
+    worldToLocal(
+      this.playerResolvedLocalCenter,
+      this.playerResolvedWorldCenter,
+      this.currentShipPose,
+    );
+    desiredLocal.x = this.playerResolvedLocalCenter.x;
+    desiredLocal.z = this.playerResolvedLocalCenter.z;
+  }
+
+  private playerMovementMayContactDynamic(
+    currentLocal: PhysicsVector3,
+    desiredLocal: PhysicsVector3,
+  ): boolean {
+    const movementX = desiredLocal.x - currentLocal.x;
+    const movementZ = desiredLocal.z - currentLocal.z;
+    const movementLengthSquared = movementX * movementX + movementZ * movementZ;
+    for (let index = 0; index < this.objectLocalPositionsForTest.length; index += 1) {
+      const object = this.objectLocalPositionsForTest[index]!;
+      const relativeX = object.x - currentLocal.x;
+      const relativeZ = object.z - currentLocal.z;
+      const fraction = movementLengthSquared > Number.EPSILON
+        ? Math.max(0, Math.min(
+          1,
+          (relativeX * movementX + relativeZ * movementZ) / movementLengthSquared,
+        ))
+        : 0;
+      const closestX = currentLocal.x + movementX * fraction;
+      const closestZ = currentLocal.z + movementZ * fraction;
+      const deltaX = object.x - closestX;
+      const deltaZ = object.z - closestZ;
+      const radius = PLAYER_RADIUS + this.objectHorizontalRadii[index]!;
+      if (deltaX * deltaX + deltaZ * deltaZ <= radius * radius) return true;
+    }
+    return false;
+  }
+
+  private initializeSceneQueries(): void {
+    this.world.timestep = PHYSICS_STEP_SECONDS;
+    this.world.step();
+    this.sceneQueriesInitialized = true;
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      body.setTranslation(this.objectSpawnWorlds[index]!, true);
+      body.setRotation(this.objectSpawnWorldRotations[index]!, true);
+      body.setLinvel(this.zeroVelocity, true);
+      body.setAngvel(this.zeroVelocity, true);
+    }
+    this.world.propagateModifiedBodyPositionsToColliders();
     this.validateAndCopyObjects();
   }
 
@@ -469,6 +610,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.world.removeCharacterController(this.playerController);
     this.world.free();
   }
 
