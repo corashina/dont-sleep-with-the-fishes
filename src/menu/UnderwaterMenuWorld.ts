@@ -304,7 +304,7 @@ export class UnderwaterMenuWorld {
   }
 
   private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {
-    const geometry = new PlaneGeometry(24, 19, 24, 18);
+    const geometry = new PlaneGeometry(36, 32, 30, 24);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
     for (let index = 0; index < position.count; index += 1) {
@@ -416,7 +416,7 @@ export class UnderwaterMenuWorld {
     readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
     readonly material: ShaderMaterial;
   } {
-    const geometry = new PlaneGeometry(23.5, 18.5, 1, 1);
+    const geometry = new PlaneGeometry(35.5, 31.5, 1, 1);
     const material = new ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
