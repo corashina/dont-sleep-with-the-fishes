@@ -3,7 +3,6 @@ import {
   BufferGeometry,
   Group,
   Material,
-  Mesh,
   Skeleton,
   SkinnedMesh,
   Texture,
