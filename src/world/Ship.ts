@@ -10,7 +10,6 @@ import type { LadderClimbZone } from '../player/LadderTraversal';
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
-import { createShipDeckDetails } from './ShipDeckDetails';
 import { createShipFurniture } from './ShipFurniture';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
@@ -30,7 +29,6 @@ export interface ShipBuild {
   readonly scavengeIntroAnchors: ScavengeIntroAnchors;
   itemSurfaces: ShipItemSurface[];
   furnitureColliderById: ReadonlyMap<string, CollisionBox>;
-  detailColliderById: ReadonlyMap<string, CollisionBox>;
   playerStart: Vector3;
   evacuationPoint: Vector3;
   lifeboatAnchor: Vector3;
@@ -158,17 +156,14 @@ export function createShip(
   const materials = createShipMaterials(0x51f15e, maxTextureAnisotropy, shipAssets);
   let geometry: ReturnType<typeof createShipGeometry> | undefined;
   let furniture: ReturnType<typeof createShipFurniture> | undefined;
-  let details: ReturnType<typeof createShipDeckDetails> | undefined;
   let rigging: ReturnType<typeof createShipRigging> | undefined;
   let smoke: ShipSmoke | undefined;
   try {
     geometry = createShipGeometry(materials, SHIP_LAYOUT);
     furniture = createShipFurniture(materials, shipFurniture, SHIP_LAYOUT);
-    details = createShipDeckDetails(shipFurniture, SHIP_LAYOUT.details);
     rigging = createShipRigging(materials, SHIP_LAYOUT.rigging);
     const structuralColliders = [
       ...geometry.shellColliders,
-      ...details.colliders,
       ...rigging.colliders,
     ];
     validateShipItemSurfaces(
@@ -180,7 +175,6 @@ export function createShip(
     smoke.points.name = 'freighter-smoke';
     geometry.root.add(
       furniture.root,
-      details.root,
       rigging.root,
       smoke.points,
     );
@@ -189,7 +183,6 @@ export function createShip(
   } catch (error) {
     smoke?.dispose();
     rigging?.disposeGeometry();
-    details?.disposeGeometry();
     furniture?.disposeGeometry();
     geometry?.disposeGeometry();
     materials.dispose();
@@ -198,13 +191,11 @@ export function createShip(
 
   const assembledGeometry = geometry;
   const assembledFurniture = furniture;
-  const assembledDetails = details;
   const assembledRigging = rigging;
   const assembledSmoke = smoke;
   const colliders = [
     ...assembledGeometry.shellColliders,
     ...assembledFurniture.colliders,
-    ...assembledDetails.colliders,
     ...assembledRigging.colliders,
   ];
   const itemSurfaces = visibleProductionSurfaces(assembledFurniture.surfaces, colliders);
@@ -222,7 +213,6 @@ export function createShip(
     scavengeIntroAnchors: assembledRigging.scavengeIntroAnchors,
     itemSurfaces,
     furnitureColliderById: assembledFurniture.colliderByFurnitureId,
-    detailColliderById: assembledDetails.colliderById,
     playerStart: new Vector3(startX, FREIGHTER_DIMENSIONS.deckY + 1.5, startZ),
     evacuationPoint: new Vector3(
       evacuationX,
@@ -255,7 +245,6 @@ export function createShip(
       disposed = true;
       assembledSmoke.dispose();
       assembledRigging.disposeGeometry();
-      assembledDetails.disposeGeometry();
       assembledFurniture.disposeGeometry();
       assembledGeometry.disposeGeometry();
       materials.dispose();

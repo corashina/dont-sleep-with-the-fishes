@@ -333,7 +333,7 @@ export class ScavengePhase implements GamePhase {
       this.endingStarted = true;
       this.hands.hideAndReset();
       this.audio.sink();
-      this.world.attachPhysicsBarrelsToShip();
+      this.world.attachPhysicsObjectsToShip();
       if (this.input.pointerLocked) document.exitPointerLock();
       this.contextAction = { type: 'none', prompt: '' };
       this.itemTooltip = null;
