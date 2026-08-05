@@ -1,8 +1,12 @@
 import type { PhysicsVector3 } from '../physics/PhysicsRuntime';
 import type { CollisionBox } from '../player/collisions';
 import { circleOverlapsCollisionFootprint } from '../player/collisions';
-import type { ScavengePhysicsObjectId } from './ScavengePhysicsObjectCatalog';
-import { FREIGHTER_DIMENSIONS } from './ShipLayout';
+import {
+  SCAVENGE_PHYSICS_OBJECT_SPECS,
+  type ScavengePhysicsObjectId,
+  type ScavengePhysicsObjectSpec,
+} from './ScavengePhysicsObjectCatalog';
+import { FREIGHTER_DIMENSIONS, PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT } from './ShipLayout';
 
 const REQUIRED_COUNTS = {
   door: 2,
@@ -20,6 +24,7 @@ export interface ScavengePhysicsObjectPlacement {
   readonly category: ScavengePhysicsObjectPlacementCategory;
   readonly position: PhysicsVector3;
   readonly rotationY: number;
+  readonly doorId?: string;
 }
 
 type PlacementTuple = readonly [
@@ -28,13 +33,14 @@ type PlacementTuple = readonly [
   number,
   number,
   number,
+  string?,
 ];
 
 const PLACEMENT_TUPLES: readonly PlacementTuple[] = [
-  ['door-cabin-port', 'door', -5.75, 7.25, Math.PI / 2],
-  ['door-cabin-starboard', 'door', 5.75, 7.25, Math.PI / 2],
-  ['door-wheelhouse-aft', 'door', 0, 17, 0],
-  ['door-wheelhouse-port', 'door', -5.5, 19.5, Math.PI / 2],
+  ['door-cabin-port', 'door', -5.75, 7.25, Math.PI / 2, 'cabin-port-door'],
+  ['door-cabin-starboard', 'door', 5.75, 7.25, Math.PI / 2, 'cabin-starboard-door'],
+  ['door-wheelhouse-aft', 'door', 0, 17, 0, 'wheelhouse-aft-door'],
+  ['door-wheelhouse-port', 'door', -5.5, 19.5, Math.PI / 2, 'wheelhouse-port-door'],
   ['exterior-cabin-port', 'exterior', -7, 10.2, 0],
   ['exterior-cabin-starboard', 'exterior', 7, 10.2, 0],
   ['exterior-storage-port', 'exterior', -7, -12.5, 0],
@@ -53,13 +59,16 @@ function createPlacement([
   x,
   z,
   rotationY,
+  doorId,
 ]: PlacementTuple): ScavengePhysicsObjectPlacement {
-  return Object.freeze({
+  const placement: ScavengePhysicsObjectPlacement = {
     id,
     category,
     position: Object.freeze({ x, y: FREIGHTER_DIMENSIONS.deckY, z }),
     rotationY,
-  });
+    ...(doorId === undefined ? {} : { doorId }),
+  };
+  return Object.freeze(placement);
 }
 
 export const SCAVENGE_PHYSICS_OBJECT_PLACEMENTS: readonly ScavengePhysicsObjectPlacement[] = Object.freeze(
@@ -112,6 +121,32 @@ function selectPositions(random: () => number): ScavengePhysicsObjectPlacement[]
   return shuffled(selected, random);
 }
 
+function projectedDoorHalfWidth(
+  spec: ScavengePhysicsObjectSpec,
+  placement: ScavengePhysicsObjectPlacement,
+): number {
+  const { collider } = spec;
+  if (collider.kind === 'sphere' || collider.kind === 'cylinder') return collider.radius;
+  const door = SHIP_LAYOUT.doors.find(({ id }) => id === placement.doorId);
+  if (!door) return 0;
+  const cosine = Math.abs(Math.cos(placement.rotationY));
+  const sine = Math.abs(Math.sin(placement.rotationY));
+  return door.orientation === 'aft'
+    ? cosine * collider.halfExtents.x + sine * collider.halfExtents.z
+    : sine * collider.halfExtents.x + cosine * collider.halfExtents.z;
+}
+
+export function scavengePhysicsObjectBlocksDoor(
+  spec: ScavengePhysicsObjectSpec,
+  placement: ScavengePhysicsObjectPlacement,
+): boolean {
+  if (placement.category !== 'door') return false;
+  const door = SHIP_LAYOUT.doors.find(({ id }) => id === placement.doorId);
+  if (!door) return false;
+  return door.width / 2 - projectedDoorHalfWidth(spec, placement)
+    < PLAYER_LAYOUT_RADIUS * 2;
+}
+
 export function selectScavengePhysicsObjectPlacements(
   objectIds: readonly ScavengePhysicsObjectId[],
   random: () => number,
@@ -122,8 +157,25 @@ export function selectScavengePhysicsObjectPlacements(
     throw new Error(`Scavenge physics object selection requires ${count} object IDs`);
   }
   const positions = selectPositions(random);
-  const ids = shuffled(objectIds, random);
-  return new Map(ids.map((id, index) => [id, positions[index]! ]));
+  const remainingIds = shuffled(objectIds, random);
+  const assignments = new Map<ScavengePhysicsObjectId, ScavengePhysicsObjectPlacement>();
+  for (const placement of positions) {
+    if (placement.category !== 'door') continue;
+    const objectIndex = remainingIds.findIndex((id) => {
+      const spec = SCAVENGE_PHYSICS_OBJECT_SPECS.find((candidate) => candidate.id === id)!;
+      return scavengePhysicsObjectBlocksDoor(spec, placement);
+    });
+    if (objectIndex < 0) {
+      throw new Error(`No physics object can block selected door: ${placement.id}`);
+    }
+    const [id] = remainingIds.splice(objectIndex, 1);
+    assignments.set(id!, placement);
+  }
+  for (const placement of positions) {
+    if (placement.category === 'door') continue;
+    assignments.set(remainingIds.shift()!, placement);
+  }
+  return assignments;
 }
 
 export function validateScavengePhysicsObjectPlacementPool(
@@ -137,11 +189,20 @@ export function validateScavengePhysicsObjectPlacementPool(
   }[],
 ): void {
   const ids = new Set<string>();
+  const positions = new Set<string>();
   for (const placement of placements) {
     if (ids.has(placement.id)) {
       throw new Error(`Duplicate scavenge physics object placement id: ${placement.id}`);
     }
     ids.add(placement.id);
+    if (!Object.hasOwn(REQUIRED_COUNTS, placement.category)) {
+      throw new Error(`Invalid scavenge physics object placement category: ${placement.id}`);
+    }
+    const positionKey = `${placement.position.x}:${placement.position.y}:${placement.position.z}`;
+    if (positions.has(positionKey)) {
+      throw new Error(`Duplicate scavenge physics object placement position: ${placement.id}`);
+    }
+    positions.add(positionKey);
     if (blockers.some((blocker) => circleOverlapsCollisionFootprint(
       placement.position,
       CANDIDATE_RADIUS,

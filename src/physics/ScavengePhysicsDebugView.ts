@@ -104,6 +104,11 @@ export class ScavengePhysicsDebugView {
     }
   }
 
+  attachDynamicToShip(ship: Group): void {
+    if (this.disposed || this.dynamicRoot.parent === ship) return;
+    ship.attach(this.dynamicRoot);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

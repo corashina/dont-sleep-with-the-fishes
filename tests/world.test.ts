@@ -243,6 +243,29 @@ describe('world builders', () => {
     }
   });
 
+  it('keeps revealed physics visuals aligned through inactive intro motion', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const sinking = getSinkingState(0, 120);
+    const localPositions = world.physicsObjects.map(
+      (object) => world.ship.worldToLocal(object.getWorldPosition(new Vector3())),
+    );
+    try {
+      world.revealPhysicsObjects();
+      world.setScavengeIntroImpact(-0.12, 0.08, -0.1);
+      world.update(4, 1 / 60, sinking, new Vector3(), false);
+      world.physicsObjects.forEach((object, index) => {
+        const expected = localPositions[index]!.clone().applyMatrix4(world.ship.matrixWorld);
+        expect(object.getWorldPosition(new Vector3()).distanceTo(expected)).toBeLessThan(1e-5);
+      });
+
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -485,7 +508,42 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('advances and synchronizes every physics object only when enabled', () => {
+  it('keeps attached debug object meshes aligned while the ship sinks', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      Math.random,
+      physicsRuntime,
+      { physicsMode: 'debug' },
+    );
+    try {
+      const object = world.physicsObjects[0]!;
+      const debug = scene.getObjectByName('physics-debug-object:barrel')!;
+      world.revealPhysicsObjects();
+      world.attachPhysicsObjectsToShip();
+      world.update(1, 1 / 60, {
+        ...getSinkingState(30, 120),
+        sinkOffset: -4,
+        pitchRadians: 0.1,
+        rollRadians: -0.2,
+      }, new Vector3(), false);
+
+      expect(debug.parent?.parent).toBe(world.ship);
+      const expectedCenter = new Vector3(0, SCAVENGE_PHYSICS_OBJECT_SPECS[0]!.visualHalfHeight, 0)
+        .applyQuaternion(object.getWorldQuaternion(new Quaternion()))
+        .add(object.getWorldPosition(new Vector3()));
+      expect(debug.getWorldPosition(new Vector3()).distanceTo(expectedCenter)).toBeLessThan(1e-5);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('tracks inactive ship motion and advances every physics object when enabled', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
@@ -493,12 +551,18 @@ describe('world builders', () => {
     const physics = (world as unknown as {
       scavengePhysics: ScavengePhysics;
     }).scavengePhysics;
-    const before = world.physicsObjects.map((object) => object.position.clone());
+    const beforeLocal = world.physicsObjects.map(
+      (object) => world.ship.worldToLocal(object.getWorldPosition(new Vector3())),
+    );
     const beforePhysics = structuredClone(physics.objectPoses);
 
     world.update(1, 1 / 60, getSinkingState(30, 120), camera.position, false);
-    world.physicsObjects.forEach((object, index) => expect(object.position).toEqual(before[index]));
-    expect(physics.objectPoses).toEqual(beforePhysics);
+    world.physicsObjects.forEach((object, index) => {
+      const local = world.ship.worldToLocal(object.getWorldPosition(new Vector3()));
+      expect(local.distanceTo(beforeLocal[index]!)).toBeLessThan(1e-5);
+    });
+    expect(physics.objectPoses).not.toEqual(beforePhysics);
+    const beforeActive = world.physicsObjects.map((object) => object.position.clone());
 
     for (let step = 1; step <= 30; step += 1) {
       world.update(
@@ -527,7 +591,7 @@ describe('world builders', () => {
         .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
     });
     expect(world.physicsObjects.some((object, index) => (
-      object.position.distanceTo(before[index]!) > 1e-3
+      object.position.distanceTo(beforeActive[index]!) > 1e-3
     ))).toBe(true);
 
     world.dispose();

@@ -231,6 +231,22 @@ function multiplyQuaternions(
   copyNormalizedQuaternion(target, target);
 }
 
+function worldRotationToLocal(
+  target: MutablePhysicsQuaternion,
+  world: PhysicsQuaternion,
+  frame: PhysicsQuaternion,
+): void {
+  const frameX = -frame.x;
+  const frameY = -frame.y;
+  const frameZ = -frame.z;
+  const frameW = frame.w;
+  target.x = frameW * world.x + frameX * world.w + frameY * world.z - frameZ * world.y;
+  target.y = frameW * world.y - frameX * world.z + frameY * world.w + frameZ * world.x;
+  target.z = frameW * world.z + frameX * world.y - frameY * world.x + frameZ * world.w;
+  target.w = frameW * world.w - frameX * world.x - frameY * world.y - frameZ * world.z;
+  copyNormalizedQuaternion(target, target);
+}
+
 function createObjectColliderDesc(
   rapier: PhysicsRuntime['rapier'],
   collider: PhysicsObjectCollider,
@@ -343,6 +359,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
   private readonly dynamicColliderHandles = new Set<number>();
   private readonly objectSpawns: readonly MutablePhysicsVector3[];
   private readonly objectRotations: readonly MutablePhysicsQuaternion[];
+  private readonly objectLocalRotations: readonly MutablePhysicsQuaternion[];
   private readonly objectSpawnWorlds: readonly MutablePhysicsVector3[];
   private readonly objectSpawnWorldRotations: readonly MutablePhysicsQuaternion[];
   private readonly safeBounds: PlayerNavigationBounds['safe'];
@@ -447,6 +464,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
       copyNormalizedQuaternion(copy, rotation);
       return copy;
     });
+    this.objectLocalRotations = this.objectRotations.map((rotation) => ({ ...rotation }));
     this.objectSpawnWorlds = config.objects.map(() => ({ x: 0, y: 0, z: 0 }));
     this.objectSpawnWorldRotations = config.objects.map(() => ({ x: 0, y: 0, z: 0, w: 1 }));
     this.objectHorizontalRadii = config.objects.map(({ profile }) => {
@@ -617,7 +635,11 @@ export class ScavengePhysics implements ScavengePhysicsController {
   }
 
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void {
-    if (!active || this.disposed) return;
+    if (this.disposed) return;
+    if (!active) {
+      this.trackInactiveShip(shipPose);
+      return;
+    }
     copyVector(this.targetShipPose.translation, shipPose.translation);
     copyNormalizedQuaternion(this.targetShipPose.rotation, shipPose.rotation);
     const stepCount = this.clock.advance(deltaSeconds, this.stepPhysics);
@@ -626,6 +648,37 @@ export class ScavengePhysics implements ScavengePhysicsController {
     }
     copyVector(this.previousShipPose.translation, this.targetShipPose.translation);
     copyNormalizedQuaternion(this.previousShipPose.rotation, this.targetShipPose.rotation);
+  }
+
+  private trackInactiveShip(shipPose: PhysicsPose): void {
+    copyVector(this.previousShipPose.translation, shipPose.translation);
+    copyNormalizedQuaternion(this.previousShipPose.rotation, shipPose.rotation);
+    copyVector(this.targetShipPose.translation, this.previousShipPose.translation);
+    copyNormalizedQuaternion(this.targetShipPose.rotation, this.previousShipPose.rotation);
+    copyVector(this.currentShipPose.translation, this.previousShipPose.translation);
+    copyNormalizedQuaternion(this.currentShipPose.rotation, this.previousShipPose.rotation);
+    this.shipBody.setTranslation(this.currentShipPose.translation, false);
+    this.shipBody.setRotation(this.currentShipPose.rotation, false);
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      const worldPosition = this.objectSpawnWorlds[index]!;
+      const worldRotation = this.objectSpawnWorldRotations[index]!;
+      localToWorld(
+        worldPosition,
+        this.objectLocalPositionsForTest[index]!,
+        this.currentShipPose,
+      );
+      multiplyQuaternions(
+        worldRotation,
+        this.currentShipPose.rotation,
+        this.objectLocalRotations[index]!,
+      );
+      body.setTranslation(worldPosition, false);
+      body.setRotation(worldRotation, false);
+      copyVector(this.objectPoses[index]!.translation, worldPosition);
+      copyNormalizedQuaternion(this.objectPoses[index]!.rotation, worldRotation);
+    }
+    this.world.propagateModifiedBodyPositionsToColliders();
   }
 
   get recoveryCountForTest(): number {
@@ -707,11 +760,17 @@ export class ScavengePhysics implements ScavengePhysicsController {
       body.setAngvel(this.zeroVelocity, true);
       this.recoveryCount += 1;
       copyVector(localPosition, spawn);
+      copyNormalizedQuaternion(this.objectLocalRotations[index]!, this.objectRotations[index]!);
       copyVector(pose.translation, spawnWorld);
       copyNormalizedQuaternion(pose.rotation, spawnWorldRotation);
       return;
     }
     copyVector(pose.translation, translation);
     copyNormalizedQuaternion(pose.rotation, rotation);
+    worldRotationToLocal(
+      this.objectLocalRotations[index]!,
+      rotation,
+      this.currentShipPose.rotation,
+    );
   }
 }
