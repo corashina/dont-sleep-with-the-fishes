@@ -78,11 +78,11 @@ export class MenuTitleSign implements MenuSceneComponent {
     board.position.set(0, 1.55, 0);
     const leftPost = new Mesh(leftPostGeometry, postMaterial);
     leftPost.name = 'menu:title-sign-post-left';
-    leftPost.position.set(-1.45, 0.45, 0.03);
+    leftPost.position.set(-1.45, 0.45, -0.12);
     leftPost.rotation.z = 0.04;
     const rightPost = new Mesh(rightPostGeometry, postMaterial);
     rightPost.name = 'menu:title-sign-post-right';
-    rightPost.position.set(1.48, 0.52, 0.02);
+    rightPost.position.set(1.48, 0.52, -0.12);
     rightPost.rotation.z = -0.035;
 
     this.root.name = 'menu:title-sign';
