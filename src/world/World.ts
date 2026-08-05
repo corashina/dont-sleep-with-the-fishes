@@ -193,6 +193,7 @@ export class World {
   private readonly buoyancy: BoatBuoyancy;
   private scavengePhysics: ScavengePhysics | null = null;
   private physicsDebugView: ScavengePhysicsDebugView | null = null;
+  private physicsObjectsVisible = false;
   private physicsObjectsAttachedToShip = false;
   private readonly physicsObjectsRoot = new Group();
   private readonly freighterBuoyancy = new BoatBuoyancy(
@@ -403,10 +404,12 @@ export class World {
         random,
       );
       this.physicsObjectsRoot.name = 'physics-objects';
+      this.physicsObjectsRoot.visible = false;
       this.physicsObjects = SCAVENGE_PHYSICS_OBJECT_SPECS.map((spec) => {
         const placement = placements.get(spec.id)!;
         const visual = new Group();
         visual.name = `physics-object:${spec.id}`;
+        visual.visible = false;
         visual.position.set(placement.position.x, this.deckY, placement.position.z);
         visual.rotation.y = placement.rotationY;
         visual.scale.set(...spec.visualScale);
@@ -687,6 +690,14 @@ export class World {
   triggerScavengeIntroCrash(): void {
     if (this.disposed) return;
     this.scavengeIntroPresentation.trigger();
+  }
+
+  revealPhysicsObjects(): void {
+    if (this.disposed || this.physicsObjectsVisible) return;
+    this.physicsObjectsVisible = true;
+    this.physicsObjectsRoot.visible = true;
+    this.physicsObjects.forEach((object) => { object.visible = true; });
+    this.physicsDebugView?.setVisible(true);
   }
 
   attachPhysicsObjectsToShip(): void {

@@ -47,6 +47,7 @@ export class ScavengePhysicsDebugView {
   ) {
     this.staticRoot.name = 'physics-debug-static';
     this.dynamicRoot.name = 'physics-debug-dynamic';
+    this.setVisible(false);
     staticCuboids.forEach(({ center, halfExtents, rotation }, index) => {
       const mesh = new Mesh(this.boxGeometry, this.staticMaterial);
       mesh.name = `physics-debug-cuboid:${index}`;
@@ -81,6 +82,11 @@ export class ScavengePhysicsDebugView {
     });
     ship.add(this.staticRoot);
     scene.add(this.dynamicRoot);
+  }
+
+  setVisible(visible: boolean): void {
+    this.staticRoot.visible = visible;
+    this.dynamicRoot.visible = visible;
   }
 
   sync(objectPoses: readonly PhysicsPose[]): void {

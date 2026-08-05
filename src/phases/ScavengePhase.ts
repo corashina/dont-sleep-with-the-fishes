@@ -224,6 +224,7 @@ export class ScavengePhase implements GamePhase {
     );
 
     this.ui.onStart = () => {
+      this.world.revealPhysicsObjects();
       void this.requestPointerLock();
     };
     this.ui.onResume = () => {
