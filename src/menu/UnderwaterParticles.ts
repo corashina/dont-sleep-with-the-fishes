@@ -9,12 +9,15 @@ import {
   Vector3,
 } from 'three';
 
-const BUBBLE_COUNT = 144;
+const BUBBLE_COUNT = 264;
+const WRECK_BUBBLE_COUNT = 48;
 const MATTER_COUNT = 180;
 
 const PARTICLE_VERTEX_SHADER = `
   attribute vec3 basePosition;
   attribute float phase;
+  attribute float particleSize;
+  attribute float riseSpeed;
   uniform float uTime;
   uniform float uRise;
   uniform float uPointSize;
@@ -23,14 +26,17 @@ const PARTICLE_VERTEX_SHADER = `
   void main() {
     vec3 transformed = basePosition;
     if (uRise > 0.5) {
-      transformed.y = mod(basePosition.y + uTime * (0.13 + phase * 0.018) + 0.75, 9.5) - 0.75;
+      transformed.y = mod(
+        basePosition.y + uTime * (0.13 + phase * 0.018) * riseSpeed + 0.75,
+        9.5
+      ) - 0.75;
       transformed.x += sin(uTime * 0.42 + phase) * 0.08;
     } else {
       transformed.x += sin(uTime * 0.13 + phase) * 0.045;
       transformed.y += cos(uTime * 0.11 + phase * 1.3) * 0.035;
     }
     vec4 viewPosition = modelViewMatrix * vec4(transformed, 1.0);
-    gl_PointSize = uPointSize * (9.0 / max(1.0, -viewPosition.z));
+    gl_PointSize = uPointSize * particleSize * (9.0 / max(1.0, -viewPosition.z));
     gl_Position = projectionMatrix * viewPosition;
     vPhase = phase;
   }
@@ -68,10 +74,23 @@ function createParticlePool(
 ): ParticlePool {
   const basePositions = new Float32Array(count * 3);
   const phases = new Float32Array(count);
+  const particleSizes = new Float32Array(count);
+  const riseSpeeds = new Float32Array(count);
   const columns = bubbles ? 12 : 15;
-  const rows = Math.ceil(count / columns);
+  const ambientCount = bubbles ? count - WRECK_BUBBLE_COUNT : count;
+  const rows = Math.ceil(ambientCount / columns);
   for (let index = 0; index < count; index += 1) {
     const offset = index * 3;
+    if (bubbles && index >= ambientCount) {
+      const sourceIndex = index - ambientCount;
+      const sourceColumn = sourceIndex % 6;
+      const sourceRow = Math.floor(sourceIndex / 6);
+      basePositions[offset] = -8.5 + sourceColumn * 3.4
+        + ((sourceIndex * 7) % 5 - 2) * 0.08;
+      basePositions[offset + 1] = -0.4 + sourceRow / 7 * 8.6;
+      basePositions[offset + 2] = -19.1
+        + ((sourceColumn + sourceRow) % 3 - 1) * 1.4;
+    } else {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const horizontal = column / (columns - 1);
@@ -83,7 +102,14 @@ function createParticlePool(
     basePositions[offset] = (horizontal * 2 - 1) * spread + jitterX;
     basePositions[offset + 1] = -0.55 + vertical * 9.1 + jitterY;
     basePositions[offset + 2] = 4.4 - depthBand * 5.1 - (row % 3) * 0.35;
+    }
     phases[index] = ((index * 11) % count) / count * Math.PI * 2;
+    particleSizes[index] = bubbles
+      ? 0.65 + ((index * 37) % 106) / 105 * 1.05
+      : 1;
+    riseSpeeds[index] = bubbles
+      ? 0.7 + ((index * 53) % 91) / 90 * 0.9
+      : 1;
   }
 
   const geometry = new BufferGeometry();
@@ -91,6 +117,11 @@ function createParticlePool(
   geometry.setAttribute('position', basePosition);
   geometry.setAttribute('basePosition', basePosition);
   geometry.setAttribute('phase', new Float32BufferAttribute(phases, 1));
+  geometry.setAttribute(
+    'particleSize',
+    new Float32BufferAttribute(particleSizes, 1),
+  );
+  geometry.setAttribute('riseSpeed', new Float32BufferAttribute(riseSpeeds, 1));
   geometry.boundingSphere = new Sphere(new Vector3(0, 3.8, -23), 58);
   const material = new ShaderMaterial({
     uniforms: {
