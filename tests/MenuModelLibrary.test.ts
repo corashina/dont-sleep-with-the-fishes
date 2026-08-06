@@ -23,7 +23,7 @@ function root(id: string): Group {
   const value = new Group();
   value.name = id;
   value.add(new Mesh(new BoxGeometry(), new MeshBasicMaterial({ map: new Texture() })));
-  value.animations = id === 'shark'
+  value.animations = id === 'shark' || id === 'redSnapper'
     ? [new AnimationClip('Armature|Swim', 1.25, [
       new NumberKeyframeTrack('.rotation[y]', [0, 1.25], [0, 0.1]),
     ])]
@@ -34,7 +34,11 @@ function root(id: string): Group {
 describe('MenuModelLibrary', () => {
   it('loads every required model and clones independent roots', async () => {
     const loader: MenuModelLoader = {
-      load: vi.fn(async (url) => root(url.includes('shark') ? 'shark' : url)),
+      load: vi.fn(async (url) => root(
+        url.includes('shark') ? 'shark'
+          : url.includes('redSnapper') ? 'redSnapper'
+            : url,
+      )),
     };
     const library = await MenuModelLibrary.load(loader);
     const first = library.create('boat');
@@ -67,6 +71,22 @@ describe('MenuModelLibrary', () => {
     );
   });
 
+  it('rejects a red snapper without Armature|Swim', async () => {
+    const loader: MenuModelLoader = {
+      load: async (url) => {
+        const id = url.includes('shark') ? 'shark'
+          : url.includes('redSnapper') ? 'redSnapper'
+            : url;
+        const value = root(id);
+        if (id === 'redSnapper') value.animations = [];
+        return value;
+      },
+    };
+    await expect(MenuModelLibrary.load(loader)).rejects.toEqual(
+      expect.objectContaining({ menuModelId: 'redSnapper' }),
+    );
+  });
+
   it('disposes loaded siblings after a load failure', async () => {
     const disposals: ReturnType<typeof vi.fn>[] = [];
     const loader: MenuModelLoader = {
@@ -94,7 +114,11 @@ describe('MenuModelLibrary', () => {
     let textureDispose: ReturnType<typeof vi.fn> | undefined;
     const loader: MenuModelLoader = {
       load: async (url) => {
-        const value = root(url.includes('shark') ? 'shark' : url);
+        const value = root(
+          url.includes('shark') ? 'shark'
+            : url.includes('redSnapper') ? 'redSnapper'
+              : url,
+        );
         if (!url.includes('boat')) return value;
         const mesh = value.children[0] as Mesh;
         const material = mesh.material as MeshBasicMaterial;
@@ -128,7 +152,11 @@ describe('MenuModelLibrary', () => {
   it('disposes each cloned skeleton exactly once with its instance', async () => {
     const loader: MenuModelLoader = {
       load: async (url) => {
-        const value = root(url.includes('shark') ? 'shark' : url);
+        const value = root(
+          url.includes('shark') ? 'shark'
+            : url.includes('redSnapper') ? 'redSnapper'
+              : url,
+        );
         if (!url.includes('shark')) return value;
         value.clear();
         const bone = new Bone();

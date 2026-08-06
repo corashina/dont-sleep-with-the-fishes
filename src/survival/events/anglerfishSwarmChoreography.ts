@@ -1,9 +1,15 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
-import { scaleEventItemDuration } from '../eventItemTiming';
+import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
 
 export const SWARM_REVEAL_DURATION = 2.9;
 export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
 export const SWARM_REACTION_DURATION = 1.15;
+
+export function swarmItemDuration(choiceId: string): number {
+  return choiceId === 'bait' || choiceId === 'baitTin' || choiceId === 'fishingNet'
+    ? scaleThrownItemDuration(1.2)
+    : SWARM_ITEM_DURATION;
+}
 export const SWARM_FISH_COUNT = 6;
 export const SWARM_CENTER_Z = 0;
 const ORBIT_SPEED_SCALE = 0.5;

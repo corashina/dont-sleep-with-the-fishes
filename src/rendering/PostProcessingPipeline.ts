@@ -16,6 +16,10 @@ import {
   ItemAmbientOcclusionPass,
   type ItemAmbientOcclusionMode,
 } from './ItemAmbientOcclusion';
+import {
+  BinocularMaskPass,
+  sceneBinocularMaskStrength,
+} from './BinocularMaskPass';
 import { sceneHoverOutlineTargets } from './HoverOutline';
 import {
   DirectSceneRenderer,
@@ -56,6 +60,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
   private readonly outlinePass: OutlinePass;
+  private readonly binocularMaskPass: BinocularMaskPass;
   private readonly outputPass: OutputPass;
   private readonly size: Vector2;
   private readonly maxTextureSize: number;
@@ -81,6 +86,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     let target: WebGLRenderTarget | undefined;
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
+    let binocularMaskPass: BinocularMaskPass | undefined;
     let outputPass: OutputPass | undefined;
     let itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null = null;
     try {
@@ -110,6 +116,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       outlinePass.edgeThickness = 4;
       outlinePass.edgeGlow = 0;
       outlinePass.downSampleRatio = 2;
+      binocularMaskPass = new BinocularMaskPass();
       outputPass = new OutputPass();
 
       composer.addPass(this.renderPass);
@@ -127,16 +134,19 @@ export class PostProcessingPipeline implements SceneRenderer {
         }
       }
       composer.addPass(outlinePass);
+      composer.addPass(binocularMaskPass);
       composer.addPass(outputPass);
 
       this.composer = composer;
       this.itemAmbientOcclusionPass = itemAmbientOcclusionPass;
       this.outlinePass = outlinePass;
+      this.binocularMaskPass = binocularMaskPass;
       this.outputPass = outputPass;
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
       itemAmbientOcclusionPass?.dispose();
       outlinePass?.dispose();
+      binocularMaskPass?.dispose();
       outputPass?.dispose();
       if (composer === undefined) target?.dispose();
       else composer.dispose();
@@ -156,6 +166,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.outlinePass.renderScene = scene;
     this.outlinePass.renderCamera = camera;
     this.outlinePass.selectedObjects = sceneHoverOutlineTargets(scene);
+    this.binocularMaskPass.setStrength(sceneBinocularMaskStrength(scene));
     this.composer.render(0);
   }
 
@@ -186,6 +197,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     try {
       this.composer.setPixelRatio(pixelRatio);
       this.composer.setSize(width, height);
+      this.binocularMaskPass.setSize(width, height);
     } finally {
       if (activeAmbientOcclusionPass !== null) {
         this.composer.passes.splice(1, 0, activeAmbientOcclusionPass);
@@ -210,6 +222,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.disposed = true;
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
+    this.binocularMaskPass.dispose();
     this.outputPass.dispose();
     this.composer.dispose();
   }

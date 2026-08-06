@@ -1,7 +1,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
   Group,
@@ -13,24 +12,12 @@ import {
   MeshStandardMaterial,
   Object3D,
   PointLight,
-  RingGeometry,
   Shape,
   ShapeGeometry,
-  type Skeleton,
   SphereGeometry,
   Vector2,
   Vector3,
 } from 'three';
-import type { ItemId } from '../game/ItemState';
-import {
-  applyHandJointCurl,
-  findImportedHandRig,
-} from '../rendering/RiggedHandRig';
-import {
-  collectOwnedSkeletons,
-  disposeSkeletons,
-} from '../rendering/modelPresentation';
-import { collectMeshResources } from '../world/SceneResources';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 
 type EffectRoot = Group;
@@ -39,10 +26,13 @@ const TAPE = 'event-item-tape';
 const NET = 'event-item-net';
 const FLARE = 'event-item-flare';
 const CHAIN = 'event-item-chain';
-const UMBRELLA = 'event-item-umbrella';
 const FLASHLIGHT = 'event-item-flashlight-beam';
 const SHOTGUN_SMOKE = 'event-item-shotgun-smoke';
-const BINOCULAR_MASK = 'event-item-binocular-mask';
+const FLARE_MUZZLE_X = 0.34;
+const FLARE_DISTANCE = 18;
+const FLARE_ARC_HEIGHT = 3.2;
+const FLARE_WATER_Y = 0.04;
+const FLARE_FORWARD = new Vector3(1, 0, 0);
 
 function clampEffect(value: number): number {
   return Math.min(1, Math.max(0, value));
@@ -55,24 +45,25 @@ export class EventItemEffects {
   private readonly effects: readonly EffectRoot[];
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
-  private readonly skeletons = new Set<Skeleton>();
   private readonly baseOpacities = new Map<Material, number>();
   private readonly actorPosition = new Vector3();
-  private readonly flareLight: PointLight;
+  private readonly flarePosition = new Vector3();
+  private readonly flareMuzzle = new Vector3();
+  private readonly flareDirection = new Vector3();
+  private readonly flareDestination = new Vector3();
+  private flareLaunched = false;
+  private flareTravel = 0;
   private readonly flashlightLight: PointLight;
+  private readonly flareLight: PointLight;
   private readonly heldFillLight: PointLight;
   private readonly tape: EffectRoot;
   private readonly net: EffectRoot;
   private readonly flare: EffectRoot;
   private readonly chain: EffectRoot;
-  private readonly umbrella: EffectRoot;
   private readonly flashlight: EffectRoot;
-  private readonly flashlightHand: Group;
-  private readonly flashlightHandAvailable: boolean;
   private readonly shotgunSmoke: EffectRoot;
-  private readonly binocularMask: EffectRoot;
+  private binocularStrength = 0;
   private effectOpacity = 0;
-  private heldItemId: ItemId | null = null;
   private readonly applyEffectOpacity = (object: Object3D): void => {
     if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
     if (Array.isArray(object.material)) {
@@ -83,18 +74,14 @@ export class EventItemEffects {
   };
   private disposed = false;
 
-  constructor(heldHand: Group | null = null) {
+  constructor() {
     this.root.name = 'event-item-effects';
     this.tape = this.createTape();
     this.net = this.createNet();
     [this.flare, this.flareLight] = this.createFlare();
     this.chain = this.createChain();
-    this.umbrella = this.createUmbrella();
     [this.flashlight, this.flashlightLight] = this.createFlashlight();
-    [this.flashlightHand, this.flashlightHandAvailable] =
-      this.createFlashlightHand(heldHand);
     this.shotgunSmoke = this.createShotgunSmoke();
-    this.binocularMask = this.createBinocularMask();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
     this.heldFillLight.name = 'event-item-held-fill';
     this.heldFillLight.position.set(-0.24, 0.36, 0.48);
@@ -103,35 +90,25 @@ export class EventItemEffects {
       this.net,
       this.flare,
       this.chain,
-      this.umbrella,
       this.flashlight,
       this.shotgunSmoke,
-      this.binocularMask,
     ];
-    this.root.add(...this.effects, this.flashlightHand, this.heldFillLight);
+    this.root.add(...this.effects, this.heldFillLight);
     this.clear();
-  }
-
-  setHeldItem(itemId: ItemId | null): void {
-    if (this.disposed) return;
-    this.heldItemId = itemId;
-    if (itemId !== 'flashlight') this.flashlightHand.visible = false;
   }
 
   apply(sample: Readonly<EventItemUseSample>, actor: Object3D): void {
     if (this.disposed) return;
-    this.clear();
+    this.hideEffects();
 
     actor.updateWorldMatrix(true, false);
     actor.getWorldPosition(this.actorPosition);
     this.root.position.copy(this.actorPosition);
     actor.getWorldQuaternion(this.root.quaternion);
-    this.flashlightHand.visible = this.flashlightHandAvailable
-      && this.heldItemId === 'flashlight'
-      && sample.itemVisible
-      && sample.cameraSpaceBlend > 0.02;
-    this.heldFillLight.visible = sample.cameraSpaceBlend > 0;
-    this.heldFillLight.intensity = clampEffect(sample.cameraSpaceBlend) * 3.4;
+    this.heldFillLight.visible = sample.cameraSpaceBlend > 0 && sample.itemVisible;
+    this.heldFillLight.intensity = sample.itemVisible
+      ? clampEffect(sample.cameraSpaceBlend) * 3.4
+      : 0;
 
     if (sample.effectKind === 'none' || sample.effectKind === 'bucket-cover') return;
 
@@ -151,22 +128,29 @@ export class EventItemEffects {
         this.net.scale.setScalar(0.7 + primary * 0.42);
         break;
       case 'flare':
+        this.root.quaternion.identity();
         this.show(this.flare, primary);
-        this.flare.position.set(0.36, 0.22 + primary * 0.34, -0.48);
-        this.flare.scale.setScalar(0.7 + primary * 0.42);
-        this.flareLight.intensity = primary * (1.8 + primary * 5.4);
+        if (!this.flareLaunched || sample.effectTravel < this.flareTravel) {
+          this.captureFlareTrajectory(actor);
+        }
+        this.flareLaunched = true;
+        this.flareTravel = sample.effectTravel;
+        this.flarePosition
+          .lerpVectors(this.flareMuzzle, this.flareDestination, sample.effectTravel);
+        this.flarePosition.y += sample.effectArc * FLARE_ARC_HEIGHT;
+        this.flare.position.copy(this.flarePosition).sub(this.actorPosition);
+        this.flare.quaternion.setFromUnitVectors(FLARE_FORWARD, this.flareDirection);
+        this.flare.scale.setScalar(
+          0.94 + Math.sin(sample.effectTravel * Math.PI * 32) * 0.06,
+        );
+        this.flareLight.intensity = 5.4
+          + Math.sin(sample.effectTravel * Math.PI * 38) * 0.8;
         break;
       case 'chain':
         this.root.quaternion.identity();
         this.show(this.chain, primary);
         this.chain.position.set(0.02, 0.12, 0.02);
         this.chain.rotation.z = 0.025 * secondary;
-        break;
-      case 'umbrella':
-        this.show(this.umbrella, primary);
-        this.umbrella.position.set(0.04, 0.38 + primary * 0.42, -0.38 - primary * 0.14);
-        this.umbrella.rotation.set(-0.16 - primary * 0.24, 0.06, 0.04);
-        this.umbrella.scale.setScalar(0.76 + primary * 0.3);
         break;
       case 'flashlight':
         this.show(this.flashlight, primary);
@@ -192,15 +176,18 @@ export class EventItemEffects {
         }
         break;
       case 'binocular-mask':
-        this.show(this.binocularMask, primary);
-        this.binocularMask.position.set(0, 0.02, -1.05);
-        this.binocularMask.scale.setScalar(0.76 + primary * 0.26);
-        this.binocularMask.rotation.y = Math.PI;
+        this.binocularStrength = primary;
         break;
     }
   }
 
   clear(): void {
+    this.hideEffects();
+    this.flareLaunched = false;
+    this.flareTravel = 0;
+  }
+
+  private hideEffects(): void {
     this.root.position.set(0, 0, 0);
     this.root.quaternion.identity();
     for (const effect of this.effects) {
@@ -210,29 +197,51 @@ export class EventItemEffects {
       effect.scale.set(1, 1, 1);
     }
     for (const material of this.baseOpacities.keys()) material.opacity = 0;
-    if (this.flareLight) this.flareLight.intensity = 0;
+    this.binocularStrength = 0;
     if (this.flashlightLight) this.flashlightLight.intensity = 0;
+    if (this.flareLight) this.flareLight.intensity = 0;
     if (this.heldFillLight) {
       this.heldFillLight.visible = false;
       this.heldFillLight.intensity = 0;
     }
-    if (this.flashlightHand) this.flashlightHand.visible = false;
+  }
+
+  private captureFlareTrajectory(actor: Object3D): void {
+    this.flareMuzzle
+      .set(FLARE_MUZZLE_X, 0, 0)
+      .applyMatrix4(actor.matrixWorld);
+    this.flareDirection
+      .set(1, 0, 0)
+      .transformDirection(actor.matrixWorld);
+    this.flareDirection.y = 0;
+    if (this.flareDirection.lengthSq() < 0.0001) {
+      this.flareDirection.set(0, 0, -1);
+    } else {
+      this.flareDirection.normalize();
+    }
+    this.flareDestination
+      .copy(this.flareMuzzle)
+      .addScaledVector(this.flareDirection, FLARE_DISTANCE);
+    this.flareDestination.y = FLARE_WATER_Y;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.clear();
-    this.flareLight.shadow.dispose();
     this.flashlightLight.shadow.dispose();
+    this.flareLight.shadow.dispose();
     this.heldFillLight.shadow.dispose();
-    disposeSkeletons(this.skeletons);
     this.geometries.forEach((geometry) => geometry.dispose());
     this.materials.forEach((material) => material.dispose());
     this.geometries.clear();
     this.materials.clear();
     this.baseOpacities.clear();
     this.root.clear();
+  }
+
+  get binocularMaskStrength(): number {
+    return this.binocularStrength;
   }
 
   private show(effect: EffectRoot, weight: number): void {
@@ -316,19 +325,54 @@ export class EventItemEffects {
     const flare = new Group();
     flare.name = FLARE;
     const core = this.mesh(
-      new SphereGeometry(0.075, 8, 6),
-      new MeshBasicMaterial({ color: 0xffd1a0 }),
+      new SphereGeometry(0.045, 10, 8),
+      new MeshBasicMaterial({ color: 0xfff4c7 }),
       'event-item-flare-core',
     );
     const halo = this.mesh(
-      new RingGeometry(0.09, 0.16, 9),
-      new MeshBasicMaterial({ color: 0xff7350, transparent: true, opacity: 0.3, depthWrite: false }),
+      new SphereGeometry(0.14, 10, 8),
+      new MeshBasicMaterial({
+        color: 0xff4b22,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false,
+      }),
       'event-item-flare-halo',
     );
-    halo.rotation.y = Math.PI;
-    const light = new PointLight(0xff724b, 0, 4.2, 2);
+    const flame = this.mesh(
+      new ConeGeometry(0.052, 0.34, 8, 1, true),
+      new MeshBasicMaterial({
+        color: 0xff7a28,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+      }),
+      'event-item-flare-flame',
+    );
+    flame.position.x = -0.17;
+    flame.rotation.z = -Math.PI / 2;
+
+    const smokeGeometry = new SphereGeometry(0.055, 7, 5);
+    const smokeMaterial = new MeshBasicMaterial({
+      color: 0x8b8178,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+    });
+    for (let index = 0; index < 4; index += 1) {
+      const smoke = this.mesh(
+        smokeGeometry,
+        smokeMaterial,
+        `event-item-flare-smoke-${index}`,
+      );
+      smoke.position.set(-0.34 - index * 0.1, (index % 2 - 0.5) * 0.035, 0);
+      smoke.scale.setScalar(0.72 + index * 0.2);
+      flare.add(smoke);
+    }
+
+    const light = new PointLight(0xff5c27, 0, 5.5, 2);
     light.name = 'event-item-flare-light';
-    flare.add(core, halo, light);
+    flare.add(halo, flame, core, light);
     return [flare, light];
   }
 
@@ -350,86 +394,21 @@ export class EventItemEffects {
     return chain;
   }
 
-  private createUmbrella(): EffectRoot {
-    const umbrella = new Group();
-    umbrella.name = UMBRELLA;
-    const cloth = new MeshStandardMaterial({
-      color: 0x445c68,
-      roughness: 0.9,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-      side: 2,
-    });
-    const canopy = this.mesh(new ConeGeometry(0.46, 0.24, 7, 1, true), cloth, 'event-item-umbrella-canopy');
-    canopy.rotation.x = Math.PI;
-    const ribGeometry = new CylinderGeometry(0.01, 0.012, 0.52, 4);
-    const ribMaterial = new MeshStandardMaterial({ color: 0x312e2a, roughness: 0.72, metalness: 0.5 });
-    umbrella.add(canopy);
-    for (let index = 0; index < 4; index += 1) {
-      const rib = this.mesh(ribGeometry, ribMaterial, `event-item-umbrella-rib-${index}`);
-      rib.rotation.z = (index - 1.5) * 0.52;
-      rib.rotation.x = Math.PI / 2;
-      rib.position.y = -0.04;
-      umbrella.add(rib);
-    }
-    return umbrella;
-  }
-
   private createFlashlight(): [EffectRoot, PointLight] {
     const flashlight = new Group();
     flashlight.name = FLASHLIGHT;
     const beam = this.mesh(
-      new ConeGeometry(0.34, 2.4, 10, 1, true),
-      new MeshBasicMaterial({ color: 0xffefb8, transparent: true, opacity: 0.28, depthWrite: false, side: 2 }),
+      new ConeGeometry(0.42, 4.2, 10, 1, true),
+      new MeshBasicMaterial({ color: 0xffefb8, transparent: true, opacity: 0.16, depthWrite: false, side: 2 }),
       'event-item-flashlight-cone',
     );
-    beam.rotation.z = -Math.PI / 2;
-    beam.position.x = -1.2;
+    beam.rotation.z = Math.PI / 2;
+    beam.position.x = 2.1;
     const light = new PointLight(0xffedb5, 0, 4.8, 2);
     light.name = 'event-item-flashlight-light';
-    light.position.x = -0.16;
+    light.position.x = 0.16;
     flashlight.add(beam, light);
     return [flashlight, light];
-  }
-
-  private createFlashlightHand(model: Group | null): [Group, boolean] {
-    const hand = new Group();
-    hand.name = 'event-item-flashlight-hand';
-    hand.visible = false;
-    if (model === null) return [hand, false];
-
-    collectMeshResources(model, this.geometries, this.materials);
-    collectOwnedSkeletons(model, this.skeletons);
-    const rig = findImportedHandRig(model);
-    if (rig === null) return [hand, false];
-
-    model.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      object.castShadow = false;
-      object.receiveShadow = false;
-      object.frustumCulled = false;
-      const materials = Array.isArray(object.material)
-        ? object.material
-        : [object.material];
-      for (const material of materials) {
-        if (!(material instanceof MeshStandardMaterial)) continue;
-        material.color.multiplyScalar(0.82);
-        material.roughness = Math.max(material.roughness, 0.92);
-        material.metalness = 0;
-        material.emissive.setHex(0x241812);
-        material.emissiveIntensity = 0.2;
-        material.flatShading = true;
-        material.needsUpdate = true;
-      }
-    });
-    applyHandJointCurl(rig.joints, 0.86);
-    hand.position.set(0.24, -0.06, 0.02);
-    hand.rotation.set(Math.PI / 2, 0, -Math.PI / 2);
-    hand.scale.setScalar(0.24);
-    hand.add(model);
-    return [hand, true];
   }
 
   private createShotgunSmoke(): EffectRoot {
@@ -457,23 +436,4 @@ export class EventItemEffects {
     return smoke;
   }
 
-  private createBinocularMask(): EffectRoot {
-    const mask = new Group();
-    mask.name = BINOCULAR_MASK;
-    const rimGeometry = new RingGeometry(0.22, 0.29, 12);
-    const rimMaterial = new MeshBasicMaterial({ color: 0x1b2021, transparent: true, opacity: 0.9, depthWrite: false, side: 2 });
-    const glassGeometry = new CircleGeometry(0.215, 12);
-    const glassMaterial = new MeshBasicMaterial({ color: 0x243333, transparent: true, opacity: 0.5, depthWrite: false, side: 2 });
-    for (const [index, x] of [-0.25, 0.25].entries()) {
-      const lens = new Group();
-      lens.name = `event-item-binocular-lens-${index}`;
-      const rim = this.mesh(rimGeometry, rimMaterial, `event-item-binocular-rim-${index}`);
-      const glass = this.mesh(glassGeometry, glassMaterial, `event-item-binocular-glass-${index}`);
-      glass.position.z = -0.002;
-      lens.position.x = x;
-      lens.add(rim, glass);
-      mask.add(lens);
-    }
-    return mask;
-  }
 }

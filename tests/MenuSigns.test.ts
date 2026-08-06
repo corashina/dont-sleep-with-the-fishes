@@ -41,6 +41,13 @@ it('builds smaller guide and start signs in swapped positions', () => {
   expect((signs.startHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);
   expect(signs.startHitTarget.name).toBe('menu:start-sign-board');
   expect(signs.guideHitTarget.name).toBe('menu:guide-sign-board');
+  for (const sign of [signs.guideHitTarget, signs.startHitTarget]) {
+    expect(sign.material).toHaveLength(6);
+    expect(sign.material[4]!.map).not.toBeNull();
+    for (const index of [0, 1, 2, 3, 5]) {
+      expect(sign.material[index]!.map).toBeNull();
+    }
+  }
 
   const textureDisposers = signs.textures.map((texture) => vi.spyOn(texture, 'dispose'));
   signs.dispose();
@@ -59,20 +66,20 @@ it('highlights each complete sign without changing its transform', () => {
   signs.setGuideHighlighted(true);
   expect(guide.scale.toArray()).toEqual([1, 1, 1]);
   expect(guide.position.equals(guidePosition)).toBe(true);
-  expect(signs.guideHitTarget.material.emissiveIntensity).toBeGreaterThan(0);
+  expect(signs.guideHitTarget.material[4]!.emissiveIntensity).toBeGreaterThan(0);
   expect((guidePost.material as MeshStandardMaterial).emissiveIntensity).toBeGreaterThan(0);
-  expect(signs.startHitTarget.material.emissiveIntensity).toBe(0);
+  expect(signs.startHitTarget.material[4]!.emissiveIntensity).toBe(0);
 
   signs.setStartHighlighted(true);
   expect(start.scale.toArray()).toEqual([1, 1, 1]);
-  expect(signs.startHitTarget.material.emissiveIntensity).toBeGreaterThan(0);
+  expect(signs.startHitTarget.material[4]!.emissiveIntensity).toBeGreaterThan(0);
   expect((startPost.material as MeshStandardMaterial).emissiveIntensity).toBeGreaterThan(0);
 
   signs.setGuideHighlighted(false);
-  expect(signs.guideHitTarget.material.emissiveIntensity).toBe(0);
+  expect(signs.guideHitTarget.material[4]!.emissiveIntensity).toBe(0);
   expect((guidePost.material as MeshStandardMaterial).emissiveIntensity).toBe(0);
   signs.setStartHighlighted(false);
-  expect(signs.startHitTarget.material.emissiveIntensity).toBe(0);
+  expect(signs.startHitTarget.material[4]!.emissiveIntensity).toBe(0);
   signs.dispose();
 });
 

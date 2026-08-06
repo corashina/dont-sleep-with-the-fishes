@@ -4,7 +4,10 @@ import {
   DISTANT_DEBRIS_COUNT, DISTANT_MOUNTAIN_COUNT, DISTANT_PLANT_COUNT, DISTANT_RIDGE_COUNT,
   DISTANT_ROCK_COUNT, DistantSeabed,
 } from '../src/menu/DistantSeabed';
-import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
+import {
+  MENU_PROTECTED_FOOTPRINTS,
+  menuSeabedHeight,
+} from '../src/menu/MenuSceneLayout';
 
 const getDistantDetails = (distant: DistantSeabed) => [
   distant.root.getObjectByName('menu:distant-rocks')!,
@@ -79,6 +82,30 @@ it('keeps every detail outside the Dorothy footprint', () => {
       && bounds.max.z >= minZ && bounds.min.z <= maxZ;
   }).map((detail) => detail.name);
   expect(conflicts).toEqual([]);
+  distant.dispose();
+});
+
+it('joins each distant terrain edge to the main seabed', () => {
+  const distant = new DistantSeabed();
+  const terrainGroups = [
+    distant.root.getObjectByName('menu:distant-ridges')!,
+    distant.root.getObjectByName('menu:distant-mountains')!,
+  ];
+  for (const mesh of terrainGroups.flatMap((group) => group.children) as Mesh[]) {
+    const position = mesh.geometry.getAttribute('position');
+    mesh.geometry.computeBoundingBox();
+    const bounds = mesh.geometry.boundingBox!;
+    for (let index = 0; index < position.count; index += 1) {
+      const x = position.getX(index);
+      const z = position.getZ(index);
+      const isEdge = x === bounds.min.x || x === bounds.max.x
+        || z === bounds.min.z || z === bounds.max.z;
+      if (!isEdge) continue;
+      expect(position.getY(index)).toBeCloseTo(
+        menuSeabedHeight(x, z + mesh.position.z),
+      );
+    }
+  }
   distant.dispose();
 });
 

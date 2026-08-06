@@ -1,4 +1,4 @@
-import { AnimationClip, Group, NumberKeyframeTrack } from 'three';
+import { AnimationClip, Group, NumberKeyframeTrack, Vector3 } from 'three';
 import { expect, it, vi } from 'vitest';
 import { UnderwaterMenuAnimator } from '../src/menu/UnderwaterMenuAnimator';
 import { createMenuMotionSample, sampleMenuMotionInto } from '../src/menu/menuChoreography';
@@ -6,6 +6,7 @@ import { createMenuMotionSample, sampleMenuMotionInto } from '../src/menu/menuCh
 it('updates actor transforms without replacing actor objects', () => {
   const sharks = [new Group(), new Group()] as const;
   const fishSchools = [new Group(), new Group()] as const;
+  const fish = [new Group(), new Group()];
   const clip = new AnimationClip('Armature|Swim', 1.25, [
     new NumberKeyframeTrack('.rotation[y]', [0, 1.25], [0, 0.1]),
   ]);
@@ -16,6 +17,7 @@ it('updates actor transforms without replacing actor objects', () => {
   const animator = new UnderwaterMenuAnimator({
     sharks: sharks.map((root) => ({ root, clip })) as never,
     fishSchools,
+    fish: fish.map((root) => ({ root, clip })),
     setPlantTime,
     setBubbleTime,
     setMatterTime,
@@ -32,6 +34,15 @@ it('updates actor transforms without replacing actor objects', () => {
     expected.sharks[0].tangent[0],
     expected.sharks[0].tangent[2],
   ));
+  const schoolForward = new Vector3(0, 0, 1)
+    .applyQuaternion(fishSchools[0].quaternion)
+    .setY(0)
+    .normalize();
+  const travelDirection = new Vector3(...expected.fishSchools[0].tangent)
+    .setY(0)
+    .normalize();
+  expect(schoolForward.dot(travelDirection)).toBeCloseTo(1);
+  expect(fish[0]!.rotation.y).not.toBe(0);
   expect(setPlantTime).toHaveBeenCalledWith(1);
   expect(setBubbleTime).toHaveBeenCalledWith(1);
   expect(setMatterTime).toHaveBeenCalledWith(1);

@@ -6,9 +6,15 @@ export interface MenuSharkActor {
   readonly clip: AnimationClip;
 }
 
+export interface MenuFishActor {
+  readonly root: Group;
+  readonly clip: AnimationClip;
+}
+
 export interface UnderwaterMenuActors {
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
+  readonly fish: readonly MenuFishActor[];
   readonly setPlantTime: (time: number) => void;
   readonly setBubbleTime: (time: number) => void;
   readonly setMatterTime: (time: number) => void;
@@ -17,33 +23,32 @@ export interface UnderwaterMenuActors {
 
 export class UnderwaterMenuAnimator {
   private readonly sample = createMenuMotionSample();
-  private readonly mixers: readonly [AnimationMixer, AnimationMixer];
-  private readonly actions: readonly [AnimationAction, AnimationAction];
+  private readonly mixers: readonly AnimationMixer[];
+  private readonly actions: readonly AnimationAction[];
+  private readonly animatedActors: readonly MenuSharkActor[];
   private disposed = false;
 
   constructor(private readonly actors: UnderwaterMenuActors) {
-    if (actors.sharks[0].clip.name !== 'Armature|Swim'
-      || actors.sharks[1].clip.name !== 'Armature|Swim') {
-      throw new Error('Menu sharks require the Armature|Swim clip');
+    const animatedActors = [...actors.sharks, ...actors.fish];
+    if (animatedActors.some(({ clip }) => clip.name !== 'Armature|Swim')) {
+      throw new Error('Menu swimmers require the Armature|Swim clip');
     }
 
-    const firstMixer = new AnimationMixer(actors.sharks[0].root);
-    const secondMixer = new AnimationMixer(actors.sharks[1].root);
-    const firstAction = firstMixer.clipAction(actors.sharks[0].clip);
-    const secondAction = secondMixer.clipAction(actors.sharks[1].clip);
-    firstAction.play();
-    secondAction.play();
-    secondAction.time = actors.sharks[1].clip.duration * 0.5;
-    this.mixers = [firstMixer, secondMixer];
-    this.actions = [firstAction, secondAction];
+    this.animatedActors = animatedActors;
+    this.mixers = animatedActors.map(({ root }) => new AnimationMixer(root));
+    this.actions = animatedActors.map(({ clip }, index) => {
+      const action = this.mixers[index]!.clipAction(clip);
+      action.play();
+      action.time = clip.duration * (index / animatedActors.length);
+      return action;
+    });
   }
 
   update(elapsedSeconds: number, deltaSeconds: number): void {
     if (this.disposed) return;
 
     const delta = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
-    this.mixers[0].update(delta);
-    this.mixers[1].update(delta);
+    for (const mixer of this.mixers) mixer.update(delta);
     sampleMenuMotionInto(
       this.sample,
       Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0,
@@ -78,9 +83,9 @@ export class UnderwaterMenuAnimator {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (let index = 0; index < 2; index += 1) {
+    for (let index = 0; index < this.animatedActors.length; index += 1) {
       this.actions[index]!.stop();
-      this.mixers[index]!.uncacheRoot(this.actors.sharks[index]!.root);
+      this.mixers[index]!.uncacheRoot(this.animatedActors[index]!.root);
     }
   }
 }

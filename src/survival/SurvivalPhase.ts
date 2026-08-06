@@ -767,7 +767,11 @@ export class SurvivalPhase implements GamePhase {
     instanceId: ItemInstanceId,
     itemType: ItemId | undefined,
   ): Promise<void> {
-    if (itemType === 'shotgun') {
+    if (
+      itemType === 'shotgun'
+      || itemType === 'flashlight'
+      || itemType === 'flareGun'
+    ) {
       return this.world.playEventItemUse?.(
         eventId,
         choiceId,

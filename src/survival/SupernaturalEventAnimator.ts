@@ -637,7 +637,6 @@ export class SupernaturalEventAnimator {
     )) return;
     if (active.eventId === 'ghosts') {
       this.hideGhosts();
-      if (active.choiceId === 'flareGun') this.showFlare(this.itemSample.effect);
       return;
     }
     if (this.itemSample.effect > 0.015) {

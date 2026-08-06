@@ -35,6 +35,7 @@ import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
+import { setSceneBinocularMaskStrength } from '../rendering/BinocularMaskPass';
 import {
   BoatBuoyancy,
   smoothBoatPoseInto,
@@ -721,6 +722,7 @@ export class BoatWorld {
   private moonPulseElapsed = 0;
   private moonCameraLower = 0;
   private moonEventStaged = false;
+  private readonly moonItemAimTarget = new Object3D();
   private readonly moonPhysicalResponsePose: EventPhysicalResponsePose = {
     x: 0,
     y: 0,
@@ -784,6 +786,11 @@ export class BoatWorld {
     this.eventModels = dedicatedEventModels ?? createEmptyEventModelLibraryForTest();
     this.scene = new Scene();
     this.camera = camera;
+    this.moonItemAimTarget.name = 'moon-event-item-aim-target';
+    this.moonItemAimTarget.position
+      .set(...SURVIVAL_CELESTIAL_DIRECTION)
+      .normalize()
+      .multiplyScalar(60);
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
@@ -879,9 +886,7 @@ export class BoatWorld {
           : resolvedEventModels.clone('mysteryChest'),
       );
       this.chestDisplay = chestDisplay;
-      this.itemEffects = new EventItemEffects(
-        propModels.createEventModel('riggedHand')?.root ?? null,
-      );
+      this.itemEffects = new EventItemEffects();
       itemUseAdapter = new EventItemUseAdapter(this.camera, this.itemEffects);
       this.itemUseAdapter = itemUseAdapter;
       itemUseController = new EventItemUseController(
@@ -1015,6 +1020,7 @@ export class BoatWorld {
 
       this.scene.add(
         this.motionRig,
+        this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
         this.key,
@@ -1563,6 +1569,9 @@ export class BoatWorld {
   private eventItemAimTarget(eventId: string): Object3D | null {
     if (eventId === 'dangerous-waters') {
       return this.eventPresentation.itemAimTarget(eventId);
+    }
+    if (eventId === 'face-on-the-moon') {
+      return this.moonItemAimTarget;
     }
     return this.dedicatedEvents?.itemAimTarget()
       ?? this.featuredEvents.itemAimTarget(eventId)
@@ -2130,6 +2139,10 @@ export class BoatWorld {
     } else if (this.moonEventStaged) {
       this.applyMoonPresentation();
     }
+    setSceneBinocularMaskStrength(
+      this.scene,
+      this.itemEffects.binocularMaskStrength,
+    );
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
 
@@ -2198,6 +2211,7 @@ export class BoatWorld {
       () => this.sky.dispose(),
       () => this.scene.remove(
         this.motionRig,
+        this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
         this.key,

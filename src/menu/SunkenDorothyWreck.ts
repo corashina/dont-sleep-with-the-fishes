@@ -10,8 +10,9 @@ import {
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { disposeResourceSets } from '../world/SceneResources';
 
-export const DOROTHY_WRECK_POSITION = [1.6, 0.08, -19.5] as const;
+export const DOROTHY_WRECK_POSITION = [1.6, 1.8, -19.5] as const;
 export const DOROTHY_WRECK_ROTATION = [0.06, -1.42, -0.16] as const;
+export const DOROTHY_WRECK_SCALE = 2;
 export const DOROTHY_WRECK_PART_NAMES = [
   'menu:dorothy-wreck-hull',
   'menu:dorothy-wreck-deck',
@@ -61,6 +62,7 @@ export class SunkenDorothyWreck implements MenuSceneComponent {
     this.root.name = 'menu:dorothy-wreck';
     this.root.position.set(...DOROTHY_WRECK_POSITION);
     this.root.rotation.set(...DOROTHY_WRECK_ROTATION);
+    this.root.scale.setScalar(DOROTHY_WRECK_SCALE);
     this.root.add(
       this.mesh(DOROTHY_WRECK_PART_NAMES[0], hullGeometry, hullMaterial),
       this.mesh(DOROTHY_WRECK_PART_NAMES[1], this.geometry(new BoxGeometry(4.6, 0.2, 15.2)), upperMaterial, [0, 0.7, 0.2]),

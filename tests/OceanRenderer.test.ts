@@ -38,6 +38,20 @@ function expectedHorizonVertexCount(
 }
 
 describe('OceanRenderer horizon geometry', () => {
+  it('keeps wave shading independent from horizon mesh density', () => {
+    const ocean = new OceanRenderer('low');
+
+    expect(ocean.material.vertexShader).toContain('geometryLod');
+    expect(ocean.material.vertexShader).toContain('resolvedGeometryWave');
+    expect(ocean.material.fragmentShader).toContain('sampleSurfaceWave');
+    expect(ocean.material.fragmentShader).toContain(
+      'sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative)',
+    );
+    expect(ocean.material.fragmentShader).not.toContain('vWorldNormal');
+
+    ocean.dispose();
+  });
+
   it('copies active and inactive vortex state into shader uniforms', () => {
     const ocean = new OceanRenderer('low');
     const active: VortexWaveState = {

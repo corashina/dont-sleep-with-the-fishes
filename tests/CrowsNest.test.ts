@@ -130,20 +130,25 @@ describe('mainmast crow\'s nest', () => {
 
       const guard = (name: string): Mesh<BoxGeometry> =>
         build.root.getObjectByName(`crows-nest:guard:${name}`) as Mesh<BoxGeometry>;
-      const portGuard = guard('port');
-      const starboardGuard = guard('starboard');
-      expect(portGuard.geometry.parameters.width).toBe(0.12);
-      expect(portGuard.position.x).toBe(-1.94);
-      expect(portGuard.geometry.parameters.depth).toBe(4);
-      expect(starboardGuard.geometry.parameters.width).toBe(0.12);
-      expect(starboardGuard.position.x).toBe(1.94);
+      const portTop = guard('port-top');
+      const starboardTop = guard('starboard-top');
+      expect(portTop.geometry.parameters.width).toBe(0.12);
+      expect(portTop.geometry.parameters.height).toBe(0.14);
+      expect(portTop.position.x).toBe(-1.94);
+      expect(portTop.geometry.parameters.depth).toBe(4);
+      expect(starboardTop.geometry.parameters.width).toBe(0.12);
+      expect(starboardTop.position.x).toBe(1.94);
 
-      const aftGuard = guard('aft');
-      expect(aftGuard.geometry.parameters.width).toBe(4);
-      expect(aftGuard.position.x).toBe(0);
-      expect(aftGuard.position.z).toBe(mast.position[2] - 1.94);
-      expect(build.root.getObjectByName('crows-nest:guard:aft-port')).toBeUndefined();
-      expect(build.root.getObjectByName('crows-nest:guard:aft-starboard')).toBeUndefined();
+      const aftTop = guard('aft-top');
+      expect(aftTop.geometry.parameters.width).toBe(4);
+      expect(aftTop.position.x).toBe(0);
+      expect(aftTop.position.z).toBe(mast.position[2] - 1.94);
+      const guardPosts = build.root.children.filter(
+        ({ name }) => name.startsWith('crows-nest:guard:') && name.includes('post'),
+      );
+      expect(guardPosts).toHaveLength(8);
+      expect(build.root.getObjectByName('crows-nest:guard:port')).toBeUndefined();
+      expect(build.root.getObjectByName('crows-nest:guard:aft')).toBeUndefined();
       expect(build.climbZone.topFloor).toEqual({
         minX: -1.88,
         maxX: 1.88,
@@ -152,8 +157,12 @@ describe('mainmast crow\'s nest', () => {
       });
 
       const floorSurfaceY = FREIGHTER_DIMENSIONS.deckY + 14.57;
-      expect(portGuard.position.y - portGuard.geometry.parameters.height / 2)
+      const portPost = guard('port-post-0');
+      expect(portPost.geometry.parameters.height).toBe(1.05);
+      expect(portPost.position.y - portPost.geometry.parameters.height / 2)
         .toBe(floorSurfaceY);
+      expect(portTop.position.y + portTop.geometry.parameters.height / 2)
+        .toBeCloseTo(floorSurfaceY + 1.05);
       expect(build.root.getObjectByName('crows-nest:bracket:1')).toBeUndefined();
       expect(build.root.getObjectByName('crows-nest:rope-collar:1')).toBeUndefined();
       const support = build.root.getObjectByName('crows-nest:support-beam') as Mesh<BoxGeometry>;
@@ -181,12 +190,12 @@ describe('mainmast crow\'s nest', () => {
         .toBe(false);
       expect(landing.x - mastCollider.maxX - PLAYER_LAYOUT_RADIUS).toBeCloseTo(0.02);
       const sideGuardCollider = {
-        minX: starboardGuard.position.x - starboardGuard.geometry.parameters.width / 2,
-        maxX: starboardGuard.position.x + starboardGuard.geometry.parameters.width / 2,
+        minX: starboardTop.position.x - starboardTop.geometry.parameters.width / 2,
+        maxX: starboardTop.position.x + starboardTop.geometry.parameters.width / 2,
         minY: floorSurfaceY,
         maxY: floorSurfaceY + SHIP_LAYOUT.rigging.crowsNest.guardHeight,
-        minZ: starboardGuard.position.z - starboardGuard.geometry.parameters.depth / 2,
-        maxZ: starboardGuard.position.z + starboardGuard.geometry.parameters.depth / 2,
+        minZ: starboardTop.position.z - starboardTop.geometry.parameters.depth / 2,
+        maxZ: starboardTop.position.z + starboardTop.geometry.parameters.depth / 2,
       };
       expect(circleOverlapsCollisionFootprint(landing, PLAYER_LAYOUT_RADIUS, sideGuardCollider))
         .toBe(false);
@@ -217,7 +226,7 @@ describe('mainmast crow\'s nest', () => {
           expect(supported).toBe(true);
           expect(circleOverlapsCollisionFootprint({ x, z }, PLAYER_LAYOUT_RADIUS, mastCollider))
             .toBe(false);
-          [portGuard, starboardGuard, guard('forward')].forEach((mesh) => {
+          [portTop, starboardTop, guard('forward-top')].forEach((mesh) => {
             const collider = {
               minX: mesh.position.x - mesh.geometry.parameters.width / 2,
               maxX: mesh.position.x + mesh.geometry.parameters.width / 2,

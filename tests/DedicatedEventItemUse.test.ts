@@ -31,11 +31,11 @@ import { LeakPresentation } from '../src/survival/events/LeakPresentation';
 import { SchoolOfFishPresentation } from '../src/survival/events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from '../src/survival/events/SnatcherPresentation';
 import { WhirlpoolPresentation } from '../src/survival/events/WhirlpoolPresentation';
-import { SWARM_ITEM_DURATION } from '../src/survival/events/anglerfishSwarmChoreography';
-import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
+import { swarmItemDuration } from '../src/survival/events/anglerfishSwarmChoreography';
+import { deathStareItemDuration } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
-import { SCHOOL_ITEM_DURATION } from '../src/survival/events/schoolOfFishChoreography';
-import { SNATCHER_ITEM_DURATION } from '../src/survival/events/snatcherChoreography';
+import { schoolItemDuration } from '../src/survival/events/schoolOfFishChoreography';
+import { snatcherItemDuration } from '../src/survival/events/snatcherChoreography';
 import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
 
 const choices = {
@@ -72,13 +72,13 @@ const eventProbeNames: Readonly<Record<ItemAnimationEventId, string>> = {
   whirlpool: 'whirlpool-dark-funnel',
 };
 
-const itemDurations: Readonly<Record<ItemAnimationEventId, number>> = {
-  leak: LEAK_ITEM_DURATION,
-  'school-of-fish': SCHOOL_ITEM_DURATION,
-  snatcher: SNATCHER_ITEM_DURATION,
-  'death-stare': DEATH_STARE_ITEM_DURATION,
-  'swarm-of-anglerfish': SWARM_ITEM_DURATION,
-  whirlpool: WHIRLPOOL_ITEM_DURATION,
+const itemDurations: Readonly<Record<ItemAnimationEventId, (choiceId: string) => number>> = {
+  leak: () => LEAK_ITEM_DURATION,
+  'school-of-fish': schoolItemDuration,
+  snatcher: snatcherItemDuration,
+  'death-stare': deathStareItemDuration,
+  'swarm-of-anglerfish': swarmItemDuration,
+  whirlpool: () => WHIRLPOOL_ITEM_DURATION,
 };
 
 const factories: Readonly<Record<
@@ -179,7 +179,7 @@ describe('dedicated event item use', () => {
       presentation.stage({ eventId, targetInstanceId: null, variantSeed: 41 });
 
       const itemUse = presentation.playItemUse(choiceId, instanceId);
-      presentation.update(1, itemDurations[eventId]);
+      presentation.update(1, itemDurations[eventId](choiceId));
       await expect(itemUse).resolves.toBe(true);
       expect(borrowEventActor).not.toHaveBeenCalled();
       expect(release).not.toHaveBeenCalled();
@@ -228,7 +228,7 @@ describe('dedicated event item use', () => {
       const itemUse = presentation.playItemUse(choiceId, instanceId);
       const resolved = vi.fn();
       void itemUse.then(resolved);
-      const duration = itemDurations[eventId];
+      const duration = itemDurations[eventId](choiceId);
       const eventProbe = presentation.worldRoot.getObjectByName(eventProbeNames[eventId])
         ?? presentation.boatRoot.getObjectByName(eventProbeNames[eventId]);
       expect(eventProbe).toBeDefined();

@@ -69,7 +69,7 @@ const TOOL_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
 });
 
 const EVENT_ITEM_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
-  ductTape: 'tapeRepair',
+  ductTape: 'ductTapePickup',
   flareGun: 'flareGun',
   shotgun: 'shotgun',
   flashlight: 'flashlight',

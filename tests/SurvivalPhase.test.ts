@@ -4455,74 +4455,21 @@ describe('SurvivalPhase orchestration', () => {
     );
   });
 
-  it('plays the item sound once when an event item use begins', async () => {
-    let current = snapshot({
-      state: 'nightEvent',
-      pendingEventId: 'other-people',
-      inventory: inventory({
-        'flareGun-1': {
-          instanceId: 'flareGun-1', type: 'flareGun', condition: 'usable',
-        },
-      }),
-    });
-    const itemUse = deferred();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => current),
-        resolveEvent: vi.fn(() => {
-          current = snapshot({ state: 'nightEvent', pendingEventId: null });
-          return accepted({
-            code: 'event-resolved',
-            eventResult: {
-              eventId: 'other-people',
-              choiceId: 'flareGun',
-              resultId: 'people-rescue',
-            },
-          });
-        }),
-      },
-      world: {
-        revealEvent: vi.fn(() => Promise.resolve()),
-        playEventItemUse: vi.fn(() => itemUse.promise),
-        playEventChoice: vi.fn(() => Promise.resolve()),
-        reactToEventOutcome: vi.fn(() => Promise.resolve()),
-        play: vi.fn(() => Promise.resolve()),
-        dispose: vi.fn(),
-      },
-      ui: {
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setEventUsing: vi.fn(),
-        setBusy: vi.fn(),
-        showFeedback: vi.fn(),
-        dispose: vi.fn(),
-      },
-    });
-    const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
-    const eventItem = vi.spyOn(audio, 'eventItem');
-    const eventAction = vi.spyOn(audio, 'eventAction');
-    const tool = vi.spyOn(audio, 'tool');
-
-    phase.start();
-    await flushPromises();
-    phase.handleEventItem('flareGun', 'flareGun-1');
-
-    expect(eventItem).toHaveBeenCalledExactlyOnceWith('flareGun');
-    expect(eventAction).not.toHaveBeenCalled();
-    expect(tool).not.toHaveBeenCalled();
-
-    itemUse.resolve();
-    await flushPromises();
-    phase.dispose();
-  });
-
-  it('defers the shotgun sound until its keyed action cue', async () => {
+  it.each([
+    ['shotgun', 'shotgun-1', 'death-stare'],
+    ['flashlight', 'flashlight-1', 'death-stare'],
+    ['flareGun', 'flareGun-1', 'other-people'],
+  ] as const)('defers the %s sound until its keyed action cue', async (
+    itemType,
+    instanceId,
+    eventId,
+  ) => {
     const current = snapshot({
       state: 'nightEvent',
-      pendingEventId: 'death-stare',
+      pendingEventId: eventId,
       inventory: inventory({
-        'shotgun-1': {
-          instanceId: 'shotgun-1', type: 'shotgun', condition: 'usable',
+        [instanceId]: {
+          instanceId, type: itemType, condition: 'usable' as const,
         },
       }),
     });
@@ -4557,12 +4504,12 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    phase.handleEventItem('shotgun', 'shotgun-1');
+    phase.handleEventItem(itemType, instanceId);
 
     expect(eventItem).not.toHaveBeenCalled();
     expect(actionCue).toEqual(expect.any(Function));
     actionCue!();
-    expect(eventItem).toHaveBeenCalledExactlyOnceWith('shotgun');
+    expect(eventItem).toHaveBeenCalledExactlyOnceWith(itemType);
 
     itemUse.resolve();
     await flushPromises();

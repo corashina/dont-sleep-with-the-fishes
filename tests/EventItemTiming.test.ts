@@ -5,31 +5,40 @@ import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersP
 import {
   EVENT_ITEM_DURATION_MULTIPLIER,
   scaleEventItemDuration,
+  scaleThrownItemDuration,
+  THROWN_ITEM_SPEED_MULTIPLIER,
 } from '../src/survival/eventItemTiming';
 import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
-import { SWARM_ITEM_DURATION } from '../src/survival/events/anglerfishSwarmChoreography';
-import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
+import { SWARM_ITEM_DURATION, swarmItemDuration } from '../src/survival/events/anglerfishSwarmChoreography';
+import { DEATH_STARE_ITEM_DURATION, deathStareItemDuration } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
-import { SCHOOL_ITEM_DURATION } from '../src/survival/events/schoolOfFishChoreography';
-import { SNATCHER_ITEM_DURATION } from '../src/survival/events/snatcherChoreography';
+import { SCHOOL_ITEM_DURATION, schoolItemDuration } from '../src/survival/events/schoolOfFishChoreography';
+import { SNATCHER_ITEM_DURATION, snatcherItemDuration } from '../src/survival/events/snatcherChoreography';
 import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
 import { supernaturalItemUseDuration } from '../src/survival/supernaturalEventChoreography';
 import { weatherItemUseDuration } from '../src/survival/weatherEventChoreography';
 
 describe('event item timing', () => {
-  it('applies the same four-times duration to every item animation system', () => {
+  it('keeps the standard pace and speeds thrown items up by 25 percent', () => {
     expect(EVENT_ITEM_DURATION_MULTIPLIER).toBe(4);
     expect(scaleEventItemDuration(1)).toBe(4);
+    expect(THROWN_ITEM_SPEED_MULTIPLIER).toBe(1.25);
+    expect(scaleThrownItemDuration(1)).toBe(3.2);
     expect(GENERIC_EVENT_ITEM_USE_DURATION).toBe(2.6);
     expect(DANGEROUS_WATERS_ITEM_DURATION).toBe(4.4);
-    expect(eventItemUseDuration('throw-target')).toBe(5.4);
+    expect(eventItemUseDuration('throw-target')).toBeCloseTo(4.32);
+    expect(eventItemUseDuration('net-throw')).toBe(4.8);
     expect(weatherItemUseDuration('shower-night', 'umbrella')).toBe(6);
     expect(supernaturalItemUseDuration('ghosts', 'flareGun')).toBe(4.8);
     expect(LEAK_ITEM_DURATION).toBe(4.4);
     expect(SCHOOL_ITEM_DURATION).toBe(5);
+    expect(schoolItemDuration('fishingNet')).toBe(4);
     expect(SNATCHER_ITEM_DURATION).toBe(4.6);
+    expect(snatcherItemDuration('swimRing')).toBeCloseTo(3.68);
     expect(DEATH_STARE_ITEM_DURATION).toBe(5);
+    expect(deathStareItemDuration('food')).toBe(4);
     expect(SWARM_ITEM_DURATION).toBe(4.8);
-    expect(WHIRLPOOL_ITEM_DURATION).toBe(5);
+    expect(swarmItemDuration('baitTin')).toBeCloseTo(3.84);
+    expect(WHIRLPOOL_ITEM_DURATION).toBe(4);
   });
 });

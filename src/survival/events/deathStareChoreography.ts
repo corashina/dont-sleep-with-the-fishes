@@ -1,9 +1,15 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
-import { scaleEventItemDuration } from '../eventItemTiming';
+import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
 
 export const DEATH_STARE_REVEAL_DURATION = 3.2;
 export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
+
+export function deathStareItemDuration(choiceId: string): number {
+  return choiceId === 'food' || choiceId === 'cannedFood' || choiceId === 'fishingNet'
+    ? scaleThrownItemDuration(1.25)
+    : DEATH_STARE_ITEM_DURATION;
+}
 
 export type DeathStareItemEffectKind =
   | 'none'

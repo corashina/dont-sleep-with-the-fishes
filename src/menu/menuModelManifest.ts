@@ -4,7 +4,7 @@ import menuMetadataJson from '../assets/models/menu/menu-model-metadata.json';
 export const MENU_MODEL_IDS = [
   'boat', 'rockA', 'rockB', 'rockC', 'coral', 'starfish',
   'fishBone', 'skull', 'largeBone', 'shark',
-  'sardine', 'clownfish', 'seaweed',
+  'redSnapper', 'seaweed',
 ] as const;
 
 export type MenuModelId = typeof MENU_MODEL_IDS[number];
@@ -39,8 +39,7 @@ const PRESENTATION = {
   skull: { targetLongestDimension: 0.52, rotation: [0, 0, 0], maxTriangles: 3500 },
   largeBone: { targetLongestDimension: 0.9, rotation: [0, 0, 0], maxTriangles: 1800 },
   shark: { targetLongestDimension: 4.8, rotation: [0, 0, 0], maxTriangles: 700 },
-  sardine: { targetLongestDimension: 0.68, rotation: [0, Math.PI / 2, 0], maxTriangles: 2000 },
-  clownfish: { targetLongestDimension: 0.58, rotation: [0, 0, 0], maxTriangles: 2000 },
+  redSnapper: { targetLongestDimension: 0.76, rotation: [0, 0, 0], maxTriangles: 2000 },
   seaweed: { targetLongestDimension: 0.62, rotation: [0, 0, 0], maxTriangles: 2000 },
 } as const;
 
@@ -60,7 +59,7 @@ function metadata(source: SourceMetadata): GeneratedMetadata {
 }
 
 function modelUrl(id: MenuModelId): string {
-  const directory = id === 'sardine' || id === 'clownfish' || id === 'seaweed'
+  const directory = id === 'redSnapper' || id === 'seaweed'
     ? 'fishing' : 'menu';
   return new URL(`../assets/models/${directory}/${id}.glb`, import.meta.url).href;
 }
@@ -76,8 +75,7 @@ const GENERATED_METADATA: Readonly<Record<MenuModelId, GeneratedMetadata>> = {
   skull: metadata(menuMetadata.skull!),
   largeBone: metadata(menuMetadata.largeBone!),
   shark: metadata(menuMetadata.shark!),
-  sardine: metadata(fishingMetadata.sardine!),
-  clownfish: metadata(fishingMetadata.clownfish!),
+  redSnapper: metadata(fishingMetadata.redSnapper!),
   seaweed: metadata(fishingMetadata.seaweed!),
 };
 

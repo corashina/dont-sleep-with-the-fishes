@@ -107,30 +107,33 @@ const vertexShader = `
   uniform float uVortexTangentStrength;
   uniform float uVortexPhase;
   uniform float uVortexStrength;
-  varying float vHeight;
-  varying float vWaveSlope;
   varying float vViewDepth;
-  varying vec3 vWorldNormal;
+  varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
 
   void main() {
     vec3 displaced = position;
     vec2 worldXZ = position.xz + uOrigin;
-    float derivativeX = 0.0;
-    float derivativeZ = 0.0;
+    vec4 baseWorldPosition = modelMatrix * vec4(position, 1.0);
+    float geometryLod = smoothstep(
+      55.0,
+      140.0,
+      length(cameraPosition - baseWorldPosition.xyz)
+    );
     float height = 0.0;
     for (int i = 0; i < 4; i++) {
       vec2 direction = normalize(uDirections[i]);
-      float amplitude = uParameters[i].x * uAmplitudeScale;
-      float waveNumber = 6.28318530718 / uParameters[i].y;
+      float wavelength = uParameters[i].y;
+      float resolvedGeometryWave = smoothstep(4.0, 11.0, wavelength);
+      float geometryWeight = mix(1.0, resolvedGeometryWave, geometryLod);
+      float amplitude = uParameters[i].x * uAmplitudeScale * geometryWeight;
+      float waveNumber = 6.28318530718 / wavelength;
       float theta = waveNumber * dot(direction, worldXZ) + uParameters[i].z * uTime + uPhases[i];
       float waveSin = sin(theta);
       float waveCos = cos(theta);
       height += amplitude * waveSin;
       displaced.x += uParameters[i].w * amplitude * direction.x * waveCos;
       displaced.z += uParameters[i].w * amplitude * direction.y * waveCos;
-      derivativeX += amplitude * waveNumber * direction.x * waveCos;
-      derivativeZ += amplitude * waveNumber * direction.y * waveCos;
     }
     vec2 vortexDelta = worldXZ - uVortexCenter;
     float vortexDistance = length(vortexDelta);
@@ -140,22 +143,13 @@ const vertexShader = `
     float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
     vec2 radial = vortexDelta * inverseDistance;
     float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
-    float envelopeDerivative =
-      vortexDistance > 0.0001 && vortexDistance < vortexRadius
-        ? -6.0 * envelopeT * (1.0 - envelopeT) * uVortexStrength / vortexRadius
-        : 0.0;
     height -= uVortexDepression * envelope;
     displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
     displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
-    derivativeX -= uVortexDepression * envelopeDerivative * radial.x;
-    derivativeZ -= uVortexDepression * envelopeDerivative * radial.y;
     displaced.y += height;
-    vec3 localNormal = normalize(vec3(-derivativeX, 1.0, -derivativeZ));
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
-    vHeight = height;
-    vWaveSlope = length(vec2(derivativeX, derivativeZ));
     vViewDepth = length(cameraPosition - worldPosition.xyz);
-    vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
+    vOceanPosition = worldXZ;
     vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
@@ -165,6 +159,13 @@ const fragmentShader = `
   uniform float uTime;
   uniform float uAmplitudeScale;
   uniform vec2 uDetailFade;
+  uniform vec2 uDirections[4];
+  uniform vec4 uParameters[4];
+  uniform float uPhases[4];
+  uniform vec2 uVortexCenter;
+  uniform float uVortexRadius;
+  uniform float uVortexDepression;
+  uniform float uVortexStrength;
   uniform vec3 uDeepColor;
   uniform vec3 uShallowColor;
   uniform vec3 uFoamColor;
@@ -184,11 +185,48 @@ const fragmentShader = `
   uniform vec2 uExclusionLowerTaperStarts[2];
   uniform float uExclusionMinimumLocalYs[2];
   uniform float uExclusionUpperLocalYs[2];
-  varying float vHeight;
-  varying float vWaveSlope;
   varying float vViewDepth;
-  varying vec3 vWorldNormal;
+  varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
+
+  void sampleSurfaceWave(
+    vec2 worldPosition,
+    out float height,
+    out vec2 derivative
+  ) {
+    height = 0.0;
+    derivative = vec2(0.0);
+    for (int i = 0; i < 4; i++) {
+      vec2 direction = normalize(uDirections[i]);
+      float amplitude = uParameters[i].x * uAmplitudeScale;
+      float waveNumber = 6.28318530718 / uParameters[i].y;
+      float theta = waveNumber * dot(direction, worldPosition)
+        + uParameters[i].z * uTime
+        + uPhases[i];
+      float waveCos = cos(theta);
+      height += amplitude * sin(theta);
+      derivative += amplitude * waveNumber * direction * waveCos;
+    }
+
+    vec2 vortexDelta = worldPosition - uVortexCenter;
+    float vortexDistance = length(vortexDelta);
+    float vortexRadius = max(0.001, uVortexRadius);
+    float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
+    float envelope = envelopeT * envelopeT
+      * (3.0 - 2.0 * envelopeT)
+      * uVortexStrength;
+    float inverseDistance = vortexDistance > 0.0001
+      ? 1.0 / vortexDistance
+      : 0.0;
+    vec2 radial = vortexDelta * inverseDistance;
+    float envelopeDerivative =
+      vortexDistance > 0.0001 && vortexDistance < vortexRadius
+        ? -6.0 * envelopeT * (1.0 - envelopeT)
+          * uVortexStrength / vortexRadius
+        : 0.0;
+    height -= uVortexDepression * envelope;
+    derivative -= uVortexDepression * envelopeDerivative * radial;
+  }
 
   float bayer2(vec2 cell) {
     return 2.0 * cell.x + 3.0 * cell.y - 4.0 * cell.x * cell.y;
@@ -496,7 +534,15 @@ const fragmentShader = `
     #ifdef HIGH_QUALITY_WATER
     detailSlope += highQualityRippleSlope(vWorldPosition.xz);
     #endif
-    vec3 normal = normalize(vWorldNormal + vec3(-detailSlope.x, 0.0, -detailSlope.y));
+    float waveHeight;
+    vec2 waveDerivative;
+    sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative);
+    float waveSlope = length(waveDerivative);
+    vec3 normal = normalize(vec3(
+      -waveDerivative.x - detailSlope.x,
+      1.0,
+      -waveDerivative.y - detailSlope.y
+    ));
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     vec3 lightDirection = normalize(uLightDirection);
     float lightFacing = clamp(dot(normal, lightDirection), 0.0, 1.0);
@@ -509,19 +555,19 @@ const fragmentShader = `
     vec3 reflectedColor = mix(uHorizonColor * 0.92, uSkyColor, reflectedSky);
     reflectedColor = mix(uHorizonColor * 0.78, reflectedColor, reflectionLift);
 
-    float trough = 1.0 - smoothstep(-0.48, 0.38, vHeight);
-    float depthMix = clamp(0.18 + vHeight * 0.27 + lightFacing * 0.23, 0.0, 1.0);
+    float trough = 1.0 - smoothstep(-0.48, 0.38, waveHeight);
+    float depthMix = clamp(0.18 + waveHeight * 0.27 + lightFacing * 0.23, 0.0, 1.0);
     vec3 waterBody = mix(uDeepColor, uShallowColor, depthMix);
     waterBody *= 1.0 - trough * 0.16;
     float forwardScatter = pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 4.0);
     waterBody += uShallowColor * forwardScatter * uDirectLightStrength
-      * (0.055 + vWaveSlope * 0.12);
+      * (0.055 + waveSlope * 0.12);
     #ifdef HIGH_QUALITY_WATER
     float daylight = smoothstep(0.08, 0.92, uDirectLightStrength);
     vec3 weatherTint = mix(uFogColor * 0.78, uHorizonColor * 0.64, 0.42);
     float turquoiseRetention = mix(0.34, 0.92, daylight);
     waterBody = mix(weatherTint, waterBody, turquoiseRetention);
-    float crestTransmission = smoothstep(-0.18, 0.58, vHeight)
+    float crestTransmission = smoothstep(-0.18, 0.58, waveHeight)
       * pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 2.0);
     waterBody += uShallowColor * crestTransmission
       * uDirectLightStrength * 0.075;
@@ -567,8 +613,8 @@ const fragmentShader = `
       vViewDepth
     );
     float bodyFoam = foamBody(
-      vHeight,
-      vWaveSlope,
+      waveHeight,
+      waveSlope,
       ribbonNoise,
       edgeNoise,
       fineDetailFade
@@ -587,18 +633,18 @@ const fragmentShader = `
     );
     float highFoam = highQualityFoamCoverage(
       vWorldPosition.xz,
-      vHeight,
-      vWaveSlope,
+      waveHeight,
+      waveSlope,
       highFoamDistanceFade
     );
     bodyFoam = max(bodyFoam, highFoam * 0.86);
     #endif
-    float capFoam = foamCap(vHeight, vWaveSlope, bodyFoam, ribbonNoise);
+    float capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
     #ifdef HIGH_QUALITY_WATER
     float highCapFoam = highQualityCrestCap(
       vWorldPosition.xz,
-      vHeight,
-      vWaveSlope,
+      waveHeight,
+      waveSlope,
       highFoam,
       highFoamDistanceFade
     );

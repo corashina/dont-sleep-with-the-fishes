@@ -7,7 +7,7 @@ import {
 import type { EventItemUseAdapter } from './EventItemUseAdapter';
 import {
   createEventItemUseSample,
-  eventItemActionCueProgress,
+  eventItemActionCueProgresses,
   eventItemOutcomeDuration,
   eventItemUseDuration,
   sampleEventItemOutcome,
@@ -33,7 +33,7 @@ type ActiveItemUse = {
   readonly actor: BorrowedSupplyActor;
   elapsed: number;
   readonly duration: number;
-  actionCuePlayed: boolean;
+  nextActionCueIndex: number;
   readonly resolve: (played: boolean) => void;
 };
 
@@ -92,7 +92,7 @@ export class EventItemUseController {
         actor,
         elapsed: 0,
         duration: eventItemUseDuration(request.context),
-        actionCuePlayed: false,
+        nextActionCueIndex: 0,
         resolve,
       };
     });
@@ -168,14 +168,13 @@ export class EventItemUseController {
         this.sample,
       );
       this.adapter.apply(this.sample);
-      const actionCueProgress = eventItemActionCueProgress(use.request.context);
-      if (
-        !use.actionCuePlayed
-        && use.request.onAction !== undefined
-        && actionCueProgress !== null
-        && progress >= actionCueProgress
+      const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
+      while (
+        use.request.onAction !== undefined
+        && use.nextActionCueIndex < actionCueProgresses.length
+        && progress >= actionCueProgresses[use.nextActionCueIndex]!
       ) {
-        use.actionCuePlayed = true;
+        use.nextActionCueIndex += 1;
         use.request.onAction();
       }
       if (use.elapsed >= use.duration) {
