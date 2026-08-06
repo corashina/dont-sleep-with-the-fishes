@@ -3,18 +3,20 @@ import type { CollisionArc, CollisionBox } from '../player/collisions';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import { FixedStepClock } from './FixedStepClock';
 import type { PhysicsRuntime, PhysicsVector3 } from './PhysicsRuntime';
+import type {
+  PhysicsObjectBodyProfile,
+  PhysicsObjectCollider,
+} from './ScavengePhysicsObjectTypes';
 
 const PHYSICS_STEP_SECONDS = 1 / 60;
 const MAX_PHYSICS_SUBSTEPS = 3;
 const DECK_THICKNESS = 0.2;
 const ARC_COLLIDER_SEGMENTS = 8;
-export const SCAVENGE_BARREL_RADIUS = 0.565;
-export const SCAVENGE_BARREL_HALF_HEIGHT = 0.575;
-const BARREL_MASS = 35;
-const BARREL_FRICTION = 0.002;
-const BARREL_RESTITUTION = 0.05;
-const BARREL_LINEAR_DAMPING = 0.04;
-const BARREL_ANGULAR_DAMPING = 0.03;
+const PLAYER_RADIUS = 0.35;
+const PLAYER_CAPSULE_HALF_HEIGHT = 0.4;
+const PLAYER_CAPSULE_CENTER_BELOW_EYE = 0.75;
+const PLAYER_CHARACTER_OFFSET = 0.01;
+const PLAYER_CHARACTER_MASS = 6;
 
 interface MutablePhysicsVector3 {
   x: number;
@@ -32,6 +34,16 @@ interface MutablePhysicsQuaternion {
 interface MutablePhysicsPose {
   translation: MutablePhysicsVector3;
   rotation: MutablePhysicsQuaternion;
+}
+
+interface MutableRigidBodyState {
+  translation: MutablePhysicsVector3;
+  rotation: MutablePhysicsQuaternion;
+  linearVelocity: MutablePhysicsVector3;
+  angularVelocity: MutablePhysicsVector3;
+  force: MutablePhysicsVector3;
+  torque: MutablePhysicsVector3;
+  sleeping: boolean;
 }
 
 export interface PhysicsQuaternion {
@@ -58,11 +70,22 @@ export interface ScavengePhysicsConfig {
     readonly maxZ: number;
   };
   readonly initialShipPose: PhysicsPose;
-  readonly barrelSpawns: readonly PhysicsVector3[];
+  readonly objects: readonly ScavengePhysicsObjectConfig[];
+}
+
+export interface ScavengePhysicsObjectConfig {
+  readonly id: string;
+  readonly spawn: PhysicsVector3;
+  readonly rotation: PhysicsQuaternion;
+  readonly profile: PhysicsObjectBodyProfile;
 }
 
 export interface ScavengePhysicsController {
-  readonly barrelPoses: readonly PhysicsPose[];
+  readonly objectPoses: readonly PhysicsPose[];
+  resolvePlayerMovement(
+    currentLocal: PhysicsVector3,
+    desiredLocal: { x: number; y: number; z: number },
+  ): void;
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void;
   dispose(): void;
 }
@@ -196,6 +219,49 @@ export function createScavengeStaticCuboids(
   ];
 }
 
+function multiplyQuaternions(
+  target: MutablePhysicsQuaternion,
+  left: PhysicsQuaternion,
+  right: PhysicsQuaternion,
+): void {
+  target.x = left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y;
+  target.y = left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x;
+  target.z = left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w;
+  target.w = left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z;
+  copyNormalizedQuaternion(target, target);
+}
+
+function worldRotationToLocal(
+  target: MutablePhysicsQuaternion,
+  world: PhysicsQuaternion,
+  frame: PhysicsQuaternion,
+): void {
+  const frameX = -frame.x;
+  const frameY = -frame.y;
+  const frameZ = -frame.z;
+  const frameW = frame.w;
+  target.x = frameW * world.x + frameX * world.w + frameY * world.z - frameZ * world.y;
+  target.y = frameW * world.y - frameX * world.z + frameY * world.w + frameZ * world.x;
+  target.z = frameW * world.z + frameX * world.y - frameY * world.x + frameZ * world.w;
+  target.w = frameW * world.w - frameX * world.x - frameY * world.y - frameZ * world.z;
+  copyNormalizedQuaternion(target, target);
+}
+
+function createObjectColliderDesc(
+  rapier: PhysicsRuntime['rapier'],
+  collider: PhysicsObjectCollider,
+): RAPIER.ColliderDesc {
+  if (collider.kind === 'sphere') return rapier.ColliderDesc.ball(collider.radius);
+  if (collider.kind === 'cylinder') {
+    return rapier.ColliderDesc.cylinder(collider.halfHeight, collider.radius);
+  }
+  return rapier.ColliderDesc.cuboid(
+    collider.halfExtents.x,
+    collider.halfExtents.y,
+    collider.halfExtents.z,
+  );
+}
+
 function copyVector(target: MutablePhysicsVector3, source: PhysicsVector3): void {
   target.x = source.x;
   target.y = source.y;
@@ -279,15 +345,23 @@ function isFinitePose(translation: PhysicsVector3, rotation: PhysicsQuaternion):
 }
 
 export class ScavengePhysics implements ScavengePhysicsController {
-  readonly barrelPoses: readonly MutablePhysicsPose[];
-  readonly barrelLocalPositionsForTest: readonly MutablePhysicsVector3[];
+  readonly objectPoses: readonly MutablePhysicsPose[];
+  readonly objectLocalPositionsForTest: readonly MutablePhysicsVector3[];
 
   private readonly world: RAPIER.World;
   private readonly clock: FixedStepClock;
   private readonly shipBody: RAPIER.RigidBody;
-  private readonly barrelBodies: readonly RAPIER.RigidBody[];
-  private readonly barrelSpawns: readonly MutablePhysicsVector3[];
-  private readonly barrelSpawnWorlds: readonly MutablePhysicsVector3[];
+  private readonly playerCollider: RAPIER.Collider;
+  private readonly playerController: RAPIER.KinematicCharacterController;
+  private readonly objectBodies: readonly RAPIER.RigidBody[];
+  private readonly objectSceneQuerySnapshots: readonly MutableRigidBodyState[];
+  private readonly objectHorizontalRadii: readonly number[];
+  private readonly dynamicColliderHandles = new Set<number>();
+  private readonly objectSpawns: readonly MutablePhysicsVector3[];
+  private readonly objectRotations: readonly MutablePhysicsQuaternion[];
+  private readonly objectLocalRotations: readonly MutablePhysicsQuaternion[];
+  private readonly objectSpawnWorlds: readonly MutablePhysicsVector3[];
+  private readonly objectSpawnWorldRotations: readonly MutablePhysicsQuaternion[];
   private readonly safeBounds: PlayerNavigationBounds['safe'];
   private readonly deckY: number;
   private readonly previousShipPose: MutablePhysicsPose = {
@@ -303,8 +377,20 @@ export class ScavengePhysics implements ScavengePhysicsController {
     rotation: { x: 0, y: 0, z: 0, w: 1 },
   };
   private readonly zeroVelocity: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerCurrentLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerCurrentWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerDesiredWorldDelta: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerResolvedWorldCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
+  private readonly playerResolvedLocalCenter: MutablePhysicsVector3 = { x: 0, y: 0, z: 0 };
   private recoveryCount = 0;
+  private sceneQueriesInitialized = false;
   private disposed = false;
+
+  private readonly dynamicColliderFilter = (collider: RAPIER.Collider): boolean => (
+    this.dynamicColliderHandles.has(collider.handle)
+  );
 
   private readonly stepPhysics = (
     stepSeconds: number,
@@ -328,11 +414,12 @@ export class ScavengePhysics implements ScavengePhysicsController {
     this.shipBody.setNextKinematicRotation(this.currentShipPose.rotation);
     this.world.timestep = stepSeconds;
     this.world.step();
+    this.sceneQueriesInitialized = true;
   };
 
   constructor(runtime: PhysicsRuntime, config: ScavengePhysicsConfig) {
-    if (config.barrelSpawns.length === 0) {
-      throw new Error('Scavenging physics requires at least one barrel spawn');
+    if (config.objects.length === 0) {
+      throw new Error('Scavenging physics requires at least one object');
     }
     const staticCuboids = createScavengeStaticCuboids(config);
     this.safeBounds = config.safeBounds;
@@ -358,66 +445,258 @@ export class ScavengePhysics implements ScavengePhysicsController {
 
     staticCuboids.forEach((cuboid) => this.addCuboid(cuboid, runtime));
 
-    this.barrelSpawns = config.barrelSpawns.map((spawn) => ({ ...spawn }));
-    this.barrelSpawnWorlds = this.barrelSpawns.map(() => ({ x: 0, y: 0, z: 0 }));
-    this.barrelPoses = this.barrelSpawns.map(() => ({
+    this.playerCollider = this.world.createCollider(
+      runtime.rapier.ColliderDesc.capsule(
+        PLAYER_CAPSULE_HALF_HEIGHT,
+        PLAYER_RADIUS,
+      ).setSensor(true),
+    );
+    this.playerController = this.world.createCharacterController(PLAYER_CHARACTER_OFFSET);
+    this.playerController.setApplyImpulsesToDynamicBodies(true);
+    this.playerController.setCharacterMass(PLAYER_CHARACTER_MASS);
+    this.playerController.setSlideEnabled(true);
+    this.playerController.disableAutostep();
+    this.playerController.disableSnapToGround();
+
+    this.objectSpawns = config.objects.map(({ spawn }) => ({ ...spawn }));
+    this.objectRotations = config.objects.map(({ rotation }) => {
+      const copy = { x: 0, y: 0, z: 0, w: 1 };
+      copyNormalizedQuaternion(copy, rotation);
+      return copy;
+    });
+    this.objectLocalRotations = this.objectRotations.map((rotation) => ({ ...rotation }));
+    this.objectSpawnWorlds = config.objects.map(() => ({ x: 0, y: 0, z: 0 }));
+    this.objectSpawnWorldRotations = config.objects.map(() => ({ x: 0, y: 0, z: 0, w: 1 }));
+    this.objectHorizontalRadii = config.objects.map(({ profile }) => {
+      const { collider } = profile;
+      if (collider.kind === 'sphere' || collider.kind === 'cylinder') return collider.radius;
+      return Math.hypot(collider.halfExtents.x, collider.halfExtents.z);
+    });
+    this.objectPoses = config.objects.map(() => ({
       translation: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0, w: 1 },
     }));
-    this.barrelLocalPositionsForTest = this.barrelSpawns.map(() => ({ x: 0, y: 0, z: 0 }));
-    this.barrelBodies = this.barrelSpawns.map((spawn, index) => {
-      const spawnWorld = this.barrelSpawnWorlds[index]!;
+    this.objectLocalPositionsForTest = config.objects.map(() => ({ x: 0, y: 0, z: 0 }));
+    this.objectSceneQuerySnapshots = config.objects.map(() => ({
+      translation: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      linearVelocity: { x: 0, y: 0, z: 0 },
+      angularVelocity: { x: 0, y: 0, z: 0 },
+      force: { x: 0, y: 0, z: 0 },
+      torque: { x: 0, y: 0, z: 0 },
+      sleeping: false,
+    }));
+    this.objectBodies = config.objects.map(({ profile }, index) => {
+      const spawn = this.objectSpawns[index]!;
+      const spawnWorld = this.objectSpawnWorlds[index]!;
+      const spawnWorldRotation = this.objectSpawnWorldRotations[index]!;
       localToWorld(spawnWorld, spawn, this.currentShipPose);
+      multiplyQuaternions(
+        spawnWorldRotation,
+        this.currentShipPose.rotation,
+        this.objectRotations[index]!,
+      );
       const body = this.world.createRigidBody(
         runtime.rapier.RigidBodyDesc.dynamic()
           .setTranslation(spawnWorld.x, spawnWorld.y, spawnWorld.z)
-          .setLinearDamping(BARREL_LINEAR_DAMPING)
-          .setAngularDamping(BARREL_ANGULAR_DAMPING),
+          .setRotation(spawnWorldRotation)
+          .setLinearDamping(profile.linearDamping)
+          .setAngularDamping(profile.angularDamping),
       );
-      this.world.createCollider(
-        runtime.rapier.ColliderDesc.cylinder(
-          SCAVENGE_BARREL_HALF_HEIGHT,
-          SCAVENGE_BARREL_RADIUS,
-        )
-        .setMass(BARREL_MASS)
-        .setFriction(BARREL_FRICTION)
-        .setFrictionCombineRule(runtime.rapier.CoefficientCombineRule.Min)
-        .setRestitution(BARREL_RESTITUTION),
+      const collider = this.world.createCollider(
+        createObjectColliderDesc(runtime.rapier, profile.collider)
+        .setMass(profile.mass)
+        .setFriction(profile.friction)
+        .setFrictionCombineRule(runtime.rapier.CoefficientCombineRule.Average)
+        .setRestitution(profile.restitution),
         body,
       );
+      this.dynamicColliderHandles.add(collider.handle);
       return body;
     });
-    this.validateAndCopyBarrels();
+    this.validateAndCopyObjects();
+  }
+
+  resolvePlayerMovement(
+    currentLocal: PhysicsVector3,
+    desiredLocal: { x: number; y: number; z: number },
+  ): void {
+    if (this.disposed) return;
+    if (
+      !this.sceneQueriesInitialized
+      && this.playerMovementMayContactDynamic(currentLocal, desiredLocal)
+    ) {
+      this.initializeSceneQueries();
+    }
+    this.playerCurrentLocalCenter.x = currentLocal.x;
+    this.playerCurrentLocalCenter.y = currentLocal.y - PLAYER_CAPSULE_CENTER_BELOW_EYE;
+    this.playerCurrentLocalCenter.z = currentLocal.z;
+    this.playerDesiredLocalCenter.x = desiredLocal.x;
+    this.playerDesiredLocalCenter.y = desiredLocal.y - PLAYER_CAPSULE_CENTER_BELOW_EYE;
+    this.playerDesiredLocalCenter.z = desiredLocal.z;
+    localToWorld(
+      this.playerCurrentWorldCenter,
+      this.playerCurrentLocalCenter,
+      this.currentShipPose,
+    );
+    localToWorld(
+      this.playerDesiredWorldCenter,
+      this.playerDesiredLocalCenter,
+      this.currentShipPose,
+    );
+    this.playerCollider.setTranslation(this.playerCurrentWorldCenter);
+    this.playerDesiredWorldDelta.x = this.playerDesiredWorldCenter.x
+      - this.playerCurrentWorldCenter.x;
+    this.playerDesiredWorldDelta.y = this.playerDesiredWorldCenter.y
+      - this.playerCurrentWorldCenter.y;
+    this.playerDesiredWorldDelta.z = this.playerDesiredWorldCenter.z
+      - this.playerCurrentWorldCenter.z;
+    this.playerController.computeColliderMovement(
+      this.playerCollider,
+      this.playerDesiredWorldDelta,
+      undefined,
+      undefined,
+      this.dynamicColliderFilter,
+    );
+    const movement = this.playerController.computedMovement();
+    this.playerResolvedWorldCenter.x = this.playerCurrentWorldCenter.x + movement.x;
+    this.playerResolvedWorldCenter.y = this.playerCurrentWorldCenter.y + movement.y;
+    this.playerResolvedWorldCenter.z = this.playerCurrentWorldCenter.z + movement.z;
+    worldToLocal(
+      this.playerResolvedLocalCenter,
+      this.playerResolvedWorldCenter,
+      this.currentShipPose,
+    );
+    desiredLocal.x = this.playerResolvedLocalCenter.x;
+    desiredLocal.z = this.playerResolvedLocalCenter.z;
+  }
+
+  private playerMovementMayContactDynamic(
+    currentLocal: PhysicsVector3,
+    desiredLocal: PhysicsVector3,
+  ): boolean {
+    const movementX = desiredLocal.x - currentLocal.x;
+    const movementZ = desiredLocal.z - currentLocal.z;
+    const movementLengthSquared = movementX * movementX + movementZ * movementZ;
+    for (let index = 0; index < this.objectLocalPositionsForTest.length; index += 1) {
+      const object = this.objectLocalPositionsForTest[index]!;
+      const relativeX = object.x - currentLocal.x;
+      const relativeZ = object.z - currentLocal.z;
+      const fraction = movementLengthSquared > Number.EPSILON
+        ? Math.max(0, Math.min(
+          1,
+          (relativeX * movementX + relativeZ * movementZ) / movementLengthSquared,
+        ))
+        : 0;
+      const closestX = currentLocal.x + movementX * fraction;
+      const closestZ = currentLocal.z + movementZ * fraction;
+      const deltaX = object.x - closestX;
+      const deltaZ = object.z - closestZ;
+      const radius = PLAYER_RADIUS + this.objectHorizontalRadii[index]!;
+      if (deltaX * deltaX + deltaZ * deltaZ <= radius * radius) return true;
+    }
+    return false;
+  }
+
+  private initializeSceneQueries(): void {
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      const snapshot = this.objectSceneQuerySnapshots[index]!;
+      copyVector(snapshot.translation, body.translation());
+      copyVector(snapshot.linearVelocity, body.linvel());
+      copyVector(snapshot.angularVelocity, body.angvel());
+      copyVector(snapshot.force, body.userForce());
+      copyVector(snapshot.torque, body.userTorque());
+      const rotation = body.rotation();
+      snapshot.rotation.x = rotation.x;
+      snapshot.rotation.y = rotation.y;
+      snapshot.rotation.z = rotation.z;
+      snapshot.rotation.w = rotation.w;
+      snapshot.sleeping = body.isSleeping();
+    }
+    this.world.timestep = PHYSICS_STEP_SECONDS;
+    this.world.step();
+    this.sceneQueriesInitialized = true;
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      const snapshot = this.objectSceneQuerySnapshots[index]!;
+      body.setTranslation(snapshot.translation, false);
+      body.setRotation(snapshot.rotation, false);
+      body.setLinvel(snapshot.linearVelocity, false);
+      body.setAngvel(snapshot.angularVelocity, false);
+      body.resetForces(false);
+      body.resetTorques(false);
+      body.addForce(snapshot.force, false);
+      body.addTorque(snapshot.torque, false);
+      if (snapshot.sleeping) body.sleep();
+      else body.wakeUp();
+    }
+    this.world.propagateModifiedBodyPositionsToColliders();
   }
 
   update(shipPose: PhysicsPose, deltaSeconds: number, active: boolean): void {
-    if (!active || this.disposed) return;
+    if (this.disposed) return;
+    if (!active) {
+      this.trackInactiveShip(shipPose);
+      return;
+    }
     copyVector(this.targetShipPose.translation, shipPose.translation);
     copyNormalizedQuaternion(this.targetShipPose.rotation, shipPose.rotation);
     const stepCount = this.clock.advance(deltaSeconds, this.stepPhysics);
     if (stepCount > 0) {
-      this.validateAndCopyBarrels();
+      this.validateAndCopyObjects();
     }
     copyVector(this.previousShipPose.translation, this.targetShipPose.translation);
     copyNormalizedQuaternion(this.previousShipPose.rotation, this.targetShipPose.rotation);
+  }
+
+  private trackInactiveShip(shipPose: PhysicsPose): void {
+    copyVector(this.previousShipPose.translation, shipPose.translation);
+    copyNormalizedQuaternion(this.previousShipPose.rotation, shipPose.rotation);
+    copyVector(this.targetShipPose.translation, this.previousShipPose.translation);
+    copyNormalizedQuaternion(this.targetShipPose.rotation, this.previousShipPose.rotation);
+    copyVector(this.currentShipPose.translation, this.previousShipPose.translation);
+    copyNormalizedQuaternion(this.currentShipPose.rotation, this.previousShipPose.rotation);
+    this.shipBody.setTranslation(this.currentShipPose.translation, false);
+    this.shipBody.setRotation(this.currentShipPose.rotation, false);
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      const body = this.objectBodies[index]!;
+      const worldPosition = this.objectSpawnWorlds[index]!;
+      const worldRotation = this.objectSpawnWorldRotations[index]!;
+      localToWorld(
+        worldPosition,
+        this.objectLocalPositionsForTest[index]!,
+        this.currentShipPose,
+      );
+      multiplyQuaternions(
+        worldRotation,
+        this.currentShipPose.rotation,
+        this.objectLocalRotations[index]!,
+      );
+      body.setTranslation(worldPosition, false);
+      body.setRotation(worldRotation, false);
+      copyVector(this.objectPoses[index]!.translation, worldPosition);
+      copyNormalizedQuaternion(this.objectPoses[index]!.rotation, worldRotation);
+    }
+    this.world.propagateModifiedBodyPositionsToColliders();
   }
 
   get recoveryCountForTest(): number {
     return this.recoveryCount;
   }
 
-  setBarrelPoseForTest(pose: PhysicsPose, index = 0): void {
+  setObjectPoseForTest(pose: PhysicsPose, index = 0): void {
     if (this.disposed) return;
-    const body = this.barrelBodies[index];
-    if (!body) throw new Error(`Missing physics barrel ${index}`);
+    const body = this.objectBodies[index];
+    if (!body) throw new Error(`Missing physics object ${index}`);
     body.setTranslation(pose.translation, true);
     body.setRotation(pose.rotation, true);
   }
 
-  setBarrelVelocityForTest(velocity: PhysicsVector3, index = 0): void {
+  setObjectVelocityForTest(velocity: PhysicsVector3, index = 0): void {
     if (this.disposed) return;
-    const body = this.barrelBodies[index];
-    if (!body) throw new Error(`Missing physics barrel ${index}`);
+    const body = this.objectBodies[index];
+    if (!body) throw new Error(`Missing physics object ${index}`);
     body.setLinvel(velocity, true);
     body.setAngvel(velocity, true);
   }
@@ -425,6 +704,7 @@ export class ScavengePhysics implements ScavengePhysicsController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.world.removeCharacterController(this.playerController);
     this.world.free();
   }
 
@@ -444,19 +724,20 @@ export class ScavengePhysics implements ScavengePhysicsController {
     );
   }
 
-  private validateAndCopyBarrels(): void {
-    this.barrelBodies.forEach((body, index) => {
-      this.validateAndCopyBarrel(body, index);
-    });
+  private validateAndCopyObjects(): void {
+    for (let index = 0; index < this.objectBodies.length; index += 1) {
+      this.validateAndCopyObject(this.objectBodies[index]!, index);
+    }
   }
 
-  private validateAndCopyBarrel(body: RAPIER.RigidBody, index: number): void {
+  private validateAndCopyObject(body: RAPIER.RigidBody, index: number): void {
     const translation = body.translation();
     const rotation = body.rotation();
-    const localPosition = this.barrelLocalPositionsForTest[index]!;
-    const spawn = this.barrelSpawns[index]!;
-    const spawnWorld = this.barrelSpawnWorlds[index]!;
-    const pose = this.barrelPoses[index]!;
+    const localPosition = this.objectLocalPositionsForTest[index]!;
+    const spawn = this.objectSpawns[index]!;
+    const spawnWorld = this.objectSpawnWorlds[index]!;
+    const spawnWorldRotation = this.objectSpawnWorldRotations[index]!;
+    const pose = this.objectPoses[index]!;
     let recover = !isFinitePose(translation, rotation);
     if (!recover) {
       worldToLocal(localPosition, translation, this.currentShipPose);
@@ -468,17 +749,28 @@ export class ScavengePhysics implements ScavengePhysicsController {
     }
     if (recover) {
       localToWorld(spawnWorld, spawn, this.currentShipPose);
+      multiplyQuaternions(
+        spawnWorldRotation,
+        this.currentShipPose.rotation,
+        this.objectRotations[index]!,
+      );
       body.setTranslation(spawnWorld, true);
-      body.setRotation(this.currentShipPose.rotation, true);
+      body.setRotation(spawnWorldRotation, true);
       body.setLinvel(this.zeroVelocity, true);
       body.setAngvel(this.zeroVelocity, true);
       this.recoveryCount += 1;
       copyVector(localPosition, spawn);
+      copyNormalizedQuaternion(this.objectLocalRotations[index]!, this.objectRotations[index]!);
       copyVector(pose.translation, spawnWorld);
-      copyNormalizedQuaternion(pose.rotation, this.currentShipPose.rotation);
+      copyNormalizedQuaternion(pose.rotation, spawnWorldRotation);
       return;
     }
     copyVector(pose.translation, translation);
     copyNormalizedQuaternion(pose.rotation, rotation);
+    worldRotationToLocal(
+      this.objectLocalRotations[index]!,
+      rotation,
+      this.currentShipPose.rotation,
+    );
   }
 }

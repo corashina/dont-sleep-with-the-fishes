@@ -21,6 +21,11 @@ export const SHIP_FURNITURE_MODEL_IDS = [
   'workroomCardboardBox',
   'workroomStorageShelf',
   'workroomPallet',
+  'pumpkin',
+  'propaneTank',
+  'redCan',
+  'shippingBox',
+  'package',
 ] as const;
 
 export type ShipFurnitureAssetId = typeof SHIP_FURNITURE_MODEL_IDS[number];
@@ -181,6 +186,41 @@ export const SHIP_FURNITURE_MODEL_SPECS = {
     scaleAxis: 'y',
     targetAxisLength: 0.18,
     canonicalSize: [0.568017, 0.18, 0.568017],
+    ...sharedLimits,
+  },
+  pumpkin: {
+    url: new URL('../assets/models/ship/pumpkin.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 0.8,
+    canonicalSize: [1.286651, 0.8, 1.299593],
+    ...sharedLimits,
+  },
+  propaneTank: {
+    url: new URL('../assets/models/ship/propaneTank.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.7,
+    canonicalSize: [1.267333, 1.7, 1.205301],
+    ...sharedLimits,
+  },
+  redCan: {
+    url: new URL('../assets/models/ship/redCan.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.6,
+    canonicalSize: [1.187991, 1.6, 1.187991],
+    ...sharedLimits,
+  },
+  shippingBox: {
+    url: new URL('../assets/models/ship/shippingBox.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.15,
+    canonicalSize: [1.15, 1.15, 1.15],
+    ...sharedLimits,
+  },
+  package: {
+    url: new URL('../assets/models/ship/package.glb', import.meta.url).href,
+    scaleAxis: 'y',
+    targetAxisLength: 1.05,
+    canonicalSize: [1.260585, 1.05, 1.246763],
     ...sharedLimits,
   },
 } as const satisfies Readonly<Record<ShipFurnitureAssetId, ShipFurnitureModelSpec>>;

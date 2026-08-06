@@ -14,6 +14,8 @@ import {
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 
+const noDynamicMovement = (): void => undefined;
+
 class TestInput {
   movement: MovementAxes = { x: 0, z: 0 };
   sprinting = false;
@@ -249,6 +251,7 @@ describe('mainmast crow\'s nest', () => {
       rigging.colliders,
       NEST_BOUNDS,
       () => undefined,
+      noDynamicMovement,
       [],
       rigging.climbZones,
     );

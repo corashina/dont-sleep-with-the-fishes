@@ -29,7 +29,6 @@ import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
 import {
-  SCAVENGE_BARREL_HALF_HEIGHT,
   ScavengePhysics,
 } from '../src/physics/ScavengePhysics';
 import { mulberry32 } from '../src/survival/random';
@@ -43,7 +42,7 @@ import { createLifeboat } from '../src/world/Lifeboat';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { createProp } from '../src/world/PropFactory';
-import { createShipDeckDetails } from '../src/world/ShipDeckDetails';
+import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
@@ -340,6 +339,29 @@ describe('world builders', () => {
     }
   });
 
+  it('keeps revealed physics visuals aligned through inactive intro motion', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const sinking = getSinkingState(0, 120);
+    const localPositions = world.physicsObjects.map(
+      (object) => world.ship.worldToLocal(object.getWorldPosition(new Vector3())),
+    );
+    try {
+      world.revealPhysicsObjects();
+      world.setScavengeIntroImpact(-0.12, 0.08, -0.1);
+      world.update(4, 1 / 60, sinking, new Vector3(), false);
+      world.physicsObjects.forEach((object, index) => {
+        const expected = localPositions[index]!.clone().applyMatrix4(world.ship.matrixWorld);
+        expect(object.getWorldPosition(new Vector3()).distanceTo(expected)).toBeLessThan(1e-5);
+      });
+
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -458,7 +480,7 @@ describe('world builders', () => {
     }
   });
 
-  it('uses both authored barrels as aligned physics visuals without diagnostic objects', () => {
+  it('creates one physics visual for each catalog object and removes static Kay boxes', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(
@@ -470,35 +492,43 @@ describe('world builders', () => {
       physicsRuntime,
     );
 
-    expect(world.physicsBarrels.map(({ name }) => name)).toEqual([
-      'detail:barrel-1',
-      'detail:barrel-2',
+    expect(world.physicsObjects.map(({ name }) => name)).toEqual([
+      'physics-object:barrel',
+      'physics-object:pumpkin',
+      'physics-object:propaneTank',
+      'physics-object:redCan',
+      'physics-object:cargoBox',
+      'physics-object:shippingBox',
+      'physics-object:package',
     ]);
-    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));
-    expect(scene.getObjectByName('physics-test-barrel')).toBeUndefined();
-    expect(scene.getObjectByName('physics-test-ball')).toBeUndefined();
+    expect(world.physicsObjects.filter(({ name }) => name.endsWith(':barrel'))).toHaveLength(1);
+    expect(world.physicsObjects.filter(({ name }) => name.endsWith(':cargoBox'))).toHaveLength(1);
+    expect(world.ship.getObjectByName('detail:cargoBox-1')).toBeUndefined();
+    expect(world.ship.getObjectByName('furniture:bow-box-starboard-center')).toBeUndefined();
+    expect(scene.getObjectByName('physics-objects')).toBeDefined();
+    expect(world.physicsObjects.every(({ visible }) => !visible)).toBe(true);
+    expect(scene.getObjectByName('physics-objects')?.visible).toBe(false);
     const internals = world as unknown as {
       scavengePhysics: ScavengePhysics;
-      shipBuild: {
-        detailColliderById: ReadonlyMap<string, unknown>;
-      };
     };
     const physics = internals.scavengePhysics;
-    SHIP_LAYOUT.details
-      .filter(({ kind }) => kind === 'barrel')
-      .forEach(({ id }) => {
-        expect(world.colliders).not.toContain(internals.shipBuild.detailColliderById.get(id));
-      });
-    world.physicsBarrels.forEach((barrel, index) => {
-      expect(physics.barrelPoses[index]!.translation.y - barrel.position.y)
-        .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
+    world.physicsObjects.forEach((object, index) => {
+      expect(object.parent?.name).toBe('physics-objects');
+      expect(physics.objectPoses[index]!.translation.y - object.position.y)
+        .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
     });
+
+    world.revealPhysicsObjects();
+    world.revealPhysicsObjects();
+
+    expect(world.physicsObjects.every(({ visible }) => visible)).toBe(true);
+    expect(scene.getObjectByName('physics-objects')?.visible).toBe(true);
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('keeps authored barrels static and creates no physics owner when disabled', () => {
+  it('keeps physics objects local to the ship when physics is disabled', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(
@@ -513,23 +543,19 @@ describe('world builders', () => {
     const internals = world as unknown as {
       scavengePhysics: ScavengePhysics | null;
       physicsDebugView: unknown;
-      shipBuild: {
-        detailColliderById: ReadonlyMap<string, unknown>;
-      };
     };
 
     expect(world.physicsMode).toBe('off');
     expect(internals.scavengePhysics).toBeNull();
     expect(internals.physicsDebugView).toBeNull();
-    world.physicsBarrels.forEach((barrel) => {
-      expect(barrel.parent).not.toBe(scene);
-      expect(world.ship.getObjectByName(barrel.name)).toBe(barrel);
+    expect(world.physicsObjects.every(({ visible }) => !visible)).toBe(true);
+    expect(world.ship.getObjectByName('physics-objects')?.visible).toBe(false);
+    world.physicsObjects.forEach((object) => {
+      expect(object.parent?.name).toBe('physics-objects');
+      expect(world.ship.getObjectByName(object.name)).toBe(object);
     });
-    SHIP_LAYOUT.details
-      .filter(({ kind }) => kind === 'barrel')
-      .forEach(({ id }) => {
-        expect(world.colliders).toContain(internals.shipBuild.detailColliderById.get(id));
-      });
+    world.revealPhysicsObjects();
+    const before = world.physicsObjects.map((object) => object.position.clone());
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
     expect(world.ship.getObjectByName('physics-debug-static')).toBeUndefined();
     expect(() => world.update(
@@ -539,6 +565,9 @@ describe('world builders', () => {
       new Vector3(),
       true,
     )).not.toThrow();
+    expect(world.physicsObjects.every(({ visible }) => visible)).toBe(true);
+    expect(world.ship.getObjectByName('physics-objects')?.visible).toBe(true);
+    world.physicsObjects.forEach((object, index) => expect(object.position).toEqual(before[index]));
 
     world.dispose();
     propModels.dispose();
@@ -558,14 +587,25 @@ describe('world builders', () => {
     );
 
     expect(world.physicsMode).toBe('debug');
-    expect(scene.getObjectByName('physics-debug-dynamic')).toBeDefined();
-    expect(world.ship.getObjectByName('physics-debug-static')).toBeDefined();
+    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(false);
+    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(false);
     const floor = world.ship.getObjectByName('physics-debug-cuboid:0') as Mesh;
-    const deckBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
-    expect(floor.position.z - floor.scale.z / 2).toBeCloseTo(deckBounds.minZ);
-    expect(floor.position.z + floor.scale.z / 2).toBeCloseTo(deckBounds.maxZ);
-    expect(scene.getObjectByName('physics-debug-barrel:1')).toBeDefined();
-    expect(scene.getObjectByName('physics-debug-barrel:2')).toBeDefined();
+    expect(floor.position.x - floor.scale.x / 2)
+      .toBeCloseTo(-FREIGHTER_DIMENSIONS.width / 2);
+    expect(floor.position.x + floor.scale.x / 2)
+      .toBeCloseTo(FREIGHTER_DIMENSIONS.width / 2);
+    expect(floor.position.z - floor.scale.z / 2)
+      .toBeCloseTo(-FREIGHTER_DIMENSIONS.length / 2);
+    expect(floor.position.z + floor.scale.z / 2)
+      .toBeCloseTo(FREIGHTER_DIMENSIONS.length / 2);
+    SCAVENGE_PHYSICS_OBJECT_SPECS.forEach(({ id }) => {
+      expect(scene.getObjectByName(`physics-debug-object:${id}`)).toBeDefined();
+    });
+
+    world.revealPhysicsObjects();
+
+    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(true);
+    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(true);
 
     world.dispose();
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
@@ -573,7 +613,42 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it('advances and synchronizes both authored barrels only when enabled', () => {
+  it('keeps attached debug object meshes aligned while the ship sinks', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(
+      scene,
+      propModels,
+      createTestMoonTexture(),
+      createItemInstances(),
+      Math.random,
+      physicsRuntime,
+      { physicsMode: 'debug' },
+    );
+    try {
+      const object = world.physicsObjects[0]!;
+      const debug = scene.getObjectByName('physics-debug-object:barrel')!;
+      world.revealPhysicsObjects();
+      world.attachPhysicsObjectsToShip();
+      world.update(1, 1 / 60, {
+        ...getSinkingState(30, 120),
+        sinkOffset: -4,
+        pitchRadians: 0.1,
+        rollRadians: -0.2,
+      }, new Vector3(), false);
+
+      expect(debug.parent?.parent).toBe(world.ship);
+      const expectedCenter = new Vector3(0, SCAVENGE_PHYSICS_OBJECT_SPECS[0]!.visualHalfHeight, 0)
+        .applyQuaternion(object.getWorldQuaternion(new Quaternion()))
+        .add(object.getWorldPosition(new Vector3()));
+      expect(debug.getWorldPosition(new Vector3()).distanceTo(expectedCenter)).toBeLessThan(1e-5);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('tracks inactive ship motion and advances every physics object when enabled', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
@@ -581,12 +656,18 @@ describe('world builders', () => {
     const physics = (world as unknown as {
       scavengePhysics: ScavengePhysics;
     }).scavengePhysics;
-    const before = world.physicsBarrels.map((barrel) => barrel.position.clone());
-    const beforePhysics = structuredClone(physics.barrelPoses);
+    const beforeLocal = world.physicsObjects.map(
+      (object) => world.ship.worldToLocal(object.getWorldPosition(new Vector3())),
+    );
+    const beforePhysics = structuredClone(physics.objectPoses);
 
     world.update(1, 1 / 60, getSinkingState(30, 120), camera.position, false);
-    world.physicsBarrels.forEach((barrel, index) => expect(barrel.position).toEqual(before[index]));
-    expect(physics.barrelPoses).toEqual(beforePhysics);
+    world.physicsObjects.forEach((object, index) => {
+      const local = world.ship.worldToLocal(object.getWorldPosition(new Vector3()));
+      expect(local.distanceTo(beforeLocal[index]!)).toBeLessThan(1e-5);
+    });
+    expect(physics.objectPoses).not.toEqual(beforePhysics);
+    const beforeActive = world.physicsObjects.map((object) => object.position.clone());
 
     for (let step = 1; step <= 30; step += 1) {
       world.update(
@@ -598,10 +679,9 @@ describe('world builders', () => {
       );
     }
 
-    world.physicsBarrels.forEach((barrel, index) => {
-      const pose = physics.barrelPoses[index]!;
-      expect(barrel.position.distanceTo(before[index]!)).toBeGreaterThan(1e-3);
-      expect(barrel.quaternion.toArray()).toEqual([
+    world.physicsObjects.forEach((object, index) => {
+      const pose = physics.objectPoses[index]!;
+      expect(object.quaternion.toArray()).toEqual([
         pose.rotation.x,
         pose.rotation.y,
         pose.rotation.z,
@@ -612,31 +692,34 @@ describe('world builders', () => {
         pose.translation.y,
         pose.translation.z,
       );
-      expect(barrel.position.distanceTo(colliderCenter))
-        .toBeCloseTo(SCAVENGE_BARREL_HALF_HEIGHT);
+      expect(object.position.distanceTo(colliderCenter))
+        .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
     });
+    expect(world.physicsObjects.some((object, index) => (
+      object.position.distanceTo(beforeActive[index]!) > 1e-3
+    ))).toBe(true);
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('attaches paused physics barrels to Dorothy without changing their deck poses', () => {
+  it('attaches paused physics objects to Dorothy without changing their deck poses', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
     const world = createTestWorld(scene, propModels);
     const camera = new PerspectiveCamera();
-    const savedPoses = world.physicsBarrels.map((barrel) => ({
-      position: barrel.getWorldPosition(new Vector3()),
-      quaternion: barrel.getWorldQuaternion(new Quaternion()),
+    const savedPoses = world.physicsObjects.map((object) => ({
+      position: object.getWorldPosition(new Vector3()),
+      quaternion: object.getWorldQuaternion(new Quaternion()),
     }));
 
-    world.attachPhysicsBarrelsToShip();
+    world.attachPhysicsObjectsToShip();
 
-    world.physicsBarrels.forEach((barrel, index) => {
+    world.physicsObjects.forEach((object, index) => {
       const savedPose = savedPoses[index]!;
-      expect(barrel.parent).toBe(world.ship);
-      expect(barrel.getWorldPosition(new Vector3())).toEqual(savedPose.position);
-      expect(barrel.getWorldQuaternion(new Quaternion())).toEqual(savedPose.quaternion);
+      expect(object.parent?.parent).toBe(world.ship);
+      expect(object.getWorldPosition(new Vector3())).toEqual(savedPose.position);
+      expect(object.getWorldQuaternion(new Quaternion())).toEqual(savedPose.quaternion);
     });
 
     world.update(1, 1 / 60, {
@@ -645,22 +728,22 @@ describe('world builders', () => {
       pitchRadians: 0.1,
       rollRadians: -0.2,
     }, camera.position, false);
-    world.physicsBarrels.forEach((barrel, index) => {
-      expect(barrel.getWorldPosition(new Vector3()))
+    world.physicsObjects.forEach((object, index) => {
+      expect(object.getWorldPosition(new Vector3()))
         .not.toEqual(savedPoses[index]!.position);
-      expect(barrel.getWorldQuaternion(new Quaternion()))
+      expect(object.getWorldQuaternion(new Quaternion()))
         .not.toEqual(savedPoses[index]!.quaternion);
     });
 
-    const attachedLocalPoses = world.physicsBarrels.map((barrel) => ({
-      position: barrel.position.clone(),
-      quaternion: barrel.quaternion.clone(),
+    const attachedLocalPoses = world.physicsObjects.map((object) => ({
+      position: object.position.clone(),
+      quaternion: object.quaternion.clone(),
     }));
-    world.attachPhysicsBarrelsToShip();
-    world.physicsBarrels.forEach((barrel, index) => {
-      expect(barrel.parent).toBe(world.ship);
-      expect(barrel.position).toEqual(attachedLocalPoses[index]!.position);
-      expect(barrel.quaternion.toArray()).toEqual(attachedLocalPoses[index]!.quaternion.toArray());
+    world.attachPhysicsObjectsToShip();
+    world.physicsObjects.forEach((object, index) => {
+      expect(object.parent?.parent).toBe(world.ship);
+      expect(object.position).toEqual(attachedLocalPoses[index]!.position);
+      expect(object.quaternion.toArray()).toEqual(attachedLocalPoses[index]!.quaternion.toArray());
     });
 
     world.dispose();
@@ -781,7 +864,7 @@ describe('world builders', () => {
     const observeShipResources = (): number => {
       if (!observed) {
         const ship = scene.getObjectByName('sinking-ship')!;
-        expect(ship.getObjectByName('ship-deck-details')).toBeDefined();
+        expect(ship.getObjectByName('ship-deck-details')).toBeUndefined();
         expect(ship.getObjectByName('ship-rigging')).toBeDefined();
         expect(ship.getObjectByName('freighter-smoke')).toBeDefined();
         expect(ship.getObjectByName('ship-danger-effects')).toBeDefined();
@@ -1000,9 +1083,9 @@ describe('world builders', () => {
               mark('ship', shipResources.geometries.values().next().value!);
               mark('prop', propResources.geometries.values().next().value!);
               mark('lifeboat', lifeboatResources.geometries.values().next().value!);
-              scene.getObjectByName('detail:barrel-1')!.addEventListener(
+              scene.getObjectByName('physics-objects')!.addEventListener(
                 'removed',
-                () => order.push('barrel'),
+                () => order.push('object'),
               );
               throw failure;
             },
@@ -1014,14 +1097,14 @@ describe('world builders', () => {
 
       expect(caught).toBe(failure);
       expect(order).toEqual(expect.arrayContaining([
-        'environment', 'ocean', 'lifeboat', 'prop', 'physics', 'barrel', 'ship',
+        'environment', 'ocean', 'lifeboat', 'physics', 'object', 'prop', 'ship',
       ]));
       expect(order.indexOf('environment')).toBeLessThan(order.indexOf('ocean'));
       expect(order.indexOf('ocean')).toBeLessThan(order.indexOf('lifeboat'));
-      expect(order.indexOf('lifeboat')).toBeLessThan(order.indexOf('prop'));
-      expect(order.indexOf('prop')).toBeLessThan(order.indexOf('physics'));
-      expect(order.indexOf('physics')).toBeLessThan(order.indexOf('barrel'));
-      expect(order.indexOf('barrel')).toBeLessThan(order.indexOf('ship'));
+      expect(order.indexOf('lifeboat')).toBeLessThan(order.indexOf('physics'));
+      expect(order.indexOf('physics')).toBeLessThan(order.indexOf('object'));
+      expect(order.indexOf('object')).toBeLessThan(order.indexOf('prop'));
+      expect(order.indexOf('prop')).toBeLessThan(order.indexOf('ship'));
       counts.forEach((count) => expect(count).toBe(1));
       expect(environmentDispose).toHaveBeenCalledTimes(1);
       expect(oceanDispose).toHaveBeenCalledTimes(1);
@@ -1075,9 +1158,9 @@ describe('world builders', () => {
           {
             checkpoint: (stage: string) => {
               if (stage !== 'physics') return;
-              scene.getObjectByName('detail:barrel-1')!.addEventListener(
+              scene.getObjectByName('physics-objects')!.addEventListener(
                 'removed',
-                () => calls.push('barrel'),
+                () => calls.push('object'),
               );
               const ship = scene.getObjectByName('sinking-ship')!;
               ship.addEventListener('removed', () => calls.push('ship-remove'));
@@ -1094,9 +1177,9 @@ describe('world builders', () => {
       }
 
       expect(caught).toBe(constructionFailure);
-      expect(calls).toEqual(['physics', 'barrel', 'ship-remove', 'ship-dispose']);
+      expect(calls).toEqual(['physics', 'object', 'ship-remove', 'ship-dispose']);
       expect(scene.children).toEqual([sentinel]);
-      expect(scene.getObjectByName('detail:barrel-1')).toBeUndefined();
+      expect(scene.getObjectByName('physics-object:barrel')).toBeUndefined();
       expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
       expect(physicsDispose).toHaveBeenCalledOnce();
     } finally {
@@ -1188,7 +1271,7 @@ describe('world builders', () => {
     ]);
     expect(world.itemObjects.get('ductTape-1')!.parent).toBeNull();
     expect(world.itemObjects.get('cannedFood-1')!.parent).toBe(world.ship);
-    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBe(scene));
+    world.physicsObjects.forEach((object) => expect(object.parent?.name).toBe('physics-objects'));
     for (let call = 0; call < disposeCalls; call += 1) world.dispose();
 
     expect(scene.getObjectByName('sinking-ship')).toBeUndefined();
@@ -1197,9 +1280,9 @@ describe('world builders', () => {
     expect(scene.getObjectByName('rain')).toBeUndefined();
     expect(scene.getObjectByName('procedural-skybox')).toBeUndefined();
     expect(scene.getObjectByName('storm-clouds')).toBeUndefined();
-    expect(scene.getObjectByName('detail:barrel-1')).toBeUndefined();
-    expect(scene.getObjectByName('detail:barrel-2')).toBeUndefined();
-    world.physicsBarrels.forEach((barrel) => expect(barrel.parent).toBeNull());
+    expect(scene.getObjectByName('physics-object:barrel')).toBeUndefined();
+    expect(scene.getObjectByName('physics-object:cargoBox')).toBeUndefined();
+    world.physicsObjects.forEach((object) => expect(object.parent?.parent).toBeNull());
     expect(physicsDispose).toHaveBeenCalledOnce();
     expect(skyGeometryDispose).toHaveBeenCalledOnce();
     expect(skyMaterialDispose).toHaveBeenCalledOnce();

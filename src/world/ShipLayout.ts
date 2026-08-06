@@ -96,18 +96,6 @@ export interface ShipLaneSpec {
   readonly bounds: Rect2;
 }
 
-export type ShipDeckDetailKind = 'barrel' | 'cargoBox';
-
-export interface ShipDeckDetailSpec {
-  readonly id: string;
-  readonly kind: ShipDeckDetailKind;
-  readonly position: readonly [number, number, number];
-  readonly rotationY: number;
-  readonly scale: readonly [number, number, number];
-  readonly visualSize: readonly [number, number];
-  readonly colliderSize?: readonly [number, number, number];
-}
-
 export interface ShipDeckHatchSpec {
   readonly id: 'deck-hatch';
   readonly position: readonly [number, number, number];
@@ -229,7 +217,6 @@ export interface ShipLayoutSpec {
   readonly lanes: readonly ShipLaneSpec[];
   readonly furniture: readonly ShipFurniturePlacementSpec[];
   readonly decorations: readonly ShipRoomDecorationSpec[];
-  readonly details: readonly ShipDeckDetailSpec[];
   readonly deckHatch: ShipDeckHatchSpec;
   readonly rigging: ShipRiggingSpec;
   readonly balconies: readonly ShipBalconySpec[];
@@ -305,7 +292,7 @@ const EXACT_FURNITURE_MODEL_BY_ID: Readonly<Record<string, ShipFurnitureKind>> =
   'workroom-crate-stack-starboard-forward': 'cargoCrateStack',
   'crew-wall-crate-starboard': 'cargoCrate',
   'crew-wall-barrel-port': 'barrel',
-  'bow-box-starboard-center': 'cargoBox',
+  'wheelhouse-crate-port-forward': 'cargoCrate',
   'bow-crate-starboard': 'cargoCrate',
   'stern-crate-port': 'cargoCrate',
   'stern-crate-starboard': 'cargoCrate',
@@ -449,69 +436,6 @@ const doors: readonly ShipDoorSpec[] = [
   sideDoor('storage-port-door', 'storageWorkroom', 'port', -5.75, -14.45, 2.6),
   sideDoor('storage-starboard-door', 'storageWorkroom', 'starboard', 5.75, -14.45, 2.6),
 ];
-
-export const SHIP_DECK_DETAIL_COUNTS: Readonly<Record<ShipDeckDetailKind, number>> = {
-  barrel: 2,
-  cargoBox: 3,
-};
-
-export const SHIP_DECK_DETAIL_VISUAL_SIZES: Readonly<
-  Record<ShipDeckDetailKind, readonly [number, number]>
-> = {
-  barrel: [1.13, 1.13],
-  cargoBox: [0.623579, 0.633173],
-};
-
-export const SHIP_DECK_DETAIL_MIN_GAP = 1;
-
-interface DetailTransform {
-  readonly position: readonly [number, number];
-  readonly rotationY: number;
-  readonly scale: readonly [number, number, number];
-}
-
-function boxAgainstSideWall(
-  wallCenterX: number,
-  outwardDirection: -1 | 1,
-  z: number,
-  scale: readonly [number, number, number],
-): DetailTransform {
-  const [unscaledWidth] = SHIP_DECK_DETAIL_VISUAL_SIZES.cargoBox;
-  const projectedWidth = unscaledWidth * scale[0];
-  return {
-    position: [
-      wallCenterX + outwardDirection * projectedWidth / 2,
-      z,
-    ],
-    rotationY: 0,
-    scale,
-  };
-}
-
-const detailTransforms: Readonly<Record<ShipDeckDetailKind, readonly DetailTransform[]>> = {
-  barrel: [
-    { position: [-5, -8.1], rotationY: 0, scale: [1, 1, 1] },
-    { position: [5, -8.2], rotationY: 0, scale: [1, 1, 1] },
-  ],
-  cargoBox: [
-    { position: [4.35, -5.5], rotationY: 0, scale: [0.9, 0.9, 0.9] },
-    { position: [5.5, -3.5], rotationY: 0, scale: [1, 1, 1] },
-    boxAgainstSideWall(storageBounds.minX, -1, -6, [0.82, 0.82, 0.82]),
-  ],
-};
-
-const colliders: Partial<Record<ShipDeckDetailKind, readonly [number, number, number]>> = {
-  barrel: [1.13, 1.15, 1.13],
-};
-
-const details: readonly ShipDeckDetailSpec[] = (Object.keys(detailTransforms) as ShipDeckDetailKind[]).flatMap((kind) =>
-  detailTransforms[kind].map(({ position: [x, z], rotationY, scale }, index) => ({
-    id: `${kind}-${index + 1}`, kind, position: [x, FREIGHTER_DIMENSIONS.deckY, z],
-    rotationY,
-    scale,
-    visualSize: SHIP_DECK_DETAIL_VISUAL_SIZES[kind],
-    colliderSize: colliders[kind],
-  })));
 
 function itemSurface(
   furnitureId: string,
@@ -746,15 +670,13 @@ function crateStackTopSurfaces(
 
 function raisedCargoSurface(
   furnitureId: string,
-  modelId: 'cargoCrate' | 'barrel' | 'cargoBox',
+  modelId: 'cargoCrate' | 'barrel',
   regionId: 'centralCargo' | 'wheelhouse' | 'bow' | 'stern',
   standingPoint: readonly [number, number, number],
 ): readonly ShipItemSurfaceSpec[] {
   const dimensions = modelId === 'cargoCrate'
     ? { height: 1.05, width: 0.78, depth: 0.78, clearance: 0.88 }
-    : modelId === 'barrel'
-      ? { height: 1.15, width: 0.62, depth: 0.62, clearance: 0.82 }
-      : { height: 0.55, width: 0.6, depth: 0.6, clearance: 0.72 };
+    : { height: 1.15, width: 0.62, depth: 0.62, clearance: 0.82 };
   return [itemSurface(
     furnitureId,
     'top',
@@ -766,9 +688,7 @@ function raisedCargoSurface(
     },
     dimensions.clearance,
     [standingPoint],
-    { localRotation: regionId === 'stern' && modelId === 'cargoBox'
-      ? [0, PI_OVER_TWO, 0]
-      : [0, 0, 0] },
+    { localRotation: [0, 0, 0] },
   )];
 }
 
@@ -982,7 +902,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   ...([
     ['crew-wall-crate-starboard', 'cargoCrate', 'centralCargo', 4.7, 14.025, [-1.25, 0, 0]],
     ['crew-wall-barrel-port', 'barrel', 'centralCargo', -4.7, 14.0647535, [1.25, 0, 0]],
-    ['bow-box-starboard-center', 'cargoBox', 'wheelhouse', -3.2, 21.37, [1.1, 0, 0]],
+    ['wheelhouse-crate-port-forward', 'cargoCrate', 'wheelhouse', -3.2, 21.37, [1.1, 0, 0]],
     ['bow-crate-starboard', 'cargoCrate', 'bow', 0, 22.7, [0, 0, 1.2]],
     [
       'stern-crate-port',
@@ -1003,9 +923,10 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   ] as const).map(([id, modelId, regionId, x, z, standingPoint]) => {
     const colliderSize = modelId === 'cargoCrate'
       ? [1.05, 1.05, 1.05] as const
-      : modelId === 'barrel'
-        ? [1.129507, 1.15, 1.129507] as const
-        : [0.623579, 0.55, 0.633173] as const;
+      : [1.129507, 1.15, 1.129507] as const;
+    const scale = id === 'wheelhouse-crate-port-forward'
+      ? [0.75, 0.75, 0.75] as const
+      : [1, 1, 1] as const;
     return placement(
       id,
       modelId,
@@ -1014,6 +935,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
       0,
       colliderSize,
       raisedCargoSurface(id, modelId, regionId, standingPoint),
+      scale,
     );
   }),
 ];
@@ -1162,7 +1084,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       id: 'wheelhouse', bounds: wheelhouseBounds, polygon: wheelhousePolygon, enclosed: true,
       furniturePolicy: {
         maxFixtures: 5,
-        allowedModelIds: ['table', 'cargoCrate', 'barrel', 'cargoBox'],
+        allowedModelIds: ['table', 'cargoCrate', 'barrel'],
       },
     },
     {
@@ -1181,7 +1103,7 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       enclosed: false,
       furniturePolicy: {
         maxFixtures: 18,
-        allowedModelIds: ['cargoCrate', 'cargoRack', 'barrel', 'cargoBox'],
+        allowedModelIds: ['cargoCrate', 'cargoRack', 'barrel'],
       },
     },
     {
@@ -1265,7 +1187,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
   ],
   furniture,
   decorations,
-  details,
   deckHatch: {
     id: 'deck-hatch',
     position: [0, FREIGHTER_DIMENSIONS.deckY, DECK_HATCH_Z],
@@ -1451,15 +1372,6 @@ export function furnitureRect(spec: ShipFurniturePlacementSpec): Rect2 {
   );
 }
 
-export function detailRect(spec: ShipDeckDetailSpec): Rect2 {
-  const size = spec.colliderSize ?? [0, 0, 0];
-  return detailFootprintRect(spec, size[0], size[2]);
-}
-
-export function detailVisualRect(spec: ShipDeckDetailSpec): Rect2 {
-  return detailFootprintRect(spec, spec.visualSize[0], spec.visualSize[1]);
-}
-
 export function deckHatchRect(spec: ShipDeckHatchSpec): Rect2 {
   const cosine = Math.abs(Math.cos(spec.rotationY));
   const sine = Math.abs(Math.sin(spec.rotationY));
@@ -1471,26 +1383,6 @@ export function deckHatchRect(spec: ShipDeckHatchSpec): Rect2 {
     spec.position[2] - depth / 2,
     spec.position[2] + depth / 2,
   );
-}
-
-function rectangleGap(left: Rect2, right: Rect2): number {
-  const x = Math.max(0, left.minX - right.maxX, right.minX - left.maxX);
-  const z = Math.max(0, left.minZ - right.maxZ, right.minZ - left.maxZ);
-  return Math.hypot(x, z);
-}
-
-function detailFootprintRect(
-  spec: ShipDeckDetailSpec,
-  unscaledWidth: number,
-  unscaledDepth: number,
-): Rect2 {
-  const cosine = Math.abs(Math.cos(spec.rotationY));
-  const sine = Math.abs(Math.sin(spec.rotationY));
-  const scaledWidth = unscaledWidth * spec.scale[0];
-  const scaledDepth = unscaledDepth * spec.scale[2];
-  const width = scaledWidth * cosine + scaledDepth * sine;
-  const depth = scaledWidth * sine + scaledDepth * cosine;
-  return rect(spec.position[0] - width / 2, spec.position[0] + width / 2, spec.position[2] - depth / 2, spec.position[2] + depth / 2);
 }
 
 export function mastRect(spec: ShipMastSpec): Rect2 {
@@ -1625,7 +1517,6 @@ function activeObstacles(layout: ShipLayoutSpec): Rect2[] {
   return [
     ...wallRectangles(layout),
     ...layout.furniture.map(furnitureRect),
-    ...layout.details.map(detailVisualRect),
     deckHatchRect(layout.deckHatch),
     ...layout.rigging.masts.map(mastRect),
     rect(-innerX - RAIL_THICKNESS, -innerX, hullBounds.minZ, hullBounds.maxZ),
@@ -1891,7 +1782,6 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   assertUnique('door', layout.doors.map(({ id }) => id));
   assertUnique('furniture', layout.furniture.map(({ id }) => id));
   assertUnique('decoration', layout.decorations.map(({ id }) => id));
-  assertUnique('detail', layout.details.map(({ id }) => id));
   assertUnique('balcony', layout.balconies.map(({ id }) => id));
   assertUnique('ladder', layout.ladders.map(({ id }) => id));
   assertUnique('mast', layout.rigging.masts.map(({ id }) => id));
@@ -2031,44 +1921,6 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
     [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
   ];
-  const detailVisualBounds = layout.details.map((spec) => {
-    if (!finiteTuple(spec.position) || !Number.isFinite(spec.rotationY)
-      || spec.scale.some((value) => !positive(value))
-      || !spec.visualSize || spec.visualSize.some((value) => !positive(value))) {
-      throw new Error(`Detail ${spec.id} must have a positive visual footprint`);
-    }
-    if (spec.colliderSize?.some((value) => !positive(value))) {
-      throw new Error(`Detail ${spec.id} must have finite transforms and positive dimensions`);
-    }
-    const bounds = detailVisualRect(spec);
-    if (!validRect(bounds)
-      || !pointInPolygon([spec.position[0], spec.position[2]], cargoZone.polygon)) {
-      throw new Error(`Detail ${spec.id} lies outside the cargoDeck hull polygon`);
-    }
-    return { spec, bounds };
-  });
-  detailVisualBounds.forEach((left, index) => {
-    detailVisualBounds.slice(index + 1).forEach((right) => {
-      if (rectangleGap(left.bounds, right.bounds) < SHIP_DECK_DETAIL_MIN_GAP) {
-        throw new Error(
-          `Details ${left.spec.id} and ${right.spec.id} must remain at least 1 metre apart`,
-        );
-      }
-    });
-  });
-  const detailBounds = layout.details.flatMap((spec) => {
-    if (!finiteTuple(spec.position) || !Number.isFinite(spec.rotationY)
-      || spec.scale.some((value) => !positive(value))
-      || spec.colliderSize?.some((value) => !positive(value))) {
-      throw new Error(`Detail ${spec.id} must have finite transforms and positive dimensions`);
-    }
-    if (!spec.colliderSize) return [];
-    const bounds = detailRect(spec);
-    if (!validRect(bounds) || rectCorners(bounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
-      throw new Error(`Detail ${spec.id} collider crosses the cargoDeck hull polygon`);
-    }
-    return [{ id: spec.id, bounds }];
-  });
   const hatch = layout.deckHatch;
   if (hatch.id !== 'deck-hatch' || !finiteTuple(hatch.position)
     || !Number.isFinite(hatch.rotationY) || hatch.size.some((value) => !positive(value))
@@ -2222,10 +2074,9 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       }
       if (physicalRegion === 'bow' || physicalRegion === 'stern') {
         if (spec.modelId !== 'cargoCrate'
-          && spec.modelId !== 'barrel'
-          && spec.modelId !== 'cargoBox') {
+          && spec.modelId !== 'barrel') {
           throw new Error(
-            `Furniture ${spec.id} in ${physicalRegion} must be a raised cargoCrate, barrel, or cargoBox owner`,
+            `Furniture ${spec.id} in ${physicalRegion} must be a raised cargoCrate or barrel owner`,
           );
         }
         if (Math.abs(surface.localPosition[1] - spec.colliderSize[1]) > 1e-6) {
@@ -2271,22 +2122,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     }
   });
   const accessBounds = secondaryAccessRectangles(layout.furniture);
-  detailVisualBounds.filter(({ spec }) => !spec.colliderSize).forEach((detail) => {
-    furnitureBounds.filter(({ spec }) => spec.surfaces.length > 0).forEach((furnitureObstacle) => {
-      if (overlaps(detail.bounds, furnitureObstacle.bounds)) {
-        throw new Error(
-          `${detail.spec.id} visual footprint overlaps searchable furniture ${furnitureObstacle.spec.id}`,
-        );
-      }
-    });
-    accessBounds.forEach((access) => {
-      if (overlaps(detail.bounds, access.bounds)) {
-        throw new Error(`${detail.spec.id} visual footprint overlaps item access ${access.id}`);
-      }
-    });
-  });
   const authoredObstacles = [
-    ...detailVisualBounds.map(({ spec, bounds }) => ({ id: spec.id, bounds })),
     { id: hatch.id, bounds: hatchBounds },
     ...mastBounds,
   ];
@@ -2363,7 +2199,6 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   }));
   const fixedAccessObstacles = [
     ...walls,
-    ...detailVisualBounds.map(({ spec, bounds }) => ({ id: spec.id, bounds })),
     { id: hatch.id, bounds: hatchBounds },
     ...mastBounds,
   ];

@@ -36,15 +36,19 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import type { CollisionArc, CollisionBox } from '../player/collisions';
+import type {
+  CollisionArc,
+  CollisionBox,
+  LocalPlayerPosition,
+} from '../player/collisions';
 import type { LadderClimbZone } from '../player/LadderTraversal';
 import type { PlayerNavigationBounds } from '../player/PlayerController';
 import {
-  SCAVENGE_BARREL_HALF_HEIGHT,
   ScavengePhysics,
   createScavengeStaticCuboids,
   type PhysicsPose,
 } from '../physics/ScavengePhysics';
+import type { PhysicsObjectCollider } from '../physics/ScavengePhysicsObjectTypes';
 import { ScavengePhysicsDebugView } from '../physics/ScavengePhysicsDebugView';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
@@ -67,6 +71,12 @@ import {
   runCleanupSteps,
 } from './SceneResources';
 import { createShip, type ShipBuild } from './Ship';
+import { SCAVENGE_PHYSICS_OBJECT_SPECS } from './ScavengePhysicsObjectCatalog';
+import {
+  SCAVENGE_PHYSICS_OBJECT_PLACEMENTS,
+  selectScavengePhysicsObjectPlacements,
+  validateScavengePhysicsObjectPlacementPool,
+} from './ScavengePhysicsObjectPlacement';
 import { ScavengeIntroPresentation } from './ScavengeIntroPresentation';
 import { ShipDangerEffects } from './ShipDangerEffects';
 import type { ShipAssets } from './ShipAssets';
@@ -153,10 +163,16 @@ function copyThreePoseIntoPhysicsPose(
   output.rotation.w = rotation.w;
 }
 
+export function colliderVerticalHalfExtent(collider: PhysicsObjectCollider): number {
+  if (collider.kind === 'sphere') return collider.radius;
+  if (collider.kind === 'cylinder') return collider.halfHeight;
+  return collider.halfExtents.y;
+}
+
 export class World {
   readonly ship: Group;
   readonly lifeboat: Group;
-  readonly physicsBarrels!: readonly Group[];
+  readonly physicsObjects!: readonly Group[];
   readonly physicsMode: PhysicsMode;
   readonly boatDepositTarget!: Mesh<BoxGeometry, MeshBasicMaterial>;
   readonly itemObjects = new Map<ItemInstanceId, Group>();
@@ -181,7 +197,9 @@ export class World {
   private readonly buoyancy: BoatBuoyancy;
   private scavengePhysics: ScavengePhysics | null = null;
   private physicsDebugView: ScavengePhysicsDebugView | null = null;
-  private physicsBarrelsAttachedToShip = false;
+  private physicsObjectsVisible = false;
+  private physicsObjectsAttachedToShip = false;
+  private readonly physicsObjectsRoot = new Group();
   private readonly freighterBuoyancy = new BoatBuoyancy(
     sampleDefaultWave,
     FREIGHTER_BUOYANCY_FOOTPRINT,
@@ -199,7 +217,7 @@ export class World {
   private readonly itemPickupPosition = new Vector3();
   private readonly shipPhysicsTranslation = new Vector3();
   private readonly shipPhysicsRotation = new Quaternion();
-  private readonly barrelVisualOffset = new Vector3();
+  private readonly physicsObjectVisualOffset = new Vector3();
   private readonly shipPhysicsPose: PhysicsPose = {
     translation: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0, w: 1 },
@@ -242,6 +260,13 @@ export class World {
   };
   private disposed = false;
 
+  readonly resolvePlayerMovement = (
+    current: Readonly<LocalPlayerPosition>,
+    desired: LocalPlayerPosition,
+  ): void => {
+    this.scavengePhysics?.resolvePlayerMovement(current, desired);
+  };
+
   constructor(
     private readonly scene: Scene,
     private readonly propModels: PropModelLibrary,
@@ -263,15 +288,7 @@ export class World {
     this.ship = this.shipBuild.root;
     this.scavengeIntroAnchors = this.shipBuild.scavengeIntroAnchors;
     this.ship.position.y = -FREIGHTER_DRAFT;
-    const barrelSpecs = SHIP_LAYOUT.details.filter(({ kind }) => kind === 'barrel');
-    const dynamicBarrelColliders = new Set(
-      barrelSpecs.map(({ id }) => this.shipBuild.detailColliderById.get(id)),
-    );
-    this.colliders = this.physicsMode === 'off'
-      ? this.shipBuild.colliders
-      : this.shipBuild.colliders.filter(
-        (collider) => !dynamicBarrelColliders.has(collider),
-      );
+    this.colliders = this.shipBuild.colliders;
     this.interactionOccluders = this.shipBuild.interactionOccluders;
     this.arcColliders = this.shipBuild.arcColliders;
     this.climbZones = this.shipBuild.climbZones;
@@ -301,55 +318,6 @@ export class World {
       this.scavengeIntroPresentation.root.position.set(0, this.deckY + 0.3, -7);
       this.ship.add(this.scavengeIntroPresentation.root);
       rollback.push(() => this.scavengeIntroPresentation.dispose());
-      this.ship.updateMatrixWorld(true);
-      this.physicsBarrels = barrelSpecs.map(({ id }) => {
-        const barrel = this.ship.getObjectByName(`detail:${id}`);
-        if (!(barrel instanceof Group)) throw new Error(`Missing ship barrel detail ${id}`);
-        return barrel;
-      });
-
-      this.ship.getWorldPosition(this.shipPhysicsTranslation);
-      this.ship.getWorldQuaternion(this.shipPhysicsRotation);
-      copyThreePoseIntoPhysicsPose(
-        this.shipPhysicsPose,
-        this.shipPhysicsTranslation,
-        this.shipPhysicsRotation,
-      );
-      const deckBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds;
-      const physicsConfig = {
-        colliders: this.colliders,
-        arcColliders: this.shipBuild.arcColliders,
-        safeBounds: this.playerNavigationBounds.safe,
-        deckY: this.deckY,
-        deckBounds,
-        initialShipPose: this.shipPhysicsPose,
-        barrelSpawns: barrelSpecs.map(({ position }) => ({
-          x: position[0],
-          y: position[1] + SCAVENGE_BARREL_HALF_HEIGHT,
-          z: position[2],
-        })),
-      };
-      if (this.physicsMode !== 'off') {
-        if (physicsRuntime === null) {
-          throw new Error('Physics runtime is required unless physics is disabled');
-        }
-        this.physicsBarrels.forEach((barrel) => this.scene.attach(barrel));
-        rollback.push(() => this.physicsBarrels.forEach((barrel) => barrel.removeFromParent()));
-        this.scavengePhysics = new ScavengePhysics(physicsRuntime, physicsConfig);
-        rollback.push(() => this.scavengePhysics?.dispose());
-        if (this.physicsMode === 'debug') {
-          this.physicsDebugView = new ScavengePhysicsDebugView(
-            this.scene,
-            this.ship,
-            createScavengeStaticCuboids(physicsConfig),
-            this.physicsBarrels.length,
-          );
-          rollback.push(() => this.physicsDebugView?.dispose());
-        }
-        this.syncPhysicsObjects();
-      }
-      construction.checkpoint?.('physics');
-
       const depositWidth = lifeboatStation.bounds.maxX - lifeboatStation.bounds.minX;
       const depositLength = lifeboatStation.bounds.maxZ - lifeboatStation.bounds.minZ;
       const depositGeometry = new BoxGeometry(depositWidth, 0.08, depositLength);
@@ -428,6 +396,94 @@ export class World {
         }
         this.shipItemScales.set(instance.instanceId, transform.scale);
       });
+      validateScavengePhysicsObjectPlacementPool(
+        SCAVENGE_PHYSICS_OBJECT_PLACEMENTS,
+        this.shipBuild.colliders,
+        [
+          { id: 'player-start', x: this.playerStart.x, z: this.playerStart.z, radius: 1.25 },
+          { id: 'intro-ladder', x: 0, z: 4.5, radius: 1.25 },
+          { id: 'evacuation', x: this.evacuationPoint.x, z: this.evacuationPoint.z, radius: 1.5 },
+        ],
+      );
+      const placements = selectScavengePhysicsObjectPlacements(
+        SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ id }) => id),
+        random,
+      );
+      this.physicsObjectsRoot.name = 'physics-objects';
+      this.physicsObjectsRoot.visible = false;
+      this.physicsObjects = SCAVENGE_PHYSICS_OBJECT_SPECS.map((spec) => {
+        const placement = placements.get(spec.id)!;
+        const visual = new Group();
+        visual.name = `physics-object:${spec.id}`;
+        visual.visible = false;
+        visual.position.set(placement.position.x, this.deckY, placement.position.z);
+        visual.rotation.y = placement.rotationY;
+        visual.scale.set(...spec.visualScale);
+        visual.add(shipFurniture.clone(spec.modelId));
+        this.physicsObjectsRoot.add(visual);
+        return visual;
+      });
+      if (this.physicsMode === 'off') this.ship.add(this.physicsObjectsRoot);
+      else this.scene.add(this.physicsObjectsRoot);
+      rollback.push(() => this.physicsObjectsRoot.removeFromParent());
+
+      this.ship.updateMatrixWorld(true);
+      this.ship.getWorldPosition(this.shipPhysicsTranslation);
+      this.ship.getWorldQuaternion(this.shipPhysicsRotation);
+      copyThreePoseIntoPhysicsPose(
+        this.shipPhysicsPose,
+        this.shipPhysicsTranslation,
+        this.shipPhysicsRotation,
+      );
+      const physicsConfig = {
+        colliders: this.colliders,
+        arcColliders: this.shipBuild.arcColliders,
+        safeBounds: this.playerNavigationBounds.safe,
+        deckY: this.deckY,
+        deckBounds: {
+          minX: -FREIGHTER_DIMENSIONS.width / 2,
+          maxX: FREIGHTER_DIMENSIONS.width / 2,
+          minZ: -FREIGHTER_DIMENSIONS.length / 2,
+          maxZ: FREIGHTER_DIMENSIONS.length / 2,
+        },
+        initialShipPose: this.shipPhysicsPose,
+        objects: SCAVENGE_PHYSICS_OBJECT_SPECS.map((spec) => {
+          const placement = placements.get(spec.id)!;
+          return {
+            id: spec.id,
+            spawn: {
+              x: placement.position.x,
+              y: this.deckY + colliderVerticalHalfExtent(spec.collider),
+              z: placement.position.z,
+            },
+            rotation: {
+              x: 0,
+              y: Math.sin(placement.rotationY / 2),
+              z: 0,
+              w: Math.cos(placement.rotationY / 2),
+            },
+            profile: spec,
+          };
+        }),
+      };
+      if (this.physicsMode !== 'off') {
+        if (physicsRuntime === null) {
+          throw new Error('Physics runtime is required unless physics is disabled');
+        }
+        this.scavengePhysics = new ScavengePhysics(physicsRuntime, physicsConfig);
+        rollback.push(() => this.scavengePhysics?.dispose());
+        if (this.physicsMode === 'debug') {
+          this.physicsDebugView = new ScavengePhysicsDebugView(
+            this.scene,
+            this.ship,
+            createScavengeStaticCuboids(physicsConfig),
+            SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ id, collider }) => ({ id, collider })),
+          );
+          rollback.push(() => this.physicsDebugView?.dispose());
+        }
+        this.syncPhysicsObjects();
+      }
+      construction.checkpoint?.('physics');
       this.groundDropSmoke = new BoatDepositSmoke('ground-drop-smoke');
       this.ship.add(this.groundDropSmoke.points);
       rollback.push(() => {
@@ -564,7 +620,7 @@ export class World {
       this.shipPhysicsRotation,
     );
     this.scavengePhysics?.update(this.shipPhysicsPose, delta, simulatePhysics);
-    if (!this.physicsBarrelsAttachedToShip) this.syncPhysicsObjects();
+    if (!this.physicsObjectsAttachedToShip) this.syncPhysicsObjects();
     this.shipBuild.updateEffects(delta, sinking.progress);
     this.shipDangerEffects.update(delta, danger);
     this.scavengeIntroPresentation.update(delta);
@@ -643,11 +699,20 @@ export class World {
     this.scavengeIntroPresentation.trigger();
   }
 
-  attachPhysicsBarrelsToShip(): void {
-    if (this.disposed || this.physicsBarrelsAttachedToShip) return;
+  revealPhysicsObjects(): void {
+    if (this.disposed || this.physicsObjectsVisible) return;
+    this.physicsObjectsVisible = true;
+    this.physicsObjectsRoot.visible = true;
+    this.physicsObjects.forEach((object) => { object.visible = true; });
+    this.physicsDebugView?.setVisible(true);
+  }
+
+  attachPhysicsObjectsToShip(): void {
+    if (this.disposed || this.physicsObjectsAttachedToShip) return;
     this.ship.updateMatrixWorld(true);
-    this.physicsBarrels.forEach((barrel) => this.ship.attach(barrel));
-    this.physicsBarrelsAttachedToShip = true;
+    this.ship.attach(this.physicsObjectsRoot);
+    this.physicsDebugView?.attachDynamicToShip(this.ship);
+    this.physicsObjectsAttachedToShip = true;
   }
 
   setWaterQuality(value: WaterQuality): void {
@@ -679,24 +744,26 @@ export class World {
   private syncPhysicsObjects(): void {
     const physics = this.scavengePhysics;
     if (physics === null) return;
-    this.physicsBarrels.forEach((barrel, index) => {
-      const pose = physics.barrelPoses[index]!;
-      barrel.quaternion.set(
+    for (let index = 0; index < this.physicsObjects.length; index += 1) {
+      const visual = this.physicsObjects[index]!;
+      const pose = physics.objectPoses[index]!;
+      const spec = SCAVENGE_PHYSICS_OBJECT_SPECS[index]!;
+      visual.quaternion.set(
         pose.rotation.x,
         pose.rotation.y,
         pose.rotation.z,
         pose.rotation.w,
       );
-      this.barrelVisualOffset
-        .set(0, -SCAVENGE_BARREL_HALF_HEIGHT, 0)
-        .applyQuaternion(barrel.quaternion);
-      barrel.position.set(
-        pose.translation.x + this.barrelVisualOffset.x,
-        pose.translation.y + this.barrelVisualOffset.y,
-        pose.translation.z + this.barrelVisualOffset.z,
+      this.physicsObjectVisualOffset
+        .set(0, -spec.visualHalfHeight, 0)
+        .applyQuaternion(visual.quaternion);
+      visual.position.set(
+        pose.translation.x + this.physicsObjectVisualOffset.x,
+        pose.translation.y + this.physicsObjectVisualOffset.y,
+        pose.translation.z + this.physicsObjectVisualOffset.z,
       );
-    });
-    this.physicsDebugView?.sync(physics.barrelPoses);
+    }
+    this.physicsDebugView?.sync(physics.objectPoses);
   }
 
   saveItems(instances: readonly ItemInstance[]): void {
@@ -781,8 +848,8 @@ export class World {
         this.ship,
         this.lifeboat,
         this.ocean.mesh,
-        ...this.physicsBarrels,
       ),
+      () => this.physicsObjectsRoot.removeFromParent(),
       () => this.boatDepositSmoke.dispose(),
       () => this.groundDropSmoke.dispose(),
       () => this.itemPickupSmoke.dispose(),
