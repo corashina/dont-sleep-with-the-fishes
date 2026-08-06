@@ -7,22 +7,18 @@ import {
 } from '../src/menu/MenuSceneLayout';
 import { MENU_MODEL_SPECS } from '../src/menu/menuModelManifest';
 
-it('contains every normalized corner around the model origin', () => {
-  const placementsByModelId = new Map(MENU_MODEL_PLACEMENTS.map((placement) => [
-    placement.modelId,
-    placement,
-  ]));
-  for (const [modelId, placement] of placementsByModelId) {
+it('contains every normalized corner after its full placement rotation', () => {
+  for (const placement of MENU_MODEL_PLACEMENTS) {
     const spec = MENU_MODEL_SPECS[placement.modelId];
     const { min, max } = spec.generatedMetadata.rawBounds;
-    const rotation = new Euler(...spec.rotation);
+    const presentationRotation = new Euler(...spec.rotation);
     const corners: Vector3[] = [];
     const rotatedMin = new Vector3(Infinity, Infinity, Infinity);
     const rotatedMax = new Vector3(-Infinity, -Infinity, -Infinity);
     for (const x of [min[0], max[0]]) {
       for (const y of [min[1], max[1]]) {
         for (const z of [min[2], max[2]]) {
-          const corner = new Vector3(x, y, z).applyEuler(rotation);
+          const corner = new Vector3(x, y, z).applyEuler(presentationRotation);
           corners.push(corner);
           rotatedMin.min(corner);
           rotatedMax.max(corner);
@@ -32,12 +28,13 @@ it('contains every normalized corner around the model origin', () => {
     const rotatedSize = rotatedMax.clone().sub(rotatedMin);
     const sourceLongest = Math.max(rotatedSize.x, rotatedSize.y, rotatedSize.z);
     const scale = spec.targetLongestDimension / sourceLongest;
+    const placementRotation = new Euler(...placement.rotation);
+    const tolerance = 1e-12;
     for (const corner of corners) {
-      const horizontalRadius = Math.hypot(corner.x, corner.z) * scale;
-      const tolerance = 1e-12;
-      expect(horizontalRadius, modelId)
+      corner.multiplyScalar(scale).applyEuler(placementRotation);
+      expect(Math.abs(corner.x), placement.id)
         .toBeLessThanOrEqual(placement.halfSize[0] + tolerance);
-      expect(horizontalRadius, modelId)
+      expect(Math.abs(corner.z), placement.id)
         .toBeLessThanOrEqual(placement.halfSize[1] + tolerance);
     }
   }
