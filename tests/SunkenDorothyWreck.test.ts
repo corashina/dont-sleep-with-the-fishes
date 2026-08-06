@@ -1,6 +1,7 @@
 import { Box3, Mesh, Vector3 } from 'three';
 import { expect, it, vi } from 'vitest';
 import {
+  DOROTHY_HULL_STATION_COUNT,
   DOROTHY_WRECK_PART_NAMES,
   DOROTHY_WRECK_POSITION,
   DOROTHY_WRECK_ROTATION,
@@ -27,8 +28,8 @@ it('builds a long simplified Dorothy wreck in a distant side view', () => {
     'menu:dorothy-wreck-deck',
     'menu:dorothy-wreck-deckhouse-aft',
     'menu:dorothy-wreck-deckhouse-forward',
-    'menu:dorothy-wreck-funnel-port',
-    'menu:dorothy-wreck-funnel-starboard',
+    'menu:dorothy-wreck-funnel-forward',
+    'menu:dorothy-wreck-funnel-aft',
     'menu:dorothy-wreck-mast',
     'menu:dorothy-wreck-rail-port',
     'menu:dorothy-wreck-rail-starboard',
@@ -55,14 +56,26 @@ it('builds a long simplified Dorothy wreck in a distant side view', () => {
   }
 
   const hull = wreck.root.getObjectByName('menu:dorothy-wreck-hull') as Mesh;
+  expect(DOROTHY_HULL_STATION_COUNT).toBe(7);
+  expect(hull.geometry.getAttribute('position').count)
+    .toBeGreaterThanOrEqual(DOROTHY_HULL_STATION_COUNT * 6);
   hull.geometry.computeBoundingBox();
   expect(hull.geometry.boundingBox?.max.z).toBe(9);
   expect(hull.geometry.boundingBox?.min.z).toBe(-9);
   expect(hull.geometry.boundingBox?.getSize(new Vector3()).z).toBe(18);
 
-  const funnelPort = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-port') as Mesh;
-  const funnelStarboard = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-starboard') as Mesh;
-  expect(funnelPort.geometry).toBe(funnelStarboard.geometry);
+  const funnelForward = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-forward') as Mesh;
+  const funnelAft = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-aft') as Mesh;
+  expect(funnelForward.geometry).toBe(funnelAft.geometry);
+  expect(funnelForward.position.x).toBe(0);
+  expect(funnelAft.position.x).toBe(0);
+  expect(funnelForward.position.z).not.toBe(funnelAft.position.z);
+  expect(Math.abs(funnelForward.rotation.z)).toBeLessThan(0.12);
+  expect(Math.abs(funnelAft.rotation.z)).toBeLessThan(0.12);
+  expect(wreck.root.getObjectByName('menu:dorothy-wreck-funnel-forward-rim'))
+    .toBeInstanceOf(Mesh);
+  expect(wreck.root.getObjectByName('menu:dorothy-wreck-funnel-aft-base'))
+    .toBeInstanceOf(Mesh);
 
   const railPort = wreck.root.getObjectByName('menu:dorothy-wreck-rail-port') as Mesh;
   const railStarboard = wreck.root.getObjectByName('menu:dorothy-wreck-rail-starboard') as Mesh;
