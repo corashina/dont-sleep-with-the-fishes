@@ -68,16 +68,22 @@ function createParticlePool(
 ): ParticlePool {
   const basePositions = new Float32Array(count * 3);
   const phases = new Float32Array(count);
+  const columns = bubbles ? 12 : 15;
+  const rows = Math.ceil(count / columns);
   for (let index = 0; index < count; index += 1) {
     const offset = index * 3;
-    const depthBand = index % 18;
-    const horizontal = ((index * 37) % count) / Math.max(1, count - 1);
-    const vertical = ((index * 53) % count) / Math.max(1, count - 1);
-    const spread = 4.5 + depthBand * 2.25;
-    basePositions[offset] = (horizontal * 2 - 1) * spread;
-    basePositions[offset + 1] = -0.65 + vertical * 9.2;
-    basePositions[offset + 2] = 4.2 - depthBand * 3.25 - (index % 4) * 0.38;
-    phases[index] = (index % 23) / 23 * Math.PI * 2;
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const horizontal = columns === 1 ? 0.5 : column / (columns - 1);
+    const vertical = rows === 1 ? 0.5 : row / (rows - 1);
+    const depthBand = (column * 5 + row * 7) % 8;
+    const spread = 7.5 + depthBand * 4.2;
+    const jitterX = ((index * 17) % 11 - 5) * 0.11;
+    const jitterY = ((index * 13) % 9 - 4) * 0.07;
+    basePositions[offset] = (horizontal * 2 - 1) * spread + jitterX;
+    basePositions[offset + 1] = -0.55 + vertical * 9.1 + jitterY;
+    basePositions[offset + 2] = 4.4 - depthBand * 5.1 - (row % 3) * 0.35;
+    phases[index] = ((index * 11) % count) / count * Math.PI * 2;
   }
 
   const geometry = new BufferGeometry();
