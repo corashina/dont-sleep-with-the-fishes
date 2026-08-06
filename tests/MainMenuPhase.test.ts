@@ -10,6 +10,7 @@ function createRig(
   const canvas = document.createElement('canvas');
   const ui = {
     onStart: () => undefined,
+    onStartFocusChange: (_focused: boolean) => undefined,
     onGuideFocusChange: (_focused: boolean) => undefined,
     setTransitioning: vi.fn(),
     setFadeProgress: vi.fn(),
@@ -20,8 +21,8 @@ function createRig(
   };
   const world = {
     actors: {},
-    isGuideSignHit: vi.fn(() => false),
-    setGuideSignHighlighted: vi.fn(),
+    getMenuSignActionAt: vi.fn(() => null as 'start' | 'guide' | null),
+    setMenuSignHighlighted: vi.fn(),
     dispose: vi.fn(),
   };
   const animator = { update: vi.fn(), dispose: vi.fn() };
@@ -236,7 +237,7 @@ describe('MainMenuPhase', () => {
       y: 20,
       toJSON: () => undefined,
     } as DOMRect);
-    world.isGuideSignHit.mockReturnValue(true);
+    world.getMenuSignActionAt.mockReturnValue('guide');
     phase.start();
 
     canvas.dispatchEvent(new MouseEvent('pointermove', {
@@ -244,8 +245,9 @@ describe('MainMenuPhase', () => {
       clientY: 70,
       bubbles: true,
     }));
-    expect(world.isGuideSignHit).toHaveBeenLastCalledWith(0, 0);
-    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(true);
+    expect(world.getMenuSignActionAt).toHaveBeenLastCalledWith(0, 0);
+    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('guide', true);
+    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('start', false);
     expect(canvas.style.cursor).toBe('pointer');
 
     canvas.dispatchEvent(new MouseEvent('click', {
@@ -257,11 +259,48 @@ describe('MainMenuPhase', () => {
     expect(ui.openGuide).toHaveBeenCalledOnce();
 
     canvas.dispatchEvent(new MouseEvent('pointerleave'));
-    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(false);
+    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('guide', false);
     ui.onGuideFocusChange(true);
-    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(true);
+    expect(world.setMenuSignHighlighted).toHaveBeenLastCalledWith('guide', true);
     ui.onGuideFocusChange(false);
-    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(false);
+    expect(world.setMenuSignHighlighted).toHaveBeenLastCalledWith('guide', false);
+    phase.dispose();
+  });
+
+  it('starts from the 3D start sign with pointer or keyboard', async () => {
+    const { canvas, phase, requestPointerLock, ui, world } = createRig();
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 100,
+      width: 200,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => undefined,
+    } as DOMRect);
+    world.getMenuSignActionAt.mockReturnValue('start');
+    phase.start();
+
+    canvas.dispatchEvent(new MouseEvent('pointermove', {
+      clientX: 100,
+      clientY: 50,
+      bubbles: true,
+    }));
+    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('start', true);
+
+    canvas.dispatchEvent(new MouseEvent('click', {
+      button: 0,
+      clientX: 100,
+      clientY: 50,
+      bubbles: true,
+    }));
+    await Promise.resolve();
+    expect(requestPointerLock).toHaveBeenCalledOnce();
+
+    ui.onStartFocusChange(true);
+    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('start', true);
     phase.dispose();
   });
 
@@ -373,13 +412,14 @@ describe('MainMenuPhase', () => {
     const camera = new PerspectiveCamera();
     const ui = {
       onStart: () => undefined,
+      onStartFocusChange: (_focused: boolean) => undefined,
       onGuideFocusChange: (_focused: boolean) => undefined,
       dispose: vi.fn(),
     };
     const world = {
       actors: {},
-      isGuideSignHit: vi.fn(() => false),
-      setGuideSignHighlighted: vi.fn(),
+      getMenuSignActionAt: vi.fn(() => null),
+      setMenuSignHighlighted: vi.fn(),
       dispose: vi.fn(),
     };
     let menuScene!: Scene;

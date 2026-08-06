@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Scene } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
 import { MenuModelLibrary } from '../menu/MenuModelLibrary';
+import type { MenuSignAction } from '../menu/MenuSigns';
 import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
@@ -89,7 +90,8 @@ export class MainMenuPhase implements GamePhase {
   private started = false;
   private disposed = false;
   private pointerLockListenerRegistered = false;
-  private guidePointerHovered = false;
+  private pointerAction: MenuSignAction | null = null;
+  private startKeyboardFocused = false;
   private guideKeyboardFocused = false;
   private readonly handlePointerLockChange = (): void => {
     if (
@@ -124,9 +126,13 @@ export class MainMenuPhase implements GamePhase {
     this.ui.onStart = () => {
       void this.requestStart();
     };
+    this.ui.onStartFocusChange = (focused) => {
+      this.startKeyboardFocused = focused;
+      this.syncSignHighlights();
+    };
     this.ui.onGuideFocusChange = (focused) => {
       this.guideKeyboardFocused = focused;
-      this.syncGuideHighlight();
+      this.syncSignHighlights();
     };
   }
 
@@ -136,9 +142,9 @@ export class MainMenuPhase implements GamePhase {
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     this.pointerLockListenerRegistered = true;
     const canvas = this.context.renderer.domElement;
-    canvas.addEventListener('pointermove', this.handleGuidePointerMove);
-    canvas.addEventListener('pointerleave', this.handleGuidePointerLeave);
-    canvas.addEventListener('click', this.handleGuideClick);
+    canvas.addEventListener('pointermove', this.handleMenuPointerMove);
+    canvas.addEventListener('pointerleave', this.handleMenuPointerLeave);
+    canvas.addEventListener('click', this.handleMenuClick);
     this.ui.setTransitioning(false);
     this.ui.setFadeProgress(0);
   }
@@ -190,19 +196,22 @@ export class MainMenuPhase implements GamePhase {
       },
       () => {
         const canvas = this.context.renderer.domElement;
-        canvas.removeEventListener('pointermove', this.handleGuidePointerMove);
-        canvas.removeEventListener('pointerleave', this.handleGuidePointerLeave);
-        canvas.removeEventListener('click', this.handleGuideClick);
+        canvas.removeEventListener('pointermove', this.handleMenuPointerMove);
+        canvas.removeEventListener('pointerleave', this.handleMenuPointerLeave);
+        canvas.removeEventListener('click', this.handleMenuClick);
         canvas.style.cursor = '';
       },
       () => {
         this.ui.onStart = NOOP;
+        this.ui.onStartFocusChange = NOOP;
         this.ui.onGuideFocusChange = NOOP;
       },
       () => {
-        this.guidePointerHovered = false;
+        this.pointerAction = null;
+        this.startKeyboardFocused = false;
         this.guideKeyboardFocused = false;
-        this.world.setGuideSignHighlighted(false);
+        this.world.setMenuSignHighlighted('start', false);
+        this.world.setMenuSignHighlighted('guide', false);
       },
       () => this.scene.remove(this.context.camera),
       () => this.animator.dispose(),
@@ -237,53 +246,62 @@ export class MainMenuPhase implements GamePhase {
     if (this.transitioning) return;
     this.ui.clearPointerLockError();
     this.transitioning = true;
-    this.clearGuideInteraction();
+    this.clearSignInteraction();
     this.fadeElapsed = 0;
     this.ui.setTransitioning(true);
     this.ui.setFadeProgress(0);
   }
 
-  private readonly handleGuidePointerMove = (event: PointerEvent): void => {
-    this.guidePointerHovered = this.guideSignHit(event);
-    this.context.renderer.domElement.style.cursor = this.guidePointerHovered
+  private readonly handleMenuPointerMove = (event: PointerEvent): void => {
+    this.pointerAction = this.menuSignAction(event);
+    this.context.renderer.domElement.style.cursor = this.pointerAction
       ? 'pointer'
       : '';
-    this.syncGuideHighlight();
+    this.syncSignHighlights();
   };
 
-  private readonly handleGuidePointerLeave = (): void => {
-    this.guidePointerHovered = false;
+  private readonly handleMenuPointerLeave = (): void => {
+    this.pointerAction = null;
     this.context.renderer.domElement.style.cursor = '';
-    this.syncGuideHighlight();
+    this.syncSignHighlights();
   };
 
-  private readonly handleGuideClick = (event: MouseEvent): void => {
-    if (event.button !== 0 || !this.guideSignHit(event)) return;
+  private readonly handleMenuClick = (event: MouseEvent): void => {
+    if (event.button !== 0) return;
+    const action = this.menuSignAction(event);
+    if (!action) return;
     event.preventDefault();
-    this.ui.openGuide();
+    if (action === 'start') this.ui.onStart();
+    else this.ui.openGuide();
   };
 
-  private guideSignHit(event: MouseEvent): boolean {
-    if (this.disposed || this.transitioning) return false;
+  private menuSignAction(event: MouseEvent): MenuSignAction | null {
+    if (this.disposed || this.transitioning) return null;
     const bounds = this.context.renderer.domElement.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return false;
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
     const ndcX = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
     const ndcY = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-    return this.world.isGuideSignHit(ndcX, ndcY);
+    return this.world.getMenuSignActionAt(ndcX, ndcY);
   }
 
-  private syncGuideHighlight(): void {
+  private syncSignHighlights(): void {
     if (this.disposed) return;
-    this.world.setGuideSignHighlighted(
-      !this.transitioning
-      && (this.guidePointerHovered || this.guideKeyboardFocused),
-    );
+    const keyboardAction = this.startKeyboardFocused
+      ? 'start'
+      : this.guideKeyboardFocused ? 'guide' : null;
+    const activeAction = this.transitioning
+      ? null
+      : this.pointerAction ?? keyboardAction;
+    this.world.setMenuSignHighlighted('start', activeAction === 'start');
+    this.world.setMenuSignHighlighted('guide', activeAction === 'guide');
   }
 
-  private clearGuideInteraction(): void {
-    this.guidePointerHovered = false;
+  private clearSignInteraction(): void {
+    this.pointerAction = null;
+    this.startKeyboardFocused = false;
     this.guideKeyboardFocused = false;
     this.context.renderer.domElement.style.cursor = '';
-    this.world.setGuideSignHighlighted(false);
+    this.world.setMenuSignHighlighted('start', false);
+    this.world.setMenuSignHighlighted('guide', false);
   }
 }

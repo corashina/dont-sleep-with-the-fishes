@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { BoxGeometry, Mesh } from 'three';
+import { BoxGeometry, Mesh, MeshStandardMaterial } from 'three';
 import { expect, it, vi } from 'vitest';
 import {
   MENU_GUIDE_SIGN_POSITION,
   MENU_GUIDE_SIGN_TITLE,
-  MENU_SIGN_TITLE,
-  MENU_TITLE_SIGN_POSITION,
+  MENU_START_SIGN_POSITION,
+  MENU_START_SIGN_TITLE,
   MenuSigns,
   type MenuSignCanvasSurface,
 } from '../src/menu/MenuSigns';
@@ -25,17 +25,21 @@ function fakeFactory(surfaces: MenuSignCanvasSurface[]): () => MenuSignCanvasSur
   };
 }
 
-it('builds the lowered uppercase title and the right guide sign', () => {
+it('builds smaller guide and start signs in swapped positions', () => {
   const surfaces: MenuSignCanvasSurface[] = [];
   const signs = new MenuSigns(fakeFactory(surfaces));
-  const title = signs.root.getObjectByName('menu:title-sign')!;
   const guide = signs.root.getObjectByName('menu:guide-sign')!;
+  const start = signs.root.getObjectByName('menu:start-sign')!;
 
-  expect(title.position.toArray()).toEqual([...MENU_TITLE_SIGN_POSITION]);
   expect(guide.position.toArray()).toEqual([...MENU_GUIDE_SIGN_POSITION]);
-  expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith(MENU_SIGN_TITLE, 512, 184);
-  expect(surfaces[1]!.context.fillText).toHaveBeenCalledWith(MENU_GUIDE_SIGN_TITLE, 512, 184);
-  expect(MENU_SIGN_TITLE).toBe("DON'T SLEEP WITH THE FISHES");
+  expect(start.position.toArray()).toEqual([...MENU_START_SIGN_POSITION]);
+  expect(guide.position.x).toBeLessThan(0);
+  expect(start.position.x).toBeGreaterThan(0);
+  expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith(MENU_GUIDE_SIGN_TITLE, 512, 184);
+  expect(surfaces[1]!.context.fillText).toHaveBeenCalledWith(MENU_START_SIGN_TITLE, 512, 184);
+  expect((signs.guideHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);
+  expect((signs.startHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);
+  expect(signs.startHitTarget.name).toBe('menu:start-sign-board');
   expect(signs.guideHitTarget.name).toBe('menu:guide-sign-board');
 
   const textureDisposers = signs.textures.map((texture) => vi.spyOn(texture, 'dispose'));
@@ -44,27 +48,37 @@ it('builds the lowered uppercase title and the right guide sign', () => {
   for (const dispose of textureDisposers) expect(dispose).toHaveBeenCalledOnce();
 });
 
-it('highlights only the guide sign and restores its transform', () => {
+it('highlights each complete sign without changing its transform', () => {
   const signs = new MenuSigns(fakeFactory([]));
   const guide = signs.root.getObjectByName('menu:guide-sign')!;
-  const title = signs.root.getObjectByName('menu:title-sign')!;
+  const start = signs.root.getObjectByName('menu:start-sign')!;
+  const guidePost = guide.getObjectByName('menu:guide-sign-post-left') as Mesh;
+  const startPost = start.getObjectByName('menu:start-sign-post-left') as Mesh;
+  const guidePosition = guide.position.clone();
 
   signs.setGuideHighlighted(true);
-  expect(guide.scale.x).toBeCloseTo(1.035);
-  expect(guide.position.y).toBeCloseTo(MENU_GUIDE_SIGN_POSITION[1] + 0.04);
-  expect(signs.guideHitTarget.material.emissiveIntensity).toBe(0.45);
-  expect(title.scale.x).toBe(1);
+  expect(guide.scale.toArray()).toEqual([1, 1, 1]);
+  expect(guide.position.equals(guidePosition)).toBe(true);
+  expect(signs.guideHitTarget.material.emissiveIntensity).toBeGreaterThan(0);
+  expect((guidePost.material as MeshStandardMaterial).emissiveIntensity).toBeGreaterThan(0);
+  expect(signs.startHitTarget.material.emissiveIntensity).toBe(0);
+
+  signs.setStartHighlighted(true);
+  expect(start.scale.toArray()).toEqual([1, 1, 1]);
+  expect(signs.startHitTarget.material.emissiveIntensity).toBeGreaterThan(0);
+  expect((startPost.material as MeshStandardMaterial).emissiveIntensity).toBeGreaterThan(0);
 
   signs.setGuideHighlighted(false);
-  expect(guide.scale.x).toBe(1);
-  expect(guide.position.y).toBe(MENU_GUIDE_SIGN_POSITION[1]);
   expect(signs.guideHitTarget.material.emissiveIntensity).toBe(0);
+  expect((guidePost.material as MeshStandardMaterial).emissiveIntensity).toBe(0);
+  signs.setStartHighlighted(false);
+  expect(signs.startHitTarget.material.emissiveIntensity).toBe(0);
   signs.dispose();
 });
 
 it('keeps both signs support posts behind their painted surfaces', () => {
   const signs = new MenuSigns(fakeFactory([]));
-  for (const signName of ['menu:title-sign', 'menu:guide-sign']) {
+  for (const signName of ['menu:start-sign', 'menu:guide-sign']) {
     const sign = signs.root.getObjectByName(signName)!;
     const board = sign.getObjectByName(`${signName}-board`) as Mesh;
     const boardFront = board.position.z

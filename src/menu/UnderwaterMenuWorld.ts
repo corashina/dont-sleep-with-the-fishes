@@ -29,7 +29,11 @@ import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
 import { DistantSeabed } from './DistantSeabed';
 import type { MenuSceneComponent } from './MenuSceneComponent';
-import { MenuSigns, type MenuSignsComponent } from './MenuSigns';
+import {
+  MenuSigns,
+  type MenuSignAction,
+  type MenuSignsComponent,
+} from './MenuSigns';
 import { SunkenDorothyWreck } from './SunkenDorothyWreck';
 import {
   type MenuSharkActor,
@@ -103,9 +107,9 @@ export class UnderwaterMenuWorld {
   readonly fishSchools: readonly [Group, Group];
   readonly actors: UnderwaterMenuActors;
 
-  private readonly guideRaycaster = new Raycaster();
-  private readonly guidePointer = new Vector2();
-  private readonly guideIntersections: Intersection[] = [];
+  private readonly signRaycaster = new Raycaster();
+  private readonly signPointer = new Vector2();
+  private readonly signIntersections: Intersection[] = [];
   private readonly modelInstances: MenuModelInstance[] = [];
   private readonly components: MenuSceneComponent[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -120,6 +124,7 @@ export class UnderwaterMenuWorld {
   private readonly hadCameraFixedFlag: boolean;
   private readonly previousCameraFixed: unknown;
   private readonly signs: MenuSignsComponent;
+  private readonly signHitTargets: Mesh[];
   private disposed = false;
 
   constructor(
@@ -165,6 +170,7 @@ export class UnderwaterMenuWorld {
       throw error;
     }
     this.signs = signs;
+    this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
 
     this.placeModel(boat.root, 'boat', MENU_PLACEMENT.boat);
     this.placeModel(rockA.root, 'rockA', MENU_PLACEMENT.rockA);
@@ -261,21 +267,25 @@ export class UnderwaterMenuWorld {
     scene.add(this.root);
   }
 
-  isGuideSignHit(ndcX: number, ndcY: number): boolean {
-    if (this.disposed) return false;
-    this.guidePointer.set(ndcX, ndcY);
-    this.guideRaycaster.setFromCamera(this.guidePointer, this.camera);
-    this.guideIntersections.length = 0;
-    this.guideRaycaster.intersectObject(
-      this.signs.guideHitTarget,
+  getMenuSignActionAt(ndcX: number, ndcY: number): MenuSignAction | null {
+    if (this.disposed) return null;
+    this.signPointer.set(ndcX, ndcY);
+    this.signRaycaster.setFromCamera(this.signPointer, this.camera);
+    this.signIntersections.length = 0;
+    this.signRaycaster.intersectObjects(
+      this.signHitTargets,
       false,
-      this.guideIntersections,
+      this.signIntersections,
     );
-    return this.guideIntersections.length > 0;
+    const hit = this.signIntersections[0]?.object;
+    if (hit === this.signs.startHitTarget) return 'start';
+    if (hit === this.signs.guideHitTarget) return 'guide';
+    return null;
   }
 
-  setGuideSignHighlighted(active: boolean): void {
-    this.signs.setGuideHighlighted(active);
+  setMenuSignHighlighted(action: MenuSignAction, active: boolean): void {
+    if (action === 'start') this.signs.setStartHighlighted(active);
+    else this.signs.setGuideHighlighted(active);
   }
 
   dispose(): void {
