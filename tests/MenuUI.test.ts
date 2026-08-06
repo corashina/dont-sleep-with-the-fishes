@@ -11,6 +11,8 @@ it('exposes the approved title actions', () => {
   const mount = document.createElement('main');
   document.body.append(mount);
   const ui = new MenuUI(mount);
+  expect(mount.querySelector('.ui-treatment')).toBeNull();
+  expect(mainStyles).toMatch(/\.underwater-menu-screen\s*\{[^}]*background:\s*none/s);
 
   const title = mount.querySelector<HTMLHeadingElement>('h1')!;
   expect(title.textContent).toBe("DON'T SLEEP WITH THE FISHES");

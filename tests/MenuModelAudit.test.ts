@@ -55,6 +55,14 @@ describe('menu model audit contract', () => {
         committedSha256: 'B9EB2A8A48D1E99474DDAD1B7EFE438085EEB783F816E43B1608978C508D97CB',
         license: 'CC0 1.0',
       },
+      coral: {
+        committedSha256: '2ACA833051D14C22B107D14B2AE84E533B69A1EFBEC2B7F0A087416B9079D0AD',
+        license: 'CC-BY 3.0',
+      },
+      starfish: {
+        committedSha256: '7B79DB36F41814317A5888D10E5A7EA9EDEA7998DAE7F982F19608BC7F2D98A1',
+        license: 'CC-BY 3.0',
+      },
       fishBone: {
         committedSha256: '6FCD27536B4691BD0D639055BAC1C3D84AD3978654F310A3DF0C3F157EED371E',
         license: 'CC0 1.0',

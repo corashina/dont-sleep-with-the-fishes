@@ -12,7 +12,7 @@ import {
   POLY_PIZZA_MENU_MODEL_SOURCES,
 } from './poly-pizza-menu-models.mjs';
 
-const TOTAL_TRIANGLE_LIMIT = 8_000;
+const TOTAL_TRIANGLE_LIMIT = 10_000;
 const ATTRIBUTION_HEADING = '## Runtime underwater-menu model ledger';
 const REQUIRED_SHARK_CLIP = Object.freeze({
   name: 'Armature|Swim',

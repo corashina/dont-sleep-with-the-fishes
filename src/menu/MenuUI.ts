@@ -25,7 +25,6 @@ export class MenuUI {
     this.root = document.createElement('div');
     this.root.className = 'menu-ui';
     this.root.innerHTML = `
-      <div class="ui-treatment" aria-hidden="true"></div>
       <section class="screen is-visible underwater-menu-screen" data-menu>
         <button type="button" class="menu-action-accessible" data-menu-start>START</button>
         <button type="button" class="menu-action-accessible" data-menu-guide-open aria-haspopup="dialog"
