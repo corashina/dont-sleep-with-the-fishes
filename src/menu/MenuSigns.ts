@@ -12,9 +12,9 @@ import { disposeResourceSets } from '../world/SceneResources';
 
 export const MENU_SIGN_TITLE = "DON'T SLEEP WITH THE FISHES";
 export const MENU_GUIDE_SIGN_TITLE = 'HOW TO PLAY';
-export const MENU_TITLE_SIGN_POSITION = [-2.65, -0.35, 1.8] as const;
+export const MENU_TITLE_SIGN_POSITION = [-2.65, -0.92, 2.45] as const;
 export const MENU_TITLE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
-export const MENU_GUIDE_SIGN_POSITION = [2.7, -0.22, 1.7] as const;
+export const MENU_GUIDE_SIGN_POSITION = [2.7, -0.78, 2.35] as const;
 export const MENU_GUIDE_SIGN_ROTATION = [0.02, -0.22, 0.05] as const;
 
 export interface MenuSignCanvasSurface {
