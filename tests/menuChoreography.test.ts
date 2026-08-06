@@ -1,3 +1,4 @@
+import { PerspectiveCamera, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import {
   MENU_FADE_SECONDS,
@@ -5,6 +6,14 @@ import {
   sampleMenuFade,
   sampleMenuMotionInto,
 } from '../src/menu/menuChoreography';
+import {
+  MENU_CAMERA_POSITION,
+  MENU_CAMERA_TARGET,
+} from '../src/menu/UnderwaterMenuWorld';
+
+const SHARK_TARGET_DIMENSION = 4.8;
+const FISH_SCHOOL_WIDTH = 5 * 0.72 + 0.68;
+const MINIMUM_SCREEN_GAP = 0.04;
 
 it('loops every actor without replacing output arrays', () => {
   const sample = createMenuMotionSample();
@@ -53,6 +62,68 @@ it('keeps animal groups separated while they cover both sides', () => {
   expect(sharkX[3]).toBeGreaterThan(20);
   expect(fishX[0]).toBeLessThan(-14);
   expect(fishX[3]).toBeGreaterThan(16);
+});
+
+it('keeps shark and fish-school silhouettes separate through the 34 second loop', () => {
+  const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 1000);
+  camera.position.set(...MENU_CAMERA_POSITION);
+  camera.lookAt(...MENU_CAMERA_TARGET);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  const sample = createMenuMotionSample();
+  const cameraRight = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const sharkCenter = new Vector3();
+  const fishCenter = new Vector3();
+  const projectedShark = new Vector3();
+  const projectedFish = new Vector3();
+  const projectedEdge = new Vector3();
+  const violations: Array<{
+    readonly elapsedSeconds: number;
+    readonly pair: string;
+    readonly clearance: number;
+  }> = [];
+
+  const projectedHalfSize = (center: Vector3, width: number): number => {
+    projectedEdge.copy(center).addScaledVector(cameraRight, width * 0.5).project(camera);
+    return Math.abs(projectedEdge.x - center.clone().project(camera).x);
+  };
+
+  for (let step = 0; step <= 136; step += 1) {
+    const elapsedSeconds = step * 0.25;
+    sampleMenuMotionInto(sample, elapsedSeconds);
+    for (let sharkIndex = 0; sharkIndex < sample.sharks.length; sharkIndex += 1) {
+      sharkCenter.fromArray(sample.sharks[sharkIndex]!.position);
+      projectedShark.copy(sharkCenter).project(camera);
+      const sharkHalfSize = projectedHalfSize(sharkCenter, SHARK_TARGET_DIMENSION);
+      for (let fishIndex = 0; fishIndex < sample.fishSchools.length; fishIndex += 1) {
+        fishCenter.fromArray(sample.fishSchools[fishIndex]!.position);
+        projectedFish.copy(fishCenter).project(camera);
+        const fishHalfSize = projectedHalfSize(fishCenter, FISH_SCHOOL_WIDTH);
+        const centerGap = Math.hypot(
+          projectedShark.x - projectedFish.x,
+          projectedShark.y - projectedFish.y,
+        );
+        const clearance = centerGap - sharkHalfSize - fishHalfSize;
+        if (clearance < MINIMUM_SCREEN_GAP) {
+          violations.push({
+            elapsedSeconds,
+            pair: `shark-${sharkIndex + 1}/fish-school-${fishIndex + 1}`,
+            clearance: Number(clearance.toFixed(4)),
+          });
+        }
+      }
+    }
+  }
+
+  expect.soft(
+    violations.filter(({ elapsedSeconds }) => elapsedSeconds === 13),
+    '13 second silhouettes',
+  ).toEqual([]);
+  expect.soft(
+    violations.filter(({ elapsedSeconds }) => elapsedSeconds === 34),
+    '34 second silhouettes',
+  ).toEqual([]);
+  expect(violations, 'full-loop shark and fish-school silhouette clearance').toEqual([]);
 });
 
 it('clamps the 0.7 second fade', () => {
