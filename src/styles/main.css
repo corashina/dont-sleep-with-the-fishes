@@ -311,6 +311,29 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .system-screen--loading { justify-content: center; }
 .system-screen .screen__content { width: min(620px, calc(100vw - 64px)); }
 .system-screen--error .kicker { color: var(--ink-red-bright); }
+.system-loading-progress {
+  width: min(420px, 100%);
+  height: 14px;
+  overflow: hidden;
+  appearance: none;
+  border: 2px solid #070b0d;
+  border-radius: 0;
+  background: #080d10;
+  box-shadow: inset 0 0 0 1px #8d81704d, 3px 4px 0 #02050999;
+}
+.system-loading-progress::-webkit-progress-bar { background: #080d10; }
+.system-loading-progress::-webkit-progress-value {
+  background:
+    repeating-linear-gradient(8deg, transparent 0 7px, #f2ead71f 8px 9px),
+    linear-gradient(90deg, #77503a, #b77a35 72%, #d2a14a);
+  transition: width 180ms ease;
+}
+.system-loading-progress::-moz-progress-bar {
+  background:
+    repeating-linear-gradient(8deg, transparent 0 7px, #f2ead71f 8px 9px),
+    linear-gradient(90deg, #77503a, #b77a35 72%, #d2a14a);
+  transition: width 180ms ease;
+}
 .screen.is-visible,
 .fishing-layer.is-visible,
 .survival-overlay.is-visible { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -1534,7 +1557,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-ui .primary-action { min-width: 180px; }
 .survival-ui .primary-action:not(.salvage-action) { transition: transform 160ms ease, opacity 160ms ease; }
 .text-action { border-color: transparent; background: transparent; color: #a8a797; }
-.ending-stats { padding-top: 10px; border-top: 1px solid #b9b5a744; font-size: 0.68rem; letter-spacing: 0.09em; }
 
 @media (max-width: 760px) {
   .survival-status { inset: 14px auto auto 16px; min-width: 0; gap: 18px; }

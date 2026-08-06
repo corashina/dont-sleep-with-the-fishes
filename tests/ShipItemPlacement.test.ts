@@ -1,5 +1,5 @@
 // Importance: 4/5. Protects valid randomized item placement.
-import { Box3, Euler, Vector3 } from 'three';
+import { Box3, Euler, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,
@@ -79,8 +79,33 @@ describe('ship item placement', () => {
 
     expect(transform.rotation.x).toBeCloseTo(0);
     expect(transform.rotation.y).toBeCloseTo(-Math.PI / 4);
-    expect(transform.rotation.z).toBeCloseTo(0);
+    expect(transform.rotation.z).toBeCloseTo(-42.7 * Math.PI / 180);
     expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+  });
+
+  it('uses the same floor pose for every umbrella surface orientation', () => {
+    const umbrella = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'umbrella-1',
+    )!;
+    const rotations = [
+      new Euler(0, 0, 0),
+      new Euler(0, Math.PI / 2, 0),
+      new Euler(Math.PI / 2, -Math.PI / 2, 0),
+    ];
+
+    rotations.forEach((surfaceRotation, index) => {
+      const restingSurface = surface(`umbrella-rest-${index}`, 0, {
+        rotation: surfaceRotation,
+      });
+      const transform = assignShipItems([umbrella], [restingSurface])
+        .get(umbrella.instanceId)!;
+      const bounds = shipItemTransformBounds(umbrella.type, transform);
+
+      expect(transform.rotation.x).toBeCloseTo(0);
+      expect(transform.rotation.y).toBeCloseTo(surfaceRotation.y - Math.PI / 4);
+      expect(transform.rotation.z).toBeCloseTo(-42.7 * Math.PI / 180);
+      expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    });
   });
 
   it('rests the loaded umbrella mesh on its scavenging surface', async () => {
@@ -96,9 +121,25 @@ describe('ship item placement', () => {
       prop.position.copy(transform.position);
       prop.rotation.copy(transform.rotation);
       prop.scale.setScalar(transform.scale);
-      const bounds = new Box3().setFromObject(prop);
+      prop.updateMatrixWorld(true);
+      const inversePropMatrix = prop.matrixWorld.clone().invert();
+      let canopyFloorY = Number.POSITIVE_INFINITY;
+      let handleFloorY = Number.POSITIVE_INFINITY;
+      prop.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const positions = object.geometry.getAttribute('position');
+        for (let index = 0; index < positions.count; index += 1) {
+          const worldPoint = new Vector3()
+            .fromBufferAttribute(positions, index)
+            .applyMatrix4(object.matrixWorld);
+          const itemPoint = worldPoint.clone().applyMatrix4(inversePropMatrix);
+          if (itemPoint.x < 0.05) canopyFloorY = Math.min(canopyFloorY, worldPoint.y);
+          if (itemPoint.x > 0.15) handleFloorY = Math.min(handleFloorY, worldPoint.y);
+        }
+      });
 
-      expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+      expect(canopyFloorY).toBeCloseTo(restingSurface.position.y, 2);
+      expect(handleFloorY).toBeCloseTo(restingSurface.position.y, 2);
     } finally {
       models.dispose();
     }

@@ -34,18 +34,25 @@ function rampGain(
 
 class WebAudioVoice implements AudioVoice {
   private readonly callbacks = new Set<() => void>();
+  private source: AudioBufferSourceNode | null = null;
+  private playbackOffset = 0;
+  private startedAt = 0;
+  private paused = false;
   private ended = false;
   private stopping = false;
 
   constructor(
     readonly id: SoundId,
     private readonly context: BrowserAudioContext,
-    private readonly source: AudioBufferSourceNode,
+    private readonly buffer: AudioBuffer,
+    private readonly loop: boolean,
     private readonly gainNode: GainNode,
     private readonly baseGain: number,
     private readonly outputNodes: readonly AudioNode[],
-  ) {
-    source.onended = () => this.finish();
+  ) {}
+
+  start(): void {
+    if (!this.ended && this.source === null) this.startSource();
   }
 
   setGain(gain: number, rampSeconds = 0.05): void {
@@ -58,6 +65,26 @@ class WebAudioVoice implements AudioVoice {
     );
   }
 
+  setPaused(paused: boolean): void {
+    if (this.ended || this.stopping || this.paused === paused) return;
+    this.paused = paused;
+    if (paused) {
+      const source = this.source;
+      if (source === null) return;
+      this.playbackOffset = this.currentOffset();
+      this.source = null;
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+        // The source can already be stopped by the browser at this boundary.
+      }
+      source.disconnect();
+      return;
+    }
+    this.startSource();
+  }
+
   stop(fadeSeconds = 0): void {
     if (this.ended || this.stopping) return;
     this.stopping = true;
@@ -66,6 +93,10 @@ class WebAudioVoice implements AudioVoice {
       rampGain(this.gainNode.gain, this.context, 0, fade);
     }
     try {
+      if (this.source === null) {
+        this.finish();
+        return;
+      }
       this.source.stop(this.context.currentTime + fade);
     } catch {
       this.finish();
@@ -83,12 +114,40 @@ class WebAudioVoice implements AudioVoice {
   private finish(): void {
     if (this.ended) return;
     this.ended = true;
-    this.source.onended = null;
-    this.source.disconnect();
+    if (this.source !== null) {
+      this.source.onended = null;
+      this.source.disconnect();
+      this.source = null;
+    }
     for (const node of this.outputNodes) node.disconnect();
     const callbacks = [...this.callbacks];
     this.callbacks.clear();
     for (const callback of callbacks) callback();
+  }
+
+  private currentOffset(): number {
+    const elapsed = Math.max(0, this.context.currentTime - this.startedAt);
+    const offset = this.playbackOffset + elapsed;
+    const duration = this.buffer.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return offset;
+    return this.loop ? offset % duration : Math.min(offset, duration);
+  }
+
+  private startSource(): void {
+    if (this.ended || this.stopping || this.paused || this.source !== null) return;
+    const source = this.context.createBufferSource();
+    source.buffer = this.buffer;
+    source.loop = this.loop;
+    source.connect(this.gainNode);
+    source.onended = () => {
+      if (this.source !== source) return;
+      this.source = null;
+      source.disconnect();
+      this.finish();
+    };
+    this.source = source;
+    this.startedAt = this.context.currentTime;
+    source.start(0, this.playbackOffset);
   }
 }
 
@@ -143,17 +202,14 @@ export class WebAudioBackend implements AudioBackend {
     const active = this.voices.get(id) ?? [];
     while (active.length >= definition.maxVoices) active.shift()?.stop();
 
-    const source = this.context.createBufferSource();
     const gainNode = this.context.createGain();
-    source.buffer = buffer;
-    source.loop = definition.loop;
     gainNode.gain.value = definition.gain;
-    source.connect(gainNode);
     gainNode.connect(this.buses[definition.bus]);
     const voice = new WebAudioVoice(
       id,
       this.context,
-      source,
+      buffer,
+      definition.loop,
       gainNode,
       definition.gain,
       [gainNode],
@@ -165,7 +221,7 @@ export class WebAudioBackend implements AudioBackend {
       if (index >= 0) active.splice(index, 1);
       if (active.length === 0) this.voices.delete(id);
     });
-    source.start();
+    voice.start();
     return voice;
   }
 
@@ -181,7 +237,6 @@ export class WebAudioBackend implements AudioBackend {
     const active = this.voices.get(id) ?? [];
     while (active.length >= definition.maxVoices) active.shift()?.stop();
 
-    const source = this.context.createBufferSource();
     const gainNode = this.context.createGain();
     const spatialGain = clampGain(options.gain);
     const baseGain = definition.gain * spatialGain;
@@ -189,10 +244,7 @@ export class WebAudioBackend implements AudioBackend {
     const maxDistance = Math.max(refDistance, finiteOr(options.maxDistance, refDistance));
     const rolloffFactor = Math.max(0, finiteOr(options.rolloffFactor, 1));
     const panners: PannerNode[] = [];
-    source.buffer = buffer;
-    source.loop = true;
     gainNode.gain.value = baseGain;
-    source.connect(gainNode);
     for (const emitter of emitters) {
       const panner = this.context.createPanner();
       panner.panningModel = 'HRTF';
@@ -208,7 +260,8 @@ export class WebAudioBackend implements AudioBackend {
     const voice = new WebAudioVoice(
       id,
       this.context,
-      source,
+      buffer,
+      true,
       gainNode,
       baseGain,
       [gainNode, ...panners],
@@ -220,7 +273,7 @@ export class WebAudioBackend implements AudioBackend {
       if (index >= 0) active.splice(index, 1);
       if (active.length === 0) this.voices.delete(id);
     });
-    source.start();
+    voice.start();
     return voice;
   }
 

@@ -31,7 +31,7 @@ export interface CrowsNestBuild {
 
 const LADDER_RUNG_DEPTH = 0.11;
 const LADDER_CLIMB_MARGIN = 0.03;
-const LADDER_DECK_EMBED = 0.04;
+const LADDER_DECK_EMBED = 0.18;
 
 function boxCollider(
   position: readonly [number, number, number],

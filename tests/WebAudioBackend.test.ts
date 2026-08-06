@@ -50,7 +50,7 @@ class FakeListener {
 }
 
 class FakeContext {
-  readonly currentTime = 2;
+  currentTime = 2;
   readonly state = 'running';
   readonly destination = new FakeNode();
   readonly listener = new FakeListener();
@@ -59,7 +59,7 @@ class FakeContext {
   readonly panners: FakePanner[] = [];
   readonly resume = vi.fn(() => Promise.resolve());
   readonly close = vi.fn(() => Promise.resolve());
-  readonly decodeAudioData = vi.fn(() => Promise.resolve({} as AudioBuffer));
+  readonly decodeAudioData = vi.fn(() => Promise.resolve({ duration: 60 } as AudioBuffer));
 
   createGain(): GainNode {
     const gain = new FakeGain();
@@ -81,6 +81,32 @@ class FakeContext {
 }
 
 describe('WebAudioBackend spatial loops', () => {
+  it('resumes one-shot music from its paused offset', async () => {
+    const context = new FakeContext();
+    const fetchAudio = vi.fn(() => Promise.resolve({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(1)),
+    } as Response));
+    const backend = new WebAudioBackend(
+      context as unknown as AudioContext,
+      fetchAudio,
+    );
+    await backend.load();
+
+    const voice = backend.play('scavengeChase')!;
+    expect(context.sources[0]!.start).toHaveBeenCalledWith(0, 0);
+
+    context.currentTime = 14;
+    voice.setPaused(true);
+    expect(context.sources[0]!.stop).toHaveBeenCalledOnce();
+
+    context.currentTime = 30;
+    voice.setPaused(false);
+    expect(context.sources).toHaveLength(2);
+    expect(context.sources[1]!.start).toHaveBeenCalledWith(0, 12);
+    backend.dispose();
+  });
+
   it('feeds one half-volume source through three positioned room panners', async () => {
     const context = new FakeContext();
     const fetchAudio = vi.fn(() => Promise.resolve({

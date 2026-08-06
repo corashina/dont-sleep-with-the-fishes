@@ -3,6 +3,7 @@ import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
   type SystemScreenDescription,
+  updateSystemScreenProgress,
 } from '../ui/SystemScreen';
 import {
   ItemModelLoadError,
@@ -124,10 +125,19 @@ interface LoadedGameAssets {
   featuredEventModels: SurvivalEventModelLibrary | null;
 }
 
+const GAME_ASSET_LOAD_COUNT = 9;
+
 async function loadGameAssets(
   dependencies: LaunchDependencies,
   physicsMode: PhysicsMode,
+  onProgress: (completed: number, total: number) => void,
 ): Promise<LoadedGameAssets> {
+  let completed = 0;
+  onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  const track = <T>(promise: Promise<T>): Promise<T> => promise.finally(() => {
+    completed += 1;
+    onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  });
   const physicsRuntimePromise = physicsMode === 'off'
     ? Promise.resolve(null)
     : dependencies.loadPhysicsRuntime();
@@ -146,15 +156,15 @@ async function loadGameAssets(
     featuredEventModels,
   ] =
     await Promise.allSettled([
-      dependencies.loadModels(),
-      dependencies.loadShipFurniture(),
-      dependencies.loadSkyAssets(),
-      dependencies.loadLifeboatAssets(),
-      dependencies.loadShipAssets(),
-      eventModelsPromise,
-      physicsRuntimePromise,
-      dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent()),
-      dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null),
+      track(dependencies.loadModels()),
+      track(dependencies.loadShipFurniture()),
+      track(dependencies.loadSkyAssets()),
+      track(dependencies.loadLifeboatAssets()),
+      track(dependencies.loadShipAssets()),
+      track(eventModelsPromise),
+      track(physicsRuntimePromise),
+      track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
+      track(dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null)),
     ]);
   const assetResults = [
     models,
@@ -404,7 +414,11 @@ export function launchGame(
 
   const completion = (async (): Promise<Game | null> => {
     try {
-      unownedAssets = await loadGameAssets(dependencies, physicsMode);
+      unownedAssets = await loadGameAssets(
+        dependencies,
+        physicsMode,
+        (completed, total) => updateSystemScreenProgress(loading, completed, total),
+      );
     } catch (error) {
       if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
       return null;

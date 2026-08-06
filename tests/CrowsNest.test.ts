@@ -92,7 +92,7 @@ describe('mainmast crow\'s nest', () => {
           `mainmast-ladder:rail:${index}`,
         ) as Mesh<BoxGeometry>;
         expect(rail.position.y - rail.geometry.parameters.height / 2)
-          .toBeLessThan(FREIGHTER_DIMENSIONS.deckY);
+          .toBeCloseTo(FREIGHTER_DIMENSIONS.deckY - 0.18);
       });
       expect(firstRung.position.z - build.climbZone.climbZ).toBeCloseTo(
         PLAYER_LAYOUT_RADIUS + firstRung.geometry.parameters.depth / 2 + 0.03,

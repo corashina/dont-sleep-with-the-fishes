@@ -33,12 +33,14 @@ export class ScavengeAudio {
 
   start(): void {
     if (this.disposed) return;
+    this.scope.startLoop('menuAmbient');
     this.scope.startLoop('roomTone');
   }
 
   beginRun(): void {
     if (this.disposed || this.runBegun) return;
     this.runBegun = true;
+    this.scope.stopLoop('menuAmbient', 0.8);
     this.scope.startSpatialLoop(
       'shipAlarm',
       this.alarmEmitters,

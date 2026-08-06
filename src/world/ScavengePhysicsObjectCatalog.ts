@@ -35,8 +35,8 @@ type ObjectSpecTuple = readonly [
 ];
 
 const OBJECT_SPEC_TUPLES: readonly ObjectSpecTuple[] = [
-  ['barrel', 'barrel', [0.5, 0.5, 0.5], 0.2875,
-    { kind: 'cylinder', halfHeight: 0.278875, radius: 0.2739055 },
+  ['barrel', 'barrel', [1, 1, 1], 0.575,
+    { kind: 'cylinder', halfHeight: 0.55775, radius: 0.547811 },
     36, 0.30, 0.03, 0.08, 0.06],
   ['pumpkin', 'pumpkin', [1 / 3, 1.6 / 3, 1 / 3], 0.64 / 3,
     { kind: 'sphere', radius: 0.6208 / 3 },
@@ -44,11 +44,11 @@ const OBJECT_SPEC_TUPLES: readonly ObjectSpecTuple[] = [
   ['propaneTank', 'propaneTank', [0.5, 0.5, 0.5], 0.425,
     { kind: 'cylinder', halfHeight: 0.41225, radius: 0.2922855 },
     30, 0.34, 0.025, 0.10, 0.08],
-  ['redCan', 'redCan', [0.5, 0.5, 0.5], 0.4,
-    { kind: 'cylinder', halfHeight: 0.388, radius: 0.288088 },
+  ['redCan', 'redCan', [1, 1, 1], 0.8,
+    { kind: 'cylinder', halfHeight: 0.776, radius: 0.576176 },
     16, 0.40, 0.04, 0.14, 0.12],
-  ['cargoBox', 'cargoBox', [1, 1, 1], 0.275,
-    { kind: 'cuboid', halfExtents: { x: 0.3024355, y: 0.26675, z: 0.307089 } },
+  ['cargoBox', 'cargoBox', [1.5, 1.5, 1.5], 0.4125,
+    { kind: 'cuboid', halfExtents: { x: 0.45365325, y: 0.400125, z: 0.4606335 } },
     7, 0.62, 0.015, 0.26, 0.32],
   ['shippingBox', 'shippingBox', [0.5, 0.5, 0.5], 0.2875,
     { kind: 'cuboid', halfExtents: { x: 0.278875, y: 0.278875, z: 0.278875 } },

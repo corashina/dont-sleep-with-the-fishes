@@ -354,15 +354,16 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-whiskers-card]')!.hidden).toBe(true);
   });
 
-  it('shows the exact kidnapped ending copy', () => {
+  it('shows only the kidnapped ending title', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
     ui.showEnding('dead', 8, 1234, 37, 'kidnapped');
 
     expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('Taken in the dark.');
-    expect(mount.querySelector('[data-ending-body]')?.textContent)
-      .toBe('The false shape carries you beyond the lantern light.');
+    expect(mount.querySelector('[data-ending-body]')).toBeNull();
+    expect(mount.querySelector('[data-ending-stats]')).toBeNull();
+    expect(mount.querySelector('[data-ending]')?.textContent).not.toContain('JOURNEY ENDED');
   });
 
   it('keeps visual quality controls out of the pause overlay', () => {
@@ -2336,7 +2337,7 @@ describe('SurvivalUI', () => {
     expect(action).toHaveBeenCalledWith('repair', undefined);
   });
 
-  it('shows distinct terminal copy and emits full restart once', () => {
+  it('shows only the terminal title and emits full restart once', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const restart = vi.fn();
@@ -2345,9 +2346,8 @@ describe('SurvivalUI', () => {
     ui.showEnding('sunk', 8, 1234, 37);
 
     expect(mount.querySelector('[data-ending-title]')?.textContent).toContain('Boat is gone');
-    expect(mount.querySelector('[data-ending-stats]')?.textContent).toContain('8 DAYS');
-    expect(mount.querySelector('[data-ending-stats]')?.textContent).toContain('00:37');
-    expect(mount.querySelector('[data-ending-stats]')?.textContent).toContain('1234');
+    expect(mount.querySelector('[data-ending-body]')).toBeNull();
+    expect(mount.querySelector('[data-ending-stats]')).toBeNull();
     mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();
     expect(restart).toHaveBeenCalledOnce();
   });

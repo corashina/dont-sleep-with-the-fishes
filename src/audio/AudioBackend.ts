@@ -26,6 +26,7 @@ export interface SpatialAudioOptions {
 export interface AudioVoice {
   readonly id: SoundId;
   setGain(gain: number, rampSeconds?: number): void;
+  setPaused(paused: boolean): void;
   stop(fadeSeconds?: number): void;
   onEnded(callback: () => void): void;
 }

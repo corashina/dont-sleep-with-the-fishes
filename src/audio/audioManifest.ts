@@ -1,4 +1,5 @@
 export const SOUND_IDS = [
+  'menuAmbient',
   'calmOcean',
   'roughOcean',
   'lightWind',
@@ -66,11 +67,13 @@ export interface AudioAssetDefinition {
 }
 
 const audioModules = import.meta.glob<string>(
-  '../assets/audio/*.{mp3,wav}',
+  '../assets/audio/*.{flac,mp3,wav}',
   { eager: true, query: '?url', import: 'default' },
 );
 
-function audioUrl(id: SoundId, extension: 'mp3' | 'wav' = 'mp3'): string {
+type AudioExtension = 'flac' | 'mp3' | 'wav';
+
+function audioUrl(id: SoundId, extension: AudioExtension = 'mp3'): string {
   const path = `../assets/audio/${id}.${extension}`;
   const url = audioModules[path];
   if (url === undefined) throw new Error(`Missing audio asset: ${path}`);
@@ -83,7 +86,7 @@ function asset(
   gain: number,
   loop = false,
   maxVoices = loop ? 1 : 3,
-  extension: 'mp3' | 'wav' = 'mp3',
+  extension: AudioExtension = 'mp3',
 ): AudioAssetDefinition {
   return Object.freeze({
     url: audioUrl(id, extension),
@@ -96,6 +99,7 @@ function asset(
 
 export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
   Object.freeze({
+    menuAmbient: asset('menuAmbient', 'ambience', 0.3, true, 1, 'flac'),
     calmOcean: asset('calmOcean', 'ambience', 0.42, true),
     roughOcean: asset('roughOcean', 'ambience', 0.5, true),
     lightWind: asset('lightWind', 'ambience', 0.24, true),

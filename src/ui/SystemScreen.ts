@@ -19,6 +19,16 @@ function textElement(
   return element;
 }
 
+function loadingProgress(): HTMLProgressElement {
+  const progress = document.createElement('progress');
+  progress.className = 'system-loading-progress';
+  progress.max = 1;
+  progress.value = 0;
+  progress.setAttribute('aria-label', 'Loading game');
+  progress.setAttribute('aria-valuetext', '0%');
+  return progress;
+}
+
 export function createSystemScreen(
   description: SystemScreenDescription,
 ): HTMLElement {
@@ -38,6 +48,7 @@ export function createSystemScreen(
     textElement('h1', 'ui-role-display', description.title),
     textElement('p', 'lead ui-role-narrative', description.lead),
   );
+  if (description.kind === 'loading') content.append(loadingProgress());
   if (description.detail !== undefined) {
     content.append(textElement(
       'p',
@@ -47,4 +58,21 @@ export function createSystemScreen(
   }
   section.append(content);
   return section;
+}
+
+export function updateSystemScreenProgress(
+  screen: HTMLElement,
+  completed: number,
+  total: number,
+): void {
+  const progress = screen.querySelector<HTMLProgressElement>('.system-loading-progress');
+  if (progress === null) return;
+
+  const safeTotal = Number.isFinite(total) ? Math.max(1, Math.floor(total)) : 1;
+  const safeCompleted = Number.isFinite(completed)
+    ? Math.min(safeTotal, Math.max(0, Math.floor(completed)))
+    : 0;
+  progress.max = safeTotal;
+  progress.value = safeCompleted;
+  progress.setAttribute('aria-valuetext', `${Math.round(safeCompleted / safeTotal * 100)}%`);
 }

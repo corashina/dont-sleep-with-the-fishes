@@ -23,7 +23,6 @@ import type {
   WeatherId,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
-import { formatDuration } from './formatDuration';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
 
@@ -417,8 +416,6 @@ export class SurvivalUI {
   private readonly journalClose: HTMLButtonElement;
   private readonly endingLayer: HTMLElement;
   private readonly endingTitle: HTMLElement;
-  private readonly endingBody: HTMLElement;
-  private readonly endingStats: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
@@ -634,10 +631,7 @@ export class SurvivalUI {
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
         <div class="cinematic-overlay__content">
-          <p class="eyebrow ui-role-context">JOURNEY ENDED</p>
           <h2 class="ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
-          <p class="ui-role-narrative" data-ending-body></p>
-          <p class="ending-stats ui-role-numeral" data-ending-stats></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
             START FROM THE SHIP
           </button>
@@ -707,8 +701,6 @@ export class SurvivalUI {
     this.journalClose = requireElement(this.root, '[data-journal-close]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
-    this.endingBody = requireElement(this.root, '[data-ending-body]');
-    this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.restartButton = requireElement(this.root, '[data-restart]');
     this.backgroundRegions = [this.topControls, this.anchorLayer];
     this.modalLayers = [
@@ -1504,29 +1496,23 @@ export class SurvivalUI {
 
   showEnding(
     state: 'rescued' | 'dead' | 'sunk',
-    day: number,
-    seed: number,
-    scavengeElapsedSeconds: number,
+    _day: number,
+    _seed: number,
+    _scavengeElapsedSeconds: number,
     endingReason: SurvivalEndingReason = 'standard',
   ): void {
     if (this.disposed) return;
-    const copy = endingReason === 'kidnapped'
-      ? { title: 'Taken in the dark.', body: 'The false shape carries you beyond the lantern light.' }
+    const title = endingReason === 'kidnapped'
+      ? 'Taken in the dark.'
       : state === 'rescued'
-      ? { title: 'Rescue found you.', body: 'A vessel cuts across the horizon and carries you home.' }
+      ? 'Rescue found you.'
       : state === 'dead'
-        ? { title: 'The sea outlasted you.', body: 'Your empty lifeboat drifts on beneath the weather.' }
-        : { title: 'Boat is gone.', body: 'The damaged hull slips under and leaves no refuge behind.' };
+        ? 'The sea outlasted you.'
+        : 'Boat is gone.';
     this.closeWhiskersCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
-    this.updateText('ending:title', this.endingTitle, copy.title);
-    this.updateText('ending:body', this.endingBody, copy.body);
-    this.updateText(
-      'ending:stats',
-      this.endingStats,
-      `${day} ${day === 1 ? 'DAY' : 'DAYS'} SURVIVED · ${formatDuration(scavengeElapsedSeconds)} SCAVENGING · SEED ${seed}`,
-    );
+    this.updateText('ending:title', this.endingTitle, title);
     this.endingLayer.dataset.ending = state;
     this.restartIssued = false;
     this.restartButton.disabled = false;

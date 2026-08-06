@@ -6301,6 +6301,7 @@ describe('SurvivalPhase orchestration', () => {
       const melodyVoice: AudioVoice = {
         id: 'eerieMelody',
         setGain: vi.fn(),
+        setPaused: vi.fn(),
         stop: vi.fn((fadeSeconds) => calls.push(`audio-stop:${fadeSeconds}`)),
         onEnded: vi.fn(),
       };
@@ -6314,6 +6315,7 @@ describe('SurvivalPhase orchestration', () => {
             : {
                 id,
                 setGain: vi.fn(),
+                setPaused: vi.fn(),
                 stop: vi.fn(),
                 onEnded: vi.fn(),
               };

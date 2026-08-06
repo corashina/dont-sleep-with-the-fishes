@@ -48,6 +48,7 @@ export class OwnedAudioScope implements AudioScope {
     const voice = this.backend.play(id);
     if (voice === null) return null;
     this.effects.add(voice);
+    if (this.paused && AUDIO_MANIFEST[id].bus !== 'interface') voice.setPaused(true);
     voice.onEnded(() => this.effects.delete(voice));
     return voice;
   }
@@ -62,6 +63,7 @@ export class OwnedAudioScope implements AudioScope {
     const voice = this.backend.play(id);
     if (voice === null) return null;
     this.loops.set(id, voice);
+    if (this.paused && AUDIO_MANIFEST[id].bus !== 'interface') voice.setPaused(true);
     voice.onEnded(() => {
       if (this.loops.get(id) === voice) this.loops.delete(id);
     });
@@ -82,6 +84,7 @@ export class OwnedAudioScope implements AudioScope {
     const voice = this.backend.playSpatialLoop(id, emitters, options);
     if (voice === null) return null;
     this.loops.set(id, voice);
+    if (this.paused && AUDIO_MANIFEST[id].bus !== 'interface') voice.setPaused(true);
     voice.onEnded(() => {
       if (this.loops.get(id) === voice) this.loops.delete(id);
     });
@@ -106,6 +109,10 @@ export class OwnedAudioScope implements AudioScope {
   setPaused(paused: boolean): void {
     if (this.disposed || this.paused === paused) return;
     this.paused = paused;
+    for (const voice of this.loops.values()) voice.setPaused(paused);
+    for (const voice of this.effects) {
+      if (AUDIO_MANIFEST[voice.id].bus !== 'interface') voice.setPaused(paused);
+    }
     for (const bus of GAME_AUDIO_BUSES) {
       this.backend.setBusGain(bus, paused ? 0 : 1, 0.05);
     }
