@@ -43,7 +43,7 @@ export class SunkenDorothyWreck implements MenuSceneComponent {
     const hullGeometry = this.geometry(new BufferGeometry());
     hullGeometry.setAttribute('position', new BufferAttribute(new Float32Array([
       0, 0.55, -9, -2.3, 0.55, -6.8, 2.3, 0.55, -6.8,
-      -2.65, 0.55, 8.5, 2.65, 0.55, 8.5, 0, -1.15, -8.15,
+      -2.65, 0.55, 9, 2.65, 0.55, 9, 0, -1.15, -8.15,
       -1.65, -1.3, -5.9, 1.65, -1.3, -5.9,
       -2.05, -1.1, 8.1, 2.05, -1.1, 8.1,
     ]), 3));
@@ -55,6 +55,8 @@ export class SunkenDorothyWreck implements MenuSceneComponent {
       3, 4, 9, 3, 9, 8,
     ]);
     hullGeometry.computeVertexNormals();
+    const funnelGeometry = this.geometry(new CylinderGeometry(0.42, 0.55, 1.8, 8));
+    const railGeometry = this.geometry(new BoxGeometry(0.08, 0.38, 13.6));
 
     this.root.name = 'menu:dorothy-wreck';
     this.root.position.set(...DOROTHY_WRECK_POSITION);
@@ -64,12 +66,12 @@ export class SunkenDorothyWreck implements MenuSceneComponent {
       this.mesh(DOROTHY_WRECK_PART_NAMES[1], this.geometry(new BoxGeometry(4.6, 0.2, 15.2)), upperMaterial, [0, 0.7, 0.2]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[2], this.geometry(new BoxGeometry(2.8, 1.35, 2.8)), upperMaterial, [0, 1.45, 4.1]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[3], this.geometry(new BoxGeometry(2.35, 1.15, 2.35)), upperMaterial, [0, 1.35, -2.1]),
-      this.mesh(DOROTHY_WRECK_PART_NAMES[4], this.geometry(new CylinderGeometry(0.42, 0.55, 1.8, 8)), rustMaterial, [-1.05, 2.1, 0.35], [0, 0, 0.08]),
-      this.mesh(DOROTHY_WRECK_PART_NAMES[5], this.geometry(new CylinderGeometry(0.42, 0.55, 1.8, 8)), rustMaterial, [1.05, 2.1, 0.35], [0, 0, -0.08]),
+      this.mesh(DOROTHY_WRECK_PART_NAMES[4], funnelGeometry, rustMaterial, [-1.05, 2.1, 0.35], [0, 0, 0.08]),
+      this.mesh(DOROTHY_WRECK_PART_NAMES[5], funnelGeometry, rustMaterial, [1.05, 2.1, 0.35], [0, 0, -0.08]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[6], this.geometry(new CylinderGeometry(0.09, 0.13, 4.5, 6)), metalMaterial, [0, 2.85, -4.9], [0, 0, -0.2]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[7], this.geometry(new BoxGeometry(3.8, 0.1, 0.1)), metalMaterial, [-0.42, 4.35, -4.9], [0, 0, -0.2]),
-      this.mesh(DOROTHY_WRECK_PART_NAMES[8], this.geometry(new BoxGeometry(0.08, 0.38, 13.6)), metalMaterial, [-2.35, 1.05, 0.35]),
-      this.mesh(DOROTHY_WRECK_PART_NAMES[9], this.geometry(new BoxGeometry(0.08, 0.38, 13.6)), metalMaterial, [2.35, 1.05, 0.35]),
+      this.mesh(DOROTHY_WRECK_PART_NAMES[8], railGeometry, metalMaterial, [-2.35, 1.05, 0.35]),
+      this.mesh(DOROTHY_WRECK_PART_NAMES[9], railGeometry, metalMaterial, [2.35, 1.05, 0.35]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[10], this.geometry(new BoxGeometry(0.14, 0.95, 2.2)), rustMaterial, [-2.45, 0.15, -5.8], [0.18, 0.08, -0.25]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[11], this.geometry(new BoxGeometry(0.14, 0.8, 1.7)), rustMaterial, [2.5, 0.1, 1.9], [-0.22, -0.12, 0.2]),
       this.mesh(DOROTHY_WRECK_PART_NAMES[12], this.geometry(new BoxGeometry(1.25, 0.12, 1.75)), rustMaterial, [0.8, 0.78, 7.4], [0.16, 0.28, -0.12]),
