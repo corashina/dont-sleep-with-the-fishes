@@ -177,8 +177,8 @@ export class UnderwaterMenuWorld {
     this.placeModel(rockB.root, 'rockB', MENU_PLACEMENT.rockB);
     this.placeModel(rockC.root, 'rockC', MENU_PLACEMENT.rockC);
     skull.root.name = 'menu:skull';
-    skull.root.position.set(0.12, 1.32, -4.35);
-    skull.root.rotation.set(0.3, 0.45, -0.22);
+    skull.root.position.set(0.45, -0.2, -2.85);
+    skull.root.rotation.set(0.08, -0.4, -0.32);
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';

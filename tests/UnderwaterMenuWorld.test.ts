@@ -116,7 +116,9 @@ it('creates the approved fixed composition once', () => {
   expect(world.root.getObjectByName('menu:distant-seabed')).toBeDefined();
   const skullPosition = world.root.getObjectByName('menu:skull')!.getWorldPosition(new Vector3());
   const boatPosition = world.root.getObjectByName('menu:boat')!.getWorldPosition(new Vector3());
-  expect(skullPosition.distanceTo(boatPosition)).toBeLessThan(1.25);
+  expect(skullPosition.z).toBeGreaterThan(boatPosition.z);
+  expect(skullPosition.y).toBeLessThan(0);
+  expect(skullPosition.distanceTo(boatPosition)).toBeGreaterThan(1.5);
   expect(world.actors.sharks[0].clip.name).toBe('Armature|Swim');
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
