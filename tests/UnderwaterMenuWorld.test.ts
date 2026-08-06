@@ -117,13 +117,13 @@ it('creates the approved fixed composition once', () => {
 
   const kelp = world.root.getObjectByName('menu:procedural-kelp');
   expect(kelp).toBeInstanceOf(InstancedMesh);
-  expect((kelp as InstancedMesh).count).toBe(24);
+  expect((kelp as InstancedMesh).count).toBe(54);
   const bubbles = world.root.getObjectByName('menu:bubbles');
   const matter = world.root.getObjectByName('menu:suspended-matter');
   expect(bubbles).toBeInstanceOf(Points);
   expect(matter).toBeInstanceOf(Points);
-  expect((bubbles as Points).geometry.getAttribute('basePosition').count).toBe(72);
-  expect((matter as Points).geometry.getAttribute('basePosition').count).toBe(96);
+  expect((bubbles as Points).geometry.getAttribute('basePosition').count).toBe(144);
+  expect((matter as Points).geometry.getAttribute('basePosition').count).toBe(180);
   expect((bubbles as Points).material).toBeInstanceOf(ShaderMaterial);
   const bubbleGeometryDispose = vi.spyOn((bubbles as Points).geometry, 'dispose');
   const matterGeometryDispose = vi.spyOn((matter as Points).geometry, 'dispose');

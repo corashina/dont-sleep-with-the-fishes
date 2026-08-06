@@ -9,8 +9,8 @@ import {
   Vector3,
 } from 'three';
 
-const BUBBLE_COUNT = 72;
-const MATTER_COUNT = 96;
+const BUBBLE_COUNT = 144;
+const MATTER_COUNT = 180;
 
 const PARTICLE_VERTEX_SHADER = `
   attribute vec3 basePosition;
@@ -23,7 +23,7 @@ const PARTICLE_VERTEX_SHADER = `
   void main() {
     vec3 transformed = basePosition;
     if (uRise > 0.5) {
-      transformed.y = mod(basePosition.y + uTime * (0.13 + phase * 0.018) + 0.5, 6.4) - 0.5;
+      transformed.y = mod(basePosition.y + uTime * (0.13 + phase * 0.018) + 0.75, 9.5) - 0.75;
       transformed.x += sin(uTime * 0.42 + phase) * 0.08;
     } else {
       transformed.x += sin(uTime * 0.13 + phase) * 0.045;
@@ -70,11 +70,13 @@ function createParticlePool(
   const phases = new Float32Array(count);
   for (let index = 0; index < count; index += 1) {
     const offset = index * 3;
-    const sequence = index * 2.399963229728653;
-    const radius = 1.8 + (index % 13) * 0.49;
-    basePositions[offset] = Math.cos(sequence) * radius;
-    basePositions[offset + 1] = -0.35 + (index % 19) * 0.31;
-    basePositions[offset + 2] = -3.2 - Math.sin(sequence) * radius - (index % 7) * 0.72;
+    const depthBand = index % 18;
+    const horizontal = ((index * 37) % count) / Math.max(1, count - 1);
+    const vertical = ((index * 53) % count) / Math.max(1, count - 1);
+    const spread = 4.5 + depthBand * 2.25;
+    basePositions[offset] = (horizontal * 2 - 1) * spread;
+    basePositions[offset + 1] = -0.65 + vertical * 9.2;
+    basePositions[offset + 2] = 4.2 - depthBand * 3.25 - (index % 4) * 0.38;
     phases[index] = (index % 23) / 23 * Math.PI * 2;
   }
 
@@ -83,7 +85,7 @@ function createParticlePool(
   geometry.setAttribute('position', basePosition);
   geometry.setAttribute('basePosition', basePosition);
   geometry.setAttribute('phase', new Float32BufferAttribute(phases, 1));
-  geometry.boundingSphere = new Sphere(new Vector3(0, 2.7, -7), 13);
+  geometry.boundingSphere = new Sphere(new Vector3(0, 3.8, -23), 58);
   const material = new ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },

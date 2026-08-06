@@ -10,7 +10,7 @@ import {
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { disposeResourceSets } from '../world/SceneResources';
 
-export const DOROTHY_WRECK_POSITION = [4.5, -0.9, -22] as const;
+export const DOROTHY_WRECK_POSITION = [0.9, -0.68, -13.5] as const;
 export const DOROTHY_WRECK_ROTATION = [0.12, -0.55, -0.30] as const;
 export const DOROTHY_WRECK_PART_NAMES = [
   'menu:dorothy-wreck-hull',
