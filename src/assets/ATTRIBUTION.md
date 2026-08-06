@@ -110,12 +110,22 @@ provide secondary deck clutter.
 | workroomCardboardBox | `workroomCardboardBox.glb` | [Cardboard Box / Nick Slough](https://poly.pizza/m/j2u0dWIebu) | `poly-pizza:12b9bc45-0581-474d-87ad-0869c28e69ac` | 144 | 144 | 2026-07-28 |
 | workroomStorageShelf | `workroomStorageShelf.glb` | [Storage Shelf / Jarlan Perez](https://poly.pizza/m/6gKdASmfB9U) | `poly-pizza:9badb54d-f687-45cb-a5cd-0dde270d76ab` | 96 | 96 | 2026-07-28 |
 | workroomPallet | `workroomPallet.glb` | [Pallet / Kenney](https://poly.pizza/m/J6bhnc2wFP) | `poly-pizza:40dc910f-3ee1-4dde-a692-41ec82a9ae1f` | 108 | 108 | 2026-07-28 |
+| pumpkin | `pumpkin.glb` | [Pumpkin / Quaternius](https://poly.pizza/m/bvLvqnU1jX), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `poly-pizza:49202ae4-62ac-4035-9726-1834228e7d08` | 644 | 644 | 2026-08-05 |
+| propaneTank | `propaneTank.glb` | [Propane Tank / Quaternius](https://poly.pizza/m/3revwBHxDC), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `poly-pizza:d694382c-fd11-4ed0-a300-e5e7891a842b` | 516 | 516 | 2026-08-05 |
+| redCan | `redCan.glb` | [Can Red / Quaternius](https://poly.pizza/m/IuoYedcdXQ), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `poly-pizza:f6b52ca9-61b1-42d5-a42f-d8748a41eb45` | 332 | 332 | 2026-08-05 |
+| shippingBox | `shippingBox.glb` | [Box / Kenney](https://poly.pizza/m/HvjissDrdr), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `poly-pizza:abf06b96-4a0c-466b-b091-919cfad7a478` | 124 | 124 | 2026-08-05 |
+| package | `package.glb` | [Package / Quaternius](https://poly.pizza/m/mWkgWyrCfM), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `poly-pizza:8ee025af-e6cf-46d8-879b-62befe03ae9d` | 464 | 464 | 2026-08-05 |
 
 Pinned Poly Pizza source SHA-256 values: barrel
 `452B5BDC6C7A07B37B95D38D942ADB7CEB2B07B240AAFF93646A6AE3E4B535C7`;
 shelf `FDA303ACFD2B118ED163735E10D04E2DF7A6745552CA4A2BC57183D76D576B39`;
 crate `30604302C679A2A9A2C83A28CD54EC8A5664989EC32A75C1F78299B3ABFAD669`;
-box `4B6F7B2D17997F75192C706B28E2F894B6DFF691BCED17963470D2B2CEDDBFF9`.
+box `4B6F7B2D17997F75192C706B28E2F894B6DFF691BCED17963470D2B2CEDDBFF9`;
+pumpkin `AF4AE31BA704F8B05B69BEC18726468FEAF527A221E929BBFDF11D6B4C26BD0B`;
+propane tank `D38FA01373FFB00C255A877BC59686BBF7AB89BA63752A556C6E440483381BEA`;
+red can `233A200BEB5FF9E36B0E6AC52415D64DB506A2600CC7F8B0B0C83376A9F7B642`;
+shipping box `83D88C4C255F868B8FD77C6DC80B666AEFD17B07223B12644AC046EBE32727A8`;
+package `B8DE8103D8CA412129F4E55CA6942B7496DCFE271F832C600B4A3F62CEADE3BC`.
 
 Room source SHA-256 values: night stand
 `1C08A98905EA18850FC91932FAE9976A556AA30A564F7C45845C2F4F1BC5289A`;

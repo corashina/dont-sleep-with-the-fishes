@@ -42,6 +42,11 @@ export interface ScriptedPlayerPose {
   readonly floorEyeY: number;
 }
 
+export type DynamicMovementResolver = (
+  current: Readonly<LocalPlayerPosition>,
+  desired: LocalPlayerPosition,
+) => void;
+
 function containsLocalPosition(
   bounds: PlayerNavigationBounds['safe'],
   position: Vector3,
@@ -86,6 +91,7 @@ export class PlayerController {
     private readonly colliders: readonly CollisionBox[],
     private readonly navigationBounds: PlayerNavigationBounds,
     private readonly onFall: () => void,
+    private readonly resolveDynamicMovement: DynamicMovementResolver,
     private readonly arcColliders: readonly CollisionArc[] = [],
     private readonly climbZones: readonly LadderClimbZone[] = [],
   ) {
@@ -217,6 +223,7 @@ export class PlayerController {
       this.colliders,
       this.arcColliders,
     );
+    this.resolveDynamicMovement(current, resolved);
     const supportedByActiveElevatedFloor = this.climbZones.some((zone) =>
       Math.abs(zone.topEyeY - this.floorEyeHeight) <= GROUND_EPSILON
       && containsElevatedFloor(zone.topFloor, resolved));

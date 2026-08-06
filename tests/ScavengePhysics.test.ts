@@ -44,11 +44,103 @@ const config = () => ({
   deckY: 2.22,
   deckBounds: { minX: -10, maxX: 10, minZ: -12.5, maxZ: 12.5 },
   initialShipPose: identityPose(),
-  barrelSpawns: [
-    { x: -2.5, y: 2.795, z: 3.2 },
-    { x: 2.6, y: 2.795, z: -9 },
+  objects: [
+    {
+      id: 'sphere',
+      spawn: { x: -2.5, y: 2.82, z: 3.2 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'sphere' as const, radius: 0.6 },
+        mass: 8,
+        friction: 0.22,
+        restitution: 0.08,
+        linearDamping: 0.06,
+        angularDamping: 0.025,
+      },
+    },
+    {
+      id: 'cylinder',
+      spawn: { x: 0, y: 2.78, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'cylinder' as const, halfHeight: 0.56, radius: 0.55 },
+        mass: 36,
+        friction: 0.30,
+        restitution: 0.03,
+        linearDamping: 0.08,
+        angularDamping: 0.06,
+      },
+    },
+    {
+      id: 'cuboid',
+      spawn: { x: 2.5, y: 2.75, z: -3.2 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      profile: {
+        collider: { kind: 'cuboid' as const, halfExtents: { x: 0.5, y: 0.53, z: 0.5 } },
+        mass: 7,
+        friction: 0.62,
+        restitution: 0.015,
+        linearDamping: 0.26,
+        angularDamping: 0.32,
+      },
+    },
   ],
 });
+
+function pushingConfig(objectZ = -1.2) {
+  const base = config();
+  return {
+    ...base,
+    colliders: [],
+    objects: [{
+      ...base.objects[2]!,
+      id: 'push-box',
+      spawn: { x: 0, y: 2.75, z: objectZ },
+    }],
+  };
+}
+
+function pushingWithUnrelatedObjectsConfig() {
+  const base = config();
+  return {
+    ...base,
+    colliders: [],
+    objects: [
+      {
+        ...base.objects[2]!,
+        id: 'push-box',
+        spawn: { x: 0, y: 2.75, z: -1.2 },
+      },
+      {
+        ...base.objects[0]!,
+        id: 'moving-sphere',
+        spawn: { x: 4, y: 2.82, z: 3 },
+      },
+      {
+        ...base.objects[1]!,
+        id: 'recovering-cylinder',
+        spawn: { x: -4, y: 2.78, z: 3 },
+      },
+    ],
+  };
+}
+
+function drivePlayerIntoObject(
+  physics: ScavengePhysics,
+  step: number,
+  frameCount: number,
+): number {
+  const current = { x: 0, y: 3.72, z: 0 };
+  const startZ = physics.objectLocalPositionsForTest[0]!.z;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    const desired = { x: current.x, y: current.y, z: current.z - step };
+    physics.resolvePlayerMovement(current, desired);
+    current.x = desired.x;
+    current.z = desired.z;
+    physics.update(identityPose(), 1 / 60, true);
+  }
+  return Math.abs(physics.objectLocalPositionsForTest[0]!.z - startZ);
+}
 
 describe('ScavengePhysics', () => {
   let runtime: PhysicsRuntime;
@@ -162,24 +254,126 @@ describe('ScavengePhysics', () => {
       left.update(identityPose(), 1 / 60, true);
       right.update(identityPose(), 1 / 60, true);
     }
-    expect(left.barrelPoses).toEqual(right.barrelPoses);
-    expect(left.barrelPoses).toHaveLength(2);
-    expect(left.barrelPoses[0]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
-    expect(left.barrelPoses[1]!.translation.y).toBeCloseTo(2.22 + 0.575, 2);
+    expect(left.objectPoses).toEqual(right.objectPoses);
+    expect(left.objectPoses).toHaveLength(3);
+    expect(left.objectPoses[0]!.translation.y).toBeCloseTo(2.22 + 0.6, 2);
+    expect(left.objectPoses[1]!.translation.y).toBeCloseTo(2.22 + 0.56, 2);
+    expect(left.objectPoses[2]!.translation.y).toBeCloseTo(2.22 + 0.53, 2);
     left.dispose();
     right.dispose();
   });
 
-  it('spawns both authored barrels without diagnostic objects', () => {
+  it('spawns all configured objects with their rotations', () => {
     const physics = new ScavengePhysics(runtime, config());
-    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
-    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
-    expect(physics.barrelPoses[1]!.translation.x).toBeCloseTo(2.6);
-    expect(physics.barrelPoses[1]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[1]!.translation.z).toBeCloseTo(-9);
-    expect(physics.barrelPoses[1]!.rotation).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+    const expected = config().objects.map(({ spawn }) => spawn);
+    physics.objectPoses.forEach(({ translation }, index) => {
+      expect(translation.x).toBeCloseTo(expected[index]!.x);
+      expect(translation.y).toBeCloseTo(expected[index]!.y);
+      expect(translation.z).toBeCloseTo(expected[index]!.z);
+    });
+    expect(physics.objectPoses.every(({ rotation }) => (
+      rotation.x === 0 && rotation.y === 0 && rotation.z === 0 && rotation.w === 1
+    ))).toBe(true);
     physics.dispose();
+  });
+
+  it('blocks player movement until the contacted object moves', () => {
+    const physics = new ScavengePhysics(runtime, pushingConfig());
+    const current = { x: 0, y: 3.72, z: 0 };
+    const desired = { x: 0, y: 3.72, z: -1 };
+    physics.resolvePlayerMovement(current, desired);
+    expect(desired.z).toBeGreaterThan(-1);
+    physics.update(identityPose(), 1 / 60, true);
+    expect(physics.objectLocalPositionsForTest[0]!.z).toBeLessThan(-1.2);
+    physics.dispose();
+  });
+
+  it('preserves unrelated motion and pending recovery during first contact', () => {
+    const physics = new ScavengePhysics(runtime, pushingWithUnrelatedObjectsConfig());
+    const movingRotation = {
+      x: 0,
+      y: Math.sin(0.3 / 2),
+      z: 0,
+      w: Math.cos(0.3 / 2),
+    };
+    physics.setObjectPoseForTest({
+      translation: { x: 4.5, y: 3.1, z: 2.5 },
+      rotation: movingRotation,
+    }, 1);
+    physics.setObjectVelocityForTest({ x: 0.6, y: 0.2, z: -0.4 }, 1);
+    physics.setObjectPoseForTest({
+      translation: { x: 20, y: 3, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    }, 2);
+    physics.setObjectVelocityForTest({ x: 1, y: 2, z: 3 }, 2);
+    const bodies = (physics as unknown as {
+      objectBodies: Array<{
+        translation(): { x: number; y: number; z: number };
+        rotation(): { x: number; y: number; z: number; w: number };
+        linvel(): { x: number; y: number; z: number };
+        angvel(): { x: number; y: number; z: number };
+      }>;
+    }).objectBodies;
+    const movingBody = bodies[1]!;
+    const recoveringBody = bodies[2]!;
+    const movingBefore = {
+      translation: { ...movingBody.translation() },
+      rotation: { ...movingBody.rotation() },
+      linvel: { ...movingBody.linvel() },
+      angvel: { ...movingBody.angvel() },
+    };
+    const recoveringBefore = {
+      translation: { ...recoveringBody.translation() },
+      rotation: { ...recoveringBody.rotation() },
+      linvel: { ...recoveringBody.linvel() },
+      angvel: { ...recoveringBody.angvel() },
+    };
+    const current = { x: 0, y: 3.72, z: 0 };
+    const desired = { x: 0, y: 3.72, z: -1 };
+
+    physics.resolvePlayerMovement(current, desired);
+
+    expect(desired.z).toBeGreaterThan(-1);
+    expect({
+      translation: movingBody.translation(),
+      rotation: movingBody.rotation(),
+      linvel: movingBody.linvel(),
+      angvel: movingBody.angvel(),
+    }).toEqual(movingBefore);
+    expect({
+      translation: recoveringBody.translation(),
+      rotation: recoveringBody.rotation(),
+      linvel: recoveringBody.linvel(),
+      angvel: recoveringBody.angvel(),
+    }).toEqual(recoveringBefore);
+    expect(physics.recoveryCountForTest).toBe(0);
+
+    physics.update(identityPose(), 1 / 60, true);
+
+    expect(physics.recoveryCountForTest).toBe(1);
+    expect(physics.objectLocalPositionsForTest[2]).toEqual({ x: -4, y: 2.78, z: 3 });
+    physics.dispose();
+  });
+
+  it('pushes on contact but not at a distance', () => {
+    const far = new ScavengePhysics(runtime, pushingConfig(-6));
+    expect(drivePlayerIntoObject(far, 0.04, 10)).toBeCloseTo(0, 5);
+    far.dispose();
+
+    const contact = new ScavengePhysics(runtime, pushingConfig());
+    expect(drivePlayerIntoObject(contact, 0.04, 60)).toBeGreaterThan(0.01);
+    contact.dispose();
+  });
+
+  it('pushes farther from sprint movement than walk movement', () => {
+    const walk = new ScavengePhysics(runtime, pushingConfig());
+    const sprint = new ScavengePhysics(runtime, pushingConfig());
+    const walkDistance = drivePlayerIntoObject(walk, 0.04, 60);
+    const sprintDistance = drivePlayerIntoObject(sprint, 0.08, 60);
+    expect(walkDistance).toBeLessThan(1.5);
+    expect(sprintDistance).toBeGreaterThan(walkDistance);
+    walk.dispose();
+    sprint.dispose();
   });
 
   it('moves under a controlled kinematic tilt and remains contained', () => {
@@ -191,9 +385,9 @@ describe('ScavengePhysics', () => {
     for (let frame = 0; frame < 300; frame += 1) {
       physics.update(tilted, 1 / 60, true);
     }
-    expect(physics.barrelPoses[0]!.translation.x).not.toBeCloseTo(-2.5);
-    expect(Math.abs(physics.barrelLocalPositionsForTest[0]!.x)).toBeLessThan(9);
-    expect(physics.barrelPoses[1]!.translation.x).not.toBeCloseTo(2.6);
+    expect(physics.objectPoses[0]!.translation.x).not.toBeCloseTo(-2.5);
+    expect(Math.abs(physics.objectLocalPositionsForTest[0]!.x)).toBeLessThan(9);
+    expect(physics.objectPoses[2]!.translation.x).not.toBeCloseTo(2.5);
     physics.dispose();
   });
 
@@ -232,7 +426,7 @@ describe('ScavengePhysics', () => {
       deckY: FREIGHTER_DIMENSIONS.deckY,
       deckBounds,
       initialShipPose: pose,
-      barrelSpawns: config().barrelSpawns,
+      objects: config().objects,
     });
     let minX = Infinity;
     let maxX = -Infinity;
@@ -252,7 +446,7 @@ describe('ScavengePhysics', () => {
       (pose.translation as { y: number }).y = current.y - 0.76;
       physics.update(pose, 1 / 60, true);
 
-      const local = physics.barrelLocalPositionsForTest[0]!;
+      const local = physics.objectLocalPositionsForTest[0]!;
       minX = Math.min(minX, local.x);
       maxX = Math.max(maxX, local.x);
       minY = Math.min(minY, local.y);
@@ -275,14 +469,37 @@ describe('ScavengePhysics', () => {
     materials.dispose();
   });
 
-  it('freezes when inactive and disposes repeatedly', () => {
+  it('tracks inactive ship motion and hands off without drift, teleport, or an impulse spike', () => {
     const world = runtime.createWorld({ x: 0, y: -9.81, z: 0 });
     const free = vi.spyOn(world, 'free');
     const createWorld = vi.spyOn(runtime, 'createWorld').mockReturnValueOnce(world);
     const physics = new ScavengePhysics(runtime, config());
-    const before = structuredClone(physics.barrelPoses);
-    physics.update(identityPose(), 1, false);
-    expect(physics.barrelPoses).toEqual(before);
+    const movedLocal = { x: -1.7, y: 2.82, z: 2.4 };
+    physics.setObjectPoseForTest({
+      translation: movedLocal,
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    });
+    physics.update(identityPose(), 1 / 60, true);
+    const preservedLocal = { ...physics.objectLocalPositionsForTest[0]! };
+    const introPose: PhysicsPose = {
+      translation: { x: 3, y: -1, z: 4 },
+      rotation: { x: 0, y: Math.sin(0.25 / 2), z: 0, w: Math.cos(0.25 / 2) },
+    };
+
+    physics.update(introPose, 1, false);
+
+    expect(physics.objectLocalPositionsForTest[0]!.x).toBeCloseTo(preservedLocal.x);
+    expect(physics.objectLocalPositionsForTest[0]!.y).toBeCloseTo(preservedLocal.y);
+    expect(physics.objectLocalPositionsForTest[0]!.z).toBeCloseTo(preservedLocal.z);
+    const beforeHandoff = structuredClone(physics.objectPoses[0]!);
+    physics.update(introPose, 1 / 60, true);
+    const afterHandoff = physics.objectPoses[0]!;
+    expect(afterHandoff.translation.x).toBeCloseTo(beforeHandoff.translation.x, 3);
+    expect(afterHandoff.translation.z).toBeCloseTo(beforeHandoff.translation.z, 3);
+    const body = (physics as unknown as {
+      objectBodies: Array<{ linvel(): { x: number; y: number; z: number } }>;
+    }).objectBodies[0]!;
+    expect(Math.hypot(body.linvel().x, body.linvel().z)).toBeLessThan(0.05);
     physics.dispose();
     expect(() => physics.dispose()).not.toThrow();
     expect(free).toHaveBeenCalledOnce();
@@ -292,14 +509,14 @@ describe('ScavengePhysics', () => {
   it('reads the Rapier pose once after all accepted substeps', () => {
     const physics = new ScavengePhysics(runtime, config());
     const internals = physics as unknown as {
-      barrelBodies: Array<{
+      objectBodies: Array<{
         translation(): { x: number; y: number; z: number };
         rotation(): { x: number; y: number; z: number; w: number };
       }>;
       world: { step(): void };
     };
-    const translations = internals.barrelBodies.map((body) => vi.spyOn(body, 'translation'));
-    const rotations = internals.barrelBodies.map((body) => vi.spyOn(body, 'rotation'));
+    const translations = internals.objectBodies.map((body) => vi.spyOn(body, 'translation'));
+    const rotations = internals.objectBodies.map((body) => vi.spyOn(body, 'rotation'));
     const step = vi.spyOn(internals.world, 'step');
     physics.update(identityPose(), 1 / 20, true);
     expect(step).toHaveBeenCalledTimes(3);
@@ -319,23 +536,23 @@ describe('ScavengePhysics', () => {
   it.each([
     ['escaped', { translation: { x: 20, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
     ['non-finite', { translation: { x: Number.NaN, y: 3, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }],
-  ] as const)('recovers a %s barrel and clears velocity', (_label, pose) => {
+  ] as const)('recovers an %s object and clears velocity', (_label, pose) => {
     const physics = new ScavengePhysics(runtime, config());
-    physics.setBarrelVelocityForTest({ x: 4, y: 5, z: 6 });
-    physics.setBarrelPoseForTest(pose);
+    physics.setObjectVelocityForTest({ x: 4, y: 5, z: 6 });
+    physics.setObjectPoseForTest(pose);
     physics.update(identityPose(), 1 / 60, true);
-    expect(physics.barrelPoses[0]!.translation.x).toBeCloseTo(-2.5);
-    expect(physics.barrelPoses[0]!.translation.y).toBeCloseTo(2.795);
-    expect(physics.barrelPoses[0]!.translation.z).toBeCloseTo(3.2);
+    expect(physics.objectPoses[0]!.translation.x).toBeCloseTo(-2.5);
+    expect(physics.objectPoses[0]!.translation.y).toBeCloseTo(2.82);
+    expect(physics.objectPoses[0]!.translation.z).toBeCloseTo(3.2);
     expect(physics.recoveryCountForTest).toBe(1);
-    const barrelBody = (physics as unknown as {
-      barrelBodies: Array<{
+    const objectBody = (physics as unknown as {
+      objectBodies: Array<{
         linvel(): { x: number; y: number; z: number };
         angvel(): { x: number; y: number; z: number };
       }>;
-    }).barrelBodies[0]!;
-    expect(barrelBody.linvel()).toEqual({ x: 0, y: 0, z: 0 });
-    expect(barrelBody.angvel()).toEqual({ x: 0, y: 0, z: 0 });
+    }).objectBodies[0]!;
+    expect(objectBody.linvel()).toEqual({ x: 0, y: 0, z: 0 });
+    expect(objectBody.angvel()).toEqual({ x: 0, y: 0, z: 0 });
     physics.dispose();
   });
 
@@ -344,18 +561,18 @@ describe('ScavengePhysics', () => {
     ['maxX', { x: 9 - 0.54, y: 2.22 + 0.55, z: 0 }, { x: 8, y: 0, z: 0 }],
     ['minZ', { x: 0, y: 2.22 + 0.55, z: -12 + 0.54 }, { x: 0, y: 0, z: -8 }],
     ['maxZ', { x: 0, y: 2.22 + 0.55, z: 12 - 0.54 }, { x: 0, y: 0, z: 8 }],
-  ] as const)('contains the barrel at %s', (boundary, translation, velocity) => {
+  ] as const)('contains the object at %s', (boundary, translation, velocity) => {
     const physics = new ScavengePhysics(runtime, config());
     const recoveryCount = physics.recoveryCountForTest;
     expect(recoveryCount).toBe(0);
-    physics.setBarrelPoseForTest({
+    physics.setObjectPoseForTest({
       translation,
       rotation: { x: 0, y: 0, z: 0, w: 1 },
     });
-    physics.setBarrelVelocityForTest(velocity);
+    physics.setObjectVelocityForTest(velocity);
     for (let frame = 0; frame < 120; frame += 1) {
       physics.update(identityPose(), 1 / 60, true);
-      const local = physics.barrelLocalPositionsForTest[0]!;
+      const local = physics.objectLocalPositionsForTest[0]!;
       if (boundary === 'minX') expect(local.x).toBeGreaterThanOrEqual(-9);
       if (boundary === 'maxX') expect(local.x).toBeLessThanOrEqual(9);
       if (boundary === 'minZ') expect(local.z).toBeGreaterThanOrEqual(-12);

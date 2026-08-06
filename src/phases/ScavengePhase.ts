@@ -196,6 +196,7 @@ export class ScavengePhase implements GamePhase {
       this.world.colliders,
       this.world.playerNavigationBounds,
       () => this.session.penalize(5),
+      this.world.resolvePlayerMovement,
       this.world.arcColliders,
       this.world.climbZones,
     );
@@ -224,6 +225,7 @@ export class ScavengePhase implements GamePhase {
     );
 
     this.ui.onStart = () => {
+      this.world.revealPhysicsObjects();
       void this.requestPointerLock();
     };
     this.ui.onResume = () => {
@@ -333,7 +335,7 @@ export class ScavengePhase implements GamePhase {
       this.endingStarted = true;
       this.hands.hideAndReset();
       this.audio.sink();
-      this.world.attachPhysicsBarrelsToShip();
+      this.world.attachPhysicsObjectsToShip();
       if (this.input.pointerLocked) document.exitPointerLock();
       this.contextAction = { type: 'none', prompt: '' };
       this.itemTooltip = null;
