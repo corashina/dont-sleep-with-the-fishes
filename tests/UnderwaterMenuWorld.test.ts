@@ -18,6 +18,7 @@ import { expect, it, vi } from 'vitest';
 import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
 import { BUBBLE_COUNT } from '../src/menu/UnderwaterParticles';
+import { LIGHT_SHAFT_COUNT } from '../src/menu/UnderwaterLightShafts';
 import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 
 it('creates the approved fixed composition once', () => {
@@ -116,6 +117,7 @@ it('creates the approved fixed composition once', () => {
   expect(camera.quaternion.angleTo(expected.quaternion)).toBeLessThan(1e-8);
   const seabed = world.root.getObjectByName('menu:seabed') as Mesh;
   const caustics = world.root.getObjectByName('menu:caustic-overlay') as Mesh;
+  const lightShafts = world.root.getObjectByName('menu:light-shafts') as Group;
   const sandPosition = seabed.geometry.getAttribute('position');
   const sandColor = seabed.geometry.getAttribute('color');
   expect(sandColor).toBeDefined();
@@ -138,6 +140,11 @@ it('creates the approved fixed composition once', () => {
   expect(seabed.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
   expect(startHitTarget.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
   expect(caustics.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
+  expect(lightShafts.children).toHaveLength(LIGHT_SHAFT_COUNT);
+  expect(world.actors.setLightTime).toBeTypeOf('function');
+  for (const shaft of lightShafts.children as Mesh[]) {
+    expect(shaft.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
+  }
   world.root.updateMatrixWorld(true);
   expect(new Box3().setFromObject(seabed).max.z).toBeGreaterThan(camera.position.z);
   expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
@@ -202,6 +209,10 @@ it('creates the approved fixed composition once', () => {
     (matter as Points).material as ShaderMaterial,
     'dispose',
   );
+  const lightGeometryDispose = vi.spyOn(
+    (lightShafts.children[0] as Mesh).geometry,
+    'dispose',
+  );
 
   world.dispose();
   world.dispose();
@@ -211,6 +222,7 @@ it('creates the approved fixed composition once', () => {
   expect(matterGeometryDispose).toHaveBeenCalledTimes(1);
   expect(bubbleMaterialDispose).toHaveBeenCalledTimes(1);
   expect(matterMaterialDispose).toHaveBeenCalledTimes(1);
+  expect(lightGeometryDispose).toHaveBeenCalledTimes(1);
   expect(scene.getObjectByName('menu:underwater-world')).toBeUndefined();
 });
 

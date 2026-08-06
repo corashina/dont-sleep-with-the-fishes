@@ -49,6 +49,7 @@ import {
   type UnderwaterMenuActors,
 } from './UnderwaterMenuAnimator';
 import { UnderwaterParticles } from './UnderwaterParticles';
+import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
 import {
   disposeResourceSets,
@@ -82,7 +83,7 @@ const CAUSTIC_FRAGMENT_SHADER = `
       * sin(vUv.y * 27.0 - uTime * 0.23);
     float second = sin((vUv.x + vUv.y) * 41.0 - uTime * 0.19);
     float bands = smoothstep(0.52, 0.94, first * 0.58 + second * 0.42);
-    gl_FragColor = vec4(0.28, 0.58, 0.61, bands * 0.13 * uStrength);
+    gl_FragColor = vec4(0.28, 0.58, 0.61, bands * 0.085 * uStrength);
   }
 `;
 
@@ -104,6 +105,7 @@ export class UnderwaterMenuWorld {
   readonly root = new Group();
   readonly plants: UnderwaterPlantField;
   readonly particles: UnderwaterParticles;
+  readonly lightShafts: UnderwaterLightShafts;
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
   readonly fish: readonly MenuFishActor[];
@@ -209,14 +211,15 @@ export class UnderwaterMenuWorld {
 
     this.plants = new UnderwaterPlantField();
     this.particles = new UnderwaterParticles();
+    this.lightShafts = new UnderwaterLightShafts();
     const seabed = this.createSeabed();
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
 
-    const hemisphereLight = new HemisphereLight(0x6f9ca3, 0x172923, 1.65);
+    const hemisphereLight = new HemisphereLight(0x8dc6cf, 0x10221f, 1.8);
     hemisphereLight.name = 'menu:hemisphere-light';
-    const directionalLight = new DirectionalLight(0x9bc4cd, 2.2);
+    const directionalLight = new DirectionalLight(0xb7e1e5, 2.35);
     directionalLight.name = 'menu:directional-light';
     directionalLight.position.set(-5.5, 8.5, 3.2);
 
@@ -232,6 +235,7 @@ export class UnderwaterMenuWorld {
       ...fishSchools,
       storyProps,
       this.plants.root,
+      this.lightShafts.root,
       this.particles.root,
       caustic.mesh,
       hemisphereLight,
@@ -249,6 +253,7 @@ export class UnderwaterMenuWorld {
         this.particles.setMatterTime(time);
         this.causticMaterial.uniforms.uTime!.value = time;
       },
+      setLightTime: (time) => this.lightShafts.setTime(time),
       setCausticStrength: (strength) => {
         this.causticMaterial.uniforms.uStrength!.value = strength;
       },
@@ -309,6 +314,7 @@ export class UnderwaterMenuWorld {
     }
     cleanupSteps.push(
       () => this.plants.dispose(),
+      () => this.lightShafts.dispose(),
       () => this.particles.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
       () => this.restoreSceneState(),
