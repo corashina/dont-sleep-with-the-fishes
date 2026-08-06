@@ -6,6 +6,7 @@ import {
   Color,
   DirectionalLight,
   DoubleSide,
+  Float32BufferAttribute,
   FogExp2,
   Group,
   HemisphereLight,
@@ -357,21 +358,30 @@ export class UnderwaterMenuWorld {
     const geometry = new PlaneGeometry(140, 100, 56, 42);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
+    const color = new Float32BufferAttribute(position.count * 3, 3);
     for (let index = 0; index < position.count; index += 1) {
       const x = position.getX(index);
       const z = position.getZ(index);
-      const height = Math.sin(x * 0.62) * 0.07
-        + Math.cos(z * 0.51) * 0.05
-        + Math.sin((x + z) * 0.34) * 0.035;
+      const dune = Math.sin(x * 0.12) * 0.22
+        + Math.cos(z * 0.16) * 0.18
+        + Math.sin((x + z) * 0.08) * 0.14;
+      const ripple = Math.sin(z * 1.35 + Math.sin(x * 0.18)) * 0.045
+        + Math.sin(x * 0.75 + z * 0.31) * 0.025;
+      const height = dune + ripple;
       position.setY(index, height);
+      const shade = 0.88 + Math.sin(x * 0.31 + z * 0.19) * 0.055
+        + Math.cos(z * 0.47) * 0.035;
+      color.setXYZ(index, 0.46 * shade, 0.43 * shade, 0.33 * shade);
     }
     position.needsUpdate = true;
+    geometry.setAttribute('color', color);
     geometry.computeVertexNormals();
     const material = new MeshStandardMaterial({
       color: 0x756d54,
       roughness: 1,
       metalness: 0,
       flatShading: true,
+      vertexColors: true,
     });
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);
