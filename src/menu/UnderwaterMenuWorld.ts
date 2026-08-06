@@ -6,6 +6,7 @@ import {
   Color,
   DirectionalLight,
   DoubleSide,
+  Float32BufferAttribute,
   FogExp2,
   Group,
   HemisphereLight,
@@ -25,6 +26,12 @@ import {
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
+import {
+  MENU_CAMERA_POSITION,
+  MENU_CAMERA_TARGET,
+  MENU_MODEL_PLACEMENTS,
+  type MenuGroundPlacement,
+} from './MenuSceneLayout';
 import { DistantSeabed } from './DistantSeabed';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import {
@@ -45,57 +52,13 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
-export const MENU_CAMERA_TARGET = [0, 2.0, -4.8] as const;
-
 export const MENU_PLACEMENT = {
   boat: { position: [0, 0.42, -4.8], rotation: [0.05, -0.12, -0.09] },
-  rockA: { position: [-5.4, -0.1, -5.8], rotation: [0, 0.4, 0] },
-  rockB: { position: [4.8, -0.15, -3.2], rotation: [0, -0.7, 0] },
-  rockC: { position: [6.4, -0.2, -9.5], rotation: [0, 0.2, 0] },
 } as const;
 
-const ROCK_PLACEMENTS = {
-  rockA: [
-    MENU_PLACEMENT.rockA,
-    { position: [10.5, -0.25, -10.5], rotation: [0, -0.8, 0.08] },
-    { position: [-14, -0.32, -15], rotation: [0, 1.1, -0.05] },
-    { position: [18, -0.4, -22], rotation: [0, 0.25, 0.04] },
-  ],
-  rockB: [
-    MENU_PLACEMENT.rockB,
-    { position: [-8, -0.3, -8.5], rotation: [0, 0.65, 0.04] },
-    { position: [13.5, -0.34, -15.5], rotation: [0, -1.05, -0.06] },
-    { position: [-20, -0.42, -24], rotation: [0, 0.35, 0.03] },
-  ],
-  rockC: [
-    MENU_PLACEMENT.rockC,
-    { position: [-10.8, -0.32, -12], rotation: [0, -0.45, -0.05] },
-    { position: [16, -0.4, -20], rotation: [0, 0.85, 0.06] },
-    { position: [-24, -0.46, -30], rotation: [0, -1.2, -0.03] },
-  ],
-} as const;
-
-const CORAL_PLACEMENTS = [
-  [-3.2, -0.26, -5.9, -0.35],
-  [3.6, -0.3, -6.9, 0.65],
-  [-8.8, -0.34, -10.6, -0.9],
-  [8.4, -0.35, -11.8, 1.1],
-  [-14.5, -0.42, -17.5, 0.25],
-  [15.2, -0.42, -18.8, -0.6],
-] as const;
-
-const SEAWEED_POSITIONS = [
-  [-4.65, -0.28, -5.1],
-  [4.15, -0.32, -3.8],
-  [5.75, -0.35, -8.75],
-  [-7.4, -0.34, -8.8],
-  [8.1, -0.36, -7.2],
-  [-11.8, -0.4, -14.2],
-  [12.6, -0.42, -16.4],
-  [-17, -0.45, -22],
-  [18.2, -0.46, -24],
-] as const;
+const MENU_GROUND_MODEL_IDS: readonly MenuGroundPlacement['modelId'][] = [
+  'rockA', 'rockB', 'rockC', 'coral', 'seaweed', 'starfish', 'skull',
+];
 
 const CAUSTIC_VERTEX_SHADER = `
   varying vec2 vUv;
@@ -170,12 +133,7 @@ export class UnderwaterMenuWorld {
     this.root.name = 'menu:underwater-world';
 
     let boat: MenuModelInstance;
-    let rockAs: MenuModelInstance[];
-    let rockBs: MenuModelInstance[];
-    let rockCs: MenuModelInstance[];
-    let corals: MenuModelInstance[];
-    let starfish: MenuModelInstance;
-    let skull: MenuModelInstance;
+    let groundModelRoots: Group[];
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
     let fishSchools: readonly [Group, Group];
@@ -184,19 +142,35 @@ export class UnderwaterMenuWorld {
     let distantSeabed: MenuSceneComponent;
     try {
       boat = this.createModel(models, 'boat');
-      rockAs = ROCK_PLACEMENTS.rockA.map(() => this.createModel(models, 'rockA'));
-      rockBs = ROCK_PLACEMENTS.rockB.map(() => this.createModel(models, 'rockB'));
-      rockCs = ROCK_PLACEMENTS.rockC.map(() => this.createModel(models, 'rockC'));
-      corals = CORAL_PLACEMENTS.map(() => this.createModel(models, 'coral'));
-      starfish = this.createModel(models, 'starfish');
-      skull = this.createModel(models, 'skull');
+      const placementsByModelId: Record<
+        MenuGroundPlacement['modelId'],
+        MenuGroundPlacement[]
+      > = {
+        rockA: [],
+        rockB: [],
+        rockC: [],
+        coral: [],
+        seaweed: [],
+        starfish: [],
+        skull: [],
+      };
+      for (const placement of MENU_MODEL_PLACEMENTS) {
+        placementsByModelId[placement.modelId].push(placement);
+      }
+      groundModelRoots = [];
+      for (const modelId of MENU_GROUND_MODEL_IDS) {
+        for (const placement of placementsByModelId[modelId]) {
+          const groundModel = this.createModel(models, modelId);
+          this.placeModel(groundModel.root, placement.id, placement);
+          groundModelRoots.push(groundModel.root);
+        }
+      }
       sharkOne = this.createModel(models, 'shark');
       sharkTwo = this.createModel(models, 'shark');
       fishSchools = [
         this.createFishSchool(models, 0),
         this.createFishSchool(models, 1),
       ];
-      this.createStaticSeaweed(models);
       signs = components.createSigns();
       this.components.push(signs);
       dorothy = components.createDorothyWreck();
@@ -211,21 +185,6 @@ export class UnderwaterMenuWorld {
     this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
 
     this.placeModel(boat.root, 'boat', MENU_PLACEMENT.boat);
-    this.placeModelInstances(rockAs, 'rockA', ROCK_PLACEMENTS.rockA);
-    this.placeModelInstances(rockBs, 'rockB', ROCK_PLACEMENTS.rockB);
-    this.placeModelInstances(rockCs, 'rockC', ROCK_PLACEMENTS.rockC);
-    corals.forEach((coral, index) => {
-      const [x, y, z, yaw] = CORAL_PLACEMENTS[index]!;
-      coral.root.name = `menu:coral-${index + 1}`;
-      coral.root.position.set(x, y, z);
-      coral.root.rotation.y = yaw;
-    });
-    starfish.root.name = 'menu:starfish';
-    starfish.root.position.set(-1.65, -0.36, -2.15);
-    starfish.root.rotation.set(0.03, -0.25, -0.08);
-    skull.root.name = 'menu:skull';
-    skull.root.position.set(0.7, -0.26, -1.5);
-    skull.root.rotation.set(0.08, -0.4, -0.32);
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';
@@ -257,16 +216,10 @@ export class UnderwaterMenuWorld {
     this.root.add(
       seabed,
       boat.root,
-      ...rockAs.map(({ root }) => root),
-      ...rockBs.map(({ root }) => root),
-      ...rockCs.map(({ root }) => root),
-      ...corals.map(({ root }) => root),
-      starfish.root,
-      skull.root,
+      ...groundModelRoots,
       signs.root,
       dorothy.root,
       distantSeabed.root,
-      ...this.rootSeaweed(),
       sharkOne.root,
       sharkTwo.root,
       ...fishSchools,
@@ -377,32 +330,14 @@ export class UnderwaterMenuWorld {
       const fish = this.createModel(models, id).root;
       fish.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
       fish.position.set(
-        (fishIndex - 2.5) * 0.42,
-        ((fishIndex + schoolIndex) % 3 - 1) * 0.22,
-        (fishIndex % 2) * 0.5 - 0.25,
+        (fishIndex - 2.5) * 0.72,
+        ((fishIndex + schoolIndex) % 3 - 1) * 0.34,
+        (fishIndex % 2) * 0.8 - 0.4,
       );
       fish.rotation.y = fishIndex % 2 === 0 ? 0.08 : -0.12;
       school.add(fish);
     }
     return school;
-  }
-
-  private createStaticSeaweed(models: ModelFactory): void {
-    for (let index = 0; index < SEAWEED_POSITIONS.length; index += 1) {
-      const seaweed = this.createModel(models, 'seaweed').root;
-      seaweed.name = `menu:seaweed-${index + 1}`;
-      const position = SEAWEED_POSITIONS[index]!;
-      seaweed.position.set(position[0], position[1], position[2]);
-      seaweed.rotation.y = index * 1.9 - 0.4;
-    }
-  }
-
-  private rootSeaweed(): Group[] {
-    const roots: Group[] = [];
-    for (const instance of this.modelInstances) {
-      if (instance.root.name.startsWith('menu:seaweed-')) roots.push(instance.root);
-    }
-    return roots;
   }
 
   private placeModel(
@@ -418,42 +353,34 @@ export class UnderwaterMenuWorld {
     root.rotation.set(...placement.rotation);
   }
 
-  private placeModelInstances(
-    instances: readonly MenuModelInstance[],
-    name: string,
-    placements: readonly {
-      readonly position: readonly [number, number, number];
-      readonly rotation: readonly [number, number, number];
-    }[],
-  ): void {
-    instances.forEach((instance, index) => {
-      this.placeModel(
-        instance.root,
-        index === 0 ? name : `${name}-${index + 1}`,
-        placements[index]!,
-      );
-    });
-  }
-
   private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {
     const geometry = new PlaneGeometry(140, 100, 56, 42);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
+    const color = new Float32BufferAttribute(position.count * 3, 3);
     for (let index = 0; index < position.count; index += 1) {
       const x = position.getX(index);
       const z = position.getZ(index);
-      const height = Math.sin(x * 0.62) * 0.07
-        + Math.cos(z * 0.51) * 0.05
-        + Math.sin((x + z) * 0.34) * 0.035;
+      const dune = Math.sin(x * 0.12) * 0.22
+        + Math.cos(z * 0.16) * 0.18
+        + Math.sin((x + z) * 0.08) * 0.14;
+      const ripple = Math.sin(z * 1.35 + Math.sin(x * 0.18)) * 0.045
+        + Math.sin(x * 0.75 + z * 0.31) * 0.025;
+      const height = dune + ripple;
       position.setY(index, height);
+      const shade = 0.88 + Math.sin(x * 0.31 + z * 0.19) * 0.055
+        + Math.cos(z * 0.47) * 0.035;
+      color.setXYZ(index, 0.46 * shade, 0.43 * shade, 0.33 * shade);
     }
     position.needsUpdate = true;
+    geometry.setAttribute('color', color);
     geometry.computeVertexNormals();
     const material = new MeshStandardMaterial({
       color: 0x756d54,
       roughness: 1,
       metalness: 0,
       flatShading: true,
+      vertexColors: true,
     });
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);

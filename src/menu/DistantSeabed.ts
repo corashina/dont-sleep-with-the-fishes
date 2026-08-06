@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -9,13 +10,18 @@ import {
   PlaneGeometry,
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
+import {
+  findClearMenuX,
+  menuVisibleCenterLimit,
+  type MenuGroundFootprint,
+} from './MenuSceneLayout';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 
 export const DISTANT_RIDGE_COUNT = 3;
 export const DISTANT_MOUNTAIN_COUNT = 3;
-export const DISTANT_ROCK_COUNT = 18;
-export const DISTANT_PLANT_COUNT = 28;
-export const DISTANT_DEBRIS_COUNT = 14;
+export const DISTANT_ROCK_COUNT = 24;
+export const DISTANT_PLANT_COUNT = 36;
+export const DISTANT_DEBRIS_COUNT = 20;
 
 const RIDGES = [
   { width: 76, depth: 16, z: -16, height: 0.9, phase: 0.2 },
@@ -24,38 +30,45 @@ const RIDGES = [
 ] as const;
 
 const MOUNTAINS = [
-  { width: 88, depth: 18, z: -34, height: 6.2, phase: 0.35 },
-  { width: 116, depth: 24, z: -50, height: 10.8, phase: 1.25 },
-  { width: 148, depth: 30, z: -72, height: 17.5, phase: 2.1 },
+  { width: 104, depth: 18, z: -34, height: 6.2, phase: 0.35 },
+  { width: 138, depth: 24, z: -50, height: 10.8, phase: 1.25 },
+  { width: 172, depth: 30, z: -72, height: 17.5, phase: 2.1 },
 ] as const;
 
 const ROCKS = [
   [-11.0, -0.20, -5.5, 0.8, 0.2], [10.5, -0.15, -7.5, 1.0, 1.1],
   [-16.0, -0.25, -11.0, 1.15, 0.6], [16.5, -0.22, -12.5, 0.9, 2.2],
-  [-21.5, -0.30, -17.0, 1.45, 0.4], [22.0, -0.28, -19.5, 1.2, 1.8],
+  [-21.5, -0.30, -16.0, 1.45, 0.4], [22.0, -0.28, -19.5, 1.2, 1.8],
   [-27.0, -0.34, -25.0, 1.0, 2.7], [28.5, -0.32, -27.5, 1.55, 0.9],
   [-34.0, -0.40, -34.0, 1.35, 0.3], [35.5, -0.38, -37.0, 1.7, 1.5],
   [-42.0, -0.45, -46.0, 1.8, 2.5], [43.0, -0.42, -49.0, 1.35, 0.7],
   [-18.0, -0.35, -39.0, 1.25, 1.2], [17.0, -0.32, -43.0, 1.5, 2.1],
   [-7.0, -0.28, -30.0, 0.85, 0.4], [8.5, -0.30, -35.0, 1.1, 1.7],
   [-52.0, -0.48, -58.0, 2.0, 0.8], [53.0, -0.45, -61.0, 1.7, 2.4],
+  [-60.0, -0.48, -64.0, 1.8, 0.4], [61.0, -0.47, -67.0, 1.65, 1.6],
+  [-68.0, -0.50, -52.0, 1.55, 2.2], [68.0, -0.48, -55.0, 1.85, 0.8],
+  [-63.0, -0.52, -28.0, 1.4, 1.1], [63.0, -0.50, -31.0, 1.6, 2.6],
 ] as const;
 
 const PLANTS = [
   [-9.0, -0.10, -7.0, 0.8, 0.1], [-13.0, -0.12, -10.0, 1.1, 0.5],
   [11.5, -0.10, -9.0, 0.9, 1.2], [15.5, -0.14, -13.5, 1.3, 2.0],
-  [-18.5, -0.18, -15.0, 1.0, 0.8], [19.0, -0.16, -17.5, 0.75, 1.6],
+  [-17.5, -0.18, -15.0, 1.0, 0.8], [19.0, -0.16, -17.5, 0.75, 1.6],
   [-24.0, -0.22, -21.0, 1.2, 2.4], [25.0, -0.22, -23.0, 1.4, 0.3],
   [-30.0, -0.25, -28.0, 0.9, 1.9], [31.5, -0.25, -30.0, 1.1, 2.8],
   [-36.0, -0.28, -36.0, 1.45, 0.4], [37.0, -0.28, -39.0, 1.2, 1.4],
-  [-43.0, -0.32, -45.0, 1.6, 2.2], [44.0, -0.32, -48.0, 1.3, 0.7],
+  [-47.0, -0.32, -44.0, 1.6, 2.2], [47.0, -0.32, -46.0, 1.3, 0.7],
   [-50.0, -0.36, -55.0, 1.75, 1.1], [51.0, -0.36, -58.0, 1.5, 2.5],
-  [-5.0, -0.18, -18.0, 0.85, 0.2], [7.0, -0.20, -22.0, 1.0, 1.8],
+  [-10.0, -0.18, -18.0, 0.85, 0.2], [13.0, -0.20, -22.0, 1.0, 1.8],
   [-12.0, -0.22, -27.0, 1.3, 2.7], [13.5, -0.22, -31.0, 1.2, 0.6],
   [-19.0, -0.26, -34.0, 1.0, 1.5], [21.0, -0.28, -38.0, 1.4, 2.9],
   [-27.0, -0.30, -43.0, 1.5, 0.9], [29.0, -0.32, -47.0, 1.2, 2.0],
   [-8.0, -0.30, -50.0, 1.25, 0.3], [10.0, -0.32, -54.0, 1.4, 1.7],
   [-34.0, -0.35, -57.0, 1.6, 2.4], [36.0, -0.36, -61.0, 1.5, 0.8],
+  [-58.0, -0.38, -47.0, 1.35, 0.5], [59.0, -0.38, -50.0, 1.55, 1.4],
+  [-64.0, -0.40, -38.0, 1.25, 2.1], [65.0, -0.40, -41.0, 1.45, 0.8],
+  [-61.0, -0.42, -32.0, 1.5, 2.7], [61.0, -0.42, -35.0, 1.3, 1.7],
+  [-68.0, -0.44, -24.0, 1.2, 0.3], [68.0, -0.44, -27.0, 1.4, 2.4],
 ] as const;
 
 const DEBRIS = [
@@ -66,6 +79,9 @@ const DEBRIS = [
   [-38.0, -0.18, -40.0, 1.2, -0.4], [39.0, -0.18, -43.0, 0.9, 0.6],
   [-45.0, -0.20, -49.0, 1.3, -0.8], [46.0, -0.20, -52.0, 1.0, 0.9],
   [-11.0, -0.16, -38.0, 0.8, 0.25], [12.0, -0.18, -45.0, 1.1, -0.15],
+  [-57.0, -0.22, -57.0, 0.9, -0.25], [58.0, -0.22, -60.0, 1.05, 0.35],
+  [-66.0, -0.24, -46.0, 1.0, 0.6], [67.0, -0.24, -49.0, 1.15, -0.5],
+  [-68.0, -0.25, -34.0, 1.1, -0.7], [68.0, -0.25, -37.0, 0.95, 0.75],
 ] as const;
 
 type Detail = readonly [number, number, number, number, number];
@@ -74,6 +90,8 @@ export class DistantSeabed implements MenuSceneComponent {
   readonly root = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
+  private readonly detailBounds = new Box3();
+  private readonly detailFootprints: MenuGroundFootprint[] = [];
   private disposed = false;
 
   constructor() {
@@ -181,6 +199,30 @@ export class DistantSeabed implements MenuSceneComponent {
       mesh.position.set(x, y, z);
       mesh.scale.setScalar(scale);
       mesh.rotation.y = yaw;
+      mesh.updateMatrixWorld(true);
+      this.detailBounds.setFromObject(mesh);
+      const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
+      const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
+      const visibleLimit = menuVisibleCenterLimit(
+        this.detailBounds.min.y,
+        this.detailBounds.max.z,
+        halfX,
+      );
+      mesh.position.x = findClearMenuX(
+        x,
+        z,
+        halfX,
+        halfZ,
+        0.2,
+        this.detailFootprints,
+        -visibleLimit,
+        visibleLimit,
+      );
+      this.detailFootprints.push({
+        id: mesh.name,
+        position: [mesh.position.x, y, z],
+        halfSize: [halfX, halfZ],
+      });
       group.add(mesh);
     });
   }

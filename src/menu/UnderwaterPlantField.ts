@@ -8,11 +8,14 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
+import {
+  findClearMenuX,
+  menuVisibleCenterLimit,
+} from './MenuSceneLayout';
 
 export const KELP_COUNT = 54;
-export const KELP_BOAT_CLEARANCE_X = 2.7;
-export const KELP_BOAT_CLEARANCE_NEAR_Z = -2.2;
-export const KELP_BOAT_CLEARANCE_FAR_Z = -8.2;
+const KELP_EDGE_CLEARANCE = 0.2;
+export const KELP_SWEEP_RADIUS = Math.hypot(0.17 + 0.24, 0.08);
 
 const KELP_VERTEX_SHADER = `
   attribute float phase;
@@ -77,15 +80,24 @@ export class UnderwaterPlantField {
       const lane = Math.floor(index / 6);
       const depth = -3.2 - lane * 5.2 - (slot % 2) * 0.9;
       const spread = 7.5 + lane * 3.7;
-      let x = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
-      if (
-        depth > KELP_BOAT_CLEARANCE_FAR_Z
-        && depth < KELP_BOAT_CLEARANCE_NEAR_Z
-        && Math.abs(x) < KELP_BOAT_CLEARANCE_X
-      ) {
-        x += x < 0 ? -KELP_BOAT_CLEARANCE_X : KELP_BOAT_CLEARANCE_X;
-      }
       const scale = 0.72 + (index % 5) * 0.11;
+      const sourceX = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
+      const sweepRadius = KELP_SWEEP_RADIUS * scale;
+      const visibleLimit = menuVisibleCenterLimit(
+        -0.42,
+        depth + sweepRadius,
+        sweepRadius,
+      );
+      const x = findClearMenuX(
+        sourceX,
+        depth,
+        sweepRadius,
+        sweepRadius,
+        KELP_EDGE_CLEARANCE,
+        undefined,
+        -visibleLimit,
+        visibleLimit,
+      );
       transform.position.set(x, -0.42, depth);
       transform.rotation.set(0, index * 1.37, 0);
       transform.scale.set(scale, scale, scale);
