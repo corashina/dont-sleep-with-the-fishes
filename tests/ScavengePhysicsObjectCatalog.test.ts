@@ -11,16 +11,27 @@ describe('scavenge physics object catalog', () => {
       .toEqual([36, 8, 30, 16, 7, 10, 5]);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ friction }) => friction))
       .toEqual([0.30, 0.22, 0.34, 0.40, 0.62, 0.56, 0.68]);
+    expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ visualScale }) => visualScale)).toEqual([
+      [0.5, 0.5, 0.5],
+      [1 / 3, 1.6 / 3, 1 / 3],
+      [0.5, 0.5, 0.5],
+      [0.5, 0.5, 0.5],
+      [1, 1, 1],
+      [0.5, 0.5, 0.5],
+      [0.75, 0.75, 0.75],
+    ]);
+    expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ visualHalfHeight }) => visualHalfHeight))
+      .toEqual([0.2875, 0.64 / 3, 0.425, 0.4, 0.275, 0.2875, 0.39375]);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ collider }) => collider.kind))
       .toEqual(['cylinder', 'sphere', 'cylinder', 'cylinder', 'cuboid', 'cuboid', 'cuboid']);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ collider }) => collider)).toEqual([
-      { kind: 'cylinder', halfHeight: 0.55775, radius: 0.547811 },
-      { kind: 'sphere', radius: 0.6208 },
-      { kind: 'cylinder', halfHeight: 0.8245, radius: 0.584571 },
-      { kind: 'cylinder', halfHeight: 0.776, radius: 0.576176 },
-      { kind: 'cuboid', halfExtents: { x: 0.604871, y: 0.5335, z: 0.614178 } },
-      { kind: 'cuboid', halfExtents: { x: 0.55775, y: 0.55775, z: 0.55775 } },
-      { kind: 'cuboid', halfExtents: { x: 0.611384, y: 0.50925, z: 0.60468 } },
+      { kind: 'cylinder', halfHeight: 0.278875, radius: 0.2739055 },
+      { kind: 'sphere', radius: 0.6208 / 3 },
+      { kind: 'cylinder', halfHeight: 0.41225, radius: 0.2922855 },
+      { kind: 'cylinder', halfHeight: 0.388, radius: 0.288088 },
+      { kind: 'cuboid', halfExtents: { x: 0.3024355, y: 0.26675, z: 0.307089 } },
+      { kind: 'cuboid', halfExtents: { x: 0.278875, y: 0.278875, z: 0.278875 } },
+      { kind: 'cuboid', halfExtents: { x: 0.458538, y: 0.3819375, z: 0.45351 } },
     ]);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ restitution }) => restitution))
       .toEqual([0.03, 0.08, 0.025, 0.04, 0.015, 0.02, 0.01]);

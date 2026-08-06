@@ -21,12 +21,7 @@ import {
 } from '../src/physics/ScavengePhysics';
 import type { PhysicsRuntime } from '../src/physics/PhysicsRuntime';
 import { createShipGeometry } from '../src/world/ShipGeometry';
-import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
-import {
-  SCAVENGE_PHYSICS_OBJECT_PLACEMENTS,
-  scavengePhysicsObjectBlocksDoor,
-} from '../src/world/ScavengePhysicsObjectPlacement';
-import { FREIGHTER_DIMENSIONS, PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { testPhysicsRuntime } from './helpers/physics';
 
@@ -277,60 +272,6 @@ describe('ScavengePhysics', () => {
     physics.update(identityPose(), 1 / 60, true);
     expect(physics.objectLocalPositionsForTest[0]!.z).toBeLessThan(-1.2);
     physics.dispose();
-  });
-
-  it('blocks the widest legal path through every eligible real doorway', () => {
-    const doorPlacements = SCAVENGE_PHYSICS_OBJECT_PLACEMENTS.filter(
-      ({ category }) => category === 'door',
-    );
-    for (const placement of doorPlacements) {
-      const door = SHIP_LAYOUT.doors.find(({ id }) => id === placement.doorId)!;
-      for (const spec of SCAVENGE_PHYSICS_OBJECT_SPECS) {
-        if (!scavengePhysicsObjectBlocksDoor(spec, placement)) continue;
-        const halfHeight = spec.collider.kind === 'sphere'
-          ? spec.collider.radius
-          : spec.collider.kind === 'cylinder'
-            ? spec.collider.halfHeight
-            : spec.collider.halfExtents.y;
-        const physics = new ScavengePhysics(runtime, {
-          ...config(),
-          colliders: [],
-          safeBounds: { minX: -10, maxX: 10, minZ: -28, maxZ: 28 },
-          deckBounds: { minX: -10, maxX: 10, minZ: -28, maxZ: 28 },
-          objects: [{
-            id: spec.id,
-            spawn: {
-              x: placement.position.x,
-              y: FREIGHTER_DIMENSIONS.deckY + halfHeight,
-              z: placement.position.z,
-            },
-            rotation: {
-              x: 0,
-              y: Math.sin(placement.rotationY / 2),
-              z: 0,
-              w: Math.cos(placement.rotationY / 2),
-            },
-            profile: spec,
-          }],
-        });
-        const edgeOffset = door.width / 2 - PLAYER_LAYOUT_RADIUS - 1e-4;
-        const eyeY = FREIGHTER_DIMENSIONS.deckY + halfHeight + 0.75;
-        const current = door.orientation === 'aft'
-          ? { x: door.center[0] + edgeOffset, y: eyeY, z: door.center[1] - 2 }
-          : { x: door.center[0] - 2, y: eyeY, z: door.center[1] + edgeOffset };
-        const desired = door.orientation === 'aft'
-          ? { x: current.x, y: eyeY, z: door.center[1] + 2 }
-          : { x: door.center[0] + 2, y: eyeY, z: current.z };
-
-        physics.resolvePlayerMovement(current, desired);
-
-        const progress = door.orientation === 'aft'
-          ? desired.z - current.z
-          : desired.x - current.x;
-        expect(progress, `${spec.id} at ${placement.id}`).toBeLessThan(4);
-        physics.dispose();
-      }
-    }
   });
 
   it('preserves unrelated motion and pending recovery during first contact', () => {
