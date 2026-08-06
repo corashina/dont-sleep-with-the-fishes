@@ -76,7 +76,7 @@ function createParticlePool(
     const row = Math.floor(index / columns);
     const horizontal = columns === 1 ? 0.5 : column / (columns - 1);
     const vertical = rows === 1 ? 0.5 : row / (rows - 1);
-    const depthBand = (column * 5 + row * 7) % 8;
+    const depthBand = (column * 5 + row * 7 + Math.floor(row / 3)) % 8;
     const spread = 7.5 + depthBand * 4.2;
     const jitterX = ((index * 17) % 11 - 5) * 0.11;
     const jitterY = ((index * 13) % 9 - 4) * 0.07;
