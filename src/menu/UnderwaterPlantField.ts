@@ -9,7 +9,7 @@ import {
   ShaderMaterial,
 } from 'three';
 
-const KELP_COUNT = 24;
+export const KELP_COUNT = 54;
 
 const KELP_VERTEX_SHADER = `
   attribute float phase;
@@ -70,10 +70,11 @@ export class UnderwaterPlantField {
 
     const transform = new Object3D();
     for (let index = 0; index < KELP_COUNT; index += 1) {
-      const side = index % 2 === 0 ? -1 : 1;
-      const lane = Math.floor(index / 2);
-      const depth = -2.7 - lane * 0.72;
-      const x = side * (2.65 + (lane % 4) * 0.82);
+      const slot = index % 6;
+      const lane = Math.floor(index / 6);
+      const depth = -3.2 - lane * 5.2 - (slot % 2) * 0.9;
+      const spread = 7.5 + lane * 3.7;
+      const x = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
       const scale = 0.72 + (index % 5) * 0.11;
       transform.position.set(x, -0.42, depth);
       transform.rotation.set(0, index * 1.37, 0);

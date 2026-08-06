@@ -112,7 +112,7 @@ export class UnderwaterMenuWorld {
   private readonly ownedMaterials = new Set<Material>();
   private readonly causticMaterial: ShaderMaterial;
   private readonly menuBackground = new Color(0x071b24);
-  private readonly menuFog = new FogExp2(0x0b3440, 0.055);
+  private readonly menuFog = new FogExp2(0x0b3440, 0.022);
   private readonly previousBackground: Scene['background'];
   private readonly previousFog: Scene['fog'];
   private readonly previousCameraPosition: Vector3;
@@ -362,7 +362,7 @@ export class UnderwaterMenuWorld {
   }
 
   private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {
-    const geometry = new PlaneGeometry(36, 32, 30, 24);
+    const geometry = new PlaneGeometry(140, 100, 56, 42);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
     for (let index = 0; index < position.count; index += 1) {
@@ -385,7 +385,7 @@ export class UnderwaterMenuWorld {
     this.ownedMaterials.add(material);
     const seabed = new Mesh(geometry, material);
     seabed.name = 'menu:seabed';
-    seabed.position.set(0, -0.46, -5.6);
+    seabed.position.set(0, -0.46, -25);
     seabed.receiveShadow = true;
     return seabed;
   }
@@ -454,9 +454,11 @@ export class UnderwaterMenuWorld {
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);
     const positions = [
+      [-15.5, 4.2, -12.0, -0.12, 1.15],
       [-5.3, 3.6, -6.2, -0.12, 0.9],
       [3.8, 4.1, -8.6, 0.17, 1.25],
-      [7.1, 3.2, -12.2, -0.2, 1.05],
+      [12.5, 4.5, -17.0, -0.2, 1.2],
+      [22.0, 5.2, -30.0, 0.14, 1.5],
     ] as const;
     for (let index = 0; index < positions.length; index += 1) {
       const [x, y, z, tilt, scale] = positions[index]!;
@@ -474,7 +476,7 @@ export class UnderwaterMenuWorld {
     readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
     readonly material: ShaderMaterial;
   } {
-    const geometry = new PlaneGeometry(35.5, 31.5, 1, 1);
+    const geometry = new PlaneGeometry(139.5, 99.5, 1, 1);
     const material = new ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -490,7 +492,7 @@ export class UnderwaterMenuWorld {
     this.ownedMaterials.add(material);
     const mesh = new Mesh(geometry, material);
     mesh.name = 'menu:caustic-overlay';
-    mesh.position.set(0, -0.245, -5.6);
+    mesh.position.set(0, -0.245, -25);
     mesh.rotation.x = -Math.PI / 2;
     mesh.renderOrder = 1;
     return { mesh, material };
