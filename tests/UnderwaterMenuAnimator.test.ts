@@ -13,6 +13,7 @@ it('updates actor transforms without replacing actor objects', () => {
   const setPlantTime = vi.fn();
   const setBubbleTime = vi.fn();
   const setMatterTime = vi.fn();
+  const setLightTime = vi.fn();
   const setCausticStrength = vi.fn();
   const animator = new UnderwaterMenuAnimator({
     sharks: sharks.map((root) => ({ root, clip })) as never,
@@ -21,6 +22,7 @@ it('updates actor transforms without replacing actor objects', () => {
     setPlantTime,
     setBubbleTime,
     setMatterTime,
+    setLightTime,
     setCausticStrength,
   });
 
@@ -46,6 +48,7 @@ it('updates actor transforms without replacing actor objects', () => {
   expect(setPlantTime).toHaveBeenCalledWith(1);
   expect(setBubbleTime).toHaveBeenCalledWith(1);
   expect(setMatterTime).toHaveBeenCalledWith(1);
+  expect(setLightTime).toHaveBeenCalledWith(1);
   expect(setCausticStrength).toHaveBeenCalledWith(expected.causticStrength);
   animator.dispose();
   animator.dispose();
