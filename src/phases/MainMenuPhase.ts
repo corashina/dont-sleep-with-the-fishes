@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Scene } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
 import { MenuModelLibrary } from '../menu/MenuModelLibrary';
+import { MENU_FADE_SECONDS, sampleMenuFade } from '../menu/menuChoreography';
 import type { MenuSignAction } from '../menu/MenuSigns';
 import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
@@ -11,7 +12,6 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-const FADE_DURATION_SECONDS = 0.7;
 const NOOP = (): void => undefined;
 
 export interface MainMenuPhaseDependencies {
@@ -158,11 +158,11 @@ export class MainMenuPhase implements GamePhase {
 
     if (!this.transitioning || this.completed) return;
     this.fadeElapsed = Math.min(
-      FADE_DURATION_SECONDS,
+      MENU_FADE_SECONDS,
       this.fadeElapsed + delta,
     );
-    this.ui.setFadeProgress(this.fadeElapsed / FADE_DURATION_SECONDS);
-    if (this.fadeElapsed < FADE_DURATION_SECONDS) return;
+    this.ui.setFadeProgress(sampleMenuFade(this.fadeElapsed));
+    if (this.fadeElapsed < MENU_FADE_SECONDS) return;
     this.completed = true;
     this.onComplete();
   }

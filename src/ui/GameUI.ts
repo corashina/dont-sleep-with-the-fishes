@@ -23,6 +23,7 @@ export class GameUI {
   onResume: () => void = () => undefined;
   onReturnToMenu: () => void = () => undefined;
   private readonly root: HTMLDivElement;
+  private readonly introFade: HTMLElement;
   private readonly hud: HTMLElement;
   private readonly introSkip: HTMLElement;
   private readonly pauseLayer: HTMLElement;
@@ -71,6 +72,7 @@ export class GameUI {
       <div class="intro-skip brush-label ui-role-context" data-intro-skip hidden>
         <kbd>SPACE</kbd><span aria-hidden="true"> - </span>SKIP INTRO
       </div>
+      <div class="scavenge-intro-fade" data-intro-fade aria-hidden="true"></div>
       <section class="screen pause-screen poster-screen" data-pause>
         <div class="screen__content">
           <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
@@ -98,6 +100,7 @@ export class GameUI {
     `;
     mount.append(this.root);
     this.hud = requireElement(this.root, '.hud');
+    this.introFade = requireElement(this.root, '[data-intro-fade]');
     this.introSkip = requireElement(this.root, '[data-intro-skip]');
     this.pauseLayer = requireElement(this.root, '[data-pause]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
@@ -115,12 +118,17 @@ export class GameUI {
     this.resumeButton.addEventListener('click', this.handleResume);
     this.endingAction.addEventListener('click', this.handleReturnToMenu);
     this.setPresentation('intro');
+    this.setIntroFadeProgress(1);
   }
 
   setPresentation(presentation: ScavengePresentation): void {
     this.root.dataset.presentation = presentation;
     this.hud.hidden = presentation !== 'playing';
     this.introSkip.hidden = presentation !== 'intro';
+  }
+
+  setIntroFadeProgress(progress: number): void {
+    this.introFade.style.opacity = String(Math.min(1, Math.max(0, progress)));
   }
 
   setPaused(paused: boolean): void {

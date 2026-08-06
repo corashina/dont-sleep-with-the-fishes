@@ -242,6 +242,7 @@ function introHarness(elapsed = 0) {
   const triggerCrash = vi.fn();
   const setAudioPaused = vi.fn();
   const setUiPaused = vi.fn();
+  const setIntroFadeProgress = vi.fn();
   const consumeJump = vi.fn();
   const consumeLook = vi.fn();
   const clearLook = vi.fn();
@@ -304,6 +305,7 @@ function introHarness(elapsed = 0) {
     audio: { beginRun, crash, setPaused: setAudioPaused, update: vi.fn() },
     ui: {
       setPresentation: vi.fn(),
+      setIntroFadeProgress,
       setPaused: setUiPaused,
       clearPointerLockError: vi.fn(),
       render: vi.fn(),
@@ -348,6 +350,7 @@ function introHarness(elapsed = 0) {
     triggerCrash,
     setAudioPaused,
     setUiPaused,
+    setIntroFadeProgress,
     consumeJump,
     consumeLook,
     clearLook,
@@ -697,6 +700,17 @@ describe('ScavengePhase lifecycle integration', () => {
     (phase as unknown as { updateIntro(delta: number): void }).updateIntro(3);
     expect(sessionStart).not.toHaveBeenCalled();
     expect(sessionTick).not.toHaveBeenCalled();
+  });
+
+  it('fades from black during the opening intro frames', () => {
+    const { phase, setIntroFadeProgress } = introHarness(0);
+    const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
+
+    updateIntro.call(phase, 0.35);
+    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0.5);
+
+    updateIntro.call(phase, 0.35);
+    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0);
   });
 
   it('fires the crash once across a large delta', () => {
