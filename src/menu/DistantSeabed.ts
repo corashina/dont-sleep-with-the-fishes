@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -9,6 +10,10 @@ import {
   PlaneGeometry,
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
+import {
+  findClearMenuX,
+  type MenuGroundFootprint,
+} from './MenuSceneLayout';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 
 export const DISTANT_RIDGE_COUNT = 3;
@@ -84,6 +89,8 @@ export class DistantSeabed implements MenuSceneComponent {
   readonly root = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
+  private readonly detailBounds = new Box3();
+  private readonly detailFootprints: MenuGroundFootprint[] = [];
   private disposed = false;
 
   constructor() {
@@ -191,6 +198,23 @@ export class DistantSeabed implements MenuSceneComponent {
       mesh.position.set(x, y, z);
       mesh.scale.setScalar(scale);
       mesh.rotation.y = yaw;
+      mesh.updateMatrixWorld(true);
+      this.detailBounds.setFromObject(mesh);
+      const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
+      const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
+      mesh.position.x = findClearMenuX(
+        x,
+        z,
+        halfX,
+        halfZ,
+        0.2,
+        this.detailFootprints,
+      );
+      this.detailFootprints.push({
+        id: mesh.name,
+        position: [mesh.position.x, y, z],
+        halfSize: [halfX, halfZ],
+      });
       group.add(mesh);
     });
   }

@@ -126,6 +126,60 @@ it('keeps shark and fish-school silhouettes separate through the 34 second loop'
   expect(violations, 'full-loop shark and fish-school silhouette clearance').toEqual([]);
 });
 
+it('keeps both shark silhouettes separate at supported aspect ratios', () => {
+  const sample = createMenuMotionSample();
+  const centerOne = new Vector3();
+  const centerTwo = new Vector3();
+  const projectedOne = new Vector3();
+  const projectedTwo = new Vector3();
+  const projectedEdge = new Vector3();
+  const cameraRight = new Vector3();
+  const violations: Array<{
+    readonly aspect: number;
+    readonly elapsedSeconds: number;
+    readonly clearance: number;
+  }> = [];
+
+  for (const aspect of [1365 / 768, 2560 / 1080]) {
+    const camera = new PerspectiveCamera(65, aspect, 0.08, 1000);
+    camera.position.set(...MENU_CAMERA_POSITION);
+    camera.lookAt(...MENU_CAMERA_TARGET);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    cameraRight.setFromMatrixColumn(camera.matrixWorld, 0);
+    for (let step = 0; step <= 272; step += 1) {
+      const elapsedSeconds = step * 0.125;
+      sampleMenuMotionInto(sample, elapsedSeconds);
+      centerOne.fromArray(sample.sharks[0].position);
+      centerTwo.fromArray(sample.sharks[1].position);
+      projectedOne.copy(centerOne).project(camera);
+      projectedTwo.copy(centerTwo).project(camera);
+      projectedEdge.copy(centerOne)
+        .addScaledVector(cameraRight, SHARK_TARGET_DIMENSION * 0.5)
+        .project(camera);
+      const halfSizeOne = Math.abs(projectedEdge.x - projectedOne.x) * aspect;
+      projectedEdge.copy(centerTwo)
+        .addScaledVector(cameraRight, SHARK_TARGET_DIMENSION * 0.5)
+        .project(camera);
+      const halfSizeTwo = Math.abs(projectedEdge.x - projectedTwo.x) * aspect;
+      const centerGap = Math.hypot(
+        (projectedOne.x - projectedTwo.x) * aspect,
+        projectedOne.y - projectedTwo.y,
+      );
+      const clearance = centerGap - halfSizeOne - halfSizeTwo;
+      if (clearance < MINIMUM_SCREEN_GAP) {
+        violations.push({
+          aspect: Number(aspect.toFixed(4)),
+          elapsedSeconds,
+          clearance: Number(clearance.toFixed(4)),
+        });
+      }
+    }
+  }
+
+  expect(violations, 'full-loop shark silhouette clearance').toEqual([]);
+});
+
 it('clamps the 0.7 second fade', () => {
   expect(MENU_FADE_SECONDS).toBe(0.7);
   expect(sampleMenuFade(-1)).toBe(0);
