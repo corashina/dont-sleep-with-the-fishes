@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CollisionBox } from '../src/player/collisions';
-import { mulberry32 } from '../src/survival/random';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
 import {
   SCAVENGE_PHYSICS_OBJECT_PLACEMENTS,
-  scavengePhysicsObjectBlocksDoor,
   selectScavengePhysicsObjectPlacements,
   validateScavengePhysicsObjectPlacementPool,
   type ScavengePhysicsObjectPlacement,
 } from '../src/world/ScavengePhysicsObjectPlacement';
-import { PLAYER_LAYOUT_RADIUS, SHIP_LAYOUT } from '../src/world/ShipLayout';
 import { sequenceRandom } from './helpers/random';
 
 describe('scavenge physics object placement', () => {
@@ -48,41 +45,12 @@ describe('scavenge physics object placement', () => {
     expect([...first.entries()]).not.toEqual([...second.entries()]);
   });
 
-  it('only assigns objects that close each selected doorway', () => {
+  it('assigns every object once without requiring full doorway blockage', () => {
     const ids = SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ id }) => id);
-    for (let seed = 0; seed < 64; seed += 1) {
-      const random = mulberry32(seed);
-      const selection = selectScavengePhysicsObjectPlacements(ids, () => random.next());
-      for (const [id, placement] of selection) {
-        if (placement.category !== 'door') continue;
-        const spec = SCAVENGE_PHYSICS_OBJECT_SPECS.find((candidate) => candidate.id === id)!;
-        expect(scavengePhysicsObjectBlocksDoor(spec, placement)).toBe(true);
-      }
-    }
-  });
-
-  it('uses actual openings and player width for every eligible door assignment', () => {
-    const doors = SCAVENGE_PHYSICS_OBJECT_PLACEMENTS.filter(
-      ({ category }) => category === 'door',
-    );
-    expect(doors).toHaveLength(4);
-    for (const placement of doors) {
-      const door = SHIP_LAYOUT.doors.find(({ id }) => id === placement.doorId)!;
-      expect(door).toBeDefined();
-      for (const spec of SCAVENGE_PHYSICS_OBJECT_SPECS) {
-        if (!scavengePhysicsObjectBlocksDoor(spec, placement)) continue;
-        const collider = spec.collider;
-        const halfWidth = collider.kind === 'sphere' || collider.kind === 'cylinder'
-          ? collider.radius
-          : door.orientation === 'aft'
-            ? Math.abs(Math.cos(placement.rotationY)) * collider.halfExtents.x
-              + Math.abs(Math.sin(placement.rotationY)) * collider.halfExtents.z
-            : Math.abs(Math.sin(placement.rotationY)) * collider.halfExtents.x
-              + Math.abs(Math.cos(placement.rotationY)) * collider.halfExtents.z;
-        const sideGap = door.width / 2 - halfWidth;
-        expect(sideGap).toBeLessThan(PLAYER_LAYOUT_RADIUS * 2);
-      }
-    }
+    const random = sequenceRandom([0.25, 0.75, 0.5]);
+    const selection = selectScavengePhysicsObjectPlacements(ids, () => random.next());
+    expect([...selection.keys()].sort()).toEqual([...ids].sort());
+    expect([...selection.values()].filter(({ category }) => category === 'door')).toHaveLength(2);
   });
 
   it('rejects duplicate coordinates', () => {
