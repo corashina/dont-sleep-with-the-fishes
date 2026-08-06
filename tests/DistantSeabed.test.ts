@@ -4,6 +4,13 @@ import {
   DISTANT_DEBRIS_COUNT, DISTANT_MOUNTAIN_COUNT, DISTANT_PLANT_COUNT, DISTANT_RIDGE_COUNT,
   DISTANT_ROCK_COUNT, DistantSeabed,
 } from '../src/menu/DistantSeabed';
+import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
+
+const getDistantDetails = (distant: DistantSeabed) => [
+  distant.root.getObjectByName('menu:distant-rocks')!,
+  distant.root.getObjectByName('menu:distant-plants')!,
+  distant.root.getObjectByName('menu:distant-debris')!,
+].flatMap((group) => group.children);
 
 it('builds broad deterministic depth and mountain layers', () => {
   const distant = new DistantSeabed();
@@ -57,4 +64,46 @@ it('builds broad deterministic depth and mountain layers', () => {
   distant.dispose();
   distant.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+it('keeps every detail outside the Dorothy footprint', () => {
+  const distant = new DistantSeabed();
+  const dorothy = MENU_PROTECTED_FOOTPRINTS.find((footprint) => footprint.id === 'dorothy')!;
+  const minX = dorothy.position[0] - dorothy.halfSize[0];
+  const maxX = dorothy.position[0] + dorothy.halfSize[0];
+  const minZ = dorothy.position[2] - dorothy.halfSize[1];
+  const maxZ = dorothy.position[2] + dorothy.halfSize[1];
+  const conflicts = getDistantDetails(distant).filter((detail) => {
+    const bounds = new Box3().setFromObject(detail);
+    return bounds.max.x >= minX && bounds.min.x <= maxX
+      && bounds.max.z >= minZ && bounds.min.z <= maxZ;
+  }).map((detail) => detail.name);
+  expect(conflicts).toEqual([]);
+  distant.dispose();
+});
+
+it('supports every detail on the seabed or distant terrain', () => {
+  const distant = new DistantSeabed();
+  const mainSeabedBounds = new Box3(
+    new Vector3(-70, -Infinity, -75),
+    new Vector3(70, Infinity, 25),
+  );
+  const terrainGroups = [
+    distant.root.getObjectByName('menu:distant-ridges')!,
+    distant.root.getObjectByName('menu:distant-mountains')!,
+  ];
+  const terrainBounds = [
+    mainSeabedBounds,
+    ...terrainGroups.flatMap((group) => group.children)
+      .map((terrain) => new Box3().setFromObject(terrain)),
+  ];
+  const unsupported = getDistantDetails(distant).filter((detail) => {
+    const detailBounds = new Box3().setFromObject(detail);
+    return !terrainBounds.some((terrain) => (
+      terrain.min.x <= detailBounds.min.x && terrain.max.x >= detailBounds.max.x
+      && terrain.min.z <= detailBounds.min.z && terrain.max.z >= detailBounds.max.z
+    ));
+  }).map((detail) => detail.name);
+  expect(unsupported).toEqual([]);
+  distant.dispose();
 });
