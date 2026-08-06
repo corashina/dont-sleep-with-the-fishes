@@ -1,9 +1,11 @@
 import {
   AnimationClip,
   Box3,
+  BoxGeometry,
   Group,
   InstancedMesh,
   Mesh,
+  MeshStandardMaterial,
   NumberKeyframeTrack,
   PerspectiveCamera,
   Points,
@@ -38,8 +40,29 @@ it('creates the approved fixed composition once', () => {
     componentDisposers.push(dispose);
     return { root, dispose };
   };
+  const signsRoot = new Group();
+  signsRoot.name = 'menu:signs';
+  const titleRoot = new Group();
+  titleRoot.name = 'menu:title-sign';
+  const guideRoot = new Group();
+  guideRoot.name = 'menu:guide-sign';
+  const guideHitTarget = new Mesh(
+    new BoxGeometry(1, 1, 0.1),
+    new MeshStandardMaterial(),
+  );
+  guideHitTarget.name = 'menu:guide-sign-board';
+  guideRoot.add(guideHitTarget);
+  signsRoot.add(titleRoot, guideRoot);
+  const signsDispose = vi.fn();
+  componentDisposers.push(signsDispose);
+  const setGuideHighlighted = vi.fn();
   const components = {
-    createTitleSign: vi.fn(() => createComponent('menu:title-sign')),
+    createSigns: vi.fn(() => ({
+      root: signsRoot,
+      guideHitTarget,
+      setGuideHighlighted,
+      dispose: signsDispose,
+    })),
     createDorothyWreck: vi.fn(() => createComponent('menu:dorothy-wreck')),
     createDistantSeabed: vi.fn(() => createComponent('menu:distant-seabed')),
   };
@@ -79,6 +102,7 @@ it('creates the approved fixed composition once', () => {
   expect(world.root.getObjectByName('menu:seated-skeleton')).toBeUndefined();
   expect(world.root.getObjectByName('menu:skull')).toBeDefined();
   expect(world.root.getObjectByName('menu:title-sign')).toBeDefined();
+  expect(world.root.getObjectByName('menu:guide-sign')).toBeDefined();
   expect(world.root.getObjectByName('menu:dorothy-wreck')).toBeDefined();
   expect(world.root.getObjectByName('menu:distant-seabed')).toBeDefined();
   const skullPosition = world.root.getObjectByName('menu:skull')!.getWorldPosition(new Vector3());
@@ -88,6 +112,8 @@ it('creates the approved fixed composition once', () => {
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
   expect(world.fishSchools[1].children).toHaveLength(6);
+  world.setGuideSignHighlighted(true);
+  expect(setGuideHighlighted).toHaveBeenCalledWith(true);
 
   const kelp = world.root.getObjectByName('menu:procedural-kelp');
   expect(kelp).toBeInstanceOf(InstancedMesh);
@@ -135,11 +161,20 @@ it('rolls back completed work and preserves a component creation error', () => {
       return { root: new Group(), animations, dispose };
     }),
   };
-  const titleDispose = vi.fn(() => {
+  const signsDispose = vi.fn(() => {
     throw titleCleanupError;
   });
+  const guideHitTarget = new Mesh(
+    new BoxGeometry(1, 1, 0.1),
+    new MeshStandardMaterial(),
+  );
   const components = {
-    createTitleSign: vi.fn(() => ({ root: new Group(), dispose: titleDispose })),
+    createSigns: vi.fn(() => ({
+      root: new Group(),
+      guideHitTarget,
+      setGuideHighlighted: vi.fn(),
+      dispose: signsDispose,
+    })),
     createDorothyWreck: vi.fn(() => {
       throw primaryError;
     }),
@@ -159,7 +194,7 @@ it('rolls back completed work and preserves a component creation error', () => {
   }
 
   expect(thrown).toBe(primaryError);
-  expect(titleDispose).toHaveBeenCalledTimes(1);
+  expect(signsDispose).toHaveBeenCalledTimes(1);
   for (const dispose of modelDisposers) expect(dispose).toHaveBeenCalledTimes(1);
   expect(components.createDistantSeabed).not.toHaveBeenCalled();
 });
