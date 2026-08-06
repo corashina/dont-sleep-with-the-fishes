@@ -115,6 +115,25 @@ it('creates the approved fixed composition once', () => {
   expect(camera.quaternion.angleTo(expected.quaternion)).toBeLessThan(1e-8);
   const seabed = world.root.getObjectByName('menu:seabed') as Mesh;
   const caustics = world.root.getObjectByName('menu:caustic-overlay') as Mesh;
+  const sandPosition = seabed.geometry.getAttribute('position');
+  const sandColor = seabed.geometry.getAttribute('color');
+  expect(sandColor).toBeDefined();
+  expect(sandColor.count).toBe(sandPosition.count);
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+  const colors = new Set<string>();
+  for (let index = 0; index < sandPosition.count; index += 1) {
+    minHeight = Math.min(minHeight, sandPosition.getY(index));
+    maxHeight = Math.max(maxHeight, sandPosition.getY(index));
+    colors.add([
+      sandColor.getX(index).toFixed(3),
+      sandColor.getY(index).toFixed(3),
+      sandColor.getZ(index).toFixed(3),
+    ].join(':'));
+  }
+  expect(maxHeight - minHeight).toBeGreaterThan(0.55);
+  expect(colors.size).toBeGreaterThan(8);
+  expect((seabed.material as MeshStandardMaterial).vertexColors).toBe(true);
   world.root.updateMatrixWorld(true);
   expect(new Box3().setFromObject(seabed).max.z).toBeGreaterThan(camera.position.z);
   expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
