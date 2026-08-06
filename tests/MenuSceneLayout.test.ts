@@ -3,6 +3,7 @@ import { expect, it } from 'vitest';
 import {
   MENU_MODEL_PLACEMENTS,
   MENU_PROTECTED_FOOTPRINTS,
+  findClearMenuX,
   findMenuPlacementOverlaps,
 } from '../src/menu/MenuSceneLayout';
 import { MENU_MODEL_SPECS } from '../src/menu/menuModelManifest';
@@ -56,4 +57,13 @@ it('fills both sides and every depth layer', () => {
   expect(zs.some((z) => z > -8)).toBe(true);
   expect(zs.some((z) => z <= -8 && z > -20)).toBe(true);
   expect(zs.some((z) => z <= -20)).toBe(true);
+});
+
+it('uses the nearest clear side inside a visible horizontal range', () => {
+  const blockers = [
+    { id: 'center', position: [0, 0, 100] as const, halfSize: [1, 1] as const },
+    { id: 'right', position: [1.5, 0, 100] as const, halfSize: [0.3, 1] as const },
+  ];
+  expect(findClearMenuX(0.25, 100, 0.2, 0.2, 0.1, blockers, -2, 2))
+    .toBeCloseTo(-1.3);
 });

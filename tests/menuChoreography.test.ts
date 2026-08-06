@@ -7,9 +7,10 @@ import {
   sampleMenuMotionInto,
 } from '../src/menu/menuChoreography';
 import {
+  MENU_CAMERA_FIELD_OF_VIEW,
   MENU_CAMERA_POSITION,
   MENU_CAMERA_TARGET,
-} from '../src/menu/UnderwaterMenuWorld';
+} from '../src/menu/MenuSceneLayout';
 
 const SHARK_TARGET_DIMENSION = 4.8;
 const FISH_SCHOOL_WIDTH = 5 * 0.72 + 0.68;
@@ -65,7 +66,7 @@ it('keeps animal groups separated while they cover both sides', () => {
 });
 
 it('keeps shark and fish-school silhouettes separate through the 34 second loop', () => {
-  const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 1000);
+  const camera = new PerspectiveCamera(MENU_CAMERA_FIELD_OF_VIEW, 16 / 9, 0.08, 1000);
   camera.position.set(...MENU_CAMERA_POSITION);
   camera.lookAt(...MENU_CAMERA_TARGET);
   camera.updateMatrixWorld();
@@ -141,7 +142,7 @@ it('keeps both shark silhouettes separate at supported aspect ratios', () => {
   }> = [];
 
   for (const aspect of [1365 / 768, 2560 / 1080]) {
-    const camera = new PerspectiveCamera(65, aspect, 0.08, 1000);
+    const camera = new PerspectiveCamera(MENU_CAMERA_FIELD_OF_VIEW, aspect, 0.08, 1000);
     camera.position.set(...MENU_CAMERA_POSITION);
     camera.lookAt(...MENU_CAMERA_TARGET);
     camera.updateMatrixWorld();

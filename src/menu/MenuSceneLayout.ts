@@ -1,5 +1,22 @@
 import { MENU_MODEL_SPECS } from './menuModelManifest';
 
+export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
+export const MENU_CAMERA_TARGET = [0, 2.0, -4.8] as const;
+export const MENU_CAMERA_FIELD_OF_VIEW = 65;
+export const MENU_MINIMUM_ASPECT = 1365 / 768;
+
+const CAMERA_FORWARD_LENGTH = Math.hypot(
+  MENU_CAMERA_TARGET[1] - MENU_CAMERA_POSITION[1],
+  MENU_CAMERA_TARGET[2] - MENU_CAMERA_POSITION[2],
+);
+const CAMERA_FORWARD_Y = (MENU_CAMERA_TARGET[1] - MENU_CAMERA_POSITION[1])
+  / CAMERA_FORWARD_LENGTH;
+const CAMERA_FORWARD_Z = (MENU_CAMERA_TARGET[2] - MENU_CAMERA_POSITION[2])
+  / CAMERA_FORWARD_LENGTH;
+const CAMERA_HORIZONTAL_SCALE = Math.tan(MENU_CAMERA_FIELD_OF_VIEW * Math.PI / 360)
+  * MENU_MINIMUM_ASPECT;
+const MENU_VIEWPORT_EDGE_CLEARANCE = 0.05;
+
 type MenuGroundModelId =
   | 'rockA'
   | 'rockB'
@@ -152,30 +169,51 @@ export function findClearMenuX(
   halfZ: number,
   clearance: number,
   extraFootprints: readonly MenuGroundFootprint[] = [],
+  minimumX = -Infinity,
+  maximumX = Infinity,
 ): number {
-  let x = initialX;
-  const direction = initialX < 0 ? -1 : 1;
-  const maximumPasses = MENU_STATIC_FOOTPRINTS.length + extraFootprints.length;
-  for (let pass = 0; pass < maximumPasses; pass += 1) {
-    let moved = false;
+  let bestX = initialX;
+  let bestDistance = Infinity;
+  const consider = (candidate: number): void => {
+    if (candidate < minimumX || candidate > maximumX) return;
     for (const footprints of [MENU_STATIC_FOOTPRINTS, extraFootprints]) {
       for (const footprint of footprints) {
-        const overlapsX = x - halfX < footprint.position[0] + footprint.halfSize[0]
-          && x + halfX > footprint.position[0] - footprint.halfSize[0];
+        const overlapsX = candidate - halfX
+            < footprint.position[0] + footprint.halfSize[0]
+          && candidate + halfX
+            > footprint.position[0] - footprint.halfSize[0];
         const overlapsZ = z - halfZ < footprint.position[2] + footprint.halfSize[1]
           && z + halfZ > footprint.position[2] - footprint.halfSize[1];
-        if (!overlapsX || !overlapsZ) continue;
-        x = direction < 0
-          ? footprint.position[0] - footprint.halfSize[0] - halfX - clearance
-          : footprint.position[0] + footprint.halfSize[0] + halfX + clearance;
-        moved = true;
-        break;
+        if (overlapsX && overlapsZ) return;
       }
-      if (moved) break;
     }
-    if (!moved) break;
+    const distance = Math.abs(candidate - initialX);
+    if (distance < bestDistance) {
+      bestX = candidate;
+      bestDistance = distance;
+    }
+  };
+
+  consider(Math.min(Math.max(initialX, minimumX), maximumX));
+  for (const footprints of [MENU_STATIC_FOOTPRINTS, extraFootprints]) {
+    for (const footprint of footprints) {
+      consider(footprint.position[0] - footprint.halfSize[0] - halfX - clearance);
+      consider(footprint.position[0] + footprint.halfSize[0] + halfX + clearance);
+    }
   }
-  return x;
+  if (bestDistance === Infinity) {
+    throw new Error('Menu scene has no clear horizontal placement in the visible range');
+  }
+  return bestX;
+}
+
+export function menuVisibleCenterLimit(y: number, z: number, halfX: number): number {
+  const cameraDepth = (y - MENU_CAMERA_POSITION[1]) * CAMERA_FORWARD_Y
+    + (z - MENU_CAMERA_POSITION[2]) * CAMERA_FORWARD_Z;
+  return Math.max(
+    0,
+    cameraDepth * CAMERA_HORIZONTAL_SCALE - halfX - MENU_VIEWPORT_EDGE_CLEARANCE,
+  );
 }
 
 export function findMenuPlacementOverlaps(

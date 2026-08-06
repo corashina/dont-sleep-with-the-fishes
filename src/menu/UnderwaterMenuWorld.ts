@@ -27,6 +27,8 @@ import {
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
 import {
+  MENU_CAMERA_POSITION,
+  MENU_CAMERA_TARGET,
   MENU_MODEL_PLACEMENTS,
   type MenuGroundPlacement,
 } from './MenuSceneLayout';
@@ -49,9 +51,6 @@ import {
   ignoreCleanupError,
   runCleanupSteps,
 } from '../world/SceneResources';
-
-export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
-export const MENU_CAMERA_TARGET = [0, 2.0, -4.8] as const;
 
 export const MENU_PLACEMENT = {
   boat: { position: [0, 0.42, -4.8], rotation: [0.05, -0.12, -0.09] },

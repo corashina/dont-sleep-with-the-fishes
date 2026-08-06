@@ -12,6 +12,7 @@ import {
 import { disposeResourceSets } from '../world/SceneResources';
 import {
   findClearMenuX,
+  menuVisibleCenterLimit,
   type MenuGroundFootprint,
 } from './MenuSceneLayout';
 import type { MenuSceneComponent } from './MenuSceneComponent';
@@ -202,6 +203,13 @@ export class DistantSeabed implements MenuSceneComponent {
       this.detailBounds.setFromObject(mesh);
       const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
       const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
+      const visibleLimit = z > -15
+        ? menuVisibleCenterLimit(
+          this.detailBounds.min.y,
+          this.detailBounds.max.z,
+          halfX,
+        )
+        : Infinity;
       mesh.position.x = findClearMenuX(
         x,
         z,
@@ -209,6 +217,8 @@ export class DistantSeabed implements MenuSceneComponent {
         halfZ,
         0.2,
         this.detailFootprints,
+        -visibleLimit,
+        visibleLimit,
       );
       this.detailFootprints.push({
         id: mesh.name,
