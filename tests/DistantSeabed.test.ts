@@ -2,7 +2,7 @@ import { Box3, Mesh, Vector3 } from 'three';
 import { expect, it, vi } from 'vitest';
 import {
   DISTANT_DEBRIS_COUNT, DISTANT_MOUNTAIN_COUNT, DISTANT_PLANT_COUNT, DISTANT_RIDGE_COUNT,
-  DISTANT_ROCK_COUNT, DistantSeabed,
+  DISTANT_ROCK_COUNT, DistantSeabed, NEAR_WRECK_DEBRIS_COUNT,
 } from '../src/menu/DistantSeabed';
 import {
   MENU_PROTECTED_FOOTPRINTS,
@@ -13,6 +13,7 @@ const getDistantDetails = (distant: DistantSeabed) => [
   distant.root.getObjectByName('menu:distant-rocks')!,
   distant.root.getObjectByName('menu:distant-plants')!,
   distant.root.getObjectByName('menu:distant-debris')!,
+  distant.root.getObjectByName('menu:near-wreck-debris')!,
 ].flatMap((group) => group.children);
 
 it('builds broad deterministic depth and mountain layers', () => {
@@ -23,18 +24,21 @@ it('builds broad deterministic depth and mountain layers', () => {
   expect(distant.root.getObjectByName('menu:distant-rocks')?.children).toHaveLength(DISTANT_ROCK_COUNT);
   expect(distant.root.getObjectByName('menu:distant-plants')?.children).toHaveLength(DISTANT_PLANT_COUNT);
   expect(distant.root.getObjectByName('menu:distant-debris')?.children).toHaveLength(DISTANT_DEBRIS_COUNT);
+  expect(distant.root.getObjectByName('menu:near-wreck-debris')?.children)
+    .toHaveLength(NEAR_WRECK_DEBRIS_COUNT);
   expect(DISTANT_ROCK_COUNT).toBe(24);
   expect(DISTANT_PLANT_COUNT).toBe(36);
   expect(DISTANT_DEBRIS_COUNT).toBe(20);
+  expect(DISTANT_MOUNTAIN_COUNT).toBe(2);
+  expect(NEAR_WRECK_DEBRIS_COUNT).toBeGreaterThanOrEqual(12);
   const bounds = new Box3().setFromObject(distant.root);
   expect(bounds.getSize(new Vector3()).x).toBeGreaterThan(165);
   expect(bounds.getSize(new Vector3()).z).toBeGreaterThan(80);
-  const mountainHeights = [1, 2, 3].map((index) => {
+  const mountainHeights = [1, 2].map((index) => {
     const mountain = distant.root.getObjectByName(`menu:distant-mountain-${index}`)!;
     return new Box3().setFromObject(mountain).max.y;
   });
   expect(mountainHeights[1]).toBeGreaterThan(mountainHeights[0]!);
-  expect(mountainHeights[2]).toBeGreaterThan(mountainHeights[1]!);
   const first = distant.root.getObjectByName('menu:distant-debris-1') as Mesh;
   const second = distant.root.getObjectByName('menu:distant-debris-2') as Mesh;
   expect(first.geometry).toBe(second.geometry);
@@ -67,6 +71,19 @@ it('builds broad deterministic depth and mountain layers', () => {
   distant.dispose();
   distant.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+it('grounds nearby wreck debris with shallow penetration', () => {
+  const distant = new DistantSeabed();
+  const debris = distant.root.getObjectByName('menu:near-wreck-debris')!;
+  for (const child of debris.children) {
+    const bounds = new Box3().setFromObject(child);
+    const center = bounds.getCenter(new Vector3());
+    const penetration = menuSeabedHeight(center.x, center.z) - bounds.min.y;
+    expect(penetration, child.name).toBeGreaterThanOrEqual(0.019);
+    expect(penetration, child.name).toBeLessThanOrEqual(0.101);
+  }
+  distant.dispose();
 });
 
 it('keeps every detail outside the Dorothy footprint', () => {
