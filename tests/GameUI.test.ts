@@ -54,3 +54,18 @@ describe('GameUI scavenging clock', () => {
     ui.dispose();
   });
 });
+
+describe('GameUI pause menu', () => {
+  it('shows only the pause title and controls', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
+
+    expect(pause.textContent).toContain('Back to the deck?');
+    expect(pause.textContent).not.toContain('THE CLOCK IS STILL');
+    expect(pause.textContent).not.toContain('The countdown is stopped');
+    expect(pause.querySelector('[data-resume-button]')).not.toBeNull();
+
+    ui.dispose();
+  });
+});

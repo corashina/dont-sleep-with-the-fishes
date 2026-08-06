@@ -75,9 +75,7 @@ export class GameUI {
       <div class="scavenge-intro-fade" data-intro-fade aria-hidden="true"></div>
       <section class="screen pause-screen poster-screen" data-pause>
         <div class="screen__content">
-          <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
           <h2 class="ui-role-display">Back to the deck?</h2>
-          <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
           </button>
