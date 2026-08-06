@@ -55,6 +55,7 @@ import {
   type ScavengeHandModelFactory,
 } from '../player/ScavengeHands';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
+import { sampleMenuFade } from '../menu/menuChoreography';
 import { projectScreenBounds } from '../rendering/projectScreenBounds';
 import {
   GameUI,
@@ -226,6 +227,7 @@ export class ScavengePhase implements GamePhase {
     };
     this.ui.onReturnToMenu = this.onReturnToMenu;
     this.ui.setPresentation('intro');
+    this.ui.setIntroFadeProgress(1);
   }
 
   start(): void {
@@ -644,6 +646,7 @@ export class ScavengePhase implements GamePhase {
   private updateIntro(deltaSeconds: number): void {
     const previousElapsed = this.introElapsed;
     this.introElapsed = advanceScavengeIntroElapsed(this.introElapsed, deltaSeconds);
+    this.ui.setIntroFadeProgress(1 - sampleMenuFade(this.introElapsed));
     sampleScavengeIntroFrameInto(
       this.introFrame,
       this.introElapsed,
@@ -689,6 +692,7 @@ export class ScavengePhase implements GamePhase {
     this.player.placeCamera();
     this.introPaused = false;
     this.presentation = 'playing';
+    this.ui.setIntroFadeProgress(0);
     this.ui.setPresentation('playing');
     this.session.start();
     resetShipAlarmPhase(this.alarmPhase, this.elapsed);
