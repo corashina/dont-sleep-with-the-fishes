@@ -140,6 +140,44 @@ export const MENU_MODEL_PLACEMENTS: readonly MenuGroundPlacement[] = [
   { id: 'skull', modelId: 'skull', position: [0.7, -0.26, -0.8], rotation: [0.08, -0.4, -0.32], halfSize: MODEL_HALF_SIZE.skull },
 ];
 
+export const MENU_STATIC_FOOTPRINTS: readonly MenuGroundFootprint[] = [
+  ...MENU_PROTECTED_FOOTPRINTS,
+  ...MENU_MODEL_PLACEMENTS,
+];
+
+export function findClearMenuX(
+  initialX: number,
+  z: number,
+  halfX: number,
+  halfZ: number,
+  clearance: number,
+  extraFootprints: readonly MenuGroundFootprint[] = [],
+): number {
+  let x = initialX;
+  const direction = initialX < 0 ? -1 : 1;
+  const maximumPasses = MENU_STATIC_FOOTPRINTS.length + extraFootprints.length;
+  for (let pass = 0; pass < maximumPasses; pass += 1) {
+    let moved = false;
+    for (const footprints of [MENU_STATIC_FOOTPRINTS, extraFootprints]) {
+      for (const footprint of footprints) {
+        const overlapsX = x - halfX < footprint.position[0] + footprint.halfSize[0]
+          && x + halfX > footprint.position[0] - footprint.halfSize[0];
+        const overlapsZ = z - halfZ < footprint.position[2] + footprint.halfSize[1]
+          && z + halfZ > footprint.position[2] - footprint.halfSize[1];
+        if (!overlapsX || !overlapsZ) continue;
+        x = direction < 0
+          ? footprint.position[0] - footprint.halfSize[0] - halfX - clearance
+          : footprint.position[0] + footprint.halfSize[0] + halfX + clearance;
+        moved = true;
+        break;
+      }
+      if (moved) break;
+    }
+    if (!moved) break;
+  }
+  return x;
+}
+
 export function findMenuPlacementOverlaps(
   placements: readonly MenuGroundFootprint[],
 ): readonly (readonly [string, string])[] {

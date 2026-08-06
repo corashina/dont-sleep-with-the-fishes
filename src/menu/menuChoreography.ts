@@ -24,7 +24,7 @@ interface EllipsePath {
 
 const SHARK_PATHS = [
   { center: [-8, 6.4, -9] as const, radiusX: 9.5, radiusZ: 3.2, period: 26, phase: 0.2 },
-  { center: [9, 8.9, -18] as const, radiusX: 12.5, radiusZ: 4.6, period: 34, phase: 3.5 },
+  { center: [9, 10, -18] as const, radiusX: 12.5, radiusZ: 4.6, period: 34, phase: 0.375 },
 ] as const satisfies readonly [EllipsePath, EllipsePath];
 
 const FISH_PATHS = [
