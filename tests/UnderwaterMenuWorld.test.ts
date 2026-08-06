@@ -42,8 +42,8 @@ it('creates the approved fixed composition once', () => {
   };
   const signsRoot = new Group();
   signsRoot.name = 'menu:signs';
-  const titleRoot = new Group();
-  titleRoot.name = 'menu:title-sign';
+  const startRoot = new Group();
+  startRoot.name = 'menu:start-sign';
   const guideRoot = new Group();
   guideRoot.name = 'menu:guide-sign';
   const guideHitTarget = new Mesh(
@@ -51,15 +51,24 @@ it('creates the approved fixed composition once', () => {
     new MeshStandardMaterial(),
   );
   guideHitTarget.name = 'menu:guide-sign-board';
+  const startHitTarget = new Mesh(
+    new BoxGeometry(1, 1, 0.1),
+    new MeshStandardMaterial(),
+  );
+  startHitTarget.name = 'menu:start-sign-board';
+  startRoot.add(startHitTarget);
   guideRoot.add(guideHitTarget);
-  signsRoot.add(titleRoot, guideRoot);
+  signsRoot.add(startRoot, guideRoot);
   const signsDispose = vi.fn();
   componentDisposers.push(signsDispose);
   const setGuideHighlighted = vi.fn();
+  const setStartHighlighted = vi.fn();
   const components = {
     createSigns: vi.fn(() => ({
       root: signsRoot,
+      startHitTarget,
       guideHitTarget,
+      setStartHighlighted,
       setGuideHighlighted,
       dispose: signsDispose,
     })),
@@ -101,7 +110,7 @@ it('creates the approved fixed composition once', () => {
   expect(world.root.getObjectByName('menu:boat')).toBeDefined();
   expect(world.root.getObjectByName('menu:seated-skeleton')).toBeUndefined();
   expect(world.root.getObjectByName('menu:skull')).toBeDefined();
-  expect(world.root.getObjectByName('menu:title-sign')).toBeDefined();
+  expect(world.root.getObjectByName('menu:start-sign')).toBeDefined();
   expect(world.root.getObjectByName('menu:guide-sign')).toBeDefined();
   expect(world.root.getObjectByName('menu:dorothy-wreck')).toBeDefined();
   expect(world.root.getObjectByName('menu:distant-seabed')).toBeDefined();
@@ -112,8 +121,10 @@ it('creates the approved fixed composition once', () => {
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
   expect(world.fishSchools[1].children).toHaveLength(6);
-  world.setGuideSignHighlighted(true);
+  world.setMenuSignHighlighted('guide', true);
   expect(setGuideHighlighted).toHaveBeenCalledWith(true);
+  world.setMenuSignHighlighted('start', true);
+  expect(setStartHighlighted).toHaveBeenCalledWith(true);
 
   const kelp = world.root.getObjectByName('menu:procedural-kelp');
   expect(kelp).toBeInstanceOf(InstancedMesh);
@@ -168,10 +179,16 @@ it('rolls back completed work and preserves a component creation error', () => {
     new BoxGeometry(1, 1, 0.1),
     new MeshStandardMaterial(),
   );
+  const startHitTarget = new Mesh(
+    new BoxGeometry(1, 1, 0.1),
+    new MeshStandardMaterial(),
+  );
   const components = {
     createSigns: vi.fn(() => ({
       root: new Group(),
+      startHitTarget,
       guideHitTarget,
+      setStartHighlighted: vi.fn(),
       setGuideHighlighted: vi.fn(),
       dispose: signsDispose,
     })),

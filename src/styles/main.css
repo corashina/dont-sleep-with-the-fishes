@@ -1795,7 +1795,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   white-space: nowrap;
   border: 0;
 }
-.menu-guide-accessible {
+.menu-action-accessible {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1810,14 +1810,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   grid-row: 1;
   min-height: clamp(88px, 14vh, 150px);
   content: '';
-}
-.underwater-menu-screen [data-menu-start] {
-  grid-row: 3;
-  min-width: 310px;
-  min-height: 74px;
-  padding: 18px 28px;
-  font-size: 1rem;
-  pointer-events: auto;
 }
 .underwater-menu-screen [data-menu-pointer-lock-error] {
   grid-row: 4;

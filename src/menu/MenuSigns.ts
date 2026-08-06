@@ -10,12 +10,12 @@ import {
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { disposeResourceSets } from '../world/SceneResources';
 
-export const MENU_SIGN_TITLE = "DON'T SLEEP WITH THE FISHES";
+export const MENU_START_SIGN_TITLE = 'START';
 export const MENU_GUIDE_SIGN_TITLE = 'HOW TO PLAY';
-export const MENU_TITLE_SIGN_POSITION = [-2.65, -0.92, 2.45] as const;
-export const MENU_TITLE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
-export const MENU_GUIDE_SIGN_POSITION = [2.7, -0.78, 2.35] as const;
-export const MENU_GUIDE_SIGN_ROTATION = [0.02, -0.22, 0.05] as const;
+export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 2.55] as const;
+export const MENU_GUIDE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
+export const MENU_START_SIGN_POSITION = [2.55, -0.86, 2.45] as const;
+export const MENU_START_SIGN_ROTATION = [0.02, -0.22, 0.05] as const;
 
 export interface MenuSignCanvasSurface {
   readonly canvas: HTMLCanvasElement;
@@ -23,9 +23,12 @@ export interface MenuSignCanvasSurface {
 }
 
 export type MenuSignCanvasFactory = () => MenuSignCanvasSurface;
+export type MenuSignAction = 'start' | 'guide';
 
 export interface MenuSignsComponent extends MenuSceneComponent {
+  readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
   readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
+  setStartHighlighted(active: boolean): void;
   setGuideHighlighted(active: boolean): void;
 }
 
@@ -45,6 +48,8 @@ interface WoodenSignParts {
   readonly root: Group;
   readonly board: Mesh<BoxGeometry, MeshStandardMaterial>;
   readonly texture: CanvasTexture;
+  readonly boardMaterial: MeshStandardMaterial;
+  readonly postMaterial: MeshStandardMaterial;
 }
 
 function browserCanvas(): MenuSignCanvasSurface {
@@ -56,54 +61,61 @@ function browserCanvas(): MenuSignCanvasSurface {
 
 export class MenuSigns implements MenuSignsComponent {
   readonly root = new Group();
+  readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
   readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
   readonly textures: readonly [CanvasTexture, CanvasTexture];
 
-  private readonly guideRoot: Group;
+  private readonly startSign: WoodenSignParts;
+  private readonly guideSign: WoodenSignParts;
   private readonly geometries = new Set<BoxGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
+  private startHighlighted = false;
   private guideHighlighted = false;
   private disposed = false;
 
   constructor(factory: MenuSignCanvasFactory = browserCanvas) {
-    const title = this.createWoodenSign(factory, {
-      name: 'menu:title-sign',
-      text: MENU_SIGN_TITLE,
-      position: MENU_TITLE_SIGN_POSITION,
-      rotation: MENU_TITLE_SIGN_ROTATION,
-      boardSize: [4.2, 1.2, 0.18],
-      boardHeight: 1.55,
-      postHeight: 2.5,
-      postSpacing: 1.46,
-      font: '900 52px Georgia, serif',
-    });
     const guide = this.createWoodenSign(factory, {
       name: 'menu:guide-sign',
       text: MENU_GUIDE_SIGN_TITLE,
       position: MENU_GUIDE_SIGN_POSITION,
       rotation: MENU_GUIDE_SIGN_ROTATION,
-      boardSize: [2.65, 0.9, 0.18],
-      boardHeight: 1.32,
-      postHeight: 2.1,
-      postSpacing: 0.88,
-      font: '900 92px Georgia, serif',
+      boardSize: [2.4, 0.76, 0.16],
+      boardHeight: 1.18,
+      postHeight: 1.82,
+      postSpacing: 0.78,
+      font: '900 86px Georgia, serif',
+    });
+    const start = this.createWoodenSign(factory, {
+      name: 'menu:start-sign',
+      text: MENU_START_SIGN_TITLE,
+      position: MENU_START_SIGN_POSITION,
+      rotation: MENU_START_SIGN_ROTATION,
+      boardSize: [2.05, 0.72, 0.16],
+      boardHeight: 1.12,
+      postHeight: 1.72,
+      postSpacing: 0.66,
+      font: '900 112px Georgia, serif',
     });
 
     this.root.name = 'menu:signs';
-    this.root.add(title.root, guide.root);
-    this.guideRoot = guide.root;
+    this.root.add(guide.root, start.root);
+    this.startSign = start;
+    this.guideSign = guide;
+    this.startHitTarget = start.board;
     this.guideHitTarget = guide.board;
-    this.textures = [title.texture, guide.texture];
+    this.textures = [guide.texture, start.texture];
+  }
+
+  setStartHighlighted(active: boolean): void {
+    if (this.disposed || this.startHighlighted === active) return;
+    this.startHighlighted = active;
+    this.setSignHighlighted(this.startSign, active);
   }
 
   setGuideHighlighted(active: boolean): void {
     if (this.disposed || this.guideHighlighted === active) return;
     this.guideHighlighted = active;
-    const scale = active ? 1.035 : 1;
-    this.guideRoot.scale.setScalar(scale);
-    this.guideRoot.position.y = MENU_GUIDE_SIGN_POSITION[1] + (active ? 0.04 : 0);
-    this.guideHitTarget.material.emissive.setHex(active ? 0x5b3f20 : 0x000000);
-    this.guideHitTarget.material.emissiveIntensity = active ? 0.45 : 0;
+    this.setSignHighlighted(this.guideSign, active);
   }
 
   dispose(): void {
@@ -179,6 +191,15 @@ export class MenuSigns implements MenuSignsComponent {
     root.position.set(...spec.position);
     root.rotation.set(...spec.rotation);
     root.add(board, leftPost, rightPost);
-    return { root, board, texture };
+    return { root, board, texture, boardMaterial, postMaterial };
+  }
+
+  private setSignHighlighted(sign: WoodenSignParts, active: boolean): void {
+    sign.boardMaterial.color.setHex(active ? 0xffe8bf : 0xffffff);
+    sign.boardMaterial.emissive.setHex(active ? 0x6b431c : 0x000000);
+    sign.boardMaterial.emissiveIntensity = active ? 0.72 : 0;
+    sign.postMaterial.color.setHex(active ? 0x765637 : 0x4b3425);
+    sign.postMaterial.emissive.setHex(active ? 0x4b2f16 : 0x000000);
+    sign.postMaterial.emissiveIntensity = active ? 0.58 : 0;
   }
 }
