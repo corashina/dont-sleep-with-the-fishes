@@ -12,7 +12,15 @@ import type { VisualQuality } from './visualQuality';
 
 export const ITEM_AMBIENT_OCCLUSION_LAYER = 1;
 export const ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY = 1;
-export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.5;
+export const ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS = 0.28;
+export const ITEM_AMBIENT_OCCLUSION_GTAO_SETTINGS = {
+  radius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
+  distanceExponent: 1.6,
+  thickness: 0.75,
+  distanceFallOff: 0.72,
+  scale: 1,
+  screenSpaceRadius: true,
+} as const;
 
 export type ItemAmbientOcclusionMode = 'composite' | 'debug' | 'off';
 
@@ -64,14 +72,7 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
     super(new Scene(), new PerspectiveCamera());
     this.visualQuality = quality;
     this.blendIntensity = ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY;
-    this.updateGtaoMaterial({
-      radius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
-      distanceExponent: 1.3,
-      thickness: 0.3,
-      distanceFallOff: 1,
-      scale: 1,
-      screenSpaceRadius: true,
-    });
+    this.updateGtaoMaterial(ITEM_AMBIENT_OCCLUSION_GTAO_SETTINGS);
     this.applyVisualQuality();
     this.setMode(mode);
   }
