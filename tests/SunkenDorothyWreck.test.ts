@@ -40,6 +40,19 @@ it('builds a long simplified Dorothy wreck in a distant side view', () => {
   expect(bounds.min.y).toBeLessThan(0.15);
 
   const hull = wreck.root.getObjectByName('menu:dorothy-wreck-hull') as Mesh;
+  hull.geometry.computeBoundingBox();
+  expect(hull.geometry.boundingBox?.max.z).toBe(9);
+  expect(hull.geometry.boundingBox?.min.z).toBe(-9);
+  expect(hull.geometry.boundingBox?.getSize(new Vector3()).z).toBe(18);
+
+  const funnelPort = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-port') as Mesh;
+  const funnelStarboard = wreck.root.getObjectByName('menu:dorothy-wreck-funnel-starboard') as Mesh;
+  expect(funnelPort.geometry).toBe(funnelStarboard.geometry);
+
+  const railPort = wreck.root.getObjectByName('menu:dorothy-wreck-rail-port') as Mesh;
+  const railStarboard = wreck.root.getObjectByName('menu:dorothy-wreck-rail-starboard') as Mesh;
+  expect(railPort.geometry).toBe(railStarboard.geometry);
+
   const dispose = vi.spyOn(hull.geometry, 'dispose');
   wreck.dispose();
   wreck.dispose();
