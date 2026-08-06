@@ -377,9 +377,9 @@ export class UnderwaterMenuWorld {
       const fish = this.createModel(models, id).root;
       fish.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
       fish.position.set(
-        (fishIndex - 2.5) * 0.42,
-        ((fishIndex + schoolIndex) % 3 - 1) * 0.22,
-        (fishIndex % 2) * 0.5 - 0.25,
+        (fishIndex - 2.5) * 0.72,
+        ((fishIndex + schoolIndex) % 3 - 1) * 0.34,
+        (fishIndex % 2) * 0.8 - 0.4,
       );
       fish.rotation.y = fishIndex % 2 === 0 ? 0.08 : -0.12;
       school.add(fish);

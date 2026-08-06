@@ -23,13 +23,13 @@ interface EllipsePath {
 }
 
 const SHARK_PATHS = [
-  { center: [0, 3.4, -10] as const, radiusX: 9.5, radiusZ: 4.2, period: 24, phase: 0 },
-  { center: [1.5, 4.6, -14] as const, radiusX: 12, radiusZ: 5.5, period: 31, phase: Math.PI },
+  { center: [-8, 3.3, -9] as const, radiusX: 9.5, radiusZ: 3.2, period: 26, phase: 0.2 },
+  { center: [9, 5.9, -18] as const, radiusX: 12.5, radiusZ: 4.6, period: 34, phase: 3.5 },
 ] as const satisfies readonly [EllipsePath, EllipsePath];
 
 const FISH_PATHS = [
-  { center: [-2.5, 2.3, -5.5] as const, radiusX: 3.4, radiusZ: 1.8, period: 18, phase: 0.8 },
-  { center: [3.2, 1.7, -7.5] as const, radiusX: 4.6, radiusZ: 2.2, period: 22, phase: 3.4 },
+  { center: [-9, 2.1, -6.5] as const, radiusX: 6.5, radiusZ: 2, period: 19, phase: 0.7 },
+  { center: [10, 3.9, -12.5] as const, radiusX: 7.5, radiusZ: 2.8, period: 23, phase: 3.2 },
 ] as const satisfies readonly [EllipsePath, EllipsePath];
 
 export function createMenuMotionSample(): MenuMotionSample {
