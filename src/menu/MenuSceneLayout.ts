@@ -1,4 +1,8 @@
 import { MENU_MODEL_SPECS } from './menuModelManifest';
+import {
+  MENU_GUIDE_SIGN_POSITION,
+  MENU_START_SIGN_POSITION,
+} from './MenuSigns';
 
 export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
 export const MENU_CAMERA_TARGET = [0, 2.0, -4.8] as const;
@@ -14,6 +18,15 @@ export function menuSeabedHeight(worldX: number, worldZ: number): number {
   const ripple = Math.sin(localZ * 1.35 + Math.sin(worldX * 0.18)) * 0.045
     + Math.sin(worldX * 0.75 + localZ * 0.31) * 0.025;
   return MENU_SEABED_POSITION[1] + dune + ripple;
+}
+
+export function menuGroundedY(
+  worldX: number,
+  worldZ: number,
+  localBottom: number,
+  penetration = 0.06,
+): number {
+  return menuSeabedHeight(worldX, worldZ) - penetration - localBottom;
 }
 
 const CAMERA_FORWARD_LENGTH = Math.hypot(
@@ -115,8 +128,8 @@ const MODEL_HALF_SIZE: Readonly<Record<
 } as const;
 
 export const MENU_PROTECTED_FOOTPRINTS: readonly MenuGroundFootprint[] = [
-  { id: 'guide-sign', position: [-2.55, -0.94, 2.55], halfSize: [1.45, 0.55] },
-  { id: 'start-sign', position: [2.55, -0.86, 2.45], halfSize: [1.3, 0.55] },
+  { id: 'guide-sign', position: MENU_GUIDE_SIGN_POSITION, halfSize: [1.45, 0.55] },
+  { id: 'start-sign', position: MENU_START_SIGN_POSITION, halfSize: [1.3, 0.55] },
   { id: 'boat', position: [0, 0.42, -4.8], halfSize: [1.3, 2.9] },
   { id: 'dorothy', position: [1.6, 1.8, -19.5], halfSize: [18.4, 5.8] },
 ];

@@ -5,7 +5,13 @@ import {
   MENU_PROTECTED_FOOTPRINTS,
   findClearMenuX,
   findMenuPlacementOverlaps,
+  menuGroundedY,
+  menuSeabedHeight,
 } from '../src/menu/MenuSceneLayout';
+import {
+  MENU_GUIDE_SIGN_POSITION,
+  MENU_START_SIGN_POSITION,
+} from '../src/menu/MenuSigns';
 import { MENU_MODEL_SPECS } from '../src/menu/menuModelManifest';
 
 it('contains every normalized corner after its full placement rotation', () => {
@@ -46,6 +52,15 @@ it('keeps every static model outside other model footprints', () => {
     ...MENU_PROTECTED_FOOTPRINTS,
     ...MENU_MODEL_PLACEMENTS,
   ])).toEqual([]);
+});
+
+it('uses the sign positions and grounds local bounds with fixed penetration', () => {
+  expect(MENU_PROTECTED_FOOTPRINTS.find(({ id }) => id === 'guide-sign')?.position)
+    .toEqual(MENU_GUIDE_SIGN_POSITION);
+  expect(MENU_PROTECTED_FOOTPRINTS.find(({ id }) => id === 'start-sign')?.position)
+    .toEqual(MENU_START_SIGN_POSITION);
+  const rootY = menuGroundedY(4, -10, -0.4, 0.06);
+  expect(rootY - 0.4).toBeCloseTo(menuSeabedHeight(4, -10) - 0.06);
 });
 
 it('fills both sides and every depth layer', () => {
